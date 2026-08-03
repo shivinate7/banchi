@@ -35,14 +35,22 @@ Resolve normal / reverse holo / holo per card, in order:
 
 1. **Capture-time metadata** — variant toggle in the capture app, stored in the card's JSON
    sidecar. Primary path. `--variant` on the batch script is only an override.
-2. **Catalog-forced** — if the fixture has one condition row for that number (most SV-era
-   rares are holofoil-only), use it.
+2. **Catalog-forced** — no capture-time metadata, and one condition row for that number
+   (most SV-era rares are holofoil-only), so the row decides.
 3. **Haiku `finish` field** (`normal | holo | reverse_holo`), returned in every
    identification call at no extra cost. Runs as a cross-check even when metadata exists:
    a normal card mis-sorted into the reverse stack still matches a valid catalog row, so
    only detection catches it.
-4. **Review queue** — still ambiguous, detection disagrees with metadata, or no matching
-   catalog row.
+4. **Review queue** — still ambiguous, detection disagrees with metadata, the catalog
+   contradicts metadata, or no matching catalog row.
+
+**The toggle is trusted.** It is set per stack, so metadata is a claim and not a hint.
+Metadata naming a variant the catalog does not stock — toggle says normal, the number has
+only a holofoil row — reviews rather than being corrected to the only available row. This
+costs a tap per mis-toggled holofoil-only rare; that is the price of the toggle meaning
+something, and it is why rung 2 is reachable only without metadata. The two review reasons
+stay distinct so the queue can be triaged: a run full of contradictions means a stack is
+misfiled, while disagreements scattered across a run mean individual cards are mis-sorted.
 
 ## D4 — Review queue is digital-only
 
@@ -93,8 +101,21 @@ Both configurable, both derived from the $60/hr labor bar: a marginal pull is ~2
   collapsing markets. TCGplayer's own seller guidance is to set the floor where a sale
   loses money including labor, and always price above it.
 
-Sub-threshold cards exit via TCGplayer's native Bulk Lots category (Level 4, Pricing tab).
-No eBay needed. Pricing rules: match / undercut % / markup %.
+Pricing rules: match / undercut % / markup %.
+
+**Sub-threshold disposition is a per-run choice, never a constant in the code.** The owner
+picks one default for the run — flat at the floor, or a flat price set for that run — and
+can name individual SKUs to override it. Output is suppressed until that choice is made: a
+card under the threshold is not quietly listed and not quietly dropped.
+
+The join preserves the sub-threshold price distribution in bands rather than lumping it,
+because "everything under $0.40" hides the difference between a $0.38 rare and a $0.01
+code card, and that difference is what decides later which of them are worth a bulk lot.
+Bands are cut as fractions of the threshold, so they follow it if it moves.
+
+TCGplayer's native Bulk Lots category (Level 4, Pricing tab) remains the exit for whatever
+is not listed — selected against that distribution, not sorted into blindly at emit time.
+No eBay needed.
 
 ## D10 — Inventory model
 

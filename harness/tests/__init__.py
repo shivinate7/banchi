@@ -14,7 +14,7 @@ and only to mean "this test is a stub" — it is split across a concatenation he
 this file, which is not a test, does not count as one.
 """
 
-from typing import NamedTuple
+from typing import List, NamedTuple, Optional
 
 
 class Result(NamedTuple):
@@ -24,3 +24,59 @@ class Result(NamedTuple):
 
 class NotImplementedYet(Exception):
     """Raised by a stub. The runner reports it as a failure, never as a skip."""
+
+
+class Checks:
+    """Collects assertions so one run reports every failure, not just the first.
+
+    Same reasoning as the runner running all four tests after one fails: a harness is a
+    status signal, and stopping early hides the state of everything behind it.
+    """
+
+    def __init__(self) -> None:
+        self.lines: List[str] = []
+        self.failures = 0
+
+    def note(self, text: str) -> None:
+        for line in str(text).splitlines():
+            self.lines.append(f"       {line}")
+
+    def ok(self, condition: bool, label: str, detail: str = "") -> bool:
+        passed = bool(condition)
+        self.lines.append(f"  {'ok  ' if passed else 'FAIL'} {label}")
+        if not passed:
+            self.failures += 1
+            if detail:
+                self.note(detail)
+        return passed
+
+    def equal(self, actual, expected, label: str) -> bool:
+        return self.ok(
+            actual == expected, label, f"expected: {expected!r}\nactual:   {actual!r}"
+        )
+
+    def raises(self, exc_type, fn, label: str) -> Optional[BaseException]:
+        try:
+            fn()
+        except exc_type as caught:
+            self.ok(True, label)
+            return caught
+        except Exception as caught:  # wrong exception is still a failure
+            self.ok(False, label, f"raised {type(caught).__name__}: {caught}")
+            return None
+        self.ok(False, label, "did not raise")
+        return None
+
+    def result(self, headline: str = "") -> Result:
+        body = list(self.lines)
+        if headline:
+            body.insert(0, headline)
+        total = len(
+            [line for line in self.lines if line.startswith(("  ok  ", "  FAIL"))]
+        )
+        body.append(
+            f"  {total - self.failures}/{total} checks passed"
+            if self.failures
+            else f"  all {total} checks passed"
+        )
+        return Result(self.failures == 0, "\n".join(body))
