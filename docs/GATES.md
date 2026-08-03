@@ -113,11 +113,26 @@ a 50-card run, then scale to a full box.
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
    photo, Fulfillment view, CSV import with error reporting.
 8. Gate B smoke test.
-9. Feeder integration (Gate C).
-10. ~~Get the free pokemontcg.io key at dev.pokemontcg.io~~ — done 2026-08-03. Read from
+9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
+    - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
+      `make` target that refreshes it and records the upstream commit SHA.
+    - Build the SQLite index. Cards join to sets by *filename* — `printedTotal` is only in
+      `sets/en.json`, and it is half the join key.
+    - Fill the image mirror from `images.pokemontcg.io`: rate-limited, resumable,
+      manifest-driven, per-file skip on a non-empty existing file. Destination is outside
+      the iCloud tree (D15) and overridable by `PKMNSCAN_IMAGE_MIRROR`; move
+      `harness/images/` there too. Dry-run the `Content-Length` sum first — ~16.7 GB is
+      extrapolated from a 197-image sample, so confirm before committing the disk.
+
+    Deliberately after Gate B: no production code reads this data. `harness/eval/fixtures.py`
+    is the only consumer, step 4's batch script does not depend on it, and a warm harness run
+    already makes zero network calls. Retiring the retry/backoff scaffolding in that file is
+    part of the step, not a follow-up.
+10. Feeder integration (Gate C).
+11. ~~Get the free pokemontcg.io key at dev.pokemontcg.io~~ — done 2026-08-03. Read from
     `.env` as `POKEMONTCG_API_KEY`; keyless limits covered the harness but not set-scale
-    processing.
-11. Only then: scale, polish, deferred list.
+    processing. Step 9 removes the need for it.
+12. Only then: scale, polish, deferred list.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed

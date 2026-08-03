@@ -93,8 +93,12 @@ copies stay listed. Price is per-SKU and shared across copies.
 ## D8 — Pricing source is the TCGplayer Filtered CSV export itself
 
 It carries live, per-SKU, per-variant `TCG Market Price`. Threshold checks and pricing rules
-run directly against it. No external pricing API. pokemontcg.io serves identification
-support (set IDs, collector numbers, printedTotal) and eval images only.
+run directly against it. No external pricing API.
+
+pokemontcg.io data serves identification support (set IDs, collector numbers, printedTotal)
+and eval images only — never pricing. That role is unchanged by D15, which vendors the same
+data locally: the split above is why a snapshot is safe, since nothing price-shaped is in it.
+Read this entry as naming what the data is *for*, not as authorising a call to the live API.
 
 ## D9 — Threshold and floor are both $0.40
 
@@ -154,6 +158,54 @@ Sequencing: codes rides the shared foundation (harness → rig → server → ap
 as the feeder's shakedown cruise, and may sell manually on eBay early. Its delivery
 automation is gated on singles Gate B.
 
+## D15 — Catalog data is vendored, not fetched
+
+The pokemontcg.io dataset is a committed snapshot of the maintainer's own
+`PokemonTCG/pokemon-tcg-data` repo. Nothing calls `api.pokemontcg.io` at runtime. Zero rate
+limits, zero latency, zero dependency on someone else's uptime. Build-order step 9 — after
+Gate B, because no production code reads this data today.
+
+**Why a snapshot is safe here, when a pricing snapshot would not be.** D8 routes every price
+through the TCGplayer export, and the raw repo carries no price block at all. What is left —
+set ids, collector numbers, printedTotal, names, rarity — is fixed the day a card is printed.
+Staleness therefore has exactly one form: a *new* set is missing. That fails loudly as an
+unknown set id, never quietly as a wrong price. Refresh is a `make` target run monthly that
+records the upstream commit SHA, so a T1 score is attributable to a catalog revision.
+
+**SQLite, not Postgres.** ~20k rows, read-only after load, one machine. Every Postgres
+advantage is absent: no concurrent writers (D13's two devices share one truth *through* the
+capture server, so there is still one writer), no network access, no indexing at a scale
+SQLite strains at. Against that it adds a service that must be running for `make harness` to
+pass — the exact class of dependency this entry deletes. `sqlite3` is stdlib, so
+`requirements.txt` keeps its property of naming what it deliberately omits.
+
+**Card records carry no nested `set` object.** Unlike the API response, the set is implied by
+the *filename*, and `printedTotal` lives only in `sets/en.json`. The join key is
+`zfill(3)(number) + "/" + printedTotal`, so joining card→set by filename is the one detail a
+loader must get right. There is no `tcgplayer` block either; see D8 for why that is fine.
+
+**The image mirror must live outside the iCloud tree.** The repo sits under
+`~/Library/Mobile Documents/com~apple~CloudDocs/`. iCloud with Optimize Mac Storage evicts
+large cold files and leaves `.icloud` placeholders behind, at which point an `is_file()` check
+returns False and the mirror silently fails the guarantee it exists to provide. 160 MB of eval
+images sync today; a full mirror is ~16.7 GB (measured: 834 KB average across 197 hires PNGs).
+Path is overridable; `harness/images/` moves out at the same time. Mirroring at all is the
+point — `images.pokemontcg.io` is the piece most likely to throttle or disappear, and it is
+the one piece the JSON repo does not cover.
+
+**Mirror scope is a knob with a default, not a constant.** Full catalog is the default. D12
+scopes the product to SWSH/SV, which would cut the mirror to under a third (~4.8 GB) — recorded
+so that narrowing it later is a decision rather than an oversight.
+
+**Upstream publishes no license file.** Private, single-operator use only. Recorded so no
+later session assumes redistribution rights that were never granted.
+
+**A defect this erases.** The current fetch requests `pageSize=250` with no pagination loop,
+but sv1 has 258 cards, sv4 266, sv8 252 — and the banked `sv1.json` holds exactly 250 records,
+so sv1 is truncated today. Low severity: the manifest pins the selection, so committed scores
+stay reproducible and the effect is sampling bias rather than a wrong number. A local file has
+no page size.
+
 ---
 
 ## Deferred — do not build until all gates pass
@@ -183,6 +235,22 @@ needs a decision entry of its own.
   with it"; T1 can A/B it directly (`PKMNSCAN_T1_SET_HINT=1`). Watch both directions: a
   hint that raises accuracy but also raises *confidence on wrong answers* is a bad trade,
   because it converts review-queue taps into silently mislisted cards.
+- **Cross-check the collector number against the local catalog** (needs D15). Not a
+  replacement for the model's read — a second, independent derivation of the same fact, the
+  same shape as D3 rung 3, where detected `finish` cross-checks capture metadata even when
+  metadata already exists. The model returns `name`, `number`, `printed_total`; given a set
+  hint, the catalog independently yields `(set, name) → number` and `(set) → printedTotal`.
+  Agreement is confidence, disagreement is a review-queue reason.
+
+  The two sources cover different failure modes, which is the whole argument for running
+  both. T1's key misses (`051/197` for `031/197`, `271/167` for `211/167`) had the name right
+  and the numerator misread — the catalog catches those. A name misread with the number right
+  (`Rhydhorn` for `Rhyhorn`) disagrees from the other side — the model's digits catch that.
+  Either source alone is blind to half of it.
+
+  Honest limit, and the reason this is Someday rather than a plan: a cross-check converts
+  misses into review-queue taps, not into correct answers. It buys safety, not a higher T1
+  number — the mirror image of the trade the set-hint item above warns about.
 
 ---
 
