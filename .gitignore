@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.claude/settings.local.json
+__pycache__/
+*.pyc
+.env
+.DS_Store
+captures/
+output/
+*.log
+
+# opsec: never track raw captures or UI renders
+captures/
+harness/images/

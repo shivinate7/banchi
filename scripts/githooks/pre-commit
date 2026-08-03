@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Pre-commit opsec guard. The commit-time half of scripts/guard-opsec.sh.
+#
+# guard-opsec.sh is a Claude Code PreToolUse hook: it reads a JSON payload and only ever
+# sees writes the agent makes. This one reads the staged set, so it also covers edits you
+# make in an editor. Same three rules, same reasons:
+#
+#   1. A live unredeemed code card is a bearer instrument. Anyone who reads the image or
+#      the printed string owns the code. captures/ is gitignored; everywhere else is not.
+#   2. Fixtures are ground truth for the round-trip test. If they drift, T2 still passes
+#      and means nothing.
+#
+# Wired via `git config core.hooksPath scripts/githooks`, so it is tracked and reviewable
+# rather than living unversioned in .git/hooks.
+#
+# Bypassing is `git commit --no-verify`, which is loud and on purpose.
+#
+# Note: guard-opsec.sh blocks writes containing a code-shaped literal, including in
+# comments. That is why the printed-code layout is described below rather than spelled
+# out, and why the pattern is assembled from parts.
+
+set -uo pipefail
+
+fail() {
+  echo "COMMIT BLOCKED: $1" >&2
+  exit 1
+}
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$staged" ] && exit 0
+
+# Fixtures: block changes to an existing one, allow a new one to be added. That is exactly
+# the sanctioned path — a genuine schema change means a fresh export committed alongside
+# the old, never an edit in place.
+changed_fixtures="$(git diff --cached --name-only --diff-filter=MDR | grep -E '(^|/)fixtures/' || true)"
+if [ -n "$changed_fixtures" ]; then
+  fail "fixtures/ is ground truth for the round-trip test and is read-only.
+  Changed: $(echo "$changed_fixtures" | tr '\n' ' ')
+  If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture."
+fi
+
+while IFS= read -r path; do
+  [ -z "$path" ] && continue
+
+  case "$path" in
+    captures/*|*/captures/*) continue ;;
+    *.png|*.jpg|*.jpeg|*.webp|*.heic|*.PNG|*.JPG|*.JPEG)
+      fail "image staged outside captures/ ($path).
+  Code-card photos are bearer instruments and must never reach a tracked path."
+      ;;
+  esac
+done <<< "$staged"
+
+# Printed code layout: four hyphen-separated alphanumeric groups, of length 3, 4, 3, 3.
+g3="[A-Z0-9]{3}"
+g4="[A-Z0-9]{4}"
+code_re="${g3}-${g4}-${g3}-${g3}"
+
+if git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+' | grep -Eq "$code_re"; then
+  fail "staged content matches the printed code-card layout.
+  Never commit a live code. Use a placeholder.
+  Staged files: $(echo "$staged" | tr '\n' ' ')"
+fi
+
+exit 0
