@@ -8,7 +8,7 @@ clears it. Both configurable; neither is a magic number to be nudged by feel.
   floor      listed price = max(pricing-rule output, $0.40) — clamps undercut rules in a
              collapsing market.
 
-Only the `match` rule is wired. Undercut % and markup % are build-order step 5, and are
+Only the `match` rule is wired. Undercut % and markup % are build-order step 4, and are
 deliberately absent rather than stubbed: a rule that silently returns market price while
 claiming to undercut is worse than one that does not exist.
 
@@ -41,7 +41,7 @@ def list_price(
     floor: Decimal = FLOOR,
 ) -> Decimal:
     if rule != RULE_MATCH:
-        raise NotImplementedError(f"pricing rule {rule!r} is build-order step 5")
+        raise NotImplementedError(f"pricing rule {rule!r} is build-order step 4")
     return max(market_price, floor)
 
 

@@ -3,7 +3,10 @@ dist/
 .claude/settings.local.json
 __pycache__/
 *.pyc
-.env
+# Glob, not the bare name: an editor that saves as `.env.rtf` or `.env.txt` leaves a
+# live key in a path `.env` alone does not match, one `git add -A` from being committed.
+.env*
+!.env.example
 .DS_Store
 captures/
 output/
@@ -12,3 +15,8 @@ output/
 # opsec: never track raw captures or UI renders
 captures/
 harness/images/
+
+# Derived, reproducible from a public API. The artefact worth committing is the score in
+# harness/results/, not the images that produced it or the raw model responses.
+harness/.cache/
+.venv/

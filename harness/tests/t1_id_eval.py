@@ -1,37 +1,418 @@
 """T1 — Ground-truth ID eval.
 
-Download ~50 official card images from pokemontcg.io across 2-3 sets as labeled fixtures
-(the API record IS the label). Run identification against them. Report accuracy per set
-and overall.
+~50 official card images from pokemontcg.io across 3 SV-era sets, identified through the
+Anthropic Batch API, scored against the API records that supplied them. The API record
+IS the label, so there is no hand-labelling step and no way for the answer key to drift
+from the images.
 
-To implement:
-  - Cache images under harness/images/ (gitignored — they are reproducible from the API).
-  - Identification runs through the Batch API, model claude-haiku-4-5-20251001, not
-    sequential calls. See CLAUDE.md.
-  - Rerun after any prompt change. Write the score to harness/results/ and commit it, so
-    a regression shows up in the diff rather than in a memory of last week's number.
+Pass: overall_accuracy >= 0.95.
 
-Known blind spot (docs/GATES.md): official API images show no foil texture, so T1 cannot
-validate the `finish` field. That is Gate B's job, against real photos. A green T1 must
-never be read as variant detection working.
+A card counts as correct when BOTH halves of what the join actually consumes are right:
 
-If overall_accuracy < 0.95, build-order step 4 applies: hand-feed the same 50 images
-through TCGplayer Scan & Identify as a manual benchmark before tuning further. No
-integration code either way — see D2 in docs/DECISIONS.md.
+  name        normalized for typography only (case, accents, curly apostrophes, dashes).
+              "Iron Valiant ex" and "Iron Valiant" stay different cards.
+  join key    `pipeline.join.join_key(number, printed_total)` — the real function, not a
+              re-implementation. Scoring the key rather than the two fields separately
+              means T1 measures the thing that decides whether a card finds its catalog
+              row, and a model that reads "25" where the card prints "025" is correctly
+              scored as right, because zero-padding is the key builder's job.
+
+Known blind spot (docs/GATES.md): official API images are flat renders with no foil
+texture, so T1 CANNOT validate the `finish` field. That is Gate B's job, against ~10 real
+photos. Rather than leave that implicit, the prompt lets the model answer `unknown` and
+the results file records the finish distribution — so a green T1 alongside 50 `unknown`
+finishes reads as "variant detection untested", which is the truth, instead of looking
+like variant detection working.
+
+Cost and time: the run is cached by prompt fingerprint + fixture fingerprint (see
+`harness/eval/runcache.py`), so a normal `make harness` re-scores stored responses
+offline and makes no API call. Editing the prompt changes the fingerprint and re-submits
+automatically; `PKMNSCAN_RERUN_T1=1` forces it.
+
+Below the floor, tune the prompt directly — nothing external gates that (changed
+2026-08-03; the Scan & Identify comparison is parked in DECISIONS.md's Someday list). The
+one discipline that does apply: never tune against the cards you then score on. Fixing the
+specific images that failed and re-measuring on the same set produces a number that says
+nothing about the next card, which is the only thing the number is for.
 """
 
-from harness.tests import NotImplementedYet, Result
+from __future__ import annotations
+
+import json
+import os
+from collections import Counter, OrderedDict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from harness.eval import fixtures, runcache
+from harness.tests import Checks, Result
+from identify import batch, prompt
+from pipeline import join
 
 NAME = "T1"
 DESCRIPTION = "Ground-truth ID eval against pokemontcg.io images"
 PASS_CRITERIA = "overall_accuracy >= 0.95"
 
 ID_ACCURACY_FLOOR = 0.95
-EVAL_SET_COUNT = (2, 3)
-EVAL_IMAGE_TARGET = 50
+MIN_EVAL_SETS = 3
+EVAL_IMAGE_TARGET = 150
+
+RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+
+# D2 — the set hint is an optional accelerator recorded at capture, and identification
+# has to work without it. T1 scores the unhinted path so the number is the floor, not the
+# best case. Flip with PKMNSCAN_T1_SET_HINT=1 to measure what the hint is worth.
+SET_HINT_ENV = "PKMNSCAN_T1_SET_HINT"
+
+# Restrict a run to one split. Prompt iteration uses `tune` — it halves the upload and,
+# more importantly, keeps the holdout from being consulted on every attempt, which is
+# itself a slow way of fitting to it.
+SPLIT_ENV = "PKMNSCAN_T1_SPLIT"
+
+# The holdout's card-level failures are deliberately NOT printed. The gate is the holdout
+# score; the moment the tuner can read which holdout cards failed, the holdout has become
+# tuning data and the number stops measuring generalisation. Details still go to the
+# results JSON so a human can inspect them — that is the human's call to make, not the
+# tuner's. Set this to opt in explicitly.
+REVEAL_ENV = "PKMNSCAN_T1_REVEAL_HOLDOUT"
+
+
+class Score:
+    """One card's verdict, kept alongside enough context to explain a miss."""
+
+    __slots__ = ("card", "outcome", "name_ok", "key_ok")
+
+    def __init__(self, card, outcome, name_ok: bool, key_ok: bool):
+        self.card = card
+        self.outcome = outcome
+        self.name_ok = name_ok
+        self.key_ok = key_ok
+
+    @property
+    def correct(self) -> bool:
+        return self.name_ok and self.key_ok
+
+    @property
+    def expected_key(self) -> str:
+        return join.join_key(self.card.number, self.card.printed_total)
+
+    @property
+    def actual_key(self) -> Optional[str]:
+        ident = self.outcome.identification
+        if ident is None or not ident.has_number:
+            return None
+        return join.join_key(ident.number, ident.printed_total)
+
+    def explain(self) -> str:
+        ident = self.outcome.identification
+        if ident is None:
+            return "{0}  {1}: {2}".format(
+                self.card.card_id, self.outcome.status, self.outcome.error or "no result"
+            )
+        parts = []
+        if not self.name_ok:
+            parts.append("name {0!r} != {1!r}".format(ident.name, self.card.name))
+        if not self.key_ok:
+            parts.append("key {0} != {1}".format(self.actual_key, self.expected_key))
+        return "{0}  {1}  ({2})".format(
+            self.card.card_id, "; ".join(parts), ident.confidence
+        )
+
+
+def _set_hint_mode() -> str:
+    return "set_hint" if os.environ.get(SET_HINT_ENV) == "1" else "none"
+
+
+def _image_requests(cards, hint_mode: str) -> List[batch.ImageRequest]:
+    import base64
+
+    requests = []
+    for card in cards:
+        requests.append(
+            batch.ImageRequest(
+                custom_id=card.card_id,
+                media_type=card.media_type,
+                data_b64=base64.standard_b64encode(card.path.read_bytes()).decode("ascii"),
+                set_hint=card.set_name if hint_mode == "set_hint" else None,
+            )
+        )
+    return requests
+
+
+def _score(cards, run: batch.BatchRun) -> List[Score]:
+    scores = []
+    for card in cards:
+        outcome = run.outcomes.get(
+            card.card_id,
+            batch.Outcome(card.card_id, "absent", error="no result returned"),
+        )
+        ident = outcome.identification
+        if ident is None:
+            scores.append(Score(card, outcome, False, False))
+            continue
+        name_ok = prompt.normalize_name(ident.name) == prompt.normalize_name(card.name)
+        key_ok = ident.has_number and join.join_key(
+            ident.number, ident.printed_total
+        ) == join.join_key(card.number, card.printed_total)
+        scores.append(Score(card, outcome, name_ok, bool(key_ok)))
+    return scores
+
+
+def _per_set(scores: List[Score]) -> "OrderedDict[str, Dict[str, object]]":
+    buckets: "OrderedDict[str, Dict[str, object]]" = OrderedDict()
+    for score in scores:
+        bucket = buckets.setdefault(
+            score.card.set_id,
+            {"set_name": score.card.set_name, "total": 0, "correct": 0},
+        )
+        bucket["total"] = int(bucket["total"]) + 1
+        if score.correct:
+            bucket["correct"] = int(bucket["correct"]) + 1
+    for bucket in buckets.values():
+        bucket["accuracy"] = round(int(bucket["correct"]) / int(bucket["total"]), 4)
+    return buckets
+
+
+def _write_results(payload: dict, hint_mode: str) -> Path:
+    """One file per (date, configuration). The suffix matters: a hinted run and an
+    unhinted run are different measurements, and letting them share a filename means
+    whichever ran last silently becomes 'the' committed score."""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    suffix = "" if hint_mode == "none" else "-{0}".format(hint_mode)
+    path = RESULTS_DIR / "t1-{0}{1}.json".format(stamp, suffix)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", "utf-8")
+    return path
 
 
 def run() -> Result:
-    raise NotImplementedYet(
-        "NOT_IMPLEMENTED: no identification pipeline yet (build-order step 5)"
+    checks = Checks()
+    notes: List[str] = []
+    say = notes.append
+
+    hint_mode = _set_hint_mode()
+
+    try:
+        cards = fixtures.load(log=say)
+    except fixtures.FixtureError as exc:
+        return Result(False, "eval images unavailable: {0}".format(exc))
+
+    if not cards:
+        return Result(False, "eval images unavailable: fixture set is empty")
+
+    wanted = os.environ.get(SPLIT_ENV, "").strip().lower()
+    if wanted in (fixtures.TUNE, fixtures.HOLDOUT):
+        cards = [card for card in cards if card.split == wanted]
+        say("restricted to the {0} split: {1} images".format(wanted, len(cards)))
+    elif wanted:
+        return Result(
+            False,
+            "{0}={1!r} is not a split — use {2!r} or {3!r}".format(
+                SPLIT_ENV, wanted, fixtures.TUNE, fixtures.HOLDOUT
+            ),
+        )
+
+    prompt_id = prompt.prompt_fingerprint()
+    fixture_id = fixtures.fixture_fingerprint(cards)
+    key = runcache.cache_key(prompt_id, fixture_id, hint_mode)
+
+    cached = None if runcache.forced() else runcache.load(key)
+    if cached is not None:
+        run_result: batch.BatchRun = cached["run"]  # type: ignore[assignment]
+        source = "cached run {0}".format(cached["submitted_at"])
+    else:
+        try:
+            run_result = batch.run_batch(_image_requests(cards, hint_mode), log=say)
+        except batch.BatchError as exc:
+            return Result(
+                False,
+                "identification did not run: {0}\n"
+                "      T1 needs an Anthropic key: export ANTHROPIC_API_KEY, or put\n"
+                "      ANTHROPIC_API_KEY=sk-ant-... in .env (gitignored).\n"
+                "      Nothing is scored without it — a skipped eval must not read "
+                "as a pass.".format(exc),
+            )
+        runcache.save(key, run_result)
+        source = "fresh batch {0}".format(", ".join(run_result.batch_ids) or "?")
+
+    scores = _score(cards, run_result)
+    correct = sum(1 for score in scores if score.correct)
+    total = len(scores)
+    accuracy = correct / total
+    per_set = _per_set(scores)
+    finishes = Counter(
+        (score.outcome.identification.detected_finish or prompt.UNKNOWN_FINISH)
+        if score.outcome.identification
+        else "no-result"
+        for score in scores
     )
+
+    by_split = {
+        name: [s for s in scores if s.card.split == name]
+        for name in (fixtures.TUNE, fixtures.HOLDOUT)
+    }
+    split_stats = {
+        name: {
+            "images": len(group),
+            "correct": sum(1 for s in group if s.correct),
+            "accuracy": round(sum(1 for s in group if s.correct) / len(group), 4)
+            if group
+            else None,
+        }
+        for name, group in by_split.items()
+    }
+    holdout = split_stats[fixtures.HOLDOUT]
+    # The gate reads the holdout. A run that did not score the holdout cannot clear it —
+    # a partial run is a development convenience, never a verdict.
+    gate_accuracy = holdout["accuracy"]
+
+    payload = {
+        "test": NAME,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "model": prompt.MODEL,
+        "transport": "anthropic.messages.batches",
+        "prompt_fingerprint": prompt_id,
+        "fixture_fingerprint": fixture_id,
+        "set_hint_mode": hint_mode,
+        "image_count": total,
+        "set_count": len(per_set),
+        "split_requested": os.environ.get(SPLIT_ENV, "all"),
+        "splits": split_stats,
+        "gated_on": fixtures.HOLDOUT,
+        "holdout_accuracy": gate_accuracy,
+        "overall_accuracy": round(accuracy, 4),
+        "accuracy_floor": ID_ACCURACY_FLOOR,
+        "passed": gate_accuracy is not None and gate_accuracy >= ID_ACCURACY_FLOOR,
+        "per_set": per_set,
+        "name_correct": sum(1 for score in scores if score.name_ok),
+        "join_key_correct": sum(1 for score in scores if score.key_ok),
+        "finish_distribution": dict(sorted(finishes.items())),
+        "finish_note": (
+            "T1 cannot validate `finish` — official API images are flat renders with no "
+            "foil texture. Gate B validates it against real photos. See docs/GATES.md."
+        ),
+        "batch_ids": run_result.batch_ids,
+        "usage": {
+            "input_tokens": run_result.usage.input_tokens,
+            "output_tokens": run_result.usage.output_tokens,
+        },
+        # Split apart, because they are read by different people for different reasons.
+        # `tune_misses` is what prompt work is allowed to look at. `holdout_misses` is
+        # recorded so a human can audit a regression, and is never printed to stdout —
+        # see REVEAL_ENV.
+        "tune_misses": [
+            s.explain() for s in by_split[fixtures.TUNE] if not s.correct
+        ],
+        "holdout_misses": [
+            s.explain() for s in by_split[fixtures.HOLDOUT] if not s.correct
+        ],
+    }
+    results_path = _write_results(payload, hint_mode)
+
+    for line in notes:
+        checks.note(line)
+    checks.note("")
+    checks.note(
+        "{0} images · {1} sets · {2} · prompt {3} · fixtures {4} · set hint: {5}".format(
+            total, len(per_set), prompt.MODEL, prompt_id, fixture_id, hint_mode
+        )
+    )
+    checks.note(source)
+    checks.note("")
+    for set_id, bucket in per_set.items():
+        checks.note(
+            "{0:<8} {1:<22} {2:>2}/{3:<2}  {4:.3f}".format(
+                set_id,
+                str(bucket["set_name"])[:22],
+                bucket["correct"],
+                bucket["total"],
+                bucket["accuracy"],
+            )
+        )
+    checks.note(
+        "{0:<8} {1:<22} {2:>3}/{3:<3} {4:.3f}".format(
+            "all sets", "", correct, total, accuracy
+        )
+    )
+    checks.note("")
+    for name in (fixtures.TUNE, fixtures.HOLDOUT):
+        stat = split_stats[name]
+        marker = "  <- the gate" if name == fixtures.HOLDOUT else ""
+        checks.note(
+            "{0:<8} {1:<22} {2:>3}/{3:<3} {4}{5}".format(
+                name,
+                "",
+                stat["correct"],
+                stat["images"],
+                "{0:.3f}".format(stat["accuracy"]) if stat["accuracy"] is not None else "  n/a",
+                marker,
+            )
+        )
+    checks.note("")
+    checks.note(
+        "name only {0}/{1} · join key only {2}/{3}".format(
+            payload["name_correct"], total, payload["join_key_correct"], total
+        )
+    )
+    checks.note(
+        "finish detected: {0}   (T1 blind spot — see docs/GATES.md)".format(
+            ", ".join("{0} {1}".format(k, v) for k, v in sorted(finishes.items()))
+        )
+    )
+    if payload["tune_misses"]:
+        checks.note("")
+        checks.note("tune misses ({0}) — prompt work reads these:".format(
+            len(payload["tune_misses"])
+        ))
+        for miss in payload["tune_misses"]:
+            checks.note("  " + miss)
+    holdout_misses = payload["holdout_misses"]
+    if holdout_misses:
+        checks.note("")
+        if os.environ.get(REVEAL_ENV) == "1":
+            checks.note("holdout misses ({0}) — REVEALED, this run is now tuning data:".format(
+                len(holdout_misses)
+            ))
+            for miss in holdout_misses:
+                checks.note("  " + miss)
+        else:
+            checks.note(
+                "holdout misses: {0} — card detail withheld on purpose. It is in the "
+                "results JSON for a human; reading it to fix the prompt turns the "
+                "holdout into tuning data and voids the number.".format(
+                    len(holdout_misses)
+                )
+            )
+    checks.note("")
+
+    checks.ok(
+        len(per_set) >= MIN_EVAL_SETS,
+        "sampled {0} sets (spec: >= {1})".format(len(per_set), MIN_EVAL_SETS),
+    )
+    checks.ok(
+        total >= EVAL_IMAGE_TARGET,
+        "{0} images scored (spec: >= {1})".format(total, EVAL_IMAGE_TARGET),
+        "a partial run cannot clear the gate — drop {0} to score everything".format(
+            SPLIT_ENV
+        ),
+    )
+    checks.ok(
+        not run_result.failed,
+        "every submitted image returned a result",
+        "\n".join(
+            "{0}: {1}".format(o.custom_id, o.error) for o in run_result.failed[:10]
+        ),
+    )
+    checks.ok(
+        gate_accuracy is not None and gate_accuracy >= ID_ACCURACY_FLOOR,
+        "holdout accuracy {0} >= {1}".format(
+            "{0:.4f}".format(gate_accuracy) if gate_accuracy is not None else "not measured",
+            ID_ACCURACY_FLOOR,
+        ),
+        "tune against the tune split only — the holdout is the measurement, not the "
+        "target (docs/GATES.md T1)",
+    )
+    checks.note("score written to {0}".format(results_path.relative_to(RESULTS_DIR.parents[1])))
+
+    return checks.result()

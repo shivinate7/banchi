@@ -17,10 +17,23 @@ and overall.
 
 - **Pass**: `overall_accuracy >= 0.95`
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
-  visible in the diff.
+  visible in the diff. One file per date AND configuration — a hinted run and an unhinted
+  run are different measurements and must never share a filename.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
   `finish` field. That is Gate B's job. Do not let a green T1 be read as variant detection
   working.
+
+**Below the floor, tune the prompt — but never against the cards you score on.** Fixing the
+specific images that failed and re-measuring on the same set reports a number that means
+nothing about the next card, and that number is the whole basis for trusting identification
+once there is no answer key. So: hold out a slice the tuner never sees the failures from,
+tune against the rest, and report only the held-out score. `PKMNSCAN_REFRESH_IMAGES=1` with
+a different `EVAL_SETS` draws a fresh sample.
+
+**50 images is a small sample.** One card is two percentage points, and the confidence
+interval is roughly ±6, so 0.94 and 0.96 are not meaningfully different. Now that the
+pokemontcg.io key is in place, prefer 150–200 images — it costs cents and makes the
+verdict mean something.
 
 ### T2 — Fixture round-trip
 
@@ -90,19 +103,23 @@ a 50-card run, then scale to a full box.
 2. **Scaffolding**: `Makefile`, `.claude/settings.json` hooks, `scripts/screenshot.sh`,
    empty harness that exits 1. Do this before any feature so the check exists first.
 3. Verification harness (T1–T4).
-4. *Only if T1 < 0.95*: hand-feed the 50 harness images through Scan & Identify as a manual
-   benchmark before tuning further. See D2 — no integration code either way.
-5. Batch script v2: Batch API, variant ladder, catalog join, real CSV library.
-6. Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
+4. Batch script v2: Batch API, variant ladder, catalog join, real CSV library.
+5. Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
    state shared across devices.
-7. Design tokens locked and one component built against them — see `docs/DESIGN.md`.
+6. Design tokens locked and one component built against them — see `docs/DESIGN.md`.
    Before any screen.
-8. Vite capture app: device picker, manual capture, set hint + variant toggles, position
+7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
    photo, Fulfillment view, CSV import with error reporting.
-9. Gate B smoke test.
-10. Feeder integration (Gate C).
-11. Before full-set runs: get the free pokemontcg.io key at dev.pokemontcg.io. Keyless
-    rate limits cover the harness but not set-scale processing.
-12. Only then: scale, polish, deferred list.
+8. Gate B smoke test.
+9. Feeder integration (Gate C).
+10. ~~Get the free pokemontcg.io key at dev.pokemontcg.io~~ — done 2026-08-03. Read from
+    `.env` as `POKEMONTCG_API_KEY`; keyless limits covered the harness but not set-scale
+    processing.
+11. Only then: scale, polish, deferred list.
+
+**Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
+directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed
+from this list on 2026-08-03 and parked in `docs/DECISIONS.md`; it is available as a
+reference point when someone wants it, never as a precondition.

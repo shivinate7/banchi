@@ -20,10 +20,15 @@ without it, better with it.
 
 **TCGplayer Scan & Identify was evaluated and rejected as a pipeline component.** It is
 UI-only with no API contract, inserts a manual browser step into an autonomous flow, does
-not guarantee per-image→position mapping, and couples identification to one platform. It
-survives only as a benchmark and emergency escape hatch: if the harness scores Haiku below
-the accuracy floor on real photos, hand-feed a batch through S&I to compare. Even then, no
-integration code is written.
+not guarantee per-image→position mapping, and couples identification to one platform. No
+integration code is written, ever.
+
+**It is also not a precondition for anything** (changed 2026-08-03). It was previously the
+required next step whenever T1 scored below the floor, which put a manual browser session
+on the critical path between a red harness and any attempt to fix it — the tail wagging the
+dog. A sub-floor T1 is now worked directly. S&I is parked in the Someday list below as an
+optional reference point: it answers "is this task hard, or is our prompt weak?", which is
+worth knowing eventually and worth nothing urgently.
 
 Evaluate any future third-party integration on: API or UI? Does it return the data the core
 depends on? Does the cost it replaces matter? Does it add a manual step? Does it couple us
@@ -160,6 +165,26 @@ automation is gated on singles Gate B.
   the finish enum are Pokémon-specific. Expansion later is config plus an enum, so no
   session redesigns for it early.
 - Perceptual-hash identification layer (v2 accuracy cross-check).
+
+---
+
+## Someday — worth doing, blocking nothing
+
+Distinct from Deferred above: those are things not to build yet. These are things that can
+be done any time, in any order, that no other work waits on. Nothing here belongs in a plan
+or a gate. If an item starts blocking something, it has stopped being a Someday item and
+needs a decision entry of its own.
+
+- **Benchmark T1's eval images through TCGplayer Scan & Identify.** Hand-feed the same
+  ~50 images and compare. Answers one question and only one: when Haiku scores below the
+  floor, is the task hard or is the prompt weak? That reframes whether to keep tuning or
+  move the bar. Manual, ~30 minutes, no integration code — see D2.
+- **Measure what the set hint is actually worth.** D2 asserts identification is "better
+  with it"; T1 can A/B it directly (`PKMNSCAN_T1_SET_HINT=1`). Watch both directions: a
+  hint that raises accuracy but also raises *confidence on wrong answers* is a bad trade,
+  because it converts review-queue taps into silently mislisted cards.
+
+---
 
 Unsorted scanning is **not** deferred: it works today via the optional hints, with more
 review-queue traffic. Just do not optimize for it before Gate C.

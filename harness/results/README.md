@@ -7,4 +7,4 @@ One file per run: `t1-<UTC date>.json`, carrying at minimum the overall accuracy
 per-set breakdown, the image count, the model id, and a hash of the identification prompt
 — a score without the prompt that produced it cannot be compared to anything.
 
-Empty until build-order step 5.
+Empty until build-order step 4.

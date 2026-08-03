@@ -1,0 +1,10 @@
+# Harness + pipeline runtime. Installed into .venv by `make venv`.
+#
+# anthropic  T1's identification transport (Batch API). Nothing else in the repo
+#            talks to Anthropic — see identify/batch.py.
+anthropic>=0.69
+
+# Deliberately absent:
+#   requests   stdlib urllib covers the pokemontcg.io fetch; one fewer dependency
+#              between a clean clone and a green harness.
+#   csv libs   Python's own `csv` is the real CSV library CLAUDE.md requires.

@@ -1,0 +1,54 @@
+{
+  "accuracy_floor": 0.95,
+  "batch_ids": [
+    "msgbatch_01FV8wzhpuRbYVSfiFE5pdqc"
+  ],
+  "finish_distribution": {
+    "holo": 10,
+    "normal": 34,
+    "unknown": 6
+  },
+  "finish_note": "T1 cannot validate `finish` \u2014 official API images are flat renders with no foil texture. Gate B validates it against real photos. See docs/GATES.md.",
+  "fixture_fingerprint": "3269999a70e8",
+  "generated_at": "2026-08-03T21:40:23+00:00",
+  "image_count": 50,
+  "join_key_correct": 48,
+  "misses": [
+    "sv3pt5-61  name 'Poliwirl' != 'Poliwhirl'  (high)",
+    "sv3pt5-171  key 017/165 != 171/165  (high)",
+    "sv4-235  key 255/182 != 235/182  (high)"
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "name_correct": 49,
+  "overall_accuracy": 0.94,
+  "passed": false,
+  "per_set": {
+    "sv1": {
+      "accuracy": 1.0,
+      "correct": 17,
+      "set_name": "Scarlet & Violet",
+      "total": 17
+    },
+    "sv3pt5": {
+      "accuracy": 0.8824,
+      "correct": 15,
+      "set_name": "151",
+      "total": 17
+    },
+    "sv4": {
+      "accuracy": 0.9375,
+      "correct": 15,
+      "set_name": "Paradox Rift",
+      "total": 16
+    }
+  },
+  "prompt_fingerprint": "1ef974bf511d",
+  "set_count": 3,
+  "set_hint_mode": "set_hint",
+  "test": "T1",
+  "transport": "anthropic.messages.batches",
+  "usage": {
+    "input_tokens": 97532,
+    "output_tokens": 1863
+  }
+}
