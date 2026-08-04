@@ -226,6 +226,120 @@ so sv1 is truncated today. Low severity: the manifest pins the selection, so com
 stay reproducible and the effect is sampling bias rather than a wrong number. A local file has
 no page size.
 
+## D16 — The docs are checked mechanically; the prose is checked by asking
+
+Ten markdown files carry this project's architecture and the reasoning behind it, and until
+`scripts/docs-audit.py` existed nothing verified a single line of them. Every path, `make`
+target, subcommand, test id, threshold, decision number and env var in them was true only
+for as long as someone remembered. That is the same argument `docs/GATES.md` makes for the
+harness — "without it, 'looks done' is the only available signal" — applied to the files
+that tell the next session what done means.
+
+**Three layers, split by how knowable each finding is.**
+
+1. **Mechanical** — `scripts/docs-audit.py`, stdlib-only, run by the pre-commit hook and by
+   `make docs-audit`. Nine checks, all deterministic. **Exit 1 blocks**, because a dangling
+   path is provably wrong and there is no judgment to defer.
+2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and
+   `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20
+   staged lines, so a typo fix stays quiet.
+3. **Semantic** — `/docs-audit`, a model reading prose against the diff. Never a gate: it
+   costs money, it is not reproducible, and this project does not let a non-deterministic
+   thing decide whether work is done.
+
+**Why the coupling question does not block.** Stopping a commit over a question teaches you
+to reach for `git commit --no-verify`, and `--no-verify` also switches off the three opsec
+rules in the same hook. Trading a code-card bearer-instrument guard for a prose reminder is
+a bad trade, so layer 2 asks and gets out of the way.
+
+**Nothing on the audit path can write.** The script opens, compares, prints, and sets an
+exit code; it parses with `ast` rather than importing, so it does not even run project code.
+Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
+Adding a `--fix` flag is a change to this entry, not a configuration knob. The reason is the
+failure this entry exists to prevent:
+
+> **A blocked commit is reported, not resolved.** Never edit a doc for the sole purpose of
+> getting a commit through.
+
+An agent that can edit the docs to satisfy its own gate will do exactly that, and each edit
+will look reasonable. The docs stop being a record of what was decided and become a record
+of what was convenient — and unlike a failing test, nothing downstream ever notices. That is
+also why `/docs-audit` shows every proposed change in one table before touching anything,
+and never stages or commits: the owner's own `git diff` is the last link in the chain.
+
+**Not a harness test.** T7 was considered and rejected. The harness runs behind the `Stop`
+hook (`scripts/stop-gate.sh`), so a docs test there would fire at the end of every turn,
+including turns that touched no markdown at all. The trigger is commit-time and on-demand
+by choice. Do not add it to `harness/run.py:TESTS`.
+
+**The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs
+name before they exist — `PKMNSCAN_IMAGE_MIRROR` is documented by build-order step 9 today.
+The audit **fails when an entry comes true**, which forces the line out at that moment.
+Same instinct as `stop-gate.sh` arming on the absence of `NOT_IMPLEMENTED` markers rather
+than on a toggle: a list that only grows becomes a list nobody has read since.
+
+**A threshold is published, not restated.** Each test's `PASS_CRITERIA` must appear word for
+word as the `- **Pass**:` line of its `### Tn` section, and layer 1 blocks a commit where
+they disagree. **Reconciliation runs from the test to the gate.** The test is where a
+threshold is argued about and changed; `docs/GATES.md` is where it is announced. Rewriting a
+test so a doc-checker goes quiet inverts that and makes the test worse to please a tool.
+
+Five of six had drifted before this was enforced, which is the case that decided the
+direction: those tests were changed deliberately and approved, and the change simply never
+reached the markdown. An approved change that does not reach the doc is the failure this
+whole entry exists to stop, so it blocks rather than asking.
+
+**One known gap, recorded so a green report is not misread.** Layer 1 proves references
+resolve and thresholds agree — not that a paragraph is true. Treat a clean mechanical run
+exactly as `docs/GATES.md` treats a green T1 and T6: it means the checkable part checks out.
+
+## D17 — The repo describes itself in `docs/map.py`, and the map is audited
+
+Two questions kept costing a full search to answer: *what is built and what is TBD*, and
+*which settled decisions govern the file I am about to edit*. Both were already answered in
+prose — `docs/GATES.md` has the build order, this file has the rulings — but prose has to be
+read whole before it can be trusted, and the first question alone cost a subagent sweep and
+roughly 285k tokens in one session.
+
+`docs/map.py` answers both in one Read: build-order status, gate status, and per-component
+`does` / `status` / `governed_by` / `tested_by`. Pure literals, no imports, read with
+`ast.literal_eval` by everything that consumes it.
+
+**Data, not another markdown section, because it has three consumers.** A human or agent
+reading it once; `scripts/docs-audit.py` check 10, which verifies every claim in it; and
+`scripts/decision-context.py`, the `PreToolUse` hook that names the governing decisions
+before a file is edited. Prose serves the first well and the other two not at all.
+
+**It is audited exactly as hard as it is trusted.** An index that drifts is worse than no
+index, because it is believed. Check 10 fails when a `built` path is missing, when a
+`planned` path has quietly arrived, when `governed_by` cites a decision with no heading,
+when gate status disagrees with `docs/GATES.md`, and — the rule that does the real work —
+when a source file exists that no entry mentions. Adding a module without touching the map
+fails the commit. That orphan rule is the difference between a map and a stale map.
+
+**`governed_by` is a superset of the citations in the file's own comments,** enforced in the
+same check. The code already said `D9` in `pipeline/pricing.py`; the map may add D8, which
+the file never names but which decides where its prices come from. It may never know *less*
+than the code does.
+
+**The hook is advisory and silent by default.** `scripts/decision-context.py` exits 0
+unconditionally — bad input, missing map, its own bugs — and prints nothing for files no
+entry covers. It summarises each decision by lifting the entry's own bolded lead-in
+sentences out of this file, so a summary cannot drift from the decision it summarises;
+nothing is restated by hand. It emits `additionalContext`, never `permissionDecision`:
+`"allow"` would auto-approve every Write and Edit in the project.
+
+Precedent for the caution: the opsec `PreToolUse` guard over-triggered and was disabled
+within a day. A hook that speaks on every edit gets muted, and a muted hook protects
+nothing. The first draft of this one merged each package's decisions into every module and
+told you `pipeline/pricing.py` was governed by D2, Haiku vision — true of `pipeline/`,
+useless there. Module entries now stand alone.
+
+**Known limit.** The hook depends on a payload shape that has moved between Claude Code
+releases. If a release ignores `additionalContext` the JSON is printed instead, so the
+failure mode is a lost nudge and never a blocked edit — and `CLAUDE.md` points at
+`docs/map.py` directly, which needs no hook at all.
+
 ---
 
 ## Deferred — do not build until all gates pass

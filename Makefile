@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help harness check dev server screenshot lint typecheck venv
+.PHONY: help harness check docs-audit dev server screenshot lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -13,11 +13,12 @@
 PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 help:
-	@echo "PKMNSCAN — build-order step 4 (batch script v2)"
+	@echo "PKMNSCAN — step 4 done (batch script v2) · step 5 next (capture server)"
 	@echo
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make harness      T1-T6 verification tests. Must exit 0 before any commit."
-	@echo "  make check        harness + lint + typecheck"
+	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
+	@echo "  make check        harness + docs-audit + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -41,10 +42,20 @@ venv:
 harness:
 	@$(PYTHON) harness/run.py
 
+# Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
+# prints and passes, here for the same reason the pre-commit hook lets it through: a
+# question that can fail your build is a question you learn to route around. See D16.
+# python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
+docs-audit:
+	@python3 scripts/docs-audit.py; \
+	status=$$?; \
+	if [ $$status -eq 1 ]; then exit 1; fi
+
 # Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
 # A check suite has to run in a known order and stop at the first failure.
 check:
 	@$(MAKE) --no-print-directory harness
+	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 

@@ -51,8 +51,8 @@ verdict mean something.
 Load `fixtures/sv09_export_untouched.csv`, fill `Add to Quantity` and
 `TCG Marketplace Price` on sample rows, write, re-parse.
 
-- **Pass**: exactly those two fields differ, and byte format is preserved — unquoted header
-  row, fully quoted data fields, CRLF line endings.
+- **Pass**: exactly 2 fields differ; unquoted header, quoted data fields, CRLF
+- Byte format is preserved throughout — the three properties above are the whole of it.
 - Assert against `fixtures/staged-import-accepted.csv`, which TCGplayer accepted verbatim.
 - After any real import, use TCGplayer's **Export From Staged** button and diff it against
   the pipeline's intended output. That is a machine-checkable round trip against the real
@@ -73,8 +73,8 @@ Required cases:
   sidecar set hint, reviews as `set_ambiguous` without one, and leaves non-colliding keys
   untouched
 
-- **Pass**: zero unmatched, or every unmatched card reported in both directions and routed
-  to a standing queue with its position retained, before any output is written.
+- **Pass**: zero unmatched, or every unmatched card reported both ways and routed to a
+  standing queue with its position, before any output is written
 
 Output is **not** suppressed by a non-empty queue (batch script v2 §5.6). An unresolved
 card sits at a known position in a box: it is not lost and it is not urgent, and holding
@@ -100,8 +100,8 @@ the other thing that decides whether a resolved card is listed:
   swept into the sub-threshold flat price
 - `--review-below-confidence=none` restores "confidence never routes on its own"
 
-- **Pass**: all four stages, the review path fires on disagreement, and every routing row
-  above sends the card to the queue named.
+- **Pass**: all four stages correct, review fires on metadata/detection disagreement, and
+  every routing row sends the card to the queue named
 
 ### T5 — Pricing rules
 
@@ -109,8 +109,10 @@ New with batch script v2. Undercut and markup against both bases, rounding half-
 decimals, the floor clamp applied *after* rounding, the threshold always read from
 `TCG Market Price` whatever the basis, and the `no_market_data` refusal.
 
-- **Pass**: every rule × basis combination prices exactly, the floor clamp cannot be
-  rounded under, and a `no_market_data` SKU is never auto-priced.
+- **Pass**: every rule x basis prices exactly; floor clamp applied after rounding;
+  threshold always reads market; no_market_data never auto-priced
+- "Floor clamp applied after rounding" is also the statement that it cannot be rounded
+  under — clamping first would let the rounding step drop the price back below the floor.
 
 ### T6 — Card geometry
 
@@ -121,9 +123,11 @@ read — so detection gets its own failing test name.
 Synthetic composites only: a card rectangle rendered onto a background at a **known**
 offset, scale and rotation, so the answer key is exact. No rig photo exists in this repo.
 
-- **Pass**: the detected rectangle is within tolerance of the known one across the offset,
-  scale and rotation sweep; the title band and number corner crops each contain their
-  target region; and a frame with no card returns "not found" rather than a guess.
+- **Pass**: detected rectangle within tolerance across the sweep; bands contain their
+  target; no card -> not found
+- The sweep is offset, scale and rotation. "Bands" are the title band and the number
+  corner, and each must contain its target region. "Not found" must be a refusal, never a
+  guess.
 - **Known blind spot, and it is the important one**: this measures the algorithm against
   images this repo generated, which is not the same as measuring it against photographs
   from the rig. Real detection rates are a Gate B number. A green T6 means the geometry is

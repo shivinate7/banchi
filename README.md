@@ -8,14 +8,16 @@ physical location tracking. Two tracks share one physical rig.
 ```
 CLAUDE.md                  always-on rules. Keep it short.
 codes/CLAUDE.md            code-card track, auto-loaded in that directory
+docs/map.py                the repo as data: built vs TBD, and what governs each file
 docs/DECISIONS.md          settled decisions + rationale (read on demand)
 docs/CODES-DECISIONS.md    same, for the codes track
 docs/GATES.md              gates, harness contract, build order
 docs/DESIGN.md             design tokens, Fulfillment view constraints
 docs/specs/                interviewed specs, executed in a clean session
 .claude/skills/            on-demand domain knowledge (TCGplayer CSV schema)
+.claude/commands/          /docs-audit — prose vs code, proposes, never commits
 .claude/settings.json      permissions + hooks
-scripts/                   guard scripts, screenshot runner
+scripts/                   guard scripts, screenshot runner, docs-audit.py
 fixtures/                  real TCGplayer exports — ground truth, never modified
 
 pkmnscan                   the CLI. `./pkmnscan --help`

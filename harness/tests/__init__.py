@@ -4,7 +4,15 @@ Each test module exposes:
 
     NAME            "T1"
     DESCRIPTION     one line
-    PASS_CRITERIA   the threshold, verbatim from docs/GATES.md
+    PASS_CRITERIA   the threshold. Published verbatim as the `- **Pass**:` line of this
+                    test's section in docs/GATES.md, and `make docs-audit` blocks a commit
+                    where the two disagree.
+
+                    THE TEST IS THE SOURCE; THE GATE PUBLISHES IT. Change a threshold here
+                    and update `### Tn` in docs/GATES.md to match — never the reverse. This
+                    is where a threshold is argued about and changed; the doc is where it is
+                    announced, and rewording a test to satisfy the doc makes the test worse
+                    to please a checker. Five of six drifted while nothing enforced this.
     run() -> Result
 
 A stub raises NotImplementedYet with a message beginning "NOT_IMPLE" + "MENTED". That

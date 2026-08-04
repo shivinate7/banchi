@@ -65,6 +65,10 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
 ## Map
 
+- `docs/map.py` — the repo as data: what is built, what is TBD, and which decisions govern
+  each file. **Read this before editing anything under `pipeline/`, `identify/`, `store/`,
+  `geometry/` or `cli/`** — every entry there is settled and re-litigating one wastes a
+  session. Audited by `make docs-audit`, so it cannot quietly go stale.
 - @docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 - @docs/GATES.md — gates, harness contract, build order.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
