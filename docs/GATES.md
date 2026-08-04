@@ -24,6 +24,12 @@ and overall.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per date AND configuration — a hinted run and an unhinted
   run are different measurements and must never share a filename.
+- **The results file is rewritten only when the measurement changes.** A cached re-scoring
+  recomputes nothing, so it leaves the file byte-identical rather than restamping
+  `generated_at`. Otherwise every `make harness` puts a one-line diff on a tracked file and
+  a real re-measurement stops being visible among the noise — which is the one thing the
+  committed score exists to show. `batch_ids` and `usage` are part of the comparison, so a
+  fresh submission always writes even if the accuracy lands on the same number.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
   `finish` field. That is Gate B's job. Do not let a green T1 be read as variant detection
   working.

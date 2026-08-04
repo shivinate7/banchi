@@ -174,16 +174,45 @@ def _per_set(scores: List[Score]) -> "OrderedDict[str, Dict[str, object]]":
     return buckets
 
 
-def _write_results(payload: dict, hint_mode: str) -> Path:
+def _write_results(payload: dict, hint_mode: str) -> Tuple[Path, bool]:
     """One file per (date, configuration). The suffix matters: a hinted run and an
     unhinted run are different measurements, and letting them share a filename means
-    whichever ran last silently becomes 'the' committed score."""
+    whichever ran last silently becomes 'the' committed score.
+
+    Returns (path, wrote). A cached re-scoring recomputes nothing, so it must not dirty
+    a committed score: if the only field that would change is `generated_at`, the file
+    is left exactly as it was. Otherwise every `make harness` produces a one-line diff
+    on a tracked file, and the log stops being able to tell a real re-measurement from
+    a timestamp bump — which is the one question `harness/results/` exists to answer.
+
+    The comparison covers everything else in the payload, `batch_ids` and `usage`
+    included, so the discrimination lands where it should: replaying cached responses
+    reproduces those byte for byte, while a fresh submission carries new batch ids and
+    is written even if the accuracy happens to come out identical. The kept timestamp is
+    the one from the run that actually produced the number, which is the more truthful
+    of the two anyway."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     suffix = "" if hint_mode == "none" else "-{0}".format(hint_mode)
     path = RESULTS_DIR / "t1-{0}{1}.json".format(stamp, suffix)
+
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            existing = None  # unreadable or corrupt: overwrite it, that IS a change
+        if isinstance(existing, dict) and _same_measurement(existing, payload):
+            return path, False
+
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", "utf-8")
-    return path
+    return path, True
+
+
+def _same_measurement(existing: dict, payload: dict) -> bool:
+    """Everything but `generated_at`. A timestamp is not a finding."""
+    return {k: v for k, v in existing.items() if k != "generated_at"} == {
+        k: v for k, v in payload.items() if k != "generated_at"
+    }
 
 
 def run() -> Result:
@@ -308,7 +337,7 @@ def run() -> Result:
             s.explain() for s in by_split[fixtures.HOLDOUT] if not s.correct
         ],
     }
-    results_path = _write_results(payload, hint_mode)
+    results_path, results_written = _write_results(payload, hint_mode)
 
     for line in notes:
         checks.note(line)
@@ -413,6 +442,23 @@ def run() -> Result:
         "tune against the tune split only — the holdout is the measurement, not the "
         "target (docs/GATES.md T1)",
     )
-    checks.note("score written to {0}".format(results_path.relative_to(RESULTS_DIR.parents[1])))
+    # The results file is tracked, so a re-scoring that recomputes nothing must leave it
+    # alone — otherwise every harness run puts a timestamp diff in the log and a real
+    # re-measurement stops being visible among them. Checked here rather than left to
+    # `git status`, because the whole point is that nobody has to notice.
+    checks.ok(
+        _same_measurement(payload, {**payload, "generated_at": "1970-01-01T00:00:00+00:00"}),
+        "a timestamp alone is not a new measurement",
+    )
+    checks.ok(
+        not _same_measurement(payload, {**payload, "holdout_accuracy": -1.0}),
+        "...but a changed score is, and rewrites the file",
+    )
+    checks.note(
+        "score {0} {1}".format(
+            "written to" if results_written else "unchanged, already at",
+            results_path.relative_to(RESULTS_DIR.parents[1]),
+        )
+    )
 
     return checks.result()
