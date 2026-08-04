@@ -39,7 +39,18 @@ to one platform?
 Resolve normal / reverse holo / holo per card, in order:
 
 1. **Capture-time metadata** — variant toggle in the capture app, stored in the card's JSON
-   sidecar. Primary path. `--variant` on the batch script is only an override.
+   sidecar. Primary path. `--variant` on the batch script **fills the finish in where a
+   sidecar records none, and never overrides one** (clarified 2026-08-03; this entry
+   previously read "only an override", which the implementation would have had to read as
+   licence to replace a recorded toggle).
+
+   Fill-gaps rather than override, because the rest of this entry spends three paragraphs
+   establishing that the toggle is a *claim* — and a flag that can flatten a box you
+   toggled stack by stack is precisely what makes it stop being one. The case the flag
+   actually exists for is the capture app not existing yet: a directory of photos with no
+   sidecars at all, where every card stocked in more than one finish would otherwise cost a
+   review-queue tap. Overriding a recorded toggle buys nothing there, since there is
+   nothing recorded to override.
 2. **Catalog-forced** — no capture-time metadata, and one condition row for that number
    (most SV-era rares are holofoil-only), so the row decides.
 3. **Haiku `finish` field** (`normal | holo | reverse_holo`), returned in every
@@ -116,6 +127,15 @@ Pricing rules: match / undercut % / markup %.
 picks one default for the run — flat at the floor, or a flat price set for that run — and
 can name individual SKUs to override it. Output is suppressed until that choice is made: a
 card under the threshold is not quietly listed and not quietly dropped.
+
+**A row with a blank or $0.00 market price is `no_market_data`, and is not sub-threshold.**
+A missing price is an unknown price, not a low one, so it gets no disposition at all — not
+the flat price, not the floor, not the bulk lot. It is priced by hand in `decisions.json`
+or explicitly left unlisted, and `emit` refuses to write while one is still unanswered.
+Recorded because the tempting "fix" is to sweep these into the sub-threshold bucket, where
+the whole point of the bands above is that they describe cards whose value is *known* to be
+small. The failure that prevents: handing away a $40 chase card at the $0.40 floor because
+its market cell happened to be empty.
 
 The join preserves the sub-threshold price distribution in bands rather than lumping it,
 because "everything under $0.40" hides the difference between a $0.38 rare and a $0.01

@@ -7,7 +7,9 @@ Pass: all four stages, plus the review path fires on disagreement.
 
 The ladder (D3 in docs/DECISIONS.md), in order:
   1. Capture-time metadata — variant toggle recorded in the card's JSON sidecar. Primary
-     path. `--variant` on the batch script is only an override.
+     path. `--variant` on the batch script fills the finish in where a sidecar records
+     none, and NEVER overrides one — asserted at the end of this file, because a flag able
+     to replace a recorded toggle is the one thing that would stop it being a claim.
   2. Catalog-forced — one condition row for that number in the fixture (most SV-era rares
      are holofoil-only), so the row decides.
   3. Haiku `finish` field (normal | holo | reverse_holo), returned in every identification
@@ -36,21 +38,38 @@ literal requirement that each of the three condition strings resolves to its own
 price. If a future export does contain a three-row number, replace the synthetic block —
 `_three_row_gap()` reports the count on every run so the gap stays visible.
 
+AND THE ROUTING TABLE (v2 §5.4), because resolving a card and trusting the answer are two
+different decisions and only the second one decides whether it gets listed. Confidence is
+the only signal that a card was GUESSED at: a misread `026/198` as `025/198` is still a
+valid number that joins to a real row and prices cleanly, so nothing downstream can catch
+it. That makes the routing table the last line, and it is asserted row by row here.
+
+The main/parked split matters as much as the routing does. A low-confidence $12 card in
+front of a human is a tap; a low-confidence 15-cent card in front of a human is how the $12
+ones get missed. And an UNPRICED card is never parked — no price is not a low price, and a
+misread secret rare is exactly that case.
+
 Guards v1 bug #1: variant mispricing, which blindly took
 holofoil || reverseHolofoil || normal.
 """
 
 from __future__ import annotations
 
+import json
+import tempfile
 from decimal import Decimal
 from pathlib import Path
 
 from harness.tests import Checks, Result
-from pipeline import join, tcgcsv, variant
+from identify import sidecar
+from pipeline import join, routing, tcgcsv, variant
 
 NAME = "T4"
-DESCRIPTION = "Variant ladder resolves all four stages"
-PASS_CRITERIA = "all four stages correct, and review fires on metadata/detection disagreement"
+DESCRIPTION = "Variant ladder resolves all four stages, and the routing table"
+PASS_CRITERIA = (
+    "all four stages correct, review fires on metadata/detection disagreement, and "
+    "every routing row sends the card to the queue named"
+)
 
 FINISHES = ("normal", "holo", "reverse_holo")
 
@@ -373,5 +392,284 @@ def run() -> Result:
         [["catalog_forced"]],
         "the unambiguous card still resolves in the same batch",
     )
+
+    # ======================================================================================
+    # The routing table (v2 §5.4). Which queue a card lands in, row by row.
+    # ======================================================================================
+
+    expensive = Decimal("12.00")
+    cheap = Decimal("0.15")
+
+    table = [
+        # (label, kwargs, expected queue, expected reason)
+        (
+            "resolved + high confidence",
+            dict(resolved=True, reason="metadata", confidence="high", price=expensive),
+            routing.LISTED,
+            routing.LISTED,
+        ),
+        (
+            "resolved + medium confidence",
+            dict(resolved=True, reason="metadata", confidence="medium", price=expensive),
+            routing.LISTED,
+            routing.LISTED,
+        ),
+        (
+            "resolved + LOW confidence, market >= $0.40",
+            dict(resolved=True, reason="metadata", confidence="low", price=expensive),
+            routing.MAIN,
+            routing.LOW_CONFIDENCE,
+        ),
+        (
+            "resolved + LOW confidence, market < $0.40",
+            dict(resolved=True, reason="metadata", confidence="low", price=cheap),
+            routing.PARKED,
+            routing.LOW_CONFIDENCE,
+        ),
+        (
+            "ladder -> review, cheapest candidate >= $0.40",
+            dict(
+                resolved=False,
+                reason=variant.AMBIGUOUS_NO_SIGNAL,
+                confidence="high",
+                candidate_prices=[expensive, Decimal("18.00")],
+            ),
+            routing.MAIN,
+            variant.AMBIGUOUS_NO_SIGNAL,
+        ),
+        (
+            "ladder -> review, cheapest candidate < $0.40",
+            dict(
+                resolved=False,
+                reason=variant.METADATA_DETECTION_DISAGREEMENT,
+                confidence="high",
+                candidate_prices=[cheap, expensive],
+            ),
+            routing.PARKED,
+            variant.METADATA_DETECTION_DISAGREEMENT,
+        ),
+        (
+            "no catalog row at all",
+            dict(resolved=False, reason=variant.NO_CATALOG_ROW, confidence="high"),
+            routing.MAIN,
+            variant.NO_CATALOG_ROW,
+        ),
+        (
+            "identification failed",
+            dict(resolved=False, reason=routing.IDENTIFICATION_FAILED),
+            routing.MAIN,
+            routing.IDENTIFICATION_FAILED,
+        ),
+        (
+            "no position recoverable",
+            dict(resolved=False, reason=routing.NO_POSITION),
+            routing.MAIN,
+            routing.NO_POSITION,
+        ),
+        (
+            "matched row with a blank market price",
+            dict(resolved=True, reason="metadata", confidence="high", price=None),
+            routing.NO_MARKET_DATA,
+            routing.NO_MARKET_DATA,
+        ),
+        (
+            "matched row with a $0.00 market price",
+            dict(
+                resolved=True, reason="metadata", confidence="high", price=Decimal("0.00")
+            ),
+            routing.NO_MARKET_DATA,
+            routing.NO_MARKET_DATA,
+        ),
+    ]
+    for label, kwargs, queue, reason in table:
+        destination = routing.route(**kwargs)
+        c.equal((destination.queue, destination.reason), (queue, reason), label)
+
+    # The cheapest candidate decides, not the dearest — routing on the optimistic end of a
+    # range would park cards that might be valuable.
+    c.equal(
+        routing.route(
+            resolved=False,
+            reason=variant.AMBIGUOUS_NO_SIGNAL,
+            candidate_prices=[cheap, expensive],
+        ).price,
+        cheap,
+        "the main/parked cut reads the CHEAPEST candidate row",
+    )
+    c.equal(
+        routing.cheapest([None, Decimal("0.00"), Decimal("2.00"), Decimal("1.00")]),
+        Decimal("1.00"),
+        "and blank/zero prices are skipped when finding it, not treated as zero",
+    )
+
+    # An unpriced card is never parked, whatever else is true of it.
+    never_parked = True
+    for reason in (
+        variant.NO_CATALOG_ROW,
+        routing.IDENTIFICATION_FAILED,
+        routing.NO_POSITION,
+        routing.SET_AMBIGUOUS,
+    ):
+        destination = routing.route(resolved=False, reason=reason, candidate_prices=[])
+        if destination.queue != routing.MAIN or destination.price is not None:
+            never_parked = False
+            c.note(f"{reason} -> {destination.describe}")
+    c.ok(never_parked, "an unpriced card always goes to MAIN, never parked — D9 in reverse")
+
+    # --- the confidence gate is configurable ---------------------------------------------
+    c.equal(
+        routing.route(
+            resolved=True,
+            reason="metadata",
+            confidence="low",
+            price=expensive,
+            review_below=routing.CONFIDENCE_NONE,
+        ).queue,
+        routing.LISTED,
+        "--review-below-confidence=none restores 'confidence never routes on its own'",
+    )
+    c.equal(
+        routing.route(
+            resolved=True,
+            reason="metadata",
+            confidence="medium",
+            price=expensive,
+            review_below=routing.CONFIDENCE_MEDIUM,
+        ).queue,
+        routing.MAIN,
+        "--review-below-confidence=medium routes medium as well as low",
+    )
+    c.equal(
+        routing.route(
+            resolved=True,
+            reason="metadata",
+            confidence="high",
+            price=expensive,
+            review_below=routing.CONFIDENCE_MEDIUM,
+        ).queue,
+        routing.LISTED,
+        "...but never high",
+    )
+    c.raises(
+        routing.UnknownConfidenceGate,
+        lambda: routing.check_review_below("very-low"),
+        "a confidence gate outside none | low | medium is refused",
+    )
+
+    # --- main-queue order: priced first, descending; unpriced last -------------------------
+    ordered = join.join_batch(
+        [
+            join.IdentifiedCard(
+                position=join.Position(9, 1), name="Articuno", number="161",
+                printed_total="159", confidence="low",
+                photo="captures/box9/0001.jpg",
+            ),
+            join.IdentifiedCard(
+                position=join.Position(9, 2), name="Ghost", number="999",
+                printed_total="159", confidence="high",
+                photo="captures/box9/0002.jpg",
+            ),
+            join.IdentifiedCard(
+                position=join.Position(9, 3), name="Butterfree", number="003",
+                printed_total="159", metadata_finish="reverse_holo", confidence="low",
+                photo="captures/box9/0003.jpg",
+            ),
+        ],
+        catalog,
+        router=join.default_router(),
+    )
+    c.note(ordered.report())
+    c.equal(
+        [q.destination.price for q in ordered.queue(routing.MAIN)],
+        [HOLO_ONLY_PRICE, NO_NORMAL_REVERSE_PRICE, None],
+        "main queue: priced first, descending by price, unpriced last",
+    )
+    c.equal(
+        [q.card.position.index for q in ordered.queue(routing.MAIN)],
+        [1, 3, 2],
+        "...so you work the known-valuable cards first and nothing is hidden",
+    )
+    c.equal(
+        len(ordered.matches), 0, "and every low-confidence card stayed out of the file"
+    )
+
+    # A low-confidence CHEAP card parks instead, and is not in the main queue at all.
+    parked_run = join.join_batch(
+        [
+            join.IdentifiedCard(
+                position=join.Position(9, 4), name="Billy & O'Nare", number="142",
+                printed_total="159", metadata_finish="normal", confidence="low",
+                photo="captures/box9/0004.jpg",
+            )
+        ],
+        catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        [q.destination.queue for q in parked_run.queued],
+        [routing.PARKED],
+        "a low-confidence $0.12 card parks",
+    )
+    c.equal(
+        len(parked_run.queue(routing.MAIN)),
+        0,
+        "...and is NOT in the main queue, where it would bury the expensive ones",
+    )
+
+    # --- rung 1's `--variant`: fills gaps, NEVER overrides ---------------------------------
+    # D3 spends three paragraphs establishing that the capture toggle is a claim rather than
+    # a hint. A flag able to replace a recorded toggle across a whole run is the single thing
+    # that would undo that, so the guarantee is asserted here and not left to care.
+    with tempfile.TemporaryDirectory() as tmp:
+        captures = Path(tmp)
+        (captures / "0001.jpg").write_bytes(b"")
+        (captures / "0001.json").write_text(
+            json.dumps({"box": 3, "position": 1, "variant": "normal"})
+        )
+        (captures / "0002.jpg").write_bytes(b"")
+        (captures / "0002.json").write_text(json.dumps({"box": 3, "position": 2}))
+        (captures / "0003.jpg").write_bytes(b"")  # no sidecar at all
+
+        without = {c_.photo.stem: c_ for c_ in sidecar.scan(captures, box=3)}
+        c.equal(
+            [without[k].metadata_finish for k in ("0001", "0002", "0003")],
+            ["normal", None, None],
+            "with no flag: only the recorded toggle supplies a finish",
+        )
+
+        filled = {
+            c_.photo.stem: c_
+            for c_ in sidecar.scan(captures, box=3, variant_default="reverse_holo")
+        }
+        c.equal(
+            filled["0001"].metadata_finish,
+            "normal",
+            "--variant=reverse_holo does NOT override a sidecar that says normal",
+        )
+        c.ok(
+            not filled["0001"].variant_from_flag,
+            "...and the card is not marked as having taken the flag",
+        )
+        c.equal(
+            [filled["0002"].metadata_finish, filled["0003"].metadata_finish],
+            ["reverse_holo", "reverse_holo"],
+            "--variant fills a sidecar with no variant, and a photo with no sidecar",
+        )
+        c.ok(
+            filled["0002"].variant_from_flag and filled["0003"].variant_from_flag,
+            "...and both are marked, so the run report can say how many took the flag",
+        )
+        c.equal(
+            sum(1 for c_ in filled.values() if c_.variant_from_flag),
+            2,
+            "exactly the cards with nothing recorded took the flag",
+        )
+        c.ok(
+            sidecar.load(
+                captures / "0003.jpg", root=captures, box=3, variant_default="holographic"
+            ).metadata_finish
+            is None,
+            "a finish outside the enum is not applied, even from the flag",
+        )
 
     return c.result()

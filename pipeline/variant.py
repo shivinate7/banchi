@@ -70,6 +70,7 @@ METADATA_NOT_STOCKED = "metadata_not_stocked"
 METADATA_DETECTION_DISAGREEMENT = "metadata_detection_disagreement"
 DETECTED_FINISH_NOT_STOCKED = "detected_finish_not_stocked"
 AMBIGUOUS_NO_SIGNAL = "ambiguous_no_signal"
+DUPLICATE_CONDITION = "duplicate_condition"
 
 
 class UnknownFinish(ValueError):
@@ -123,7 +124,18 @@ def resolve(
     if not candidates:
         return Resolution(stage=REVIEW, reason=NO_CATALOG_ROW)
 
-    by_condition = {row[tcgcsv.CONDITION_COLUMN]: row for row in candidates}
+    by_condition: Dict[str, tcgcsv.Row] = {}
+    for row in candidates:
+        condition = row[tcgcsv.CONDITION_COLUMN]
+        if condition in by_condition:
+            # Two candidate rows claiming the same condition string. The dict this used to
+            # be built as would have kept the last one silently and priced whichever the
+            # export happened to list second — a coin flip dressed as a resolution. The
+            # shape that produces it is a cross-set join-key collision (v2 §5.1), which
+            # `Catalog.candidates` normally catches first; this is the backstop for every
+            # other way two rows can arrive here, and it reviews rather than picking.
+            return Resolution(stage=REVIEW, reason=DUPLICATE_CONDITION)
+        by_condition[condition] = row
 
     # Rung 1 — capture-time metadata, trusted.
     if metadata_finish is not None:

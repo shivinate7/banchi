@@ -7,16 +7,22 @@
 .PHONY: help harness check dev server screenshot lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
-# activate anything. Falls back to system python3, which still runs T2-T4 — only T1
-# needs the anthropic SDK, and it reports the missing dependency rather than crashing.
+# activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
+# anthropic SDK and T6 needs Pillow + numpy, and each reports the missing dependency as a
+# FAILURE rather than crashing or, worse, skipping. A skipped test must not read as a pass.
 PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 help:
-	@echo "PKMNSCAN — build-order step 3 (verification harness)"
+	@echo "PKMNSCAN — build-order step 4 (batch script v2)"
 	@echo
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
-	@echo "  make harness      T1-T4 verification tests. Must exit 0 before any commit."
+	@echo "  make harness      T1-T6 verification tests. Must exit 0 before any commit."
 	@echo "  make check        harness + lint + typecheck"
+	@echo
+	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
+	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
+	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
+	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make dev          Vite app on :5173                    (unblocked at step 8)"
 	@echo "  make server       Python capture server on :8000       (unblocked at step 6)"
 	@echo "  make screenshot   render key views to captures/ui/     (unblocked at step 8)"

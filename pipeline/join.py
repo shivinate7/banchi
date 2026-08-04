@@ -27,11 +27,27 @@ Bidirectional reporting, in both pairings this pipeline performs:
 before any output is written" is a property of the code and not of the caller's
 discipline.
 
+A card leaves `unmatched_cards` in exactly one way: by being routed into `queued`, which is
+what the standing review and parked queues are written from. That is the amended GATES.md
+T3 criterion expressed structurally — reviews no longer suppress output (v2 §5.6, holding
+400 good cards hostage to 7 ambiguous ones is the wrong trade), but a card may leave this
+pipeline unlisted and never unrecorded. Pass a `router` to get that behaviour; without one
+the older, stricter shape is unchanged, and the harness exercises both.
+
 It refuses on one more thing: sub-threshold cards with no disposition. What happens to a
 card under the D9 threshold is the owner's call each run — flat at the floor, flat at a
 number set for the run, or a per-SKU decision — so the pipeline surfaces the bucket with
 its price distribution intact and waits. `SubThresholdBucket` bands it rather than lumping it,
 because "everything under $0.40" hides which of those cards are worth a bulk lot.
+
+MULTI-SET KEYING (v2 §5.1). The join key is unique only *within* a set, and multi-set runs
+are required. Collisions are computed once at catalog build — cheap, deterministic, and
+known before a single card is joined — and reported, so the real exposure is visible rather
+than assumed. A colliding key is disambiguated by the capture sidecar's set hint; no hint,
+or a hint naming none of the candidate sets, reviews as `set_ambiguous`. Never guessed.
+This deliberately does not make the set hint authoritative everywhere: D2 and the prompt
+both call it optional and possibly wrong, so it is consulted only where the number alone
+has already failed to decide.
 """
 
 from __future__ import annotations
@@ -39,9 +55,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from pipeline import pricing, tcgcsv, variant
+from pipeline import pricing, routing, tcgcsv, variant
 
 # D7 — a playset. Configurable, but never guessed at.
 LIVE_QUANTITY_CAP = 4
@@ -77,7 +93,14 @@ class Position:
 
 @dataclass(frozen=True)
 class IdentifiedCard:
-    """One physical card after identification. `photo` is what the review queue shows."""
+    """One physical card after identification. `photo` is what the review queue shows.
+
+    `set_hint` is the capture sidecar's stack label (D2: an optional accelerator, possibly
+    wrong). It is read only to break a multi-set key collision — see `Catalog.candidates`.
+
+    `confidence` is the model's own read of how legible the title and number were, and is
+    the only signal that a card was guessed at. `pipeline.routing` acts on it.
+    """
 
     position: Position
     name: str
@@ -86,6 +109,8 @@ class IdentifiedCard:
     metadata_finish: Optional[str] = None
     detected_finish: Optional[str] = None
     photo: Optional[str] = None
+    set_hint: Optional[str] = None
+    confidence: Optional[str] = None
 
 
 def join_key(number, printed_total) -> str:
@@ -93,28 +118,114 @@ def join_key(number, printed_total) -> str:
     return f"{str(number).strip().zfill(3)}/{str(printed_total).strip()}"
 
 
+def normalize_set(name: str) -> str:
+    """Fold a set label to something two sources can agree on.
+
+    The export writes `SV09: Journey Together`; a capture sidecar's hint is whatever the
+    divider was labelled — `sv9`, `SV09`, `Journey Together`. Lowercase, drop everything
+    that is not a letter or digit, and strip leading zeros from each digit run, so `sv09`
+    and `sv9` fold to one string. pokemontcg.io uses the unpadded form and TCGplayer the
+    padded one; without this they never compare equal.
+    """
+    text = str(name or "").strip().lower()
+    out: List[str] = []
+    digits: List[str] = []
+    for char in text:
+        if char.isdigit():
+            digits.append(char)
+            continue
+        if digits:
+            out.append(str(int("".join(digits))))
+            digits = []
+        if char.isalnum():
+            out.append(char)
+    if digits:
+        out.append(str(int("".join(digits))))
+    return "".join(out)
+
+
+def set_matches(hint: Optional[str], set_name: str) -> bool:
+    """Does this hint name this set?
+
+    Matched against the whole label and against each side of the colon, so `sv9`,
+    `SV09`, `Journey Together` and the full `SV09: Journey Together` all hit. Deliberately
+    exact after folding, with no substring fallback: `sv1` is a substring of `sv19`, and a
+    hint that quietly matches the wrong set is worse than one that matches nothing — the
+    latter reviews, which is what D2's "possibly wrong" hint has earned.
+    """
+    folded = normalize_set(hint)
+    if not folded:
+        return False
+    parts = [set_name] + set_name.split(":")
+    return any(normalize_set(part) == folded for part in parts)
+
+
+@dataclass(frozen=True)
+class Candidates:
+    """The rows a card could be, how they were found, and whether that was decisive."""
+
+    rows: Tuple[tcgcsv.Row, ...]
+    lookup: str
+    set_ambiguous: bool = False
+    candidate_sets: Tuple[str, ...] = ()
+
+    @property
+    def market_prices(self) -> Tuple[Optional[Decimal], ...]:
+        return tuple(
+            tcgcsv.parse_price(row[tcgcsv.MARKET_PRICE_COLUMN]) for row in self.rows
+        )
+
+
 class Catalog:
-    """A TCGplayer export indexed for joining."""
+    """A TCGplayer export indexed for joining.
+
+    Built from the export and nothing else (v2 §5.1). Collisions — one join key reaching
+    rows in more than one `Set Name` — are computed here, once, before any card is joined.
+    """
 
     def __init__(self, export: tcgcsv.Export):
         self.export = export
         self._by_number: Dict[str, List[tcgcsv.Row]] = {}
         self._blank_number_by_name: Dict[str, List[tcgcsv.Row]] = {}
         self._order: Dict[str, int] = {}
+        self._sets_by_key: Dict[str, List[str]] = {}
 
         for index, row in enumerate(export.rows):
             self._order[row[tcgcsv.SKU_COLUMN]] = index
             number = row[tcgcsv.NUMBER_COLUMN].strip()
+            set_name = row.get(tcgcsv.SET_COLUMN, "")
             if number:
                 self._by_number.setdefault(number, []).append(row)
+                key = number
             else:
-                self._blank_number_by_name.setdefault(
-                    row[tcgcsv.NAME_COLUMN].strip(), []
-                ).append(row)
+                name = row[tcgcsv.NAME_COLUMN].strip()
+                self._blank_number_by_name.setdefault(name, []).append(row)
+                key = f"name:{name}"
+            seen = self._sets_by_key.setdefault(key, [])
+            if set_name not in seen:
+                seen.append(set_name)
 
     @property
     def header(self) -> Tuple[str, ...]:
         return self.export.header
+
+    @property
+    def set_names(self) -> List[str]:
+        names: List[str] = []
+        for row in self.export.rows:
+            name = row.get(tcgcsv.SET_COLUMN, "")
+            if name not in names:
+                names.append(name)
+        return names
+
+    @property
+    def colliding_keys(self) -> List[str]:
+        """Keys reaching rows in more than one set. Reported at catalog build so the real
+        exposure is a number, not an assumption."""
+        return sorted(k for k, sets in self._sets_by_key.items() if len(sets) > 1)
+
+    def sets_for_key(self, key: str) -> List[str]:
+        return list(self._sets_by_key.get(key, ()))
 
     def rows_for_key(self, key: str) -> List[tcgcsv.Row]:
         return list(self._by_number.get(key, ()))
@@ -122,14 +233,47 @@ class Catalog:
     def rows_for_blank_number_name(self, name: str) -> List[tcgcsv.Row]:
         return list(self._blank_number_by_name.get(name.strip(), ()))
 
-    def candidates(self, card: IdentifiedCard) -> Tuple[List[tcgcsv.Row], str]:
+    def candidates(self, card: IdentifiedCard) -> Candidates:
         """Rows this card could be, and how they were found."""
         if card.number is not None and card.printed_total is not None:
             key = join_key(card.number, card.printed_total)
-            return self.rows_for_key(key), f"number:{key}"
-        # No collector number on the product (code cards, some promos). These are exactly
-        # the rows whose `Number` is blank, so the name fallback stays scoped to them.
-        return self.rows_for_blank_number_name(card.name), f"name:{card.name}"
+            rows = self.rows_for_key(key)
+            lookup = f"number:{key}"
+        else:
+            # No collector number on the product (code cards, some promos). These are
+            # exactly the rows whose `Number` is blank, so the name fallback stays scoped
+            # to them.
+            rows = self.rows_for_blank_number_name(card.name)
+            lookup = f"name:{card.name}"
+
+        sets: List[str] = []
+        for row in rows:
+            name = row.get(tcgcsv.SET_COLUMN, "")
+            if name not in sets:
+                sets.append(name)
+
+        if len(sets) <= 1:
+            return Candidates(rows=tuple(rows), lookup=lookup)
+
+        # Rung 3 of §5.1 — a colliding key, disambiguated by the sidecar set hint.
+        if card.set_hint:
+            narrowed = [
+                row
+                for row in rows
+                if set_matches(card.set_hint, row.get(tcgcsv.SET_COLUMN, ""))
+            ]
+            if narrowed:
+                return Candidates(
+                    rows=tuple(narrowed), lookup=f"{lookup} set:{card.set_hint}"
+                )
+
+        # Rung 4 — no hint, or a hint naming none of the candidates.
+        return Candidates(
+            rows=tuple(rows),
+            lookup=lookup,
+            set_ambiguous=True,
+            candidate_sets=tuple(sets),
+        )
 
     def catalog_index(self, sku: str) -> int:
         return self._order[sku]
@@ -137,21 +281,42 @@ class Catalog:
 
 @dataclass
 class SkuMatch:
-    """Every copy of one card+variant, collapsed to the single row the import will carry."""
+    """Every copy of one card+variant, collapsed to the single row the import will carry.
+
+    `rule` and `basis` are the run's pricing choice (v2 §6). They default to the D9 match
+    rule against Market, which is what every caller before batch script v2 assumed.
+    """
 
     sku: str
     row: tcgcsv.Row
     positions: List[Position] = field(default_factory=list)
     stages: List[str] = field(default_factory=list)
     live_cap: int = LIVE_QUANTITY_CAP
+    rule: pricing.Rule = pricing.MATCH
+    basis: str = pricing.BASIS_MARKET
 
     @property
     def condition(self) -> str:
         return self.row[tcgcsv.CONDITION_COLUMN]
 
     @property
+    def set_name(self) -> str:
+        return self.row.get(tcgcsv.SET_COLUMN, "")
+
+    @property
     def market_price(self) -> Optional[Decimal]:
+        """What the D9 threshold reads, always, whatever `--basis` is set to."""
         return tcgcsv.parse_price(self.row[tcgcsv.MARKET_PRICE_COLUMN])
+
+    @property
+    def basis_price(self) -> Optional[Decimal]:
+        """What the pricing rule is applied to."""
+        return pricing.basis_price(self.row, self.basis)
+
+    @property
+    def has_market_data(self) -> bool:
+        """False means the price is UNKNOWN, not low — never sub-threshold (D9)."""
+        return pricing.has_market_data(self.market_price)
 
     @property
     def live_before(self) -> int:
@@ -180,8 +345,11 @@ class SkuMatch:
 
     @property
     def list_price(self) -> Optional[Decimal]:
-        market = self.market_price
-        return None if market is None else pricing.list_price(market)
+        """`clamp_floor(round(rule(basis)))`. None when the basis cell is blank."""
+        basis = self.basis_price
+        if basis is None:
+            return None
+        return pricing.list_price(basis, rule=self.rule)
 
     @property
     def listable(self) -> bool:
@@ -311,12 +479,62 @@ class SubThresholdBucket:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class QueuedCard:
+    """A card the router sent to a standing queue instead of to the import file.
+
+    Distinct from `UnmatchedCard`, and the distinction is the whole point: an unmatched
+    card is unrecorded and blocks output; a queued one has been written down at a known
+    position and does not. A card moves from the first category to the second only by being
+    routed, never by being tolerated.
+    """
+
+    card: IdentifiedCard
+    destination: routing.Destination
+    lookup: str
+    resolution_reason: str
+    candidates: Tuple[tcgcsv.Row, ...] = ()
+
+    @property
+    def queue(self) -> str:
+        return self.destination.queue
+
+    @property
+    def describe(self) -> str:
+        return (
+            f"{self.card.name} [{self.lookup}] -> {self.destination.describe} "
+            f"at {self.card.position.label}"
+        )
+
+
 @dataclass
 class JoinReport:
     matches: "OrderedDict[str, SkuMatch]" = field(default_factory=OrderedDict)
     unmatched_cards: List[UnmatchedCard] = field(default_factory=list)
+    queued: List[QueuedCard] = field(default_factory=list)
     below_threshold: SubThresholdBucket = field(default_factory=SubThresholdBucket)
     cards_in: int = 0
+    collisions: int = 0
+
+    def queue(self, name: str) -> List[QueuedCard]:
+        """One standing queue's cards, in the order they should be worked.
+
+        Main-queue order is priced-and-ambiguous first, descending by price, unpriced last
+        (v2 §5.4). Position breaks ties so two runs of the same box agree.
+        """
+        return sorted(
+            (q for q in self.queued if q.queue == name),
+            key=lambda q: (
+                q.destination.sort_key,
+                q.card.position.box,
+                q.card.position.index,
+            ),
+        )
+
+    @property
+    def no_market_data(self) -> List[SkuMatch]:
+        """Matched, but the catalog row carries no price. Never auto-priced (D9)."""
+        return [m for m in self.matches.values() if m.copies and not m.has_market_data]
 
     @property
     def unmatched_rows(self) -> List[SkuMatch]:
@@ -332,7 +550,11 @@ class JoinReport:
 
     @property
     def cards_out(self) -> int:
-        return sum(m.copies for m in self.matches.values()) + len(self.unmatched_cards)
+        return (
+            sum(m.copies for m in self.matches.values())
+            + len(self.unmatched_cards)
+            + len(self.queued)
+        )
 
     @property
     def dropped(self) -> int:
@@ -372,6 +594,19 @@ class JoinReport:
         lines.append(f"unmatched rows (row with no card): {len(self.unmatched_rows)}")
         lines += [f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]}" for m in self.unmatched_rows]
         lines.append(f"cards dropped: {self.dropped}")
+        for name in (routing.MAIN, routing.PARKED):
+            cards = self.queue(name)
+            if cards:
+                lines.append(f"routed to {name}: {len(cards)}")
+                lines += [f"    {q.describe}" for q in cards]
+        if self.no_market_data:
+            lines.append(
+                f"no market data (hand-price or leave unlisted): {len(self.no_market_data)}"
+            )
+            lines += [
+                f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]} {m.condition} x{m.copies}"
+                for m in self.no_market_data
+            ]
         if self.at_cap:
             lines.append(f"already at the live cap, nothing added: {len(self.at_cap)}")
             lines += [
@@ -384,29 +619,89 @@ class JoinReport:
         return "\n".join(lines)
 
 
+Router = Callable[[IdentifiedCard, Candidates, variant.Resolution], routing.Destination]
+
+
+def default_router(
+    threshold: Decimal = pricing.THRESHOLD,
+    review_below: str = routing.CONFIDENCE_LOW,
+) -> Router:
+    """The v2 §5.4 routing table, bound to this run's threshold and confidence gate."""
+    routing.check_review_below(review_below)
+
+    def route(
+        card: IdentifiedCard,
+        found: Candidates,
+        resolution: variant.Resolution,
+    ) -> routing.Destination:
+        resolved = not resolution.needs_review and resolution.row is not None
+        return routing.route(
+            resolved=resolved,
+            reason=resolution.reason,
+            confidence=card.confidence,
+            price=resolution.market_price,
+            candidate_prices=found.market_prices,
+            threshold=threshold,
+            review_below=review_below,
+        )
+
+    return route
+
+
 def join_batch(
     cards: Sequence[IdentifiedCard],
     catalog: Catalog,
     live_cap: int = LIVE_QUANTITY_CAP,
+    router: Optional[Router] = None,
+    rule: pricing.Rule = pricing.MATCH,
+    basis: str = pricing.BASIS_MARKET,
 ) -> JoinReport:
-    """Resolve every card to exactly one catalog row, aggregating copies by SKU."""
-    report = JoinReport(cards_in=len(cards))
+    """Resolve every card to exactly one catalog row, aggregating copies by SKU.
+
+    With a `router`, every card that does not list is written into `report.queued` with the
+    queue it belongs in — reviews stop suppressing output, because the card is recorded
+    (v2 §5.6). Without one, ladder failures land in `unmatched_cards` and `report.ok` is
+    False, which is the pre-v2 behaviour and still what `emit_import` refuses on.
+    """
+    pricing.check_basis(basis)
+    rule = pricing.Rule.parse(rule)
+    report = JoinReport(cards_in=len(cards), collisions=len(catalog.colliding_keys))
 
     for card in cards:
-        candidates, lookup = catalog.candidates(card)
-        resolution = variant.resolve(
-            candidates,
-            metadata_finish=card.metadata_finish,
-            detected_finish=card.detected_finish,
-        )
+        found = catalog.candidates(card)
+        if found.set_ambiguous:
+            # A colliding key the set hint could not break. Never guessed (§5.1 rung 4).
+            resolution = variant.Resolution(
+                stage=variant.REVIEW, reason=routing.SET_AMBIGUOUS
+            )
+        else:
+            resolution = variant.resolve(
+                found.rows,
+                metadata_finish=card.metadata_finish,
+                detected_finish=card.detected_finish,
+            )
+
+        if router is not None:
+            destination = router(card, found, resolution)
+            if destination.queue in (routing.MAIN, routing.PARKED):
+                report.queued.append(
+                    QueuedCard(
+                        card=card,
+                        destination=destination,
+                        lookup=found.lookup,
+                        resolution_reason=resolution.reason,
+                        candidates=found.rows,
+                    )
+                )
+                continue
 
         if resolution.needs_review or resolution.row is None:
             report.unmatched_cards.append(
                 UnmatchedCard(
                     card=card,
                     reason=resolution.reason,
-                    lookup=lookup,
-                    candidates=tuple(candidates),
+                    lookup=found.lookup,
+                    candidates=found.rows,
                 )
             )
             continue
@@ -414,7 +709,13 @@ def join_batch(
         sku = resolution.sku
         match = report.matches.get(sku)
         if match is None:
-            match = SkuMatch(sku=sku, row=resolution.row, live_cap=live_cap)
+            match = SkuMatch(
+                sku=sku,
+                row=resolution.row,
+                live_cap=live_cap,
+                rule=rule,
+                basis=basis,
+            )
             report.matches[sku] = match
         match.positions.append(card.position)
         match.stages.append(resolution.stage)
@@ -426,8 +727,10 @@ def join_batch(
     for match in report.matches.values():
         match.positions.sort(key=lambda p: (p.box, p.index))
 
+    # A row with no market price is NOT sub-threshold — it is unpriced, which D9 keeps as
+    # its own category precisely so it cannot be swept into a flat bulk price.
     report.below_threshold = SubThresholdBucket(
-        [m for m in report.matches.values() if not m.listable]
+        [m for m in report.matches.values() if m.has_market_data and not m.listable]
     )
     return report
 
@@ -440,27 +743,46 @@ def prices_for(
     report: JoinReport,
     sub_threshold: Optional[pricing.Disposition] = None,
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
+    no_market_data: Optional[Dict[str, object]] = None,
 ) -> "OrderedDict[str, Decimal]":
     """Listed price per SKU, and what decided it.
 
-    Three layers, most specific first:
+    Four layers, most specific first:
 
       1. `sku_dispositions[sku]`  — going under the hood on one SKU. Works on any matched
                                     SKU, above or below the threshold.
-      2. `sub_threshold`          — one choice for the whole run's sub-threshold bucket.
-      3. the D9 match rule        — for everything at or above the threshold.
+      2. `no_market_data[sku]`    — a hand-entered price for a row the catalog has no price
+                                    for, or `pricing.UNLISTED` to leave it out of the file.
+                                    D9: a missing price is an unknown price, so it gets no
+                                    automatic answer of any kind.
+      3. `sub_threshold`          — one choice for the whole run's sub-threshold bucket.
+      4. the run's pricing rule   — for everything at or above the threshold.
 
-    A sub-threshold SKU with neither 1 nor 2 raises `Undecided`. It is not quietly
-    dropped, and it is not quietly listed.
+    A sub-threshold SKU with no disposition raises `Undecided`, and so does an unpriced SKU
+    with no hand-entered answer. Neither is quietly dropped, and neither is quietly listed.
+
+    SKUs answered `UNLISTED` are absent from the returned mapping — that is how a decision
+    to not list something is carried, rather than by a price nobody chose.
     """
     overrides = dict(sku_dispositions or {})
+    unpriced = dict(no_market_data or {})
     prices: "OrderedDict[str, Decimal]" = OrderedDict()
     undecided: List[SkuMatch] = []
+    unanswered: List[SkuMatch] = []
 
     for match in report.matches.values():
         disposition = overrides.get(match.sku)
         if disposition is not None:
             prices[match.sku] = disposition.resolve()
+            continue
+        if not match.has_market_data:
+            answer = unpriced.get(match.sku)
+            if answer is None:
+                unanswered.append(match)
+                continue
+            if answer == pricing.UNLISTED:
+                continue
+            prices[match.sku] = pricing.round_money(Decimal(str(answer)))
             continue
         if match.listable:
             prices[match.sku] = match.list_price
@@ -477,6 +799,17 @@ def prices_for(
             + report.below_threshold.report()
         )
 
+    if unanswered:
+        raise Undecided(
+            f"{len(unanswered)} SKU(s) have no market price in the catalog and no "
+            f"hand-entered answer. A missing price is an unknown price (D9): give each a "
+            f"price or {pricing.UNLISTED!r}, never the floor by default.\n"
+            + "\n".join(
+                f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]} {m.condition} x{m.copies}"
+                for m in unanswered
+            )
+        )
+
     unknown = set(overrides) - set(report.matches)
     if unknown:
         raise Undecided(f"sku_dispositions names SKUs not in this batch: {sorted(unknown)}")
@@ -488,11 +821,21 @@ def import_rows(
     report: JoinReport,
     sub_threshold: Optional[pricing.Disposition] = None,
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
+    no_market_data: Optional[Dict[str, object]] = None,
+    only: Optional[Set[str]] = None,
 ) -> List[tcgcsv.Row]:
-    """The rows an import file would carry. One per SKU, in catalog order."""
-    prices = prices_for(report, sub_threshold, sku_dispositions)
+    """The rows an import file would carry. One per SKU, in catalog order.
+
+    `only` selects a subset of SKUs, which is how `emit` splits one join into the listed
+    file and the sub-threshold file (v2 §7) without pricing the run twice.
+    """
+    prices = prices_for(report, sub_threshold, sku_dispositions, no_market_data)
     rows: List[tcgcsv.Row] = []
     for match in report.matches.values():
+        if match.sku not in prices:  # answered UNLISTED
+            continue
+        if only is not None and match.sku not in only:
+            continue
         if match.add_to_quantity == 0:  # already at the live cap; report.at_cap has it
             continue
         row = tcgcsv.set_writable(
@@ -513,8 +856,16 @@ def emit_import(
     path,
     sub_threshold: Optional[pricing.Disposition] = None,
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
+    no_market_data: Optional[Dict[str, object]] = None,
+    only: Optional[Set[str]] = None,
 ) -> bytes:
-    """Write the import file — or refuse, loudly, with both directions reported."""
+    """Write the import file — or refuse, loudly, with both directions reported.
+
+    `report.ok` is the gate, and it is unchanged by v2 §5.6: a routed card is no longer in
+    `unmatched_cards`, so a run whose reviews all reached a standing queue passes here,
+    while a card nobody recorded still stops the write. That is the amended GATES.md T3
+    criterion — reported and queued *before* output, rather than output suppressed.
+    """
     if not report.ok:
         raise OutputSuppressed(
             "output suppressed; unmatched must be reported first:\n"
@@ -522,7 +873,7 @@ def emit_import(
             + "\n"
             + report.report()
         )
-    rows = import_rows(report, sub_threshold, sku_dispositions)
+    rows = import_rows(report, sub_threshold, sku_dispositions, no_market_data, only)
     skus = [r[tcgcsv.SKU_COLUMN] for r in rows]
     if len(skus) != len(set(skus)):
         raise OutputSuppressed("duplicate TCGplayer Id rows in one import file")

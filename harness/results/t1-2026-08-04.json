@@ -12,7 +12,7 @@
   "finish_note": "T1 cannot validate `finish` \u2014 official API images are flat renders with no foil texture. Gate B validates it against real photos. See docs/GATES.md.",
   "fixture_fingerprint": "df21fd125854",
   "gated_on": "holdout",
-  "generated_at": "2026-08-03T23:45:24+00:00",
+  "generated_at": "2026-08-04T04:12:49+00:00",
   "holdout_accuracy": 0.9706,
   "holdout_misses": [
     "sv3-31  key 051/197 != 031/197  (high)",

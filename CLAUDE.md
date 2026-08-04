@@ -12,11 +12,16 @@ Gate C. See @docs/GATES.md.
 <!-- FILL THESE IN AS THEY EXIST. An empty command block is the #1 CLAUDE.md failure. -->
 
 ```
-make harness        # all four verification tests; MUST exit 0 before any commit
+make harness        # all six verification tests; MUST exit 0 before any commit
 make dev            # Vite app on :5173
 make server         # Python capture server on :8000
 make screenshot     # renders key views to captures/ui/ for visual review
 make check          # harness + lint + typecheck
+
+./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
+./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
+./pkmnscan emit     <run-dir>       # write import CSVs. Free, re-runnable.
+./pkmnscan reconcile <run-dir> <staged-export.csv>
 ```
 
 ## Things you will get wrong without being told
@@ -62,6 +67,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
 - @docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 - @docs/GATES.md — gates, harness contract, build order.
+- `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `codes/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

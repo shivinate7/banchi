@@ -4,7 +4,8 @@ For a batch of identified cards, every card matches exactly one fixture row for 
 resolved condition string. Report unmatched in BOTH directions before any output is
 written.
 
-Pass: zero unmatched, or unmatched reported and output suppressed.
+Pass: zero unmatched, or every unmatched card reported in both directions and routed to a
+standing queue with its position retained, before any output is written.
 
 Required cases (docs/GATES.md), all against real SV09 rows:
   - Secret rares where the number exceeds the denominator   Articuno 161/159
@@ -12,6 +13,7 @@ Required cases (docs/GATES.md), all against real SV09 rows:
   - Names with apostrophes and ampersands                   Billy & O'Nare 142/159
   - 7 identical cards -> one row, `Add to Quantity` = 4,    Dunsparce 120/159
     3 recorded as backstock
+  - Multi-set key collisions                                003/159 in two Set Names
 
 Both directions, and both of the pipeline's pairings:
 
@@ -22,8 +24,18 @@ Both directions, and both of the pipeline's pairings:
                       silently skipped identified cards, and reported nothing for
                       unmatched rows. A one-directional check passes on that bug.
 
-Output suppression is asserted as a property of the code: `emit_import` raises rather than
-writing while anything is unmatched, and the test checks that no file appeared on disk.
+TWO EMIT GATES, and the difference between them is the amended pass criterion. Without a
+router an unmatched card is UNRECORDED, so `emit_import` raises and no file appears — the
+pre-v2 behaviour, still asserted. With a router the same card is ROUTED into a standing
+queue with its position retained, and output proceeds: reviews stop suppressing output
+(v2 §5.6), because holding 400 good cards hostage to 7 ambiguous ones is the wrong trade.
+Unlisted is acceptable; unrecorded is not, and that is what is actually being tested.
+
+MULTI-SET KEYING IS SYNTHETIC, and labelled. The committed fixture is a single-set export
+(SV09: Journey Together, 341 rows), so a cross-set key collision does not exist in it to
+test against. `_multi_set_catalog()` clones a handful of rows under a second Set Name with
+distinct SKUs — the same approach, and the same reason, as T4's synthetic three-row block.
+Replace it the day a two-set export is committed.
 """
 
 from __future__ import annotations
@@ -33,11 +45,14 @@ from decimal import Decimal
 from pathlib import Path
 
 from harness.tests import Checks, Result
-from pipeline import join, pricing, tcgcsv
+from pipeline import join, pricing, routing, tcgcsv, variant
 
 NAME = "T3"
 DESCRIPTION = "Catalog join covers every card, unmatched reported both ways"
-PASS_CRITERIA = "zero unmatched, or unmatched reported and output suppressed"
+PASS_CRITERIA = (
+    "zero unmatched, or every unmatched card reported both ways and routed to a "
+    "standing queue with its position, before any output is written"
+)
 
 LIVE_QUANTITY_CAP = 4
 
@@ -58,7 +73,16 @@ BUTTERFREE_REVERSE_SKU = "8607369"  # 003/159 Near Mint Reverse Holofoil, 0.47
 BOX = 3
 
 
-def _card(index, name, number=None, total="159", metadata=None, detected=None):
+SECOND_SET = "SV08: Surging Sparks"
+CLONED_HOLO_SKU = "9100001"
+CLONED_REVERSE_SKU = "9100002"
+COLLIDING_KEY = "003/159"
+
+
+def _card(
+    index, name, number=None, total="159", metadata=None, detected=None,
+    set_hint=None, confidence="high",
+):
     return join.IdentifiedCard(
         position=join.Position(box=BOX, index=index),
         name=name,
@@ -67,7 +91,39 @@ def _card(index, name, number=None, total="159", metadata=None, detected=None):
         metadata_finish=metadata,
         detected_finish=detected,
         photo=f"captures/box{BOX}/{index:04d}.jpg",
+        set_hint=set_hint,
+        confidence=confidence,
     )
+
+
+def _multi_set_catalog(export):
+    """SYNTHETIC: the SV09 export plus 003/159 cloned into a second Set Name.
+
+    Labelled, because the committed fixture is single-set and a cross-set collision cannot
+    be produced from it. Distinct SKUs, so nothing about the clone can be mistaken for the
+    original by the thing under test — the join matches on `TCGplayer Id`.
+    """
+    rows = list(export.rows)
+    for row in export.rows:
+        if row[tcgcsv.NUMBER_COLUMN] != COLLIDING_KEY:
+            continue
+        sku = (
+            CLONED_HOLO_SKU
+            if row[tcgcsv.CONDITION_COLUMN] == "Near Mint Holofoil"
+            else CLONED_REVERSE_SKU
+        )
+        rows.append(
+            dict(
+                row,
+                **{
+                    tcgcsv.SKU_COLUMN: sku,
+                    tcgcsv.SET_COLUMN: SECOND_SET,
+                    tcgcsv.NAME_COLUMN: "Pikachu",
+                    tcgcsv.MARKET_PRICE_COLUMN: "5.00",
+                },
+            )
+        )
+    return join.Catalog(tcgcsv.Export(header=export.header, rows=tuple(rows)))
 
 
 def _clean_batch():
@@ -407,6 +463,139 @@ def run() -> Result:
     silent = join.JoinReport(cards_in=5)
     c.equal(silent.dropped, 5, "a dropped card is visible in the report")
     c.ok(not silent.ok, "dropped cards block output")
+
+    # --- routed, not suppressed: the amended pass criterion ---------------------------------
+    routed = join.join_batch(
+        dirty, catalog, live_cap=LIVE_QUANTITY_CAP, router=join.default_router()
+    )
+    c.note(routed.report())
+    c.equal(
+        len(routed.unmatched_cards),
+        0,
+        "with a router, an unresolvable card is not left unrecorded",
+    )
+    c.equal(len(routed.queued), 2, "it is recorded in a standing queue instead")
+    c.equal(routed.dropped, 0, "and the closure check still holds — nothing dropped")
+    c.ok(routed.ok, "a fully routed batch no longer suppresses output (v2 §5.6)")
+    c.equal(
+        sorted(q.card.position.index for q in routed.queued),
+        [14, 15],
+        "each queued card keeps its position — the queue is addressable, not a count",
+    )
+    c.ok(
+        all(q.card.photo for q in routed.queued),
+        "each queued card keeps its capture photo (D4)",
+    )
+    c.equal(
+        sorted({q.resolution_reason for q in routed.queued}),
+        ["no_catalog_row"],
+        "and the reason it could not be resolved",
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        routed_path = Path(tmp) / "routed.csv"
+        written = tcgcsv.parse(
+            join.emit_import(
+                routed, catalog, routed_path, sub_threshold=pricing.flat_floor()
+            )
+        )
+        c.ok(routed_path.exists(), "the 400 good cards are written while 2 wait in a queue")
+        c.equal(
+            len(written.rows),
+            6,
+            "and the file holds exactly the SKUs that resolved",
+        )
+
+    # --- multi-set key collisions (SYNTHETIC — see the module docstring) ----------------------
+    multi = _multi_set_catalog(export)
+    c.equal(
+        len(multi.set_names), 2, "the synthetic catalog really does carry two Set Names"
+    )
+    c.equal(
+        multi.colliding_keys,
+        [COLLIDING_KEY],
+        "the colliding key is computed at catalog build, before any card is joined",
+    )
+    c.equal(
+        sorted(multi.sets_for_key(COLLIDING_KEY)),
+        sorted(["SV09: Journey Together", SECOND_SET]),
+        "and it names which sets collide, so the exposure is a number not an assumption",
+    )
+    c.equal(
+        multi.colliding_keys and join.Catalog(export).colliding_keys,
+        [],
+        "the single-set fixture has no collisions at all",
+    )
+
+    hinted = join.join_batch(
+        [_card(20, "Butterfree", "003", metadata="reverse_holo", set_hint="sv9")],
+        multi,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(hinted.matches),
+        [BUTTERFREE_REVERSE_SKU],
+        "a colliding key is resolved by the sidecar set hint",
+    )
+    c.equal(
+        [q.destination.queue for q in hinted.queued], [], "and nothing is queued for it"
+    )
+
+    other_set = join.join_batch(
+        [_card(21, "Pikachu", "003", metadata="reverse_holo", set_hint="SV08")],
+        multi,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(other_set.matches),
+        [CLONED_REVERSE_SKU],
+        "the hint picks the OTHER set when that is the one named",
+    )
+
+    c.ok(
+        join.set_matches("sv9", "SV09: Journey Together"),
+        "set hints fold zero-padding: pokemontcg.io writes sv9, TCGplayer writes SV09",
+    )
+    c.ok(
+        join.set_matches("Journey Together", "SV09: Journey Together"),
+        "the name on its own matches too",
+    )
+    c.ok(
+        not join.set_matches("sv1", "SV19: Nothing"),
+        "and a hint is never a substring match — sv1 must not select sv19",
+    )
+
+    for label, hint in (("no hint", None), ("a hint naming neither set", "sv5")):
+        ambiguous = join.join_batch(
+            [_card(22, "Butterfree", "003", metadata="reverse_holo", set_hint=hint)],
+            multi,
+            router=join.default_router(),
+        )
+        c.equal(
+            [q.destination.reason for q in ambiguous.queued],
+            [routing.SET_AMBIGUOUS],
+            f"a colliding key with {label} goes to review as set_ambiguous, never guessed",
+        )
+        c.equal(list(ambiguous.matches), [], f"...and resolves to nothing with {label}")
+
+    untouched = join.join_batch(
+        [_card(23, "Dunsparce", "120", metadata="normal")],
+        multi,
+        router=join.default_router(),
+    )
+    c.equal(
+        list(untouched.matches),
+        [SEVEN_COPY_SKU],
+        "a NON-colliding key is unaffected by the presence of a second set",
+    )
+
+    # The latent bug §5.1 closes: `by_condition` used to keep the last of two rows sharing a
+    # condition string, silently pricing whichever the export happened to list second.
+    twins = [by_sku[SEVEN_COPY_SKU], dict(by_sku[SEVEN_COPY_SKU], **{tcgcsv.SKU_COLUMN: "9200001"})]
+    c.equal(
+        variant.resolve(twins, metadata_finish="normal").reason,
+        variant.DUPLICATE_CONDITION,
+        "two candidate rows with one condition string review, rather than a coin flip",
+    )
 
     # --- file <-> inventory, the v1 bug #5 pairing ----------------------------------------
     inventory = [SEVEN_COPY_SKU, SECRET_RARE_SKU, AMPERSAND_NORMAL_SKU]

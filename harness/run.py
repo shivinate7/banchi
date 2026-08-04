@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Harness runner — T1-T4.
+"""Harness runner — T1-T6.
 
-`make harness` exits 0 only when all four tests pass. Nothing in this project is "done"
+`make harness` exits 0 only when all six tests pass. Nothing in this project is "done"
 until it does. See docs/GATES.md for the contract; every threshold there is a number, not
 an adjective, and the numbers live in the test modules next to the code that checks them.
 
-All four tests always run, even after one fails. A runner that stops at the first failure
-hides the state of the other three, which is the opposite of what a status signal is for.
+T1-T4 are the original contract. T5 (pricing) and T6 (geometry) arrived with batch script
+v2: a wrong price is a distinct failure from a wrong match, and a card the pipeline cannot
+find in its own photograph is a third thing again. Each earns its own failing test name.
+
+All six tests always run, even after one fails. A runner that stops at the first failure
+hides the state of everything behind it, which is the opposite of what a status signal
+is for.
 """
 
 import sys
@@ -16,11 +21,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from harness.tests import NotImplementedYet, Result  # noqa: E402
-from harness.tests import t1_id_eval, t2_round_trip, t3_join_coverage, t4_variant_ladder  # noqa: E402
+from harness.tests import (  # noqa: E402
+    t1_id_eval,
+    t2_round_trip,
+    t3_join_coverage,
+    t4_variant_ladder,
+    t5_pricing,
+    t6_geometry,
+)
 
 # Explicit and ordered. No discovery magic: a test that silently stops being collected is
 # a green harness that checks nothing.
-TESTS = [t1_id_eval, t2_round_trip, t3_join_coverage, t4_variant_ladder]
+TESTS = [
+    t1_id_eval,
+    t2_round_trip,
+    t3_join_coverage,
+    t4_variant_ladder,
+    t5_pricing,
+    t6_geometry,
+]
 
 
 def run_one(module):

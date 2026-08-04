@@ -4,7 +4,22 @@
 #            talks to Anthropic — see identify/batch.py.
 anthropic>=0.69
 
+# Pillow  image handling for `pkmnscan identify`: the 1568px downscale (anything
+#         larger is billed and then discarded by the API) and the crop-retry bands.
+#         Not optional — there is no stdlib path to either.
+# numpy   the array maths behind geometry/: thresholding, projection profiles, the
+#         coarse rotation search. Pure compute, no system libraries.
+#
+# Both are a recorded decision, not a drive-by import — batch script v2 spec §4.5.
+# `opencv-python-headless` is the named fallback IF measured detection rates are poor.
+# Nothing has been measured yet: there is not one rig photo in this repo, and Gate B is
+# where the measurement happens. Adding a 40 MB binary ahead of that measurement is the
+# decision §4.5 exists to defer, so it stays absent until a number says otherwise.
+Pillow>=9
+numpy>=1.21
+
 # Deliberately absent:
 #   requests   stdlib urllib covers the pokemontcg.io fetch; one fewer dependency
 #              between a clean clone and a green harness.
 #   csv libs   Python's own `csv` is the real CSV library CLAUDE.md requires.
+#   opencv     see above — a fallback gated on a measurement that has not happened.

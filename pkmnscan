@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# `pkmnscan` — the four commands of batch script v2. See cli/__main__.py.
+#
+# A wrapper rather than a packaged console_script, on purpose: a clean clone reaches a green
+# `make harness` with `make venv` and nothing else, and requirements.txt stays the single
+# place dependencies are declared. Packaging is a step-12 concern.
+#
+# Picks the venv exactly the way the Makefile does, so there is one rule about which Python
+# runs and it is stated in two places that agree.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$here/.venv/bin/python" ]; then
+  python="$here/.venv/bin/python"
+else
+  python="$(command -v python3)"
+fi
+exec "$python" -m cli "$@"

@@ -1,4 +1,4 @@
-"""Shared types for the T1-T4 tests.
+"""Shared types for the T1-T6 tests.
 
 Each test module exposes:
 
@@ -29,7 +29,7 @@ class NotImplementedYet(Exception):
 class Checks:
     """Collects assertions so one run reports every failure, not just the first.
 
-    Same reasoning as the runner running all four tests after one fails: a harness is a
+    Same reasoning as the runner running every test after one fails: a harness is a
     status signal, and stopping early hides the state of everything behind it.
     """
 

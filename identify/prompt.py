@@ -117,16 +117,41 @@ _USER_TEXT_WITH_HINT = (
     "about the set and may be wrong - trust the card over the label."
 )
 
+_HINT_CLAUSE = (
+    " The stack it came from is labelled {hint}, which is a hint about the set and may "
+    "be wrong - trust the card over the label."
+)
+_USER_TEXT_WITH_CROPS = (
+    "Identify this card. The first image is the whole card. The images after it are "
+    "enlarged crops of the SAME card: the title band across the top, and the band along "
+    "the bottom where the collector number is printed. Read each field from whichever "
+    "image shows it most clearly. The crops are enlargements, not different cards, and "
+    "the bands are cut loosely, so a crop may include parts of the card either side of "
+    "the field you are reading."
+)
 
-def user_text(set_hint: Optional[str] = None) -> str:
+
+def user_text(set_hint: Optional[str] = None, with_crops: bool = False) -> str:
     """The per-image turn. The set hint is an optional accelerator (D2), never required."""
+    if with_crops:
+        text = _USER_TEXT_WITH_CROPS
+        return text + _HINT_CLAUSE.format(hint=set_hint) if set_hint else text
     if set_hint:
         return _USER_TEXT_WITH_HINT.format(hint=set_hint)
     return _USER_TEXT
 
 
 def prompt_fingerprint() -> str:
-    """Stable hash of the whole contract: model, prompt, both user turns, schema."""
+    """Stable hash of the contract T1 SCORES: model, prompt, both user turns, schema.
+
+    The crop-retry turn is deliberately NOT in here, and the omission is the same argument
+    v2 §4.6 makes about not invalidating the production cache on a prompt change. T1 never
+    sends crops — it scores one flat render per card — so a reworded crop-retry turn cannot
+    move a T1 number by a single card. Folding it in would invalidate every cached run and
+    charge for a re-measurement of something that did not change. `retry_fingerprint`
+    records it separately, so it is still pinned; it just does not pretend to gate a score
+    it has no bearing on.
+    """
     payload = json.dumps(
         {
             "model": MODEL,
@@ -136,6 +161,16 @@ def prompt_fingerprint() -> str:
             "user_with_hint": _USER_TEXT_WITH_HINT,
             "schema": SCHEMA,
         },
+        sort_keys=True,
+        ensure_ascii=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def retry_fingerprint() -> str:
+    """Stable hash of the crop-retry turn, recorded in the run manifest."""
+    payload = json.dumps(
+        {"user_with_crops": _USER_TEXT_WITH_CROPS, "hint_clause": _HINT_CLAUSE},
         sort_keys=True,
         ensure_ascii=True,
     )

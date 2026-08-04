@@ -20,3 +20,10 @@ harness/images/
 # harness/results/, not the images that produced it or the raw model responses.
 harness/.cache/
 .venv/
+
+# Batch script v2 state. `runs/` is derived — deleting one costs nothing, which is the
+# property that makes it safe to re-run anything. `inventory/` is the master store and is
+# the opposite: real, local, and never in git. It holds a live map of what is in which box
+# and what it sold for, which is not a thing to push to a remote.
+runs/
+inventory/

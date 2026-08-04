@@ -44,17 +44,35 @@ class BatchError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """An extra image in the same request — a crop-retry region (v2 §4.5)."""
+
+    media_type: str
+    data_b64: str
+
+
+@dataclass(frozen=True)
 class ImageRequest:
-    """One card to identify. `custom_id` is the caller's key and comes back unchanged."""
+    """One card to identify. `custom_id` is the caller's key and comes back unchanged.
+
+    `regions` is empty on the normal path. On a crop retry it carries the enlarged bands
+    alongside the full image — still ONE request for the card, so there is still no
+    per-card call path here, only a request that happens to have more pictures in it.
+    """
 
     custom_id: str
     media_type: str
     data_b64: str
     set_hint: Optional[str] = None  # D2: optional accelerator, identification works without
+    regions: Sequence[Attachment] = ()
 
     @property
     def payload_bytes(self) -> int:
-        return len(self.data_b64)
+        return len(self.data_b64) + sum(len(r.data_b64) for r in self.regions)
+
+    @property
+    def with_crops(self) -> bool:
+        return bool(self.regions)
 
 
 @dataclass(frozen=True)
@@ -118,8 +136,23 @@ def _client(api_key: Optional[str] = None):
         raise BatchError(f"could not construct the Anthropic client: {exc}") from exc
 
 
+def _image_block(media_type: str, data_b64: str) -> dict:
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": data_b64},
+    }
+
+
 def build_request(item: ImageRequest) -> dict:
-    """One entry in the batch. Image block before text — vision reads better that way."""
+    """One entry in the batch. Image blocks before text — vision reads better that way."""
+    content = [_image_block(item.media_type, item.data_b64)]
+    content += [_image_block(r.media_type, r.data_b64) for r in item.regions]
+    content.append(
+        {
+            "type": "text",
+            "text": prompt.user_text(item.set_hint, with_crops=item.with_crops),
+        }
+    )
     return {
         "custom_id": item.custom_id,
         "params": {
@@ -131,22 +164,7 @@ def build_request(item: ImageRequest) -> dict:
             "output_config": {
                 "format": {"type": "json_schema", "schema": prompt.SCHEMA}
             },
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": item.media_type,
-                                "data": item.data_b64,
-                            },
-                        },
-                        {"type": "text", "text": prompt.user_text(item.set_hint)},
-                    ],
-                }
-            ],
+            "messages": [{"role": "user", "content": content}],
         },
     }
 
@@ -192,6 +210,74 @@ def _collect(client, batch_id: str, run: BatchRun) -> None:
         run.outcomes[custom_id] = Outcome(custom_id, SUCCEEDED, identification=identification)
 
 
+def _await_end(
+    client,
+    batch_id: str,
+    poll_seconds: int,
+    timeout_seconds: int,
+    say: Callable[[str], None],
+):
+    """Poll one batch until the API says it ended. Returns the final batch object."""
+    deadline = time.monotonic() + timeout_seconds
+    batch = client.messages.batches.retrieve(batch_id)
+    status = batch.processing_status
+    while status != "ended":
+        if time.monotonic() > deadline:
+            raise BatchError(
+                f"{batch_id} still {status} after {timeout_seconds}s — "
+                f"results stay retrievable for 29 days, so re-run to pick them up"
+            )
+        time.sleep(poll_seconds)
+        batch = client.messages.batches.retrieve(batch_id)
+        if batch.processing_status != status:
+            status = batch.processing_status
+            say(f"{batch_id} {status}")
+    return batch
+
+
+def _say_counts(batch, say: Callable[[str], None]) -> None:
+    counts = getattr(batch, "request_counts", None)
+    if counts is None:
+        return
+    say(
+        f"{batch.id} ended — {counts.succeeded} succeeded, {counts.errored} errored, "
+        f"{counts.canceled} canceled, {counts.expired} expired"
+    )
+
+
+def collect_batches(
+    batch_ids: Sequence[str],
+    *,
+    api_key: Optional[str] = None,
+    client=None,
+    poll_seconds: int = DEFAULT_POLL_SECONDS,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    log: Optional[Callable[[str], None]] = None,
+) -> BatchRun:
+    """REATTACH to batches already submitted, and collect them.
+
+    Results stay retrievable for 29 days, so a run whose script died mid-poll owns answers
+    it has already paid for. Re-submitting would buy them a second time — which is why the
+    ids are written to the manifest BEFORE the first poll, and why this exists to pick them
+    up. Still no per-card path: this collects whole batches, same as `run_batch`.
+    """
+    say = log or (lambda _message: None)
+    run = BatchRun()
+    if not batch_ids:
+        return run
+
+    client = client or _client(api_key)
+    started = time.monotonic()
+    for batch_id in batch_ids:
+        say(f"reattaching to {batch_id}")
+        batch = _await_end(client, batch_id, poll_seconds, timeout_seconds, say)
+        run.batch_ids.append(batch_id)
+        _say_counts(batch, say)
+        _collect(client, batch_id, run)
+    run.elapsed_seconds = time.monotonic() - started
+    return run
+
+
 def run_batch(
     items: Sequence[ImageRequest],
     *,
@@ -200,10 +286,16 @@ def run_batch(
     poll_seconds: int = DEFAULT_POLL_SECONDS,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     log: Optional[Callable[[str], None]] = None,
+    on_submit: Optional[Callable[[str], None]] = None,
 ) -> BatchRun:
     """Identify every image in one submission. Blocks until the batch ends.
 
     Returns an `Outcome` for every `custom_id` submitted, whatever happened to it.
+
+    `on_submit` is called with each batch id the instant the API returns it and BEFORE the
+    first poll. That ordering is the whole point: a script that dies during a four-hour
+    poll must be able to reattach rather than pay again, and an id persisted after the poll
+    is an id you do not have when you need it.
     """
     say = log or (lambda _message: None)
     run = BatchRun()
@@ -227,27 +319,12 @@ def run_batch(
             raise BatchError(f"batch create failed: {exc}") from exc
 
         run.batch_ids.append(batch.id)
+        if on_submit is not None:
+            on_submit(batch.id)
         say(f"submitted {len(requests)} requests as {batch.id}")
 
-        deadline = time.monotonic() + timeout_seconds
-        status = batch.processing_status
-        while status != "ended":
-            if time.monotonic() > deadline:
-                raise BatchError(
-                    f"{batch.id} still {status} after {timeout_seconds}s — "
-                    f"results stay retrievable for 29 days, so re-run to pick them up"
-                )
-            time.sleep(poll_seconds)
-            batch = client.messages.batches.retrieve(batch.id)
-            if batch.processing_status != status:
-                status = batch.processing_status
-                say(f"{batch.id} {status}")
-
-        counts = batch.request_counts
-        say(
-            f"{batch.id} ended — {counts.succeeded} succeeded, {counts.errored} errored, "
-            f"{counts.canceled} canceled, {counts.expired} expired"
-        )
+        batch = _await_end(client, batch.id, poll_seconds, timeout_seconds, say)
+        _say_counts(batch, say)
         _collect(client, batch.id, run)
 
     # Closure: everything submitted is accounted for, matched or reported.

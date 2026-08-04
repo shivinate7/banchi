@@ -2,9 +2,14 @@
 
 ## The harness is the contract
 
-`make harness` runs four tests and exits non-zero on any failure. Nothing is "done" until
+`make harness` runs six tests and exits non-zero on any failure. Nothing is "done" until
 it exits 0 and you have seen the output. This is the whole reason the project can be run
 by an agent unattended — without it, "looks done" is the only available signal.
+
+T1–T4 are the original contract. T5 and T6 arrived with batch script v2 (build-order
+step 4): a wrong price is a distinct failure from a wrong match, and a card the pipeline
+cannot find in its own photograph is a third thing again. Each deserves its own failing
+test name.
 
 Every threshold below is a number, not an adjective. `ID_ACCURACY_FLOOR=0.95` is a spec;
 "about 95%" is an opinion an agent can talk itself past.
@@ -58,8 +63,19 @@ Required cases:
 - Blank-`Number` rows (name-matching fallback)
 - Names with apostrophes and ampersands (`Billy & O'Nare`)
 - 7 identical cards → one row, `Add to Quantity` = 4, 3 recorded as backstock
+- Multi-set key collisions: a key that maps to rows in two `Set Name`s resolves by the
+  sidecar set hint, reviews as `set_ambiguous` without one, and leaves non-colliding keys
+  untouched
 
-- **Pass**: zero unmatched, or unmatched reported and output suppressed.
+- **Pass**: zero unmatched, or every unmatched card reported in both directions and routed
+  to a standing queue with its position retained, before any output is written.
+
+Output is **not** suppressed by a non-empty queue (batch script v2 §5.6). An unresolved
+card sits at a known position in a box: it is not lost and it is not urgent, and holding
+400 good cards hostage to 7 ambiguous ones is the wrong trade. What the pass criterion
+requires is that the report and the queue file both exist *before* the emitter writes
+anything — a card may leave the pipeline unlisted, never unrecorded. `emit_import` enforces
+it by refusing to write while any unmatched card has not been routed.
 
 ### T4 — Variant ladder
 
@@ -67,7 +83,46 @@ For a card with normal, holo, and reverse rows in the fixture, assert each ladde
 resolves to the correct condition string and price: metadata-driven, catalog-forced,
 detection-driven, and the disagreement → review path.
 
-- **Pass**: all four stages, plus the review path fires on disagreement.
+Also the routing table (batch script v2 §5.4) — which queue a card lands in, since that is
+the other thing that decides whether a resolved card is listed:
+
+- confidence `low` + market ≥ $0.40 → **main** review queue, not listed
+- confidence `low` + market < $0.40 → **parked**, not listed, not dropped
+- ladder → review: main if the cheapest candidate row is ≥ $0.40, parked if below
+- no catalog row, or identification failed → main, sorted last
+- matched row with blank or $0.00 market → `no_market_data`, never auto-priced and never
+  swept into the sub-threshold flat price
+- `--review-below-confidence=none` restores "confidence never routes on its own"
+
+- **Pass**: all four stages, the review path fires on disagreement, and every routing row
+  above sends the card to the queue named.
+
+### T5 — Pricing rules
+
+New with batch script v2. Undercut and markup against both bases, rounding half-up at two
+decimals, the floor clamp applied *after* rounding, the threshold always read from
+`TCG Market Price` whatever the basis, and the `no_market_data` refusal.
+
+- **Pass**: every rule × basis combination prices exactly, the floor clamp cannot be
+  rounded under, and a `no_market_data` SKU is never auto-priced.
+
+### T6 — Card geometry
+
+New with batch script v2. The crop-retry path in §4.5 is only as good as its ability to
+find the card in the frame, and a wrong crop produces a miss indistinguishable from a bad
+read — so detection gets its own failing test name.
+
+Synthetic composites only: a card rectangle rendered onto a background at a **known**
+offset, scale and rotation, so the answer key is exact. No rig photo exists in this repo.
+
+- **Pass**: the detected rectangle is within tolerance of the known one across the offset,
+  scale and rotation sweep; the title band and number corner crops each contain their
+  target region; and a frame with no card returns "not found" rather than a guess.
+- **Known blind spot, and it is the important one**: this measures the algorithm against
+  images this repo generated, which is not the same as measuring it against photographs
+  from the rig. Real detection rates are a Gate B number. A green T6 means the geometry is
+  self-consistent, **not** that detection works. Treat it exactly as T1's finish blind spot
+  is treated: recorded here so a green harness cannot be misread.
 
 ---
 
@@ -103,7 +158,11 @@ a 50-card run, then scale to a full box.
 2. **Scaffolding**: `Makefile`, `.claude/settings.json` hooks, `scripts/screenshot.sh`,
    empty harness that exits 1. Do this before any feature so the check exists first.
 3. Verification harness (T1–T4).
-4. Batch script v2: Batch API, variant ladder, catalog join, real CSV library.
+4. ~~Batch script v2: Batch API, variant ladder, catalog join, real CSV library~~ — code
+   done 2026-08-03, spec at `docs/specs/batch-script.md`, harness green at T1–T6.
+   `./pkmnscan identify | join | emit | reconcile`. **Not yet run against a real card**:
+   that is Gate B, and until it passes this is verified against fixtures and synthetic
+   images only.
 5. Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
    state shared across devices.

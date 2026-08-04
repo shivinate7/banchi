@@ -170,10 +170,15 @@ it omits, so either addition is a recorded decision, not a drive-by import.
 Keyed by **position**. Each entry stores the identification, the photo's sha256, the prompt
 fingerprint, the timestamp, and `cleared_by_human`.
 
-An answer is reused only if position, photo hash, and prompt fingerprint all still match —
-position is the identity; the other two are staleness checks. This is what makes a re-shot
-photo get re-read instead of silently returning the answer to a picture that no longer
-exists.
+An answer is reused when position and photo hash still match. Position is the identity; the
+photo hash is the staleness check, and it is what makes a re-shot photo get re-read instead
+of silently returning the answer to a picture that no longer exists.
+
+**The prompt fingerprint is recorded, not enforced.** It is deliberately not part of the
+reuse test — see the `Prompt changed` row below and the rationale under the table. (This
+paragraph previously said an answer was reused "only if position, photo hash, and prompt
+fingerprint all still match", which contradicted that row. Corrected 2026-08-03; the table
+is what was built.)
 
 | Situation | Behavior |
 |---|---|
@@ -414,6 +419,14 @@ report — catching an import that was staged and never moved live.
 | `--force-resubmit` | off | pay again for an existing batch |
 | `--reidentify-stale` | off | re-read weak uncleared entries after a prompt change |
 | `--dry-run` | off | everything except the API call |
+| `--variant` | unset | fills the finish where a sidecar records none. **Never overrides one.** |
+
+`--variant` is named by D3 rung 1 and was missing from this table as first written (added
+2026-08-03). It fills gaps and does not override: D3 spends three paragraphs establishing
+that the capture toggle is a *claim*, and a flag that could flatten a box you toggled stack
+by stack is the one thing that defeats it. The case it exists for is the capture app not
+existing yet — a directory of photos with no sidecars at all, where without it every card
+stocked in more than one finish takes a review-queue tap.
 
 ---
 
@@ -446,9 +459,21 @@ Logic in `pipeline/`, `identify/`, `geometry/`; tests in `harness/`.
   price, and the `no_market_data` refusal. A wrong price is a distinct failure from a wrong
   match and deserves its own failing test name.
 
-Adding T5 requires editing `docs/GATES.md`, `CLAUDE.md`'s `make harness` comment ("all four
-verification tests"), `harness/run.py`'s `TESTS` list, and `README.md`. That is a deliberate
-contract change, not a drive-by.
+- **T6 (card geometry)** — new, added at implementation time (2026-08-03) and not in this
+  spec as first written. The same argument as T5, one step further along: §4.5's crop retry
+  is only as good as its ability to find the card, and a wrong crop produces a miss
+  indistinguishable from a bad read. Shipping `geometry/` with no harness test contradicted
+  the harness contract more than a sixth test did.
+
+  Synthetic composites only — a card rectangle rendered at a known offset, scale and
+  rotation, so the answer key is exact and nothing is downloaded. **A green T6 is not
+  evidence that detection works**: it measures the algorithm against images this repo drew,
+  which is not the same as photographs from the rig. Real detection rates stay a Gate B
+  number, and GATES.md records that blind spot the way T1's `finish` blind spot is recorded.
+
+Adding T5 and T6 requires editing `docs/GATES.md`, `CLAUDE.md`'s `make harness` comment
+("all four verification tests"), `harness/run.py`'s `TESTS` list, and `README.md`. That is a
+deliberate contract change, not a drive-by. **The harness is six tests.**
 
 ---
 
@@ -464,7 +489,8 @@ contradicts them as written:
    output is written."*
 
 2. **`docs/GATES.md` and `CLAUDE.md`, harness size.** Both describe the harness as four
-   tests. T5 makes it five.
+   tests. T5 and T6 make it **six**. Done 2026-08-03, along with `README.md` and
+   `harness/run.py`'s `TESTS` list.
 
 3. **`pipeline/pricing.py` docstring.** States undercut % and markup % are "build-order step
    4, and are deliberately absent". This spec builds them; the docstring's rationale should
