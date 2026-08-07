@@ -7,7 +7,7 @@ physical location tracking. Two tracks share one physical rig.
 
 ```
 CLAUDE.md                  always-on rules. Keep it short.
-codes/CLAUDE.md            code-card track, auto-loaded in that directory
+code-card-fork/CLAUDE.md   code-card track, auto-loaded in that directory
 docs/map.py                the repo as data: built vs TBD, and what governs each file
 docs/DECISIONS.md          settled decisions + rationale (read on demand)
 docs/CODES-DECISIONS.md    same, for the codes track

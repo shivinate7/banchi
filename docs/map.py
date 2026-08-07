@@ -201,6 +201,6 @@ COMPONENTS = [
 
 TRACKS = [
     {"name": "singles", "decisions": "docs/DECISIONS.md", "rules": "CLAUDE.md", "status": "current"},
-    {"name": "codes", "decisions": "docs/CODES-DECISIONS.md", "rules": "codes/CLAUDE.md",
+    {"name": "codes", "decisions": "docs/CODES-DECISIONS.md", "rules": "code-card-fork/CLAUDE.md",
      "status": "shakedown", "note": "manual eBay sales allowed early; delivery automation gated on singles Gate B"},
 ]

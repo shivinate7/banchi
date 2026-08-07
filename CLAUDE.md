@@ -2,7 +2,7 @@
 
 Bulk-list pre-sorted Pokémon TCG singles on TCGplayer with zero attention per card and
 physical location tracking. Two tracks share one rig: singles (this file) and code cards
-(`codes/CLAUDE.md`, auto-loaded in that directory).
+(`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
 **Current gate: B.** Gate A passed 2026-07-26. Nothing on the deferred list, ever, until
 Gate C. See @docs/GATES.md.
@@ -73,5 +73,5 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 - @docs/GATES.md — gates, harness contract, build order.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
-- `codes/CLAUDE.md` — the code-card track. Separate schema, separate channel.
+- `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

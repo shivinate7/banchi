@@ -1169,14 +1169,14 @@ def self_test() -> int:
         "@docs/DECISIONS.md from CLAUDE.md",
         str(resolved),
     )
-    resolved = resolve_candidate("@../docs/CODES-DECISIONS.md", ROOT / "codes" / "CLAUDE.md", tops)
+    resolved = resolve_candidate("@../docs/CODES-DECISIONS.md", ROOT / "code-card-fork" / "CLAUDE.md", tops)
     ok(
         resolved is not None and resolved.exists(),
-        "@../docs/CODES-DECISIONS.md from codes/CLAUDE.md",
+        "@../docs/CODES-DECISIONS.md from code-card-fork/CLAUDE.md",
         str(resolved),
     )
     ok(
-        resolve_candidate("../../../etc/passwd", ROOT / "codes" / "CLAUDE.md", tops) is None,
+        resolve_candidate("../../../etc/passwd", ROOT / "code-card-fork" / "CLAUDE.md", tops) is None,
         "a ../ path escaping the repo is not ours to check",
     )
 
