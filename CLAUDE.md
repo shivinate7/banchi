@@ -9,14 +9,12 @@ Gate C. See @docs/GATES.md.
 
 ## Commands
 
-<!-- FILL THESE IN AS THEY EXIST. An empty command block is the #1 CLAUDE.md failure. -->
-
 ```
 make harness        # all six verification tests; MUST exit 0 before any commit
-make dev            # Vite app on :5173
-make server         # Python capture server on :8000
-make screenshot     # renders key views to captures/ui/ for visual review
-make check          # harness + lint + typecheck
+make dev            # Vite app on :5173                  — stub, unblocked at step 7
+make server         # Python capture server on :8000     — stub, unblocked at step 5
+make screenshot     # renders key views to captures/ui/  — needs step 7's views
+make check          # harness + lint + typecheck         — lint/typecheck still stubs
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
@@ -26,8 +24,10 @@ make check          # harness + lint + typecheck
 
 ## Things you will get wrong without being told
 
-- **Join key** = `zfill(3)(number) + "/" + printedTotal`, built from pokemontcg.io data.
-  Never join on Product Name — it inconsistently embeds numbers.
+- **Join key** = `zfill(3)(number) + "/" + printedTotal`. The shape is pokemontcg.io's
+  schema (`printedTotal` is their field name), but at runtime both values come from the
+  identification and match against the export's `Number` column — nothing in the pipeline
+  calls that API. Never join on Product Name — it inconsistently embeds numbers.
 - **Only two columns are ever written**: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:

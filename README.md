@@ -39,7 +39,8 @@ cd pkmnscan
 claude
 ```
 
-Requires `ANTHROPIC_API_KEY` in your shell profile. If `claude` is missing:
+Requires `ANTHROPIC_API_KEY`, either exported in your shell profile or set in `.env`
+(gitignored) — a real environment variable wins over `.env`. If `claude` is missing:
 `npm install -g @anthropic-ai/claude-code`
 
 ## Session 1 — scaffolding
@@ -105,7 +106,7 @@ makes git safe here — without it, macOS evicts cold files, and `.git` pack fil
 eviction candidates. Keep that pin on.
 
 Pinning stops eviction, not upload. iCloud does not read `.gitignore`, so before build-order
-step 8 brings in `node_modules` (tens of thousands of small files), exclude it from sync —
+step 7 brings in `node_modules` (tens of thousands of small files), exclude it from sync —
 name it `node_modules.nosync` and symlink, or keep it outside the synced tree. The same
 applies to `captures/` once it holds real card photos.
 

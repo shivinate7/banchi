@@ -52,7 +52,7 @@ from pipeline import join
 
 NAME = "T1"
 DESCRIPTION = "Ground-truth ID eval against pokemontcg.io images"
-PASS_CRITERIA = "overall_accuracy >= 0.95"
+PASS_CRITERIA = "holdout_accuracy >= 0.95"
 
 ID_ACCURACY_FLOOR = 0.95
 MIN_EVAL_SETS = 3

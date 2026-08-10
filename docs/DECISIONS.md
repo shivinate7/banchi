@@ -238,7 +238,7 @@ that tell the next session what done means.
 **Three layers, split by how knowable each finding is.**
 
 1. **Mechanical** — `scripts/docs-audit.py`, stdlib-only, run by the pre-commit hook and by
-   `make docs-audit`. Nine checks, all deterministic. **Exit 1 blocks**, because a dangling
+   `make docs-audit`. Twelve checks, all deterministic. **Exit 1 blocks**, because a dangling
    path is provably wrong and there is no judgment to defer.
 2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and
    `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20
@@ -306,7 +306,9 @@ roughly 285k tokens in one session.
 `ast.literal_eval` by everything that consumes it.
 
 **Data, not another markdown section, because it has three consumers.** A human or agent
-reading it once; `scripts/docs-audit.py` check 10, which verifies every claim in it; and
+reading it once; `scripts/docs-audit.py`'s repo-map check, which verifies every claim in it
+— named rather than numbered, because a positional index re-drifts every time a check is
+added, and this one already had; and
 `scripts/decision-context.py`, the `PreToolUse` hook that names the governing decisions
 before a file is edited. Prose serves the first well and the other two not at all.
 

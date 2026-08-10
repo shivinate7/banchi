@@ -16,11 +16,18 @@ Every threshold below is a number, not an adjective. `ID_ACCURACY_FLOOR=0.95` is
 
 ### T1 — Ground-truth ID eval
 
-Download ~50 official card images from pokemontcg.io across 2–3 sets as labeled fixtures
-(the API record IS the label). Run identification against them. Report accuracy per set
-and overall.
+Download ~150 official card images from pokemontcg.io across at least 3 sets as labeled
+fixtures (the API record IS the label). Run identification against them. Report accuracy
+per set and overall.
 
-- **Pass**: `overall_accuracy >= 0.95`
+- **Pass**: `holdout_accuracy >= 0.95`
+- **The gate is the holdout, not the whole sample.** The images split deterministically in
+  two — a hash of the card id, so there is no seed to lose and the same card lands in the
+  same half on any machine. The tuner is allowed to read failures from the tune half only;
+  the holdout is the measurement. `overall_accuracy` is still reported and is still useful,
+  but it includes the half the prompt was fitted against, which is exactly the number the
+  paragraph below says means nothing about the next card. Current split: 82 tune, 68
+  holdout, 150 together.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per date AND configuration — a hinted run and an unhinted
   run are different measurements and must never share a filename.
@@ -40,11 +47,6 @@ nothing about the next card, and that number is the whole basis for trusting ide
 once there is no answer key. So: hold out a slice the tuner never sees the failures from,
 tune against the rest, and report only the held-out score. `PKMNSCAN_REFRESH_IMAGES=1` with
 a different `EVAL_SETS` draws a fresh sample.
-
-**50 images is a small sample.** One card is two percentage points, and the confidence
-interval is roughly ±6, so 0.94 and 0.96 are not meaningfully different. Now that the
-pokemontcg.io key is in place, prefer 150–200 images — it costs cents and makes the
-verdict mean something.
 
 ### T2 — Fixture round-trip
 

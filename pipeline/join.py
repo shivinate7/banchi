@@ -1,11 +1,14 @@
 """Catalog join — identified cards to TCGplayer SKU rows.
 
-Join key is `zfill(3)(number) + "/" + printedTotal`, built from pokemontcg.io data and
-matched against the export's `Number` column. Secret rares exceed the denominator in the
-same format (`161/159`) and are ordinary, not invalid. Product Name is NEVER a join key —
-it inconsistently embeds the number ("Accelgor" in one row, "Black Belt's Training -
-143/159" in another). Name matching exists only as a fallback for the rare catalog rows
-whose `Number` is blank.
+Join key is `zfill(3)(number) + "/" + printedTotal`. The shape follows pokemontcg.io's
+schema — `printedTotal` is their field name — but at runtime both values come from the
+identification, matched against the export's `Number` column. Nothing here calls that API;
+`harness/eval/fixtures.py` is the only caller, for T1's labelled fixtures.
+
+Secret rares exceed the denominator in the same format (`161/159`) and are ordinary, not
+invalid. Product Name is NEVER a join key — it inconsistently embeds the number
+("Accelgor" in one row, "Black Belt's Training - 143/159" in another). Name matching
+exists only as a fallback for the rare catalog rows whose `Number` is blank.
 
 Duplicates aggregate by SKU at join time (D7): multiple copies collapse into ONE row with
 `Add to Quantity` = copies, live quantity capped at 4, the remainder held as backstock at

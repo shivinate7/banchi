@@ -7,7 +7,7 @@ itself. So it is written below as numbers.
 
 ## Lock tokens before building any screen
 
-Fill this in before step 8 of the build order, then build **one** component against it
+Fill this in before step 7 of the build order, then build **one** component against it
 (the pull-confirm button in default / pressed / disabled) and look at it. Catching a gap on
 one component is far cheaper than after ten screens.
 

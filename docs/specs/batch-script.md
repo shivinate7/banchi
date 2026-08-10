@@ -411,7 +411,7 @@ report — catching an import that was staged and never moved live.
 | `--retry-budget` | 1 | per-card retries after a batch failure |
 | `--review-below-confidence` | `low` | `none` \| `low` \| `medium` |
 | `--basis` | `market` | `market` \| `low` |
-| rule | `match` | `decisions.json` |
+| `--rule` | `match` | `decisions.json`, seeded by the flag |
 | threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py` |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
 | cards per section | 25 | D10 |
@@ -479,14 +479,15 @@ deliberate contract change, not a drive-by. **The harness is six tests.**
 
 ## Required document amendments
 
-Implementation must not land until these are edited by the owner, because the spec above
-contradicts them as written:
+The spec above contradicted four documents as written, and implementation was gated on the
+owner editing them first. All four were applied on 2026-08-03 and the implementation landed
+in `41221f6`. Kept as the record of what changed and why, not as an open gate:
 
 1. **`docs/GATES.md`, T3 pass criteria.** Currently: *"zero unmatched, or unmatched reported
    and output suppressed."* Section 5.6 makes reviews non-blocking, so output is **not**
    suppressed. Proposed replacement: *"zero unmatched, or every unmatched card reported in
    both directions and routed to a standing queue with its position retained, before any
-   output is written."*
+   output is written."* Done 2026-08-03.
 
 2. **`docs/GATES.md` and `CLAUDE.md`, harness size.** Both describe the harness as four
    tests. T5 and T6 make it **six**. Done 2026-08-03, along with `README.md` and
@@ -494,12 +495,12 @@ contradicts them as written:
 
 3. **`pipeline/pricing.py` docstring.** States undercut % and markup % are "build-order step
    4, and are deliberately absent". This spec builds them; the docstring's rationale should
-   be retired rather than left describing a state that no longer exists.
+   be retired rather than left describing a state that no longer exists. Done 2026-08-03.
 
 4. **`docs/DECISIONS.md`, D9.** Sub-threshold disposition is described as a per-run choice.
    This spec adds a `no_market_data` category that is *not* dispositioned at all. Worth a
    sentence in D9 so a later session does not "fix" it by sweeping those into the flat
-   price.
+   price. Done 2026-08-03.
 
 ---
 
