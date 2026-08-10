@@ -169,8 +169,12 @@ COMPONENTS = [
     {
         "path": "scripts/",
         "status": "built",
-        "does": "opsec guards, the stop gate, the docs audit, the screenshot runner",
+        "does": "opsec guards, the stop gate, the docs audit, the screenshot runner, "
+                "and `make status` — which reads this file for the next step and the gate",
         "governed_by": ["D14", "D16"],
+        "note": "scripts/status.py declares every file it reads in a SOURCES literal, and "
+                "docs-audit check 13 verifies that list. Its values are derived so they "
+                "cannot go stale; check 13 is what catches its *reader* going stale.",
     },
     {
         "path": "fixtures/",

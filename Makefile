@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help harness check docs-audit dev server screenshot lint typecheck venv
+.PHONY: help status harness check docs-audit dev server screenshot lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -13,8 +13,9 @@
 PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 help:
-	@echo "PKMNSCAN — step 4 done (batch script v2) · step 5 next (capture server)"
+	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
+	@echo "  make status       where you are: next step, gate, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make harness      T1-T6 verification tests. Must exit 0 before any commit."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
@@ -38,6 +39,12 @@ venv:
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
 	@echo "venv ready: $$(.venv/bin/python -V)"
 	@echo "T1 also needs ANTHROPIC_API_KEY in the environment."
+
+# python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
+# tool. Exits non-zero if any declared source is missing — it prints MISSING rather than
+# quietly printing less, because the shorter version is the one you would believe.
+status:
+	@python3 scripts/status.py
 
 harness:
 	@$(PYTHON) harness/run.py

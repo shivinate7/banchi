@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import os
 import re
 import subprocess
@@ -1040,6 +1041,109 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
 
 
+# ------------------------------------------------------- 13. status.py's declared sources
+
+
+STATUS = ROOT / "scripts" / "status.py"
+
+
+def module_defs(path: Path) -> Set[str]:
+    """Module-level `def` names, by parsing — same no-import rule as everything else here."""
+    try:
+        tree = ast.parse(read(path))
+    except (OSError, SyntaxError):
+        return set()
+    return {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def check_status_sources(report: Report) -> None:
+    """`make status` reads a declared list of files. This verifies every one of them.
+
+    status.py derives every value it prints, so its *values* cannot go stale. Its *reader*
+    can: rename `harness/results/t1.json` and the glob matches nothing, silently deleting
+    the most important line of the output. That is worse than no status tool, because you
+    would believe the shorter version.
+
+    It is not hypothetical. The score files were dated until `f86de1a` made them one per
+    configuration, and a reader written the week before would have gone quiet rather than
+    loud. So this is a check, not a comment asking the next session to remember.
+
+    Reads SOURCES with `ast`, never by importing — a read-only audit must not execute the
+    code it audits, which is also why SOURCES has to stay a pure literal.
+    """
+    if not STATUS.exists():
+        report.add("status sources", MECHANICAL, [Finding("scripts/status.py", "does not exist")])
+        return
+
+    sources = literals_from_module(STATUS).get("SOURCES")
+    if not sources:
+        report.add(
+            "status sources",
+            MECHANICAL,
+            [
+                Finding(
+                    "scripts/status.py",
+                    "no SOURCES list to read. It must stay a pure literal — this audit "
+                    "parses it with `ast` and never imports it.",
+                )
+            ],
+        )
+        return
+
+    findings: List[Finding] = []
+    checked = 0
+    for entry in sources:
+        path = str(entry.get("path", ""))
+        kind = str(entry.get("kind", ""))
+        requires = list(entry.get("requires") or [])
+        where = f"scripts/status.py -> {path}"
+        checked += 1
+
+        if any(ch in path for ch in "*?["):
+            parent, _, glob = path.rpartition("/")
+            targets = sorted((ROOT / parent).glob(glob)) if (ROOT / parent).is_dir() else []
+        else:
+            target = ROOT / path
+            targets = [target] if target.exists() else []
+
+        if not targets:
+            if not entry.get("optional"):
+                findings.append(
+                    Finding(
+                        where,
+                        f"`{path}` matches nothing, so `make status` would print MISSING and "
+                        f"exit non-zero.\nIt is read for: {entry.get('why', '?')}\n"
+                        f"If the file moved, update SOURCES in scripts/status.py.",
+                    )
+                )
+            continue
+
+        for target in targets:
+            name = rel(target)
+            spot = f"scripts/status.py -> {name}"
+            if kind == "literals":
+                have = set(literals_from_module(target))
+                for req in requires:
+                    if req not in have:
+                        findings.append(Finding(spot, f"`{name}` no longer defines the literal `{req}`."))
+            elif kind == "defs":
+                have = module_defs(target)
+                for req in requires:
+                    if req not in have:
+                        findings.append(Finding(spot, f"`{name}` no longer defines `{req}()`."))
+            elif kind == "json":
+                try:
+                    payload = json.loads(read(target))
+                except ValueError as exc:
+                    findings.append(Finding(spot, f"not valid JSON — {exc}"))
+                    continue
+                for req in requires:
+                    if req not in payload:
+                        findings.append(Finding(spot, f"`{name}` has no `{req}` key."))
+
+    report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
+
+
 # ------------------------------------------------------------------ Layer 2: coupling
 
 
@@ -1291,6 +1395,7 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_current_gate(report)
     check_map(report, allowed)
+    check_status_sources(report)
     if staged_only:
         check_coupling(report)
     return report
