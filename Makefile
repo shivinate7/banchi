@@ -24,11 +24,11 @@ help:
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
-	@echo "  make dev          Vite app on :5173                    (unblocked at step 8)"
-	@echo "  make server       Python capture server on :8000       (unblocked at step 6)"
-	@echo "  make screenshot   render key views to captures/ui/     (unblocked at step 8)"
-	@echo "  make lint         linters                              (unblocked at step 5)"
-	@echo "  make typecheck    type checkers                        (unblocked at step 8)"
+	@echo "  make dev          Vite app on :5173                    (unblocked at step 7)"
+	@echo "  make server       Python capture server on :8000       (unblocked at step 5)"
+	@echo "  make screenshot   render key views to captures/ui/     (unblocked at step 7)"
+	@echo "  make lint         linters                              (ruff unblocked; not wired)"
+	@echo "  make typecheck    type checkers                        (unblocked at step 7)"
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
 
@@ -62,27 +62,27 @@ check:
 dev:
 	@echo "make dev: nothing to run yet."
 	@echo "  Will run: npm run dev  (Vite app on :5173)"
-	@echo "  Unblocked by build-order step 8 — see docs/GATES.md"
+	@echo "  Unblocked by build-order step 7 — see docs/GATES.md"
 	@exit 1
 
 server:
 	@echo "make server: nothing to run yet."
 	@echo "  Will run: python3 server/capture_server.py  (on :8000)"
-	@echo "  Unblocked by build-order step 6 — see docs/GATES.md"
+	@echo "  Unblocked by build-order step 5 — see docs/GATES.md"
 	@exit 1
 
 screenshot:
 	@scripts/screenshot.sh --manifest captures/views.txt
 
 lint:
-	@echo "make lint: nothing to lint yet."
+	@echo "make lint: not wired yet."
 	@echo "  Will run: ruff (Python) + eslint (JS), including the v1-bug lint rules —"
 	@echo "  no split(\",\") CSV parsing, no facingMode: \"environment\". See docs/DECISIONS.md."
-	@echo "  Unblocked by build-order step 5 — see docs/GATES.md"
+	@echo "  ruff has Python to lint as of step 4; eslint waits for step 7 — see docs/GATES.md"
 	@exit 1
 
 typecheck:
 	@echo "make typecheck: nothing to typecheck yet."
 	@echo "  Will run: tsc --noEmit"
-	@echo "  Unblocked by build-order step 8 — see docs/GATES.md"
+	@echo "  Unblocked by build-order step 7 — see docs/GATES.md"
 	@exit 1

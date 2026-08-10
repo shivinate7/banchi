@@ -14,7 +14,7 @@ make harness        # all six verification tests; MUST exit 0 before any commit
 make dev            # Vite app on :5173                  — stub, unblocked at step 7
 make server         # Python capture server on :8000     — stub, unblocked at step 5
 make screenshot     # renders key views to captures/ui/  — needs step 7's views
-make check          # harness + lint + typecheck         — lint/typecheck still stubs
+make check          # harness + docs-audit + lint + typecheck — last two still stubs
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
