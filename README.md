@@ -17,7 +17,7 @@ docs/specs/                interviewed specs, executed in a clean session
 .claude/skills/            on-demand domain knowledge (TCGplayer CSV schema)
 .claude/commands/          /docs-audit — prose vs code, proposes, never commits
 .claude/settings.json      permissions + hooks
-scripts/                   guard scripts, screenshot runner, docs-audit.py
+scripts/                   guard scripts, screenshot runner, docs-audit.py, status.py
 fixtures/                  real TCGplayer exports — ground truth, never modified
 
 pkmnscan                   the CLI. `./pkmnscan --help`
@@ -36,8 +36,14 @@ inventory/                 the master store on disk. Real, local, never in git.
 
 ```
 cd pkmnscan
+make status
 claude
 ```
+
+`make status` first, especially after time away: it prints the next build-order step, the
+open gate, the last T1 score and the branch — all read from the repo, none of it written
+down anywhere a person has to remember to update. Stdlib only, so it works before
+`make venv` and without an API key.
 
 Requires `ANTHROPIC_API_KEY`, either exported in your shell profile or set in `.env`
 (gitignored) — a real environment variable wins over `.env`. If `claude` is missing:

@@ -10,6 +10,7 @@ Gate C. See @docs/GATES.md.
 ## Commands
 
 ```
+make status         # where you are: next step, gate, T1 score, branch. Start here.
 make harness        # all six verification tests; MUST exit 0 before any commit
 make dev            # Vite app on :5173                  — stub, unblocked at step 7
 make server         # Python capture server on :8000     — stub, unblocked at step 5
