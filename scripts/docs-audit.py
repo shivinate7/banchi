@@ -492,7 +492,7 @@ def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
     return None
 
 
-def check_pkmnscan_commands(report: Report, docs: List[Path]) -> None:
+def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Path]) -> None:
     main = ROOT / "cli" / "__main__.py"
     if not main.exists():
         report.add("pkmnscan commands", MECHANICAL, [Finding("cli/__main__.py", "does not exist")])
@@ -507,11 +507,9 @@ def check_pkmnscan_commands(report: Report, docs: List[Path]) -> None:
         return
 
     findings: List[Finding] = []
-    documented: Set[str] = set()
     for doc in docs:
         for number, line in iter_code_lines(read(doc)):
             for name in _PKMNSCAN_REF_RE.findall(line):
-                documented.add(name)
                 if name not in registered:
                     findings.append(
                         Finding(
@@ -520,6 +518,17 @@ def check_pkmnscan_commands(report: Report, docs: List[Path]) -> None:
                             f"cli/__main__.py:COMMANDS ({', '.join(registered)}).",
                         )
                     )
+
+    # Completeness reads every doc, never the staged subset. The two halves ask opposite
+    # questions and need opposite scopes: "does this reference resolve" is about the lines
+    # you changed, while "is this command documented anywhere" is about the repo. Scoping
+    # the second one to the staged set asked whether a command is documented in the files
+    # this commit happens to touch — which is not the invariant, and failed every commit
+    # that edited a doc other than CLAUDE.md or README.md.
+    documented: Set[str] = set()
+    for doc in all_docs:
+        for _, line in iter_code_lines(read(doc)):
+            documented.update(_PKMNSCAN_REF_RE.findall(line))
     for name in registered:
         if name not in documented:
             findings.append(
@@ -1266,15 +1275,16 @@ def self_test() -> int:
 def audit(staged_only: bool) -> Report:
     report = Report()
     allowed = load_allowlist()
-    docs = markdown_files()
+    all_docs = markdown_files()
+    docs = all_docs
     if staged_only:
         staged = set(staged_changes())
-        docs = [doc for doc in docs if rel(doc) in staged]
+        docs = [doc for doc in all_docs if rel(doc) in staged]
 
     check_paths(report, docs, allowed)
     check_allowlist(report, allowed)
     check_make_targets(report, docs)
-    check_pkmnscan_commands(report, docs)
+    check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
     check_pass_criteria(report)
     check_decision_ids(report, docs)

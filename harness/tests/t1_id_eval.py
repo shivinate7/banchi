@@ -175,9 +175,16 @@ def _per_set(scores: List[Score]) -> "OrderedDict[str, Dict[str, object]]":
 
 
 def _write_results(payload: dict, hint_mode: str) -> Tuple[Path, bool]:
-    """One file per (date, configuration). The suffix matters: a hinted run and an
-    unhinted run are different measurements, and letting them share a filename means
-    whichever ran last silently becomes 'the' committed score.
+    """One file per configuration. The suffix matters: a hinted run and an unhinted run
+    are different measurements, and letting them share a filename means whichever ran
+    last silently becomes 'the' committed score.
+
+    The filename carries no date, and that is the fix for a hole the rule below had from
+    the start: the dedupe compares against the file it is about to write, so a new UTC
+    date meant a new filename, a missing file, and an unconditional write. One measurement
+    accumulated one file per day the harness ran — 2026-08-03 and 2026-08-04 were committed
+    as byte-identical twins. The date lives in `generated_at` inside the payload; git holds
+    the history, which is what "so regressions are visible in the diff" always meant.
 
     Returns (path, wrote). A cached re-scoring recomputes nothing, so it must not dirty
     a committed score: if the only field that would change is `generated_at`, the file
@@ -192,9 +199,8 @@ def _write_results(payload: dict, hint_mode: str) -> Tuple[Path, bool]:
     the one from the run that actually produced the number, which is the more truthful
     of the two anyway."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     suffix = "" if hint_mode == "none" else "-{0}".format(hint_mode)
-    path = RESULTS_DIR / "t1-{0}{1}.json".format(stamp, suffix)
+    path = RESULTS_DIR / "t1{0}.json".format(suffix)
 
     if path.exists():
         try:

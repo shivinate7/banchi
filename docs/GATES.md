@@ -29,8 +29,10 @@ per set and overall.
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
   holdout, 150 together.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
-  visible in the diff. One file per date AND configuration — a hinted run and an unhinted
-  run are different measurements and must never share a filename.
+  visible in the diff. One file per configuration — a hinted run and an unhinted run are
+  different measurements and must never share a filename. **No date in the name**: git
+  holds the history, and a dated filename turned every new UTC date into a fresh file
+  rather than a comparison, which is exactly the noise the next bullet forbids.
 - **The results file is rewritten only when the measurement changes.** A cached re-scoring
   recomputes nothing, so it leaves the file byte-identical rather than restamping
   `generated_at`. Otherwise every `make harness` puts a one-line diff on a tracked file and
