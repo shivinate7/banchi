@@ -7,10 +7,12 @@ Audit this repo's documentation against the code, and propose changes for the ow
 approve. Scope: $ARGUMENTS (empty means the working tree against `HEAD`).
 
 This is the semantic half of D16. `scripts/docs-audit.py` already checks everything a
-machine can settle — twelve checks: paths, the allowlist, `make` targets, `./pkmnscan`
+machine can settle — sixteen checks: paths, the allowlist, `make` targets, `./pkmnscan`
 subcommands, test ids, thresholds and their verbatim wording, decision numbers in docs and
-in code, env vars, the current gate, and every claim in `docs/map.py`. Your job is the part
-it cannot: **prose that is still grammatical, still well-formed, and no longer true.**
+in code, env vars, the current gate, every claim in `docs/map.py`, the sources
+`scripts/status.py` declares, its own published check count, and checks named by position
+in the docs and in code. Your job is the part it cannot: **prose that is still grammatical,
+still well-formed, and no longer true.**
 
 ## Run it in this order
 

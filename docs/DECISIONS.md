@@ -228,9 +228,9 @@ no page size.
 
 ## D16 — The docs are checked mechanically; the prose is checked by asking
 
-Ten markdown files carry this project's architecture and the reasoning behind it, and until
-`scripts/docs-audit.py` existed nothing verified a single line of them. Every path, `make`
-target, subcommand, test id, threshold, decision number and env var in them was true only
+This repo's markdown carries its architecture and the reasoning behind it, and until
+`scripts/docs-audit.py` existed nothing verified a single line of it. Every path, `make`
+target, subcommand, test id, threshold, decision number and env var in it was true only
 for as long as someone remembered. That is the same argument `docs/GATES.md` makes for the
 harness — "without it, 'looks done' is the only available signal" — applied to the files
 that tell the next session what done means.
@@ -238,8 +238,30 @@ that tell the next session what done means.
 **Three layers, split by how knowable each finding is.**
 
 1. **Mechanical** — `scripts/docs-audit.py`, stdlib-only, run by the pre-commit hook and by
-   `make docs-audit`. Twelve checks, all deterministic. **Exit 1 blocks**, because a dangling
-   path is provably wrong and there is no judgment to defer.
+   `make docs-audit`. Sixteen checks, all deterministic. Fourteen **exit 1 and block**,
+   because a dangling path is provably wrong and there is no judgment to defer. Two print
+   on exit 2 instead, and both are the same shape: a decision id cited in a `.py` comment,
+   and a check named by position in one. `D2` could plausibly become a variable name, and a
+   comment saying it checks N rows is ordinary English — a false positive that blocks is
+   worse than one that prints. **That count is itself checked** against the registry
+   `audit()` builds: this sentence read "twelve" for two commits after there were thirteen,
+   and a number nobody verifies is the first thing a reader trusts.
+
+   **The count row is the one that can change sides.** It blocks when the docs and the
+   registry disagree, but when its own reader cannot account for every check it finds
+   defined — `audit()` restructured into a loop, say — it compares nothing and asks
+   instead. Publishing a number it does not stand behind would be worse than publishing
+   none: a half-read registry reports a plausible smaller count, the docs get edited down
+   to match, and a wrong number that agrees with its own checker is invisible from then on.
+   That is why the labels are counted a second way, from the check functions themselves, and
+   why a mismatch between the two suspends the comparison rather than resolving it. The same
+   rule `scripts/githooks/pre-commit` applies one level up: a broken auditor is not evidence
+   the docs are wrong.
+
+   **A check is named, never numbered** — the same rule D17 sets for the repo-map check,
+   now enforced for all of them. Positions moved once already, when the section headers ran
+   1 to 10 and then jumped, leaving two numbers in circulation that pointed at nothing. The
+   report's labels are the names.
 2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and
    `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20
    staged lines, so a typo fix stays quiet.
@@ -251,6 +273,14 @@ that tell the next session what done means.
 to reach for `git commit --no-verify`, and `--no-verify` also switches off the three opsec
 rules in the same hook. Trading a code-card bearer-instrument guard for a prose reminder is
 a bad trade, so layer 2 asks and gets out of the way.
+
+Worth being exact about what `--no-verify` costs, because it is more than it was: those
+three rules run **only** at commit time now. Their `PreToolUse` twin, `scripts/guard-opsec.sh`,
+has been disabled in `.claude/settings.json` since 2026-08-03 — it blocked any write
+containing a code-shaped literal, including placeholders in prose about the format, and cost
+two blocked writes in one session. Fixtures stay covered while it is off by the
+`permissions.deny` rules; the code-card literal does not. Revisit before the codes track
+handles real cards.
 
 **Nothing on the audit path can write.** The script opens, compares, prints, and sets an
 exit code; it parses with `ast` rather than importing, so it does not even run project code.
@@ -313,11 +343,11 @@ added, and this one already had; and
 before a file is edited. Prose serves the first well and the other two not at all.
 
 **It is audited exactly as hard as it is trusted.** An index that drifts is worse than no
-index, because it is believed. Check 10 fails when a `built` path is missing, when a
-`planned` path has quietly arrived, when `governed_by` cites a decision with no heading,
-when gate status disagrees with `docs/GATES.md`, and — the rule that does the real work —
-when a source file exists that no entry mentions. Adding a module without touching the map
-fails the commit. That orphan rule is the difference between a map and a stale map.
+index, because it is believed. The repo-map check fails when a `built` path is missing,
+when a `planned` path has quietly arrived, when `governed_by` cites a decision with no
+heading, when gate status disagrees with `docs/GATES.md`, and — the rule that does the real
+work — when a source file exists that no entry mentions. Adding a module without touching
+the map fails the commit. That orphan rule is the difference between a map and a stale map.
 
 **`governed_by` is a superset of the citations in the file's own comments,** enforced in the
 same check. The code already said `D9` in `pipeline/pricing.py`; the map may add D8, which

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Docs staleness audit — the mechanical half. See docs/DECISIONS.md D16.
 
-Ten markdown files carry this project's architecture and its rationale. Nothing verified
-them until this script existed, so every path, target, subcommand, test id and decision
-number in them was true only for as long as someone remembered.
+This repo's markdown carries its architecture and its rationale. Nothing verified it until
+this script existed, so every path, target, subcommand, test id and decision number in it
+was true only for as long as someone remembered.
 
 THE AUDIT NEVER WRITES. It opens, compares, prints, and sets an exit code. The only writes
 in this file are inside `--self-test`, into a `tempfile.TemporaryDirectory()` it creates
@@ -172,7 +172,7 @@ def top_level_names() -> Set[str]:
     return {entry.name for entry in ROOT.iterdir()}
 
 
-# -------------------------------------------------------------- 1. path references
+# ----------------------------------------------------------------- path references
 
 # A candidate must contain a slash. That single requirement is what keeps this check
 # usable: the docs are full of `161/159`, `SWSH/SV`, `sets/en.json` and
@@ -338,7 +338,7 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
     report.add("paths", MECHANICAL, findings, f"{checked} references resolve")
 
 
-# ------------------------------------------------------------------- 2. the allowlist
+# ---------------------------------------------------------------------- the allowlist
 
 
 def load_allowlist() -> Dict[str, str]:
@@ -396,7 +396,7 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
     report.add("allowlist", MECHANICAL, findings, f"{len(allowed)} entries, none stale")
 
 
-# -------------------------------------------------------------------- 3. make targets
+# ----------------------------------------------------------------------- make targets
 
 _MAKE_RULE_RE = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*):", re.MULTILINE)
 _MAKE_REF_RE = re.compile(r"\bmake ([a-z][a-z0-9-]*)")
@@ -471,7 +471,7 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
     report.add("make targets", MECHANICAL, findings, f"{referenced} references, {len(targets)} targets")
 
 
-# -------------------------------------------------------- 4. ./pkmnscan subcommands
+# ----------------------------------------------------------- ./pkmnscan subcommands
 
 _PKMNSCAN_REF_RE = re.compile(r"`?\.?/?pkmnscan ([a-z][a-z-]*)")
 
@@ -547,7 +547,7 @@ def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Pat
     )
 
 
-# -------------------------------------------------------- 5/6. harness tests + criteria
+# ------------------------------------------------------------- harness tests + criteria
 
 _TEST_REF_RE = re.compile(r"\bT([1-9][0-9]?)\b")
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
@@ -731,7 +731,7 @@ def check_pass_criteria(report: Report) -> None:
     report.add("criteria wording", MECHANICAL, wording, "every criterion is published verbatim")
 
 
-# ------------------------------------------------------------------- 7. decision ids
+# ---------------------------------------------------------------------- decision ids
 
 _DECISION_RE = re.compile(r"\bD([1-9][0-9]?)\b")
 _CODES_DECISION_RE = re.compile(r"\bC([1-9][0-9]?)\b")
@@ -780,7 +780,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     report.add("decision ids in code", ADVISORY, in_code, "citations in .py all resolve")
 
 
-# ---------------------------------------------------------------------- 8. env vars
+# ------------------------------------------------------------------------- env vars
 
 _ENV_RE = re.compile(r"\b(PKMNSCAN_[A-Z0-9_]+|POKEMONTCG_API_KEY|ANTHROPIC_API_KEY)\b")
 
@@ -831,7 +831,7 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
     report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real")
 
 
-# ------------------------------------------------------------------- 9. current gate
+# ---------------------------------------------------------------------- current gate
 
 
 def check_current_gate(report: Report) -> None:
@@ -872,7 +872,7 @@ def check_current_gate(report: Report) -> None:
     report.add("current gate", MECHANICAL, findings, summary)
 
 
-# ------------------------------------------------------------------- 10. the repo map
+# ----------------------------------------------------------------------- the repo map
 
 MAP = ROOT / "docs" / "map.py"
 SOURCE_SUFFIX = ".py"
@@ -1041,7 +1041,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
 
 
-# ------------------------------------------------------- 13. status.py's declared sources
+# ----------------------------------------------------------- status.py's declared sources
 
 
 STATUS = ROOT / "scripts" / "status.py"
@@ -1142,6 +1142,265 @@ def check_status_sources(report: Report) -> None:
                         findings.append(Finding(spot, f"`{name}` has no `{req}` key."))
 
     report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
+
+
+# -------------------------------------------------------------------- the check registry
+
+
+SELF = Path(__file__).resolve()
+
+# The docs that publish how many checks this script runs. That number is prose, so layer 1
+# never looked at it: D16 read "twelve" for two commits after there were thirteen. A count
+# is the first thing a reader trusts about a tool they have not opened, and it was the one
+# claim in this repo whose subject was the auditor itself.
+COUNT_CLAIMS = ("docs/DECISIONS.md", ".claude/commands/docs-audit.md")
+
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19, "twenty": 20,
+}
+
+# Digits or the word, because these files spell small numbers out and a rule that accepted
+# only one form would be a rule about house style rather than about the count.
+_COUNT_CLAIM_RE = re.compile(
+    r"\b(\d{1,2}|" + "|".join(_NUMBER_WORDS) + r")\s+checks\b", re.IGNORECASE
+)
+
+# A check named by position. D17 already ruled against it for the repo-map check — "named
+# rather than numbered, because a positional index re-drifts every time a check is added,
+# and this one already had" — and the rest of the repo had not caught up: the section
+# headers in this file ran 1 to 10 and then jumped, so two numbers in circulation pointed
+# at nothing at all.
+_POSITIONAL_RE = re.compile(r"\bchecks?\s+\d{1,2}\b", re.IGNORECASE)
+
+
+def claimed_counts(text: str) -> List[Tuple[int, str, int]]:
+    """(line number, the words as written, the number they mean) for each published count.
+
+    Its own function so the self-test can feed it the prose that nearly fools it. D8 says
+    "Threshold checks and pricing rules run directly against it", which is a sentence about
+    prices and must not read as a claim about this script.
+    """
+    out: List[Tuple[int, str, int]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        for raw in _COUNT_CLAIM_RE.findall(line):
+            out.append((number, raw, _NUMBER_WORDS.get(raw.lower()) or int(raw)))
+    return out
+
+
+def _report_labels(func: ast.FunctionDef) -> List[str]:
+    """Distinct labels a check function hands to Report.add, in source order."""
+    labels: List[str] = []
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Attribute) and node.func.attr == "add"):
+            continue
+        if not node.args:
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            if first.value not in labels:
+                labels.append(first.value)
+    return labels
+
+
+class Registry(NamedTuple):
+    layer1: List[str]  # labels from the calls audit() makes unconditionally
+    layer2: List[str]  # labels from the calls inside its staged_only branch
+    defined: List[str]  # every label any check_* function in the file emits
+    unaccounted: List[str]  # defined, but in neither layer — see registered_labels
+
+
+def registered_labels(path: Path = SELF) -> Registry:
+    """What this script's own source says its checks are. Takes a path so it is testable.
+
+    Parsed with `ast` rather than collected by running `audit()`, for the reason every
+    other reader here is: the number has to be true of the file that gets committed. A
+    registry gathered at run time agrees with itself no matter what the source says.
+
+    Layer 2 is what `audit()` calls inside its `staged_only` branch — the coupling
+    question, which only the pre-commit hook ever runs.
+
+    **`unaccounted` is the part that matters, and it is not a nicety.** Reading the plain
+    calls in `audit()` is an inference about the shape of the code, and the dangerous way
+    for it to break is halfway: restructure eleven of those calls into a loop, leave three
+    behind, and this returns 3 with no complaint. The caller would then report that the
+    docs overstate the count — and the obvious way to clear that red commit is to edit D16
+    down to three, at which point the docs are wrong, the check is green, and nothing will
+    ever notice again. So the labels are counted a second way, from the function
+    definitions, which no restructuring of `audit()` moves. A label that exists there and
+    turns up in neither layer means this reader can no longer account for every check, and
+    the caller must refuse to publish a number rather than argue the docs toward it.
+    """
+    try:
+        tree = ast.parse(read(path))
+    except (OSError, SyntaxError):
+        return Registry([], [], [], [])
+    emits = {
+        node.name: _report_labels(node)
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("check_")
+    }
+    defined: List[str] = []
+    for labels in emits.values():
+        defined.extend(label for label in labels if label not in defined)
+
+    audit_fn = next(
+        (n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "audit"),
+        None,
+    )
+    if audit_fn is None:
+        return Registry([], [], defined, defined)
+
+    def called(body: Sequence[ast.stmt]) -> List[str]:
+        names: List[str] = []
+        for statement in body:
+            if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+                continue
+            func = statement.value.func
+            if isinstance(func, ast.Name) and func.id in emits:
+                names.extend(label for label in emits[func.id] if label not in names)
+        return names
+
+    layer1 = called([s for s in audit_fn.body if not isinstance(s, ast.If)])
+    layer2 = []
+    for statement in audit_fn.body:
+        if isinstance(statement, ast.If):
+            layer2.extend(called(statement.body))
+    layer2 = [label for label in layer2 if label not in layer1]
+    seen = set(layer1) | set(layer2)
+    return Registry(layer1, layer2, defined, [d for d in defined if d not in seen])
+
+
+def check_registry(report: Report, docs: List[Path], source: Path = SELF) -> None:
+    """The count the docs publish, against the registry `audit()` actually builds.
+
+    `source` is which file to read the registry out of. It is this one in every real run,
+    and a fixture in `--self-test` — the reader's behaviour on a shape it cannot read has
+    to be provable without restructuring the live script to find out.
+
+    Every other check here asks whether a claim about the project is still true. This one
+    asks whether the claim about the checker is, which nothing else was ever going to do.
+
+    **Three rows, because there are three different questions here.** They do not share a
+    scope and they do not share a severity, so a combined verdict would have had to take
+    the widest scope and the strictest severity of the three and apply both to all of them:
+
+      check count        the published number. Reads COUNT_CLAIMS whatever `--staged` says,
+                         the way `check_pass_criteria` reads every test — the claim is
+                         about this script, not about the diff. Blocks: a wrong count is
+                         wrong with no judgment involved. The one exception is below.
+
+      check numbering    a check named by position in the markdown. Staged-scoped like
+                         every other doc check, so a commit answers for its own lines.
+      numbering in code  the same, in `.py` comments and the allowlist. ADVISORY and
+                         whole-tree, for the reason `decision ids in code` is: a comment
+                         saying it will check N rows is ordinary English, and a false
+                         positive that blocks a commit is worse than one that prints a
+                         line. This paragraph tripped it while being written, which is
+                         about as direct as evidence gets.
+
+    That split is the same reasoning as `check_decision_ids`, which reads the docs and the
+    code as two rows rather than one, and it is why nothing here has to choose between
+    scanning code at all and scanning it under the docs' rules.
+
+    **The exception: a confused reader asks, it does not block.** If `registered_labels`
+    cannot account for every check it finds defined, the count is not compared at all and
+    the row goes ADVISORY. Publishing a number this reader does not stand behind is the one
+    outcome worse than publishing none: the docs would get edited to match it, and a wrong
+    count that agrees with its checker is invisible forever. Downgrading rather than
+    blocking is also the rule `scripts/githooks/pre-commit` already applies one level up —
+    "a broken auditor is not evidence the docs are wrong."
+    """
+    registry = registered_labels(source)
+    counts: List[Finding] = []
+    severity = MECHANICAL
+    summary = ""
+
+    if not registry.layer1 or registry.unaccounted:
+        severity = ADVISORY
+        summary = "reader could not account for every check — count NOT compared"
+        if not registry.layer1:
+            detail = (
+                "cannot find the check calls in `audit()` at all.\n"
+                "This reader parses the plain calls in that function, so restructuring it "
+                "into a table or a loop needs the reader updated with it."
+            )
+        else:
+            detail = (
+                f"{len(registry.defined)} labels are defined by a `check_*` function, but "
+                f"these turn up in neither layer of `audit()`:\n"
+                f"  {', '.join(registry.unaccounted)}\n"
+                f"Either a check is registered nowhere, or this reader can no longer see "
+                f"how `audit()` calls it."
+            )
+        counts.append(
+            Finding(
+                "scripts/docs-audit.py",
+                f"{detail}\n"
+                f"The published count is NOT checked while this is true. Do not edit the "
+                f"number in the docs to match anything this row says — fix the reader, or "
+                f"wire up the check it lost track of.",
+            )
+        )
+    else:
+        expected = len(registry.layer1)
+        staged = ", ".join(registry.layer2) or "none"
+        roster = f"  layer 1: {', '.join(registry.layer1)}\n  layer 2 (--staged): {staged}"
+        summary = f"{expected} registered, {expected} published"
+        for name in COUNT_CLAIMS:
+            path = ROOT / name
+            if not path.exists():
+                continue  # a missing file is the path check's finding, not this one's
+            claims = claimed_counts(read(path))
+            if not claims:
+                counts.append(
+                    Finding(
+                        name,
+                        f"publishes no `N checks` count, so nothing here is verifiable.\n"
+                        f"Say how many there are — {expected} — or this check is decoration.",
+                    )
+                )
+                continue
+            for number, raw, value in claims:
+                if value != expected:
+                    counts.append(
+                        Finding(
+                            f"{name}:{number}",
+                            f"says `{raw} checks`, but `audit()` registers {expected}.\n"
+                            f"{roster}",
+                        )
+                    )
+
+    def positional(paths: Iterable[Path]) -> List[Finding]:
+        found: List[Finding] = []
+        for path in paths:
+            if not path.exists():
+                continue
+            for number, line in enumerate(read(path).splitlines(), start=1):
+                for hit in _POSITIONAL_RE.findall(line):
+                    found.append(
+                        Finding(
+                            f"{rel(path)}:{number}",
+                            f"`{hit}` names a check by its position. Use the label the "
+                            f"report prints — `repo map`, `status sources`, and so on "
+                            f"(D17). If this is ordinary English about a count, reword it: "
+                            f"there is no allowlist for a phrase.",
+                        )
+                    )
+        return found
+
+    report.add("check count", severity, counts, summary)
+    report.add("check numbering", MECHANICAL, positional(docs), "no check named by position")
+    report.add(
+        "numbering in code",
+        ADVISORY,
+        positional(python_files() + [ALLOWLIST]),
+        "comments name checks by label",
+    )
 
 
 # ------------------------------------------------------------------ Layer 2: coupling
@@ -1365,6 +1624,116 @@ def self_test() -> int:
             repr(criteria),
         )
 
+    print("\nthe registry reads itself, and the published count is checkable")
+    live = registered_labels()
+    ok(
+        "paths" in live.layer1 and "check count" in live.layer1 and len(live.layer1) > 10,
+        "audit()'s layer-1 labels are read from source",
+        str(live.layer1),
+    )
+    ok(live.layer2 == ["coupling"], "the staged-only branch is layer 2", str(live.layer2))
+    ok(not live.unaccounted, "every defined check is accounted for", str(live.unaccounted))
+
+    # The reader against a file that is not itself. The second fixture is the failure that
+    # matters: audit() restructured into a loop, where inferring from call statements
+    # returns a plausible number instead of nothing. `unaccounted` is what refuses it.
+    print("\nthe reader is honest about a shape it cannot read")
+    with tempfile.TemporaryDirectory() as tmp:
+        flat = Path(tmp) / "flat.py"
+        flat.write_text(
+            "def check_alpha(report):\n"
+            "    report.add('alpha', MECHANICAL, [], '')\n"
+            "def check_beta(report):\n"
+            "    report.add('beta', MECHANICAL, [], '')\n"
+            "    report.add('beta extra', MECHANICAL, [], '')\n"
+            "def check_late(report):\n"
+            "    report.add('late', ADVISORY, [], '')\n"
+            "def audit(staged_only):\n"
+            "    report = Report()\n"
+            "    check_alpha(report)\n"
+            "    check_beta(report)\n"
+            "    if staged_only:\n"
+            "        check_late(report)\n"
+            "    return report\n",
+            encoding="utf-8",
+        )
+        parsed = registered_labels(flat)
+        ok(
+            parsed.layer1 == ["alpha", "beta", "beta extra"],
+            "a function emitting two rows contributes both",
+            str(parsed.layer1),
+        )
+        ok(parsed.layer2 == ["late"], "the staged-only call is layer 2", str(parsed.layer2))
+        ok(
+            not parsed.unaccounted,
+            "nothing unaccounted in a shape it can read",
+            str(parsed.unaccounted),
+        )
+
+        looped = Path(tmp) / "looped.py"
+        looped.write_text(
+            "def check_alpha(report):\n"
+            "    report.add('alpha', MECHANICAL, [], '')\n"
+            "def check_beta(report):\n"
+            "    report.add('beta', MECHANICAL, [], '')\n"
+            "def audit(staged_only):\n"
+            "    report = Report()\n"
+            "    for check in (check_alpha, check_beta):\n"
+            "        check(report)\n"
+            "    return report\n",
+            encoding="utf-8",
+        )
+        parsed = registered_labels(looped)
+        ok(not parsed.layer1, "a looped audit() yields no inferred count", str(parsed.layer1))
+        ok(
+            parsed.unaccounted == ["alpha", "beta"],
+            "and every label it lost is reported unaccounted",
+            str(parsed.unaccounted),
+        )
+
+        report = Report()
+        check_registry(report, [], looped)
+        row = {check: (severity, findings) for check, severity, findings, _ in report.checks}
+        severity, findings = row.get("check count", ("", []))
+        ok(
+            severity == ADVISORY and len(findings) == 1,
+            "the count row asks instead of blocking, and compares nothing",
+            str(row.get("check count")),
+        )
+    counts = claimed_counts("Fourteen checks, all deterministic. **Exit 1 blocks**")
+    ok(counts == [(1, "Fourteen", 14)], "a spelled-out count is read", str(counts))
+    counts = claimed_counts("Threshold checks and pricing rules run directly against it.")
+    ok(not counts, "D8's prose is not a claim about this script", str(counts))
+
+    print("\na check named by position is reported, per subset")
+    with tempfile.TemporaryDirectory() as tmp:
+        doc = Path(tmp) / "fake.md"
+        # Built with an f-string on purpose: written as a literal, this line would be a
+        # finding against this file. Same trick, same reason, as the code pattern that
+        # scripts/githooks/pre-commit assembles from parts.
+        doc.write_text(f"the orphan rule is check {10} here\n", encoding="utf-8")
+        report = Report()
+        check_registry(report, [doc])
+        rows = {check: (severity, findings) for check, severity, findings, _ in report.checks}
+        ok(
+            len(rows.get("check numbering", ("", []))[1]) == 1,
+            "a positional reference in a doc is reported",
+            str(rows.get("check numbering")),
+        )
+        count_row = rows.get("check count", ("", ["no count row at all"]))
+        ok(not count_row[1], "the count row stays clean", str(count_row))
+        ok(
+            rows.get("numbering in code", ("", []))[0] == ADVISORY,
+            "the code row is advisory, and the doc row is not",
+            str([(check, severity) for check, severity, _, _ in report.checks]),
+        )
+
+        doc.write_text("the repo-map check owns the orphan rule\n", encoding="utf-8")
+        report = Report()
+        check_registry(report, [doc])
+        _, _, findings, _ = report.checks[1]
+        ok(not findings, "naming the check by its label is fine", str(findings))
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -1396,6 +1765,7 @@ def audit(staged_only: bool) -> Report:
     check_current_gate(report)
     check_map(report, allowed)
     check_status_sources(report)
+    check_registry(report, docs)
     if staged_only:
         check_coupling(report)
     return report

@@ -7,21 +7,21 @@ and prose has to be read in full before it can be trusted.
 
 Read by three consumers, which is the reason it is data and not another markdown section:
 
-  scripts/docs-audit.py       check 10 — verifies every claim below against the filesystem
+  scripts/docs-audit.py       its repo-map check verifies every claim below against the tree
   scripts/decision-context.py the PreToolUse hook that tells you which decisions govern a
                               file before you edit it
   you, or an agent            a single Read instead of a search
 
-THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. Check 10 fails when a
-`built` path is missing, when a `planned` path has quietly arrived, when a `governed_by`
-cites a decision that does not exist, and — the one that actually keeps this honest — when
-a source file exists that no entry here mentions. Adding a module without touching this
-file fails the commit.
+THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The repo-map check
+fails when a `built` path is missing, when a `planned` path has quietly arrived, when a
+`governed_by` cites a decision that does not exist, and — the one that actually keeps this
+honest — when a source file exists that no entry here mentions. Adding a module without
+touching this file fails the commit.
 
-`governed_by` is a superset of the `D<n>` citations in the file's own comments; check 10
-enforces that direction. Entries beyond the citations are curated: `pipeline/pricing.py`
-never says "D8" in a comment, but D8 is what makes the TCGplayer export the only pricing
-source, and someone editing that file needs to know.
+`governed_by` is a superset of the `D<n>` citations in the file's own comments; the
+repo-map check enforces that direction. Entries beyond the citations are curated:
+`pipeline/pricing.py` never says "D8" in a comment, but D8 is what makes the TCGplayer
+export the only pricing source, and someone editing that file needs to know.
 
 Pure literals only — no imports, no computation. scripts/docs-audit.py reads it with
 `ast.literal_eval` rather than importing it, for the same reason it parses everything else
@@ -34,8 +34,8 @@ that way: an audit must not run project code.
 #
 # `next` means unblocked and NOT STARTED. There is deliberately no "in progress": the
 # earlier draft called step 5 `current`, which read as work underway when step 4 had just
-# landed and step 5 had not been touched. Exactly one step is `next`, and check 10 enforces
-# that — two of them is the drift this vocabulary exists to prevent.
+# landed and step 5 had not been touched. Exactly one step is `next`, and the repo-map
+# check enforces that — two of them is the drift this vocabulary exists to prevent.
 #
 # `blocked_by` names the step or gate that unblocks it, never a date.
 
@@ -74,8 +74,8 @@ GATES = [
 # status: built | stub | planned
 #   built    code exists and the harness covers it
 #   stub     the file exists and deliberately does nothing yet
-#   planned  no file yet; `step` says what creates it. Check 10 FAILS if it exists,
-#            which is what forces the entry to be updated the day it is written.
+#   planned  no file yet; `step` says what creates it. The repo-map check FAILS if it
+#            exists, which forces the entry to be updated the day it is written.
 
 COMPONENTS = [
     {
@@ -173,8 +173,9 @@ COMPONENTS = [
                 "and `make status` — which reads this file for the next step and the gate",
         "governed_by": ["D14", "D16"],
         "note": "scripts/status.py declares every file it reads in a SOURCES literal, and "
-                "docs-audit check 13 verifies that list. Its values are derived so they "
-                "cannot go stale; check 13 is what catches its *reader* going stale.",
+                "the audit's status-sources check verifies that list. Its values are "
+                "derived so they cannot go stale; that check is what catches its *reader* "
+                "going stale.",
     },
     {
         "path": "fixtures/",

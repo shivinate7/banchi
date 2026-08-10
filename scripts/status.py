@@ -5,8 +5,9 @@ Written for one case: you step away, forget where you were, come back and need t
 oriented without reading four files and running the harness.
 
 NOTHING HERE IS A FACT ABOUT THE PROJECT. Every value is read at run time from a source
-that something else already enforces — `docs/map.py` by docs-audit check 10, the T1 score
-by the test that writes it, the branch by git. If the map says step 6, this says step 6.
+that something else already enforces — `docs/map.py` by the audit's repo-map check, the T1
+score by the test that writes it, the branch by git. If the map says step 6, this says
+step 6.
 There is no second place to update, which is the whole reason this file is worth having
 rather than a paragraph in a README that someone has to remember to edit.
 
@@ -16,8 +17,8 @@ Two failure modes, handled differently, because they are not the same thing:
   the READER going stale     possible, and the real risk. If `harness/results/` moves or a
                              key is renamed, this script cannot repair itself.
 
-The second is why `SOURCES` below is declarative. docs-audit check 13 walks it and fails
-the commit that breaks it, so a rename is caught the day it happens instead of quietly
+The second is why `SOURCES` below is declarative. The audit's status-sources check walks it
+and fails the commit that breaks it, so a rename is caught the day it happens rather than
 deleting a block from this output. A status tool that silently prints less is worse than
 no status tool, because you will believe it.
 
@@ -28,7 +29,7 @@ Stdlib only, no venv, no network, no API key — it has to work on a cold clone,
 is close to the situation it exists for.
 
     scripts/status.py            print the status block
-    scripts/status.py --sources  print SOURCES as JSON (what check 13 reads)
+    scripts/status.py --sources  print SOURCES as JSON (what the audit reads)
 """
 
 from __future__ import annotations
@@ -48,10 +49,11 @@ WIDTH = 76
 LABEL = 15  # column where values start, so the left rail reads as a column
 
 
-# Every file this script reads, declared in one place so docs-audit check 13 can verify it
-# WITHOUT running it. Pure literals for exactly the reason docs/map.py is: the audit parses
-# with `ast.literal_eval` rather than importing, because a read-only check must not execute
-# the code it is checking. A `Source` class here would be a Call node and unreadable to it.
+# Every file this script reads, declared in one place so the audit's status-sources check
+# can verify it WITHOUT running it. Pure literals for the reason docs/map.py is: the audit
+# parses with `ast.literal_eval` rather than importing, because a read-only check must not
+# execute the code it is checking. A `Source` class here would be a Call node, unreadable
+# to it.
 #
 # `kind` says what must be true of the target:
 #   literals  a .py whose module-level literal assignments include every name in `requires`
@@ -60,7 +62,7 @@ LABEL = 15  # column where values start, so the left rail reads as a column
 #   file/dir  presence only
 #
 # Resolve reads through `resolve()` below, so this list is not decoration — it is the only
-# place a path is written down, and check 13 fails the commit that invalidates one.
+# place a path is written down, and that check fails the commit that invalidates one.
 
 SOURCES = (
     {
@@ -120,8 +122,8 @@ def resolve(pattern: str) -> List[Path]:
     """Paths for a declared source. Records a MISSING unless the entry is optional.
 
     Every read goes through here so `SOURCES` stays the single place a path is written.
-    A hardcoded path elsewhere would be a path check 13 does not know about — which is the
-    drift this whole arrangement exists to prevent.
+    A hardcoded path elsewhere would be one the status-sources check does not know about —
+    which is the drift this whole arrangement exists to prevent.
     """
     entry = next((s for s in SOURCES if s["path"] == pattern), None)
     if entry is None:  # a caller invented a path instead of declaring it
@@ -394,8 +396,8 @@ def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     """From structured fields, never from prose.
 
     The T1 caveat is written into the score file by the test itself; the T6 caveat is the
-    `note` on the map's geometry entry, which check 10 audits. Rewording docs/GATES.md
-    cannot break either one.
+    `note` on the map's geometry entry, which the repo-map check audits. Rewording
+    docs/GATES.md cannot break either one.
     """
     notes: List[str] = []
     for path in resolve("harness/results/t1*.json"):
@@ -492,7 +494,7 @@ def render() -> str:
         lines.append("")
         lines.append("This output is incomplete. A status tool that quietly prints less is")
         lines.append("worse than none, so this exits non-zero. If a file moved, update")
-        lines.append("SOURCES in scripts/status.py — docs-audit check 13 checks the same list.")
+        lines.append("SOURCES in scripts/status.py — the docs audit verifies the same list.")
     return "\n".join(lines)
 
 

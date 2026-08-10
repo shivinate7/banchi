@@ -7,7 +7,7 @@
 #
 # A reason is not optional. "Build-order step 6 creates this" is a reason; the path
 # repeated back in prose is not. If the reason is that the audit misread ordinary prose as
-# a path, the fix is the extractor rule in check 1, NOT a line here.
+# a path, the fix is the path extractor's own rules, NOT a line here.
 #
 # Only paths under an existing top-level directory ever reach this file. Anything else —
 # `PokemonTCG/pokemon-tcg-data`, `sets/en.json`, `claude.ai/code` — is somebody else's
