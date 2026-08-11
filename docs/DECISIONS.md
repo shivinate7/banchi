@@ -237,31 +237,28 @@ that tell the next session what done means.
 
 **Three layers, split by how knowable each finding is.**
 
-1. **Mechanical** — `scripts/docs-audit.py`, stdlib-only, run by the pre-commit hook and by
-   `make docs-audit`. Sixteen checks, all deterministic. Fourteen **exit 1 and block**,
-   because a dangling path is provably wrong and there is no judgment to defer. Two print
-   on exit 2 instead, and both are the same shape: a decision id cited in a `.py` comment,
-   and a check named by position in one. `D2` could plausibly become a variable name, and a
-   comment saying it checks N rows is ordinary English — a false positive that blocks is
-   worse than one that prints. **That count is itself checked** against the registry
-   `audit()` builds: this sentence read "twelve" for two commits after there were thirteen,
-   and a number nobody verifies is the first thing a reader trusts.
+1. **Mechanical** — `scripts/docs-audit.py`, stdlib-only, run by the pre-commit hook
+   and by `make docs-audit`. Every check is deterministic, and **blocking is the
+   default**: a finding is mechanical when a reference is provably wrong — a path that
+   does not resolve, a `make` target that does not exist, a threshold that disagrees
+   with `docs/GATES.md` — and it exits 1, because there is no judgment to defer.
 
-   **The count row is the one that can change sides.** It blocks when the docs and the
-   registry disagree, but when its own reader cannot account for every check it finds
-   defined — `audit()` restructured into a loop, say — it compares nothing and asks
-   instead. Publishing a number it does not stand behind would be worse than publishing
-   none: a half-read registry reports a plausible smaller count, the docs get edited down
-   to match, and a wrong number that agrees with its own checker is invisible from then on.
-   That is why the labels are counted a second way, from the check functions themselves, and
-   why a mismatch between the two suspends the comparison rather than resolving it. The same
-   rule `scripts/githooks/pre-commit` applies one level up: a broken auditor is not evidence
-   the docs are wrong.
+   **A finding prints on exit 2 instead of blocking when judging it needs context the
+   script cannot have.** A decision id cited in a `.py` comment could plausibly become
+   a variable name one day; code that changed beside an unchanged doc is a question,
+   not a defect. A false positive that blocks is worse than one that prints.
 
-   **A check is named, never numbered** — the same rule D17 sets for the repo-map check,
-   now enforced for all of them. Positions moved once already, when the section headers ran
-   1 to 10 and then jumped, leaving two numbers in circulation that pointed at nothing. The
-   report's labels are the names.
+   **Neither the roster nor its count is restated here.** `make docs-audit` names
+   every check it runs, each row marked blocking or advisory, and that output is the
+   register. This paragraph used to publish the count, and keeping one restated number
+   honest cost more machinery than any other check in the file — all of it guarding a
+   fact nothing downstream consumed. Deleting the claim deleted the need. D18 records
+   the general rule.
+
+   **A check is named, never numbered** — the same rule D17 sets for the repo-map
+   check, enforced for all of them. Positions moved once already; the report's labels
+   are the names.
+
 2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and
    `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20
    staged lines, so a typo fix stays quiet.
