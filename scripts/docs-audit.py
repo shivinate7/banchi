@@ -106,6 +106,16 @@ class Report:
         adv = sum(len(f) for _, sev, f, _ in self.checks if sev == ADVISORY and f)
         return mech, adv
 
+    def as_json(self, exit_code: int) -> str:
+        # The machine surface: nothing downstream parses the human render (spec §7 — three
+        # parser bugs in one planning session came from regexing it).
+        rows = [
+            {"label": check, "severity": severity, "summary": summary,
+             "findings": [finding._asdict() for finding in findings]}
+            for check, severity, findings, summary in self.checks
+        ]
+        return json.dumps({"rows": rows, "exit": exit_code}, indent=2)
+
     def render(self) -> str:
         lines = ["PKMNSCAN docs audit — docs/DECISIONS.md D16", "=" * 72, ""]
         for check, severity, findings, summary in self.checks:
@@ -1794,19 +1804,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--all", action="store_true", help="audit every markdown file (the default)"
     )
     parser.add_argument("--self-test", action="store_true", help="verify the extractors and exit")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print one JSON object — rows plus the exit code — instead of the human render",
+    )
     args = parser.parse_args(argv)
 
     if args.self_test:
         return self_test()
 
     report = audit(staged_only=args.staged)
-    print(report.render())
     mechanical, advisory = report.counts()
-    if mechanical:
-        return 1
-    if advisory:
-        return 2
-    return 0
+    code = 1 if mechanical else 2 if advisory else 0
+    print(report.as_json(code) if args.json else report.render())
+    return code
 
 
 if __name__ == "__main__":
