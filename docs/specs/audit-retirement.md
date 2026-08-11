@@ -422,6 +422,28 @@ doc naming docs/specs/ before that directory existed, which is allowlist-shaped;
 everything else 0 or no unconfounded window (repo map, status sources, coupling, and the
 count row all postdate the 8).
 
+**Refreshed 2026-08-11 against the shipped auditor** (`scripts/audit-history.py -n 8`,
+same 8 trees, machine-classified — per-tree / distinct, and see the convention warning
+above the bucket table before comparing these to the hand figures):
+
+| row | before this migration | after |
+|---|---|---|
+| criteria wording | 25 / 6 | **50 / 12** — the docstring extension doubled its reach |
+| criteria evidence | did not exist | **17 / 4** |
+| check count | 8 / 1 | retired |
+| env vars | 5 / 3 | 5 / 3 |
+| harness tests | 3 / 3 | 3 / 3 |
+| decision ids in code | 0 substantive | 0 substantive |
+| everything else | 0 | 0 |
+
+Two things worth reading off that table. `criteria evidence` has a **retrospective record
+on trees that predate it** — the case section 7 says this tool exists for, and the answer
+is that the new check is not speculative. And `criteria wording`, already the
+best-evidenced row before the migration, is now twice as reachable, which is the
+strongest argument available for having extended it rather than added a new row.
+`evidence freshness` reads 0 by construction: it is staged-only and this tool runs
+whole-tree, so its record is not evidence about it either way.
+
 ## 8. The bucket rule and the corrected ranking
 
 Basis: ast spans of module-level defs, classes and assigns, plus self-test sections
@@ -516,3 +538,67 @@ the off-the-shelf cluster is link syntax, prose style, and decision authoring, a
 of it attempts cross-file claim-against-fact checking, which is what every surviving row
 is. And **scripts/decision-context.py is unserved** — nothing in the ADR ecosystem wires
 decisions into an edit path.
+
+## 10. Outcome — what shipped, for a session that was not here
+
+This plan is executed. Ten commits, `3feb924..HEAD`. Read this section instead of the
+nine above if you only need the end state; read the ledger in section 1 before
+reproposing anything.
+
+**What the audit checks now: 17 rows whole-tree, plus `coupling` under `--staged`.**
+Run `make docs-audit` for the roster — it is the register, and nothing restates it (D16).
+Fifteen block on exit 1; `numbering in code`, `evidence freshness` and `coupling` print
+on exit 2 and allow.
+
+**What changed, by name:**
+
+- **Retired**: the `check count` row and its machinery — 178 lines of code and 81 of
+  self-test, guarding a published number no consumer read. Section 6. The one consumer
+  of the count, `scripts/status.py`, needed no edit and reported the new total by itself,
+  because it counts rows in the rendered report rather than restating a figure.
+- **Added**: `criteria evidence` (mechanical) and `evidence freshness` (advisory,
+  staged-only). `criteria evidence` is the first row in this file whose subject is a
+  **runtime artifact rather than source text** — it reads `gated_on` out of the committed
+  score file and requires `PASS_CRITERIA` to name the field the run actually gated on.
+  Everything else here compares strings to strings.
+- **Extended**: `criteria wording` now also holds each test's own module docstring to its
+  `PASS_CRITERIA`. Five paraphrases were live when it landed.
+- **New surfaces**: `--json` on the audit (nothing retires on a parsed human render), and
+  `scripts/audit-history.py` with `make audit-history`, which replays today's auditor over
+  every historical tree. It is diagnostic and structurally cannot gate.
+- **Fixed**: staged mode reads the staged blob, not the worktree. Two false sentences in
+  `harness/tests/t1_id_eval.py` and two wrong build-order citations in
+  `scripts/screenshot.sh`. And the gated split in T1 became one decision instead of three
+  independent mentions that had to agree — see below.
+
+**Net line delta, measured 2026-08-11, not recalled**: `scripts/docs-audit.py` went
+1804 → 1736 lines, **−68 net**, while gaining two rows, a JSON surface, a staged-blob
+read and the docstring extension. The retirement paid for all of it.
+
+**The bug class this migration kept finding.** Three instances, all the same shape:
+correct logic evaluated against the wrong thing, invisible to code review and visible only
+against an outside baseline.
+
+1. Staged mode audited the worktree while the commit carried the index.
+2. `audit-history` counted findings the injected auditor raised *against itself* — caught
+   only because the total ran 36× over a known baseline.
+3. T1's split selection, its `gated_on` record and its stdout gate marker each named
+   `fixtures.HOLDOUT` independently. Moving the gate to the tune half left all three
+   saying "holdout" and the harness green.
+
+The rule that generalises them, recorded at the third site: **repeated reads of one name
+are fine and track a change everywhere; the defect is two independent decisions that must
+agree.** Each earlier repair of (3) had added another reference instead of deriving from
+one.
+
+**This spec's own accuracy record**, so the next planning session can calibrate its
+output. Its *mechanical* figures held: self-test sections measured 81 against a recorded
+81, whole-unit deletions 102 against an implied 102, and the only arithmetic gap was the
+one boundary it had itself flagged as estimated. Its claims about *runtime behaviour* did
+not: section 4 asserted a `gated_on` derivation that did not exist, and 4(b) assumed a git
+history that `docs/GATES.md` deliberately erases. Both were approved as verified fact and
+both failed on first execution. **Count lines from the source and trust the number; assert
+what code does at run time and verify it before building on it.**
+
+**Not done, deliberately**: nothing in this repo generates anything, and D18's permitted-
+seam list is still empty. That is the finished state, not an unfinished one.
