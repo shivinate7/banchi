@@ -401,6 +401,24 @@ from it.
 | env vars | 40 | 0 | 40 | 2 |
 | current gate | 36 | 0 | 36 | 0 |
 
+**Which convention the last column uses, and the fact that no tool reproduces it.** Those
+figures are the planning session's hand classification, counted by hand over the 8 ungated
+trees. `scripts/audit-history.py` counts the same window two other ways and lands on
+neither: criteria wording 25 per-tree / 6 distinct against a recorded 16; env vars 5 / 3
+against 2; harness tests 3 / 3 against 1. Only one of the three gaps has been run to
+ground — decision ids in code, recorded as 2 and actually 0, where every finding was the
+injected auditor citing itself. The rest is an unwritten counting convention, not a defect
+on either side, and the tool was deliberately not tuned until it agreed.
+
+So the bucket rule below decides retirements using numbers that no tool currently
+reproduces, and the three conventions disagree by up to 4x. That is tolerable only while
+nothing sits near a boundary. **Any future retirement argument at a bucket boundary must
+adjudicate the convention first, in writing, and before looking at which number favours
+the cut.** Picking the convention after seeing which one clears the threshold is the
+same move as tuning the classifier to hit 16 — it just launders it through a choice that
+looks procedural. Re-deriving the hand figures, or replacing them with an instrumented
+convention, is the honest way out and is worth doing before the next cut, not during it.
+
 The bucket rule (boundaries stated on this basis):
 
 - **Bucket 0 — no unconfounded window.** The check's subject postdates every ungated
