@@ -171,7 +171,7 @@ COMPONENTS = [
         "status": "built",
         "does": "opsec guards, the stop gate, the docs audit, the screenshot runner, "
                 "and `make status` — which reads this file for the next step and the gate",
-        "governed_by": ["D14", "D16"],
+        "governed_by": ["D14", "D16", "D18"],
         "note": "scripts/status.py declares every file it reads in a SOURCES literal, and "
                 "the audit's status-sources check verifies that list. Its values are "
                 "derived so they cannot go stale; that check is what catches its *reader* "
