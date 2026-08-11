@@ -164,7 +164,15 @@ def rel(path: Path) -> str:
         return str(path)
 
 
+# Populated only in staged mode, with the staged path set. A file staged at version A and
+# edited on to version B must be audited as A — the content the commit will carry — or the
+# hook checks prose the commit does not contain.
+_STAGED_PATHS: Set[str] = set()
+
+
 def read(path: Path) -> str:
+    if rel(path) in _STAGED_PATHS:
+        return git("show", ":" + rel(path))
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -1752,6 +1760,7 @@ def audit(staged_only: bool) -> Report:
     docs = all_docs
     if staged_only:
         staged = set(staged_changes())
+        _STAGED_PATHS.update(staged)
         docs = [doc for doc in all_docs if rel(doc) in staged]
 
     check_paths(report, docs, allowed)
