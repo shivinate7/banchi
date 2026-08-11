@@ -807,6 +807,131 @@ def check_pass_criteria(report: Report) -> None:
     report.add("criteria wording", MECHANICAL, wording, "every criterion is published verbatim")
 
 
+# ------------------------------------------------------ the evidence behind a criterion
+
+
+EVIDENCE_DIR = ROOT / "harness" / "results"
+
+# Changing any of these changes what a score MEANS: the test decides what counts as
+# correct, the fixtures decide which cards were scored, the prompt decides what was asked.
+# A score recorded before one of them is evidence about a different measurement.
+EVIDENCE_SOURCES = (
+    "harness/tests/t1_id_eval.py",
+    "harness/eval/fixtures.py",
+    "identify/prompt.py",
+)
+
+
+def check_criteria_evidence(report: Report) -> None:
+    """The criterion must name the field the score file says the gate actually read.
+
+    This catches incident #1's class at the layer it lived: `overall_accuracy >= 0.95` does
+    not contain "holdout", and nothing compared the two. `gated_on` is the right thing to
+    read because it is **written by the run**, from the same name that selects the split —
+    so it reports what the code did, not what a second literal claims it did.
+
+    That property had to be built before this check could rest on it. `gated_on` was an
+    independent mention of `fixtures.HOLDOUT` until 2026-08-11, which is the sibling-literal
+    anti-pattern one layer down: mutating the selection left `gated_on` unchanged and this
+    check would have gone green on a tree whose gate read the tune half. See the premise
+    correction in `docs/specs/audit-retirement.md`.
+
+    Zero score files is itself a finding. A criterion with no recorded run behind it is not
+    a passing measurement, it is an unmeasured claim.
+    """
+    criteria = {
+        name: string_assign(read(path), "PASS_CRITERIA")
+        for name, path in registered_tests()
+        if path.exists()
+    }
+    scores = sorted(EVIDENCE_DIR.glob("t1*.json")) if EVIDENCE_DIR.exists() else []
+    findings: List[Finding] = []
+    if not scores:
+        findings.append(
+            Finding(
+                "harness/results/",
+                "no t1 score file, so no criterion here has a recorded run behind it.\n"
+                "  Run `make harness` and commit the result.",
+            )
+        )
+    for score in scores:
+        try:
+            payload = json.loads(read(score))
+        except ValueError:
+            findings.append(Finding(rel(score), "is not readable JSON."))
+            continue
+        gated = payload.get("gated_on")
+        if not isinstance(gated, str) or not gated:
+            findings.append(
+                Finding(
+                    rel(score),
+                    "records no `gated_on`, so nothing says which field the gate read.",
+                )
+            )
+            continue
+        text = criteria.get(payload.get("test", "T1"))
+        if text is None:
+            continue
+        field = gated + "_accuracy"
+        if field not in text:
+            findings.append(
+                Finding(
+                    rel(score),
+                    f"the run gated on `{field}`, which PASS_CRITERIA does not name.\n"
+                    f"  score file: gated_on = {gated!r}\n"
+                    f"  criterion:  {text}\n"
+                    f"  The run is the fact. Fix the criterion, or the code that chose the "
+                    f"split — never edit the score file to agree.",
+                )
+            )
+    report.add(
+        "criteria evidence", MECHANICAL, findings, f"{len(scores)} scored run, gate field published"
+    )
+
+
+def check_evidence_freshness(report: Report, staged_only: bool) -> None:
+    """A staged edit to what the score measures, with no re-scored result beside it.
+
+    **Advisory, structurally.** The severity is written at the one `report.add` below and no
+    branch raises it, for D16's stated reason: a blocking question teaches you to reach for
+    `--no-verify`, which also disarms the three opsec rules in the same hook. Trading a
+    bearer-instrument guard for a staleness reminder is a bad trade. Same shape as
+    `scripts/audit-history.py` being structurally unable to gate.
+
+    No minimum-lines floor, unlike the coupling row: a two-line threshold edit is exactly
+    the dangerous one.
+
+    **Staged only, and the committed half is deliberately absent.** Comparing the last
+    commit touching these sources against the last commit touching `harness/results/` was
+    designed, built and dropped: `docs/GATES.md` has the score file rewritten *only* when
+    the measurement changes, so "re-ran, nothing moved" and "never re-ran" are the same
+    history by design. The test therefore fired on every no-measurement-affecting edit and
+    could not be cleared except by touching the score file — the exact noise that rule
+    exists to prevent. A permanently-lit advisory would have taught us to skip exit 2
+    everywhere. See the withdrawn ledger in `docs/specs/audit-retirement.md`; reviving it
+    means arguing against the results-file rule first.
+
+    Known limit, so a quiet row is not misread: this sees only what a commit stages. The
+    stop gate runs the harness at every turn end, which narrows the rest without closing it.
+    """
+    findings: List[Finding] = []
+    if staged_only:
+        staged = set(staged_changes())
+        touched = [name for name in EVIDENCE_SOURCES if name in staged]
+        if touched and not any(name.startswith("harness/results/") for name in staged):
+            findings.append(
+                Finding(
+                    " ".join(touched),
+                    "staged, and nothing under harness/results/ is.\n"
+                    "  Still the same measurement? If it moved, re-run `make harness` and "
+                    "commit the score with it. Not blocking.",
+                )
+            )
+    report.add(
+        "evidence freshness", ADVISORY, findings, "staged score sources bring their result"
+    )
+
+
 # ---------------------------------------------------------------------- decision ids
 
 _DECISION_RE = re.compile(r"\bD([1-9][0-9]?)\b")
@@ -1563,6 +1688,8 @@ def audit(staged_only: bool) -> Report:
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
     check_pass_criteria(report)
+    check_criteria_evidence(report)
+    check_evidence_freshness(report, staged_only)
     check_decision_ids(report, docs)
     check_env_vars(report, docs, allowed)
     check_current_gate(report)

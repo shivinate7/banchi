@@ -70,6 +70,38 @@ Withdrawn — do not repropose:
   read-time in CLAUDE.md rather than behind a command.
 - **The GATE_FIELD sibling-literal design** for the criterion check: section 4 records
   the mutation that kills it, so it is not rediscovered.
+- **Committed staleness, section 4(b)** — built 2026-08-11, run, and dropped the same
+  day. It compared the last commit touching the three score sources against the last
+  commit touching harness/results/ and asked when the first was not an ancestor of the
+  second. **The signal it needs does not exist in this repo, by design.** docs/GATES.md
+  has the score file rewritten *only* when the measurement changes, so "re-ran, nothing
+  moved" and "never re-ran" are the same git history — deliberately, so a real
+  re-measurement stays visible instead of drowning in per-run restamps. On its first live
+  run it fired against the gated_split derivation commit, which changed the test and moved
+  no number: the score re-scored byte-identical, and the finding could not be cleared
+  except by touching the score file, which is exactly the noise the results-file rule
+  exists to prevent. A permanently-lit advisory is worse than a silent check, because this
+  repo has one advisory convention and a row stuck on teaches us to skip exit 2 against
+  every other row that uses it.
+
+  Both alternatives were evaluated and rejected. Narrowing the sources to identify/prompt.py
+  alone changes the false-positive rate, not the fact — a comment edit there still fires.
+  Having T1 record the commit it was verified against makes the score file churn on every
+  commit, violating the same rule from the other direction.
+
+  **This is a consequence of the results-file rule, not a judgement about the check.**
+  Anyone who wants 4(b) back has to argue against that rule first; arguing against this
+  entry is arguing about the wrong thing. The staged half, 4(c), survives and asks the
+  same question at the only moment it is actionable.
+
+**A pattern in this spec's own reliability, recorded for the next planning session.** Its
+mechanical figures held up under execution — the self-test sections measured 81 against a
+recorded 81, whole-unit deletions 102 against an implied 102, and the only arithmetic gap
+was the one boundary the spec itself flagged as estimated. Its claims about *runtime
+behaviour* did not: section 4 asserted a gated_on derivation that did not exist, and 4(b)
+assumed a git history that another rule deliberately erases. Count lines from the source
+and trust the number; assert what code does at run time and verify it before building on
+it.
 
 ## 2. staged-read
 
