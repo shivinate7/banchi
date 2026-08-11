@@ -1,11 +1,12 @@
 """T1 — Ground-truth ID eval.
 
-~50 official card images from pokemontcg.io across 3 SV-era sets, identified through the
+Official card images from pokemontcg.io across SV-era sets — sample size and set count
+are EVAL_IMAGE_TARGET and MIN_EVAL_SETS below — identified through the
 Anthropic Batch API, scored against the API records that supplied them. The API record
 IS the label, so there is no hand-labelling step and no way for the answer key to drift
 from the images.
 
-Pass: overall_accuracy >= 0.95.
+Pass: holdout_accuracy >= 0.95.
 
 A card counts as correct when BOTH halves of what the join actually consumes are right:
 
@@ -20,9 +21,9 @@ A card counts as correct when BOTH halves of what the join actually consumes are
 Known blind spot (docs/GATES.md): official API images are flat renders with no foil
 texture, so T1 CANNOT validate the `finish` field. That is Gate B's job, against ~10 real
 photos. Rather than leave that implicit, the prompt lets the model answer `unknown` and
-the results file records the finish distribution — so a green T1 alongside 50 `unknown`
-finishes reads as "variant detection untested", which is the truth, instead of looking
-like variant detection working.
+the results file records the finish distribution — so a green T1 alongside nothing but
+`unknown` finishes reads as "variant detection untested", which is the truth, instead of
+looking like variant detection working.
 
 Cost and time: the run is cached by prompt fingerprint + fixture fingerprint (see
 `harness/eval/runcache.py`), so a normal `make harness` re-scores stored responses

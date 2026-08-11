@@ -5,8 +5,8 @@
 # can still be broken. This is the loop that closes that gap — see docs/DESIGN.md.
 #
 # Uses Playwright's built-in `screenshot` CLI via npx, so there is no driver code and no
-# package.json until the Vite app actually needs one (build-order step 8). The version is
-# pinned here; bump it deliberately.
+# package.json until the Vite app actually needs one (when the Vite capture app lands).
+# The version is pinned here; bump it deliberately.
 #
 #   scripts/screenshot.sh <url> <name>          one render
 #   scripts/screenshot.sh --manifest <file>     one render per "<name> <url>" line
@@ -77,7 +77,7 @@ case "${1:-}" in
     if [ ! -f "$manifest" ] || ! grep -qEv '^[[:space:]]*(#|$)' "$manifest" 2>/dev/null; then
       echo "make screenshot: no views to render yet."
       echo "  Needs $manifest listing '<name> <url>' lines, one per key view."
-      echo "  Unblocked by build-order step 8 — see docs/GATES.md and docs/DESIGN.md."
+      echo "  Unblocked when the capture app's views exist — see docs/GATES.md and docs/DESIGN.md."
       echo "  To render a single URL now: scripts/screenshot.sh <url> <name>"
       exit 1
     fi
