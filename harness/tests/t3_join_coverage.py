@@ -4,8 +4,8 @@ For a batch of identified cards, every card matches exactly one fixture row for 
 resolved condition string. Report unmatched in BOTH directions before any output is
 written.
 
-Pass: zero unmatched, or every unmatched card reported in both directions and routed to a
-standing queue with its position retained, before any output is written.
+Pass: zero unmatched, or every unmatched card reported both ways and routed to a standing
+queue with its position, before any output is written.
 
 Required cases (docs/GATES.md), all against real SV09 rows:
   - Secret rares where the number exceeds the denominator   Articuno 161/159

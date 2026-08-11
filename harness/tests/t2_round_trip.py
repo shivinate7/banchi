@@ -3,10 +3,11 @@
 Load fixtures/sv09_export_untouched.csv, fill `Add to Quantity` and `TCG Marketplace Price`
 on sample rows, write, re-parse.
 
-Pass: exactly those two fields differ, and the byte format is preserved —
-  - unquoted header row
-  - fully quoted data fields
-  - CRLF line endings
+Pass: exactly 2 fields differ; unquoted header, quoted data fields, CRLF.
+
+Those three format properties are the whole of what "the byte format is preserved" means
+here — an unquoted header row, fully quoted data fields, CRLF line endings. There is no
+fourth thing implied by the phrase.
 
 fixtures/staged-import-accepted.csv is the oracle, and it is a stronger one than it looks:
 its two rows are byte-for-byte the corresponding rows of sv09_export_untouched.csv with

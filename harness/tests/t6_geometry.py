@@ -5,9 +5,11 @@ card in the frame: a wrong crop produces a miss indistinguishable from a bad rea
 does it confidently. So detection gets its own failing test name rather than hiding inside
 a green identification run.
 
-Pass: the detected rectangle is within tolerance of the known one across the offset, scale
-and rotation sweep; the title band and number corner crops each contain their target region;
-and a frame with no card returns "not found" rather than a guess.
+Pass: detected rectangle within tolerance across the sweep; bands contain their target;
+no card -> not found.
+
+The sweep is offset, scale and rotation. The bands are the title band and the number
+corner, and each must contain its target region. "Not found" is a refusal, never a guess.
 
 SYNTHETIC COMPOSITES ONLY, and the answer key is exact because this test drew the picture:
 a card rectangle with a coloured title bar and a white number box, rendered onto a background

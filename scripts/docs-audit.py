@@ -694,6 +694,39 @@ def normalise(text: str) -> str:
     return " ".join(text.split())
 
 
+def docstring_pass_claim(source: str) -> Optional[str]:
+    """The module docstring's `Pass:` paragraph, whitespace-joined. None if it makes none.
+
+    A paragraph and not a line, because four of the six tests wrap their claim and t6's
+    runs past 250 characters unwrapped. Joining to the next blank line is what lets the
+    claim stay readable and still be compared whole; anything after that blank line is
+    prose about the claim, not the claim.
+
+    **Absence is deliberately not a finding.** Deleting a restatement is the correct answer
+    to one going stale (D18), so a guard that reported the missing line would make the right
+    fix the expensive one and push tests toward keeping a claim they no longer want.
+
+    The module docstring only. A `Pass:` line there is the headline claim with PASS_CRITERIA
+    a few lines below it; the same words inside a function docstring are not that claim, and
+    reaching for them buys false positives for nothing.
+    """
+    try:
+        doc = ast.get_docstring(ast.parse(source)) or ""
+    except SyntaxError:
+        return None
+    lines = doc.split("\n")
+    for index, line in enumerate(lines):
+        if not line.strip().startswith("Pass:"):
+            continue
+        claim = [line.strip()]
+        for follow in lines[index + 1:]:
+            if not follow.strip():
+                break
+            claim.append(follow.strip())
+        return " ".join(claim)
+    return None
+
+
 def check_pass_criteria(report: Report) -> None:
     """A test's PASS_CRITERIA must appear in its docs/GATES.md section, word for word.
 
@@ -709,6 +742,14 @@ def check_pass_criteria(report: Report) -> None:
 
     Numbers are checked separately and first, so a disagreement about a threshold is never
     reported as a disagreement about wording.
+
+    **The test's own module docstring is held to the same standard**, since that is the copy
+    a reader meets first — `harness/tests/t1_id_eval.py` carried "overall_accuracy >= 0.95"
+    two lines above the corrected literal, and five more paraphrases were live when this was
+    added. Scoped narrowly on purpose: a `Pass:` line in a test module self-identifies as the
+    claim and its ground truth is a module-level assignment in the same file, which is the
+    bar for policing prose at all. Where that bar is not met, the answer is to delete the
+    restatement rather than widen this check to chase it.
     """
     sections = gates_sections()
     mechanical: List[Finding] = []
@@ -716,12 +757,29 @@ def check_pass_criteria(report: Report) -> None:
     for name, path in registered_tests():
         if not path.exists():
             continue
-        criteria = string_assign(read(path), "PASS_CRITERIA")
+        source = read(path)
+        criteria = string_assign(source, "PASS_CRITERIA")
         if criteria is None:
             mechanical.append(
                 Finding(rel(path), "no module-level PASS_CRITERIA string to read.")
             )
             continue
+        claim = docstring_pass_claim(source)
+        if claim is not None and normalise(criteria) not in normalise(claim):
+            wording.append(
+                Finding(
+                    rel(path),
+                    f"the module docstring's `Pass:` claim is a paraphrase, not the "
+                    f"criterion.\n"
+                    f"  docstring: {claim}\n"
+                    f"  test:      {criteria}\n"
+                    f"  Publish the criterion verbatim, or delete the `Pass:` line — both "
+                    f"are correct answers. What is not: dropping something the paraphrase "
+                    f"knew to satisfy this check. Keep it as its own sentence after the "
+                    f"blank line.",
+                )
+            )
+
         section = sections.get(name)
         if section is None:
             continue

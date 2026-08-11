@@ -3,7 +3,8 @@
 For a card with normal, holo, and reverse rows in the fixture, assert each ladder stage
 resolves to the correct condition string and price.
 
-Pass: all four stages, plus the review path fires on disagreement.
+Pass: all four stages correct, review fires on metadata/detection disagreement, and every
+routing row sends the card to the queue named.
 
 The ladder (D3 in docs/DECISIONS.md), in order:
   1. Capture-time metadata — variant toggle recorded in the card's JSON sidecar. Primary

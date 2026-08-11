@@ -4,8 +4,11 @@ New with batch script v2. A wrong price is a distinct failure from a wrong match
 can be perfect and the money still wrong, and the two have different causes, different
 symptoms and different fixes. So it gets its own failing test name.
 
-Pass: every rule x basis combination prices exactly, the floor clamp cannot be rounded
-under, and a `no_market_data` SKU is never auto-priced.
+Pass: every rule x basis prices exactly; floor clamp applied after rounding; threshold
+always reads market; no_market_data never auto-priced.
+
+"Applied after rounding" is also the statement that the price cannot be rounded *under*
+the floor: clamping first would let the rounding step drop it back below.
 
 Four things are checked, in the order they can hurt you:
 
