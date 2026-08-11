@@ -19,8 +19,9 @@ before and after every commit in this plan.
 - **Future names are deliberately never written here as paths or backticked make
   invocations.** The paths row blocks on a backticked path that does not resolve; the
   make targets row blocks on a backticked or fenced make invocation naming a target the
-  Makefile lacks. The script and target this plan creates are named in prose only
-  (audit-history, docs-gen) until they exist. If a future name must be written as a real
+  Makefile lacks. The script and target this plan creates are named in prose only until
+  they exist — docs-gen still is; audit-history stopped being one the moment it landed,
+  and section 7 now writes its real path. If a future name must be written as a real
   reference before it is built, the sanctioned route is a line in
   scripts/docs-audit-allow.txt with a reason — the mechanism already covering
   PKMNSCAN_IMAGE_MIRROR and T7.
@@ -348,8 +349,9 @@ collision that zeroed the decision ids in code tally; the report footer leaking 
 last row's findings; gitignore artifacts read as findings). Owner's standing rule:
 **nothing retires on numbers parsed from the human render.**
 
-**audit-history, ~47 lines.** A new script under scripts (name it at execution; this
-file deliberately does not write the path — section 0). For each commit: git archive the
+**audit-history, ~47 lines.** Built as `scripts/audit-history.py`, run by `make
+audit-history` — named at execution per section 0, whose prose-only rule lapsed for this
+one the moment the file existed. For each commit: git archive the
 tree into a scratch directory, drop in the CURRENT scripts/docs-audit.py, run with
 --json, tally per label. Classifier, from the planning session's hand version: a finding
 is subject-absent when its missing target sits under a gitignored path (archived trees

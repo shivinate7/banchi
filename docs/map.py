@@ -170,7 +170,9 @@ COMPONENTS = [
         "path": "scripts/",
         "status": "built",
         "does": "opsec guards, the stop gate, the docs audit, the screenshot runner, "
-                "and `make status` — which reads this file for the next step and the gate",
+                "`make status` — which reads this file for the next step and the gate — "
+                "and audit-history, which replays the auditor over old trees. Diagnostic; "
+                "never gates, per D18.",
         "governed_by": ["D14", "D16", "D18"],
         "note": "scripts/status.py declares every file it reads in a SOURCES literal, and "
                 "the audit's status-sources check verifies that list. Its values are "

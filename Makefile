@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit dev server screenshot lint typecheck venv
+.PHONY: help status harness check docs-audit audit-history dev server screenshot lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -19,6 +19,7 @@ help:
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make harness      T1-T6 verification tests. Must exit 0 before any commit."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
+	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make check        harness + docs-audit + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -57,6 +58,14 @@ docs-audit:
 	@python3 scripts/docs-audit.py; \
 	status=$$?; \
 	if [ $$status -eq 1 ]; then exit 1; fi
+
+# Deliberately NOT a prerequisite of `check`, and never wired to a hook: every tree after
+# the audit landed is clean because the hook blocked anything else, so a zero here cannot
+# tell silent prevention from dead weight. It informs a retirement argument; it never makes
+# one. Nonzero means the tool failed, never that a finding was found. See D18 and the
+# script's own header.
+audit-history:
+	@python3 scripts/audit-history.py
 
 # Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
 # A check suite has to run in a known order and stop at the first failure.
