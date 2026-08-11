@@ -298,7 +298,21 @@ def run() -> Result:
         }
         for name, group in by_split.items()
     }
-    holdout = split_stats[fixtures.HOLDOUT]
+    # WHICH SPLIT THE GATE READS IS DECIDED ONCE, HERE, AND EVERY OTHER MENTION DERIVES
+    # FROM IT. Not a style preference — this line and the two that report it used to name
+    # `fixtures.HOLDOUT` independently, so moving the gate to the tune half left `gated_on`
+    # saying "holdout", the tune accuracy stored under `holdout_accuracy`, and stdout still
+    # printing "<- the gate" beside the holdout row. Three published surfaces agreeing with
+    # each other and none of them with the code. Anything that records or labels the gate
+    # reads `gated_split`, so a change here cannot leave a stale label behind.
+    #
+    # THE RULE FOR SPOTTING THE NEXT ONE, because this class has now survived two fixes
+    # that each added a reference instead of removing one: repeated reads of a single name
+    # are fine — a change tracks everywhere. The defect is two independent DECISIONS that
+    # must agree. `ARTICUNO` used in fourteen assertions is one name; a selection saying
+    # HOLDOUT and a label saying HOLDOUT are two decisions, and only one of them moves.
+    gated_split = fixtures.HOLDOUT
+    holdout = split_stats[gated_split]
     # The gate reads the holdout. A run that did not score the holdout cannot clear it —
     # a partial run is a development convenience, never a verdict.
     gate_accuracy = holdout["accuracy"]
@@ -315,7 +329,7 @@ def run() -> Result:
         "set_count": len(per_set),
         "split_requested": os.environ.get(SPLIT_ENV, "all"),
         "splits": split_stats,
-        "gated_on": fixtures.HOLDOUT,
+        "gated_on": gated_split,
         "holdout_accuracy": gate_accuracy,
         "overall_accuracy": round(accuracy, 4),
         "accuracy_floor": ID_ACCURACY_FLOOR,
@@ -374,7 +388,7 @@ def run() -> Result:
     checks.note("")
     for name in (fixtures.TUNE, fixtures.HOLDOUT):
         stat = split_stats[name]
-        marker = "  <- the gate" if name == fixtures.HOLDOUT else ""
+        marker = "  <- the gate" if name == gated_split else ""
         checks.note(
             "{0:<8} {1:<22} {2:>3}/{3:<3} {4}{5}".format(
                 name,

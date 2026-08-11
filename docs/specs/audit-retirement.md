@@ -145,8 +145,24 @@ Everything here was verified 2026-08-10.
 The score file is tracked: git ls-files under harness/results/ returns README.md and
 t1.json, and git check-ignore reports not ignored (.gitignore excludes harness/images/,
 not harness/results/). The file carries a gated_on value of "holdout", written at run
-time by the same code path that selects the split — evidence of execution, not a
-restated literal.
+time from the same name that selects the split — evidence of execution, not a restated
+literal.
+
+**Premise correction, 2026-08-11.** That last sentence was approved as verified and was
+not true of the code. The split selection and the payload's gated_on named
+fixtures.HOLDOUT independently, as did the stdout "<- the gate" marker: three references
+to one choice, none derived from the others. Mutating the selection to the tune half left
+gated_on saying "holdout", put the tune accuracy under the holdout_accuracy key, kept
+passed at True, and still printed the marker beside the holdout row — the GATE_FIELD
+anti-pattern this section documents, reproduced one layer down in the place certified as
+safe. Built on that code, check (a) would have read gated_on, found "holdout", matched
+PASS_CRITERIA and reported clean, which is a check publishing a false assurance rather
+than an absent one. The three references now derive from a single `gated_split`, the
+sentence above describes what the code does, and (a) rests on something true. One
+residual is deliberate: the `holdout_accuracy` KEY is still a literal, so a mutated run
+files the tune number under a holdout name — that divergence is exactly what (a) catches
+through gated_on, and closing it in the schema would change a field other readers depend
+on for no added safety.
 
 Three parts, two new report rows:
 
