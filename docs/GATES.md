@@ -169,9 +169,9 @@ a 50-card run, then scale to a full box.
 ## Build order
 
 1. ~~Repo init, fixtures committed, git from commit zero~~ — done.
-2. **Scaffolding**: `Makefile`, `.claude/settings.json` hooks, `scripts/screenshot.sh`,
-   empty harness that exits 1. Do this before any feature so the check exists first.
-3. Verification harness (T1–T4).
+2. ~~**Scaffolding**: `Makefile`, `.claude/settings.json` hooks, `scripts/screenshot.sh`,
+   empty harness that exits 1. Do this before any feature so the check exists first.~~ — done.
+3. ~~Verification harness (T1–T4)~~ — done; T5 and T6 arrived with step 4.
 4. ~~Batch script v2: Batch API, variant ladder, catalog join, real CSV library~~ — code
    done 2026-08-03, spec at `docs/specs/batch-script.md`, harness green at T1–T6.
    `./pkmnscan identify | join | emit | reconcile`. **Not yet run against a real card**:
