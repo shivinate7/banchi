@@ -529,6 +529,28 @@ def iter_code_lines(text: str):
             yield number, " ".join(spans)
 
 
+def phony_gaps(text: str) -> Tuple[Set[str], Set[str]]:
+    """(rule targets missing from `.PHONY`, `.PHONY` names with no rule).
+
+    `.PHONY` is a second enumeration of the same target list, and make obeys the shorter
+    one silently. Every rule in this Makefile is a command, never a file it builds, so a
+    name missing from `.PHONY` is always wrong — and when a file or directory of that name
+    exists the target stops running altogether: `harness:` has no prerequisites and
+    `harness/` is a real directory, so dropping `harness` makes `make harness` print
+    "up to date" and exit 0 having run no tests. `make check` and the stop gate inherit it,
+    and the docs audit stays clean throughout, because nothing was ever wrong in the prose.
+
+    Both directions. The mirror drift is the same defect from the other side: a `.PHONY`
+    name with no rule is dead config that reads as coverage.
+    """
+    targets = set(_MAKE_RULE_RE.findall(text))
+    phony: Set[str] = set()
+    for line in text.splitlines():
+        if line.startswith(".PHONY:"):
+            phony.update(line[len(".PHONY:"):].split())
+    return targets - phony, phony - targets
+
+
 def check_make_targets(report: Report, docs: List[Path]) -> None:
     makefile = ROOT / "Makefile"
     if not exists(makefile):
@@ -574,6 +596,24 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
                     f"target `{name}` exists but `make help` never mentions it.",
                 )
             )
+
+    unphony, unruled = phony_gaps(text)
+    for name in sorted(unphony):
+        findings.append(
+            Finding(
+                "Makefile",
+                f"target `{name}` is missing from `.PHONY`.\n"
+                f"  A file or directory named `{name}` turns `make {name}` into a no-op "
+                f"that exits 0 — a green build that ran nothing.",
+            )
+        )
+    for name in sorted(unruled):
+        findings.append(
+            Finding(
+                "Makefile",
+                f"`.PHONY` names `{name}`, which is not a target in this Makefile.",
+            )
+        )
     report.add("make targets", MECHANICAL, findings, f"{referenced} references, {len(targets)} targets")
 
 
@@ -1758,6 +1798,29 @@ def self_test() -> int:
         by_label = {check: findings for check, _, findings, _ in report.checks}
         findings = by_label["check numbering"]
         ok(not findings, "naming the check by its label is fine", str(findings))
+
+    # A target absent from .PHONY is a green `make` that ran nothing, and nothing in the
+    # prose is wrong when it happens — so no other check in this file can see it.
+    print("\nevery make target is declared .PHONY")
+    complete = ".PHONY: help harness\n\nhelp:\n\t@echo hi\n\nharness:\n\t@run\n"
+    ok(phony_gaps(complete) == (set(), set()), "a complete .PHONY is clean", str(phony_gaps(complete)))
+    dropped = ".PHONY: help\n\nhelp:\n\t@echo hi\n\nharness:\n\t@run\n"
+    ok(
+        phony_gaps(dropped) == ({"harness"}, set()),
+        "a target missing from .PHONY is reported",
+        str(phony_gaps(dropped)),
+    )
+    stale = ".PHONY: help harness ghost\n\nhelp:\n\t@echo hi\n\nharness:\n\t@run\n"
+    ok(
+        phony_gaps(stale) == (set(), {"ghost"}),
+        "a .PHONY name with no rule is reported",
+        str(phony_gaps(stale)),
+    )
+    ok(
+        phony_gaps(read(ROOT / "Makefile")) == (set(), set()),
+        "this repo's own Makefile agrees with its .PHONY",
+        str(phony_gaps(read(ROOT / "Makefile"))),
+    )
 
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
