@@ -1431,10 +1431,20 @@ def staged_changes() -> Dict[str, int]:
     A "doc older than the code" heuristic reads plausible and does not survive contact
     with this repo: markdown gets edited in the same working session as the code it
     describes, so timestamps say nothing about whether the prose kept up.
+
+    **`--no-renames`, and `-z`, both for the same reason.** Left to itself git reports a
+    staged rename as one record whose path field is the combined form `docs/{old => new}.md`,
+    which is not a path and matches nothing — so a renamed doc was audited by no check at
+    all and the run reported clean. `--no-renames` splits it into the add and the delete,
+    and `--diff-filter=ACMR` keeps the add: the new path, which is the one that needs
+    auditing. `-z` drops git's quoting of unusual names, so the field is always a real path.
     """
     changes: Dict[str, int] = {}
-    for line in git("diff", "--cached", "--numstat", "--diff-filter=ACMR").splitlines():
-        parts = line.split("\t")
+    raw = git("diff", "--cached", "--numstat", "-z", "--no-renames", "--diff-filter=ACMR")
+    for record in raw.split("\0"):
+        if not record:
+            continue
+        parts = record.split("\t")
         if len(parts) != 3:
             continue
         added, removed, path = parts
