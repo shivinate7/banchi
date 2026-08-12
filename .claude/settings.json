@@ -3,7 +3,8 @@
   "permissions": {
     "allow": [
       "Bash(make harness)",
-      "Bash(make check)",
+      "Bash(make status)",
+      "Bash(make docs-audit)",
       "Bash(make screenshot)",
       "Bash(npm run lint)",
       "Bash(git status)",
@@ -16,6 +17,7 @@
       "Edit(./fixtures/**)"
     ]
   },
+  "_permissions_allow_note": "Two entries in permissions.allow are worth explaining, so an allow-list review does not re-derive them. Bash(npm run lint) CANNOT SUCCEED TODAY — there is no package.json — and it is kept ON PURPOSE, because it becomes true at build-order step 7 when the Vite app lands. That is exactly what distinguishes it from Bash(make check), REMOVED 2026-08-11: make check runs lint and typecheck, both stubs that exit 1 by design (see the header comment in the Makefile — a target that exits 0 with nothing to run is a lie), so it can never exit 0, and nothing automated invokes it. One impossible grant resolves itself; the other does not. Bash(make status) and Bash(make docs-audit) were added in the same edit — both read-only, and status is what README.md and CLAUDE.md tell a cold session to run first. Deliberately NOT granted: make audit-history, a slow once-in-a-while diagnostic that a standing grant would invite into routine use.",
   "_disabled_PreToolUse_opsec_note": "TURNED OFF 2026-08-03, during scaffolding. guard-opsec.sh over-triggers: it blocks any write containing a code-shaped literal, including placeholders in comments and docs, which cost two blocked writes in one session while writing about the format rather than a real code. RESTORE by moving its entry into the real 'PreToolUse' array above — the key was renamed from '_disabled_PreToolUse' when that array arrived, so the old instruction to rename it back would now produce a duplicate key. Revisit before the codes track handles real cards (code-card-fork/CLAUDE.md), and consider narrowing the pattern to skip .md files and comment lines first. Still covered while off: fixtures by the permissions.deny rules above, and all three opsec rules at commit time by scripts/githooks/pre-commit.",
   "_PreToolUse_decision_context_note": "ADDED with D16/D17. scripts/decision-context.py names the settled decisions governing the file about to be edited, read out of docs/map.py and summarised from docs/DECISIONS.md itself so no summary can drift from its decision. It exits 0 unconditionally — on bad input, a missing map, or its own bugs — and prints nothing for files no map entry covers, which is most of them. It is advisory and must never be able to fail an edit; that is the difference between it and the guard below, which over-triggered and was off within a day. It emits hookSpecificOutput.additionalContext rather than permissionDecision: setting permissionDecision to 'allow' would auto-approve every Write and Edit in the project, which is a security change wearing a convenience hat. If a Claude Code release ignores additionalContext the JSON is merely printed, so the failure mode is a lost nudge and never a blocked edit — CLAUDE.md points at docs/map.py directly for that reason.",
   "hooks": {
@@ -37,17 +39,6 @@
           {
             "type": "command",
             "command": "scripts/guard-opsec.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "make lint typecheck 2>&1 | tail -20"
           }
         ]
       }

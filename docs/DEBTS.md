@@ -103,6 +103,33 @@ is the one command a cold session is told to run first. Worth doing carefully.
 
 ---
 
+## Absent signals — a check that does not run at all
+
+### The post-edit hook channel is gone, and step 7 is when it should come back
+
+Recorded 2026-08-11, from the step-5 spec work.
+
+`.claude/settings.json` ran `make lint typecheck` after every Write and Edit. Both targets
+exit 1 by design — `Makefile:3`, a target that exits 0 with nothing to run is a lie the
+rest of the project would be built on top of — and under one make invocation the abort on
+`lint` meant `typecheck` never ran at all. The pipe to `tail` then swallowed the status, so
+the hook itself exited 0 and blocked nothing. Five lines of failure text after every edit,
+from 2026-08-03 until it was deleted on 2026-08-11.
+
+Deleted rather than repointed. Pointing it at the harness costs far more output per edit
+for a check the Stop hook already runs at turn end, and dropping `lint`'s `exit 1` would
+make `make check` green by lying — which is the thing `Makefile:3` exists to refuse.
+
+**Cost**: there is now no automatic post-edit signal at all. Zero today, because there was
+nothing behind the channel. Real at build-order step 7, when TypeScript arrives and
+`make typecheck` starts meaning something.
+
+**Why not fixed**: there is nothing to point it at yet. Step 7 should re-add it — at the
+typecheck target alone, never at the composite — rather than rediscovering the question
+from an empty hooks block.
+
+---
+
 ## Reporting defects — a check runs but can report the wrong thing
 
 Full detail is in the review; the short form, by where it bites:
