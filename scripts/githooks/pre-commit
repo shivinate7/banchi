@@ -75,10 +75,18 @@ fi
 #
 #   1  a reference in the markdown is provably wrong  -> block
 #   2  code changed and the doc describing it did not -> print the question, allow
+#  64  this hook invoked the auditor wrongly           -> warn loudly, allow
 #
 # Exit 2 does not block on purpose. Stopping a commit over a question would make
 # `--no-verify` habitual, and `--no-verify` also switches off the three opsec rules above.
 # Trading a bearer-instrument guard for a prose reminder is a bad trade.
+#
+# 64 exists because the flags below are a second, independent statement of the auditor's
+# interface. Argparse's default exit for an unrecognised flag is 2 — this hook's allow-and-
+# print code — so a renamed option would have silently stopped the gate while printing what
+# reads like the routine coupling question. The auditor now exits 64 there so it lands in
+# the loud branch, and its `audit invocation` check reconciles these flags against argparse
+# so it does not get that far.
 #
 # Anything else means the auditor itself is broken, which is not evidence the docs are
 # wrong. Say so loudly and let the commit through.
@@ -102,6 +110,12 @@ if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command 
       ;;
     2)
       echo "$audit_out"
+      ;;
+    64)
+      echo "$audit_out" >&2
+      echo "WARNING: this hook invoked scripts/docs-audit.py with a flag it does not accept," >&2
+      echo "so THE DOCS AUDIT DID NOT RUN. Reconcile the invocation above with the parser." >&2
+      echo "Allowing the commit: a broken caller is not evidence the docs are wrong." >&2
       ;;
     *)
       echo "WARNING: scripts/docs-audit.py exited $audit_status — the docs audit did not run." >&2

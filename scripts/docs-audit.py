@@ -21,6 +21,13 @@ Two severities, split by how knowable each finding is:
   ADVISORY   (exit 2)  a question. Code changed and the doc that describes it did not.
                        Prints and allows: blocking on a question trains you to reach for
                        `git commit --no-verify`, which also disables the opsec guard.
+  USAGE      (exit 64) this script was invoked wrongly. NOT 2, and that is the whole point:
+                       argparse exits 2 by default, which is the code the pre-commit hook
+                       prints-and-allows on. A caller that grew a stale flag would land in
+                       the allow branch and read as the routine coupling question — the
+                       gate switching itself off while looking entirely normal. 64 falls
+                       through to the hook's "the auditor is broken" branch, which is loud.
+                       The `audit invocation` check exists so it does not get that far.
 
 Stdlib only, so the git hook can call `python3` directly and never depends on `make venv`
 having been run.
@@ -38,6 +45,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import io
 import json
 import os
 import re
@@ -52,6 +61,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 MECHANICAL = "mechanical"
 ADVISORY = "advisory"
+
+# sysexits.h EX_USAGE. Deliberately not 2 — see the exit table in the module docstring.
+EXIT_USAGE = 64
 
 # Directories that are not this project's source. `.venv` alone holds hundreds of vendored
 # READMEs, and auditing someone else's markdown would be noise with a straight face.
@@ -1536,6 +1548,72 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
     )
 
 
+# -------------------------------------------------------------- how callers invoke this
+
+# Every file that runs this script as a gate or a build step. Each is checked for flags
+# this script does not declare.
+INVOKERS = ["Makefile", "scripts/githooks/pre-commit", ".claude/commands/docs-audit.md"]
+
+_INVOCATION_RE = re.compile(r"docs-audit\.py((?:\s+--[a-z][a-z-]*)*)")
+
+
+def check_audit_invocation(report: Report) -> None:
+    """Every flag a caller passes this script must be one this script declares.
+
+    The invocation string in the pre-commit hook is a second, independent decision about
+    this script's interface, and nothing reconciled it with the argparse definition. That
+    is the repo's recurring failure class — two decisions that must agree, only one of
+    which moves — sitting on the commit gate itself.
+
+    The consequence is worse than a broken flag. Renaming or dropping an option makes
+    argparse reject the hook's command line, and argparse's own exit code for that is 2 —
+    which is this script's ADVISORY code, the one the hook prints and allows. So the gate
+    would stop running and report the routine coupling question while doing it. `EXIT_USAGE`
+    makes that failure loud; this check makes it not happen.
+
+    Flags only. Reconciling positional arguments or values would mean modelling argparse,
+    and this script has none to model.
+
+    **The question is asked of argparse, not of a list scraped out of it.** An earlier draft
+    read `parser._actions` — a private attribute, and the coupling of a coupling check. It
+    was also wrong: argparse accepts unambiguous abbreviations, so `--stag` really does run
+    and set membership would have called it a finding. `parse_known_args` returns unmatched
+    optionals in its second element, which IS the property this check is about — would this
+    command line be rejected — and it is public API. The declared list below is pulled from
+    `format_usage()` for the human message only; nothing decides on it.
+    """
+    parser = build_parser()
+
+    def rejected(flag: str) -> bool:
+        with contextlib.redirect_stderr(io.StringIO()):
+            try:
+                _, extras = parser.parse_known_args([flag])
+            except SystemExit:  # a flag that parses but demands a value
+                return True
+        return flag in extras
+
+    declared = parser.format_usage().split(":", 1)[-1].strip().replace("\n", " ")
+    findings: List[Finding] = []
+    for name in INVOKERS:
+        path = ROOT / name
+        if not exists(path):
+            continue
+        for number, line in enumerate(read(path).splitlines(), start=1):
+            for match in _INVOCATION_RE.finditer(line):
+                for flag in match.group(1).split():
+                    if rejected(flag):
+                        findings.append(
+                            Finding(
+                                f"{name}:{number}",
+                                f"invokes `docs-audit.py {flag}`, which argparse rejects.\n"
+                                f"  Accepts: {declared}\n"
+                                f"  The invocation would exit {EXIT_USAGE}; a caller "
+                                f"reading that as a finding would stop gating.",
+                            )
+                        )
+    report.add("audit invocation", MECHANICAL, findings, f"{len(INVOKERS)} callers, flags all declared")
+
+
 # ------------------------------------------------------------------ Layer 2: coupling
 
 
@@ -1852,6 +1930,50 @@ def self_test() -> int:
         leave_staged_mode()
     ok(_INDEX_PATHS is None and exists(ROOT / "Makefile"), "and the worktree comes back")
 
+    # Argparse's own exit for a bad flag is 2 — this script's advisory code, which the
+    # pre-commit hook prints and allows. A caller that grew a stale flag would switch the
+    # gate off and look routine doing it.
+    print("\ninvoking this script wrongly is not mistaken for an advisory")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            build_parser().parse_args(["--no-such-flag"])
+        code: Optional[int] = None
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else None
+    ok(code == EXIT_USAGE, f"an unknown flag exits {EXIT_USAGE}, never 2", f"exited {code}")
+    report = Report()
+    check_audit_invocation(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(not by_label["audit invocation"], "every caller's flags are declared", str(by_label))
+
+    # The reason this check asks argparse instead of reading a list out of it: argparse
+    # accepts unambiguous abbreviations, so a caller passing `--stag` really does run and
+    # is not a finding. Set membership against the declared options called it one.
+    with tempfile.TemporaryDirectory() as tmp:
+        caller = Path(tmp) / "caller.sh"
+        caller.write_text("python3 scripts/docs-audit.py --stag\n", encoding="utf-8")
+        saved, INVOKERS[:] = list(INVOKERS), [rel(caller)]
+        try:
+            report = Report()
+            check_audit_invocation(report)
+            rows = {check: findings for check, _, findings, _ in report.checks}
+            ok(
+                not rows["audit invocation"],
+                "an abbreviation argparse accepts is not a finding",
+                str(rows["audit invocation"]),
+            )
+            caller.write_text("python3 scripts/docs-audit.py --stagx\n", encoding="utf-8")
+            report = Report()
+            check_audit_invocation(report)
+            rows = {check: findings for check, _, findings, _ in report.checks}
+            ok(
+                len(rows["audit invocation"]) == 1,
+                "a flag argparse rejects is",
+                str(rows["audit invocation"]),
+            )
+        finally:
+            INVOKERS[:] = saved
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -1892,13 +2014,28 @@ def audit(staged_only: bool) -> Report:
     check_map(report, allowed)
     check_status_sources(report)
     check_positional_references(report, docs)
+    check_audit_invocation(report)
     if staged_only:
         check_coupling(report)
     return report
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
+class _Parser(argparse.ArgumentParser):
+    """Usage errors exit EXIT_USAGE, never argparse's default 2.
+
+    2 is this script's advisory code and the pre-commit hook prints-and-allows on it, so
+    argparse's default would let a stale flag in a caller disable the commit gate while
+    printing something that reads like the routine coupling question.
+    """
+
+    def error(self, message: str):  # pragma: no cover - argparse contract
+        self.print_usage(sys.stderr)
+        sys.stderr.write(f"{self.prog}: error: {message}\n")
+        sys.exit(EXIT_USAGE)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = _Parser(
         prog="docs-audit",
         description="Audit the markdown for stale references. Never writes.",
     )
@@ -1916,7 +2053,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="print one JSON object — rows plus the exit code — instead of the human render",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
 
     if args.self_test:
         return self_test()
