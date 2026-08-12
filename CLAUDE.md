@@ -72,6 +72,9 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   session. Audited by `make docs-audit`, so it cannot quietly go stale.
 - @docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 - @docs/GATES.md — gates, harness contract, build order.
+- `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
+  before treating a green `make docs-audit` as coverage: it means the checks that exist,
+  passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
