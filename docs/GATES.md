@@ -184,7 +184,9 @@ a 50-card run, then scale to a full box.
    reaches it**: nothing under `harness/tests` imports `server`, `store` or `cli`, so a
    green harness says nothing about this step — see `docs/DEBTS.md`.
 6. Design tokens locked and one component built against them — see `docs/DESIGN.md`.
-   Before any screen.
+   Before any screen. **Tokens locked 2026-08-12**, by interview against rendered
+   alternatives rather than by inference; the component is not built, so this step is not
+   done. `docs/DESIGN.md` names the three states to build and the exact fills.
 7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
    photo, Fulfillment view, CSV import with error reporting.

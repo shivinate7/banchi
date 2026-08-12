@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pkmnscan — what was rejected, and what it looked like</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400;12..96,75..100,700&family=Geist:wght@400;500;700&family=Geist+Mono:wght@400;600&family=Archivo:wdth,wght@75..125,400;75..125,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#FCFCFD; --surface:#FFFFFF; --ink:#08090A; --muted:#52555B;
+    --line:#E6E7EA; --accent:#1E40AF; --hover:#F4F5F7; --pressed:#17348F;
+    --display:'Cabinet Grotesk', sans-serif; --body:'Atkinson Hyperlegible', sans-serif;
+    --util:'Martian Mono', monospace; --r:4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px;
+         line-height: 1.5; padding: 32px; }
+  .sheet-h1 { font-family: var(--display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+  .sheet-lede { color: var(--muted); max-width: 78ch; margin-top: 8px; font-size: 15px; }
+  .sheet-lede code { font-family: var(--util); font-size: 12px; }
+  h2 { font-family: var(--util); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+       color: var(--muted); margin: 48px 0 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .why { color: var(--muted); font-size: 14px; max-width: 78ch; margin-bottom: 16px; }
+  .why b { color: var(--ink); font-weight: 700; }
+  .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .col { flex: 1 1 300px; min-width: 290px; }
+  .tag { font-family: var(--util); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+         color: var(--muted); margin-bottom: 8px; display: block; }
+  .tag b { color: var(--ink); font-weight: 600; }
+
+  /* alternative grounds, kept only so the rejection has a picture */
+  .a-paper    { --p-bg:#F5F1E8; --p-sf:#FFFDF8; --p-ink:#1C1917; --p-mut:#6B6355; --p-acc:#8A2B10; --p-ln:#D9D2C4; }
+  .a-cool     { --p-bg:#F4F6F8; --p-sf:#FFFFFF; --p-ink:#14181C; --p-mut:#5A6570; --p-acc:#0C4F69; --p-ln:#D8DEE4; }
+  .a-graphite { --p-bg:#F2F3F5; --p-sf:#FFFFFF; --p-ink:#0E1116; --p-mut:#5B6472; --p-acc:#4338CA; --p-ln:#DFE2E7; }
+  .a-terminal { --p-bg:#F6F6F4; --p-sf:#FFFFFF; --p-ink:#111312; --p-mut:#5E625E; --p-acc:#08573F; --p-ln:#E3E4DF; }
+  .chosen     { --p-bg:#FCFCFD; --p-sf:#FFFFFF; --p-ink:#08090A; --p-mut:#52555B; --p-acc:#1E40AF; --p-ln:#E6E7EA; }
+
+  /* alternative type stacks */
+  .y-fraunces  { --d:'Fraunces', serif;              --b:'Source Sans 3', sans-serif;         --u:'IBM Plex Mono', monospace; }
+  .y-bricolage { --d:'Bricolage Grotesque', sans-serif; --b:'Geist', sans-serif;              --u:'Geist Mono', monospace; }
+  .y-archivo   { --d:'Archivo', sans-serif;          --b:'Atkinson Hyperlegible', sans-serif; --u:'DM Mono', monospace; }
+  .y-geist     { --d:'Geist', sans-serif;            --b:'Geist', sans-serif;                 --u:'Geist Mono', monospace; }
+  .y-chosen    { --d:'Cabinet Grotesk', sans-serif;  --b:'Atkinson Hyperlegible', sans-serif; --u:'Martian Mono', monospace; }
+  .y-archivo .claim { font-stretch: 112%; }
+
+  .panel { background: var(--p-bg, var(--bg)); color: var(--p-ink, var(--ink));
+           border: 1px solid var(--p-ln, var(--line)); border-radius: var(--r);
+           font-family: var(--b, var(--body)); overflow: hidden; }
+  .panel .inner { padding: 14px; }
+  .strip { display: flex; justify-content: space-between; background: var(--hover);
+           border-bottom: 1px solid var(--p-ln, var(--line)); padding: 8px 14px;
+           font-family: var(--u, var(--util)); font-size: 10px; letter-spacing: .1em;
+           text-transform: uppercase; color: var(--p-mut, var(--muted)); }
+  .count { font-family: var(--u, var(--util)); font-size: 10px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--p-mut, var(--muted)); margin-bottom: 8px; }
+  .pos { font-family: var(--u, var(--util)); font-variant-numeric: tabular-nums; font-size: 21px;
+         font-weight: 600; letter-spacing: -.04em; line-height: 1.2; }
+  .pos span { color: var(--p-mut, var(--muted)); font-weight: 400; }
+  .chips { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
+  .chip { font-family: var(--u, var(--util)); font-size: 9px; letter-spacing: .05em;
+          text-transform: uppercase; border: 1px solid var(--p-ln, var(--line)); border-radius: 3px;
+          padding: 3px 6px; color: var(--p-mut, var(--muted)); }
+  .chip.unsure { border-color: var(--p-acc, var(--accent)); color: var(--p-acc, var(--accent)); font-weight: 600; }
+  .chip .raw { display: block; font-size: 8px; letter-spacing: 0; text-transform: none;
+               opacity: .62; margin-top: 2px; }
+
+  .card { aspect-ratio: 63 / 88; width: 100%; max-width: 150px; margin: 14px auto;
+          border: 1px solid var(--p-ln, var(--line)); border-radius: var(--r);
+          background: var(--p-sf, var(--surface)); display: grid; grid-template-rows: auto 1fr;
+          gap: 6px; padding: 6px; }
+  .card .title-band { height: 14px; background: var(--p-bg, var(--bg)); border-radius: 2px; }
+  .card .art { background: var(--p-bg, var(--bg)); border-radius: 2px; }
+
+  .claim { font-family: var(--d, var(--display)); font-size: 17px; font-weight: 700;
+           line-height: 1.25; letter-spacing: -.01em; margin: 12px 0; }
+  .claim em { font-style: normal; color: var(--p-acc, var(--accent)); }
+
+  .choices { border: 1px solid var(--p-ln, var(--line)); border-radius: var(--r); overflow: hidden;
+             background: var(--p-sf, var(--surface)); }
+  .choice { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+            padding: 9px 12px; border-bottom: 1px solid var(--p-ln, var(--line)); }
+  .choice:last-child { border-bottom: 0; }
+  .choice .what { font-size: 15px; font-weight: 700; }
+  .choice .money { font-family: var(--u, var(--util)); font-variant-numeric: tabular-nums;
+                   font-size: 14px; font-weight: 600; letter-spacing: -.04em; }
+  .choice.filled { background: var(--p-acc, var(--accent)); border-color: var(--p-acc, var(--accent)); }
+  .choice.filled .what, .choice.filled .money { color: #fff; }
+  .kbd { font-family: var(--u, var(--util)); font-size: 9px; color: var(--p-mut, var(--muted));
+         border: 1px solid var(--p-ln, var(--line)); border-radius: 3px; padding: 2px 5px;
+         min-width: 20px; text-align: center; }
+  .choice.filled .kbd { color: #fff; border-color: rgba(255,255,255,.5); }
+  .verdict { font-family: var(--util); font-size: 11px; letter-spacing: .04em; margin-top: 8px;
+             color: var(--muted); }
+  .verdict.no::before  { content: "REJECTED — "; color: var(--accent); font-weight: 600; }
+  .verdict.yes::before { content: "CHOSEN — ";   color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="sheet-h1">What was rejected, and what it looked like</div>
+<p class="sheet-lede"><code>docs/DESIGN.md</code> names several things this design is not. A negative
+constraint is only useful if a later session can see what it is refusing — otherwise it reads as
+taste and gets overturned by the first person with different taste. Every panel here was rendered,
+looked at, and turned down on 2026-08-12. The chosen design is in <code>locked.html</code>.
+Cards are synthetic rectangles at <code>geometry/detect.py</code>'s <code>CARD_ASPECT</code>; the
+pre-commit hook blocks images outside <code>captures/</code>.</p>
+
+<h2>Grounds</h2>
+<p class="why">The first pass was built on warm paper with a high-contrast serif display. It reads
+<b>NYT / FT</b> — sanitised, editorial, professional in a way that belongs to a newspaper and not to
+a workbench. That verdict is the reason DESIGN.md bans newspaper coding by name rather than merely
+specifying a hex value.</p>
+<div class="row">
+  <div class="col a-paper y-fraunces">
+    <span class="tag"><b>Warm paper</b> · #F5F1E8 / #8A2B10</span>
+    <div class="panel"><div class="inner">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="card"><div class="title-band"></div><div class="art"></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict no">the ground and the serif together read as a newspaper</div>
+  </div>
+
+  <div class="col a-cool y-fraunces">
+    <span class="tag"><b>Cool clinical</b> · #F4F6F8 / #0C4F69</span>
+    <div class="panel"><div class="inner">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="card"><div class="title-band"></div><div class="art"></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict no">same register, cooler ground — the serif was carrying it</div>
+  </div>
+
+  <div class="col a-graphite y-bricolage">
+    <span class="tag"><b>Graphite &amp; signal</b> · #F2F3F5 / #4338CA</span>
+    <div class="panel"><div class="inner">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="card"><div class="title-band"></div><div class="art"></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict no">right register, but the grey ground has a colour of its own</div>
+  </div>
+
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Ink &amp; electric</b> · #FCFCFD / #1E40AF</span>
+    <div class="panel"><div class="inner">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="card"><div class="title-band"></div><div class="art"></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict yes">the card photo is the only chromatic thing on screen</div>
+  </div>
+</div>
+
+<h2>Display faces</h2>
+<p class="why">All four on the chosen ground, so only the face differs. <b>Geist as a single-family
+system</b> is the interesting rejection: it is the most coherent of the four and it lost precisely
+because it satisfies the token block by deleting one of its requirements — DESIGN.md asks for one
+characterful face, and a single grotesque used at three sizes has none.</p>
+<div class="row">
+  <div class="col chosen y-bricolage">
+    <span class="tag"><b>Bricolage Grotesque</b> · Geist / Geist Mono</span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">Reverse Holo</p>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+    </div></div>
+    <div class="verdict no">the most of-this-moment, and therefore the most datable</div>
+  </div>
+  <div class="col chosen y-archivo">
+    <span class="tag"><b>Archivo Expanded</b> · Atkinson / DM Mono</span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">Reverse Holo</p>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+    </div></div>
+    <div class="verdict no">close second; its body face survived into the chosen stack</div>
+  </div>
+  <div class="col chosen y-geist">
+    <span class="tag"><b>Geist</b> · single family, three roles</span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">Reverse Holo</p>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+    </div></div>
+    <div class="verdict no">no characterful face at all — deletes the requirement</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Cabinet Grotesk</b> · Atkinson / Martian Mono</span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">Reverse Holo</p>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+    </div></div>
+    <div class="verdict yes">flared terminals, character without volume</div>
+  </div>
+</div>
+
+<h2>The panel header strip</h2>
+<p class="why">A tinted bar carrying each panel's name and its queue depth. It put the count
+permanently on screen, which <code>store/queues.py</code> argues for in prose. It was still rejected,
+and DESIGN.md records that <b>no rule about header strips</b> should be written either way — this is
+a rejected element, not a banned category.</p>
+<div class="row">
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>With strip</b></span>
+    <div class="panel">
+      <div class="strip"><span>review · disagreement</span><span>3 / 41</span></div>
+      <div class="inner">
+        <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+        <div class="card"><div class="title-band"></div><div class="art"></div></div>
+        <p class="claim">You toggled this stack <em>Normal</em>.</p>
+      </div>
+    </div>
+    <div class="verdict no">a band of chrome on every panel</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Count inline</b></span>
+    <div class="panel"><div class="inner">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="card"><div class="title-band"></div><div class="art"></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>.</p>
+    </div></div>
+    <div class="verdict yes">the panel reads as one field</div>
+  </div>
+</div>
+
+<h2>Where the solid fill goes</h2>
+<p class="why">Accent works at two weights: outline for <b>unsure</b>, solid fill for <b>the only
+action</b>. On a two-answer screen the fill needs a rule, and both available rules are worse than
+having none. Filling the pricier row biases the queue toward over-listing. Filling the toggle's
+answer is defensible under D3 but makes one fill mean two things.</p>
+<div class="row">
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Fill on the pricier row</b></span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">You toggled <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice filled"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict no">points at the money — drifts toward over-listing</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Fill on the toggle's answer</b></span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">You toggled <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice filled"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict no">unbiased, but the fill now means two things</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>No fill on a two-answer screen</b></span>
+    <div class="panel"><div class="inner">
+      <p class="claim" style="margin-top:0">You toggled <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div></div>
+    <div class="verdict yes">the fill's meaning never has to be learned twice</div>
+  </div>
+</div>
+
+<h2>Reason codes</h2>
+<p class="why">Twelve machine strings come out of <code>pipeline/variant.py</code> and
+<code>pipeline/routing.py</code>. Showing only a friendly label creates a second vocabulary nothing
+audits and no path back from what you saw to what the pipeline said. Showing only the raw string is
+honest and unreadable.</p>
+<div class="row">
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Verbatim only</b></span>
+    <div class="panel"><div class="inner">
+      <div class="chips"><span class="chip">sv3 · 215/197</span>
+        <span class="chip unsure">metadata_detection_disagreement</span></div>
+    </div></div>
+    <div class="verdict no">named for code, not for reading</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Label only</b></span>
+    <div class="panel"><div class="inner">
+      <div class="chips"><span class="chip">sv3 · 215/197</span>
+        <span class="chip unsure">toggle ≠ photo</span></div>
+    </div></div>
+    <div class="verdict no">a second vocabulary that nothing audits</div>
+  </div>
+  <div class="col chosen y-chosen">
+    <span class="tag"><b>Label, raw beneath</b></span>
+    <div class="panel"><div class="inner">
+      <div class="chips"><span class="chip">sv3 · 215/197</span>
+        <span class="chip unsure">toggle ≠ photo<span class="raw">metadata_detection_disagreement</span></span></div>
+    </div></div>
+    <div class="verdict yes">readable, and still greppable</div>
+  </div>
+</div>
+
+</body>
+</html>

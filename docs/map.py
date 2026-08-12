@@ -47,7 +47,10 @@ BUILD_ORDER = [
      "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card — that is Gate B."},
     {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "done",
      "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. No harness test reaches it — that gap is recorded in docs/DEBTS.md, not closed."},
-    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "next"},
+    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "next",
+     "note": "tokens locked 2026-08-12 by interview — palette, three faces, spacing, radius, accent "
+             "policy and the review queue's shape are all in docs/DESIGN.md. The component is NOT "
+             "built, so the step is not done: `next` still means what it says."},
     {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "blocked", "blocked_by": "step 6"},
     {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},

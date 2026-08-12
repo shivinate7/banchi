@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pkmnscan — locked tokens, rendered</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+<style>
+  /* ====================================================================
+     The locked tokens from docs/DESIGN.md, 2026-08-12. This file exists so
+     the layout and density behind those numbers survive the session that
+     chose them. Change a value here only by changing DESIGN.md first.
+     ==================================================================== */
+  :root {
+    --bg:      #FCFCFD;
+    --surface: #FFFFFF;
+    --ink:     #08090A;
+    --muted:   #52555B;
+    --line:    #E6E7EA;
+    --accent:  #1E40AF;
+    --hover:   #F4F5F7;
+    --pressed: #17348F;
+
+    --display: 'Cabinet Grotesk', sans-serif;
+    --body:    'Atkinson Hyperlegible', sans-serif;
+    --util:    'Martian Mono', monospace;
+
+    --r: 4px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body);
+         font-size: 16px; line-height: 1.5; padding: 32px; }
+
+  .sheet-h1 { font-family: var(--display); font-size: 32px; font-weight: 800;
+              letter-spacing: -.02em; }
+  .sheet-lede { color: var(--muted); max-width: 76ch; margin-top: 8px; font-size: 15px; }
+  .sheet-lede code { font-family: var(--util); font-size: 12px; }
+  h2 { font-family: var(--util); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+       color: var(--muted); margin: 48px 0 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .note { color: var(--muted); font-size: 14px; max-width: 72ch; margin-bottom: 16px; }
+
+  .row { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .col { flex: 0 1 380px; }
+  .wide { flex: 1 1 480px; }
+
+  /* ---- synthetic card. NOT a photograph: scripts/githooks/pre-commit blocks any
+     image staged outside captures/, and that guard is worth more than a nicer mock.
+     Aspect is geometry/detect.py's CARD_ASPECT, 63/88. ---- */
+  .card { aspect-ratio: 63 / 88; width: 100%; max-width: 260px; margin: 24px auto;
+          border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+          display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 8px; }
+  .card .title-band { height: 24px; background: var(--hover); border-radius: 2px; }
+  .card .art { background: var(--hover); border-radius: 2px; }
+  .card .foot { display: flex; justify-content: space-between; align-items: center;
+                font-family: var(--util); font-size: 9px; color: var(--muted); }
+  .card.sm { max-width: none; width: 40px; margin: 0; padding: 3px; gap: 3px; border-radius: 3px; }
+  .card.sm .title-band { height: 6px; }
+  .card.sm .foot { display: none; }
+
+  /* ---- the panel ---- */
+  .panel { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r);
+           padding: 16px; }
+  .count { font-family: var(--util); font-size: 11px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .pos { font-family: var(--util); font-variant-numeric: tabular-nums; font-size: 26px;
+         font-weight: 600; letter-spacing: -.04em; line-height: 1.15; }
+  .pos span { color: var(--muted); font-weight: 400; }
+
+  .chips { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .chip { font-family: var(--util); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+          border: 1px solid var(--line); border-radius: 3px; padding: 4px 7px; color: var(--muted); }
+  .chip.unsure { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .chip .raw { display: block; font-size: 9px; letter-spacing: .02em; opacity: .62;
+               text-transform: none; margin-top: 2px; }
+
+  .claim { font-family: var(--display); font-size: 21px; font-weight: 700; line-height: 1.25;
+           letter-spacing: -.02em; margin: 16px 0; }
+  .claim em { font-style: normal; color: var(--accent); }
+
+  .choices { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+             background: var(--surface); }
+  .choice { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+            padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .choice:last-child { border-bottom: 0; }
+  .choice:hover { background: var(--hover); }
+  .choice .what { font-size: 17px; font-weight: 700; }
+  .choice .money { font-family: var(--util); font-variant-numeric: tabular-nums;
+                   font-size: 16px; font-weight: 600; letter-spacing: -.04em; }
+  .kbd { font-family: var(--util); font-size: 10px; color: var(--muted);
+         border: 1px solid var(--line); border-radius: 3px; padding: 2px 5px;
+         min-width: 22px; text-align: center; }
+
+  /* ---- queue ---- */
+  .queue { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+           overflow: hidden; }
+  .qrow { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; padding: 12px 16px;
+          border-bottom: 1px solid var(--line); align-items: center; }
+  .qrow:last-child { border-bottom: 0; }
+  .qname { font-size: 17px; font-weight: 700; line-height: 1.2; }
+  .qmeta { font-family: var(--util); font-size: 9.5px; color: var(--muted); margin-top: 4px;
+           letter-spacing: .02em; text-transform: uppercase; }
+  .qmeta .raw { text-transform: none; opacity: .62; }
+  .qmoney { font-family: var(--util); font-variant-numeric: tabular-nums; font-size: 19px;
+            font-weight: 600; text-align: right; letter-spacing: -.05em; }
+  .qrow.low .qname { font-size: 13px; font-weight: 400; }
+  .qrow.low .qmoney { font-size: 13px; font-weight: 400; color: var(--muted); }
+  .qrow.parked { opacity: .5; }
+  .qrow.nomarket .qmoney { color: var(--accent); font-size: 11px; font-weight: 600;
+                           text-transform: uppercase; letter-spacing: .04em; }
+
+  /* ---- the step 6 component ---- */
+  .btn { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+         border-radius: var(--r); padding: 14px 16px; font-size: 18px; font-weight: 700;
+         min-height: 44px; border: 1px solid transparent; }
+  .btn.default  { background: var(--accent);  color: #fff; border-color: var(--accent); }
+  .btn.pressed  { background: var(--pressed); color: #fff; border-color: var(--pressed); }
+  .btn.disabled { background: var(--surface); color: var(--muted); border-color: var(--line); }
+  .btn.default .kbd, .btn.pressed .kbd { color: #fff; border-color: rgba(255,255,255,.5); }
+  .btn-label { font-family: var(--util); font-size: 10px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
+
+  /* ---- swatches, scale, specimens ---- */
+  .sw-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  .sw .patch { height: 56px; }
+  .sw .meta { padding: 8px 10px; font-family: var(--util); font-size: 10px; line-height: 1.6;
+              letter-spacing: .02em; }
+  .sw .meta b { font-weight: 600; }
+  .sw .meta i { font-style: normal; color: var(--muted); display: block; }
+
+  .scale { display: flex; align-items: flex-end; gap: 8px; }
+  .scale div { background: var(--accent); border-radius: 2px; width: 28px;
+               font-family: var(--util); font-size: 9px; color: var(--muted);
+               text-align: center; }
+  .scale span { display: block; margin-top: 6px; }
+
+  .spec-d { font-family: var(--display); font-size: 40px; font-weight: 700; letter-spacing: -.03em; }
+  .spec-b { font-family: var(--body); font-size: 20px; margin-top: 12px; max-width: 44ch; }
+  .spec-u { font-family: var(--util); font-variant-numeric: tabular-nums; font-size: 26px;
+            font-weight: 600; margin-top: 12px; letter-spacing: -.04em; }
+  .spec-u small { display: block; font-size: 12px; font-weight: 400; color: var(--muted);
+                  margin-top: 8px; letter-spacing: .02em; }
+</style>
+</head>
+<body>
+
+<div class="sheet-h1">Locked tokens, rendered</div>
+<p class="sheet-lede">The design <code>docs/DESIGN.md</code> specifies, drawn. Every colour, size and
+space here comes from that file — this sheet is a view of it, never a second source of truth. If the
+two disagree, the doc wins and this file is stale. The card is a synthetic rectangle at
+<code>geometry/detect.py</code>'s <code>CARD_ASPECT</code> (63/88), not a photograph: the pre-commit
+hook blocks any image outside <code>captures/</code>, and that guard outranks a prettier mock.</p>
+
+<h2>Palette · six tokens, two interaction states</h2>
+<div class="sw-list">
+  <div class="sw"><div class="patch" style="background:#FCFCFD"></div>
+    <div class="meta"><b>bg &nbsp;#FCFCFD</b><i>the page</i></div></div>
+  <div class="sw"><div class="patch" style="background:#FFFFFF;border-bottom:1px solid var(--line)"></div>
+    <div class="meta"><b>surface &nbsp;#FFFFFF</b><i>choice rows, queue rows</i></div></div>
+  <div class="sw"><div class="patch" style="background:#08090A"></div>
+    <div class="meta"><b>ink &nbsp;#08090A</b><i>19.4:1 on bg &middot; all text</i></div></div>
+  <div class="sw"><div class="patch" style="background:#52555B"></div>
+    <div class="meta"><b>muted &nbsp;#52555B</b><i>7.29:1 on bg &middot; metadata</i></div></div>
+  <div class="sw"><div class="patch" style="background:#E6E7EA"></div>
+    <div class="meta"><b>line &nbsp;#E6E7EA</b><i>the 1px hairline</i></div></div>
+  <div class="sw"><div class="patch" style="background:#1E40AF"></div>
+    <div class="meta"><b>accent &nbsp;#1E40AF</b><i>8.5:1 on bg &middot; unsure / only-action</i></div></div>
+  <div class="sw"><div class="patch" style="background:#F4F5F7"></div>
+    <div class="meta"><b>hover &nbsp;#F4F5F7</b><i>row hover only</i></div></div>
+  <div class="sw"><div class="patch" style="background:#17348F"></div>
+    <div class="meta"><b>pressed &nbsp;#17348F</b><i>white on it: 10.9:1</i></div></div>
+</div>
+
+<h2>Spacing · one scale, and one radius</h2>
+<div class="scale">
+  <div style="height:4px"></div><div style="height:8px"></div><div style="height:12px"></div>
+  <div style="height:16px"></div><div style="height:24px"></div><div style="height:32px"></div>
+  <div style="height:48px"></div><div style="height:64px"></div>
+</div>
+<div class="scale" style="margin-top:6px">
+  <div style="height:0;background:none"><span>4</span></div>
+  <div style="height:0;background:none"><span>8</span></div>
+  <div style="height:0;background:none"><span>12</span></div>
+  <div style="height:0;background:none"><span>16</span></div>
+  <div style="height:0;background:none"><span>24</span></div>
+  <div style="height:0;background:none"><span>32</span></div>
+  <div style="height:0;background:none"><span>48</span></div>
+  <div style="height:0;background:none"><span>64</span></div>
+</div>
+<p class="note" style="margin-top:16px">Radius is 4px everywhere. Owner screens live at the 4–16 end
+of the scale; the Fulfillment view lives at 24–64.</p>
+
+<h2>Type · three faces, three jobs</h2>
+<div class="spec-d">Reverse Holo</div>
+<div class="spec-b">You toggled this stack Normal. The photo reads Reverse Holo. Tap the one that
+is true; nothing is written until you do.</div>
+<div class="spec-u">Box 3 · Section 2 · Card 17
+  <small>0123456789 &middot; $2.90 &middot; 215/197 &middot; 41 WAITING &middot; 14D</small></div>
+<p class="note" style="margin-top:16px">Cabinet Grotesk appears only at ≥20px and only on the
+sentence naming what the system found. Atkinson Hyperlegible carries every sentence a human reads.
+Martian Mono carries every number, and is tabular by construction so
+<code>Box 3 · Section 2 · Card 17</code> cannot shift width between cards.</p>
+
+<h2>The review queue · one card at a time, photo first, single column</h2>
+<div class="row">
+  <div class="col">
+    <div class="panel">
+      <div class="count">review · 3 of 41</div>
+      <div class="pos">Box 3 <span>·</span> Section 2 <span>·</span> Card 17</div>
+      <div class="chips">
+        <span class="chip">sv3 · 215/197</span>
+        <span class="chip unsure">toggle ≠ photo<span class="raw">metadata_detection_disagreement</span></span>
+        <span class="chip">2d</span>
+      </div>
+      <div class="card"><div class="title-band"></div><div class="art"></div>
+        <div class="foot"><span>215/197</span><span>SV3</span></div></div>
+      <p class="claim">You toggled this stack <em>Normal</em>. The photo reads <em>Reverse Holo</em>.</p>
+      <div class="choices">
+        <div class="choice"><span class="what">Normal</span><span class="money">$0.41</span><span class="kbd">1</span></div>
+        <div class="choice"><span class="what">Reverse Holo</span><span class="money">$2.90</span><span class="kbd">2</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="wide">
+    <p class="note"><b>No solid fill here, and that is the rule.</b> Two answers means no
+    only-action, so accent stays at outline weight on the reason chip and on each conflicting claim.
+    Filling the pricier candidate would teach the queue to drift toward over-listing; filling the
+    toggle's answer would make the fill mean two different things on two screens.</p>
+    <p class="note"><b>No panel header strip.</b> Built, looked at, rejected. The count sits inline
+    above the position label instead.</p>
+    <p class="note"><b>Reason code twice.</b> Human label large, the pipeline's own string small
+    beneath it, so what you saw on screen is greppable in the run report and in
+    <code>review.json</code>.</p>
+    <p class="note"><b>A key on every choice.</b> Owner-side only — an hour in the queue is a
+    keyboard. Answering writes and advances; there is no confirmation to dismiss.</p>
+  </div>
+</div>
+
+<h2>The queue list · the sort has to be visible without reading a number</h2>
+<p class="note"><code>store/queues.py</code>'s <code>sort_key</code> puts priced cards first,
+descending, then unpriced, then box-walk order. Name size and price size step down with the price;
+a parked row is dimmed rather than merely lower. Photo-led rows, no column rules — this is the
+answer to being a list of hundreds of rows without becoming a spreadsheet.</p>
+<div class="queue" style="max-width:640px">
+  <div class="qrow">
+    <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+    <div><div class="qname">Charizard ex</div>
+      <div class="qmeta">B3·S2·C17 · toggle ≠ photo · 2d <span class="raw">metadata_detection_disagreement</span></div></div>
+    <div class="qmoney">$8.20</div>
+  </div>
+  <div class="qrow">
+    <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+    <div><div class="qname">Glimmora ex</div>
+      <div class="qmeta">B3·S2·C19 · low confidence · 2d <span class="raw">low_confidence</span></div></div>
+    <div class="qmoney">$2.90</div>
+  </div>
+  <div class="qrow low">
+    <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+    <div><div class="qname">Tarountula</div>
+      <div class="qmeta">B3·S3·C04 · no catalog row · 6d <span class="raw">no_catalog_row</span></div></div>
+    <div class="qmoney">$0.44</div>
+  </div>
+  <div class="qrow nomarket">
+    <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+    <div><div class="qname">Bill's Transfer</div>
+      <div class="qmeta">B4·S1·C02 · no market data · 6d <span class="raw">no_market_data</span></div></div>
+    <div class="qmoney">price it</div>
+  </div>
+  <div class="qrow low parked">
+    <div class="card sm"><div class="title-band"></div><div class="art"></div></div>
+    <div><div class="qname">Pineco</div>
+      <div class="qmeta">B4·S1·C11 · parked · 14d <span class="raw">parked</span></div></div>
+    <div class="qmoney">$0.06</div>
+  </div>
+</div>
+
+<h2>Step 6's component · pull-confirm, three states</h2>
+<p class="note">This is the one component the build order requires be drawn and looked at before any
+screen. The solid fill is legal here because there is exactly one thing to do.</p>
+<div class="row">
+  <div class="col">
+    <div class="btn-label">default · 8.7:1</div>
+    <div class="btn default"><span>Pull this card</span><span class="kbd">↵</span></div>
+    <div class="btn-label">pressed · 10.9:1</div>
+    <div class="btn pressed"><span>Pull this card</span><span class="kbd">↵</span></div>
+    <div class="btn-label">disabled · never in the Fulfillment view</div>
+    <div class="btn disabled"><span>Pull this card</span><span class="kbd">↵</span></div>
+  </div>
+  <div class="wide">
+    <p class="note">All three clear 44px tall. The Fulfillment view's own minimums — 20px body,
+    32px position label, 320px photo short edge, 44×44 targets 12px apart, 7:1 contrast — are
+    assertions in a Playwright test, not prose, and are listed in <code>docs/DESIGN.md</code>.</p>
+  </div>
+</div>
+
+</body>
+</html>
