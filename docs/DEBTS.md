@@ -128,6 +128,51 @@ nothing behind the channel. Real at build-order step 7, when TypeScript arrives 
 typecheck target alone, never at the composite — rather than rediscovering the question
 from an empty hooks block.
 
+### The position allocator was verified by hand, and the cases died with the session
+
+Recorded 2026-08-11, when `allocate_capture` and `next_index` landed in `store/master.py`.
+
+Nothing under `harness/tests` imports `store`, so the allocator shipped with no automated
+coverage — deliberately, per `docs/specs/capture-server.md`, which rules that fixing the
+`store/` coverage gap is not a precondition for build-order step 5. It was instead exercised
+by hand across seventeen assertions before the commit, all passing, none committed. The
+enumeration is below because re-deriving it later costs more than writing it down, and
+because it is the closest thing to a specification the allocator has:
+
+- **Empty box** returns index 1; a box that has never been seen is created implicitly by
+  the first allocation.
+- **Sequential allocation** yields 1 then 2, keyed `3/1` and `3/2`.
+- **Boxes are independent** — allocating into box 7 leaves box 3's next index untouched.
+- **D10's permanent gap**: a card moved to `sold` keeps its record, and the high-water mark
+  continues past it rather than filling the hole.
+- **Deleting the highest record releases its index.** This is the behaviour step 7's undo
+  will inherit, and it is why reuse-versus-burn is settled by whether undo deletes or
+  tombstones — not by the allocator.
+- **A string-typed record** — box and index arriving as JSON strings — is counted, not
+  skipped, so the next index clears it.
+- **An unparsable box or index refuses**, and the message names the offending card key.
+- **A replayed `capture_id`** returns the original card with `created` False and burns no
+  second index.
+- **One `capture_id` on two cards refuses**, naming both positions.
+- **`capture_id` survives a JSON round trip** through `to_payload` and `parse`.
+- **Allocation logs exactly one `captured` event.**
+
+Separately measured on the same day, and the reason the coercion is written the way it is:
+with a string-typed record present, filtering on `c.box == box` drops it silently and
+returns an index that collides later, while coercing only the box raises `TypeError` from
+`max()` **inside the lock**. Only coercing both fields is correct. The record is hard to
+spot because `position_key` coerces while the fields do not — the key looks perfectly
+ordinary and the fields are wrong.
+
+**Cost**: the allocator is the one piece of step-5 logic the 20-card Gate B run exercises
+twenty times, and nothing re-checks any of the above on a later edit. A refactor that
+reintroduced the `c.box == box` filter would pass every gate in the repo.
+
+**Why not fixed**: adding a harness test for `store/` is a real decision about what the
+harness covers — the contract in `docs/GATES.md` is six tests about the pipeline, and
+`store/` and `cli/` were left out of it from the start. Do that deliberately, as its own
+argument, not as a rider on the capture server.
+
 ---
 
 ## Reporting defects — a check runs but can report the wrong thing

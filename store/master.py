@@ -20,15 +20,25 @@ math wrong: `Add to Quantity = min(cap - live, backstock)` reads the LIVE number
 import that was staged and never moved live has no live quantity at all — so a collapsed
 state would refill against inventory that is not for sale.
 
+POSITIONS ARE ASSIGNED HERE, by `allocate_capture` and nowhere else. It takes a box and no
+index, so there is no parameter through which a caller's stale read can enter a write.
+`record_capture` still accepts an explicit position, because `identify` and `emit` re-record
+cards they did not allocate — that is a seam to watch rather than a guarantee, and the
+safety is that the capture server never calls it.
+
 Positions are never renumbered and sold cards leave permanent gaps (D10). Nothing in this
 module deletes a card record; `sold` is a state, not a removal.
+
+NOTHING IN THE HARNESS REACHES THIS FILE. No module under `harness/tests` imports `store`,
+so a green harness says nothing about anything below. `docs/DEBTS.md` records why that is
+not being fixed before build-order step 5.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 VERSION = 1
 
@@ -50,6 +60,25 @@ class UnknownState(ValueError):
     """A listing state outside the enum. Never coerced."""
 
 
+# These subclass `ValueError` like `UnknownState` above, and NOT `store.files.StoreError`,
+# which is the obvious-looking alternative. The reason is structural rather than stylistic:
+# this module imports nothing from the rest of the package, and `StoreError` lives in
+# `store/files.py`, so inheriting from it would give `master.py` its first intra-package
+# import to buy nothing. Do not "fix" the inconsistency — it is the isolation.
+
+
+class BadPosition(ValueError):
+    """A stored box or index that will not parse as an integer. Never coerced past."""
+
+
+class PositionOccupied(ValueError):
+    """`allocate_capture` computed an index that already holds a card. Never upserted."""
+
+
+class DuplicateCaptureId(ValueError):
+    """Two cards carry one `capture_id`. The replay lookup refuses rather than guessing."""
+
+
 def check_state(state: str) -> str:
     if state not in STATES:
         raise UnknownState(f"{state!r} not in {STATES}")
@@ -58,6 +87,26 @@ def check_state(state: str) -> str:
 
 def position_key(box: int, index: int) -> str:
     return f"{int(box)}/{int(index)}"
+
+
+def _as_position_int(value, where: str) -> int:
+    """Coerce a stored box or index, or refuse naming the record it came from.
+
+    This helper exists instead of a bare comparison because of a combination that hides
+    itself: `Inventory.parse` reconstructs cards straight from JSON and coerces nothing,
+    while `position_key` coerces with `int()`. A record written with a string box therefore
+    keeps a perfectly ordinary-looking key and a mistyped field, and the two ways of
+    getting it wrong fail differently — `c.box == box` drops the record silently and hands
+    out an index that collides later, while coercing only the box feeds a string into
+    `max()` and raises inside the lock. Measured, both of them, before this was written.
+
+    Reachable from the capture server, which takes `box` out of a JSON request body: a
+    client sending a string writes a string, and `asdict` round-trips it to disk.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise BadPosition(f"{where} is {value!r}, which is not an integer") from None
 
 
 def now() -> str:
@@ -86,6 +135,11 @@ class Card:
     set_hint: Optional[str] = None
     metadata_finish: Optional[str] = None
     captured_at: Optional[str] = None
+    # Idempotency key for one POST /capture. Optional because every record predating the
+    # capture server has none, and `parse` filters on `Card.__annotations__`, so a field
+    # that is not declared here is dropped on reload rather than kept — which is why the
+    # retry guard could not live in the sidecar alone.
+    capture_id: Optional[str] = None
     name: Optional[str] = None
     number: Optional[str] = None
     printed_total: Optional[str] = None
@@ -130,6 +184,96 @@ class Inventory:
         }
 
     # ------------------------------------------------------------------------- writing
+
+    def next_index(self, box) -> int:
+        """The index `allocate_capture` would assign next in `box`. DISPLAY ONLY.
+
+        High-water mark: `1 + max(index in this box)`, counting every state. Not count+1,
+        which agrees only while the set is dense and disagrees the moment a record is
+        removed; not first-free, which contradicts D10 — sold cards leave permanent gaps,
+        and the next captured card goes on the end of the stack because that is where the
+        operator's hand puts it.
+
+        An unparsable box or index stops the scan rather than being skipped. Skipping one
+        would hide exactly the collision it is about to cause, since the record still owns
+        its key.
+
+        Never pass this value into a write. Reading it and then recording is two lock
+        acquisitions with a network round trip between them, which is the lost update
+        `store/__init__.py` spends a paragraph on; `allocate_capture` takes no index so
+        that there is no parameter to pass it through.
+        """
+        box = _as_position_int(box, "box")
+        highest = 0
+        for key, card in self.cards.items():
+            if _as_position_int(card.box, f"box of card {key}") != box:
+                continue
+            highest = max(highest, _as_position_int(card.index, f"index of card {key}"))
+        return highest + 1
+
+    def allocate_capture(
+        self,
+        box,
+        *,
+        capture_id: Optional[str] = None,
+        photo: Optional[str] = None,
+        set_hint: Optional[str] = None,
+        metadata_finish: Optional[str] = None,
+    ) -> Tuple[Card, bool]:
+        """Assign the next index in `box` and record the card. Returns `(card, created)`.
+
+        The one sanctioned way to create a capture. Call it inside
+        `store.session.Store.write()` — the lock plus the re-read inside it are what make
+        the high-water read and the record a single step.
+
+        `created` is False only when `capture_id` replays a capture already recorded. That
+        is the retry guard: a response lost between commit and client makes the app repost,
+        and without it the retry burns a second index and leaves two records for one
+        physical card. The lookup is a linear scan, which is correct at a few thousand
+        cards and not worth an index; two cards sharing one id is a refusal rather than a
+        guess at which was meant.
+
+        On collision it raises instead of upserting. `record_capture` would take its
+        existing-record branch and copy photo, set hint and recorded variant over the
+        incumbent, returning it with no log and nothing reported — a physical card gone
+        from inventory. That branch is right for a re-record and wrong for an allocation,
+        so this path refuses to reach it.
+        """
+        box = _as_position_int(box, "box")
+
+        if capture_id is not None:
+            replay = self.card_by_capture_id(capture_id)
+            if replay is not None:
+                return replay, False
+
+        index = self.next_index(box)
+        key = position_key(box, index)
+        if key in self.cards:
+            raise PositionOccupied(
+                f"allocate_capture computed {key}, which already holds a card. "
+                "The high-water scan and this check disagree, which means the inventory "
+                "was mutated outside the lock."
+            )
+
+        card = Card(
+            box=box,
+            index=index,
+            capture_id=capture_id,
+            photo=photo,
+            set_hint=set_hint,
+            metadata_finish=metadata_finish,
+        )
+        return self.record_capture(card), True
+
+    def card_by_capture_id(self, capture_id: str) -> Optional[Card]:
+        """The card recorded under `capture_id`, or None. Refuses on a duplicate."""
+        matches = [c for c in self.cards.values() if c.capture_id == capture_id]
+        if len(matches) > 1:
+            raise DuplicateCaptureId(
+                f"{capture_id!r} is on {len(matches)} cards: "
+                f"{', '.join(sorted(c.key for c in matches))}"
+            )
+        return matches[0] if matches else None
 
     def record_capture(self, card: Card) -> Card:
         """Upsert a captured card. An existing record keeps its state and its history."""
