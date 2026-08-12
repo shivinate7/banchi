@@ -1,18 +1,21 @@
 # Known gaps, deliberately unfixed
 
-Findings from the review of the audit-retirement branch (2026-08-11) that were recorded
-rather than repaired. Each entry says what is wrong, what it costs, and why it is not fixed
-yet. This file exists so that a green `make docs-audit` is not read as "the auditor is
-complete" — it means the checks that exist, passed.
+Findings recorded rather than repaired. Each entry says what is wrong, what it costs, and
+why it is not fixed yet. This file exists so that a green `make docs-audit` is not read as
+"the auditor is complete" — it means the checks that exist, passed.
 
 Not a backlog to burn down on sight. An entry leaves this file when someone argues it
 should, the way `docs/DECISIONS.md` entries are argued.
 
-The review found 36 confirmed defects. The four load-bearing ones — the ones on the path
+Most of what follows came from the review of the audit-retirement branch (2026-08-11),
+which found 36 confirmed defects. The four load-bearing ones — the ones on the path
 that decides whether a commit proceeds — were fixed in the same session and are not listed
 here. Two more were one-line honesty fixes and are also gone: `scripts/audit-history.py`
 publishing calibration figures it no longer produced, and `docs/GATES.md` disagreeing with
 `docs/map.py` about which build-order steps are done.
+
+Later entries come from later work and say so. An entry names its own date and source, so
+this file is not scoped to the review that started it.
 
 ---
 
@@ -61,6 +64,30 @@ argues at length that a believed index is worse than none.
 **Why not fixed**: giving `scripts/` a `modules` list means writing a `does` and a
 `governed_by` for four files, which is a content decision about what governs the tooling,
 not a mechanical repair. Do it deliberately or not at all.
+
+### `tested_by` in the repo map is an unenforced claim
+
+Recorded 2026-08-11, from the step-5 spec work rather than the audit-retirement review.
+
+The repo map row validates only that a cited test id is registered in the harness registry
+(`scripts/docs-audit.py:1278`). It never checks that the test reaches the module. Audited
+across all eleven entries: ten were true, one was false — `store/queues.py` claimed T3 and
+T4 while nothing under `harness/` imports `store` at all — and two modules that *are*
+exercised carry no entry. The false line was struck and the status legend corrected; the
+field is still unenforced in both directions.
+
+Underneath it: `store/` and `cli/` have zero harness coverage. 2,509 lines, about 40% of
+product code, and it includes the package the capture server writes through.
+
+**Cost**: the map can claim coverage that does not exist, in the file D17 argues must be
+audited exactly as hard as it is trusted. The claim is believed precisely because the map
+is otherwise reliable — ten of eleven is what makes the eleventh dangerous.
+
+**Why not fixed**: a real checker means resolving each test's imports and asserting the
+module is reached, which is new machinery in the auditor —
+`docs/specs/capture-server.md` forbids that by name for the step-5 work, and it is the
+same instinct that spent a full day and eighteen commits on the auditor and its docs while
+shipping no product code. The honest interim is the legend fix and this entry.
 
 ### `make status` parses the human render, which `--json` exists to make unnecessary
 

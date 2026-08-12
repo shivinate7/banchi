@@ -26,7 +26,7 @@ pipeline/                  CSV, variant ladder, pricing, join, routing, decision
 identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
-harness/                   T1-T6. `make harness` must exit 0 before any commit.
+harness/                   T1-T6. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
 inventory/                 the master store on disk. Real, local, never in git.

@@ -72,7 +72,7 @@ GATES = [
 # ---------------------------------------------------------------------------- components
 #
 # status: built | stub | planned
-#   built    code exists and the harness covers it
+#   built    code exists. `tested_by` names the harness tests that reach it, where any do
 #   stub     the file exists and deliberately does nothing yet
 #   planned  no file yet; `step` says what creates it. The repo-map check FAILS if it
 #            exists, which forces the entry to be updated the day it is written.
@@ -146,11 +146,14 @@ COMPONENTS = [
         "status": "built",
         "does": "the master store: inventory, cache, standing queues",
         "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
+        "note": "no harness test reaches this package — nothing under harness/ imports "
+                "store. `built` above means the code exists, not that it is covered; "
+                "docs/DEBTS.md records why that is not being fixed before step 5.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
                           "governed_by": ["D7", "D10"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues",
-                          "governed_by": ["D4", "D9"], "tested_by": ["T3", "T4"]},
+                          "governed_by": ["D4", "D9"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"]},
             "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"]},
@@ -159,7 +162,7 @@ COMPONENTS = [
     {
         "path": "harness/",
         "status": "built",
-        "does": "T1-T6. `make harness` must exit 0 before any commit.",
+        "does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",
         "governed_by": ["D2", "D12", "D15"],
         "note": "the contract is docs/GATES.md; every threshold there is a number, not an adjective",
         "modules": {
