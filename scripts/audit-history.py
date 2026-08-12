@@ -47,8 +47,11 @@ Any future extension needs a comparison from outside itself, or it will look rig
 
 DOES NOT REPRODUCE THE HAND-CLASSIFIED BASELINE, and is not tuned to. The planning
 session's figures for the 8 pre-audit trees were criteria wording 16, decision ids in
-code 2, env vars 2, harness tests 1. This tool reports 25/6, 0, 5/3, 3/3 (per-tree and
-distinct). Neither convention lands on the hand numbers, so the gap is a counting
+code 2, env vars 2, harness tests 1. This tool disagrees with all four; run it and read
+the table, which is the only current statement of what it reports. (An earlier draft of
+this header restated those numbers and they were stale within two commits — a check added
+to the auditor moves them, and nothing here could notice. D18: do not publish what nothing
+consumes.) Neither convention lands on the hand numbers, so the gap is a counting
 convention nobody wrote down, not a defect on either side — and the one real correction
 runs toward the tool: decision ids in code was all instrument, never tree.
 
