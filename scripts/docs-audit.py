@@ -44,6 +44,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
@@ -150,6 +151,20 @@ class Report:
 
 
 def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
+    """Every file under `root` matching a suffix — from the index in staged mode.
+
+    Discovery is an existence question, so it answers from the same tree as `exists()`.
+    Walking the worktree here would hand the checks a file list the commit does not have.
+    """
+    if _INDEX_PATHS is not None:
+        prefix = "" if root == ROOT else rel(root).rstrip("/") + "/"
+        return sorted(
+            ROOT / entry
+            for entry in _INDEX_PATHS
+            if entry.startswith(prefix)
+            and entry.endswith(suffixes)
+            and not SKIP_DIRS.intersection(Path(entry).parent.parts)
+        )
     found: List[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
@@ -174,10 +189,41 @@ def rel(path: Path) -> str:
         return str(path)
 
 
-# Populated only in staged mode, with the staged path set. A file staged at version A and
-# edited on to version B must be audited as A — the content the commit will carry — or the
-# hook checks prose the commit does not contain.
+# Populated only in staged mode. A file staged at version A and edited on to version B must
+# be audited as A — the content the commit will carry — or the hook checks prose the commit
+# does not contain.
+#
+# CONTENT AND EXISTENCE ARE ONE QUESTION, NOT TWO. Reading staged content while asking the
+# worktree what exists audits a tree that will never be committed, and the mixture is worse
+# than either half: an untracked file makes a dangling reference resolve, an unstaged doc
+# edit satisfies a criterion the commit does not carry, and the hook passes a commit the
+# whole-tree audit rejects. `_INDEX_PATHS` is the committed tree's file set — None outside
+# staged mode, which is what selects the worktree everywhere below.
 _STAGED_PATHS: Set[str] = set()
+_INDEX_PATHS: Optional[Set[str]] = None
+
+
+def _nul_list(*args: str) -> Set[str]:
+    return {entry for entry in git(*args).split("\0") if entry}
+
+
+def enter_staged_mode() -> None:
+    """Point every read, existence check and directory listing at the index."""
+    global _INDEX_PATHS
+    _INDEX_PATHS = _nul_list("ls-files", "-z")
+    # Content differs from disk in two cases, and both must come from the index: staged
+    # against HEAD, and worktree edited on top of what was staged. The second is the one
+    # that used to leak — a doc edited but not staged was read from the worktree and its
+    # unstaged text satisfied a check the commit would fail.
+    _STAGED_PATHS.update(_nul_list("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"))
+    _STAGED_PATHS.update(_nul_list("diff", "--name-only", "-z", "--diff-filter=ACMR"))
+
+
+def leave_staged_mode() -> None:
+    """Back to the worktree. Only the self-test needs this; audit() is one-shot."""
+    global _INDEX_PATHS
+    _INDEX_PATHS = None
+    _STAGED_PATHS.clear()
 
 
 def read(path: Path) -> str:
@@ -186,8 +232,50 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def exists(path: Path) -> bool:
+    """Existence as the commit will see it, never as the worktree sees it."""
+    if _INDEX_PATHS is None:
+        return path.exists()
+    name = rel(path)
+    if name in _INDEX_PATHS:
+        return True
+    prefix = name.rstrip("/") + "/"  # a directory exists only through the files under it
+    return any(entry.startswith(prefix) for entry in _INDEX_PATHS)
+
+
+def child_names(directory: Path) -> Set[str]:
+    """Immediate children of a directory, from the index in staged mode."""
+    if _INDEX_PATHS is None:
+        return {entry.name for entry in directory.iterdir()} if directory.is_dir() else set()
+    prefix = "" if directory == ROOT else rel(directory).rstrip("/") + "/"
+    return {
+        entry[len(prefix):].split("/", 1)[0]
+        for entry in _INDEX_PATHS
+        if entry.startswith(prefix) and entry != prefix
+    }
+
+
+def glob_files(directory: Path, pattern: str) -> List[Path]:
+    """`Path.glob` semantics, against the index in staged mode.
+
+    The remainder must not contain a separator. `fnmatch`'s `*` crosses `/` and
+    `Path.glob`'s does not, so without that guard `harness/results/*.json` would also
+    match anything nested below it — a difference the self-test caught.
+    """
+    if _INDEX_PATHS is None:
+        return sorted(directory.glob(pattern)) if directory.is_dir() else []
+    prefix = "" if directory == ROOT else rel(directory).rstrip("/") + "/"
+    return sorted(
+        ROOT / entry
+        for entry in _INDEX_PATHS
+        if entry.startswith(prefix)
+        and "/" not in entry[len(prefix):]
+        and fnmatch(entry[len(prefix):], pattern)
+    )
+
+
 def top_level_names() -> Set[str]:
-    return {entry.name for entry in ROOT.iterdir()}
+    return child_names(ROOT)
 
 
 # ----------------------------------------------------------------- path references
@@ -312,7 +400,7 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                 checked += 1
                 seen.append((doc, number, candidate, target))
 
-    missing = [item for item in seen if not item[3].exists()]
+    missing = [item for item in seen if not exists(item[3])]
     probe: List[str] = []
     for item in missing:
         probe.append(rel(item[3]))
@@ -332,7 +420,7 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
         suffix = target.suffix
         if suffix and suffix not in KNOWN_SUFFIXES:
             module = target.with_suffix(".py")
-            if module.exists():
+            if exists(module):
                 attribute = suffix[1:]
                 if attribute in module_attributes(module):
                     continue
@@ -360,7 +448,7 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
 
 
 def load_allowlist() -> Dict[str, str]:
-    if not ALLOWLIST.exists():
+    if not exists(ALLOWLIST):
         return {}
     entries: Dict[str, str] = {}
     for line in read(ALLOWLIST).splitlines():
@@ -401,7 +489,7 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
             arrived = entry in code_haystack()
             what = "is referenced in the code now"
         else:
-            arrived = (ROOT / entry).exists()
+            arrived = exists(ROOT / entry)
             what = "exists now"
         if arrived:
             findings.append(
@@ -443,7 +531,7 @@ def iter_code_lines(text: str):
 
 def check_make_targets(report: Report, docs: List[Path]) -> None:
     makefile = ROOT / "Makefile"
-    if not makefile.exists():
+    if not exists(makefile):
         report.add("make targets", MECHANICAL, [Finding("Makefile", "does not exist")])
         return
     text = read(makefile)
@@ -513,7 +601,7 @@ def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
 
 def check_pkmnscan_commands(report: Report, docs: List[Path], all_docs: List[Path]) -> None:
     main = ROOT / "cli" / "__main__.py"
-    if not main.exists():
+    if not exists(main):
         report.add("pkmnscan commands", MECHANICAL, [Finding("cli/__main__.py", "does not exist")])
         return
     registered = dict_keys_from_assign(read(main), "COMMANDS")
@@ -610,7 +698,7 @@ def string_assign(source: str, name: str) -> Optional[str]:
 def gates_sections() -> Dict[str, str]:
     """`### T1 — …` heading text -> that section's body."""
     gates = ROOT / "docs" / "GATES.md"
-    if not gates.exists():
+    if not exists(gates):
         return {}
     sections: Dict[str, str] = {}
     current: Optional[str] = None
@@ -637,7 +725,7 @@ def gates_sections() -> Dict[str, str]:
 
 def registered_tests() -> List[Tuple[str, Path]]:
     runner = ROOT / "harness" / "run.py"
-    if not runner.exists():
+    if not exists(runner):
         return []
     modules = list_names_from_assign(read(runner), "TESTS") or []
     out = []
@@ -655,7 +743,7 @@ def check_harness_tests(report: Report, docs: List[Path], allowed: Dict[str, str
 
     findings: List[Finding] = []
     for name, path in tests:
-        if not path.exists():
+        if not exists(path):
             findings.append(
                 Finding("harness/run.py", f"{name} is in TESTS but {rel(path)} does not exist.")
             )
@@ -755,7 +843,7 @@ def check_pass_criteria(report: Report) -> None:
     mechanical: List[Finding] = []
     wording: List[Finding] = []
     for name, path in registered_tests():
-        if not path.exists():
+        if not exists(path):
             continue
         source = read(path)
         criteria = string_assign(source, "PASS_CRITERIA")
@@ -842,9 +930,9 @@ def check_criteria_evidence(report: Report) -> None:
     criteria = {
         name: string_assign(read(path), "PASS_CRITERIA")
         for name, path in registered_tests()
-        if path.exists()
+        if exists(path)
     }
-    scores = sorted(EVIDENCE_DIR.glob("t1*.json")) if EVIDENCE_DIR.exists() else []
+    scores = glob_files(EVIDENCE_DIR, "t1*.json")
     findings: List[Finding] = []
     if not scores:
         findings.append(
@@ -939,7 +1027,7 @@ _CODES_DECISION_RE = re.compile(r"\bC([1-9][0-9]?)\b")
 
 
 def decision_headings(path: Path, letter: str) -> Set[str]:
-    if not path.exists():
+    if not exists(path):
         return set()
     return set(re.findall(r"^##\s+(" + letter + r"[1-9][0-9]?)\b", read(path), re.MULTILINE))
 
@@ -999,7 +1087,7 @@ def code_haystack() -> str:
         parts.append(read(path))
     for name in ("Makefile", ".env.example"):
         candidate = ROOT / name
-        if candidate.exists():
+        if exists(candidate):
             parts.append(read(candidate))
     for path in _walk(ROOT / "scripts", (".sh", "pre-commit")):
         parts.append(read(path))
@@ -1038,7 +1126,7 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
 def check_current_gate(report: Report) -> None:
     claude = ROOT / "CLAUDE.md"
     gates = ROOT / "docs" / "GATES.md"
-    if not claude.exists() or not gates.exists():
+    if not exists(claude) or not exists(gates):
         report.add("current gate", MECHANICAL, [Finding("CLAUDE.md", "missing CLAUDE.md or docs/GATES.md")])
         return
 
@@ -1111,7 +1199,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     thing it indexes.
     """
     findings: List[Finding] = []
-    if not MAP.exists():
+    if not exists(MAP):
         report.add("repo map", MECHANICAL, [Finding("docs/map.py", "does not exist")])
         return
 
@@ -1145,7 +1233,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         where = f"docs/map.py -> {path}"
 
         if status == "planned":
-            if target.exists():
+            if exists(target):
                 findings.append(
                     Finding(
                         where,
@@ -1154,7 +1242,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                         f"list its modules.",
                     )
                 )
-        elif not target.exists():
+        elif not exists(target):
             findings.append(Finding(where, f"`{path}` is marked {status or 'built'} but does not exist."))
 
         check_decisions(where, component.get("governed_by") or [])
@@ -1165,7 +1253,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
             module_path = target / name
             module_where = f"docs/map.py -> {path}{name}"
             claimed += 1
-            if not module_path.exists():
+            if not exists(module_path):
                 findings.append(Finding(module_where, f"`{path}{name}` is listed but does not exist."))
                 continue
             declared = set(entry.get("governed_by") or [])
@@ -1183,11 +1271,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                 )
 
         # Orphans: a source file the map never mentions.
-        if modules and target.is_dir():
+        if modules and exists(target):
             on_disk = {
-                item.name
-                for item in target.iterdir()
-                if item.is_file() and item.suffix == SOURCE_SUFFIX and item.name != "__init__.py"
+                name
+                for name in child_names(target)
+                if name.endswith(SOURCE_SUFFIX) and name != "__init__.py"
             }
             for orphan in sorted(on_disk - set(modules)):
                 findings.append(
@@ -1213,7 +1301,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
             )
 
     # Gate status has two homes; they must agree.
-    gates_text = read(ROOT / "docs" / "GATES.md") if (ROOT / "docs" / "GATES.md").exists() else ""
+    gates_text = read(ROOT / "docs" / "GATES.md") if exists(ROOT / "docs" / "GATES.md") else ""
     for gate in gates:
         name = gate.get("gate", "")
         heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$", gates_text, re.MULTILINE)
@@ -1272,7 +1360,7 @@ def check_status_sources(report: Report) -> None:
     Reads SOURCES with `ast`, never by importing — a read-only audit must not execute the
     code it audits, which is also why SOURCES has to stay a pure literal.
     """
-    if not STATUS.exists():
+    if not exists(STATUS):
         report.add("status sources", MECHANICAL, [Finding("scripts/status.py", "does not exist")])
         return
 
@@ -1302,10 +1390,10 @@ def check_status_sources(report: Report) -> None:
 
         if any(ch in path for ch in "*?["):
             parent, _, glob = path.rpartition("/")
-            targets = sorted((ROOT / parent).glob(glob)) if (ROOT / parent).is_dir() else []
+            targets = glob_files(ROOT / parent, glob)
         else:
             target = ROOT / path
-            targets = [target] if target.exists() else []
+            targets = [target] if exists(target) else []
 
         if not targets:
             if not entry.get("optional"):
@@ -1384,7 +1472,7 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
     def positional(paths: Iterable[Path]) -> List[Finding]:
         found: List[Finding] = []
         for path in paths:
-            if not path.exists():
+            if not exists(path):
                 continue
             for number, line in enumerate(read(path).splitlines(), start=1):
                 for hit in _POSITIONAL_RE.findall(line):
@@ -1671,6 +1759,36 @@ def self_test() -> int:
         findings = by_label["check numbering"]
         ok(not findings, "naming the check by its label is fine", str(findings))
 
+    # The staged-mode primitives, which have no loud failure mode: every one of them
+    # answers plausibly against the worktree while auditing a tree the commit will not
+    # produce. Driven through the module globals because that is how audit() drives them.
+    print("\nstaged mode answers about the index, not the worktree")
+    global _INDEX_PATHS
+    try:
+        _INDEX_PATHS = {"docs/GATES.md", "docs/specs/batch-script.md", "harness/run.py"}
+        ok(exists(ROOT / "docs" / "GATES.md"), "a tracked file exists")
+        ok(not exists(ROOT / "Makefile"), "an untracked file does not, however real on disk")
+        ok(exists(ROOT / "docs"), "a directory exists through the files under it")
+        ok(not exists(ROOT / "scripts"), "a directory with nothing tracked under it does not")
+        ok(
+            child_names(ROOT / "docs") == {"GATES.md", "specs"},
+            "children come from the index, one level deep",
+            str(child_names(ROOT / "docs")),
+        )
+        ok(
+            [rel(p) for p in _walk(ROOT, (".md",))] == ["docs/GATES.md", "docs/specs/batch-script.md"],
+            "discovery enumerates the index",
+            str([rel(p) for p in _walk(ROOT, (".md",))]),
+        )
+        ok(
+            [rel(p) for p in glob_files(ROOT / "docs", "*.md")] == ["docs/GATES.md"],
+            "glob matches within one directory of the index",
+            str([rel(p) for p in glob_files(ROOT / "docs", "*.md")]),
+        )
+    finally:
+        leave_staged_mode()
+    ok(_INDEX_PATHS is None and exists(ROOT / "Makefile"), "and the worktree comes back")
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -1684,12 +1802,17 @@ def self_test() -> int:
 
 def audit(staged_only: bool) -> Report:
     report = Report()
+    # Mode first, and before anything reads or enumerates. Everything below — the
+    # allowlist, the markdown list, every existence check inside every check — has to be
+    # answered about ONE tree, and in staged mode that tree is the index. Loading any of
+    # it beforehand silently mixes the worktree back in.
+    if staged_only:
+        enter_staged_mode()
     allowed = load_allowlist()
     all_docs = markdown_files()
     docs = all_docs
     if staged_only:
         staged = set(staged_changes())
-        _STAGED_PATHS.update(staged)
         docs = [doc for doc in all_docs if rel(doc) in staged]
 
     check_paths(report, docs, allowed)
