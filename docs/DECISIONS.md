@@ -83,8 +83,8 @@ screens must be self-evident. Constraints in `docs/DESIGN.md`.
 
 The capture server serves stored photos at `GET /photo/<box>/<position>`. The review queue
 requires it; the pull modal reuses it, showing the card's own capture photo beside its
-location before pulling. Photos are already position-keyed on disk — this is display, not
-new storage.
+location before pulling. Photos are position-keyed on disk — this is display, not new
+storage.
 
 ## D7 — Duplicates aggregate by SKU at join time
 
@@ -166,8 +166,8 @@ strings (1st Edition, Shadowless, Unlimited) are a spec change, not a parameter.
 
 Vite + React web app in a desktop browser. Python capture server + batch script. Inventory
 state is server-side JSON on the Mac, read and written through the capture server, so the
-owner's and Fulfiller's devices share one truth. Photos on Mac disk, organized by set.
-Build environment is Claude Code on the Mac; code never lives in chat.
+owner's and Fulfiller's devices share one truth. Photos on Mac disk, box-keyed by capture
+position — see D6. Build environment is Claude Code on the Mac; code never lives in chat.
 
 ## D14 — Two tracks, one rig
 
