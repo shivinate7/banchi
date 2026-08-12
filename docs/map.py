@@ -45,8 +45,9 @@ BUILD_ORDER = [
     {"step": 3, "title": "Verification harness T1-T4", "status": "done"},
     {"step": 4, "title": "Batch script v2: Batch API, variant ladder, catalog join", "status": "done",
      "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card — that is Gate B."},
-    {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "next"},
-    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "blocked", "blocked_by": "step 5"},
+    {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "done",
+     "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. No harness test reaches it — that gap is recorded in docs/DEBTS.md, not closed."},
+    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "next"},
     {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "blocked", "blocked_by": "step 6"},
     {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
@@ -189,20 +190,32 @@ COMPONENTS = [
         "governed_by": ["D11"],
         "tested_by": ["T2"],
     },
-    # ------------------------------------------------------------------ not built yet
     {
         "path": "server/",
-        "status": "planned",
-        "step": 5,
+        "status": "built",
         "does": "capture server: POST /capture, /status, GET /photo/<box>/<position>, inventory state",
-        "governed_by": ["D6", "D13"],
+        "governed_by": ["D3", "D6", "D10", "D13"],
+        "note": "no harness test reaches this package either — see store/ above, and "
+                "docs/DEBTS.md for what was verified by hand instead. Writes only through "
+                "the store session, never straight to disk. The capture root is "
+                "captures/cards/ and not captures/, so screenshot renders under "
+                "captures/ui/ are never scanned as paid captures.",
+        "modules": {
+            "capture_server.py": {
+                "does": "the five routes, the sidecar identify reads back, the photo store",
+                "governed_by": ["D3", "D6", "D10", "D13"],
+            },
+        },
     },
+    # ------------------------------------------------------------- nothing planned below
+    #
     # Steps 7 (Vite capture app) and 9 (vendored catalog) have no entry on purpose: their
     # directory names are not decided yet, and inventing one costs the self-cleaning rule.
     # A `planned` entry only earns its keep when the path is right — a wrong path audits
-    # clean forever and never fires the day the real directory arrives. `server/` is here
-    # because the Makefile already names `server/capture_server.py`. Add the other two when
-    # the build order reaches them and the names are real.
+    # clean forever and never fires the day the real directory arrives. `server/` was the
+    # one entry that qualified, because the Makefile already named the file it would hold;
+    # it graduated to `built` with step 5. Add the other two when the build order reaches
+    # them and the names are real.
 ]
 
 # ------------------------------------------------------------------------------- tracks

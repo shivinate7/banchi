@@ -27,7 +27,7 @@ help:
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make dev          Vite app on :5173                    (unblocked at step 7)"
-	@echo "  make server       Python capture server on :8000       (unblocked at step 5)"
+	@echo "  make server       Python capture server on :8000. Blocks — background it in a session."
 	@echo "  make screenshot   render key views to captures/ui/     (unblocked at step 7)"
 	@echo "  make lint         linters                              (ruff unblocked; not wired)"
 	@echo "  make typecheck    type checkers                        (unblocked at step 7)"
@@ -81,11 +81,15 @@ dev:
 	@echo "  Unblocked by build-order step 7 — see docs/GATES.md"
 	@exit 1
 
+# Foreground and blocking, like any server. An agent that runs this in the foreground hangs
+# its own turn — the Stop hook runs the harness at turn end and never gets there — so
+# background it from an agent session.
+#
+# python3, not $(PYTHON): the capture server is stdlib-only, so it must not need `make venv`
+# first. Same rule as `status` and `docs-audit` above, and verified against bare system
+# python3 rather than assumed.
 server:
-	@echo "make server: nothing to run yet."
-	@echo "  Will run: python3 server/capture_server.py  (on :8000)"
-	@echo "  Unblocked by build-order step 5 — see docs/GATES.md"
-	@exit 1
+	@python3 server/capture_server.py
 
 screenshot:
 	@scripts/screenshot.sh --manifest captures/views.txt

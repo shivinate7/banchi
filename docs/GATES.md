@@ -177,9 +177,12 @@ a 50-card run, then scale to a full box.
    `./pkmnscan identify | join | emit | reconcile`. **Not yet run against a real card**:
    that is Gate B, and until it passes this is verified against fixtures and synthetic
    images only.
-5. Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
+5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
-   state shared across devices.
+   state shared across devices.~~ — done 2026-08-11, spec at `docs/specs/capture-server.md`.
+   Positions are allocated inside the store lock by `allocate_capture`. **No harness test
+   reaches it**: nothing under `harness/tests` imports `server`, `store` or `cli`, so a
+   green harness says nothing about this step — see `docs/DEBTS.md`.
 6. Design tokens locked and one component built against them — see `docs/DESIGN.md`.
    Before any screen.
 7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
