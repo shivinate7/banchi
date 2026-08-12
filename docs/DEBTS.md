@@ -128,16 +128,19 @@ nothing behind the channel. Real at build-order step 7, when TypeScript arrives 
 typecheck target alone, never at the composite — rather than rediscovering the question
 from an empty hooks block.
 
-### The position allocator was verified by hand, and the cases died with the session
+### `server/` and the position allocator were verified by hand, and the cases died with the session
 
-Recorded 2026-08-11, when `allocate_capture` and `next_index` landed in `store/master.py`.
+Recorded 2026-08-11, when `allocate_capture` and `next_index` landed in `store/master.py`
+and `server/capture_server.py` landed beside them.
 
-Nothing under `harness/tests` imports `store`, so the allocator shipped with no automated
-coverage — deliberately, per `docs/specs/capture-server.md`, which rules that fixing the
-`store/` coverage gap is not a precondition for build-order step 5. It was instead exercised
-by hand across seventeen assertions before the commit, all passing, none committed. The
-enumeration is below because re-deriving it later costs more than writing it down, and
-because it is the closest thing to a specification the allocator has:
+Nothing under `harness/tests` imports `store`, `cli` or `server`, so both shipped with no
+automated coverage — deliberately, per `docs/specs/capture-server.md`, which rules that
+fixing that gap is not a precondition for build-order step 5. They were instead exercised by
+hand before each commit, all passing, none committed. The enumeration is below because
+re-deriving it later costs more than writing it down, and because it is the closest thing to
+a specification either one has.
+
+**The allocator**, seventeen assertions:
 
 - **Empty box** returns index 1; a box that has never been seen is created implicitly by
   the first allocation.
@@ -164,9 +167,40 @@ returns an index that collides later, while coercing only the box raises `TypeEr
 spot because `position_key` coerces while the fields do not — the key looks perfectly
 ordinary and the fields are wrong.
 
+**The capture server**, twenty-six route assertions plus three that matter more than the
+rest:
+
+- **Routes**: three captures into a fresh box return contiguous indices with the first
+  flagged `new_box`; the rendered label matches `pipeline/join.py`'s; a replayed
+  `capture_id` answers 200 with `created` false and burns no index; nine refusals answer
+  with their own code — absent and non-numeric and zero box, absent and non-base64 image, a
+  PNG refused rather than converted, a finish outside the enum, an unknown route; the photo
+  route returns JPEG bytes and 404s on an absent position; a PUT to an absent position 404s
+  rather than creating, and a PUT naming `state` is refused.
+- **The sidecar seam** — the one that can fail silently and costs money when it does. What
+  the server writes, read back through `identify.sidecar.scan`: every capture positioned
+  from its sidecar, `source` reading `sidecar`, no problem recorded, keys equal to
+  `store.master.position_key`, and scan order equal to position order.
+- **The PUT round trip.** A correction reaches the sidecar, which is what
+  `cli/cmd_identify.py` actually reads — including the case where the sidecar already named
+  a finish, and the case where a hint-only PUT must leave the finish alone. This is the one
+  that was broken and passing its own route test at the same time; see the section above on
+  two sources of truth.
+- **Twenty-way contention.** Twenty simultaneous captures into one box: twenty served,
+  indices contiguous, no duplicates, twenty photos, twenty records, every sidecar parsing.
+  Run against the default listen backlog of 5 it serves 8 and the OS resets 12 — a distinct
+  failure from anything the allocator does, and the 8 that landed were still contiguous and
+  duplicate-free.
+- **The money rule, both directions.** A stray `.png` under the capture root takes the scan
+  from 4 captures to 5, each a paid Batch request; a render under `captures/ui/` leaves it
+  at 4, which is the whole reason the root is `captures/cards/`.
+- **Bare interpreter.** The server starts and serves on system `python3` with no venv, which
+  is what makes `python3` rather than `$(PYTHON)` correct in the Makefile.
+
 **Cost**: the allocator is the one piece of step-5 logic the 20-card Gate B run exercises
 twenty times, and nothing re-checks any of the above on a later edit. A refactor that
-reintroduced the `c.box == box` filter would pass every gate in the repo.
+reintroduced the `c.box == box` filter would pass every gate in the repo, and so would one
+that dropped the sidecar write out of the PUT path.
 
 **Why not fixed**: adding a harness test for `store/` is a real decision about what the
 harness covers — the contract in `docs/GATES.md` is six tests about the pipeline, and
