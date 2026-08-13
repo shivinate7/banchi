@@ -7,4 +7,16 @@
 #
 # The URLs assume `make dev` is already serving. It blocks, so background it first.
 
-pull-confirm  http://localhost:5173/
+# The hash route is load-bearing, not decoration. The gallery answered at '/' while it was
+# the whole app at step 6; step 7a mounted the capture screen there. Dropping the '#/gallery'
+# renders the capture screen into captures/ui/pull-confirm.png — a screenshot that is named
+# after one view and shows another, which is worse than no screenshot, because the loop
+# docs/DESIGN.md calls mandatory is a human comparing this render against the reference.
+pull-confirm  http://localhost:5173/#/gallery
+
+# Step 7a's two screens. The capture screen renders without a camera in a headless render —
+# that is not a defect to work around, it is the first thing a person sees before granting
+# permission, and it is worth looking at deliberately rather than only ever seeing the happy
+# path. The layout underneath it renders either way.
+capture       http://localhost:5173/#/
+pull-preview  http://localhost:5173/#/pull

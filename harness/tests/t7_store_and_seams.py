@@ -30,11 +30,13 @@ Isolation is `PKMNSCAN_HOME` pointed at a temporary directory. `store.files.home
 the environment on every call rather than at import, so no module reload is needed — and
 that property is itself asserted below, because the whole test is built on it.
 
-WHAT THIS DELIBERATELY DOES NOT COVER. Undo, mark-sold and the pull routes do not exist
-yet; they arrive with build-order step 7 and their assertions arrive with them. D10 already
-settles what undo must do — delete rather than tombstone, newest capture in a box only,
-refused once the card's row has been written into an import file — so those cases are
-writable the day the route is.
+UNDO ARRIVED WITH STEP 7a AND SO DID ITS CASES, which is what the paragraph here used to
+promise. `check_undo` covers what D10 settles: delete rather than tombstone, the newest
+capture in a box only, refused once the card's row has been written into an import file.
+
+WHAT THIS STILL DOES NOT COVER. Mark-sold and the pull routes do not exist; they are 7b,
+built after Gate B against real data rather than against guesses, and their assertions
+arrive with them.
 """
 
 from __future__ import annotations
@@ -461,6 +463,175 @@ def check_server_routes(checks: Checks) -> None:
         )
 
 
+# ------------------------------------------------------------------------------------ undo
+
+
+def check_undo(checks: Checks) -> None:
+    """DELETE /inventory/<box>/<index> — the one route the capture app added.
+
+    THE ONLY ROUTE IN THIS SERVER THAT DESTROYS ANYTHING, which is why it gets a section of
+    its own rather than a few more lines beside the other refusals. Every other write here
+    adds a record or corrects a field, and the worst a bug in one of them does is record
+    something wrong. A bug in this one deletes a photograph of a card that is back in the
+    box by the time anybody notices.
+
+    The three rules are D10's and they are asserted as rules, not as one happy path: what
+    it deletes, that it deletes only the newest, and that it stops once `emit` has written
+    the card's row into an import file.
+    """
+    checks.note("")
+    checks.note("UNDO — DELETE /inventory/<box>/<index>")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3, set_hint="sv9", variant="holo"))
+
+        photo = capture_server.photo_path(3, 3)
+        sidecar_file = capture_server.sidecar_path(photo)
+        checks.ok(
+            photo.is_file() and sidecar_file.is_file(),
+            "three captures into box 3, and the newest has both a photo and a sidecar",
+        )
+
+        body = capture_server.do_delete_card(3, 3)
+        checks.equal(body["deleted"], "3/3", "undo answers with the position it removed")
+        checks.ok(
+            Store().read().inventory.get("3/3") is None,
+            "the RECORD is deleted, not tombstoned — there is no state between captured "
+            "and absent (D10)",
+        )
+        checks.ok(
+            not photo.is_file(),
+            "the PHOTO is deleted: an orphan is a paid Batch request for a card that no "
+            "longer exists",
+        )
+        checks.ok(
+            not sidecar_file.is_file(),
+            "and so is the sidecar, which is what carried the set hint and the toggle",
+        )
+        checks.equal(
+            len(sidecar.scan(capture_server.captures_root())),
+            2,
+            "so scan() now finds two captures — the undone card costs nothing to identify",
+        )
+
+        # The index is released. Asserted through the server rather than only through the
+        # allocator above, because the release is what makes an undo followed by a re-shoot
+        # land in the same slot, and that is the whole reason an operator presses it.
+        checks.equal(
+            Store().read().inventory.next_index(3),
+            3,
+            "the index is released — next_index steps back to it",
+        )
+        checks.equal(body["next_index"], 3, "and the response says so, so the app need not count")
+
+        second = capture_server.do_delete_card(3, 2)
+        checks.equal(
+            second["deleted"], "3/2", "a second undo walks back one more card, with no extra state"
+        )
+        checks.equal(
+            Store().read().inventory.next_index(3), 2, "and releases that index too"
+        )
+
+        _, retaken = capture_server.do_capture(capture_payload(3))
+        checks.equal(
+            retaken["key"],
+            "3/2",
+            "the next capture takes the released position: a retaken photo lands where the "
+            "bad one was",
+        )
+
+        capture_server.do_capture(capture_payload(3))  # 3/3 again, so 3/1 is not the newest
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_card(3, 1),
+            "undo of a card that is NOT the newest refuses — a mid-box gap is permanent",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "undo_not_newest",
+                "and it refuses in its own code, not card_not_found",
+            )
+            checks.ok(
+                "box 3, card 3" in str(caught),
+                "and the refusal NAMES the position that is undoable — otherwise the app "
+                "has to ask again to find out",
+                f"message was: {caught}",
+            )
+        checks.ok(
+            Store().read().inventory.get("3/1") is not None,
+            "and the card it refused is still there: a refusal deletes nothing",
+        )
+
+        # Allowed at `identified`: the model has answered, money is already spent, and
+        # nothing outside this Mac knows the card exists. Deleting it costs the fee, which
+        # is the trade D10 names.
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/3", master.IDENTIFIED)
+        capture_server.do_delete_card(3, 3)
+        checks.ok(
+            Store().read().inventory.get("3/3") is None,
+            "undo at `identified` is ALLOWED — only the identification fee is lost",
+        )
+
+        # Refused at `pushed`: `emit` has written the card's row into an import file, and a
+        # file on disk would now disagree with the inventory.
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/2", master.PUSHED)
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(3, 2),
+            "undo_too_late",
+            "undo at `pushed` refuses: its row is already in an import file",
+        )
+        checks.ok(
+            Store().read().inventory.get("3/2") is not None
+            and capture_server.photo_path(3, 2).is_file(),
+            "and the refusal reached neither the record nor the photo",
+        )
+
+        # State is read before position. This card is neither the newest nor undoable, and
+        # the answer that matters is the second one: the other order would send the
+        # operator to delete a good capture on the way to a card it could never remove.
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/1", master.SOLD)
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(3, 1),
+            "undo_too_late",
+            "a sold card refuses as too late rather than as not-newest — state is checked "
+            "first, so the answer is the one that cannot change (D10)",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(9, 9),
+            "card_not_found",
+            "undo of a position that holds no card refuses — there is nothing to delete",
+        )
+
+        checks.equal(
+            capture_server.UNDOABLE_STATES,
+            (master.CAPTURED, master.IDENTIFIED),
+            "undo is allowed at exactly captured and identified, named as an allowlist so a "
+            "new state is refused by default",
+        )
+
+    # Wiring, asserted because it is invisible from Python and fatal from a browser: without
+    # DELETE in the preflight answer the request is refused before the server ever sees it.
+    methods = dict(capture_server.CORS_HEADERS)["Access-Control-Allow-Methods"]
+    checks.ok(
+        "DELETE" in methods,
+        "CORS advertises DELETE — a preflight that omits it refuses the undo at the browser",
+        f"methods: {methods}",
+    )
+    checks.ok(
+        hasattr(capture_server.CaptureHandler, "do_DELETE"),
+        "and the handler answers the verb at all",
+    )
+
+
 # ------------------------------------------------------------------------- the sidecar seam
 
 
@@ -796,6 +967,7 @@ def run() -> Result:
     check_allocator(checks)
     check_store(checks)
     check_server_routes(checks)
+    check_undo(checks)
     check_sidecar_seam(checks)
     check_concurrency(checks)
     check_cli_seams(checks)

@@ -63,8 +63,21 @@ function buttonFor(page: Page, state: string): Locator {
   return page.locator(`[data-specimen="${state}"] .pull-confirm`)
 }
 
+/* The gallery's own route. At step 6 it was the whole app and answered at '/', which is why
+ * this file used to navigate there; step 7a mounted the capture screen at the root and moved
+ * the specimens to their own hash route. Nothing in the typecheck, the lint or the harness
+ * can see that move — the first symptom would have been every test below failing in this
+ * hook, on the run after the one that broke it.
+ *
+ * The hash form is what App.tsx routes on, so it must survive here verbatim: a path-style
+ * '/gallery' would be served index.html by Vite, mount the app with an empty hash, and
+ * render the capture screen — a passing navigation to the wrong view, which is the failure
+ * this constant exists to make impossible to reintroduce quietly.
+ */
+const GALLERY = '/#/gallery'
+
 test.beforeEach(async ({ page }) => {
-  await page.goto('/')
+  await page.goto(GALLERY)
   await expect(buttonFor(page, 'default')).toBeVisible()
 })
 

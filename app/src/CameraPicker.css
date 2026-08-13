@@ -1,0 +1,91 @@
+/* The device picker — owner-side chrome, chosen once per machine and then silent.
+ *
+ * Deliberately no panel: no background of its own, no border box, no header strip. Two
+ * reasons. docs/DESIGN.md rejected the tinted panel-header bar outright and says not to add
+ * one; and this control has to compose into whatever the capture screen lays out around it,
+ * so a box with opinions about its own ground would fight that layout rather than sit in
+ * it. The select carries the only border here, because a control that takes input is the
+ * one thing on this component that should look like it does.
+ *
+ * Every value is a token. The only numbers written literally are font sizes, which
+ * docs/DESIGN.md sets per use rather than putting on a scale — and none of the Fulfillment
+ * floors apply, because this is not reachable from that view.
+ */
+
+.camera-picker {
+  display: grid;
+  gap: var(--s2);
+  /* Roughly the width of the longest device label the Cam Link produces. Wider is wasted
+     space next to a live preview that wants the room. */
+  max-width: 420px;
+}
+
+/* Utility face, uppercase, tracked — the same treatment Gallery.css gives a specimen
+   caption, and for the same reason: docs/DESIGN.md's rule that mono carries all metadata,
+   and a field name is metadata. */
+.camera-picker-label {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.camera-picker-select {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+/* `appearance: none` is deliberately not set. Suppressing the native control means drawing
+   the disclosure chevron, and the only cheap way to draw one is a colour baked into a
+   background-image data URI — a raw hex value outside the token block, which is the one
+   thing this repo's CSS rules forbid without exception. A native select in the browser
+   chrome the owner already knows is the better trade for a control used monthly. */
+
+.camera-picker-select:disabled {
+  color: var(--muted);
+  background: var(--bg);
+  cursor: not-allowed;
+}
+
+/* Accent at its light weight: outline and text, never fill. docs/DESIGN.md gives the solid
+   fill exactly one meaning — there is one thing to do — and reserves it so that the
+   Fulfiller's pull-confirm is the loudest thing he ever sees. A missing camera, a refused
+   permission and an undersized stream all leave the owner a choice, so all three are drawn
+   here and none of them shouts. */
+.camera-picker-notice {
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+  max-width: 60ch;
+}
+
+/* The negotiated stream dimensions. Mono, because docs/DESIGN.md gives the utility face
+   every number in the product and this is the number that decides whether the run is worth
+   anything. */
+.camera-picker-signal {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* Under the pipeline's working size. It stops being metadata at that point and becomes the
+   finding, so it takes the accent and the weight — the sentence explaining it sits beneath
+   in the body face, per docs/DESIGN.md's split between numbers and prose a human reads. */
+.camera-picker-signal[data-under-target] {
+  color: var(--accent);
+  font-weight: 600;
+}

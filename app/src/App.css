@@ -1,0 +1,99 @@
+/* The app shell's chrome. Owner-side only, and deliberately the quietest thing on screen.
+ *
+ * docs/DESIGN.md gives the owner's screens a different standard from the Fulfiller's —
+ * "the owner's screens are a tool — dense is fine" — and the Fulfillment floors (20px body,
+ * 32px position labels, 44px tap targets) govern that view rather than this one. None of
+ * them is asserted here because none of them applies here.
+ *
+ * When 7b builds the Fulfillment view, this nav must not render on it: that view's row in
+ * the constraints table is "zero destructive actions reachable, assert no route to settings
+ * or import", and a strip of links to every other screen is exactly the route that assertion
+ * forbids. Recorded here rather than left for the assertion to discover.
+ */
+
+.app-nav {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s5);
+  padding: 0 var(--s6);
+
+  /* The 1px hairline and nothing else. docs/DESIGN.md: a tinted header strip carrying each
+     panel's name was built, looked at and rejected, so the chrome sits on the page ground
+     with a single --line rule under it. No shadow, no tint, no fill. */
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Metadata, not prose: a view's name is a label, so it takes the utility face uppercase and
+   tracked, the same treatment .specimen-caption gives a state name in the gallery. */
+.app-nav-link {
+  display: flex;
+  align-items: center;
+  padding: var(--s3) 0;
+
+  /* Pulls the link's own bottom rule down onto the nav's hairline instead of stacking a
+     second line 1px above it. Without this the current-route marker reads as a double rule. */
+  margin-bottom: -1px;
+  border-bottom: 1px solid transparent;
+
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* Colour only. --hover is row hover ONLY (tokens.css says so in as many words), and these
+   are not rows — a background swatch behind a nav link would be the first use of that token
+   outside the case it was derived for. */
+.app-nav-link:hover {
+  color: var(--ink);
+}
+
+/* The current route is --ink against --muted siblings, plus the rule under it.
+   Deliberately NOT --accent: docs/DESIGN.md gives accent exactly two jobs — outline and
+   text weight for "the system is unsure", solid fill for "there is one thing to do" — and
+   "which screen am I on" is neither. A third job is how a colour stops meaning anything. */
+.app-nav-link[aria-current='page'] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* Focus ring in --ink for the same reason. The conventional choice is the accent colour,
+   but accent's outline weight already carries a meaning here, and a keyboard user tabbing
+   through the chrome is not being told the system is unsure about anything. */
+.app-nav-link:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* ---- the unresolved-hash panel ---- */
+
+/* Same padding as .gallery, so a mistyped hash lands on a page laid out like the ones that
+   worked rather than on something that looks broken in a second way. */
+.no-such-view {
+  padding: var(--s6);
+  max-width: 60ch;
+}
+
+/* Body face: these are sentences a human reads, which is the one thing the utility face is
+   not for. Left at the inherited size — this is an owner-side dead end, not a Fulfillment
+   screen with a 20px floor. */
+.no-such-view p {
+  color: var(--muted);
+}
+
+.no-such-view p + p {
+  margin-top: var(--s2);
+}
+
+/* The hash itself is a literal string the owner may have typed or bookmarked, so it takes
+   the utility face and full-strength ink: it is the one part of the message worth reading
+   character by character. */
+.no-such-view-path {
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+}

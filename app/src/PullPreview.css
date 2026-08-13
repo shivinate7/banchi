@@ -1,0 +1,264 @@
+/* The pull preview — docs/specs/capture-app.md §7. Look only, so nothing here draws a
+ * control that looks pressable except the reload and the list rows.
+ *
+ * NO ACCENT ANYWHERE IN THIS FILE, and that is the one deliberate decision in it.
+ * docs/DESIGN.md gives accent exactly two jobs: outline and text weight when the system is
+ * unsure, and a solid fill when there is exactly one thing to do. This screen is neither —
+ * it is sure about everything it shows and there is nothing to do. Marking the selected row
+ * in accent was the obvious first draft and would have given the colour a third meaning,
+ * which is the drift that ends with accent meaning "important" and therefore nothing.
+ *
+ * Selection is carried by ink against muted and by weight, not by ground. tokens.css says
+ * why in one line: --bg and --surface are 1.5% apart, so neither can mark anything against
+ * the other. A selected row that is only a shade lighter is a selected row nobody can find.
+ */
+
+.pull-preview {
+  padding: var(--s6);
+  max-width: 1100px;
+}
+
+/* ---- head ---- */
+
+.pull-preview-title {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pull-preview-lede {
+  color: var(--muted);
+  max-width: 76ch;
+  margin-top: var(--s2);
+  font-size: 15px;
+}
+
+.pull-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+/* A word a human reads, so the body face. No fill — see the file header. The 44px tap
+   floor is a Fulfillment constraint and does not reach this screen; 32px is a mouse
+   target on a desktop browser, which is what D13 says this runs in. */
+.pull-preview-reload {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+.pull-preview-reload:hover {
+  background: var(--hover);
+}
+
+/* A count is a number, so the utility face. Uppercase and tracked per docs/DESIGN.md's
+   rule that mono carries all metadata. */
+.pull-preview-count {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---- body: the picker beside the card ---- */
+
+.pull-preview-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+  margin-top: var(--s5);
+}
+
+/* Sticky and independently scrolled. §10.1 records that a Gate B run may be two hundred
+   cards rather than twenty, and a list that long pushes the photo — the thing being
+   checked — off the screen. Rejected: paging the list, which adds a control to a screen
+   whose whole claim is that it has none. */
+.pull-preview-list {
+  list-style: none;
+  position: sticky;
+  top: var(--s6);
+  max-height: calc(100vh - var(--s8) - var(--s6));
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+.pull-preview-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--s2) var(--s3);
+  background: transparent;
+  border: 0;
+  /* The hairline is the only separation mechanism in the product, no exceptions. */
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.pull-preview-list li:last-child .pull-preview-row {
+  border-bottom: 0;
+}
+
+/* Row hover, which is the only thing --hover is for. */
+.pull-preview-row:hover {
+  background: var(--hover);
+}
+
+.pull-preview-row-position {
+  display: block;
+  font-family: var(--util);
+  font-size: 12px;
+  /* Unselected rows are metadata; the selected one is the card you are looking at. That
+     step from muted to ink is the selection signal, and it survives a colour-blind eye and
+     a bad monitor in a way a 1.5% ground change does not. */
+  color: var(--muted);
+}
+
+.pull-preview-row-name {
+  display: block;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: var(--s1);
+  /* One line. A long card name that wraps makes rows different heights, and a list you
+     scan for a position reads worse when the rhythm breaks. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pull-preview-row[aria-current='true'] .pull-preview-row-position {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pull-preview-row[aria-current='true'] .pull-preview-row-name {
+  color: var(--ink);
+}
+
+/* ---- the card ---- */
+
+.pull-preview-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+/* The payload of the screen: where this card physically is. Utility face because it is a
+   position, 20px because it is read against a box across the desk rather than at reading
+   distance. Not 32px — that is the Fulfillment floor for a position label, and this is the
+   owner's screen; borrowing his floors here would make it look like his view. */
+.pull-preview-position {
+  font-family: var(--util);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Sized to show a blur or a finger on the card, which is what a photo on this screen is
+   for. No 320px floor asserted: that is the Fulfillment pull modal's constraint and 7b's
+   to meet. */
+.pull-preview-photo {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* Both ways a photo can be absent, and the failure to read the inventory at all. A panel
+   rather than bare text, so that the space the photo would occupy still reads as the place
+   the photo goes. */
+.pull-preview-absent,
+.pull-preview-note {
+  max-width: 420px;
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.pull-preview-note {
+  margin-top: var(--s5);
+}
+
+/* A sentence a human reads, so the body face. */
+.pull-preview-note-text {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, which
+   exists so that what you saw on screen is greppable against the run report and the store.
+   Owner-side only; the Fulfillment banned-word list forbids this register entirely, and no
+   Fulfillment route renders this class. break-all because these are paths and URLs, and a
+   URL that overflows its panel is a URL you cannot copy. */
+.pull-preview-machine {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  word-break: break-all;
+}
+
+/* ---- facts ---- */
+
+.pull-preview-facts {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+  max-width: 520px;
+}
+
+.pull-preview-fact {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: baseline;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pull-preview-fact dt {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Default to the body face: a card's name is a thing read. The values that are compared
+   against something — the number, the state, the timestamp — carry .is-util and are set in
+   mono by the rule below, one field at a time rather than one panel at a time. */
+.pull-preview-fact dd {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pull-preview-fact dd.is-util {
+  font-family: var(--util);
+  font-size: 13px;
+}

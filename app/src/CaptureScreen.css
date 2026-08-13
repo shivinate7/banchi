@@ -1,0 +1,419 @@
+/* The capture screen — docs/specs/capture-app.md section 5.
+ *
+ * Owner-side, so this is the dense end of docs/DESIGN.md's one system, two densities: the
+ * 4-16 end of the spacing scale, and the Fulfillment floors (20px body, 32px positions) do
+ * not govern here. Where a floor is applied anyway it is because a rig is a bad place to aim
+ * at a small target, not because a rule required it — those are marked.
+ *
+ * Every colour is a token. Two of them are spoken for and are used for nothing else:
+ * --accent means "the system is unsure" or "there is exactly one thing to do", and --hover
+ * is row hover only, which is why no button in this file has a hover state.
+ */
+
+.capture {
+  /* Capped rather than uncapped: past this the two frames grow without either becoming
+     easier to judge a blur in, and the bar's controls drift apart. */
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* ---- the bar: box, set hint, finish. All three always visible (spec 5.3). ---- */
+
+.capture-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s4);
+}
+
+.capture-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  align-items: flex-start;
+}
+
+.capture-field-wide {
+  flex-basis: 100%;
+}
+
+/* Utility face, uppercase, tracked — mono carries all metadata, and a field name is
+   metadata. Same treatment as the gallery's specimen captions, deliberately: this is one
+   system and a caption should not have two looks. */
+.capture-field-name {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.capture-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* A choice chip: a box in use, or one of the three finishes.
+
+   Selection is carried by ink and weight, never by --accent. Accent has exactly two jobs in
+   this system and "which box am I in" is neither of them; borrowing it here would mean the
+   fill on the capture button and the outline on a selected chip were the same signal saying
+   two different things. Rejected alternative: a solid --ink chip, which reads as loud as the
+   capture control and is the second thing your eye lands on rather than the tenth. */
+.capture-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--s1);
+  font-family: var(--util);
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+  /* The 44px tap floor is a Fulfillment constraint and does not govern this view. Applied
+     anyway: the owner reaches for these mid-run with a card in the other hand. */
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.capture-chip[aria-pressed='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.capture-chip-value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.capture-chip-note {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.capture-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* Both text inputs carry values that end up in a sidecar — a box number and a set code — so
+   both are the utility face. */
+.capture-number,
+.capture-text {
+  font-family: var(--util);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+  min-height: 44px;
+}
+
+.capture-number {
+  width: 9ch;
+}
+
+.capture-text {
+  width: 16ch;
+}
+
+/* A secondary action: outline and ink, no fill. The fill belongs to the capture button and
+   to the resume button, and only one of those is ever live at a time. */
+.capture-go,
+.capture-undo-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+
+.capture-go:disabled,
+.capture-undo-go:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* --accent's two jobs are taken, so focus is drawn in ink. Never removed: an hour at this
+   screen is a keyboard, and a keyboard with no visible focus is a mouse with no pointer. */
+.capture-chip:focus-visible,
+.capture-number:focus-visible,
+.capture-text:focus-visible,
+.capture-go:focus-visible,
+.capture-undo-go:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The keyboard hint. docs/DESIGN.md requires it owner-side and forbids it in the
+   Fulfillment view, which this is not; the chip is the no-dialog decision made visible. */
+.capture-key {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Secondary prose: why capture is unavailable, what the server said about itself, what an
+   undo did. Body face, because these are sentences a human reads. */
+.capture-quiet {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
+/* Information the operator should notice without being stopped by it: a new box, a box with
+   nothing in it yet. Outline weight of --accent — the system is flagging, not deciding. */
+.capture-flag {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  align-self: flex-start;
+}
+
+/* ---- the halt (spec 5.5) ---- */
+
+/* Loud, and above the stage rather than over it. Rejected: a modal. A modal hides the live
+   view and the last recorded position at the exact moment the operator needs both to work
+   out which physical card is unaccounted for. */
+.capture-halt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s5);
+}
+
+/* Display face, 20px, which is its floor — it is used nowhere else on this screen, so the
+   one thing set in it is the sentence that stops the run. */
+.capture-halt-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.capture-halt-message {
+  font-size: 15px;
+  color: var(--ink);
+  max-width: 68ch;
+}
+
+/* The machine string, small, beneath the human sentence. Greppable across the screen, the
+   server log and the error body — the same reason the review queue shows both. */
+.capture-halt-code {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.capture-halt .pull-confirm {
+  min-width: 280px;
+}
+
+/* ---- the stage: live left, last capture right (spec 5.1) ---- */
+
+.capture-stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s5);
+  align-items: start;
+}
+
+/* Below this the two frames are each too small to judge a blur in, which is the entire
+   reason the layout is a pair. Stacked, the last capture is still full width. */
+@media (max-width: 900px) {
+  .capture-stage {
+    grid-template-columns: 1fr;
+  }
+}
+
+.capture-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  /* Grid items refuse to shrink below their content without this, and a wide video track
+     would push the right panel off screen. */
+  min-width: 0;
+}
+
+/* A caption, not a header strip. docs/DESIGN.md rejected the tinted bar carrying a panel
+   name and a queue depth, and this is deliberately the other thing: no fill, no rule, no
+   count. */
+.capture-panel-name {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Both frames share one aspect and one size so the photo can be compared against the live
+   view without either being the small one. 16/9 is the shape a capture card delivers; the
+   card itself fills that field, per the rig requirement in spec 6.2. */
+.capture-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* contain, not cover: a crop that hides the edge of the frame hides the finger holding the
+   card down, which is one of the two things this panel exists to catch. */
+.capture-media {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.capture-frame-note {
+  position: absolute;
+  padding: var(--s5);
+  max-width: 46ch;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.capture-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+}
+
+.capture-controls .pull-confirm {
+  width: 100%;
+}
+
+.capture-trigger {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* ---- what the last capture was ---- */
+
+.capture-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* The position, rendered by the server. The largest number on the screen, because it is the
+   one thing that cannot be reconstructed later from the photo. Martian Mono is tabular by
+   construction, so no font-variant-numeric here — docs/DESIGN.md picked the face precisely
+   so the width cannot shift between cards by someone forgetting to set it. */
+.capture-label {
+  font-family: var(--util);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Same face, inline in a sentence, at the size of the sentence. */
+.capture-inline-label {
+  font-family: var(--util);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.capture-said-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- undo (spec 5.4) ---- */
+
+.capture-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s3) var(--s4);
+}
+
+.capture-undo-target {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-height: 64px;
+}
+
+/* Small, and still recognisable as the card you just shot. The point is aiming the undo, not
+   judging the photo — that is what the panel above is for. */
+.capture-undo-thumb {
+  width: 112px;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.capture-undo-action {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* A refusal, not a failure of the run: outline weight, beside the control it came from.
+   Nothing about a refused undo stops captures. */
+.capture-refused {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--accent);
+  max-width: 44ch;
+}

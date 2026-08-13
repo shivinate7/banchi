@@ -5,16 +5,17 @@ import { createRoot } from 'react-dom/client'
 import './tokens.css'
 import './base.css'
 
-import { Gallery } from './Gallery'
+import { App } from './App'
 
-// The gallery is the whole app at step 6. Step 7 mounts the real capture app here and
-// moves the gallery to its own route — it is worth keeping, because a component sheet
-// that is rendered by the build is a component sheet that cannot go stale.
+// Step 7a's shell. The gallery was the whole app at step 6 and is now the /gallery route —
+// it stays in the build because a component sheet that is rendered by the build is a
+// component sheet that cannot go stale. App owns which of the three screens is showing;
+// this file owns only the mount and the stylesheet order.
 const root = document.getElementById('root')
 if (root === null) throw new Error('index.html has no #root to mount into')
 
 createRoot(root).render(
   <StrictMode>
-    <Gallery />
+    <App />
   </StrictMode>,
 )

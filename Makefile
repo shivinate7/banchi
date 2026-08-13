@@ -40,7 +40,7 @@ help:
 	@echo "  make server       Python capture server on :8000. Blocks — background it in a session."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
-	@echo "  make lint         linters                              (ruff unblocked; not wired)"
+	@echo "  make lint         eslint over app/: the two v1-bug rules. No Python linter."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
@@ -116,18 +116,30 @@ screenshot:
 # covers one component; step 7 extends the same spec to the views it names.
 #
 # Deliberately NOT part of `check`: it starts a browser and a dev server, which is a
-# different weight of check from the rest, and `check` cannot pass today anyway while
-# `lint` is a stub.
+# different weight of check from the rest. That reason stood on its own even while `lint`
+# was a stub and `check` could not pass at all; it still stands now that lint runs.
 design-check:
 	$(NPM_GUARD)
 	@npm --prefix app run design-check
 
+# eslint over app/, config and rules in app/eslint.config.js. Its whole job is the two
+# guards docs/DECISIONS.md's v1 bug table has promised since it was written and never had:
+# no `facingMode` (bug 3, broke desktop camera selection) and no `split(",")` CSV parsing
+# (bug 2). Wired 2026-08-13 with the capture app's device picker, which is the first code
+# either rule could catch.
+#
+# JavaScript only, and this target does not claim otherwise. The stub it replaced promised
+# "ruff (Python) + eslint (JS)"; shipping the JS half under that name would leave `make
+# check` green with a whole language unlinted, which is the same lie the header comment
+# above is about. Python has no linter here. Adopting ruff is its own decision, unmade —
+# and `docs/specs/audit-retirement.md` section 9 is the format for making it: run the tool
+# on this repo, read the findings, then decide.
+#
+# No `--fix`, here or in the npm script. `check` below runs this target, and D18 keeps
+# anything that writes off the path that decides whether work is done.
 lint:
-	@echo "make lint: not wired yet."
-	@echo "  Will run: ruff (Python) + eslint (JS), including the v1-bug lint rules —"
-	@echo "  no split(\",\") CSV parsing, no facingMode: \"environment\". See docs/DECISIONS.md."
-	@echo "  ruff has Python to lint as of step 4; eslint has app/ to lint as of step 6."
-	@exit 1
+	$(NPM_GUARD)
+	@npm --prefix app run lint
 
 typecheck:
 	$(NPM_GUARD)

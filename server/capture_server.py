@@ -1,15 +1,19 @@
-"""Capture server — build-order step 5. Photos in, positions out, one shared truth.
+"""Capture server — build-order step 5, plus the one route step 7a adds.
 
-    POST /capture                     take a photo into the next position in a box
-    GET  /status                      counts, next index per box, store health
-    GET  /photo/<box>/<index>         the stored JPEG bytes
-    GET  /inventory                   the whole card map
-    PUT  /inventory/<box>/<index>     correct the set hint or variant on one card
+    POST   /capture                   take a photo into the next position in a box
+    GET    /status                    counts, next index per box, store health
+    GET    /photo/<box>/<index>       the stored JPEG bytes
+    GET    /inventory                 the whole card map
+    PUT    /inventory/<box>/<index>   correct the set hint or variant on one card
+    DELETE /inventory/<box>/<index>   undo the newest capture: record, sidecar, photo
 
-That list is build-order step 5 in `docs/GATES.md` and nothing else. There is no undo route
-— `docs/GATES.md` puts undo in step 7's capture app, not here — and no identification, no
-pricing, no mark-sold, no UI. This process never spends money: it holds no API key and
-makes no outbound call.
+The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
+undo, and it lives here rather than in the app because deleting a record, a sidecar and a
+photo together is a store write, and D13 keeps exactly one writer for those — the app has
+no filesystem and no lock. Everything else that app needs already existed at step 5.
+
+Still absent and still deliberate: no identification, no pricing, no mark-sold, no UI. This
+process never spends money: it holds no API key and makes no outbound call.
 
 EVERY WRITE GOES THROUGH `store.session.Store.write()`. The server never touches
 `inventory.json` and never writes a photo outside that lock. `store/__init__.py` calls it
@@ -79,7 +83,7 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 
 CORS_HEADERS = (
     ("Access-Control-Allow-Origin", "*"),
-    ("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS"),
+    ("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"),
     ("Access-Control-Allow-Headers", "Content-Type"),
 )
 
@@ -90,6 +94,16 @@ _INVENTORY_ITEM_RE = re.compile(r"^/inventory/(\d+)/(\d+)$")
 # a mis-toggled stack is exactly what this route is for. Nothing about listing state is
 # settable here — those transitions belong to identify, join and emit.
 PUT_FIELDS = ("set_hint", "variant")
+
+# States at which a card may still be undone. D10 draws the line at `emit`: up to `pushed`
+# nothing outside this Mac knows the card exists, so removing it costs the identification
+# fee and nothing else, while after it a file on disk would disagree with the inventory.
+#
+# Written as the ALLOWED set rather than the refused one, which is not a style choice: a
+# state added to `store.master.STATES` later is then refused by default. The inverse spells
+# out `pushed, staged, live, sold` and silently permits whatever comes next, and the failure
+# that produces is an undo that deletes a card TCGplayer already knows about.
+UNDOABLE_STATES = (master.CAPTURED, master.IDENTIFIED)
 
 
 class BadRequest(ValueError):
@@ -395,6 +409,128 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     return body
 
 
+def _unlink(path: Path) -> bool:
+    """Delete a file, reporting whether one was there. Absence is not a failure.
+
+    A card recorded by `emit` rather than captured has no photo and no sidecar, and an undo
+    of one must answer 200 rather than a 500 that reads like a bug in this file. Caught
+    rather than probed with `is_file()` so there is no window between the two calls — the
+    store lock closes that window for other writers, but not for the operator's own Finder.
+    """
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def do_delete_card(box: int, index: int) -> dict:
+    """Undo one capture: delete the record, then the photo, then the sidecar.
+
+    IT DELETES AND IT DOES NOT TOMBSTONE (D10). No `undone` state, no deleted flag, nothing
+    in the response hinting at a third condition between captured and absent. `sold` stays
+    the only way a position stops being listable while keeping its record, and it means
+    sold. A soft delete was rejected in the spec rather than here, and the reason is that it
+    puts a record in `inventory.json` that every consumer downstream has to learn to skip.
+
+    ONLY THE NEWEST CARD IN THE BOX. `next_index` is a high-water mark, so deleting from the
+    middle leaves a gap that can never be reused and that reads, a year later, exactly like
+    the permanent gap a sale leaves. The refusal names the position that *is* undoable,
+    because a refusal that does not say what would have worked costs a round trip. Deleting
+    the newest releases its index instead, and that release is the allocator's own
+    behaviour rather than anything arranged here: the high-water scan simply stops finding
+    the record. T7 asserts it against `Inventory.next_index` directly for that reason.
+
+    REPEATED CALLS WALK BACKWARDS, one card each, and that costs no code — every call
+    deletes whatever is newest by the time it runs.
+
+    ONE `Store.write()`, the same shape `do_capture` uses. The record is removed from the
+    in-memory inventory BEFORE either file is unlinked, so a failing unlink escapes the
+    block and commits nothing. The reverse order would delete a photo and then keep the
+    record pointing at it, which is the one outcome undo must never produce.
+
+    THE PHOTO IS UNLINKED BEFORE THE SIDECAR, and that ordering is the money rule from the
+    other direction. `identify.sidecar.scan` finds captures by photo suffix and reads
+    sidecars beside them, so a stranded sidecar costs nothing while a stranded PHOTO is a
+    paid Batch request for a card that no longer exists. Deleting the expensive one first
+    means every partial failure left after it is a cheap one.
+    """
+    key = master.position_key(box, index)
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        card = inventory.cards.get(key)
+        # The high-water mark minus one: the newest card in this box, or 0 if it is empty.
+        # Read inside the lock like everything else here — a value read before it would be
+        # a stale claim about which position is undoable.
+        newest = inventory.next_index(box) - 1
+
+        if card is None:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "card_not_found",
+                f"No card at box {box}, card {index}. "
+                + (
+                    f"The newest capture in that box is card {newest}."
+                    if newest >= 1
+                    else "That box holds no cards at all."
+                ),
+            )
+
+        # STATE IS CHECKED BEFORE POSITION, deliberately. The other order answers a request
+        # to undo a pushed card in the middle of a box with "card 12 is the newest, undo
+        # that instead" — which invites the operator to delete good captures one at a time
+        # on the way to one that could never have been removed at all.
+        if card.state not in UNDOABLE_STATES:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "undo_too_late",
+                f"Box {box}, card {index} is {card.state}: its row is already in an import "
+                f"file, so deleting it here would leave that file disagreeing with the "
+                f"inventory. Undo stops after {' and '.join(UNDOABLE_STATES)} — correct "
+                f"this card on TCGplayer instead, and leave the position alone.",
+            )
+
+        if int(index) != newest:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "undo_not_newest",
+                f"Box {box}, card {index} is not the newest capture, and a position is "
+                f"never reused once it is passed. Undo removes box {box}, card {newest}; "
+                f"press it again to walk back one card at a time.",
+            )
+
+        photo = photo_path(card.box, card.index)
+        sidecar = sidecar_path(photo)
+
+        # `card.photo` is deliberately not consulted as the path to delete. The layout is
+        # derived from the position, the same way `do_put_card` derives it, because that is
+        # the one layout this server ever writes — and a record created by `emit` carries a
+        # null photo while a stale absolute path from another machine's store would send
+        # this at a file that is not ours.
+        del inventory.cards[key]
+        photo_deleted = _unlink(photo)
+        sidecar_deleted = _unlink(sidecar)
+        released = inventory.next_index(box)
+
+    # Known gap, the same one `do_put_card` carries: nothing is appended to history.jsonl.
+    # The store logs state transitions and a deletion is not one, and there is no `undone`
+    # event to log without adding a name to the enum in an uncovered module — which is the
+    # tombstone this route exists not to create. What history keeps is the `captured` event,
+    # and that stays true: the capture did happen. It is the record that is gone.
+    return {
+        "deleted": key,
+        "box": int(box),
+        "index": int(index),
+        "photo_deleted": photo_deleted,
+        "sidecar_deleted": sidecar_deleted,
+        # The index this box will hand out next, after the release. The app redraws its
+        # position from this rather than decrementing its own counter, which would drift the
+        # moment the other device (D13) captured into the same box.
+        "next_index": released,
+    }
+
+
 # ------------------------------------------------------------------------------- handler
 
 
@@ -517,6 +653,27 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 body = do_put_card(int(match.group(1)), int(match.group(2)), self._body())
                 return self._json(HTTPStatus.OK, body)
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No PUT route {path}.")
+
+        self._dispatch(run)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        """Undo. No body is read: the position is the whole request.
+
+        Answers 200 with a body rather than 204, because the app names the position it just
+        removed and this response is where that name comes from. A 204 would make the app
+        compose it from what it believed it was deleting — and the two disagree exactly when
+        the other device (D13) has captured since.
+        """
+
+        def run():
+            path = urlparse(self.path).path.rstrip("/") or "/"
+            match = _INVENTORY_ITEM_RE.match(path)
+            if match:
+                body = do_delete_card(int(match.group(1)), int(match.group(2)))
+                return self._json(HTTPStatus.OK, body)
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND, "no_such_route", f"No DELETE route {path}."
+            )
 
         self._dispatch(run)
 
