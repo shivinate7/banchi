@@ -186,3 +186,111 @@ export type Inventory = {
   version: number
   cards: Record<string, InventoryCard>
 }
+
+// -------------------------------------------------------------------- the standing queues
+
+/* `GET /queues` and the answer that clears one of its entries.
+ *
+ * WRITTEN IN ReviewQueue.tsx AND MOVED HERE, which is what that file asked for in as many
+ * words: "THESE TYPES BELONG IN types.ts AND ARE HERE BECAUSE OF FILE OWNERSHIP, NOT DESIGN
+ * — move them the moment both files are writable together." They were, 7b's screens were
+ * wired, and two copies of one contract is the drift the whole one-owner rule in server.ts
+ * exists to prevent. Nothing about them changed on the way across; the header comment they
+ * carried is the paragraph below.
+ *
+ * Field for field out of `store/queues.py:QueueEntry`, `cli/resolve.py:_candidate_rows` and
+ * `server/capture_server.py:_queue_row`, in the server's own case for the reason stated at
+ * the top of this file: the first thing anyone debugging a run does is hold what the app
+ * shows against `review.json`, and two vocabularies for one record makes that a lookup.
+ */
+
+/** The two standing queues — `store/queues.py:MAIN` and `PARKED`, same strings. */
+export type QueueName = 'review' | 'parked'
+
+/** One catalog row this card could be. `cli/resolve.py:_candidate_rows` builds these, and
+ *  every value is a cell out of the TCGplayer export exactly as it was read — `market` is a
+ *  string, and may be empty or `0.00`, which D9 calls an unknown price rather than a low
+ *  one. */
+export type CandidateRow = {
+  sku: string
+  name: string
+  set: string
+  number: string
+  condition: string
+  market: string
+}
+
+/** What identification said, as `cli/resolve.py:queue_entry` recorded it. Every field is
+ *  optional and nullable because a pre-join failure fills almost none of them. */
+export type QueueRead = {
+  name?: string | null
+  number?: string | null
+  printed_total?: string | null
+  set_hint?: string | null
+  metadata_finish?: string | null
+  detected_finish?: string | null
+}
+
+/** One card waiting for a human. `store/queues.py:QueueEntry`, minus the two Python
+ *  properties `asdict` drops (`age_days`, `price`) — see `ReviewQueue.tsx:seenText` for what
+ *  the screen does about the first of them.
+ *
+ *  THE `Wire` SUFFIX IS LOAD-BEARING, unlike the bare names above it. `store/queues.py`
+ *  exports a `QueueEntry` this is deliberately not a translation of: two of that record's
+ *  fields are properties rather than data, so a type here called `QueueEntry` would claim a
+ *  correspondence it does not have. `CandidateRow` and `QueueRead` have no such twin. */
+export type QueueEntryWire = {
+  position: string
+  box: number
+  index: number
+  label: string
+  photo: string | null
+  read: QueueRead
+  confidence: string | null
+  reason: string
+  candidates: CandidateRow[]
+  first_seen: string
+
+  /** The decisive market price as a string, or null for unpriced. `Decimal` serialised with
+   *  `str()`, so it is exact — see `ReviewQueue.tsx:priceOf` for why it is never turned into
+   *  a number for anything but a comparison. */
+  market: string | null
+
+  /** Always false in this payload: `GET /queues` serves `open_entries`, which filters on
+   *  exactly this. Kept because it is a real field of the record and a subtraction maintained
+   *  by hand is the thing that drifts — the route's own reasoning for not stripping it. */
+  cleared_by_human: boolean
+
+  /** DECORATED BY THE ROUTE, not stored. `QueueEntry.age_days` is a property, so `asdict`
+   *  drops it and `_queue_row` adds it back — the same shape `do_inventory` uses for the
+   *  position label, and for the same reason: computing it in the app would put a second copy
+   *  of `store/queues.py:_age_days`'s date arithmetic in a second language. Null when
+   *  `first_seen` is missing or unparsable, because that helper refuses to guess. Optional on
+   *  this side so an older server running on the Mac renders a gap rather than `undefined`. */
+  age_days?: number | null
+}
+
+/** `GET /queues`. Both queues, each already in `store/queues.py:sort_key` order. */
+export type QueueSnapshot = {
+  review: QueueEntryWire[]
+  parked: QueueEntryWire[]
+}
+
+/** D4's one-tap choice, as `POST /review/<box>/<index>/answer` takes it.
+ *
+ *  BOTH VALUES ARE COPIED OFF ONE CANDIDATE ROW, never composed. The route refuses a SKU the
+ *  pipeline did not offer — CLAUDE.md's hard rule about never guessing an identification,
+ *  enforced at the seam rather than trusted to the screen — and it checks `condition` against
+ *  the offered row rather than deriving it, so that a screen drawn from a queue file a later
+ *  join has rewritten is caught instead of writing a wrong finish onto a real card.
+ *
+ *  A NAMED TYPE RATHER THAN AN INLINE ARGUMENT, which is the opposite of what `server.capture`
+ *  does one file over. The difference is that this object is assembled off a rendered row and
+ *  passed down through a callback before it reaches the wire, so it has a life on the screen
+ *  side; `capture`'s argument is built at the call site and consumed immediately. */
+export type ReviewAnswer = {
+  box: number
+  index: number
+  sku: string
+  condition: string
+}

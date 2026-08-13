@@ -27,9 +27,9 @@ identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state
-app/                       the web app. Vite + React + TS. Capture screen, pull preview,
-                           component gallery — step 7a. The queue and the Fulfillment
-                           view are 7b, after Gate B.
+app/                       the web app. Vite + React + TS. Six screens — capture, review
+                           queue, inventory, pull preview, Fulfillment, component gallery
+                           — of which three are routed. See "The app" below.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
@@ -98,6 +98,34 @@ editor for the same contract instead of a second code path.
 
 The master store lives in `inventory/`, overridable with `PKMNSCAN_HOME`. Deleting a run
 directory costs nothing; deleting the store costs every answer you have paid for.
+
+## The app
+
+Build-order step 7, both halves built 2026-08-13. It is a browser front end over the capture
+server and nothing else: no pipeline logic, no second store, no auth, no login.
+
+```
+capture        live camera, box / set hint / finish, position tracking, undo
+review queue   one card at a time, photo first — the answer writes and advances
+inventory      D7's SKU -> positions map: one row per SKU, expanding to the copies
+pull preview   look only: a card's own capture photo beside its position label
+Fulfillment    the second persona's whole product: pull, photo-confirm, mark sold
+gallery        step 6's component sheet, rendered by the build so it cannot go stale
+```
+
+`make dev` serves it on :5173, `make screenshot` renders `scripts/views.txt` into
+`captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
+real browser.
+
+All six open at a hash, and the Fulfillment view opens **without the nav strip** the other
+five carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
+it, and a strip of links to the capture screen's hard-delete undo is exactly the route it
+forbids. `docs/map.py`'s `app/` entry is the current account of what each file does.
+
+**They were also built before Gate B, which their own spec forbids**, at the owner's
+explicit instruction. What that costs is in `docs/specs/capture-app.md`'s STATUS section:
+those screens display data no run has ever produced, so read them as specified and
+unvalidated rather than as working software.
 
 ## For anything larger
 

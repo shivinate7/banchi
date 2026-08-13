@@ -61,23 +61,37 @@ BUILD_ORDER = [
              "at app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by "
              "`make design-check`. Building it caught two places where docs/design-refs/locked.html "
              "disagrees with docs/DESIGN.md — see that directory's README."},
-    {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "next",
-     "note": "SPLIT AT GATE B, AND 7a HAS SHIPPED. Built 2026-08-13 to "
-             "docs/specs/capture-app.md: the shell and its three routes, the capture screen, "
-             "undo, the pull preview, the trigger seam, the eslint rules, and the one new "
-             "server route (DELETE /inventory/<box>/<index>). Thirteen files under app/ plus "
-             "server/capture_server.py; `make lint` stopped being a stub in the same commit. "
-             "7b is the review queue, the Fulfillment view, the inventory SKU views and "
-             "mark-sold, deliberately after the gate so it is built against a real run "
-             "rather than against guesses about what one produces. "
-             "WHY THIS ROW IS STILL `next`, since half of it is built: 7b is real remaining "
-             "scope, so `done` would be a lie, and the vocabulary above has no fourth word by "
-             "design. Two candidates lost. `blocked_by: Gate B` is true of 7b alone and reads "
-             "over the whole row as `the app is finished`. Moving `next` to step 8 is the "
-             "bigger claim — `make status` would then tell whoever runs it to start a "
-             "twenty-card physical run, against a build that has never met a card. That is the "
-             "owner's call to make on the day, not a call to make by editing this file."},
-    {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
+    {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "done",
+     "note": "BOTH HALVES BUILT 2026-08-13 on branch step-7-capture-app. 7a is "
+             "docs/specs/capture-app.md's scope — the shell and its three routes, the capture "
+             "screen, undo, the pull preview, the trigger seam, the eslint rules, and "
+             "DELETE /inventory/<box>/<index>. 7b is the review queue, the Fulfillment view, "
+             "the inventory SKU view and mark-sold, plus three more server routes "
+             "(GET /queues, POST /review/<box>/<index>/answer, POST /inventory/<box>/<index>/sold). "
+             "7b WAS BUILT BEFORE GATE B, WHICH ITS OWN SPEC FORBIDS, at the owner's explicit "
+             "instruction; that spec's STATUS section carries what it costs and its sections 0 "
+             "and 9 are left standing and marked overtaken. The short form: 7b's screens "
+             "display data no run has ever produced, so the review queue's price-driven row "
+             "hierarchy is tuned against a distribution nobody has measured and its twelve "
+             "reason codes have never all fired. "
+             "THIS ROW IS `done` AND STEP 8 IS `next`, which the previous note called the "
+             "owner's call to make on the day rather than by editing this file. It is made "
+             "now because nothing is left to build: with 7b shipped there is no remaining "
+             "step-7 scope for `next` to point at, and `make status` sending whoever runs it "
+             "to a physical twenty-card run against a build that has never met a card is now "
+             "an accurate instruction rather than a premature one. "
+             "WIRED 2026-08-13, in a pass after the build: all three screens are registered in "
+             "app/src/App.tsx's ROUTES table, app/src/server.ts carries a client function per "
+             "new route, and the shell draws no nav over the Fulfillment view. `make "
+             "design-check` went from 16 failures to 30 of 30 passing on that change alone — "
+             "every one of those failures was the unregistered route, exactly as the spec was "
+             "written to report. See the app/ entry below."},
+    {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "next",
+     "note": "unblocked 2026-08-13 when step 7 finished. THIS STEP IS PHYSICAL — twenty real "
+             "cards through the rig — and no part of this repo has met a card. Every number "
+             "the project has is a number about itself. docs/specs/capture-app.md section 10.2 "
+             "lists what to measure while it runs, which is the payoff for 7b having been "
+             "built early; section 10.1 keeps the pass criteria where they are."},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
     {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},
     {"step": 11, "title": "pokemontcg.io API key", "status": "done", "note": "done 2026-08-03; step 9 removes the need for it."},
@@ -91,9 +105,13 @@ BUILD_ORDER = [
 GATES = [
     {"gate": "A", "status": "passed", "on": "2026-07-26",
      "what": "TCGplayer seam: Level 4, SV09 fixture, 2-row Import to Staged end to end"},
-    {"gate": "B", "status": "next", "blocked_by": "step 7",
+    {"gate": "B", "status": "next",
      "what": "20-card end-to-end smoke test, plus Haiku finish detection against ~10 real photos",
-     "why_it_matters": "the harness cannot validate foil detection — T1's images have no foil texture"},
+     "why_it_matters": "the harness cannot validate foil detection — T1's images have no foil "
+                       "texture. Unblocked 2026-08-13: step 7 is done, so nothing further can "
+                       "be built toward this. It is a physical run and it is the first thing "
+                       "in this project that will produce a number about a card rather than "
+                       "about the project."},
     {"gate": "C", "status": "blocked", "blocked_by": "Gate B",
      "what": "feeder integration: motion state machine, 50-card run, then a full box"},
 ]
@@ -231,23 +249,30 @@ COMPONENTS = [
         "path": "server/",
         "status": "built",
         "does": "capture server: POST /capture, /status, GET /photo/<box>/<position>, "
-                "GET and PUT inventory state, and DELETE /inventory/<box>/<index> — undo",
-        "governed_by": ["D3", "D6", "D10", "D13"],
+                "GET and PUT inventory state, DELETE /inventory/<box>/<index> — undo — and "
+                "7b's three: GET /queues, POST /review/<box>/<index>/answer, "
+                "POST /inventory/<box>/<index>/sold",
+        "governed_by": ["D3", "D4", "D6", "D7", "D10", "D13"],
         "note": "T7 reaches this package as of 2026-08-13: every route, every named "
                 "refusal, and the sidecar seam read back through identify.sidecar.scan. "
-                "What it still does not cover is in docs/DEBTS.md. Writes only through "
-                "the store session, never straight to disk. The capture root is "
+                "7b's three routes arrived with their own T7 cases in the same session, "
+                "which is the one thing about 7b that did NOT get built ahead of its "
+                "evidence. What T7 still does not cover is in docs/DEBTS.md. Writes only "
+                "through the store session, never straight to disk. The capture root is "
                 "captures/cards/ and not captures/, so screenshot renders under "
                 "captures/ui/ are never scanned as paid captures.",
         "modules": {
             "capture_server.py": {
-                # Six since 2026-08-13, when step 7a's undo landed. The count is written out
-                # rather than left as "the routes" because it is the one number here a reader
-                # checks against the handlers, and it was wrong for exactly one commit.
-                "does": "the six routes, the sidecar identify reads back, the photo store",
+                # Nine since 2026-08-13, when 7b's queue read and its two writes landed on top
+                # of step 7a's undo. The count is written out rather than left as "the routes"
+                # because it is the one number here a reader checks against the handlers, and
+                # it was wrong for exactly one commit at six.
+                "does": "the nine routes, the sidecar identify reads back, the photo store",
                 # D5 is here because the file cites it: the concurrency it is tested at is two
                 # and four simultaneous captures, and two is D5's two people on two devices.
-                "governed_by": ["D3", "D5", "D6", "D10", "D13"],
+                # D4 and D7 arrived with 7b — the review answer is D4's one-tap choice, and
+                # mark-sold is the per-position half of D7's aggregate-by-SKU rule.
+                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13"],
                 "tested_by": ["T7"],
             },
         },
@@ -256,13 +281,13 @@ COMPONENTS = [
         "path": "app/",
         "status": "built",
         "step": 7,
-        "does": "the web app: three owner-side routes behind a hand-written hash router — the "
-                "capture screen that step 7a shipped and Gate B runs on, the pull preview, and "
-                "step 6's component gallery — plus the Playwright spec that asserts "
-                "docs/DESIGN.md's Fulfillment floors. What step 7 has left is 7b: the review "
-                "queue, the Fulfillment view, the inventory SKU views and mark-sold, all of it "
-                "after Gate B.",
-        "governed_by": ["D3", "D5", "D6", "D10", "D13", "D18"],
+        "does": "the web app. Six routes behind a hand-written hash router, five of them the "
+                "owner's — the capture screen that Gate B runs on, the review queue, the "
+                "inventory SKU view, the pull preview and step 6's component gallery — and one "
+                "the Fulfiller's, which the shell deliberately draws no nav over. Two "
+                "Playwright specs assert docs/DESIGN.md's Fulfillment floors, one against step "
+                "6's component and one against the Fulfillment view.",
+        "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
         # What the orphan rule scans here, and the reason this directory needs the key at
         # all: the default is `.py` one level deep, which over a tree holding no Python and
         # keeping all of it in subdirectories is a check that reports a clean scan for having
@@ -276,13 +301,29 @@ COMPONENTS = [
                 "described modules and this list named none of them — a green row over an "
                 "entry nothing had checked. The rule reaches here now because the entry "
                 "declares `source_suffixes` above and scripts/docs-audit.py reads it, which is "
-                "the half of that fix that lives in this file. "
+                "the half of that fix that lives in this file. It did its job on the same day: "
+                "7b's seven files could not land here unnamed. "
                 "Nothing here imports docs/design-refs/: those are drawings of the spec, and "
                 "this is built from docs/DESIGN.md itself. "
                 "NO ENTRY BELOW CARRIES tested_by, and that is a measurement rather than an "
-                "oversight: no harness test imports anything in this directory. The Playwright "
-                "spec is not a harness test and reaches only the pull-confirm — see its own "
-                "entry.",
+                "oversight: no harness test imports anything in this directory. Neither "
+                "Playwright spec is a harness test — see their own entries. "
+                "7b WAS BUILT BEFORE GATE B, AGAINST ITS OWN SPEC, at the owner's explicit "
+                "instruction, and what that costs is still true of every entry below: the "
+                "screens display data no run has ever produced — the review queue's "
+                "price-driven type scale is fitted to a distribution nobody has measured and "
+                "its twelve reason codes have never all fired — so read every 7b entry as "
+                "specified-and-unvalidated. "
+                "WHAT IS NO LONGER TRUE, recorded because the shape of it is worth keeping: "
+                "the three screens shipped unrouted, with no client for their routes and the "
+                "review queue's calls arriving as a prop nothing supplied, because src/App.tsx "
+                "and src/server.ts were another group's files that session. `make design-check` "
+                "was the only check that could tell — it failed 16 of 30, every failure the "
+                "missing route rather than a design defect — while harness, lint, typecheck and "
+                "docs-audit stayed green. The wiring pass on 2026-08-13 registered the routes, "
+                "added one client function per route, and took design-check to 30 of 30. The "
+                "finding survives the fix: nothing on the commit path can tell whether a screen "
+                "can be opened, and the one check that can is not on it.",
         "modules": {
             # ---- the page, and what builds and runs it ----
             "index.html": {"does": "the single page: the #root main.tsx mounts into, and the "
@@ -308,22 +349,27 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: three hash routes, one ROUTES table driving both "
-                                    "the nav and the render",
-                            "governed_by": ["D13", "D16"]},
+            "src/App.tsx": {"does": "the shell: six hash routes, one ROUTES table driving both the "
+                                    "nav and the render, and the persona field that decides the "
+                                    "Fulfiller's view gets no chrome at all",
+                            "governed_by": ["D5", "D10", "D13", "D16"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
-                                    "shadow, and why this nav must never render on 7b's "
+                                    "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
-                            "governed_by": ["D5"]},
+                            "governed_by": ["D5", "D10"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
-                                      "server's own messages verbatim.",
-                              "governed_by": ["D3", "D6", "D10", "D13"]},
+                                      "server's own messages verbatim, and holds the two "
+                                      "readers every screen shares: a thrown thing as an "
+                                      "owner-side screen draws it, and the position label as "
+                                      "the server rendered it.",
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
-                                     "names. Types only — it emits no JavaScript.",
-                             "governed_by": ["D3", "D6", "D10"]},
+                                     "names — captures, inventory, and the standing queues. "
+                                     "Types only, it emits no JavaScript.",
+                             "governed_by": ["D3", "D4", "D6", "D9", "D10"]},
             "src/useCamera.ts": {"does": "the camera: deviceId selection, never facingMode (v1 bug "
                                          "3), the native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
@@ -358,6 +404,59 @@ COMPONENTS = [
             "src/PullPreview.css": {"does": "its layout, and why no accent appears anywhere in it",
                                     "governed_by": ["D5", "D6", "D13"]},
 
+            # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
+            #
+            # Every entry in this block describes a file that exists, typechecks, lints clean
+            # and opens at a hash. `does` says what the file is for, never that a person has
+            # seen it hold a real card — the distinction the whole entry note above is about,
+            # and the one a reader skimming `does` lines would otherwise lose.
+            "src/ReviewQueue.tsx": {
+                "does": "the review queue: one card at a time, photo first, single column, the "
+                        "reason as a human label over its machine string, candidate rows "
+                        "priced from the export, and an answer that writes and advances with "
+                        "no dialog. Reads GET /queues and writes one candidate row back "
+                        "through src/server.ts like every other screen.",
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13"],
+            },
+            # D9 governs a stylesheet here, and it is the sharpest instance of what building
+            # 7b early costs: the price bands that drive the type scale are the one set of
+            # numbers in this directory invented rather than read out of a module, and D9's
+            # threshold is the only real number they are anchored to.
+            "src/ReviewQueue.css": {
+                "does": "its layout, and the price-driven type scale that makes the sort "
+                        "visible — name size and price size stepping down together, parked "
+                        "rows dimmed. Accent outlined, never filled, wherever there are two "
+                        "answers. The bands are a guess at a distribution nobody has measured.",
+                "governed_by": ["D5", "D9", "D13"],
+            },
+            "src/Inventory.tsx": {
+                "does": "D7's SKU -> positions map made visible: one row per SKU carrying the "
+                        "copy count, expanding to the individual positions holding it. Reads "
+                        "GET /inventory, groups in the browser, keeps nothing — there is one "
+                        "place inventory lives and it is not here.",
+                "governed_by": ["D5", "D7", "D8", "D10", "D13"],
+            },
+            "src/Inventory.css": {
+                "does": "its layout, at the dense owner-side end of the one system, two "
+                        "densities — and why no accent appears anywhere in it",
+                "governed_by": ["D5", "D7", "D13"],
+            },
+            "src/Fulfillment.tsx": {
+                "does": "D5's second persona's entire product: cards to pull in box-walk "
+                        "order, photo-confirm before each pull, one-tap mark-sold with an undo "
+                        "window. No machine string and no server message reaches this screen — "
+                        "both are correct for the owner and neither is his.",
+                "governed_by": ["D5", "D6", "D7", "D10", "D13"],
+            },
+            "src/Fulfillment.css": {
+                "does": "the generous 24-64 end of the one system, two densities. Every floor "
+                        "in docs/DESIGN.md's constraints table applies to every rule in it and "
+                        "none is restated as a comment — they are asserted next door instead. "
+                        "The temporary rule that hid the shell nav is gone: src/App.tsx stopped "
+                        "rendering it on this route, which is the fix that rule named.",
+                "governed_by": ["D5", "D10"],
+            },
+
             # ---- step 6's component and the sheet that renders it ----
             "src/PullConfirm.tsx": {"does": "step 6's component: the pull modal's confirm button. "
                                             "Reused as the capture button rather than copied.",
@@ -378,12 +477,28 @@ COMPONENTS = [
                 "governed_by": ["D13", "D16", "D18"],
             },
             "tests/pull-confirm.spec.ts": {
-                "does": "the Fulfillment constraints table as assertions: 44px targets, 20px "
-                        "body, 7:1 contrast, 12px apart. Run by `make design-check`.",
+                "does": "three rows of the Fulfillment constraints table against step 6's one "
+                        "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
+                        "`make design-check`.",
                 "governed_by": ["D5"],
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
+            },
+            "tests/fulfillment.spec.ts": {
+                "does": "all nine rows of the Fulfillment constraints table against the "
+                        "rendered view, with every contrast ratio computed from the colours "
+                        "the page actually painted rather than from a number published in "
+                        "docs/DESIGN.md. Run by `make design-check`.",
+                "governed_by": ["D5", "D10", "D13"],
+                "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
+                        "assertions `make design-check` runs for the few hours between the view "
+                        "being built and being routed — all of them because every test asserts "
+                        "the view is on screen before measuring anything, and none of them a "
+                        "design defect. Worth keeping: that is the spec working, and the "
+                        "alternative it was written against is nine confident measurements of "
+                        "whatever Vite serves for an unknown hash. Green since the routing "
+                        "landed 2026-08-13.",
             },
         },
     },

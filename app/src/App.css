@@ -5,10 +5,16 @@
  * 32px position labels, 44px tap targets) govern that view rather than this one. None of
  * them is asserted here because none of them applies here.
  *
- * When 7b builds the Fulfillment view, this nav must not render on it: that view's row in
- * the constraints table is "zero destructive actions reachable, assert no route to settings
- * or import", and a strip of links to every other screen is exactly the route that assertion
- * forbids. Recorded here rather than left for the assertion to discover.
+ * OWNER-SIDE ONLY IS NOW ENFORCED AND NOT JUST DECLARED. This file said, before the
+ * Fulfillment view existed, that the nav must never render on it — the constraints table
+ * requires zero destructive actions reachable from that view, and a strip of links to the
+ * capture screen's hard-delete undo (D10) is exactly the route it forbids. App.tsx stopped
+ * rendering it there on 2026-08-13; the reasoning and the mechanism are both at `CHROME_FREE`
+ * in that file, because the shell is the only place that can decide it.
+ *
+ * So every rule below is measured against nothing but the owner's screens. Its 11px links and
+ * sub-44px targets would fail four rows of the constraints table if they ever appeared on his
+ * device, which is the sharpest possible statement of why they may not.
  */
 
 .app-nav {

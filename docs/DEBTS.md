@@ -109,29 +109,61 @@ is the one command a cold session is told to run first. Worth doing carefully.
 
 ## Absent signals — a check that does not run at all
 
-### Nothing checks `app/src/tokens.css` against `docs/DESIGN.md`
+### `app/src/tokens.css` is checked against `docs/DESIGN.md` now — closed 2026-08-13
 
-Recorded 2026-08-12, from the step-6 component work.
+Recorded 2026-08-12 from the step-6 component work, **closed 2026-08-13 in step 7b**, which
+is the third of the three moments this entry named and the first one that did not go by.
 
-`docs/design-refs/README.md` already admits this about the two sheets: "nothing reads these
-files programmatically and `scripts/docs-audit.py` does not check the hex values inside
-them, so that staleness will not announce itself." As of step 6 the same is true of
-`app/src/tokens.css` — except that file is not a drawing. It is what the product renders
-from, so a token changed in one place and not the other means the app and the document
-arguing for it disagree, and the document is the one nobody re-reads.
+What it argued: `docs/design-refs/README.md` already admits that nothing reads the two
+sheets programmatically, and the same was true of `app/src/tokens.css` — except that file is
+not a drawing. It is what the product renders from, so a token changed in one place and not
+the other means the app and the document arguing for it disagree, and the document is the
+one nobody re-reads. The cost rose with every stylesheet: one component when this was
+written, seven after step 7a, ten-plus once 7b's screens land.
 
-**Cost**: it rose on 2026-08-13. One component read these tokens when this was written;
-step 7a made it seven stylesheets — three routes, the shell, the picker, the pull-confirm
-and the page ground — and 7b adds the queue and the Fulfillment view. The failure is silent
-by construction — a wrong hex renders perfectly.
+What shipped: the `design tokens` row in `scripts/docs-audit.py`. It parses the fenced block
+under `## Tokens` in `docs/DESIGN.md` — every colour by its name, the three typefaces, every
+step of the spacing scale, the radius — and the custom properties declared on `:root` in
+`app/src/tokens.css`, and compares them in both directions. It blocks, because a
+disagreement between two stated values is provable and D16 leaves it no judgment to defer: a
+value that differs, a locked token the stylesheet never declares, and a declared token the
+block never locked are each a mechanical finding naming both files and both values.
 
-**Why not fixed**: the fix is a mechanical audit check parsing `docs/DESIGN.md`'s fenced
-token block against the file's custom properties, and it is *permitted* — checking is not
-generating, so D18 does not bar it. It was not done at step 6 because that session's job was
-to ship a component, and this repo has a recorded habit of building auditor machinery instead
-of product code. **`docs/specs/capture-app.md` section 11 then named it as the cheapest of
-three and said doing it early in 7a was defensible; 7a shipped without it**, so the second
-stated moment to do this has also gone by. It is still cheap and still well-specified.
+**Seen to fail before it was believed.** With `--accent` changed to `#1e40b0` in
+`app/src/tokens.css` and nothing else touched:
+
+```
+  FAIL design tokens          1 problem
+       docs/DESIGN.md + app/src/tokens.css
+         `accent` disagrees.
+           docs/DESIGN.md:      #1E40AF
+           app/src/tokens.css: #1e40b0
+```
+
+exit 1. Reverted byte-identically, the row reads `ok` and the run exits 0. Under `--staged`
+the same drift is silent until it is staged, which is the whole file's rule — the hook
+audits the tree the commit will carry.
+
+**What it does not cover.** Four things, all deliberate:
+
+- **It proves the two files agree, not that the palette is any good.** A green row says
+  nothing about the 7:1 property of the set, the choice of face, or whether a colour earns
+  its place. Contrast is asserted against rendered pixels in `app/tests/pull-confirm.spec.ts`
+  and the rest is what the interview was for.
+- **The two sheets in `docs/design-refs/` stay unchecked, by design.** They are drawings of
+  `docs/DESIGN.md` and are allowed to lose to it — that file already records two places where
+  the sheet did. A check that forced them to agree would force the reference to be re-drawn
+  before a token could move, which inverts which of the two is the source.
+- **The second fenced block in `docs/DESIGN.md` is not read.** Step 6's three button states
+  restate five of these hexes, and nothing reads those literals — `app/tests/pull-confirm.spec.ts`
+  computes contrast and sizes from rendered pixels and never compares a hex — so one of them
+  can go stale in silence. Left out because it is a different question: a document disagreeing
+  with itself rather than with the code, where D18's instinct is that deleting a restatement
+  may be the right answer. That argument belongs in `docs/DESIGN.md`, not in the auditor.
+- **A raw hex anywhere else in `app/` is invisible to it.** The check reads one `:root` in one
+  file. `app/src/PullConfirm.css` paints `color: #ffffff` twice, and whether that is `--surface`
+  spelled the long way or a label colour deliberately outside the palette is a question for
+  that file's owner, not something this row can see.
 
 ### The repo-map orphan rule did not reach `app/` — it bit, and then it was closed
 

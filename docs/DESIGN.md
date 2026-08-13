@@ -150,10 +150,26 @@ carries its citation.
 The hardest screen in the product and the one the owner spends hours in, so its shape is
 part of the design and not left to step 7.
 
-**One card at a time, photo first, single column.** Photo full width at the top, then one
+**One card at a time, photo first, single column.** Photo as large as the viewport allows at
+the top, then one
 sentence naming what the system found, then the candidate rows with their prices. No
 left/right split, so the same layout works on a laptop and a phone. Answering advances
 immediately.
+
+**"As large as the viewport allows" replaced "full width at the top" on 2026-08-13, after
+building it.** Full column width is right on a phone and wrong on a laptop: a card is 63×88,
+so at a 656px column it draws over 900px tall, and the sentence and the first candidate — the
+two things you are comparing the photo *against* — fall off the screen. The first
+implementation instead centred the image inside a full-width panel, which drew a correct
+photograph beside an equal area of empty surface inside one border, and looked like a bug.
+
+So the rule is a cap on **height**, with width free to bind first: on a phone the column is
+narrow and the photo is genuinely full width; on a laptop the height cap keeps the sentence
+and a candidate visible beneath it. The number is a judgement and lives in
+`app/src/ReviewQueue.css` rather than here — what this section fixes is that the photo is the
+largest thing on the screen and that what you compare it to stays in view with it. This is a
+judging screen: the photograph has to be big enough to settle whether the foil matches the
+toggle, which is the disagreement that put the card in this queue.
 
 **Worked expensive-first, and that ordering has to be visible.** *Description, not
 specification:* `store/queues.py:sort_key` sorts priced cards first and descending, unpriced

@@ -1,0 +1,253 @@
+/* The Fulfillment view — the generous end of docs/DESIGN.md's "one system, two densities".
+ *
+ * Same palette, same three faces, same 4px radius as every owner-side screen in this app.
+ * What changes is the scale: the owner's screens use the 4-16 end of the spacing scale and
+ * this one uses 24-64, and every floor in the constraints table applies to every rule below —
+ * 20px on any text, 32px on any position label, 44px tap targets 12px apart, 7:1 on any text
+ * against any ground, a photo at least 320px on its short edge.
+ *
+ * NONE OF THOSE NUMBERS IS RESTATED IN A COMMENT AS THOUGH IT WERE CHECKED HERE. They are
+ * asserted against the rendered page in app/tests/fulfillment.spec.ts, which is what
+ * docs/DESIGN.md asks for in as many words: "The agent cannot see its own output, so these
+ * are Playwright assertions, not prose." A comment claiming 44px is prose.
+ *
+ * NO 10px MONO CHIP, NO MACHINE-STRING CLASS, NO REASON-CODE SLOT. Those exist in
+ * CaptureScreen.css and PullPreview.css and are correct there; here the smallest type on the
+ * screen is 20px and there is no register below it to put a code in.
+ *
+ * The separation mechanism is the 1px --line hairline and nothing else, as everywhere else in
+ * the product. Rows are spaced as well as ruled, which is not decoration: two tap targets
+ * that abut are 0px apart and the table requires 12.
+ */
+
+/* THE NAV RULE THAT WAS HERE IS GONE, and its absence is the fix rather than a regression.
+ *
+ * This stylesheet carried `body:has(.fulfillment) .app-nav { display: none }` as a bridge,
+ * because the shell was another group's file the day this view was built and the constraints
+ * table needed to be true before it could be checked. It named its own replacement: App.tsx
+ * not rendering the nav on this route at all, since a component that is not rendered cannot be
+ * reached by a keyboard, a screen reader or a stray tap, while `display: none` earns those
+ * three properties by accident and loses them to one specificity change. That landed
+ * 2026-08-13 — see `CHROME_FREE` in App.tsx — so the rule was deleted rather than kept as a
+ * second guard nothing exercises. The assertion in app/tests/fulfillment.spec.ts is what
+ * notices if the shell ever starts drawing chrome here again.
+ */
+
+.fulfillment {
+  /* One column, always. Not a breakpoint away from being two: docs/DESIGN.md's argument for
+     the review queue's single column is that the same layout works on a laptop and a phone,
+     and this is the view where that matters most — it is the default view on his device and
+     nobody is standing next to him when the layout changes. */
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s6);
+
+  display: flex;
+  flex-direction: column;
+  /* 24px, which is both the bottom of this view's spacing range and twice the 12px the table
+     requires between tap targets. One value doing two jobs, and the larger one wins. */
+  gap: var(--s5);
+  align-items: flex-start;
+}
+
+/* THE ONE BREAKPOINT, and it exists because of a measurement rather than a taste.
+ *
+ * At `--s6` padding a 390px-wide phone leaves 326px for the photo and a 375px one leaves 311
+ * — under the 320px short edge the constraints table requires, on the device this view is the
+ * default screen of. Rendered and measured before this rule was written; the desktop
+ * assertion could not have caught it, which is why the spec now measures the photo at a phone
+ * width as well.
+ *
+ * The padding steps down rather than the photo, because the photo's floor is the constraint
+ * and the padding is what is negotiable. 24px is still the bottom of this view's range. */
+@media (max-width: 480px) {
+  .fulfillment {
+    padding: var(--s5);
+  }
+}
+
+.fulfillment-title {
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* Every sentence on this screen, at one size. There is deliberately no second body size and
+   no muted variant of it: a "secondary" sentence on a screen with one user is a sentence
+   somebody decided he did not need to read, and the way to have that opinion is to delete the
+   sentence rather than to shrink it. --ink on --bg, 19.4:1. */
+.fulfillment-say {
+  font-family: var(--body);
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--ink);
+  max-width: 34em;
+}
+
+/* A card's name is a thing a human reads, so it is the body face — the one rule that keeps
+   this screen from reading as a spreadsheet. Heavier and larger than a sentence because it is
+   what he matches against the order in his hand. */
+.fulfillment-name {
+  display: block;
+  font-family: var(--body);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+/* The position label. Utility face because docs/DESIGN.md gives every number in the product
+   to Martian Mono, and because it must not shift width between cards — which a mono gives for
+   free rather than by remembering to set `tnum`, and which the spec asserts by measuring two
+   digit strings rather than by trusting this comment.
+
+   Wrapping is allowed at the separators. `Box 3 · Section 2 · Card 17` at this size is wider
+   than a phone, and the alternatives are worse in both directions: shrinking it below the
+   32px floor is forbidden, and truncating a position label hides the digit that decides which
+   slot he opens. */
+.fulfillment-place {
+  display: block;
+  font-family: var(--util);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+/* On the card panel the position is the payload of the screen rather than one row's caption,
+   so it steps up. 36px and not more: past this the label wraps to three lines on a phone, and
+   a position that has to be reassembled across lines is harder to carry to a box than a
+   smaller one that does not. */
+.fulfillment-place-large {
+  font-size: 36px;
+  font-weight: 600;
+}
+
+/* ---- the list ---- */
+
+.fulfillment-list {
+  list-style: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* The whole row is the target. Padding at the 24px end of the scale rather than the tap
+   floor: 44px is what a target may not go below, not what a target should be for a reader
+   with reading glasses under a desk lamp. */
+.fulfillment-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s5);
+  text-align: left;
+
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+/* Row hover, which is the only thing --hover exists for. */
+.fulfillment-row:hover {
+  background: var(--hover);
+}
+
+/* --ink and not --accent. Accent has exactly two jobs and "this is the row your finger is on"
+   is neither; the outline weight already means the system is unsure, and it must not start
+   meaning "here" on the one screen where the fill has to be unmistakable. */
+.fulfillment-row:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ---- the card panel ---- */
+
+/* Short edge >= 320px, which the aspect ratio makes the width. Sized from the card rather
+   than from the viewport: 63x88mm is the shape of every card this product will ever hold, so
+   the box is the right shape before the photo loads and the layout does not jump when it
+   does. */
+.fulfillment-photo {
+  display: block;
+  width: min(360px, 100%);
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.fulfillment-action {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* The one control that carries the solid accent fill, raised to this view's scale.
+ *
+ * A contextual rule rather than an edit to PullConfirm.css: that component owns its three
+ * states, its colours and its floors, and this changes none of them — it raises the label and
+ * the padding for the view docs/DESIGN.md calls his, and lowers nothing. Its own 20px label
+ * and 44px height already clear the floors; this makes the loudest thing he ever sees look
+ * like it. */
+.fulfillment .pull-confirm {
+  width: 100%;
+  font-size: 24px;
+  padding: var(--s5);
+  text-align: center;
+}
+
+.fulfillment .pull-confirm-label {
+  text-align: center;
+}
+
+/* ---- the plain controls: back, try again, undo ---- */
+
+/* Everything he can press that is not the one thing to do. Deliberately one class and one
+   look: three different quiet buttons would be three things to learn, and the difference
+   between them is carried by the words on them, which is the only difference he has any use
+   for. Body face, because these are words rather than values. */
+.fulfillment-plain {
+  font-family: var(--body);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--s5);
+  cursor: pointer;
+}
+
+.fulfillment-plain:hover {
+  background: var(--hover);
+}
+
+.fulfillment-plain:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ---- the sale he can still take back ---- */
+
+/* A panel in the space above the list rather than a strip across the top of the screen: the
+   list is where he is when this appears, and a message that arrives somewhere he is not
+   looking is a message with a window that has already closed. */
+.fulfillment-sold {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s5);
+  padding: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}

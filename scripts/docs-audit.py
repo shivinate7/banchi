@@ -1628,6 +1628,296 @@ def check_status_sources(report: Report) -> None:
     report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
 
 
+# ------------------------------------------------ the palette the app actually renders from
+
+DESIGN = ROOT / "docs" / "DESIGN.md"
+TOKENS_CSS = ROOT / "app" / "src" / "tokens.css"
+
+COLOUR = "colour"
+TYPEFACE = "typeface"
+LENGTH = "length"
+
+# The two files name the same token differently in exactly two places, and both differences
+# are cosmetic: the type rows are headed by the job a face does (`Utility`) where the
+# property is abbreviated (`--util`), and the spacing scale is one row of numbers where the
+# properties are `--s1`, `--s2` and so on. Renaming one side to match the other was the
+# obvious alternative and is the wrong one — app/src/tokens.css says in its own header that
+# its property names match docs/design-refs/locked.html, and the doc's block is laid out to
+# be read as a palette by a person. A three-line table is cheaper than either file getting
+# worse to spare it.
+DOC_TYPE_TOKENS = {"Display": "display", "Body": "body", "Utility": "util"}
+SPACING_TOKEN = "s"  # positional: the nth number on the Spacing row is `--s<n>`
+RADIUS_TOKEN = "r"
+
+# `Color      #FCFCFD  bg   the page.` and its continuation rows, which carry no label. The
+# optional leading word is what lets the first row of the group parse like the rest.
+_TOKEN_ROW_RE = re.compile(r"^\s*(?:[A-Z][a-z]*\s+)?(#[0-9A-Fa-f]{3,6})\s+([a-z][a-z0-9-]*)\b")
+# Built from the table above rather than beside it: a second enumeration of the same three
+# labels is the drift this whole check exists to catch, and there is no excuse for one here.
+_TYPE_ROW_RE = re.compile(r"^(" + "|".join(DOC_TYPE_TOKENS) + r")\s+(.+?)\s*\(")
+_SPACING_ROW_RE = re.compile(r"^Spacing\s+([\d ]+\d)")
+_RADIUS_ROW_RE = re.compile(r"^Radius\s+(\d+px)\b")
+
+_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_CSS_PROPERTY_RE = re.compile(r"--([A-Za-z0-9_-]+)\s*:\s*([^;]+);")
+_SHORTHAND_RE = re.compile(r"#[0-9a-f]{3}$")
+
+
+class Token(NamedTuple):
+    kind: str
+    text: str  # as its own file writes it, so a finding can quote both spellings
+    value: str  # normalised, and the only thing ever compared
+
+
+def token_value(kind: str, text: str) -> str:
+    """One normaliser, run over both sides.
+
+    Deliberately not two. A doc-side and a css-side normaliser are two decisions about what
+    counts as the same value, and the failure mode of their disagreeing is a permanent
+    finding nobody can fix — or worse, a permanent pass. Every difference this collapses is
+    a difference CSS itself does not see:
+
+      colour     `#FFF` and `#ffffff` are one colour. A check that called them a
+                 disagreement would be reporting a spelling, and would be worked around by
+                 respelling the doc, which is D16's forbidden direction.
+      typeface   the stylesheet names the locked face plus a generic fallback. The interview
+                 chose a face; `sans-serif` behind it is a rendering nicety nobody locked.
+                 Family names are ASCII case-insensitive to CSS, so case is folded too.
+      length     whitespace only. `4px` and `4 px` are not the same value to CSS and are not
+                 collapsed here.
+    """
+    if kind == COLOUR:
+        text = " ".join(text.split()).lower()
+        return "#" + "".join(ch * 2 for ch in text[1:]) if _SHORTHAND_RE.match(text) else text
+    if kind == TYPEFACE:
+        return " ".join(text.split(",")[0].strip().strip("'\"").split()).lower()
+    return " ".join(text.split()).lower()
+
+
+def design_token_block(text: str) -> Optional[str]:
+    """The fenced block under the `## Tokens` heading, or None.
+
+    Scoped to that one section on purpose. docs/DESIGN.md carries a second fenced block —
+    step 6's three button states — which restates some of these hexes; it is a doc arguing
+    with itself rather than with the code, a different question with a different answer, and
+    folding it in here would put two comparisons behind one row's name.
+
+    An unterminated fence returns None, which the caller reports. Falling through to the
+    next fence in the file would compare the button states against the stylesheet and find
+    nothing wrong with either.
+    """
+    collecting = False
+    in_section = False
+    block: List[str] = []
+    for line in text.splitlines():
+        if not collecting and line.startswith("## "):
+            in_section = bool(re.match(r"^##\s+Tokens\b", line))
+            continue
+        if in_section and line.lstrip().startswith("```"):
+            if collecting:
+                return "\n".join(block)
+            collecting = True
+            continue
+        if collecting:
+            block.append(line)
+    return None
+
+
+def design_tokens(block: str) -> Dict[str, Token]:
+    """Every token the block locks: colours by name, the three faces, the scale, the radius.
+
+    A row this cannot read disappears from the doc side rather than being reported here, and
+    that is safe in one direction only — the stylesheet still declares the property, so the
+    comparison reports it as a token the block does not lock. Reformatting the block into a
+    markdown table would therefore fail loudly, one finding per token, rather than passing
+    on an empty comparison. The vacuous case, where nothing at all parses, is caught by the
+    caller.
+    """
+    tokens: Dict[str, Token] = {}
+    for line in block.splitlines():
+        colour = _TOKEN_ROW_RE.match(line)
+        if colour:
+            tokens[colour.group(2)] = Token(COLOUR, colour.group(1), token_value(COLOUR, colour.group(1)))
+            continue
+        face = _TYPE_ROW_RE.match(line)
+        if face:
+            name = DOC_TYPE_TOKENS[face.group(1)]
+            tokens[name] = Token(TYPEFACE, face.group(2), token_value(TYPEFACE, face.group(2)))
+            continue
+        spacing = _SPACING_ROW_RE.match(line)
+        if spacing:
+            for index, step in enumerate(spacing.group(1).split(), start=1):
+                # The block writes the scale bare where the stylesheet writes px. Reading the
+                # unit in is an assumption, and it is the one the rest of the file supports:
+                # `Radius 4px` on the next row carries its unit, and the Fulfillment table
+                # states every other length in px. What would settle it is the Spacing row
+                # spelling the unit out. Until then a scale in any other unit reads here as a
+                # disagreement, which is the safe direction to be wrong in.
+                tokens[f"{SPACING_TOKEN}{index}"] = Token(LENGTH, step, token_value(LENGTH, step + "px"))
+            continue
+        radius = _RADIUS_ROW_RE.match(line)
+        if radius:
+            tokens[RADIUS_TOKEN] = Token(LENGTH, radius.group(1), token_value(LENGTH, radius.group(1)))
+    return tokens
+
+
+def css_root_tokens(text: str) -> Dict[str, str]:
+    """Custom properties declared on `:root`, comments stripped first.
+
+    Stripping first is the point: a token commented out during a refactor still reads as a
+    declaration to a regex, and this check would then agree with the doc about a value the
+    browser never sees. Braces are counted rather than stopping at the first `}` so that a
+    `:root` nested inside an at-rule is read whole — docs/DESIGN.md bans a dark theme, and
+    an audit that silently truncated at one is an audit that would not notice it arriving.
+    """
+    body = _CSS_COMMENT_RE.sub(" ", text)
+    out: Dict[str, str] = {}
+    for match in re.finditer(r":root\b[^{]*\{", body):
+        depth = 1
+        index = match.end()
+        while index < len(body) and depth:
+            if body[index] == "{":
+                depth += 1
+            elif body[index] == "}":
+                depth -= 1
+            index += 1
+        for name, value in _CSS_PROPERTY_RE.findall(body[match.end():index]):
+            out[name] = value.strip()
+    return out
+
+
+def token_findings(doc: Dict[str, Token], css: Dict[str, str]) -> List[Finding]:
+    """Both directions, and every finding names both files and both values.
+
+    Both directions because either half of a drift is the same defect seen from one side. A
+    token in the doc and not the stylesheet is a decision the product never implemented; a
+    token in the stylesheet and not the doc is a value the owner never chose, which is the
+    more dangerous of the two — it renders perfectly and no interview ever saw it.
+    """
+    findings: List[Finding] = []
+    for name in sorted(set(doc) | set(css)):
+        locked = doc.get(name)
+        rendered = css.get(name)
+        if locked is None:
+            findings.append(
+                Finding(
+                    f"{rel(TOKENS_CSS)} + {rel(DESIGN)}",
+                    f"`--{name}: {rendered}` is declared in {rel(TOKENS_CSS)}, and the token "
+                    f"block in {rel(DESIGN)} locks no `{name}`.\n"
+                    f"  Lock it there, or delete it here. A token the doc never chose is a "
+                    f"value with no argument behind it.",
+                )
+            )
+            continue
+        if rendered is None:
+            findings.append(
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"{rel(DESIGN)} locks `{name}` at `{locked.text}`, and "
+                    f"{rel(TOKENS_CSS)} declares no `--{name}`.\n"
+                    f"  Nothing renders it, so the locked value is a decision the product "
+                    f"does not carry.",
+                )
+            )
+            continue
+        if token_value(locked.kind, rendered) != locked.value:
+            findings.append(
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"`{name}` disagrees.\n"
+                    f"  {rel(DESIGN)}:      {locked.text}\n"
+                    f"  {rel(TOKENS_CSS)}: {rendered}\n"
+                    f"  The doc is the source — it records what the owner picked from "
+                    f"rendered alternatives. Change the stylesheet, or take the value back "
+                    f"through an interview and change both.",
+                )
+            )
+    return findings
+
+
+def check_design_tokens(report: Report) -> None:
+    """The locked palette in docs/DESIGN.md against the custom properties the app renders.
+
+    docs/DESIGN.md's token block is the record of an interview: every value in it was chosen
+    by the owner from rendered alternatives, and the paragraphs under it argue for the
+    choices. app/src/tokens.css is what the browser actually paints. Nothing compared them
+    until this row existed, and docs/DEBTS.md recorded the gap with the reason it matters:
+    a wrong hex renders perfectly, so the failure is silent by construction and the document
+    is the one nobody re-reads.
+
+    **Blocking, because a disagreement is provable.** Two files state the same value; either
+    they match or they do not. There is no context this script is missing, which is D16's
+    test for a mechanical finding rather than a printed question.
+
+    **This is a check, not a generator, and the distinction is the whole of D18.** Nothing
+    here writes. The temptation it is placed against is a build step that rewrites
+    app/src/tokens.css from the block — which would run inside `make check`, make the two
+    agree by construction, and turn every wrong hex into a confidently rendered one.
+    Checking lets two things disagree in public.
+
+    **What a green row means, exactly**: the values agree. It says nothing about whether the
+    palette is any good — contrast is asserted in app/tests/pull-confirm.spec.ts against
+    rendered pixels, and taste is what the interview was for.
+    """
+    missing = [rel(path) for path in (DESIGN, TOKENS_CSS) if not exists(path)]
+    if missing:
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    " ".join(missing),
+                    "does not exist, so nothing compares the locked palette against what "
+                    "the app renders from.",
+                )
+            ],
+        )
+        return
+
+    block = design_token_block(read(DESIGN))
+    if block is None:
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    rel(DESIGN),
+                    "has no fenced block under its `## Tokens` heading, so there is no "
+                    "locked palette to compare against.\n"
+                    "  The block is the record of the interview that chose these values. "
+                    "If it moved, this check has to move with it.",
+                )
+            ],
+        )
+        return
+
+    doc = design_tokens(block)
+    css = css_root_tokens(read(TOKENS_CSS))
+    if not doc or not css:
+        # A side that parses to nothing must never report a clean row — same rule as a
+        # malformed `source_suffixes` scanning nothing and saying so. This is the state
+        # docs/DEBTS.md calls this auditor's worst failure mode: a check gone quiet.
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"read {len(doc)} tokens from the block and {len(css)} from `:root`. "
+                    f"A side that parses to nothing compares nothing.",
+                )
+            ],
+        )
+        return
+
+    report.add(
+        "design tokens",
+        MECHANICAL,
+        token_findings(doc, css),
+        f"{len(doc)} locked tokens, all rendered as locked",
+    )
+
+
 # ------------------------------------------------------------------ naming checks by name
 
 
@@ -2097,6 +2387,112 @@ def self_test() -> int:
             str(sorted(source_names(root, DEFAULT_SOURCE_SUFFIXES, False))),
         )
 
+    # The token row's silent failures, in the order they would bite: a normaliser that
+    # hides a real difference, a parser that reads a value the browser never sees, and a
+    # comparison that runs in one direction only.
+    print("\nthe locked palette is compared against the stylesheet, both ways")
+    ok(
+        token_value(COLOUR, "#FFF") == token_value(COLOUR, "#ffffff"),
+        "case and shorthand are spelling, not disagreement",
+        f'{token_value(COLOUR, "#FFF")} vs {token_value(COLOUR, "#ffffff")}',
+    )
+    ok(
+        token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif") == token_value(TYPEFACE, "Cabinet Grotesk"),
+        "the generic fallback in a font stack is not part of the token",
+        token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif"),
+    )
+    ok(
+        token_value(LENGTH, "4px") != token_value(LENGTH, "4 px"),
+        "a length keeps its unit joined — CSS does not read those as one value",
+    )
+
+    sample = "\n".join(
+        [
+            "Color      #FCFCFD  bg        the page. Everything sits on this.",
+            "           #1E40AF  accent    unsure, and the only-action fill",
+            "",
+            "Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px",
+            "",
+            "Spacing    4 8 12        one scale, no other values",
+            "Radius     4px           one value, everywhere",
+        ]
+    )
+    parsed = design_tokens(sample)
+    ok(
+        set(parsed) == {"bg", "accent", "display", "s1", "s2", "s3", "r"},
+        "every row of the block yields its token, labelled row included",
+        str(sorted(parsed)),
+    )
+    ok(parsed["s2"].value == "8px", "the bare spacing scale is read in px", str(parsed["s2"]))
+    ok(
+        parsed["display"].value == "cabinet grotesk",
+        "the face is read without its host parenthetical",
+        str(parsed["display"]),
+    )
+
+    rendered = {
+        "bg": "#fcfcfd",
+        "accent": "#1E40AF",
+        "display": "'Cabinet Grotesk', sans-serif",
+        "s1": "4px",
+        "s2": "8px",
+        "s3": "12px",
+        "r": "4px",
+    }
+    ok(not token_findings(parsed, rendered), "two files that agree produce no finding", str(token_findings(parsed, rendered)))
+
+    drifted = dict(rendered, accent="#1e40b0")
+    findings = token_findings(parsed, drifted)
+    ok(
+        len(findings) == 1 and "#1E40AF" in findings[0].message and "#1e40b0" in findings[0].message,
+        "a changed hex is reported, naming both values",
+        str(findings),
+    )
+    ok(
+        len(findings) == 1 and "docs/DESIGN.md" in findings[0].message and "app/src/tokens.css" in findings[0].message,
+        "and naming both files",
+        str(findings),
+    )
+    ok(
+        len(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})) == 1,
+        "a locked token the stylesheet never declares is reported",
+        str(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})),
+    )
+    ok(
+        len(token_findings(parsed, dict(rendered, shadow="#000000"))) == 1,
+        "and a stylesheet token the block never locked",
+        str(token_findings(parsed, dict(rendered, shadow="#000000"))),
+    )
+
+    css = css_root_tokens(":root {\n  --ink: #08090a; /* was --ink: #ffffff; */\n}\n")
+    ok(css == {"ink": "#08090a"}, "a declaration inside a comment is not a token", str(css))
+    ok(
+        css_root_tokens(".card { --ink: #ffffff; }\n") == {},
+        "and a custom property on some other selector is not a locked token",
+        str(css_root_tokens(".card { --ink: #ffffff; }\n")),
+    )
+
+    # The extractor against the real file, because the synthetic block above is written to
+    # be parseable and docs/DESIGN.md is written to be read.
+    if exists(DESIGN):
+        block = design_token_block(read(DESIGN))
+        # Discriminated on a string only the step-6 fence carries. The obvious marker —
+        # `disabled`, one of its three state names — is also the last word of the `muted`
+        # row in this fence, so it failed against the correct block. Measured, not guessed.
+        ok(
+            block is not None and "Spacing" in block and "44px tall" not in block,
+            "the Tokens fence is the one extracted, not step 6's button states",
+            (block or "")[:70],
+        )
+    report = Report()
+    check_design_tokens(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["design tokens"],
+        "this repo's own tokens.css agrees with docs/DESIGN.md",
+        str(by_label["design tokens"]),
+    )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -2219,6 +2615,7 @@ def audit(staged_only: bool) -> Report:
     check_current_gate(report)
     check_map(report, allowed)
     check_status_sources(report)
+    check_design_tokens(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     if staged_only:

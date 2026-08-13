@@ -1,4 +1,11 @@
-import type { CardSummary, Finish, Inventory, ServerStatus } from './types'
+import type {
+  CardSummary,
+  Finish,
+  Inventory,
+  QueueSnapshot,
+  ReviewAnswer,
+  ServerStatus,
+} from './types'
 
 /* The only module in this app that talks to the capture server.
  *
@@ -67,6 +74,48 @@ export class ServerError extends Error {
   }
 }
 
+/** A refusal in the shape an owner-side screen draws it: the sentence it shows, and the code
+ *  it prints small beneath — docs/DESIGN.md's human-label-large, machine-string-small rule. */
+export type Failure = { code: string; message: string }
+
+/**
+ * Any thrown thing, as an owner-side screen shows it.
+ *
+ * THE SERVER'S OWN MESSAGE, VERBATIM, which is the rule this whole module is built on:
+ * `server/capture_server.py:_fail` already says what happened and what to do next, holding
+ * facts this side of the wire does not have. The second branch is for something that threw
+ * inside the client before the server could answer — and it deliberately does NOT point at
+ * `make server`, because `request()` above has already converted a dead server, a wrong
+ * address and a CORS refusal alike into `ServerError('unreachable', …)`. Anything reaching
+ * the fallback is a bug in the app, and sending the operator to the terminal for it sends him
+ * to the one place the fault is not. It keeps a branch rather than being dropped, because a
+ * screen that renders nothing while something is broken is worse than one that names it, and
+ * `client_bug` greps to this line and to no server route.
+ *
+ * THREE SCREENS CARRIED A BYTE-IDENTICAL COPY OF THIS UNTIL 2026-08-13. PullPreview.tsx wrote
+ * it; ReviewQueue.tsx and Inventory.tsx copied it, and both named this file as where it
+ * belonged and another group's ownership as why it could not go there that session.
+ * Inventory.tsx set the threshold as well — "worth doing when a third screen needs it, not
+ * before". A third screen needed it, and both conditions were met at once, so it moved here
+ * rather than gaining a fourth copy.
+ *
+ * FULFILLMENT.TSX DOES NOT USE IT, and that is a policy difference rather than an oversight.
+ * That view may not show a server message at all: those strings name routes, states and
+ * `make` commands, every one of them correct and none of them the Fulfiller's (D5). It writes
+ * its own sentences and the register note at the top of that file argues why. Do not
+ * "finish the job" by wiring this into it.
+ */
+export function describeFailure(err: unknown): Failure {
+  if (err instanceof ServerError) return { code: err.code, message: err.message }
+  const detail = err instanceof Error ? err.message : String(err)
+  return {
+    code: 'client_bug',
+    message:
+      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
+      'the app rather than a refusal — check the browser console.',
+  }
+}
+
 /**
  * Where a stored capture can be seen. D6's route, and the reason it exists.
  *
@@ -82,6 +131,37 @@ export class ServerError extends Error {
  */
 export function photoUrl(box: number, index: number): string {
   return `${base}/photo/${box}/${index}`
+}
+
+/**
+ * The position label the server rendered, or null when it sent none.
+ *
+ * `pipeline/join.py:Position.label` composes `Box 3 · Section 2 · Card 17` at 25 cards per
+ * section (D10) and `do_inventory` decorates every row it can with the result. The rule
+ * types.ts states on that field is that the app displays this string and never composes a
+ * second one — a client-side renderer is a copy of D10's divider size that nothing keeps in
+ * step with the pipeline's.
+ *
+ * MISSING IS RETURNED AS NULL, NEVER FILLED IN, and what a caller shows instead is the
+ * caller's decision: the pull preview and the inventory view both print the store key with
+ * the words `no label` in front of it, because `3/30` bare reads like a position and is not
+ * one. `do_inventory` leaves a row undecorated when its box or index will not coerce, on the
+ * grounds that a placeholder would name a position that does not exist; this function is
+ * where that refusal survives the trip.
+ *
+ * THE `typeof` CHECK IS NOT REDUNDANT WITH `label?: string` AND MUST NOT BE DELETED AS THOUGH
+ * IT WERE. The type describes the contract; this describes the process actually answering on
+ * :8000, and during an upgrade — an older capture server still running on the Mac — those are
+ * different things. This module casts rather than validates, by the decision recorded below,
+ * so a field the running server omits arrives under a type that says otherwise. It also does
+ * work the type cannot: `''` is a `string` and not a label.
+ *
+ * Two screens carried identical copies of this until 2026-08-13. It is one rule about one
+ * field, so it is one function.
+ */
+export function positionLabel(card: { label?: string }): string | null {
+  const { label } = card
+  return typeof label === 'string' && label.trim() !== '' ? label : null
 }
 
 // ------------------------------------------------------------------------------ the wire
@@ -275,6 +355,112 @@ export async function undoCapture(box: number, index: number): Promise<{ deleted
   return (await request(`/inventory/${box}/${index}`, { method: 'DELETE' })) as {
     deleted: string
   }
+}
+
+// --------------------------------------------------------- the standing queues, and D4's answer
+
+/**
+ * Both standing queues, in the order they are meant to be worked.
+ *
+ * THE ORDER IS THE PAYLOAD'S WHOLE POINT AND IS NEVER RECOMPUTED ON THIS SIDE.
+ * `store/queues.py:Queue.open_entries` sorts priced first and descending, unpriced last, then
+ * box-walk order — the same sort every run report has already printed. An app-side re-sort
+ * would be a second copy of `QueueEntry.sort_key` one edit away from disagreeing with the
+ * report the owner read before he opened the screen.
+ *
+ * Cleared entries are absent rather than flagged: the route serves `open_entries`, which is
+ * "what is left to do", and an answered card is not that.
+ *
+ * Two lists and not one. The split is the point (`store/queues.py`): main is work, parked is
+ * the low-value queue an unidentifiable card may never be worth a tap on. Concatenating them
+ * here would put the merge in the one module that cannot see why they are separate — the
+ * screen does it, deliberately and in one function it can argue for.
+ */
+export async function getQueues(): Promise<QueueSnapshot> {
+  return (await request('/queues', NO_CACHE)) as QueueSnapshot
+}
+
+/**
+ * D4's one-tap choice: one candidate row, chosen, written onto the card.
+ *
+ * `condition` TRAVELS WITH `sku` EVEN THOUGH THE SKU IMPLIES IT, and this client does not
+ * derive it. The route checks the pair against the row it offered, so that a screen drawn
+ * from a queue file a later join has rewritten is caught rather than obeyed; a condition
+ * composed here would be self-consistent every time and would turn a stale click into a
+ * wrong finish on a real card. Both values are copied off the row that was pressed.
+ *
+ * The refusals worth branching on are `already_answered` and `not_in_queue` — the two-device
+ * case (D5, D13) and a client asking about the wrong card. They are two codes rather than one
+ * because the remedies differ, and the screen reads `ServerError.code` to tell them apart.
+ *
+ * Answers one entry, never a batch. `Store.write()` takes the file lock per call, so a caller
+ * that fires several at once stacks writes against a lock and gets their failures back out of
+ * order — the review screen serialises for exactly that reason.
+ */
+export async function answerReview(answer: ReviewAnswer): Promise<{ answered: string }> {
+  const { box, index, sku, condition } = answer
+  /* Named for what it answered, the same subset `undoCapture` takes of a much larger body:
+   * the route also reports which queues it cleared and the whole card record, and no screen
+   * reads either. `server/capture_server.py:do_review_answer` holds the full shape. */
+  return (await request(`/review/${box}/${index}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sku, condition }),
+  })) as { answered: string }
+}
+
+// ------------------------------------------------------------------------------ mark sold
+
+/* One route in both directions — `POST /inventory/<box>/<index>/sold`, with `{"undo": true}`
+ * to reverse. Two exported functions over one private call, because a boolean at the call
+ * site reads as `sale(box, index, true)` and the reader has to come here to learn which way
+ * that goes.
+ *
+ * A body is sent even for the sale, which carries nothing: `_body()` refuses an empty request
+ * as `body_required`, uniformly for every write this server answers. Two characters on the
+ * wire buys one set of rules about request size and encoding rather than two.
+ *
+ * THE `already_sold` AND `not_sold` REFUSALS ARE NOT SOFTENED HERE. Both mean the card is
+ * already in the state the caller asked for, and the Fulfillment view treats them as success
+ * on the grounds that the only person who could act on the refusal is not in the room. That
+ * is a decision about one persona's screen (D5), not about the wire: on the owner's screens
+ * the same refusal is worth seeing. So this module does what it does for every other route —
+ * throws `ServerError` carrying the server's own code and message — and the screen that wants
+ * the softer reading applies it where the reason for it is written down.
+ */
+async function sale(box: number, index: number, undo: boolean): Promise<{ position: string }> {
+  return (await request(`/inventory/${box}/${index}/sold`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(undo ? { undo: true } : {}),
+  })) as { position: string }
+}
+
+/**
+ * Mark one copy sold. D10: sold is a state, never a removal — the record stays, the position
+ * stays, and the position is never reused, so a printed label is still true a year later.
+ *
+ * ONE COPY, NOT ONE SKU. D7 keeps every copy as its own position with its own photo precisely
+ * so an order pull can mark one of them sold and leave the rest listed. The position in the
+ * path is the whole of the selection.
+ */
+export function markSold(box: number, index: number): Promise<{ position: string }> {
+  return sale(box, index, false)
+}
+
+/**
+ * Put a sold copy back to the state it was in. The server half of docs/DESIGN.md's undo.
+ *
+ * There is no expiry on the route and none here: a server-side deadline would fail the
+ * reversal exactly when the network was slow. What the design's ">= 10s" governs is how long
+ * the control stays on screen, which is the calling screen's decision and is made there.
+ *
+ * The state that comes back is read out of `history.jsonl` rather than guessed — a card sold
+ * out of `pushed` returns to `pushed`. When the log cannot say, the route refuses as
+ * `sold_origin_unknown` rather than defaulting to `live`.
+ */
+export function undoSale(box: number, index: number): Promise<{ position: string }> {
+  return sale(box, index, true)
 }
 
 // --------------------------------------------------------------------------- capture ids

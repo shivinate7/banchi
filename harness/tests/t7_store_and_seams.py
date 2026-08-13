@@ -38,9 +38,19 @@ one is a regression test as much as coverage: the route shipped editing the card
 while `Store.write()` committed the queues and the answer cache back around a position that
 no longer existed.
 
-WHAT THIS STILL DOES NOT COVER. Mark-sold and the pull routes do not exist; they are 7b,
-built after Gate B against real data rather than against guesses, and their assertions
-arrive with them.
+7b'S THREE ROUTES ARRIVED THE SAME WAY, on 2026-08-13, and the paragraph here used to say
+they did not exist. `check_queues`, `check_review_answer` and `check_mark_sold` cover the
+standing-queue read, D4's one-tap answer and D10's mark-sold with its reversal — every
+refusal by code, and the two rules that are easy to state and easy to lose: an answer may
+only be one of the rows the pipeline offered, and a sale is a state that keeps its record
+and its position.
+
+WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
+three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
+after. Every queue entry they have ever been handed was hand-built — by the harness below,
+or by hand in a browser — so what is asserted here is that the routes behave as
+`docs/DESIGN.md` describes, NOT that a real run produces entries of this shape. A green T7
+says the same thing about 7b that a green T6 says about geometry: it is self-consistent.
 """
 
 from __future__ import annotations
@@ -81,6 +91,55 @@ PASS_CRITERIA = (
 # Enough to satisfy the server's magic-number check. It verifies rather than decodes — see
 # the JPEG_MAGIC comment there — so a real image would only make this test slower.
 JPEG = b"\xff\xd8\xff" + b"\x00" * 64
+
+# Two rows the pipeline would have offered for one collector number, built through
+# `cli/resolve.py:_candidate_rows`'s six keys rather than by hand, so the shape 7b's routes
+# read cannot drift from the shape `join` writes. The pair differs only by finish, which is
+# the case D3 rung 4 sends to review and the case the review screen exists for.
+#
+# HAND-BUILT, AND THAT IS THE LIMIT OF WHAT THESE CASES PROVE. No run has ever produced a
+# queue entry — Gate B is where the first one comes from — so these assert the routes against
+# `docs/DESIGN.md`, not against reality. Recorded here rather than only in the module
+# docstring because this literal is where the assumption physically lives.
+CANDIDATES = [
+    {
+        "sku": "8608859",
+        "name": "Articuno",
+        "set": "SV09",
+        "number": "161/159",
+        "condition": "Near Mint Holofoil",
+        "market": "12.00",
+    },
+    {
+        "sku": "8608860",
+        "name": "Articuno",
+        "set": "SV09",
+        "number": "161/159",
+        "condition": "Near Mint Reverse Holofoil",
+        "market": "4.20",
+    },
+]
+
+
+def entry(box: int, index: int, **extra) -> queues.QueueEntry:
+    """A queue entry for a captured position, with the fields a review row is drawn from.
+
+    `label` comes from `join.Position` and never from a literal, for the same reason
+    `check_server_routes` asserts the server's labels that way: one renderer draws a
+    position, and a literal here would go on passing while the app and the pipeline
+    disagreed about where a card is.
+    """
+    fields = {
+        "position": master.position_key(box, index),
+        "box": box,
+        "index": index,
+        "label": join.Position(box, index).label,
+        "photo": str(capture_server.photo_path(box, index)),
+        "reason": "metadata_detection_disagreement",
+        "candidates": [dict(row) for row in CANDIDATES],
+    }
+    fields.update(extra)
+    return queues.QueueEntry(**fields)
 
 
 @contextmanager
@@ -764,6 +823,557 @@ def check_undo(checks: Checks) -> None:
     )
 
 
+# --------------------------------------------------------------------- the standing queues
+
+
+def check_queues(checks: Checks) -> None:
+    """GET /queues — the two standing queues, in the order they are meant to be worked.
+
+    THE ORDER IS THE ONLY THING THIS ROUTE ADDS, so it is what is asserted. `docs/DESIGN.md`
+    calls the expensive-first sort "built and runs today" and says the screen's job is to
+    make it visible; a route that quietly re-sorted, or an app that did, would throw away a
+    ranking the run report has already printed and the owner has already read.
+    """
+    checks.note("")
+    checks.note("QUEUES — GET /queues")
+
+    with isolated_home():
+        empty = capture_server.do_queues()
+        checks.equal(
+            empty,
+            {"review": [], "parked": []},
+            "an empty store answers with two empty lists, never a null or a 404",
+        )
+
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+        capture_server.do_capture(capture_payload(4))
+
+        with Store().write() as snapshot:
+            # Prices chosen so every leg of `QueueEntry.sort_key` is exercised by one list:
+            # two cards at the same price to force the box-walk tiebreak, one cheaper, one
+            # unpriced. An `open_entries` that sorted by insertion, by position, or by price
+            # ascending all give different answers to this.
+            snapshot.review.upsert(entry(3, 1, market="0.75"))
+            snapshot.review.upsert(entry(3, 2, market=None))
+            snapshot.review.upsert(entry(3, 3, market="12.00"))
+            snapshot.review.upsert(entry(4, 1, market="12.00"))
+            snapshot.parked.upsert(entry(3, 2, market="0.02", reason="no_market_data"))
+
+        body = capture_server.do_queues()
+        checks.equal(
+            [row["position"] for row in body["review"]],
+            ["3/3", "4/1", "3/1", "3/2"],
+            "priced first and DESCENDING, ties broken by box-walk order, unpriced last "
+            "(docs/DESIGN.md: worked expensive-first, and that ordering has to be visible)",
+        )
+        checks.equal(
+            [row["position"] for row in body["review"]],
+            [e.position for e in Store().read().review.open_entries],
+            "and the route hands over Queue.open_entries' own order — one sort, not a "
+            "second copy of QueueEntry.sort_key living in the server",
+        )
+        checks.equal(
+            [row["position"] for row in body["parked"]],
+            ["3/2"],
+            "parked is a SEPARATE list: main is work, parked is the low-value queue, and "
+            "merging them here is how the $12 cards get missed (store/queues.py)",
+        )
+
+        row = body["review"][0]
+        checks.equal(
+            sorted(row),
+            [
+                "age_days",
+                "box",
+                "candidates",
+                "cleared_by_human",
+                "confidence",
+                "first_seen",
+                "index",
+                "label",
+                "market",
+                "photo",
+                "position",
+                "read",
+                "reason",
+            ],
+            "a queue row is the whole QueueEntry record plus age_days — not a projection "
+            "the app has to hold against review.json field by field",
+        )
+        checks.equal(
+            row["candidates"],
+            CANDIDATES,
+            "the candidate rows ride along: they are what the review screen offers, and a "
+            "second call to fetch them would be a screen that can draw before it can answer",
+        )
+        checks.equal(row["market"], "12.00", "with the price the sort was made on")
+        checks.equal(row["reason"], "metadata_detection_disagreement", "and the reason code")
+        checks.equal(
+            row["photo"],
+            str(capture_server.photo_path(3, 3)),
+            "photo is the path on the Mac, exactly as Card.photo is — GET /photo is D6's "
+            "route and the only way a browser sees it",
+        )
+        checks.equal(
+            row["age_days"], 0, "and age_days is computed here rather than in the app"
+        )
+        checks.equal(
+            row["label"],
+            join.Position(3, 3).label,
+            "the label is pipeline/join.py's, the same one every other route answers with",
+        )
+
+        # A cleared entry is not work. It stays in the file — `Queue.release` preserves it so
+        # a human's answer outlives the question — and this route answers "what is left".
+        with Store().write() as snapshot:
+            snapshot.review.entries["3/1"].cleared_by_human = True
+        after = capture_server.do_queues()
+        checks.equal(
+            [row["position"] for row in after["review"]],
+            ["3/3", "4/1", "3/2"],
+            "a cleared entry disappears from the queue payload",
+        )
+        checks.ok(
+            Store().read().review.entries.get("3/1") is not None,
+            "but stays in review.json: the answer outlives the question (store/queues.py)",
+        )
+        checks.equal(
+            capture_server.do_status()["queues"],
+            {"review": 3, "parked": 1},
+            "and GET /status counts OPEN entries, not every record in the file — the two "
+            "were indistinguishable until something set cleared_by_human, and this is the "
+            "number the owner reads to decide whether there is work left",
+        )
+
+
+# ------------------------------------------------------------------------ the review answer
+
+
+def check_review_answer(checks: Checks) -> None:
+    """POST /review/<box>/<index>/answer — D4's one-tap choice.
+
+    THE REFUSAL THAT MATTERS IS `sku_not_a_candidate`. `CLAUDE.md`'s hard rule — never guess
+    an identification, ambiguity goes to the review queue with its photo — is a rule about
+    the pipeline, and a screen that could write an arbitrary SKU onto a card would be that
+    same rule broken by hand: an answer nothing ever proposed, indistinguishable afterwards
+    from one that was, on the card the pipeline was least sure about.
+    """
+    checks.note("")
+    checks.note("REVIEW ANSWER — POST /review/<box>/<index>/answer")
+
+    holo = CANDIDATES[0]
+    reverse = CANDIDATES[1]
+
+    with isolated_home():
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(3))
+
+        with Store().write() as snapshot:
+            for key in ("3/1", "3/2", "3/3", "3/4", "3/5"):
+                snapshot.inventory.set_state(key, master.IDENTIFIED)
+            snapshot.review.upsert(entry(3, 1, market="12.00"))
+            # No candidates at all — `cli/resolve.py:failure_entry`'s shape, for a card whose
+            # identification failed outright. There is nothing to choose between.
+            snapshot.review.upsert(
+                entry(3, 3, candidates=[], reason="identification_failed")
+            )
+            # In BOTH files at once, which nothing in store/queues.py prevents.
+            snapshot.review.upsert(entry(3, 4, market="12.00"))
+            snapshot.parked.upsert(entry(3, 4, market="0.05"))
+            # Parked only, so the parked path is answerable on its own.
+            snapshot.parked.upsert(entry(3, 5, market="0.05"))
+            # 3/2 is captured and identified and in no queue at all.
+
+        good = {"sku": reverse["sku"], "condition": reverse["condition"]}
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, dict(good, state="sold")),
+            "field_not_settable",
+            "an answer naming `state` is refused: listing transitions are not settable here",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"condition": reverse["condition"]}),
+            "sku_required",
+            "an answer with no sku refuses as sku_required",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"sku": reverse["sku"]}),
+            "condition_required",
+            "and one with no condition refuses as condition_required",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(9, 9, good),
+            "card_not_found",
+            "an answer for a position that holds no card refuses — this route answers a "
+            "card that exists and never creates one",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 2, good),
+            "not_in_queue",
+            "a card that is not waiting in either queue refuses in its OWN code, not as "
+            "card_not_found — the position is real and the client is asking about the "
+            "wrong card",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(3, 3, good),
+            "an entry recording no candidate rows refuses rather than accepting a free "
+            "answer into the one field the hard rule protects",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "no_candidates",
+                "and it refuses as no_candidates",
+            )
+            checks.ok(
+                "identification_failed" in str(caught),
+                "and the refusal names why the card is queued, since that is what says "
+                "whether it needs a re-shoot or a re-identify",
+                f"message was: {caught}",
+            )
+
+        # THE ONE THIS SECTION EXISTS FOR.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(
+                3, 1, {"sku": "9999999", "condition": holo["condition"]}
+            ),
+            "a sku the pipeline never offered is REFUSED — never guess an identification "
+            "(CLAUDE.md), and a screen that could write one is that rule broken by hand",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "sku_not_a_candidate",
+                "and it refuses in its own code",
+            )
+            checks.ok(
+                holo["sku"] in str(caught) and reverse["sku"] in str(caught),
+                "and the refusal names the rows that WERE offered, so the next request is "
+                "the right one rather than another guess",
+                f"message was: {caught}",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                3, 1, {"sku": reverse["sku"], "condition": holo["condition"]}
+            ),
+            "condition_mismatch",
+            "a real sku with the WRONG condition refuses: the pair is redundant on the "
+            "wire precisely so a screen drawn from a re-joined queue file cannot answer "
+            "one row while believing it answered another",
+        )
+
+        checks.ok(
+            Store().read().inventory.get("3/1").sku is None,
+            "and not one of those refusals wrote a sku onto the card",
+        )
+
+        # ------------------------------------------------------------------ the answer
+        body = capture_server.do_review_answer(3, 1, good)
+        checks.equal(body["answered"], "3/1", "an answer reports the position it answered")
+        checks.equal(body["sku"], reverse["sku"], "and the sku it wrote")
+        checks.equal(
+            body["condition"],
+            reverse["condition"],
+            "and the condition, taken from the candidate row rather than echoed back",
+        )
+        checks.ok(
+            body["review_cleared"] and not body["parked_cleared"],
+            "and says which queue it cleared, the way undo says what it removed",
+        )
+        checks.equal(
+            body["card"]["label"],
+            join.Position(3, 1).label,
+            "the returned card is a decorated inventory row — the same shape GET "
+            "/inventory answers with, so the app needs no second vocabulary for a card",
+        )
+
+        answered = Store().read()
+        checks.equal(answered.inventory.get("3/1").sku, reverse["sku"], "the sku reaches the card")
+        checks.equal(
+            answered.inventory.get("3/1").condition,
+            reverse["condition"],
+            "and so does the condition",
+        )
+        checks.equal(
+            answered.inventory.get("3/1").state,
+            master.IDENTIFIED,
+            "and the card's STATE is untouched: emit owns the move to pushed, and the app "
+            "reads state rather than setting it",
+        )
+
+        checks.ok(
+            answered.review.entries["3/1"].cleared_by_human,
+            "the entry is CLEARED, not deleted — cleared_by_human is the flag "
+            "store/queues.py was built around and nothing had ever written",
+        )
+        checks.equal(
+            [row["position"] for row in capture_server.do_queues()["review"]],
+            ["3/4", "3/3"],
+            "so it leaves the queue payload, and the two still waiting keep their order — "
+            "priced 3/4 ahead of unpriced 3/3",
+        )
+
+        # The reason clearing beats deleting: a later `./pkmnscan join` re-queues every card
+        # it could not resolve, and this card is still unresolved as far as the pipeline is
+        # concerned. Popping the entry would let it ask the same question again.
+        with Store().write() as snapshot:
+            requeued = snapshot.review.upsert(entry(3, 1, market="12.00"))
+        checks.ok(
+            not requeued,
+            "and a later join CANNOT re-ask it: Queue.upsert refuses to re-queue a cleared "
+            "position, which is what a deletion here would have thrown away",
+        )
+        checks.ok(
+            Store().read().review.entries["3/1"].cleared_by_human,
+            "and the re-queue left the answer alone",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, good),
+            "already_answered",
+            "answering it twice refuses in its own code — the two-device case (D5, D13), "
+            "where the remedy is to reload rather than to retry",
+        )
+
+        both = capture_server.do_review_answer(3, 4, good)
+        checks.ok(
+            both["review_cleared"] and both["parked_cleared"],
+            "a position sitting in BOTH files is cleared in both — clearing one would "
+            "leave the screen showing a card whose answer is already written",
+        )
+
+        parked_only = capture_server.do_review_answer(3, 5, good)
+        checks.ok(
+            parked_only["parked_cleared"] and not parked_only["review_cleared"],
+            "and a parked-only card is answerable on its own",
+        )
+        checks.equal(
+            capture_server.do_status()["queues"],
+            {"review": 1, "parked": 0},
+            "GET /status follows the answers down — 3/3 is all that is left open",
+        )
+
+        # Nothing outside inventory.json and the queues moved. The paid answer in particular
+        # is left exactly as it was: see the route's own comment for why marking it
+        # human-cleared claims more than the human actually said.
+        checks.ok(
+            not Store().read().cache.entries,
+            "and identifications.json is untouched — this route records which ROW was "
+            "chosen, not that the model's read was vouched for",
+        )
+
+
+# ------------------------------------------------------------------------------ mark sold
+
+
+def check_mark_sold(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/sold — D10's sale, and the server half of undo.
+
+    TWO RULES, AND THEY PULL IN OPPOSITE DIRECTIONS. A sale must not remove anything — the
+    record and the position both survive, permanently — while the undo `docs/DESIGN.md`
+    requires on every mark-sold must put back the exact state the card came from, which for a
+    real order pull is as likely to be `pushed` or `staged` as `live`.
+    """
+    checks.note("")
+    checks.note("MARK SOLD — POST /inventory/<box>/<index>/sold")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+
+        with Store().write() as snapshot:
+            for state in (master.PUSHED, master.STAGED, master.LIVE):
+                snapshot.inventory.set_state("3/1", state)
+            snapshot.inventory.set_state("3/2", master.PUSHED)
+
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(9, 9, {}),
+            "card_not_found",
+            "a sale against a position that holds no card refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(3, 1, {"state": "sold"}),
+            "field_not_settable",
+            "and a body naming a field this route does not set refuses before anything else",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(3, 1, {"undo": "yes"}),
+            "undo_invalid",
+            "`undo` must be a JSON boolean: the string \"false\" is truthy in Python, and a "
+            "flag whose two values are do-it and undo-it is the last place to guess",
+        )
+
+        # ----------------------------------------------------------------- the sale
+        sold = capture_server.do_mark_sold(3, 1, {})
+        checks.equal(sold["state"], master.SOLD, "a sale moves the card to `sold`")
+        checks.ok(not sold["undone"], "and reports that it was a sale, not a reversal")
+        checks.equal(sold["previous_state"], master.LIVE, "naming the state it came from")
+        checks.equal(
+            sold["restores_to"],
+            master.LIVE,
+            "and what an undo would put back, so the control can be offered — or not — at "
+            "the moment of the sale rather than at the tap that would have failed",
+        )
+
+        after = Store().read()
+        checks.ok(
+            after.inventory.get("3/1") is not None,
+            "SOLD IS A STATE, NEVER A REMOVAL (D10): the record survives the sale",
+        )
+        checks.equal(
+            after.inventory.next_index(3),
+            4,
+            "and the position is a PERMANENT GAP — the next capture steps past it, not "
+            "into it, which is what makes a printed label true a year later",
+        )
+        checks.ok(
+            capture_server.photo_path(3, 1).is_file(),
+            "and the capture photo survives too: a sold card is what the pull preview "
+            "shows (D6), and what makes a dispute answerable afterwards",
+        )
+        checks.equal(
+            capture_server.do_status()["states"][master.SOLD], 1, "GET /status counts it sold"
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(3, 1, {}),
+            "already_sold",
+            "selling it twice refuses — one physical card, one sale",
+        )
+
+        # -------------------------------------------------------------- the reversal
+        back = capture_server.do_mark_sold(3, 1, {"undo": True})
+        checks.ok(back["undone"], "an undo reports itself as a reversal")
+        checks.equal(back["state"], master.LIVE, "and puts the card back where it was")
+        checks.equal(back["previous_state"], master.SOLD, "from sold")
+        checks.equal(
+            back["restores_to"], None, "with nothing left to reverse"
+        )
+        checks.equal(
+            Store().read().inventory.get("3/1").state,
+            master.LIVE,
+            "and the store agrees",
+        )
+        checks.equal(
+            [e["event"] for e in Store().history() if e.get("position") == "3/1"],
+            [master.CAPTURED, master.PUSHED, master.STAGED, master.LIVE, master.SOLD, master.LIVE],
+            "history reads `live, sold, live` — the reversal needs no `undone` event, which "
+            "docs/DEBTS.md records as a D10 question rather than a logging one",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(3, 1, {"undo": True}),
+            "not_sold",
+            "and reversing a card that is not sold refuses in its own code",
+        )
+
+        # THE REASON THE PRIOR STATE IS READ AND NOT ASSUMED. An order pull before any
+        # Export From Staged has been run touches cards at `pushed`; restoring one of those
+        # to `live` would claim TCGplayer is showing quantity against a SKU it has never
+        # been told about.
+        pushed = capture_server.do_mark_sold(3, 2, {})
+        checks.equal(
+            pushed["restores_to"],
+            master.PUSHED,
+            "a card sold out of `pushed` restores to PUSHED, not to live — the reversal is "
+            "exact rather than assuming the card was listed",
+        )
+        checks.equal(
+            capture_server.do_mark_sold(3, 2, {"undo": True})["state"],
+            master.PUSHED,
+            "and the reversal actually puts that state back",
+        )
+
+        # ASSUMPTION, asserted so a later change to it is visible rather than silent.
+        # Neither docs/DESIGN.md nor D10 says which states may be sold from, and the route
+        # is permissive: refusing a card that was never pushed would leave a person holding
+        # a card he has genuinely sold with no way to record it. Gate B settles it.
+        never_listed = capture_server.do_mark_sold(3, 3, {})
+        checks.equal(
+            never_listed["restores_to"],
+            master.CAPTURED,
+            "a card that was never listed can still be marked sold, restoring to `captured` "
+            "— ASSUMPTION, permissive by choice; see the route's comment",
+        )
+        capture_server.do_mark_sold(3, 3, {"undo": True})
+
+        # A record whose history the store does not hold. Reachable for a store whose
+        # history.jsonl was truncated or hand-edited, and the point is that it refuses.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["5/1"] = master.Card(
+                box=5, index=1, state=master.SOLD
+            )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_mark_sold(5, 1, {"undo": True}),
+            "a sold card with no earlier state in history REFUSES rather than guessing",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "sold_origin_unknown",
+                "and it refuses in its own code — defaulting to `live` is the obvious guess "
+                "and is exactly what would make the reversal wrong",
+            )
+        checks.equal(
+            Store().read().inventory.get("5/1").state,
+            master.SOLD,
+            "and the refusal changed nothing",
+        )
+
+    # Wiring, invisible from Python and fatal from a browser: a preflight that does not
+    # advertise POST refuses both of 7b's writes before the server ever sees them.
+    methods = dict(capture_server.CORS_HEADERS)["Access-Control-Allow-Methods"]
+    checks.ok(
+        "POST" in methods,
+        "CORS advertises POST, which both 7b writes travel on",
+        f"methods: {methods}",
+    )
+    checks.equal(
+        capture_server.SOLD_FIELDS,
+        ("undo",),
+        "and mark-sold's whole body is the undo flag: the position is in the path and the "
+        "state is a constant",
+    )
+
+    # ROUTING, and specifically that the sale does not shadow the two verbs already living
+    # under /inventory/<box>/<index>. Asserted here rather than by standing a server up:
+    # everything above calls the route functions directly, so a regex that matched the wrong
+    # path would leave every one of those assertions green while the app got a 404 — or,
+    # worse, while a PUT correction was read as a sale.
+    checks.ok(
+        capture_server._SOLD_RE.match("/inventory/3/17/sold") is not None
+        and capture_server._SOLD_RE.match("/inventory/3/17") is None,
+        "the sale matches /inventory/<box>/<index>/sold and nothing shorter",
+    )
+    checks.ok(
+        capture_server._INVENTORY_ITEM_RE.match("/inventory/3/17/sold") is None,
+        "and the PUT/DELETE path is anchored, so a sale can never be read as a correction "
+        "or as an undo of the capture",
+    )
+    checks.ok(
+        capture_server._REVIEW_ANSWER_RE.match("/review/3/17/answer") is not None
+        and capture_server._REVIEW_ANSWER_RE.match("/review/3/17") is None,
+        "and the answer matches /review/<box>/<index>/answer and nothing shorter",
+    )
+
+
 # ------------------------------------------------------------------------- the sidecar seam
 
 
@@ -1100,6 +1710,9 @@ def run() -> Result:
     check_store(checks)
     check_server_routes(checks)
     check_undo(checks)
+    check_queues(checks)
+    check_review_answer(checks)
+    check_mark_sold(checks)
     check_sidecar_seam(checks)
     check_concurrency(checks)
     check_cli_seams(checks)

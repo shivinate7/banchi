@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { InventoryCard } from './types'
-import { ServerError, getInventory, photoUrl } from './server'
+import type { Failure } from './server'
+import { describeFailure, positionLabel, getInventory, photoUrl } from './server'
 import './PullPreview.css'
 
 /* The pull preview — docs/specs/capture-app.md §7. LOOK ONLY.
@@ -21,45 +22,19 @@ import './PullPreview.css'
  * every state and speaks the pipeline's vocabulary.
  */
 
-/* The position label is READ off the wire and never composed here.
+/* The position label is READ off the wire and never composed here, and the rule now lives in
+ * `server.ts:positionLabel` — this file wrote it, the inventory view copied it verbatim, and
+ * one rule about one field is one function. The whole argument went across with it, including
+ * the part this screen learned the hard way: an earlier draft ported the arithmetic and D10's
+ * 25-cards-per-divider constant into TypeScript, which is one divider size living in two
+ * languages with nothing keeping them in step — and of the two answers, the one on screen is
+ * the one a person walks to a box with.
  *
- * `GET /inventory` decorates every row with the `label`, `section` and `card` that
- * `pipeline/join.py:Position` computed, the same three fields `POST /capture` has always
- * returned, and types.ts states the rule on that field: the app displays the string and
- * never composes a second one. An earlier draft of this file ported the arithmetic and
- * D10's 25-cards-per-divider constant into TypeScript. That is one divider size living in
- * two languages with nothing keeping them in step — and of the two answers, the one on
- * screen is the one a person walks to a box with.
- *
- * MISSING IS SHOWN, NEVER FILLED IN. When the field is absent this returns null and the
- * screen says so in the space the label would have occupied. Recomputing it locally would
- * trade a visible gap for an invisible disagreement, and only one of those sends someone to
- * the wrong slot.
- *
- * Two ways the field is absent, and neither is hypothetical. An older capture server still
- * running on the Mac is the upgrade case. The standing one is `do_inventory`'s own rule: a
- * record whose box or index will not coerce to an int is left UNDECORATED rather than
- * labelled, on the grounds that a placeholder would name a position that does not exist.
- * A client-side renderer would take that same record and print a confident label from it,
- * which is exactly the outcome the server declined to produce.
- *
- * THE CAST IS GONE AND THE `typeof` CHECK STAYS, which is the shape this function was
- * written to end up in. `InventoryCard` declares `label?: string` as of the integration
- * pass, so an intersection widening it to `{ label?: unknown }` now only hides the
- * declaration from the reader. The check is not redundant with that declaration and must
- * not be deleted as though it were: the type describes the contract, this describes the
- * process actually answering on :8000, and during an upgrade — an older capture server
- * still running on the Mac — those are different things. `server.ts` casts rather than
- * validates, by a decision recorded there, so a field the running server omits arrives
- * here as `undefined` under a type that says otherwise.
- *
- * It also does work the type cannot: `''` is a `string` and not a label. `Position.label`
- * never renders one, so this is defence against a future decorator, not against today's.
+ * What stayed here is the fallback at the call sites below, which is this screen's decision
+ * rather than the rule's: a row with no label shows its store key with `no label` in front of
+ * it. Recomputing the label locally would trade a visible gap for an invisible disagreement,
+ * and only one of those sends someone to the wrong slot.
  */
-function serverLabel(card: InventoryCard): string | null {
-  const { label } = card
-  return typeof label === 'string' && label.trim() !== '' ? label : null
-}
 
 /* The inventory arrives as a map keyed `"3/1"`. The key is kept for identity and React,
  * and shown verbatim in the one case where a row carries no label — never parsed into a
@@ -77,32 +52,12 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
     .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
 }
 
-type Failure = { code: string; message: string }
-
-/* docs/specs/capture-app.md §4: every response the app surfaces uses the server's own
- * message, because those strings say what happened and what to do next and a friendlier
- * paraphrase is a less actionable one. So a `ServerError` contributes its message and its
- * code verbatim, and this function writes nothing at all on that path.
- *
- * The other branch is not a transport failure, and this file used to treat it as one and
- * offer `make server`. `server.ts` converts a dead server, a wrong address and a CORS
- * refusal alike into `ServerError('unreachable', …)` before any of them get here, so
- * nothing reaching this branch is any of those — it is a throw from inside the client, and
- * pointing at the server sends the operator to the one place the fault is not. It keeps a
- * branch rather than being dropped, because a screen that renders nothing while something
- * is broken is worse than one that names it, and `client_bug` greps to this line and to no
- * server route.
- */
-function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message }
-  const detail = err instanceof Error ? err.message : String(err)
-  return {
-    code: 'client_bug',
-    message:
-      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
-      'the app rather than a refusal — check the browser console.',
-  }
-}
+/* `describeFailure` and `Failure` LIVED HERE and moved to server.ts on 2026-08-13, beside
+ * the `ServerError` they destructure. This file's copy was the original and the argument in
+ * its docstring travelled with it whole — including the reason it does not offer `make
+ * server`, which this screen learned by getting it wrong first. Two later screens had copied
+ * it byte for byte, and both of those comments named server.ts as the destination; the third
+ * copy is what made the move due. */
 
 type Detail = { label: string; value: string; mono: boolean }
 
@@ -184,7 +139,7 @@ export function PullPreview() {
    * PhotoPanel. Two reads of the same field cannot disagree today, but they are two places
    * to edit the day the field is renamed, and the failure mode of getting that half-right
    * is a photo captioned with a position beside a panel saying there is none. */
-  const selectedLabel = selectedRow === null ? null : serverLabel(selectedRow.card)
+  const selectedLabel = selectedRow === null ? null : positionLabel(selectedRow.card)
 
   return (
     <main className="pull-preview">
@@ -257,7 +212,7 @@ export function PullPreview() {
                       front of it, because `3/30` alone reads like a position and is not
                       one. The detail panel says the rest; a row has no room for it. */}
                   <span className="pull-preview-row-position">
-                    {serverLabel(row.card) ?? `no label · ${row.key}`}
+                    {positionLabel(row.card) ?? `no label · ${row.key}`}
                   </span>
                   <span className="pull-preview-row-name">{row.card.name ?? row.card.state}</span>
                 </button>
