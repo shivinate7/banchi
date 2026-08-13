@@ -94,6 +94,21 @@
   color: var(--ink);
 }
 
+/* The no-claim finish chip, which is the finish control's DEFAULT: the operator has said
+   nothing about this stack, so the capture sends no `variant` and the sidecar records none
+   (D3 rung 1).
+
+   Dashed, and nothing else different. Dashed reads as "nothing recorded here", which is
+   precisely the state, and it costs no colour: the pressed rule above still carries
+   selection in ink and weight, so the chip behaves like its three neighbours in every other
+   respect. Rejected: --accent, and the .capture-flag treatment. Both are the vocabulary of
+   something being wrong, and this is the state every run correctly sits in — a default drawn
+   as a warning teaches the operator to clear it by picking a finish, which is the exact
+   failure the state was added to prevent. */
+.capture-chip-unclaimed {
+  border-style: dashed;
+}
+
 .capture-chip-value {
   font-size: 14px;
   font-weight: 600;
@@ -410,10 +425,22 @@
 }
 
 /* A refusal, not a failure of the run: outline weight, beside the control it came from.
-   Nothing about a refused undo stops captures. */
+   Nothing about a refused undo stops captures.
+
+   BODY FACE, not the utility face this was first drawn in. The server's undo refusals are
+   the longest prose the app puts on screen — `undo_not_newest` explains that a position is
+   never reused and names the card that IS undoable, `undo_too_late` explains what an import
+   file would disagree with — and docs/DESIGN.md gives the body face every sentence a human
+   reads, reserving mono for metadata and numbers. At 11px mono it was both the wrong face
+   and the smallest text on the screen, on the one string here that has to be read word for
+   word rather than glanced at.
+
+   13px and 52ch to match .capture-quiet, so the screen has one prose size and one measure
+   rather than two. The colour is unchanged: being noticed beside the control it came from
+   is this line's whole job, and that was never the part that was wrong. */
 .capture-refused {
-  font-family: var(--util);
-  font-size: 11px;
+  font-family: var(--body);
+  font-size: 13px;
   color: var(--accent);
-  max-width: 44ch;
+  max-width: 52ch;
 }

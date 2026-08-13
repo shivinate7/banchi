@@ -32,20 +32,34 @@ by their component name and points at directories that exist, not at files that 
 
 ## 1. Order of operations
 
-| order | item | size | waits for |
-|---|---|---|---|
-| 0 | ~~doc-amendments~~ | **done 2026-08-13, before this spec was committed** | — |
-| 1 | undo-route | ~60 lines in one built module | — |
-| 2 | server-client | ~120 lines, new | — |
-| 3 | capture-screen | ~350 lines, the bulk of it | 1, 2 |
-| 4 | trigger-seam | ~60 lines, folded into 3 | 3 |
-| 5 | pull-preview | ~120 lines | 2 |
-| 6 | eslint | config + 2 rules | 3 |
-| 7 | map-flip | ~20 lines | all, same commit |
+**All eight are done. Item 7 was missed in the build commit it was scheduled for and done in
+the review that followed** — see below.
+
+| order | item | size | waits for | state |
+|---|---|---|---|---|
+| 0 | ~~doc-amendments~~ | — | — | **done 2026-08-13**, before this spec was committed |
+| 1 | ~~undo-route~~ | ~60 lines in one built module | — | **done 2026-08-13**, `server/capture_server.py` |
+| 2 | ~~server-client~~ | ~120 lines, new | — | **done 2026-08-13**, `app/src/server.ts` |
+| 3 | ~~capture-screen~~ | ~350 lines, the bulk of it | 1, 2 | **done 2026-08-13**, `app/src/CaptureScreen.tsx` |
+| 4 | ~~trigger-seam~~ | ~60 lines, folded into 3 | 3 | **done 2026-08-13**, `app/src/trigger.ts` — its own module, not folded |
+| 5 | ~~pull-preview~~ | ~120 lines | 2 | **done 2026-08-13**, `app/src/PullPreview.tsx` |
+| 6 | ~~eslint~~ | config + 2 rules | 3 | **done 2026-08-13**, `app/eslint.config.js`; `make lint` stopped being a stub |
+| 7 | ~~map-flip~~ | ~20 lines | all, same commit | **missed in that commit**; done in the review that followed, and it took more than 20 lines |
 
 Item 0 first for the reason `docs/specs/capture-server.md` puts its false-claim sweep
 first: a doc that contradicts what you are about to build will be read as authority by the
 session after this one.
+
+**Item 7 is the one to read twice.** "All, same commit" was the whole of its schedule and it
+was not met: the build shipped and `docs/map.py` described none of the thirteen files it
+added, so the index D17 calls believed-therefore-dangerous was wrong about the directory that
+had just changed most. Nothing caught it, and nothing could — the repo-map orphan rule
+filtered on `.py` and did not descend, which `docs/DEBTS.md` had predicted in writing on
+2026-08-12. Both halves are fixed now: the map carries every file, and the orphan rule
+reaches this directory through a per-entry `source_suffixes` declaration it makes in the map
+itself. The lesson for the next spec that ends in a map-flip is that a step scheduled as
+"same commit" as everything else is a step with no schedule of its own — and that the map
+flip is the one item where nothing but the schedule was ever going to catch it.
 
 ## 2. doc-amendments — APPLIED 2026-08-13
 
@@ -365,8 +379,9 @@ into the gate.
 
 ## 8. eslint
 
-`make lint` is still a deliberate `exit 1`. Wire it here, because the device picker is the
-first code the v1-bug rules can actually catch:
+`make lint` was a deliberate `exit 1` when this was written, and stopped being one here —
+wired 2026-08-13 at `app/eslint.config.js`, because the device picker is the first code the
+v1-bug rules can actually catch:
 
 - no `facingMode` in any camera constraint (v1 bug 3)
 - no `split(",")` CSV parsing (v1 bug 2)
@@ -432,6 +447,13 @@ It does not close the `tested_by` gap in `docs/map.py`, add the token-drift chec
 work — step 7a is where the number of files reading those tokens stops being one — and it
 is the cheapest of the three. Doing it early in this session is defensible; doing it as a
 rider on the capture screen is not.
+
+**What actually happened, 2026-08-13.** The third was extended to reach `app/` in the review
+that followed this build, because the gap stopped being hypothetical: item 7 above was missed
+and nothing noticed. The second was not done in this session or the review, so the token
+block in `docs/DESIGN.md` and `app/src/tokens.css` are still checked by nobody, across seven
+stylesheets now instead of one. The first is unchanged. `docs/DEBTS.md` carries all three,
+and carries which of their stated moments have already gone by.
 
 It does not settle what the Fulfiller's device points at, beyond making the server's base
 URL configurable so that the question stays answerable later.

@@ -32,7 +32,11 @@ that property is itself asserted below, because the whole test is built on it.
 
 UNDO ARRIVED WITH STEP 7a AND SO DID ITS CASES, which is what the paragraph here used to
 promise. `check_undo` covers what D10 settles: delete rather than tombstone, the newest
-capture in a box only, refused once the card's row has been written into an import file.
+capture in a box only, refused once the card's row has been written into an import file —
+and that the position leaves every store that holds it, not just `inventory.json`. That last
+one is a regression test as much as coverage: the route shipped editing the card map alone
+while `Store.write()` committed the queues and the answer cache back around a position that
+no longer existed.
 
 WHAT THIS STILL DOES NOT COVER. Mark-sold and the pull routes do not exist; they are 7b,
 built after Gate B against real data rather than against guesses, and their assertions
@@ -63,7 +67,7 @@ from cli import resolve, runs  # noqa: E402
 from identify import sidecar  # noqa: E402
 from pipeline import join, tcgcsv, variant  # noqa: E402
 from server import capture_server  # noqa: E402
-from store import files, master  # noqa: E402
+from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
 
 NAME = "T7"
@@ -451,6 +455,40 @@ def check_server_routes(checks: Checks) -> None:
         checks.equal(report["next_index"]["3"], 4, "and reports the next index per box")
         checks.ok("problem" not in report, "and reports no problem on a healthy store")
 
+        # GET /inventory decorates every row with its rendered position. Asserted against
+        # `join.Position` itself and never against a literal string: the whole point of the
+        # decoration is that ONE renderer draws a position label, and a literal here would
+        # go on passing while the app and the pipeline disagreed about where a card is.
+        inventory = capture_server.do_inventory()
+        checks.equal(
+            sorted(inventory["cards"]),
+            ["3/1", "3/2", "3/3"],
+            "GET /inventory returns every card, keyed by position",
+        )
+        row = inventory["cards"]["3/2"]
+        checks.equal(
+            row["label"],
+            join.Position(3, 2).label,
+            "and each row carries the label pipeline/join.py renders — not a second copy of "
+            "D10's 25-cards-per-section rule living in the app",
+        )
+        checks.equal(
+            row["section"], join.Position(3, 2).section, "with the section it sits in"
+        )
+        checks.equal(
+            row["card"], join.Position(3, 2).card, "and its card within that section"
+        )
+
+        # WIRE-ONLY, which is the constraint that makes the decoration safe. `inventory.json`
+        # is the on-disk format and `Inventory.parse` filters on `Card.__annotations__`, so a
+        # label written into it would be silently dropped on the next reload — a field that
+        # exists only until something re-reads it is worse than no field at all.
+        on_disk = json.loads(Store().inventory_path.read_text("utf-8"))
+        checks.ok(
+            all("label" not in record for record in on_disk["cards"].values()),
+            "and the decoration never reaches inventory.json — to_payload is untouched",
+        )
+
         # A corrupt record must not take down the one route you reach for when something is
         # wrong. It reports the finding instead.
         with Store().write() as snapshot:
@@ -460,6 +498,20 @@ def check_server_routes(checks: Checks) -> None:
         checks.ok(
             "problem" in broken,
             "and /status still answers, reporting the problem rather than raising",
+        )
+
+        broken_inventory = capture_server.do_inventory()
+        checks.ok(
+            "label" not in broken_inventory["cards"]["3/1"],
+            "a record whose box will not coerce is left UNLABELLED — a placeholder label "
+            "names a position that does not exist, which is the one thing a label may never "
+            "do (D10)",
+        )
+        checks.equal(
+            broken_inventory["cards"]["3/2"]["label"],
+            join.Position(3, 2).label,
+            "and one bad record does not take the route down: every other row keeps its "
+            "label, on the route the app polls",
         )
 
 
@@ -513,6 +565,12 @@ def check_undo(checks: Checks) -> None:
             len(sidecar.scan(capture_server.captures_root())),
             2,
             "so scan() now finds two captures — the undone card costs nothing to identify",
+        )
+        checks.ok(
+            not body["review_deleted"]
+            and not body["parked_deleted"]
+            and not body["cache_deleted"],
+            "and it reports nothing else removed for a card that was never queued or read",
         )
 
         # The index is released. Asserted through the server rather than only through the
@@ -616,6 +674,80 @@ def check_undo(checks: Checks) -> None:
             (master.CAPTURED, master.IDENTIFIED),
             "undo is allowed at exactly captured and identified, named as an allowlist so a "
             "new state is refused by default",
+        )
+
+        # EVERYTHING KEYED BY THE POSITION GOES, not the card record alone. The snapshot
+        # carries the two standing queues and the identification cache as well, and
+        # `Store.write()` writes all four files back on the way out — so a route that edits
+        # only `inventory.cards` does not leave the others alone, it commits them unchanged
+        # around a position that no longer exists.
+        #
+        # This is not a corner case, which is why it is set up in full rather than asserted
+        # on a bare card. `cli/cmd_emit.py` marks only MATCHED positions `pushed`, so a card
+        # that went to a queue stays `identified` — and `identified` is inside
+        # UNDOABLE_STATES. The undoable set and the queued set overlap by construction, and
+        # a queued card is precisely the one carrying a paid answer and a photo path.
+        _, queued = capture_server.do_capture(capture_payload(3))
+        queued_key = queued["key"]
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state(queued_key, master.IDENTIFIED)
+            snapshot.review.upsert(
+                queues.QueueEntry(
+                    position=queued_key,
+                    box=queued["box"],
+                    index=queued["index"],
+                    label=queued["label"],
+                    photo=str(capture_server.photo_path(queued["box"], queued["index"])),
+                    reason="low_confidence",
+                    market="12.00",
+                )
+            )
+            snapshot.parked.upsert(
+                queues.QueueEntry(
+                    position=queued_key,
+                    box=queued["box"],
+                    index=queued["index"],
+                    label=queued["label"],
+                    reason="no_market_data",
+                    # Cleared by a human, which is the one case `Queue.release` refuses to
+                    # drop — on the grounds that an answer should outlive its question. Undo
+                    # must drop it anyway, and that is asserted below rather than assumed:
+                    # the index is released, so the next capture into this box takes this
+                    # very position, and a preserved answer would be a human's ruling about
+                    # one physical card attached to a different one.
+                    cleared_by_human=True,
+                )
+            )
+            snapshot.cache.put(queued_key, {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
+
+        removed = capture_server.do_delete_card(queued["box"], queued["index"])
+        after = Store().read()
+        checks.ok(
+            after.review.entries.get(queued_key) is None,
+            "undo drops the REVIEW entry — otherwise it names the photo this route just "
+            "deleted, and nothing clears a queue entry before 7b's review screen",
+        )
+        checks.ok(
+            after.parked.entries.get(queued_key) is None,
+            "and the PARKED entry, even one a human had cleared: the card, the question and "
+            "the photograph are all gone, and the position is about to be reused",
+        )
+        checks.ok(
+            after.cache.get(queued_key) is None,
+            "and the paid IDENTIFICATION — a cached answer keyed to a position the next "
+            "capture will fill is an answer about the wrong physical card",
+        )
+        checks.ok(
+            removed["review_deleted"]
+            and removed["parked_deleted"]
+            and removed["cache_deleted"],
+            "and the response says what it removed, the way photo_deleted already does",
+        )
+        counted = capture_server.do_status()["queues"]
+        checks.equal(
+            counted,
+            {"review": 0, "parked": 0},
+            "so GET /status stops counting the phantom — the number the owner works from",
         )
 
     # Wiring, asserted because it is invisible from Python and fatal from a browser: without

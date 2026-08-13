@@ -3,14 +3,15 @@
     POST   /capture                   take a photo into the next position in a box
     GET    /status                    counts, next index per box, store health
     GET    /photo/<box>/<index>       the stored JPEG bytes
-    GET    /inventory                 the whole card map
+    GET    /inventory                 the whole card map, each row carrying its label
     PUT    /inventory/<box>/<index>   correct the set hint or variant on one card
-    DELETE /inventory/<box>/<index>   undo the newest capture: record, sidecar, photo
+    DELETE /inventory/<box>/<index>   undo the newest capture: every trace of one position
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
-undo, and it lives here rather than in the app because deleting a record, a sidecar and a
-photo together is a store write, and D13 keeps exactly one writer for those — the app has
-no filesystem and no lock. Everything else that app needs already existed at step 5.
+undo, and it lives here rather than in the app because deleting a record, a sidecar, a
+photo, two queue entries and a paid answer together is a store write, and D13 keeps exactly
+one writer for those — the app has no filesystem and no lock. Everything else that app needs
+already existed at step 5.
 
 Still absent and still deliberate: no identification, no pricing, no mark-sold, no UI. This
 process never spends money: it holds no API key and makes no outbound call.
@@ -36,10 +37,29 @@ therefore a paid Batch request, and `scripts/screenshot.sh` writes UI renders in
 `captures/ui/`. Rooting at `captures/` would bill every screenshot. Nothing but card photos
 and their sidecars may ever be written below `captures/cards/`.
 
-NOTHING IN THE HARNESS REACHES THIS FILE. No module under `harness/tests` imports `server`,
-`store` or `cli`, so a green `make harness` says nothing whatsoever about this module.
-`docs/DEBTS.md` records why that is not being fixed before step 5, and lists what was
-verified by hand instead. Do not read the harness as coverage here.
+T7 REACHES THIS FILE, as of 2026-08-13, and the paragraph here used to say the opposite —
+which was true when this module shipped at step 5 and stopped being true the day
+`harness/tests/t7_store_and_seams.py` landed. It imports this module and calls every route
+in it: allocation and its refusal codes, `/status` on a healthy store and on a corrupt
+record, the sidecar seam `identify.sidecar` reads back, `GET /inventory` and the position it
+renders, two- and four-way concurrent captures over real sockets, and each of the DELETE
+route's rules — what it removes, that it removes only the newest card in a box, and that it
+refuses once `emit` has written the card's row into an import file.
+
+WHAT T7 STILL DOES NOT REACH, from `docs/DEBTS.md`, so a green harness is read for what it
+is. Three named cases rather than a package nobody looks at:
+
+  twenty-way contention   T7 runs two and four simultaneous captures, matching D5's two
+                          devices. The twenty-way case is what found `request_queue_size`
+                          at its default of 5 — 8 served, 12 reset by the OS — and if that
+                          constant below is ever lowered, nothing will notice.
+  the bare-interpreter    `make server` runs this on system `python3` with no venv. T7
+  start                   imports the module under whichever interpreter runs the harness,
+                          so it cannot see a missing dependency that the harness supplies.
+  the PUT history line    a correction through `do_put_card` appends nothing to
+                          `history.jsonl`. T7 asserts the correction reaches the sidecar,
+                          which is the part that costs money when it fails; the missing
+                          history line is still missing.
 """
 
 from __future__ import annotations
@@ -339,7 +359,39 @@ def do_photo(box: int, index: int) -> bytes:
 
 
 def do_inventory() -> dict:
-    return Store().read().inventory.to_payload()
+    """The whole card map, each row decorated with its rendered position.
+
+    DECORATED BECAUSE THE ALTERNATIVE IS A SECOND RENDERER, and the alternative is what
+    happened: an undecorated row carries `box` and `index` and nothing else, so the app
+    reimplemented D10's 25-cards-per-section arithmetic in TypeScript to draw a label with.
+    Two copies of the rule that says where a physical card is, one edit away from
+    disagreeing about it. `_card_summary` already answers POST and PUT with exactly these
+    three fields, so this makes the two shapes agree rather than inventing a third.
+
+    THE DECORATION IS WIRE-ONLY, and that is the constraint that shapes the code below.
+    `Inventory.to_payload` is the on-disk format: `inventory.json` is parsed back by
+    `Inventory.parse`, which filters on `Card.__annotations__` and would drop a `label`
+    silently on the next reload. So the fields are added to the dict `to_payload` has just
+    built out of `asdict`, on a snapshot this function then discards — they cannot reach a
+    write, because nothing here holds the snapshot long enough to commit it.
+
+    A RECORD WHOSE POSITION WILL NOT COERCE IS LEFT UNDECORATED rather than labelled. Both
+    alternatives are worse. Raising takes the entire card map down over one bad row, on the
+    route the app polls. A placeholder label — `Box ? · Section ?` — names a position that
+    does not exist, which is the one thing a position label may never do, since D10's whole
+    argument is that a printed label is worth trusting a year later. `do_status` is where a
+    record like that is reported, and it reports it already.
+    """
+    payload = Store().read().inventory.to_payload()
+    for record in (payload.get("cards") or {}).values():
+        try:
+            position = join.Position(int(record["box"]), int(record["index"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        record["label"] = position.label
+        record["section"] = position.section
+        record["card"] = position.card
+    return payload
 
 
 def do_put_card(box: int, index: int, payload: dict) -> dict:
@@ -425,7 +477,7 @@ def _unlink(path: Path) -> bool:
 
 
 def do_delete_card(box: int, index: int) -> dict:
-    """Undo one capture: delete the record, then the photo, then the sidecar.
+    """Undo one capture: the record, the queue entries and the paid answer, then the files.
 
     IT DELETES AND IT DOES NOT TOMBSTONE (D10). No `undone` state, no deleted flag, nothing
     in the response hinting at a third condition between captured and absent. `sold` stays
@@ -444,10 +496,37 @@ def do_delete_card(box: int, index: int) -> dict:
     REPEATED CALLS WALK BACKWARDS, one card each, and that costs no code — every call
     deletes whatever is newest by the time it runs.
 
-    ONE `Store.write()`, the same shape `do_capture` uses. The record is removed from the
-    in-memory inventory BEFORE either file is unlinked, so a failing unlink escapes the
-    block and commits nothing. The reverse order would delete a photo and then keep the
-    record pointing at it, which is the one outcome undo must never produce.
+    IT CLEARS ALL FOUR STORES KEYED BY THIS POSITION, not just the inventory. The snapshot
+    carries `review`, `parked` and `cache` as well, and `Store.write()` writes every one of
+    them back on the way out — so dropping the record alone does not leave the others
+    untouched, it commits them unchanged around a position that no longer exists. Details
+    below, at the code.
+
+    ONE `Store.write()`, the same shape `do_capture` uses — and it is NOT a transaction
+    spanning the store and the filesystem, because no such thing is available here. What is
+    actually guaranteed, stated exactly rather than as "atomic":
+
+      a failing unlink        escapes the block, so nothing commits. Every edit above is
+                              discarded, the record keeps its photo, and the request can be
+                              repeated.
+      a failure in the        leaves the record in place with its photo already gone. Undo
+      commit, after the       again repairs it: the card is still the newest, still in an
+      unlinks have run        undoable state, and `_unlink` treats an absent file as no
+                              failure — so the retry commits what the first attempt could
+                              not.
+
+    THE FILESYSTEM WORK IS DELIBERATELY NOT MOVED AFTER THE BLOCK, which would make the
+    first row cover everything and is the obvious repair. Outside the block it runs after
+    the commit, and then a partial failure strands a PHOTO with no record —
+    `identify.sidecar.scan` finds captures by photo suffix, so that orphan is a paid Batch
+    request for a card nothing else knows about, silent until the bill. The
+    record-without-photo above costs nothing and heals on a retry. Cheap and retryable beats
+    expensive and silent.
+
+    The limit underneath all of it, from `docs/specs/capture-server.md` §6.5: the session
+    replaces four JSON files and appends history after the yield, each atomically but not
+    together. The commit is per file, so this route cannot promise more than the rows above
+    however it is ordered.
 
     THE PHOTO IS UNLINKED BEFORE THE SIDECAR, and that ordering is the money rule from the
     other direction. `identify.sidecar.scan` finds captures by photo suffix and reads
@@ -509,6 +588,36 @@ def do_delete_card(box: int, index: int) -> dict:
         # null photo while a stale absolute path from another machine's store would send
         # this at a file that is not ours.
         del inventory.cards[key]
+
+        # THE OTHER THREE STORES ARE KEYED BY POSITION TOO, and this is the whole of what
+        # made undo leave wreckage. Measured before this was written: after undoing 3/2 the
+        # record, the photo and the sidecar were gone, while `review.json` still held an
+        # entry whose `photo` field named the file this route had just deleted,
+        # `identifications.json` still held the paid answer, and `GET /status` went on
+        # counting the phantom in `queues.review`.
+        #
+        # The orphan was PERMANENT rather than untidy. Nothing clears a queue entry before
+        # 7b's review screen — `store/queues.py` says so out loud — and the one removal that
+        # exists, `Queue.release` from `cli/cmd_join.py`, frees positions a later run
+        # PROCESSED. A position with no photo is never scanned, so never processed, so never
+        # released. It is also most reachable exactly where it costs most: `cli/cmd_emit.py`
+        # marks only matched positions `pushed`, so a card sitting in a queue stays
+        # `identified` — and `identified` is inside UNDOABLE_STATES. The undoable set and
+        # the queued set overlap by construction.
+        #
+        # `entries.pop` RATHER THAN `Queue.release`, which is the method that already removes
+        # queue entries, and the difference is deliberate. `release` preserves anything a
+        # human cleared, on the stated grounds that the answer should outlive the question.
+        # Here the question, the card and the photograph are all gone, and the index is
+        # released — so the next capture into this box takes this very position, and a
+        # preserved answer would be a human's ruling about card A attached to physical card
+        # B. `Cache.put` refuses to overwrite a cleared answer for the same reason and would
+        # be wrong here for the same reason. A stale answer on a new card is worse than the
+        # orphan this replaces, so removal here is unconditional.
+        review_deleted = snapshot.review.entries.pop(key, None) is not None
+        parked_deleted = snapshot.parked.entries.pop(key, None) is not None
+        cache_deleted = snapshot.cache.entries.pop(key, None) is not None
+
         photo_deleted = _unlink(photo)
         sidecar_deleted = _unlink(sidecar)
         released = inventory.next_index(box)
@@ -524,6 +633,15 @@ def do_delete_card(box: int, index: int) -> dict:
         "index": int(index),
         "photo_deleted": photo_deleted,
         "sidecar_deleted": sidecar_deleted,
+        # What the other three stores gave up, reported the same way and for the same
+        # reason: an undo says what it destroyed, and a card that was sitting in a review
+        # queue with a paid answer against it is the case where that matters most. Booleans
+        # rather than counts, because each of these files holds at most one entry per
+        # position — a count could only ever be 0 or 1, and printing it as a number invites
+        # the next reader to believe otherwise.
+        "review_deleted": review_deleted,
+        "parked_deleted": parked_deleted,
+        "cache_deleted": cache_deleted,
         # The index this box will hand out next, after the release. The app redraws its
         # position from this rather than decrementing its own counter, which would drift the
         # moment the other device (D13) captured into the same box.

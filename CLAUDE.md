@@ -16,7 +16,8 @@ make dev            # Vite app on :5173. Blocks — background it.
 make server         # Python capture server on :8000. Blocks — background it.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
-make check          # harness + docs-audit + lint + typecheck — lint is still a stub
+make lint           # eslint over app/: no facingMode, no split(","). JS only, no Python linter.
+make check          # harness + docs-audit + lint + typecheck — no stubs left in it
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
@@ -78,7 +79,8 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7a: the capture screen, undo, the pull preview, and the
-  one new server route. Interviewed and settled; NOT built. Its doc amendments are applied.
+  one new server route. Built 2026-08-13. 7b — review queue, Fulfillment view, inventory
+  views, mark-sold — is after Gate B and is not specified anywhere yet.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

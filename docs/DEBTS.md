@@ -120,35 +120,51 @@ them, so that staleness will not announce itself." As of step 6 the same is true
 from, so a token changed in one place and not the other means the app and the document
 arguing for it disagree, and the document is the one nobody re-reads.
 
-**Cost**: low today and rising. One component reads these tokens; step 7 adds every screen.
-The failure is silent by construction — a wrong hex renders perfectly.
+**Cost**: it rose on 2026-08-13. One component read these tokens when this was written;
+step 7a made it seven stylesheets — three routes, the shell, the picker, the pull-confirm
+and the page ground — and 7b adds the queue and the Fulfillment view. The failure is silent
+by construction — a wrong hex renders perfectly.
 
 **Why not fixed**: the fix is a mechanical audit check parsing `docs/DESIGN.md`'s fenced
 token block against the file's custom properties, and it is *permitted* — checking is not
-generating, so D18 does not bar it. It is not done because this session's job was to ship a
-component, and this repo has a recorded habit of building auditor machinery instead of
-product code. It is cheap and well-specified; do it early in step 7, when the number of
-files reading these tokens stops being one.
+generating, so D18 does not bar it. It was not done at step 6 because that session's job was
+to ship a component, and this repo has a recorded habit of building auditor machinery instead
+of product code. **`docs/specs/capture-app.md` section 11 then named it as the cheapest of
+three and said doing it early in 7a was defensible; 7a shipped without it**, so the second
+stated moment to do this has also gone by. It is still cheap and still well-specified.
 
-### The repo-map orphan rule does not reach `app/`
+### The repo-map orphan rule did not reach `app/` — it bit, and then it was closed
 
-Recorded 2026-08-12, from the step-6 component work. Same consequence as the `scripts/`
-entry above, different mechanism.
+Recorded 2026-08-12 from the step-6 component work, **rewritten 2026-08-13 after both halves
+of it happened inside one day.**
 
-`scripts/docs-audit.py:1219` sets `SOURCE_SUFFIX = ".py"`, and the orphan scan filters on
-it. `app/` has a full `modules` list in `docs/map.py`, so the entries it *does* carry are
-checked for existence and for decision citations — but a new `.tsx`, `.css` or `.ts` file
-added beside them is never flagged as undescribed. The rule D17 calls "the one that actually
-keeps this honest" is inert over the directory that is about to grow fastest.
+What it predicted: `app/`'s module list is the only one in the map maintained by hand alone,
+the cost "rises sharply at step 7", and step 7 adds screens rather than files-at-a-time.
 
-**Cost**: rises sharply at step 7. `app/`'s module list is the only one in the map maintained
-by hand alone, and step 7 adds screens, not files-at-a-time.
+What happened: step 7a landed thirteen new files under `app/`, `docs/map.py` described none
+of them, and every row of `make docs-audit` stayed green — including the repo-map row, which
+reported 44 entries matching a tree holding thirteen files it had never looked at. The gap
+bit once, at the size and at the moment this entry named, and it was a review rather than a
+check that found it.
 
-**Why not fixed**: widening `SOURCE_SUFFIX` to the web extensions is one line, but it decides
-what counts as a source file repo-wide — `.css` and `.html` under `docs/design-refs/` would
-start demanding entries too, and those are deliberately not components. Doing it properly
-means the suffix set becoming per-entry, which is a real change to the map's schema. Worth
-doing before step 7 gets far, and worth doing deliberately.
+**Closed the same day**, and the shape of the fix is worth keeping, because this entry
+argued against the obvious one and that argument held. Widening a repo-wide suffix constant
+was rejected here for conscripting the `.html` and `.css` under `docs/design-refs/`, which
+are drawings of `docs/DESIGN.md` and deliberately not components. What shipped instead is a
+per-entry `source_suffixes` key in `docs/map.py`, read by `scripts/docs-audit.py`; declaring
+it also makes that entry's scan recursive, which is the second half of why the drift was
+silent — `app/` keeps its source in `app/src/` and `app/tests/`, so a flat scan would have
+found nothing whatever suffixes it was handed. `docs/design-refs/` stays uncovered by having
+no module list at all, rather than by an exemption someone has to maintain.
+
+**What is left, and it is not nothing.** The rule proves a file has an entry; it never proves
+the entry is true. A `does` describing the wrong file passes exactly as well — the same
+unenforced-claim shape as the `tested_by` row above, now spread across twenty-odd hand-written
+lines. `.json` is deliberately outside the declared suffixes, since including it would
+conscript `app/package-lock.json`, so `app/package.json` — which holds the npm scripts
+`make lint`, `make typecheck` and `make design-check` all run through — has no entry
+describing it. And `scripts/` is still uncovered for the different reason in its own entry
+above.
 
 ### What T7 deliberately leaves uncovered in `server/`
 
@@ -167,17 +183,29 @@ Three things from that enumeration are still not asserted anywhere:
 - **The bare-interpreter start.** The server runs on system `python3` with no venv, which
   is what makes `python3` rather than `$(PYTHON)` correct in the Makefile. T7 imports the
   module under whichever interpreter runs the harness, so it cannot see this.
-- **A `PUT` correction appends nothing to `history.jsonl`.** The store logs state
-  transitions and a correction is not one. T7 asserts the correction reaches the sidecar,
-  which is the part that costs money when it fails; the missing history line is still
-  missing.
+- **Neither a `PUT` correction nor a `DELETE` undo appends to `history.jsonl`.** Two routes
+  as of 2026-08-13, not one. The store logs state transitions and neither of these is one.
+  T7 asserts what costs money when it fails — that the correction reaches the sidecar, and
+  that undo removes the record, the sidecar and the photo — and the history lines are still
+  missing from both. Undo is the wider of the two: afterwards `history.jsonl` still carries
+  a `captured` event for a position whose record is gone. That is true rather than wrong —
+  the capture did happen, it is the record that was removed — but it is the one place those
+  two files disagree, and nothing says so at read time.
 
 **Cost**: low and bounded, which is the difference from the entry this replaces. Each is a
 single known case rather than a whole package nothing looks at.
 
-**Why not fixed**: the first two cost more at every turn end than they can return, and the
-third is a log call in a module that now has coverage — so it is a small deliberate change
-rather than a risky one, and it should be made when `server/` is next opened for step 7.
+**Why not fixed**: the first two cost more at every turn end than they can return. The third
+had a stated trigger — "when `server/` is next opened for step 7" — and **that trigger fired
+on 2026-08-13 and was passed**: step 7a opened `server/capture_server.py`, added a whole
+route, and left both gaps where they were. Written down rather than quietly re-dated, because
+a fix condition that goes by without comment is how a debt becomes permanent.
+
+`DELETE` also supplied a reason to think harder than "add a log call", which is what the old
+text assumed the fix was. There is no `undone` event in the store's vocabulary, and adding
+one means naming a transition for a record that no longer exists — an entry in a log that
+reads as the tombstone `docs/specs/capture-app.md` section 3 says this route must not create.
+Whoever closes this settles that first, and it is a D10 question rather than a logging one.
 
 ---
 

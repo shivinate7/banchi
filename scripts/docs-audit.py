@@ -67,7 +67,18 @@ EXIT_USAGE = 64
 
 # Directories that are not this project's source. `.venv` alone holds hundreds of vendored
 # READMEs, and auditing someone else's markdown would be noise with a straight face.
-SKIP_DIRS = {".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__"}
+#
+# `dist` and `test-results` joined when the repo-map orphan scan learned to recurse: they
+# are Vite's build output and Playwright's per-run output, both under `app/`, and a scan
+# that descends now has an opinion about them. Pruned here rather than left to the
+# gitignore filter in `check_map` because the two do different jobs — this one stops a
+# build tree being enumerated at all, and that one stops a finding being *reported* for
+# anything git calls local state. Neither subsumes the other: `app/playwright-report/` is
+# ignored and not listed here, and a scan of a fresh worktree walks it for nothing.
+SKIP_DIRS = {
+    ".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__",
+    "dist", "test-results",
+}
 
 ALLOWLIST = ROOT / "scripts" / "docs-audit-allow.txt"
 
@@ -1216,7 +1227,117 @@ def check_current_gate(report: Report) -> None:
 # ----------------------------------------------------------------------- the repo map
 
 MAP = ROOT / "docs" / "map.py"
-SOURCE_SUFFIX = ".py"
+
+# What the orphan scan counts as source when an entry says nothing. Every entry written
+# before the key below existed keeps exactly the behaviour it had: `.py`, one level deep.
+DEFAULT_SOURCE_SUFFIXES: Tuple[str, ...] = (".py",)
+
+# The optional per-entry key that widens it. A single repo-wide suffix set was the obvious
+# fix and is the wrong one: adding the web extensions to it would conscript
+# `docs/design-refs/*.html` and `*.css`, which are drawings of docs/DESIGN.md and
+# deliberately not components, into demanding map entries. Per-entry is the only shape that
+# lets `app/` declare what it is written in without deciding that for the rest of the tree —
+# and `docs/design-refs/` stays uncovered by having no entry with a module list at all,
+# rather than by an exemption someone has to maintain.
+SOURCE_SUFFIXES_KEY = "source_suffixes"
+
+
+def scan_plan(component: Dict[str, object]) -> Tuple[Tuple[str, ...], bool, List[str]]:
+    """What this entry's orphan scan covers: (suffixes, recursive, complaints).
+
+    **Declaring the key replaces the default set rather than adding to it.** `app/` holds no
+    `.py` and never will, so a union would have it hunting for a language it does not
+    contain; the entry is the right place to say what a directory is written in, and saying
+    it should not mean saying it twice.
+
+    **A declaration is also what turns the scan recursive, and the coupling is deliberate.**
+    A declaring directory keeps its source in subdirectories — `app/src/`, `app/tests/` —
+    so a flat scan of one would find nothing whatever suffixes it was handed, which is the
+    second half of why tonight's `.tsx` drift landed in silence. Recursing for *every* entry
+    was the first draft and was worse: `harness/` lists `run.py` alone, and everything under
+    `harness/tests/` and `harness/eval/` is deliberately undescribed (the map says so in a
+    comment). Turning a dozen of those into blocking findings is a content decision about
+    the map, argued in the map, not a side effect of widening a suffix set in here. So the
+    default stays flat and grandfathered, and an entry that declares is an entry that has
+    said what its whole tree is made of.
+
+    **A malformed declaration scans nothing and reports that it scanned nothing.** Falling
+    back to the `.py` default would leave `app/` printing a clean orphan scan that had
+    looked at no file it contains — a check gone quiet, which docs/DEBTS.md already names
+    as this auditor's worst failure mode. The complaints are MECHANICAL because the shape of
+    a literal is provable: there is no context this script is missing.
+    """
+    declared = component.get(SOURCE_SUFFIXES_KEY)
+    if declared is None:
+        return DEFAULT_SOURCE_SUFFIXES, False, []
+
+    # A bare string is the plausible mistake, and it is the dangerous one: `str.endswith`
+    # accepts a string as happily as a tuple, so `".tsx"` written without its brackets would
+    # scan for one suffix and look entirely correct doing it.
+    if isinstance(declared, str) or not isinstance(declared, (list, tuple)):
+        return (), False, [
+            f"`{SOURCE_SUFFIXES_KEY}` must be a list of suffixes — [\".tsx\", \".css\"] — "
+            f"and is {declared!r}. Nothing was scanned for orphans under this entry."
+        ]
+
+    complaints: List[str] = []
+    suffixes: List[str] = []
+    for item in declared:
+        if not isinstance(item, str) or not item.startswith(".") or len(item) < 2:
+            complaints.append(
+                f"`{SOURCE_SUFFIXES_KEY}` lists {item!r}, which is not a file suffix. "
+                f"A suffix starts with a dot — `\".tsx\"`, never `\"tsx\"`, which matches no "
+                f"filename and would report a clean scan for having looked at nothing."
+            )
+            continue
+        suffixes.append(item)
+
+    if declared and not suffixes:
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` names no usable suffix, so the orphan rule does not "
+            f"run over this directory at all."
+        )
+    if not declared:
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` is an empty list. An entry that declares the key is "
+            f"saying what its source is; declaring nothing switches the orphan rule off "
+            f"here, which is what leaving the key out already does more honestly."
+        )
+    if not component.get("modules"):
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` is declared but the entry lists no `modules`, and the "
+            f"orphan scan only runs where there is a module list to compare against. Either "
+            f"list the modules or drop the key — an inert declaration reads as coverage."
+        )
+    return tuple(suffixes), True, complaints
+
+
+def source_names(target: Path, suffixes: Tuple[str, ...], deep: bool) -> Set[str]:
+    """Source files under `target`, named the way docs/map.py names them.
+
+    Relative and slash-joined, because the map already keys `app/`'s modules by
+    `src/tokens.css` — so a recursive scan needs no translation step, the relative path IS
+    the key. `__init__.py` is excluded as package plumbing rather than a module anyone would
+    write a `does` for.
+
+    Deep mode reuses `_walk`, which buys two properties that would otherwise have to be
+    rebuilt here: it prunes SKIP_DIRS as it descends, so `app/node_modules` is never
+    enumerated rather than enumerated and discarded, and it reads the index in staged mode,
+    so the hook keeps auditing the tree the commit will carry.
+    """
+    if not suffixes:
+        return set()
+    if not deep:
+        return {
+            name
+            for name in child_names(target)
+            if name.endswith(suffixes) and name != "__init__.py"
+        }
+    return {
+        path.relative_to(target).as_posix()
+        for path in _walk(target, suffixes)
+        if path.name != "__init__.py"
+    }
 
 
 def literals_from_module(path: Path) -> Dict[str, object]:
@@ -1249,6 +1370,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     that went false; the orphan rule catches a claim that was never made — a module added
     without touching the map, which is exactly how an index quietly stops describing the
     thing it indexes.
+
+    What each entry's orphan scan looks at is the entry's own declaration — see `scan_plan`.
+    It reached `.py` and one directory deep until 2026-08-13, so `app/` was inert under a
+    rule its map entry looked covered by: every step 7a screen landed beside the described
+    modules in one evening and the row stayed green.
     """
     findings: List[Finding] = []
     if not exists(MAP):
@@ -1266,6 +1392,10 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     singles = decision_headings(ROOT / "docs" / "DECISIONS.md", "D")
     test_names = {name for name, _ in registered_tests()}
     claimed = 0
+    # (component path, orphan) pairs, reported after the loop rather than inside it. The
+    # gitignore question below is one batched git call for the whole map that way, instead
+    # of one per entry that lists modules.
+    orphans: List[Tuple[str, str]] = []
 
     def check_decisions(where: str, names: Sequence[str]) -> None:
         for name in names:
@@ -1300,6 +1430,10 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         check_decisions(where, component.get("governed_by") or [])
         check_tests(where, component.get("tested_by") or [])
 
+        suffixes, deep, complaints = scan_plan(component)
+        for complaint in complaints:
+            findings.append(Finding(where, complaint))
+
         modules = component.get("modules") or {}
         for name, entry in modules.items():
             module_path = target / name
@@ -1322,21 +1456,30 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                     )
                 )
 
-        # Orphans: a source file the map never mentions.
+        # Orphans: a source file the map never mentions. Still guarded on `modules`, which
+        # is the exception docs/DEBTS.md records for `scripts/`: an entry with no module
+        # list has nothing to be an orphan of.
         if modules and exists(target):
-            on_disk = {
-                name
-                for name in child_names(target)
-                if name.endswith(SOURCE_SUFFIX) and name != "__init__.py"
-            }
-            for orphan in sorted(on_disk - set(modules)):
-                findings.append(
-                    Finding(
-                        f"docs/map.py -> {path}",
-                        f"`{path}{orphan}` exists but no entry describes it. Add it to "
-                        f"modules, with what it does and what governs it.",
-                    )
-                )
+            for orphan in sorted(source_names(target, suffixes, deep) - set(modules)):
+                orphans.append((path, orphan))
+
+    # A gitignored file is local state and not repo content — the same argument
+    # `ignored_paths` makes for a dangling reference, and it lands harder here because this
+    # row blocks: refusing a commit over `app/playwright-report/index.html` would be the
+    # auditor stopping work on a file the repo does not contain. One batched call, and in
+    # staged mode the list is empty by construction, since `_walk` reads the index and the
+    # index holds nothing ignored — so the pre-commit path pays nothing for this.
+    ignored = ignored_paths([owner + orphan for owner, orphan in orphans])
+    for owner, orphan in orphans:
+        if owner + orphan in ignored:
+            continue
+        findings.append(
+            Finding(
+                f"docs/map.py -> {owner}",
+                f"`{owner}{orphan}` exists but no entry describes it. Add it to "
+                f"modules, with what it does and what governs it.",
+            )
+        )
 
     # Exactly one thing is next. Two is how "current" stopped meaning anything the first
     # time: step 4 was done, step 5 untouched, and both read as the place work was
@@ -1900,6 +2043,60 @@ def self_test() -> int:
         str(phony_gaps(read(ROOT / "Makefile"))),
     )
 
+    # The orphan scan's reach. Every case here is a way for the rule to look like it ran:
+    # the wrong suffixes find nothing, a flat scan of a nested tree finds nothing, and a
+    # typo in the declaration finds nothing — all three print the same clean row.
+    print("\nthe orphan scan covers what the map entry declares")
+    ok(
+        scan_plan({}) == (DEFAULT_SOURCE_SUFFIXES, False, []),
+        "an entry declaring nothing is scanned as it always was",
+        str(scan_plan({})),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx", ".css"], "modules": {"src/a.tsx": {}}})
+    ok(plan == ((".tsx", ".css"), True, []), "a declaration replaces the default, and recurses", str(plan))
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: ["tsx"], "modules": {"src/a.tsx": {}}})
+    ok(
+        plan[0] == () and len(plan[2]) == 2,
+        "a suffix without its dot is reported, not silently matched",
+        str(plan),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: ".tsx", "modules": {"src/a.tsx": {}}})
+    ok(
+        plan[0] == () and len(plan[2]) == 1,
+        "a bare string is reported — str.endswith would have accepted it",
+        str(plan),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx"]})
+    ok(
+        len(plan[2]) == 1,
+        "declaring suffixes with no modules list is an inert declaration",
+        str(plan),
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for name in ("src/a.tsx", "src/deep/b.tsx", "node_modules/pkg/c.tsx",
+                     "dist/d.tsx", "test-results/e.tsx", "src/f.py"):
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("", encoding="utf-8")
+        found = source_names(root, (".tsx",), True)
+        ok(
+            found == {"src/a.tsx", "src/deep/b.tsx"},
+            "a deep scan reaches subdirectories and skips the build output",
+            str(sorted(found)),
+        )
+        ok(
+            source_names(root, (".tsx",), False) == set(),
+            "and the flat scan it replaced saw none of it — the defect, measured",
+            str(sorted(source_names(root, (".tsx",), False))),
+        )
+        ok(
+            source_names(root, DEFAULT_SOURCE_SUFFIXES, False) == set(),
+            "a `.py` entry is unaffected by any of it",
+            str(sorted(source_names(root, DEFAULT_SOURCE_SUFFIXES, False))),
+        )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -1925,6 +2122,15 @@ def self_test() -> int:
             [rel(p) for p in glob_files(ROOT / "docs", "*.md")] == ["docs/GATES.md"],
             "glob matches within one directory of the index",
             str([rel(p) for p in glob_files(ROOT / "docs", "*.md")]),
+        )
+        # The orphan scan's deep mode, through the index. It is the only check in this file
+        # that walks a directory tree, so it is the only one that could quietly go back to
+        # asking the worktree — and in the hook the worktree is the tree that will not be
+        # committed.
+        ok(
+            source_names(ROOT / "docs", (".md",), True) == {"GATES.md", "specs/batch-script.md"},
+            "a deep scan enumerates the index, nested paths and all",
+            str(sorted(source_names(ROOT / "docs", (".md",), True))),
         )
     finally:
         leave_staged_mode()

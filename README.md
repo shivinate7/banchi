@@ -27,7 +27,9 @@ identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state
-app/                       the web app. Vite + React + TS. One component so far.
+app/                       the web app. Vite + React + TS. Capture screen, pull preview,
+                           component gallery — step 7a. The queue and the Fulfillment
+                           view are 7b, after Gate B.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.

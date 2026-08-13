@@ -125,22 +125,24 @@ built, looked at, and rejected. Do not add one, and do not write a rule about th
 
 ## The review queue — SPECIFICATION. NONE OF THIS IS BUILT.
 
-**Everything in this section describes a screen that does not exist.** A Vite app exists as
-of step 6 and renders exactly one thing — the pull-confirm gallery — so the absence below is
-now specific rather than total: no queue screen, no candidate rows, no photo, no sort applied
-to anything on screen.
+**Everything in this section describes a screen that does not exist.** The Vite app renders
+three routes as of step 7a — the capture screen, the pull preview and step 6's component
+gallery — and none of them is this one, so the absence below is specific rather than total:
+no queue screen, no candidate rows, no photo shown beside candidates, no sort applied to
+anything on screen. The pull preview does show a card's own capture photo, which is D6's
+route doing the job this section reuses it for; it shows no candidates and makes no choice.
 
-**This warning governs this section and no other.** As of 2026-08-13 the capture screen, undo
-and the pull preview have an execution spec at `docs/specs/capture-app.md` and are build-order
-step 7a; the review queue is explicitly 7b and is built after Gate B, against a real run
-rather than against guesses about what one produces. So the queue is the part of this
+**This warning governs this section and no other.** The capture screen, undo and the pull
+preview were built on 2026-08-13 as step 7a, to `docs/specs/capture-app.md`; the review queue
+is explicitly 7b and is built after Gate B, against a real run rather than against guesses
+about what one produces. So the queue is the part of this
 document with the furthest to fall, and it is the part still written entirely forward.
 Read every statement below
 as *shall*, never as *does* — it is a specification written before the thing it specifies,
 which is the same reason `docs/GATES.md` writes its thresholds as numbers before there is
-anything to measure. When step 7 lands, this section becomes checkable and someone should
-check it; until then nothing here has been observed, and an agent that reads it as a
-description of working software will confidently document behaviour that has never run.
+anything to measure. When 7b lands, this section becomes checkable and someone should check
+it; until then nothing here has been observed, and an agent that reads it as a description of
+working software will confidently document behaviour that has never run.
 
 The one exception is marked inline: the sort order is description, not specification, and
 carries its citation.

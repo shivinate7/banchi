@@ -37,6 +37,13 @@ that way: an audit must not run project code.
 # landed and step 5 had not been touched. Exactly one step is `next`, and the repo-map
 # check enforces that — two of them is the drift this vocabulary exists to prevent.
 #
+# A step whose scope was split part-way through keeps `next` until every part is built, and
+# its `note` carries what shipped and what did not. That is the whole handling: no fourth
+# status, because a fourth status is what this vocabulary refuses, and a `note` nobody can
+# misread costs nothing. Precedent is step 6, which held `next` with its tokens locked and
+# its component unbuilt and said exactly that in the note; step 7 is the same shape at a
+# larger size, and its note argues the case rather than leaving the reader to infer it.
+#
 # `blocked_by` names the step or gate that unblocks it, never a date.
 
 BUILD_ORDER = [
@@ -55,12 +62,21 @@ BUILD_ORDER = [
              "`make design-check`. Building it caught two places where docs/design-refs/locked.html "
              "disagrees with docs/DESIGN.md — see that directory's README."},
     {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "next",
-     "note": "SPLIT AT GATE B. 7a is the Gate B path — shell, capture screen, undo, pull "
-             "preview — specified 2026-08-13 at docs/specs/capture-app.md, doc amendments "
-             "already applied, nothing built. 7b is the review queue, Fulfillment view, "
-             "inventory views and mark-sold, built after the gate against a real run. The "
-             "toolchain landed with step 6: app/ is a Vite + React + TS project with one "
-             "component, a gallery route and a Playwright spec."},
+     "note": "SPLIT AT GATE B, AND 7a HAS SHIPPED. Built 2026-08-13 to "
+             "docs/specs/capture-app.md: the shell and its three routes, the capture screen, "
+             "undo, the pull preview, the trigger seam, the eslint rules, and the one new "
+             "server route (DELETE /inventory/<box>/<index>). Thirteen files under app/ plus "
+             "server/capture_server.py; `make lint` stopped being a stub in the same commit. "
+             "7b is the review queue, the Fulfillment view, the inventory SKU views and "
+             "mark-sold, deliberately after the gate so it is built against a real run "
+             "rather than against guesses about what one produces. "
+             "WHY THIS ROW IS STILL `next`, since half of it is built: 7b is real remaining "
+             "scope, so `done` would be a lie, and the vocabulary above has no fourth word by "
+             "design. Two candidates lost. `blocked_by: Gate B` is true of 7b alone and reads "
+             "over the whole row as `the app is finished`. Moving `next` to step 8 is the "
+             "bigger claim — `make status` would then tell whoever runs it to start a "
+             "twenty-card physical run, against a build that has never met a card. That is the "
+             "owner's call to make on the day, not a call to make by editing this file."},
     {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
     {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},
@@ -214,7 +230,8 @@ COMPONENTS = [
     {
         "path": "server/",
         "status": "built",
-        "does": "capture server: POST /capture, /status, GET /photo/<box>/<position>, inventory state",
+        "does": "capture server: POST /capture, /status, GET /photo/<box>/<position>, "
+                "GET and PUT inventory state, and DELETE /inventory/<box>/<index> — undo",
         "governed_by": ["D3", "D6", "D10", "D13"],
         "note": "T7 reaches this package as of 2026-08-13: every route, every named "
                 "refusal, and the sidecar seam read back through identify.sidecar.scan. "
@@ -224,8 +241,13 @@ COMPONENTS = [
                 "captures/ui/ are never scanned as paid captures.",
         "modules": {
             "capture_server.py": {
-                "does": "the five routes, the sidecar identify reads back, the photo store",
-                "governed_by": ["D3", "D6", "D10", "D13"],
+                # Six since 2026-08-13, when step 7a's undo landed. The count is written out
+                # rather than left as "the routes" because it is the one number here a reader
+                # checks against the handlers, and it was wrong for exactly one commit.
+                "does": "the six routes, the sidecar identify reads back, the photo store",
+                # D5 is here because the file cites it: the concurrency it is tested at is two
+                # and four simultaneous captures, and two is D5's two people on two devices.
+                "governed_by": ["D3", "D5", "D6", "D10", "D13"],
                 "tested_by": ["T7"],
             },
         },
@@ -234,22 +256,111 @@ COMPONENTS = [
         "path": "app/",
         "status": "built",
         "step": 7,
-        "does": "the web app. Step 6's pull-confirm component, the gallery that renders it, "
-                "and the Playwright spec that asserts docs/DESIGN.md's Fulfillment floors. "
-                "Step 7 adds the screens.",
-        "governed_by": ["D5", "D6", "D13", "D18"],
-        "note": "THE ORPHAN RULE DOES NOT REACH THIS DIRECTORY. It filters on SOURCE_SUFFIX, "
-                "which is `.py`, so a new .tsx or .css file is never flagged as undescribed — "
-                "the one entry in this file whose module list is maintained by hand alone. "
-                "Recorded in docs/DEBTS.md beside the same gap in scripts/. "
+        "does": "the web app: three owner-side routes behind a hand-written hash router — the "
+                "capture screen that step 7a shipped and Gate B runs on, the pull preview, and "
+                "step 6's component gallery — plus the Playwright spec that asserts "
+                "docs/DESIGN.md's Fulfillment floors. What step 7 has left is 7b: the review "
+                "queue, the Fulfillment view, the inventory SKU views and mark-sold, all of it "
+                "after Gate B.",
+        "governed_by": ["D3", "D5", "D6", "D10", "D13", "D18"],
+        # What the orphan rule scans here, and the reason this directory needs the key at
+        # all: the default is `.py` one level deep, which over a tree holding no Python and
+        # keeping all of it in subdirectories is a check that reports a clean scan for having
+        # looked at no file in the entry it names. It was inert exactly that way until
+        # 2026-08-13 — see the note. `.json` is deliberately absent: it would conscript
+        # package-lock.json, and a manifest is not a module anyone writes a `does` for.
+        "source_suffixes": [".ts", ".tsx", ".css", ".js", ".html"],
+        "note": "THE ORPHAN RULE WAS INERT OVER THIS DIRECTORY UNTIL 2026-08-13, AND IT COST "
+                "EXACTLY WHAT docs/DEBTS.md SAID IT WOULD. It filtered on one repo-wide `.py` "
+                "suffix, one level deep, so step 7a's thirteen new files landed beside the "
+                "described modules and this list named none of them — a green row over an "
+                "entry nothing had checked. The rule reaches here now because the entry "
+                "declares `source_suffixes` above and scripts/docs-audit.py reads it, which is "
+                "the half of that fix that lives in this file. "
                 "Nothing here imports docs/design-refs/: those are drawings of the spec, and "
-                "this is built from docs/DESIGN.md itself.",
+                "this is built from docs/DESIGN.md itself. "
+                "NO ENTRY BELOW CARRIES tested_by, and that is a measurement rather than an "
+                "oversight: no harness test imports anything in this directory. The Playwright "
+                "spec is not a harness test and reaches only the pull-confirm — see its own "
+                "entry.",
         "modules": {
+            # ---- the page, and what builds and runs it ----
+            "index.html": {"does": "the single page: the #root main.tsx mounts into, and the "
+                                   "three font faces from their two hosts",
+                           "governed_by": ["D5", "D13"]},
+            "vite.config.ts": {"does": "the dev server on :5173, strictPort — a busy port fails "
+                                       "loudly rather than serving on 5174, where CLAUDE.md, the "
+                                       "Makefile and scripts/views.txt would all three be wrong",
+                               "governed_by": ["D13"]},
+            "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
+                                             "Vite it starts for itself",
+                                     "governed_by": ["D5"]},
+
+            # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing else.",
                                "governed_by": ["D18"]},
             "src/base.css": {"does": "reset and the page ground. Light only — there is no dark theme.",
                              "governed_by": ["D5"]},
-            "src/PullConfirm.tsx": {"does": "step 6's component: the pull modal's confirm button",
+
+            # ---- the shell ----
+            "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens before base",
+                             "governed_by": ["D13"]},
+            # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
+            # and its render off a single ROUTES table rather than a table plus a switch, and
+            # cites D16 for why two lists of the same strings are the drift to avoid.
+            "src/App.tsx": {"does": "the shell: three hash routes, one ROUTES table driving both "
+                                    "the nav and the render",
+                            "governed_by": ["D13", "D16"]},
+            "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
+                                    "shadow, and why this nav must never render on 7b's "
+                                    "Fulfillment view",
+                            "governed_by": ["D5"]},
+
+            # ---- the wire, and the two seams ----
+            "src/server.ts": {"does": "the only module that talks to the capture server, so the "
+                                      "stop-the-run failure rule is one decision. Surfaces the "
+                                      "server's own messages verbatim.",
+                              "governed_by": ["D3", "D6", "D10", "D13"]},
+            "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
+                                     "names. Types only — it emits no JavaScript.",
+                             "governed_by": ["D3", "D6", "D10"]},
+            "src/useCamera.ts": {"does": "the camera: deviceId selection, never facingMode (v1 bug "
+                                         "3), the native resolution requested explicitly, and a "
+                                         "remembered device that refuses to fall back to another",
+                                 "governed_by": ["D13"]},
+            "src/trigger.ts": {"does": "the trigger seam: whatever fires a capture, behind one "
+                                       "interface. Manual today; Gate C's motion state machine "
+                                       "drops into the same slot.",
+                               "governed_by": ["D13"]},
+
+            # ---- 7a's screens ----
+            "src/CaptureScreen.tsx": {"does": "the capture screen: live camera left, last capture "
+                                              "right, box list from /status, set hint and finish "
+                                              "always visible, undo that names what it would delete",
+                                      "governed_by": ["D3", "D10", "D13"]},
+            # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
+            # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
+            # that distinction is carried here in a border style rather than in any logic.
+            "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
+                                              "system, two densities. Owner-side; the Fulfillment "
+                                              "floors do not govern here.",
+                                      "governed_by": ["D3", "D5"]},
+            "src/CameraPicker.tsx": {"does": "the device picker, and the resolution the track "
+                                             "actually negotiated — shown so a short stream is "
+                                             "caught before a box is shot through it",
+                                     "governed_by": ["D13"]},
+            "src/CameraPicker.css": {"does": "its layout. No panel and no header strip, per "
+                                             "docs/DESIGN.md.",
+                                     "governed_by": ["D5"]},
+            "src/PullPreview.tsx": {"does": "look only: the card's own capture photo beside its "
+                                            "position label, the last link in the Gate B chain",
+                                    "governed_by": ["D6", "D10"]},
+            "src/PullPreview.css": {"does": "its layout, and why no accent appears anywhere in it",
+                                    "governed_by": ["D5", "D6", "D13"]},
+
+            # ---- step 6's component and the sheet that renders it ----
+            "src/PullConfirm.tsx": {"does": "step 6's component: the pull modal's confirm button. "
+                                            "Reused as the capture button rather than copied.",
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
@@ -257,8 +368,15 @@ COMPONENTS = [
                                 "governed_by": ["D5"]},
             "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
                                 "governed_by": ["D5"]},
-            "src/main.tsx": {"does": "mounts the gallery. Step 7 mounts the app here instead.",
-                             "governed_by": ["D13"]},
+
+            # ---- what checks the above ----
+            "eslint.config.js": {
+                "does": "the two v1-bug rules docs/DECISIONS.md's table has named as guards since "
+                        "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
+                        "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
+                        "writes off the path `make check` runs.",
+                "governed_by": ["D13", "D16", "D18"],
+            },
             "tests/pull-confirm.spec.ts": {
                 "does": "the Fulfillment constraints table as assertions: 44px targets, 20px "
                         "body, 7:1 contrast, 12px apart. Run by `make design-check`.",

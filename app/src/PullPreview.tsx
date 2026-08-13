@@ -21,36 +21,50 @@ import './PullPreview.css'
  * every state and speaks the pipeline's vocabulary.
  */
 
-/* pipeline/join.py:CARDS_PER_SECTION. Duplicated rather than shared, because nothing
- * carries a constant across the Python and the app today and inventing a channel for one
- * number is worse than restating it beside the renderer that uses it. D10 calls it
- * configurable; if it ever moves, it moves in both files or the app sends a person to the
- * wrong slot. */
-const CARDS_PER_SECTION = 25
-
-/* Renders exactly what `pipeline/join.py:Position.label` renders, separator included.
+/* The position label is READ off the wire and never composed here.
  *
- * The server returns a `label` only from `POST /capture` and `PUT /inventory/...`; an
- * inventory row carries box and index and nothing else, so this screen has to build it.
- * Getting it wrong sends a person to the wrong slot, which is the entire failure this
- * product exists to avoid, so it is written as a port of the Python rather than as
- * arithmetic that happens to agree.
+ * `GET /inventory` decorates every row with the `label`, `section` and `card` that
+ * `pipeline/join.py:Position` computed, the same three fields `POST /capture` has always
+ * returned, and types.ts states the rule on that field: the app displays the string and
+ * never composes a second one. An earlier draft of this file ported the arithmetic and
+ * D10's 25-cards-per-divider constant into TypeScript. That is one divider size living in
+ * two languages with nothing keeping them in step — and of the two answers, the one on
+ * screen is the one a person walks to a box with.
  *
- * The floor-mod is not decoration. JavaScript's `%` is a remainder and Python's is a
- * modulo, and they disagree for a negative left operand: an index of 0 would give card 0
- * here and card 25 there. The server never allocates an index below 1, so this can only
- * fire on a hand-edited inventory.json — which is precisely the case where a silently
- * different answer would be believed.
+ * MISSING IS SHOWN, NEVER FILLED IN. When the field is absent this returns null and the
+ * screen says so in the space the label would have occupied. Recomputing it locally would
+ * trade a visible gap for an invisible disagreement, and only one of those sends someone to
+ * the wrong slot.
+ *
+ * Two ways the field is absent, and neither is hypothetical. An older capture server still
+ * running on the Mac is the upgrade case. The standing one is `do_inventory`'s own rule: a
+ * record whose box or index will not coerce to an int is left UNDECORATED rather than
+ * labelled, on the grounds that a placeholder would name a position that does not exist.
+ * A client-side renderer would take that same record and print a confident label from it,
+ * which is exactly the outcome the server declined to produce.
+ *
+ * THE CAST IS GONE AND THE `typeof` CHECK STAYS, which is the shape this function was
+ * written to end up in. `InventoryCard` declares `label?: string` as of the integration
+ * pass, so an intersection widening it to `{ label?: unknown }` now only hides the
+ * declaration from the reader. The check is not redundant with that declaration and must
+ * not be deleted as though it were: the type describes the contract, this describes the
+ * process actually answering on :8000, and during an upgrade — an older capture server
+ * still running on the Mac — those are different things. `server.ts` casts rather than
+ * validates, by a decision recorded there, so a field the running server omits arrives
+ * here as `undefined` under a type that says otherwise.
+ *
+ * It also does work the type cannot: `''` is a `string` and not a label. `Position.label`
+ * never renders one, so this is defence against a future decorator, not against today's.
  */
-function positionLabel(box: number, index: number): string {
-  const section = Math.floor((index - 1) / CARDS_PER_SECTION) + 1
-  const card = ((((index - 1) % CARDS_PER_SECTION) + CARDS_PER_SECTION) % CARDS_PER_SECTION) + 1
-  return `Box ${box} · Section ${section} · Card ${card}`
+function serverLabel(card: InventoryCard): string | null {
+  const { label } = card
+  return typeof label === 'string' && label.trim() !== '' ? label : null
 }
 
 /* The inventory arrives as a map keyed `"3/1"`. The key is kept for identity and React,
- * and never parsed: the label is built from `box` and `index` because a store key and a
- * physical location are two different facts that happen to agree today. */
+ * and shown verbatim in the one case where a row carries no label — never parsed into a
+ * position: a store key and a physical location are two different facts that agree for the
+ * first 25 cards in a box and diverge from card 26 on, where `3/26` is Section 2, Card 1. */
 type Row = { key: string; card: InventoryCard }
 
 /* Box-walk order — box, then index. The same order `store/queues.py:sort_key` falls back
@@ -63,21 +77,31 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
     .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
 }
 
-type Failure = { code: string | null; message: string; hint: string | null }
+type Failure = { code: string; message: string }
 
 /* docs/specs/capture-app.md §4: every response the app surfaces uses the server's own
  * message, because those strings say what happened and what to do next and a friendlier
- * paraphrase is a less actionable one. So a `ServerError` contributes its message
- * verbatim and no hint of ours.
+ * paraphrase is a less actionable one. So a `ServerError` contributes its message and its
+ * code verbatim, and this function writes nothing at all on that path.
  *
- * A transport failure is the case that rule does not cover: there is no server message
- * because there was no response. `TypeError: Failed to fetch` is true and useless, so it
- * is shown as the machine string it is and given the one sentence the copy rules ask for.
+ * The other branch is not a transport failure, and this file used to treat it as one and
+ * offer `make server`. `server.ts` converts a dead server, a wrong address and a CORS
+ * refusal alike into `ServerError('unreachable', …)` before any of them get here, so
+ * nothing reaching this branch is any of those — it is a throw from inside the client, and
+ * pointing at the server sends the operator to the one place the fault is not. It keeps a
+ * branch rather than being dropped, because a screen that renders nothing while something
+ * is broken is worse than one that names it, and `client_bug` greps to this line and to no
+ * server route.
  */
 function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, hint: null }
-  const message = err instanceof Error ? err.message : String(err)
-  return { code: null, message, hint: 'The capture server did not answer. Start it with `make server`.' }
+  if (err instanceof ServerError) return { code: err.code, message: err.message }
+  const detail = err instanceof Error ? err.message : String(err)
+  return {
+    code: 'client_bug',
+    message:
+      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
+      'the app rather than a refusal — check the browser console.',
+  }
 }
 
 type Detail = { label: string; value: string; mono: boolean }
@@ -156,6 +180,12 @@ export function PullPreview() {
 
   const selectedRow = rows?.find((row) => row.key === selected) ?? null
 
+  /* Read once for the selected card and passed down, rather than read again inside
+   * PhotoPanel. Two reads of the same field cannot disagree today, but they are two places
+   * to edit the day the field is renamed, and the failure mode of getting that half-right
+   * is a photo captioned with a position beside a panel saying there is none. */
+  const selectedLabel = selectedRow === null ? null : serverLabel(selectedRow.card)
+
   return (
     <main className="pull-preview">
       <header className="pull-preview-head">
@@ -185,13 +215,16 @@ export function PullPreview() {
 
       {failure === null ? null : (
         <div className="pull-preview-note">
-          <p className="pull-preview-note-text">{failure.hint ?? failure.message}</p>
-          {/* Human label large, machine string small beneath it — docs/DESIGN.md's reason-code
-              rule, which exists so that what you saw on screen is greppable against the run
-              report. Owner-side only, and this screen is owner-side. */}
-          <p className="pull-preview-machine">
-            {failure.code === null ? failure.message : `${failure.code} — ${failure.message}`}
-          </p>
+          <p className="pull-preview-note-text">{failure.message}</p>
+          {/* The CODE beneath the sentence, and never the sentence again.
+              docs/DESIGN.md's rule is "human label large, machine string small beneath
+              it", and the machine string it means is a greppable token — `store_busy`,
+              `unreachable` — that says something the label above it does not. An earlier
+              draft printed the server's one message in both slots, which is not that rule
+              but a stutter, and it cost the small line the only job it has: getting from
+              what is on screen to what the server said, with `git grep`. Owner-side only,
+              and this screen is owner-side. */}
+          <p className="pull-preview-machine">{failure.code}</p>
         </div>
       )}
 
@@ -219,8 +252,12 @@ export function PullPreview() {
                   aria-current={row.key === selected ? 'true' : undefined}
                   onClick={() => setSelected(row.key)}
                 >
+                  {/* The store key when the server sent no label, so the rows stay
+                      distinguishable enough to pick one — with the word `no label` in
+                      front of it, because `3/30` alone reads like a position and is not
+                      one. The detail panel says the rest; a row has no room for it. */}
                   <span className="pull-preview-row-position">
-                    {positionLabel(row.card.box, row.card.index)}
+                    {serverLabel(row.card) ?? `no label · ${row.key}`}
                   </span>
                   <span className="pull-preview-row-name">{row.card.name ?? row.card.state}</span>
                 </button>
@@ -230,15 +267,37 @@ export function PullPreview() {
 
           {selectedRow === null ? null : (
             <section className="pull-preview-detail">
-              {/* The payload of the whole screen. Utility face because it is a position,
-                  and sized up because it is the one thing being checked against a physical
-                  box across the desk. */}
-              <p className="pull-preview-position">
-                {positionLabel(selectedRow.card.box, selectedRow.card.index)}
-              </p>
+              {selectedLabel === null ? (
+                /* The gap, drawn as a panel in the space the label would have filled.
+                   Loud rather than blank: this screen's whole claim is that it says where
+                   a card is, and a screen that has quietly stopped making that claim
+                   should not look like one that is still making it. */
+                <div className="pull-preview-gap">
+                  {/* Both causes, because the sentence has to survive being read on the
+                      wrong one: a restart fixes an old server and does nothing at all for a
+                      record whose box will not coerce. Naming only the likelier one would
+                      send the operator round a loop that cannot work. */}
+                  <p className="pull-preview-note-text">
+                    The capture server sent no position label for this card, and this screen
+                    does not work one out for itself. Either an older server is running —
+                    restart it with `make server` and reload — or this record's box or index
+                    is not a number, which `GET /status` reports.
+                  </p>
+                  {/* The field and its state, in the shape the missing-photo panel below
+                      uses — `photo: null` there, `label: absent` here — plus the store key,
+                      which is what a `curl /inventory | grep` needs to see it for itself. */}
+                  <p className="pull-preview-machine">label: absent · key {selectedRow.key}</p>
+                </div>
+              ) : (
+                /* The payload of the whole screen. Utility face because it is a position,
+                   and sized up because it is the one thing being checked against a physical
+                   box across the desk. */
+                <p className="pull-preview-position">{selectedLabel}</p>
+              )}
 
               <PhotoPanel
                 row={selectedRow}
+                label={selectedLabel}
                 absent={photoAbsent === selectedRow.key}
                 onAbsent={() => setPhotoAbsent(selectedRow.key)}
               />
@@ -261,6 +320,11 @@ export function PullPreview() {
 
 type PhotoPanelProps = {
   row: Row
+
+  /** The server's own position label, or null when this row arrived without one. Handed
+   *  down rather than derived here — see the note beside `selectedLabel`. */
+  label: string | null
+
   absent: boolean
   onAbsent: () => void
 }
@@ -275,8 +339,12 @@ type PhotoPanelProps = {
  *
  * Both print the URL that was asked for, so the next move is a curl rather than a guess.
  */
-function PhotoPanel({ row, absent, onAbsent }: PhotoPanelProps) {
-  const label = positionLabel(row.card.box, row.card.index)
+function PhotoPanel({ row, label, absent, onAbsent }: PhotoPanelProps) {
+  /* One phrasing, used by both the sentence beside a missing photo and the alt text on a
+   * present one, so those two cannot end up disagreeing about where the card is. The
+   * fallback says `store key` out loud rather than printing `3/30` bare: bare, it reads
+   * like a position, and the whole point of the null case is that no position was sent. */
+  const where = label ?? `store key ${row.key}`
 
   if (row.card.photo === null) {
     return (
@@ -311,7 +379,7 @@ function PhotoPanel({ row, absent, onAbsent }: PhotoPanelProps) {
       <div className="pull-preview-absent">
         <p className="pull-preview-note-text">
           The record has a photo but the file is not on disk. Nothing here can restore it — the
-          card is still at {label}.
+          card is still at {where}.
         </p>
         <p className="pull-preview-machine">{base}</p>
       </div>
@@ -325,7 +393,7 @@ function PhotoPanel({ row, absent, onAbsent }: PhotoPanelProps) {
       key={row.key}
       className="pull-preview-photo"
       src={base}
-      alt={`The card photographed at ${label}`}
+      alt={`The card photographed at ${where}`}
       onError={onAbsent}
     />
   )

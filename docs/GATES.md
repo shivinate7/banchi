@@ -164,10 +164,13 @@ at a temporary directory, so nothing here touches the real inventory.
 - **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
   sockets, matching D5's two devices. The twenty-way case that found the listen backlog
   proved something about a socket option and is not worth paying for at every turn end.
-- **Known gap**: undo, mark-sold and the pull routes do not exist yet, so nothing here
-  covers them. D10 already settles what undo must do — delete rather than tombstone, newest
-  capture in a box only, refused once the card's row has been written into an import file —
-  so those cases are writable the day the route is.
+- **Undo is covered as of 2026-08-13**, the day its route landed with step 7a: that it
+  answers with the position it removed, that the record, sidecar and photo all go, that a
+  second call walks back one more card, and that it refuses anything but the newest and
+  anything already written into an import file. All D10, and all written the same day the
+  route was, which is what this bullet promised when it said the cases were writable then.
+- **Known gap**: mark-sold and the pull routes do not exist, so nothing here covers them.
+  They are 7b, after Gate B.
 
 ---
 
@@ -222,9 +225,13 @@ a 50-card run, then scale to a full box.
 5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
    state shared across devices.~~ — done 2026-08-11, spec at `docs/specs/capture-server.md`.
-   Positions are allocated inside the store lock by `allocate_capture`. **No harness test
-   reaches it**: nothing under `harness/tests` imports `server`, `store` or `cli`, so a
-   green harness says nothing about this step — see `docs/DEBTS.md`.
+   Positions are allocated inside the store lock by `allocate_capture`. **T7 reaches it as
+   of 2026-08-13**: every route, every named refusal, and the sidecar seam read back through
+   the reader `identify` uses. This line said the opposite for two days — the step shipped
+   with nothing under `harness/tests` importing `server`, `store` or `cli` — and the claim
+   outlived the gap it described. What T7 still does not assert is in `docs/DEBTS.md`, and
+   is now three named cases rather than a whole package.
+   A sixth route, `DELETE /inventory/<box>/<index>`, arrived later with step 7a's undo.
 6. ~~Design tokens locked and one component built against them~~ — done 2026-08-12.
    Tokens locked by interview against rendered alternatives rather than by inference; the
    pull-confirm built against them at `app/src/PullConfirm.tsx`, in all three states, on a
@@ -240,10 +247,14 @@ a 50-card run, then scale to a full box.
    screens rather than a build system. Extend `app/tests/pull-confirm.spec.ts` to the rest
    of `docs/DESIGN.md`'s Fulfillment table as the views that carry those rows land.
 
-   **Split at Gate B.** 7a is the Gate B path — the shell, the capture screen, undo and the
-   pull preview — specified in `docs/specs/capture-app.md`. 7b is the review queue, the
-   Fulfillment view, the inventory views and mark-sold, built after the gate against a real
-   run rather than against guesses about what one produces.
+   **Split at Gate B, and 7a shipped 2026-08-13.** 7a is the Gate B path — the shell, the
+   capture screen, undo, the pull preview and the trigger seam — specified in
+   `docs/specs/capture-app.md` and built to it, along with the one new server route and the
+   two eslint rules that make `make lint` real. 7b is the review queue, the Fulfillment
+   view, the inventory views and mark-sold, built after the gate against a real run rather
+   than against guesses about what one produces. **The step is therefore half done and
+   `docs/map.py` still calls it `next`** — its note argues that call, and this list and that
+   file must not drift apart on it.
 
    **"CSV import with error reporting" was struck from this list on 2026-08-13.** It was a
    v1 feature that batch script v2 absorbed whole: `emit` writes `pushed`, `reconcile` moves

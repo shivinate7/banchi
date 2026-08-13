@@ -185,10 +185,14 @@
   border-radius: var(--r);
 }
 
-/* Both ways a photo can be absent, and the failure to read the inventory at all. A panel
-   rather than bare text, so that the space the photo would occupy still reads as the place
-   the photo goes. */
+/* Both ways a photo can be absent, the failure to read the inventory at all, and the row
+   that arrived with no position label on it. A panel rather than bare text, so that the
+   space the missing thing would occupy still reads as the place it goes — which is the
+   whole argument for .pull-preview-gap sharing this rule rather than being drawn quieter.
+   A screen that has stopped saying where a card is must not look like one that is still
+   saying it, and a blank line where a 20px position was is exactly that. */
 .pull-preview-absent,
+.pull-preview-gap,
 .pull-preview-note {
   max-width: 420px;
   padding: var(--s4);
@@ -210,6 +214,13 @@
 
 /* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, which
    exists so that what you saw on screen is greppable against the run report and the store.
+
+   IT CARRIES A TOKEN, NEVER THE SENTENCE ABOVE IT AGAIN. What goes here is the refusal's
+   code, the field that was null, the URL that 404'd — something the sentence does not
+   already say. The rule reads "human label large, machine string small beneath it" and is
+   easy to misread as "twice, at two sizes"; this file did misread it, and printed the
+   server's one message in both slots, which reads as a stutter and greps to nothing.
+
    Owner-side only; the Fulfillment banned-word list forbids this register entirely, and no
    Fulfillment route renders this class. break-all because these are paths and URLs, and a
    URL that overflows its panel is a URL you cannot copy. */

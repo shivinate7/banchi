@@ -23,6 +23,29 @@
  *  is why a mis-toggled card reviews rather than being silently corrected downstream. */
 export type Finish = 'normal' | 'holo' | 'reverse_holo'
 
+/** What the finish control on the capture screen holds, which is one state wider than the
+ *  wire enum. `null` is NO CLAIM: the operator has not said anything about this stack, so
+ *  nothing is sent and `sidecar_payload` writes no `variant` key at all — the file stays a
+ *  record of claims actually made (D3 rung 1), which is the rule `set_hint` already
+ *  followed on this side of the wire and `variant` did not.
+ *
+ *  THE NULL IS WHAT KEEPS D3 RUNGS 2 AND 3 REACHABLE, and that is the reason it exists
+ *  rather than tidiness. `pipeline/variant.py:resolve` consults the catalog (rung 2,
+ *  CATALOG_FORCED) and cross-checks detection (rung 3) only where `metadata_finish` is
+ *  None. An app that always sends a claim makes both rungs dead for every card this product
+ *  will ever capture: a holofoil-only SV-era rare shot with an untouched toggle would
+ *  return METADATA_NOT_STOCKED and cost a review-queue tap, where the single catalog row
+ *  would have decided it with no attention at all. Not touching a toggle is not a claim of
+ *  `normal`, and once the sidecar is written the two are indistinguishable.
+ *
+ *  A SEPARATE TYPE RATHER THAN A FOURTH MEMBER OF `Finish`. Widening `Finish` itself is the
+ *  shorter edit and the wrong one: `Finish` is the wire enum, and the server answers
+ *  anything outside `pipeline/variant.py:FINISHES` with `variant_invalid`. A no-claim member
+ *  living inside it would typecheck at `server.capture()`'s `variant` argument and fail at
+ *  the rig. Two names keep "what the operator can choose" and "what the wire accepts" from
+ *  collapsing into one set. */
+export type FinishClaim = Finish | null
+
 /** What `POST /capture` and `PUT /inventory/<box>/<index>` answer with: where the card
  *  landed. */
 export type CardSummary = {
@@ -93,10 +116,39 @@ export type ServerStatus = {
 }
 
 /** One card in `GET /inventory`. Mirrors `store/master.py:Card` field for field, because
- *  the server serialises that dataclass with `asdict`. */
+ *  the server serialises that dataclass with `asdict` — plus the three decorated fields
+ *  below, which the dataclass does not carry and `do_inventory` adds on the way out. */
 export type InventoryCard = {
   box: number
   index: number
+
+  /* ---- decorated by the server, not stored ----
+   *
+   * `server/capture_server.py:do_inventory` adds these three to each row after `to_payload`
+   * has built it, the same three `POST /capture` and `PUT /inventory` have always answered
+   * with. They exist so the app never composes a position label — see `CardSummary.label`
+   * for the rule and D10 for the divider size that a second renderer would copy.
+   *
+   * OPTIONAL, AND THAT IS THE CONTRACT RATHER THAN CAUTION ABOUT AN UNFAMILIAR ROUTE. The
+   * decoration is skipped for any record whose box or index will not coerce to an int: a
+   * placeholder label would name a position that does not exist, which is the one thing a
+   * position label may never do, so the server leaves the row bare and `GET /status`
+   * reports it. Declaring them required would make every reader's narrowing look redundant
+   * and invite its deletion, at which point that row renders `undefined` as a location.
+   *
+   * `?:` rather than `| undefined` on a required key: both typecheck the same reads, and
+   * the optional form is what an absent JSON key actually is. The second form would also
+   * force every construction of this type to spell the fields out, which matters the day a
+   * test builds one.
+   *
+   * WIRE-ONLY, and never written back. `Inventory.parse` filters on `Card.__annotations__`,
+   * so a label that reached `inventory.json` would be dropped silently on the next reload.
+   * Nothing in this app writes an inventory row, so the rule costs nothing here — it is
+   * recorded because the reason it is safe on this side is that there is no PUT of a whole
+   * row to accidentally round-trip one through. */
+  label?: string
+  section?: number
+  card?: number
 
   /** Filesystem path again, not a URL. See `CardSummary.photo`. */
   photo: string | null

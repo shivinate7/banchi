@@ -93,9 +93,10 @@ export function CameraPicker({ camera }: { camera: Camera }) {
       </select>
 
       {/* Accent as outline and text, never as fill. docs/DESIGN.md: the solid fill means
-          there is exactly one thing to do, and a screen with two answers gets none. Both
-          notices below leave the owner a choice — pick a different camera, or go fix the
-          rig — so both are drawn at the light weight. */}
+          there is exactly one thing to do, and a screen with two answers gets none. Every
+          notice below leaves the owner a choice — pick a different camera, reopen this one,
+          or go fix the rig — so all of them are drawn at the light weight, and so is the
+          control at the bottom. */}
       {camera.missing ? (
         <p className="camera-picker-notice">
           The remembered camera is not connected. Check the Cam Link and that the camera is
@@ -119,6 +120,26 @@ export function CameraPicker({ camera }: { camera: Camera }) {
           photo will be worse than the rig can produce. Check the camera is in its clean-HDMI
           output mode and that nothing else is holding the capture card.
         </p>
+      ) : null}
+
+      {/* Every message above ends by telling the owner to act on the rig and come back, and
+          until this control existed there was nothing to come back to: the select fires no
+          change event for the value it already holds, and re-picking the same camera changed
+          no state, so a sleeping camera or a busy capture card could only be answered with a
+          page reload. `retry` re-enumerates and re-opens.
+
+          Shown only when something is wrong. A permanently visible control to reopen a
+          working camera is an invitation to drop the stream mid-box, and it would sit at the
+          same weight as the choice the owner actually came here to make.
+
+          A plain button rather than PullConfirm: that component carries the solid accent
+          fill, which docs/DESIGN.md reserves for a screen with exactly one thing to do. This
+          screen offers at least two — reopen this camera, or pick a different one from the
+          select above — so it takes the same outline weight as the notices it answers. */}
+      {camera.missing || camera.error !== null || underTarget ? (
+        <button className="camera-picker-retry" type="button" onClick={camera.retry}>
+          Reopen the camera
+        </button>
       ) : null}
     </section>
   )

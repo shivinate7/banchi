@@ -72,6 +72,12 @@ export type Camera = {
 
   selectDevice(id: string): void
 
+  /** Re-run acquisition for whatever is currently chosen. The only way back from a stream
+   *  error: re-picking the same camera in the select is a no-op twice over — a `<select>`
+   *  fires no change event for the value it already holds, and the effect that opens the
+   *  device is keyed on `deviceId`, which did not change. */
+  retry(): void
+
   /** The remembered camera is not in the device list. Distinct from `error`, because it
    *  is answerable: the owner picks, or plugs the rig back in. */
   missing: boolean
@@ -80,7 +86,9 @@ export type Camera = {
    *  to do next. */
   error: string | null
 
-  /** A live track is attached and the element has reported its dimensions. */
+  /** A live track is attached and the element has reported its dimensions. Goes false
+   *  again when the track ends or mutes — a dead signal leaves the element holding its
+   *  last decoded frame, so nothing about the `<video>` says the picture is stale. */
   ready: boolean
 
   /** JPEG bytes as bare base64 — no `data:` prefix, because the server b64decodes the
@@ -122,21 +130,57 @@ function describeCameraError(cause: unknown): string {
       return 'Camera permission was refused. Allow the camera for this site in the browser settings, then reload.'
     case 'NotFoundError':
     case 'DevicesNotFoundError':
-      return 'That camera is not connected. Check the Cam Link cable and that the camera is awake, then pick a camera.'
+      return 'That camera is not connected. Check the Cam Link cable and that the camera is awake, then reopen the camera below.'
     case 'NotReadableError':
     case 'TrackStartError':
-      return 'Another application is holding the camera. Quit it — OBS and the Elgato utilities both take exclusive use — then pick the camera again.'
+      return 'Another application is holding the camera. Quit it — OBS and the Elgato utilities both take exclusive use — then reopen the camera below.'
     case 'OverconstrainedError':
     case 'ConstraintNotSatisfiedError':
-      return `That camera cannot deliver ${MIN_WIDTH}x${MIN_HEIGHT} or better, which is below what the pipeline needs. Check the camera is in its clean-HDMI output mode, then pick a camera.`
+      return `That camera cannot deliver ${MIN_WIDTH}x${MIN_HEIGHT} or better, which is below what the pipeline needs. Check the camera is in its clean-HDMI output mode, then reopen the camera below.`
     case 'AbortError':
-      return 'The camera stopped responding. Unplug the Cam Link, plug it back in, then pick a camera.'
+      return 'The camera stopped responding. Unplug the Cam Link, plug it back in, then reopen the camera below.'
     default:
       return cause instanceof Error
         ? `The camera did not open: ${cause.message}`
-        : 'The camera did not open. Unplug the Cam Link, plug it back in, then pick a camera.'
+        : 'The camera did not open. Unplug the Cam Link, plug it back in, then reopen the camera below.'
   }
 }
+
+/* ---- the signal dying under a camera that is still there ----
+ *
+ * docs/specs/capture-app.md section 6.2's last rig setting: a body that sleeps mid-box drops
+ * the HDMI signal. The Cam Link stays plugged in and stays enumerated, so `devicechange`
+ * never fires and nothing above notices. What does change is the track — it mutes when the
+ * source stops delivering and ends when it goes away — and until those were listened for,
+ * `ready` had exactly one thing that cleared it, which was choosing a different device.
+ *
+ * The cost of not listening is the reason these three messages exist at all. The `<video>`
+ * keeps its last decoded frame with `videoWidth` intact, so every subsequent capture
+ * succeeds against a photograph of the previous card: the feeder keeps feeding, the server
+ * keeps allocating positions, and a box fills with one image at twenty real positions. It
+ * surfaces at identification, in a paid Batch request, after the cards are boxed. That is
+ * precisely the quiet failure section 5.5 stops the run to prevent, so it stops the run.
+ *
+ * Same what-happened / what-to-do-next shape as describeCameraError, and separate strings
+ * for mute and end because the remedies differ: a muted track is a sleeping camera, an ended
+ * one is a source that went away.
+ *
+ * Honest limit, recorded so a later session does not read this as total coverage: it catches
+ * what the platform reports. A capture card that answers a dead HDMI input with black frames
+ * rather than by muting its track raises no event at all, and nothing here would fire. That
+ * is a Gate B rig finding — check what the Cam Link does with the camera switched off — and
+ * the answer is a frame-content check, not another listener.
+ */
+const SIGNAL_MUTED_MESSAGE =
+  'The camera stopped sending video. The capture card is still connected, so the camera itself has slept or lost its HDMI output — wake it and disable auto power off, then reopen the camera below.'
+
+const SIGNAL_ENDED_MESSAGE =
+  'The camera closed while it was open. Check the Cam Link cable and that the camera is awake, then reopen the camera below.'
+
+/* Thrown on the capture path rather than shown on the preview, so it names the one fact the
+ * operator needs first: nothing was recorded. CaptureScreen turns it into the halt. */
+const SIGNAL_DEAD_CAPTURE_MESSAGE =
+  'The camera has stopped sending frames, so no photo was taken. Wake the camera, then reopen it below before capturing again.'
 
 /* getUserMedia lives on an insecure origin's navigator as undefined, not as a function
  * that throws. The DOM types do not model that, and it is not hypothetical here:
@@ -221,9 +265,25 @@ export function useCamera(): Camera {
   const [missing, setMissing] = useState(false)
   const [ready, setReady] = useState(false)
 
+  /* Bumped by `retry`, and in the acquisition effect's dependencies purely so that bumping
+   * it re-runs acquisition. A counter rather than a boolean, because a boolean has to be
+   * cleared again and the clear is another render that re-runs the effect a second time.
+   *
+   * This is what makes a stream error answerable at all: every other input to that effect
+   * is unchanged when the owner wants to try the same camera again. */
+  const [attempt, setAttempt] = useState(0)
+
+  /* The live video track, for the capture path. A ref rather than state because
+   * `grabFrameJpeg` must stay identity-stable — it is in CaptureScreen's `doCapture`
+   * dependencies, and behind that sits the trigger seam, which at Gate C holds phase across
+   * a motion state machine. Rebuilding the callback on every track change would tear that
+   * down mid-card. */
+  const trackRef = useRef<MediaStreamTrack | null>(null)
+
   /* Two error sources, kept apart internally and combined on the way out. Enumeration
-   * failures survive a devicechange; a stream failure belongs to one deviceId and is
-   * cleared when that changes. Writing both into one slot meant a replugged Cam Link
+   * failures survive a devicechange; a stream failure belongs to one acquisition and is
+   * cleared by the next one, whether that is a different device or `retry` re-opening the
+   * same one. Writing both into one slot meant a replugged Cam Link
    * wiping a real "another application is holding the camera" message, or the reverse. */
   const [listError, setListError] = useState<string | null>(null)
   const [streamError, setStreamError] = useState<string | null>(null)
@@ -288,11 +348,15 @@ export function useCamera(): Camera {
     const media = mediaDevices()
     if (media === undefined) return
 
-    /* The rig is USB and HDMI, so the device list is not static: the Cam Link is unplugged,
-     * and a camera body that auto-powers-off mid-box drops the HDMI signal — the failure
-     * docs/specs/capture-app.md section 6.2 says to disable in the camera. When it happens
-     * anyway this flips `missing` rather than leaving a frozen preview that still looks
-     * live. */
+    /* The rig is USB, so the device list is not static: unplug the Cam Link and this flips
+     * `missing` rather than leaving a frozen preview that still looks live.
+     *
+     * It covers the unplug and nothing else, which is worth stating because the wording here
+     * used to claim the sleeping-camera case too and that claim is what made the frozen
+     * preview invisible. A body that auto-powers-off mid-box — docs/specs/capture-app.md
+     * section 6.2 — drops the HDMI signal behind a Cam Link that stays plugged in and stays
+     * enumerated, so `devicechange` never fires. That failure is caught one level down, on
+     * the track's own events; see SIGNAL_MUTED_MESSAGE. */
     const onDeviceChange = () => {
       void reconcile()
     }
@@ -300,7 +364,8 @@ export function useCamera(): Camera {
     return () => media.removeEventListener('devicechange', onDeviceChange)
   }, [reconcile])
 
-  /* Open the chosen device, attach it, and tear it down again on every change of mind.
+  /* Open the chosen device, attach it, and tear it down again on every change of mind — and
+   * on every `retry`, which is what `attempt` is doing in the dependencies below.
    *
    * The `cancelled` flag is not defensive programming: StrictMode mounts, unmounts and
    * remounts, so a stream that resolves after the cleanup has run must stop itself. Left
@@ -320,8 +385,34 @@ export function useCamera(): Camera {
     let cancelled = false
     let opened: MediaStream | null = null
     let attached: HTMLVideoElement | null = null
+    let watched: MediaStreamTrack | null = null
     const onMetadata = () => {
       if (!cancelled) setReady(true)
+    }
+
+    /* The three track events, and the only things besides a device change that move `ready`.
+     *
+     * `ended` and `mute` both clear it, because both mean the next frame drawn from this
+     * element is the previous card. `unmute` restores rather than staying dead: a camera
+     * that wakes up is the common case after the owner acts on the message, and demanding a
+     * reload to recover from a recoverable state is how an operator learns to ignore the
+     * message. `ready` is recomputed from the element on the way back rather than assumed
+     * true — the track can unmute before the element has metadata again. */
+    const onTrackEnded = () => {
+      if (cancelled) return
+      setReady(false)
+      setStreamError(SIGNAL_ENDED_MESSAGE)
+    }
+    const onTrackMuted = () => {
+      if (cancelled) return
+      setReady(false)
+      setStreamError(SIGNAL_MUTED_MESSAGE)
+    }
+    const onTrackUnmuted = () => {
+      if (cancelled) return
+      setStreamError(null)
+      const video = videoRef.current
+      setReady(video !== null && video.readyState >= HTMLMediaElement.HAVE_METADATA)
     }
 
     void (async () => {
@@ -353,6 +444,22 @@ export function useCamera(): Camera {
       video.addEventListener('loadedmetadata', onMetadata)
       if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onMetadata()
 
+      /* One video track, always — `videoConstraints` asks for one device and no audio. The
+       * `?? null` is for the shape of the array type rather than for a case that happens. */
+      watched = stream.getVideoTracks()[0] ?? null
+      trackRef.current = watched
+      if (watched !== null) {
+        watched.addEventListener('ended', onTrackEnded)
+        watched.addEventListener('mute', onTrackMuted)
+        watched.addEventListener('unmute', onTrackUnmuted)
+        /* Already muted at the moment it opened: the camera was asleep before the app was.
+         * Checked because the event fired before this line and will not fire again, and the
+         * alternative is a preview that waits forever with nothing on screen saying why. If
+         * an engine reports a momentary mute at open, `unmute` clears this within a frame —
+         * a message that self-corrects, against a wait that does not. */
+        if (watched.muted) onTrackMuted()
+      }
+
       /* A rejected play() is normal here — swapping srcObject aborts the pending one — and
        * an unhandled rejection in the console is noise on the screen where real errors
        * need to be visible. The element carries `autoPlay`; this is the belt. */
@@ -365,9 +472,19 @@ export function useCamera(): Camera {
         attached.removeEventListener('loadedmetadata', onMetadata)
         attached.srcObject = null
       }
+      if (watched !== null) {
+        watched.removeEventListener('ended', onTrackEnded)
+        watched.removeEventListener('mute', onTrackMuted)
+        watched.removeEventListener('unmute', onTrackUnmuted)
+      }
+      /* Cleared unconditionally, not only when it still points at this track. The next
+       * acquisition assigns it after `getUserMedia` resolves, and until then there is no
+       * camera open — so a capture fired in that window has to be refused rather than drawn
+       * from whatever was attached last. */
+      trackRef.current = null
       if (opened !== null) stopTracks(opened)
     }
-  }, [deviceId])
+  }, [deviceId, attempt])
 
   const selectDevice = useCallback((id: string) => {
     /* Storage first: it is what `reconcile` reads back, so writing state first would leave
@@ -377,9 +494,45 @@ export function useCamera(): Camera {
     setDeviceId(id)
   }, [])
 
+  /* The way back from a stream error, and the reason it cannot be "pick the camera again".
+   *
+   * That is a no-op twice over: a `<select>` fires no change event for the value it already
+   * holds, so `selectDevice` is never called, and even called it would set `deviceId` to
+   * what it already is, which re-runs nothing. Until this existed, every message ending in
+   * "then pick a camera" was instructing the owner to press a button that does nothing, and
+   * a reload was the only real remedy.
+   *
+   * Both halves are needed, and they answer different states. `reconcile` re-enumerates, so
+   * a Cam Link that came back is seen and `missing` clears; bumping `attempt` re-opens the
+   * device that is already chosen, which is the case reconcile cannot help with because
+   * nothing about the device list changed. Ordering does not matter — reconcile is async and
+   * settles on the same `deviceId`, which React bails out of, leaving exactly one
+   * re-acquisition from the bump. */
+  const retry = useCallback(() => {
+    setAttempt((count) => count + 1)
+    void reconcile()
+  }, [reconcile])
+
   const grabFrameJpeg = useCallback(async (): Promise<string> => {
     const video = videoRef.current
     if (video === null) throw new Error('There is no camera preview to capture from.')
+
+    /* Belt and braces with the `ready` gate above, and the duplication is deliberate: the
+     * cost of getting this wrong is a box of cards recorded against a photograph of the
+     * first one. `ready` guards the button, this guards the frame, and the trigger seam
+     * means the two are not the same thing — at Gate C a motion state machine fires captures
+     * without a button to disable.
+     *
+     * The zero-dimension check below cannot do this job. A dead track leaves the element
+     * holding its last decoded frame with `videoWidth` intact, which is exactly why the
+     * check passed and `drawImage` copied a stale card. */
+    const track = trackRef.current
+    if (track === null) {
+      throw new Error('No camera is open, so no photo was taken. Pick a camera, then capture.')
+    }
+    if (track.readyState !== 'live' || track.muted) {
+      throw new Error(SIGNAL_DEAD_CAPTURE_MESSAGE)
+    }
 
     /* The track's own dimensions, never the element's CSS box. Drawing at the displayed
      * size would throw away exactly the resolution the constraints above fought for, and
@@ -420,11 +573,22 @@ export function useCamera(): Camera {
       devices,
       deviceId,
       selectDevice,
+      retry,
       missing,
       error: streamError ?? listError,
       ready,
       grabFrameJpeg,
     }),
-    [devices, deviceId, selectDevice, missing, streamError, listError, ready, grabFrameJpeg],
+    [
+      devices,
+      deviceId,
+      selectDevice,
+      retry,
+      missing,
+      streamError,
+      listError,
+      ready,
+      grabFrameJpeg,
+    ],
   )
 }

@@ -72,6 +72,50 @@
   max-width: 60ch;
 }
 
+/* Reopen the camera. Drawn exactly as the notices it answers are drawn — accent outline and
+   accent text on surface — because it is the answer to one of them and not a second kind of
+   thing. The solid fill stays reserved: docs/DESIGN.md gives it the single meaning "there is
+   exactly one thing to do", and this screen also offers the select above.
+
+   Body face, not utility. It is a sentence the owner reads and acts on, not metadata — the
+   same split that puts the stream dimensions below in mono and the explanation of them in
+   body. Sized at the notice's 13px rather than smaller: it sits directly beneath a block of
+   13px prose, and a control quieter than the text telling you to use it is a control that
+   gets missed. No Fulfillment floor applies here (this is owner-side chrome), so the 44px
+   minimum is deliberately not imposed on a monthly-use control that would then outweigh the
+   camera choice itself.
+
+   `justify-self: start` so it takes its own width inside the grid rather than stretching to
+   the picker's full 420px, which would give a secondary control the same footprint as the
+   select and read as the primary action. `justify-self` and not `align-self`: a grid item's
+   inline axis is the justify one, and align-self stretched it the full width — seen in a
+   render, which is the whole reason docs/DESIGN.md makes the screenshot loop mandatory. */
+.camera-picker-retry {
+  justify-self: start;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+
+/* Pressed only, no hover fill: --hover is row hover and nothing else, which tokens.css says
+   in as many words. The pressed token is the accent's own darker state, so the outline and
+   the label move together and the control stays legible at 10.9:1 against white.
+
+   On an outline control the shift is slight — the two tokens are one step apart, and they
+   were chosen against a solid fill where the whole surface moves. Kept anyway: the
+   alternative is a control with no press feedback at all, and inventing a louder state here
+   would mean a colour that is not in the locked set. */
+.camera-picker-retry:active {
+  color: var(--pressed);
+  border-color: var(--pressed);
+}
+
 /* The negotiated stream dimensions. Mono, because docs/DESIGN.md gives the utility face
    every number in the product and this is the number that decides whether the run is worth
    anything. */
