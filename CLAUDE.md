@@ -12,10 +12,11 @@ Gate C. See @docs/GATES.md.
 ```
 make status         # where you are: next step, gate, T1 score, branch. Start here.
 make harness        # all six verification tests; the Stop hook runs it at turn end
-make dev            # Vite app on :5173                  — stub, unblocked at step 7
-make server         # Python capture server on :8000     — stub, unblocked at step 5
-make screenshot     # renders key views to captures/ui/  — needs step 7's views
-make check          # harness + docs-audit + lint + typecheck — last two still stubs
+make dev            # Vite app on :5173. Blocks — background it.
+make server         # Python capture server on :8000. Blocks — background it.
+make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
+make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
+make check          # harness + docs-audit + lint + typecheck — lint is still a stub
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.

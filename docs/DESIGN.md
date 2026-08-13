@@ -105,8 +105,10 @@ built, looked at, and rejected. Do not add one, and do not write a rule about th
 
 ## The review queue — SPECIFICATION. NONE OF THIS IS BUILT.
 
-**Everything in this section describes a screen that does not exist.** No Vite app exists;
-step 7 has not started; no module in this repo renders anything. Read every statement below
+**Everything in this section describes a screen that does not exist.** A Vite app exists as
+of step 6 and renders exactly one thing — the pull-confirm gallery — so the absence below is
+now specific rather than total: no queue screen, no candidate rows, no photo, no sort applied
+to anything on screen. Step 7 has not started. Read every statement below
 as *shall*, never as *does* — it is a specification written before the thing it specifies,
 which is the same reason `docs/GATES.md` writes its thresholds as numbers before there is
 anything to measure. When step 7 lands, this section becomes checkable and someone should
@@ -168,7 +170,14 @@ reading as a newspaper.
 
 ## Fulfillment view — hard constraints, assert these in a test
 
-The agent cannot see its own output, so these are Playwright assertions, not prose:
+The agent cannot see its own output, so these are Playwright assertions, not prose.
+
+**Three of these rows now run.** `app/tests/pull-confirm.spec.ts`, via `make design-check`,
+asserts body size, tap targets and contrast against the one component that exists — computing
+each contrast ratio from the *rendered* colours, so a token change breaks the test rather
+than the palette. The rest are still prose because the views that carry them do not exist;
+step 7 extends the same spec as each one lands. Nothing here is a harness test: the contract
+in `docs/GATES.md` is six tests about the pipeline, and this runs a browser.
 
 | Constraint | Assertion |
 |---|---|
@@ -185,10 +194,10 @@ The agent cannot see its own output, so these are Playwright assertions, not pro
 Default view on the Fulfiller's device. Sorted in box-walk order. Photo-confirm before each
 pull. One-tap mark-sold.
 
-## Step 6 is not finished
+## Step 6 — done 2026-08-12
 
-Tokens are locked; the component is not built. Build the pull-confirm button in all three
-states and look at it before any screen:
+Tokens locked, and the pull-confirm built against them in all three states. The spec it was
+built to, unchanged, because it is what `app/tests/pull-confirm.spec.ts` asserts:
 
 ```
 default    fill #1E40AF, label #FFFFFF, radius 4px, >= 44px tall     8.7:1
@@ -197,7 +206,26 @@ disabled   fill #FFFFFF, 1px #E6E7EA border, label #52555B
            — never appears in the Fulfillment view
 ```
 
-Catching a gap on one component is far cheaper than after ten screens.
+`app/src/PullConfirm.tsx` and its stylesheet, rendered on a gallery route at `app/src/Gallery.tsx`.
+`make screenshot` draws it into `captures/ui/`; `make design-check` measures it.
+
+**Two props are worth knowing before step 7 reuses this.** `keyHint` is optional and renders
+nothing when omitted, which is the Fulfillment case — those screens are touch and show no
+keys. `disabled` exists for owner-side screens only; this view has no disabled state at all.
+
+**"Catching a gap on one component is far cheaper than after ten screens" was the argument
+for doing this before any screen, and the component paid for itself immediately.** Two of
+them, both invisible in prose and both only findable by building the thing:
+
+- **The button label had to be 20px, not the 18px `docs/design-refs/locked.html` draws.**
+  The table below puts a 20px floor on every text node in the Fulfillment view, and a button
+  label is a text node. The sheet violates the constraint printed a few inches above it.
+- **The key chip does not belong on this control.** The sheet draws `↵` on all three
+  pull-confirm states; "Every choice shows its key" is an owner-side rule, and this is the
+  Fulfiller's button. It is the one control that is purely his.
+
+Both are the doc's to win — `docs/design-refs/README.md` says so — and both are recorded
+there so the sheets are not read as current.
 
 ## The screenshot loop is mandatory
 

@@ -16,7 +16,10 @@
 
 set -uo pipefail
 
-PLAYWRIGHT_VERSION="1.55.0"
+# Must match app/package.json's @playwright/test pin — two Playwright versions in one repo
+# is two browser downloads and two behaviours. 1.55.1 rather than 1.55.0: GHSA-7mvr-c777-76hp,
+# browsers downloaded without verifying the SSL certificate.
+PLAYWRIGHT_VERSION="1.55.1"
 VIEWPORT="1280,900"
 WAIT_MS=600
 

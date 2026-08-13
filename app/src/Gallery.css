@@ -1,0 +1,55 @@
+/* The component gallery. Not a product screen — this is the thing `make screenshot`
+ * renders and `make design-check` asserts against, so that step 6's component can be
+ * looked at before step 7 builds ten screens on top of it.
+ *
+ * Step 7 takes over the root route and this moves to /gallery.
+ */
+
+.gallery {
+  padding: var(--s6);
+  max-width: 900px;
+}
+
+.gallery-title {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.gallery-lede {
+  color: var(--muted);
+  max-width: 76ch;
+  margin-top: var(--s2);
+  font-size: 15px;
+}
+
+.gallery-specimens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+  margin-top: var(--s7);
+  max-width: 380px;
+}
+
+/* Utility face, uppercase, tracked — docs/DESIGN.md's rule that mono carries all
+   metadata, and a state name is metadata. */
+.specimen-caption {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--s2);
+}
+
+.specimen-note {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  max-width: 60ch;
+}
+
+.gallery-specimens .pull-confirm {
+  width: 100%;
+}

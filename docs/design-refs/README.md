@@ -29,8 +29,28 @@ doc is right and this directory is stale. Nothing reads these files programmatic
 not announce itself — treat a token change in the doc as a change here too.
 
 **Not the app.** No component in `pkmnscan` imports anything from this directory. These are
-drawings of a specification, and step 7 builds the real thing from the doc, not from this
+drawings of a specification, and `app/` builds the real thing from the doc, not from this
 markup.
+
+## Known disagreements with the doc
+
+Found 2026-08-12 by building step 6's component from `docs/DESIGN.md` and comparing. Listed
+rather than patched: these sheets record what was rendered and chosen during the interview,
+and editing them afterwards would turn a record into a second draft. `docs/DESIGN.md` wins
+both, per the rule above.
+
+- **`locked.html` draws the pull-confirm label at 18px** (`.btn`, `font-size: 18px`). The
+  Fulfillment constraints table puts a 20px floor on every text node in that view, and a
+  button label is a text node. The component is built at 20px and
+  `app/tests/pull-confirm.spec.ts` asserts it.
+- **`locked.html` draws a `↵` key chip on all three pull-confirm states.** "Every choice
+  shows its key" is an owner-side rule — the doc says the Fulfiller's screens are touch and
+  show none, and the pull-confirm is his. The component takes `keyHint` as optional and
+  renders no chip without it.
+
+Both were invisible while the tokens were prose and a drawing. That is the argument for
+build-order step 6 existing at all, and it is worth knowing that the step paid out on its
+first component.
 
 ## Two constraints that shaped them
 

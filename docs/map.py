@@ -47,11 +47,14 @@ BUILD_ORDER = [
      "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card — that is Gate B."},
     {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "done",
      "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. No harness test reaches it — that gap is recorded in docs/DEBTS.md, not closed."},
-    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "next",
-     "note": "tokens locked 2026-08-12 by interview — palette, three faces, spacing, radius, accent "
-             "policy and the review queue's shape are all in docs/DESIGN.md. The component is NOT "
-             "built, so the step is not done: `next` still means what it says."},
-    {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "blocked", "blocked_by": "step 6"},
+    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "done",
+     "note": "tokens locked 2026-08-12 by interview; the pull-confirm built against them 2026-08-12 "
+             "at app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by "
+             "`make design-check`. Building it caught two places where docs/design-refs/locked.html "
+             "disagrees with docs/DESIGN.md — see that directory's README."},
+    {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "next",
+     "note": "the toolchain landed with step 6: app/ is a Vite + React + TS project with one "
+             "component, a gallery route and a Playwright spec. Step 7 adds screens to it."},
     {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
     {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},
@@ -80,6 +83,12 @@ GATES = [
 #   stub     the file exists and deliberately does nothing yet
 #   planned  no file yet; `step` says what creates it. The repo-map check FAILS if it
 #            exists, which forces the entry to be updated the day it is written.
+#
+# `step` links an entry to the build-order step whose work happens there — the step that
+# creates it while the entry is `planned`, and the step still to be done in it once it is
+# `built`. scripts/status.py resolves "do this next" through that field, and prints a dead
+# end without it: `app/` was built by step 6 and carries `step: 7` because that is where
+# step 7's screens go.
 
 COMPONENTS = [
     {
@@ -210,15 +219,54 @@ COMPONENTS = [
             },
         },
     },
+    {
+        "path": "app/",
+        "status": "built",
+        "step": 7,
+        "does": "the web app. Step 6's pull-confirm component, the gallery that renders it, "
+                "and the Playwright spec that asserts docs/DESIGN.md's Fulfillment floors. "
+                "Step 7 adds the screens.",
+        "governed_by": ["D5", "D6", "D13", "D18"],
+        "note": "THE ORPHAN RULE DOES NOT REACH THIS DIRECTORY. It filters on SOURCE_SUFFIX, "
+                "which is `.py`, so a new .tsx or .css file is never flagged as undescribed — "
+                "the one entry in this file whose module list is maintained by hand alone. "
+                "Recorded in docs/DEBTS.md beside the same gap in scripts/. "
+                "Nothing here imports docs/design-refs/: those are drawings of the spec, and "
+                "this is built from docs/DESIGN.md itself.",
+        "modules": {
+            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing else.",
+                               "governed_by": ["D18"]},
+            "src/base.css": {"does": "reset and the page ground. Light only — there is no dark theme.",
+                             "governed_by": ["D5"]},
+            "src/PullConfirm.tsx": {"does": "step 6's component: the pull modal's confirm button",
+                                    "governed_by": ["D5", "D6"]},
+            "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
+                                    "governed_by": ["D5"]},
+            "src/Gallery.tsx": {"does": "every state on one page — what `make screenshot` renders",
+                                "governed_by": ["D5"]},
+            "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
+                                "governed_by": ["D5"]},
+            "src/main.tsx": {"does": "mounts the gallery. Step 7 mounts the app here instead.",
+                             "governed_by": ["D13"]},
+            "tests/pull-confirm.spec.ts": {
+                "does": "the Fulfillment constraints table as assertions: 44px targets, 20px "
+                        "body, 7:1 contrast, 12px apart. Run by `make design-check`.",
+                "governed_by": ["D5"],
+                "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
+                        "harness contract in docs/GATES.md is six tests about the pipeline; "
+                        "this runs a browser and is invoked on its own.",
+            },
+        },
+    },
     # ------------------------------------------------------------- nothing planned below
     #
-    # Steps 7 (Vite capture app) and 9 (vendored catalog) have no entry on purpose: their
-    # directory names are not decided yet, and inventing one costs the self-cleaning rule.
-    # A `planned` entry only earns its keep when the path is right — a wrong path audits
-    # clean forever and never fires the day the real directory arrives. `server/` was the
-    # one entry that qualified, because the Makefile already named the file it would hold;
-    # it graduated to `built` with step 5. Add the other two when the build order reaches
-    # them and the names are real.
+    # Step 9 (vendored catalog) has no entry on purpose: its directory name is not decided
+    # yet, and inventing one costs the self-cleaning rule. A `planned` entry only earns its
+    # keep when the path is right — a wrong path audits clean forever and never fires the
+    # day the real directory arrives. `server/` was one entry that qualified, because the
+    # Makefile already named the file it would hold; it graduated to `built` with step 5,
+    # and `app/` above arrived the same way with step 6. Add step 9's when the build order
+    # reaches it and the name is real.
 ]
 
 # ------------------------------------------------------------------------------- tracks

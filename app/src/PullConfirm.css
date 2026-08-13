@@ -1,0 +1,98 @@
+/* The pull-confirm button — build-order step 6's one component.
+ *
+ * The solid accent fill is legal here and almost nowhere else. docs/DESIGN.md: accent does
+ * two jobs at two weights, and the heavy one is reserved for screens with exactly one
+ * thing to do. A screen with two answers gets no fill. This is the Fulfiller's
+ * pull-confirm, so it is the loudest thing he ever sees.
+ *
+ * Every number below is either a token or a floor from the Fulfillment constraints table,
+ * and app/tests/pull-confirm.spec.ts asserts the floors rather than trusting this comment.
+ */
+
+.pull-confirm {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s3);
+
+  /* >= 44px tall and >= 44px wide: the tap-target floor. Padding is on the spacing
+     scale; the height floor is what the assertion actually checks. */
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--s3) var(--s4);
+
+  border: 1px solid transparent;
+  border-radius: var(--r);
+
+  /* 20px, not locked.html's 18px. The sheet draws this button at 18px, which its own
+     Fulfillment constraints table forbids — body text is >= 20px on every text node in
+     that view, and a button label is a text node. docs/design-refs/README.md settles the
+     tie: the doc is right and the sheet is stale. */
+  font-family: var(--body);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+
+  cursor: pointer;
+  /* No transition. An action that reports late reads as an action that did not fire. */
+}
+
+/* ---- default: there is exactly one thing to do. White on accent, 8.7:1. ---- */
+.pull-confirm {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+/* No hover rule on purpose. --hover is row hover only (docs/DESIGN.md), and the button
+   has somewhere better to go: straight to pressed. */
+
+/* ---- pressed: white on --pressed, 10.9:1. ---- */
+.pull-confirm:active {
+  background: var(--pressed);
+  border-color: var(--pressed);
+}
+
+/* GALLERY ONLY. :active cannot be held still for a screenshot or an assertion, so the
+   gallery renders a pressed instance by wrapping it in [data-force-state="pressed"].
+   Nothing in the product sets that attribute — it exists so the state that is hardest to
+   look at is the one you can look at longest. */
+[data-force-state='pressed'] .pull-confirm {
+  background: var(--pressed);
+  border-color: var(--pressed);
+}
+
+/* ---- disabled: never appears in the Fulfillment view. --muted on --surface, 7.4:1. ---- */
+.pull-confirm:disabled {
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+
+/* ---- the key hint ---- */
+
+/* Owner-side only, and absent by default. docs/DESIGN.md: every choice shows its key
+   because an hour in the review queue is a keyboard, and "the Fulfiller's screens are
+   touch and show none". locked.html draws this chip on all three pull-confirm states,
+   which contradicts that rule for the one control that is purely his — so `keyHint` is
+   optional and omitted in Fulfillment use.
+
+   This is also why the chip may sit below 20px while the label may not: it never renders
+   on the view that floor governs. */
+.pull-confirm-key {
+  font-family: var(--util);
+  font-size: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  padding: 2px 5px;
+  min-width: 22px;
+  text-align: center;
+  color: #ffffff;
+}
+
+.pull-confirm:disabled .pull-confirm-key {
+  color: var(--muted);
+  border-color: var(--line);
+}

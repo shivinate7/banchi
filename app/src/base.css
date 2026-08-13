@@ -1,0 +1,25 @@
+/* Reset and the page ground. Kept out of tokens.css so that file stays nothing but
+ * custom properties — it is the file docs/DEBTS.md names as the target of a future
+ * token-drift check, and a parser is owed a file with one kind of thing in it.
+ *
+ * Light only, everywhere. docs/DESIGN.md: there is no dark theme and no theme switcher,
+ * and that is a decision rather than a deferral. No prefers-color-scheme block belongs
+ * in this file.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}

@@ -4,13 +4,23 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-history dev server screenshot lint typecheck venv
+.PHONY: help status harness check docs-audit audit-history dev server screenshot design-check lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
 # anthropic SDK and T6 needs Pillow + numpy, and each reports the missing dependency as a
 # FAILURE rather than crashing or, worse, skipping. A skipped test must not read as a pass.
 PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+
+# Every app/ target needs its dependencies on disk first. Named as a fix rather than run
+# automatically: an implicit install hides a slow, network-touching step inside a target
+# that is supposed to serve, typecheck or assert — and the first time it matters is the
+# first time someone clones this repo, which is exactly when a silent 80 MB download is
+# least welcome.
+NPM_GUARD = @[ -d app/node_modules ] || { \
+	echo "app/ dependencies are not installed."; \
+	echo "  Fix: npm --prefix app install"; \
+	exit 1; }
 
 help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
@@ -26,11 +36,12 @@ help:
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
-	@echo "  make dev          Vite app on :5173                    (unblocked at step 7)"
+	@echo "  make dev          Vite app on :5173. Blocks — background it in a session."
 	@echo "  make server       Python capture server on :8000. Blocks — background it in a session."
-	@echo "  make screenshot   render key views to captures/ui/     (unblocked at step 7)"
+	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
+	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
 	@echo "  make lint         linters                              (ruff unblocked; not wired)"
-	@echo "  make typecheck    type checkers                        (unblocked at step 7)"
+	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
 
@@ -75,11 +86,14 @@ check:
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 
+# Foreground and blocking, like `server` below — background it from an agent session, or
+# the Stop hook's harness run never gets to happen.
+#
+# strictPort in app/vite.config.ts, so a busy 5173 fails here instead of quietly serving on
+# 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
 dev:
-	@echo "make dev: nothing to run yet."
-	@echo "  Will run: npm run dev  (Vite app on :5173)"
-	@echo "  Unblocked by build-order step 7 — see docs/GATES.md"
-	@exit 1
+	$(NPM_GUARD)
+	@npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
 # its own turn — the Stop hook runs the harness at turn end and never gets there — so
@@ -91,18 +105,30 @@ dev:
 server:
 	@python3 server/capture_server.py
 
+# The manifest is an INPUT and lives beside the script that reads it. It used to point at
+# captures/views.txt, which .gitignore excludes wholesale — so the one file that says which
+# views matter could never be committed, and would have died with the machine that wrote it.
 screenshot:
-	@scripts/screenshot.sh --manifest captures/views.txt
+	$(NPM_GUARD)
+	@scripts/screenshot.sh --manifest scripts/views.txt
+
+# The Fulfillment constraints table in docs/DESIGN.md, run against a real browser. Step 6
+# covers one component; step 7 extends the same spec to the views it names.
+#
+# Deliberately NOT part of `check`: it starts a browser and a dev server, which is a
+# different weight of check from the rest, and `check` cannot pass today anyway while
+# `lint` is a stub.
+design-check:
+	$(NPM_GUARD)
+	@npm --prefix app run design-check
 
 lint:
 	@echo "make lint: not wired yet."
 	@echo "  Will run: ruff (Python) + eslint (JS), including the v1-bug lint rules —"
 	@echo "  no split(\",\") CSV parsing, no facingMode: \"environment\". See docs/DECISIONS.md."
-	@echo "  ruff has Python to lint as of step 4; eslint waits for step 7 — see docs/GATES.md"
+	@echo "  ruff has Python to lint as of step 4; eslint has app/ to lint as of step 6."
 	@exit 1
 
 typecheck:
-	@echo "make typecheck: nothing to typecheck yet."
-	@echo "  Will run: tsc --noEmit"
-	@echo "  Unblocked by build-order step 7 — see docs/GATES.md"
-	@exit 1
+	$(NPM_GUARD)
+	@npm --prefix app run typecheck

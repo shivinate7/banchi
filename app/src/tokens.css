@@ -1,0 +1,51 @@
+/* The locked design tokens from docs/DESIGN.md, locked 2026-08-12 by interview.
+ *
+ * SOURCE OF TRUTH IS docs/DESIGN.md, NOT THIS FILE. Every value below was chosen by the
+ * owner from rendered alternatives; changing one here without changing it there makes the
+ * app disagree with the document that argues for it. Nothing audits that agreement today
+ * — see docs/DEBTS.md, which records the gap rather than pretending it is covered.
+ *
+ * Hand-written on purpose. Generating this file from the doc would put a writer on the
+ * path that decides whether a commit proceeds, which D18 forbids by name.
+ *
+ * Custom-property names match docs/design-refs/locked.html so the rendered sheet and the
+ * app read as one system.
+ *
+ * Deliberately nothing but tokens: no reset, no element rules. See base.css.
+ */
+
+:root {
+  /* ---- colour. Every token that carries text clears 7:1 on every ground it sits on. ---- */
+  --bg: #fcfcfd; /* the page. Everything sits on this. */
+  --surface: #ffffff; /* raised: choice rows, queue rows, panels */
+  --ink: #08090a; /* all body text, all headings, all money      19.4:1 on bg */
+  --muted: #52555b; /* metadata, secondary labels, disabled         7.29:1 on bg */
+  --line: #e6e7ea; /* the 1px hairline. Every separation, no exceptions. */
+  --accent: #1e40af; /* unsure, and the only-action fill             8.5:1 on bg */
+
+  /* Two interaction states derived from the above. */
+  --hover: #f4f5f7; /* ROW HOVER ONLY. bg and surface are 1.5% apart, so neither can
+                       serve as a hover state for the other. Not a button state — the
+                       pull-confirm goes straight from default to pressed. */
+  --pressed: #17348f; /* accent, pressed. White on it: 10.9:1. */
+
+  /* ---- type. Three faces, each with exactly one job. ---- */
+  --display: 'Cabinet Grotesk', sans-serif; /* 700/800 only, and only at >= 20px */
+  --body: 'Atkinson Hyperlegible', sans-serif; /* 400/700. Drawn for low vision — a
+                                                  Fulfillment decision wearing a typeface. */
+  --util: 'Martian Mono', monospace; /* 400/500/600, tabular by construction. Carries
+                                        every number in the product. */
+
+  /* ---- spacing. One scale, no other values. ---- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  /* ---- radius. One value, everywhere. ---- */
+  --r: 4px;
+}

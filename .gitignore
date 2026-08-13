@@ -27,3 +27,10 @@ harness/.cache/
 # and what it sold for, which is not a thing to push to a remote.
 runs/
 inventory/
+
+# Playwright's own output from `make design-check`. Derived and per-run. The artefact worth
+# keeping is the spec, not the record of one execution of it — same rule as harness/.cache/
+# above. app/package-lock.json is deliberately NOT here: a pinned Playwright version that
+# nothing locks is not pinned.
+app/test-results/
+app/playwright-report/

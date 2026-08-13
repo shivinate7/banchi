@@ -183,13 +183,20 @@ a 50-card run, then scale to a full box.
    Positions are allocated inside the store lock by `allocate_capture`. **No harness test
    reaches it**: nothing under `harness/tests` imports `server`, `store` or `cli`, so a
    green harness says nothing about this step — see `docs/DEBTS.md`.
-6. Design tokens locked and one component built against them — see `docs/DESIGN.md`.
-   Before any screen. **Tokens locked 2026-08-12**, by interview against rendered
-   alternatives rather than by inference; the component is not built, so this step is not
-   done. `docs/DESIGN.md` names the three states to build and the exact fills.
+6. ~~Design tokens locked and one component built against them~~ — done 2026-08-12.
+   Tokens locked by interview against rendered alternatives rather than by inference; the
+   pull-confirm built against them at `app/src/PullConfirm.tsx`, in all three states, on a
+   gallery route `make screenshot` renders and `make design-check` asserts.
+   **Building it earned its place**: it caught two points where
+   `docs/design-refs/locked.html` contradicts `docs/DESIGN.md` — an 18px button label under
+   the view's own 20px floor, and a keyboard chip on a control only the Fulfiller touches.
+   Both are recorded in `docs/design-refs/README.md`; neither was visible in prose.
 7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
-   photo, Fulfillment view, CSV import with error reporting.
+   photo, Fulfillment view, CSV import with error reporting. The toolchain arrived with
+   step 6 — `app/` is a Vite + React + TypeScript project already, so this step adds
+   screens rather than a build system. Extend `app/tests/pull-confirm.spec.ts` to the rest
+   of `docs/DESIGN.md`'s Fulfillment table as the views that carry those rows land.
 8. Gate B smoke test.
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a

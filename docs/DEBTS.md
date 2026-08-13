@@ -105,6 +105,47 @@ is the one command a cold session is told to run first. Worth doing carefully.
 
 ## Absent signals — a check that does not run at all
 
+### Nothing checks `app/src/tokens.css` against `docs/DESIGN.md`
+
+Recorded 2026-08-12, from the step-6 component work.
+
+`docs/design-refs/README.md` already admits this about the two sheets: "nothing reads these
+files programmatically and `scripts/docs-audit.py` does not check the hex values inside
+them, so that staleness will not announce itself." As of step 6 the same is true of
+`app/src/tokens.css` — except that file is not a drawing. It is what the product renders
+from, so a token changed in one place and not the other means the app and the document
+arguing for it disagree, and the document is the one nobody re-reads.
+
+**Cost**: low today and rising. One component reads these tokens; step 7 adds every screen.
+The failure is silent by construction — a wrong hex renders perfectly.
+
+**Why not fixed**: the fix is a mechanical audit check parsing `docs/DESIGN.md`'s fenced
+token block against the file's custom properties, and it is *permitted* — checking is not
+generating, so D18 does not bar it. It is not done because this session's job was to ship a
+component, and this repo has a recorded habit of building auditor machinery instead of
+product code. It is cheap and well-specified; do it early in step 7, when the number of
+files reading these tokens stops being one.
+
+### The repo-map orphan rule does not reach `app/`
+
+Recorded 2026-08-12, from the step-6 component work. Same consequence as the `scripts/`
+entry above, different mechanism.
+
+`scripts/docs-audit.py:1219` sets `SOURCE_SUFFIX = ".py"`, and the orphan scan filters on
+it. `app/` has a full `modules` list in `docs/map.py`, so the entries it *does* carry are
+checked for existence and for decision citations — but a new `.tsx`, `.css` or `.ts` file
+added beside them is never flagged as undescribed. The rule D17 calls "the one that actually
+keeps this honest" is inert over the directory that is about to grow fastest.
+
+**Cost**: rises sharply at step 7. `app/`'s module list is the only one in the map maintained
+by hand alone, and step 7 adds screens, not files-at-a-time.
+
+**Why not fixed**: widening `SOURCE_SUFFIX` to the web extensions is one line, but it decides
+what counts as a source file repo-wide — `.css` and `.html` under `docs/design-refs/` would
+start demanding entries too, and those are deliberately not components. Doing it properly
+means the suffix set becoming per-entry, which is a real change to the map's schema. Worth
+doing before step 7 gets far, and worth doing deliberately.
+
 ### The post-edit hook channel is gone, and step 7 is when it should come back
 
 Recorded 2026-08-11, from the step-5 spec work.

@@ -1,0 +1,10 @@
+# Views `make screenshot` renders, one "<name> <url>" line each. Blank lines and # are
+# skipped. Renders land in captures/ui/<name>.png, which is gitignored.
+#
+# This file is an INPUT and is tracked. It used to live at captures/views.txt, inside the
+# directory .gitignore excludes wholesale — so the list of which views are worth looking at
+# could not be committed, and the next clone would have started with none.
+#
+# The URLs assume `make dev` is already serving. It blocks, so background it first.
+
+pull-confirm  http://localhost:5173/
