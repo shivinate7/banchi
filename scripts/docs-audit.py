@@ -1929,6 +1929,66 @@ def check_design_tokens(report: Report) -> None:
 _POSITIONAL_RE = re.compile(r"\bchecks?\s+\d{1,2}\b", re.IGNORECASE)
 
 
+APP_STYLES = ROOT / "app" / "src"
+
+_RAW_COLOUR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+# Replaced by as many newlines as it spans, so a finding's line number survives the strip.
+_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def strip_css_comments(text: str) -> str:
+    return _CSS_COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
+def check_raw_colour(report: Report) -> None:
+    """A colour painted as a literal instead of read from a token.
+
+    The house rule is stated everywhere and was enforced nowhere: stylesheets use
+    `var(--token)` and never a raw hex, because the locked palette is only locked if the
+    palette is the only place colours come from. `design tokens` above proves
+    `app/src/tokens.css` agrees with `docs/DESIGN.md` — it cannot see a stylesheet that
+    bypasses both.
+
+    **Found by grep, not by argument.** `app/src/PullConfirm.css` painted `#ffffff` twice,
+    in the component the token block is the reference for, and survived a design review, a
+    six-lens adversarial review and two integration passes. It was reported three times as a
+    style note and refuted twice on the reasonable grounds that there was no token to use
+    instead — `--surface` means "raised panel", and saying that where you mean "text on the
+    loud button" conflates two things the palette keeps apart. The refutations were right and
+    the conclusion was still wrong: the answer was a missing token, not a permitted literal.
+    `--on-accent` now exists and names a value `docs/DESIGN.md`'s step 6 block had specified
+    from the beginning.
+
+    **Blocking, because there is nothing to judge.** A hex outside `tokens.css` either is or
+    is not there, which is D16's test. Comments are stripped first — a paragraph explaining
+    why `#000000` is the wrong ground is prose about a colour, not a colour.
+
+    **Scope is `app/src/*.css` only.** `docs/design-refs/` is full of hex on purpose: those
+    sheets are drawings of the spec, they import nothing, and `docs/design-refs/README.md`
+    already records that nothing audits the values inside them.
+    """
+    if not exists(APP_STYLES):
+        return
+
+    findings: List[Finding] = []
+    for path in sorted(APP_STYLES.glob("*.css")):
+        if path == TOKENS_CSS:
+            continue
+        for number, line in enumerate(strip_css_comments(read(path)).splitlines(), start=1):
+            for literal in _RAW_COLOUR_RE.findall(line):
+                findings.append(
+                    Finding(
+                        f"{rel(path)}:{number}",
+                        f"paints `{literal}` directly. Read it from a token in "
+                        f"app/src/tokens.css — and if no token means what you mean, the "
+                        f"missing token is the finding.",
+                    )
+                )
+
+    report.add("raw colour", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
+               if findings else "every colour comes from a token")
+
+
 def check_positional_references(report: Report, docs: List[Path]) -> None:
     """A check named by its position, in the docs and in the code.
 
@@ -2493,6 +2553,31 @@ def self_test() -> int:
         str(by_label["design tokens"]),
     )
 
+    print("\na colour literal is found in CSS, and not in a comment about one")
+    ok(
+        strip_css_comments("a { color: #fff; } /* not #000 */").count("#") == 1,
+        "a hex inside a block comment is stripped",
+        strip_css_comments("a { color: #fff; } /* not #000 */"),
+    )
+    ok(
+        strip_css_comments("/* two\nlines */\n.x{}").splitlines()[2] == ".x{}",
+        "stripping preserves line numbers, so a finding points at the right line",
+        str(strip_css_comments("/* two\nlines */\n.x{}").splitlines()),
+    )
+    ok(
+        bool(_RAW_COLOUR_RE.search("color: #1E40AF;")) and not _RAW_COLOUR_RE.search("var(--accent)"),
+        "the literal pattern matches a hex and not a token reference",
+        "",
+    )
+    report = Report()
+    check_raw_colour(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["raw colour"],
+        "this repo's own stylesheets read every colour from a token",
+        str(by_label["raw colour"]),
+    )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -2616,6 +2701,7 @@ def audit(staged_only: bool) -> Report:
     check_map(report, allowed)
     check_status_sources(report)
     check_design_tokens(report)
+    check_raw_colour(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     if staged_only:

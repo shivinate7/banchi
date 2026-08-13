@@ -41,7 +41,7 @@
 /* ---- default: there is exactly one thing to do. White on accent, 8.7:1. ---- */
 .pull-confirm {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -89,7 +89,7 @@
   padding: 2px 5px;
   min-width: 22px;
   text-align: center;
-  color: #ffffff;
+  color: var(--on-accent);
 }
 
 .pull-confirm:disabled .pull-confirm-key {

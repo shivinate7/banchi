@@ -29,6 +29,8 @@ Color      #FCFCFD  bg        the page. Everything sits on this.
            #F4F5F7  hover     row hover only. bg and surface are 1.5% apart, so
                               neither can serve as a hover state for the other.
            #17348F  pressed   accent, pressed. White on it: 10.9:1.
+           — and one token that names a value already in use —
+           #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
 
 Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px
 Body       Atkinson Hyperlegible (Google) 400/700

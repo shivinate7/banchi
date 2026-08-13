@@ -57,6 +57,14 @@
                        pull-confirm goes straight from default to pressed. */
   --pressed: #17348f; /* accent, pressed. White on it: 10.9:1. */
 
+  /* Label on an accent or pressed fill. NEVER a ground — that is --surface, and conflating
+     the two is why this token did not exist for a day: PullConfirm.css painted a raw
+     #ffffff twice rather than say "raised panel" where it meant "text on the loud button".
+     Not a new colour. docs/DESIGN.md's step 6 block already specified label #FFFFFF on both
+     fills, so the owner chose this value; it just had no name, and a value with no name is a
+     value the house rule against raw hex cannot be enforced against. */
+  --on-accent: #ffffff;
+
   /* ---- type. Three faces, each with exactly one job. ---- */
   --display: 'Cabinet Grotesk', sans-serif; /* 700/800 only, and only at >= 20px */
   --body: 'Atkinson Hyperlegible', sans-serif; /* 400/700. Drawn for low vision — a
