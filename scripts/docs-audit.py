@@ -1405,7 +1405,17 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     def check_tests(where: str, names: Sequence[str]) -> None:
         for name in names:
             if name not in test_names and name not in allowed:
-                findings.append(Finding(where, f"tested_by cites {name}, which is not registered in harness/run.py:TESTS."))
+                findings.append(
+                    Finding(
+                        where,
+                        f"tested_by cites {name}, which is not registered in "
+                        f"harness/run.py:TESTS.\n"
+                        f"  This field names harness tests and nothing else. A Playwright "
+                        f"spec under app/tests/ is run by `make design-check`, not at turn "
+                        f"end, and belongs in the entry's `note` — see the two spec entries "
+                        f"in docs/map.py, which say so in prose for exactly this reason.",
+                    )
+                )
 
     for component in components:
         path = component.get("path", "")
@@ -1523,6 +1533,249 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         findings.append(Finding("docs/map.py", f"build-order step {number} is listed here but not in docs/GATES.md."))
 
     report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
+
+
+# ------------------------------------------------ whether a cited test reaches what it claims
+
+# Where the one-level follow stops, and the reason this row says anything at all.
+#
+# A test's own scaffolding is part of the test: harness/eval/ holds the fixture loader and
+# the run cache, and a test that kept its imports there would otherwise be reported as
+# reaching nothing — a false positive, on a blocking row, over a correct claim. So the
+# follow reaches modules under here and no further.
+#
+# PRODUCT PACKAGES ARE DELIBERATELY NOT FOLLOWED, and that is the whole design. Measured on
+# this tree: `cli/cmd_identify.py` imports `geometry`, `cli/resolve.py` imports `store`, and
+# `harness/tests/t7_store_and_seams.py` imports `cli`. One transitive hop would therefore
+# prove "T7 reaches geometry" — a package T7 does not touch and whose two modules correctly
+# cite T6. Transitive reachability through the product's own graph makes almost every claim
+# true and asserts nothing, which is to say it recreates the unenforced field this row
+# exists to enforce, using the machinery meant to enforce it.
+FOLLOW_ROOT = "harness/"
+
+
+def imported_names(source: str) -> Set[str]:
+    """Every absolute dotted module name a source imports. The whole tree, not just its body.
+
+    `ast.walk` rather than `tree.body`, because two of the seven tests import the thing they
+    are named for from inside a function: `harness/tests/t6_geometry.py` imports `geometry`
+    after its Pillow/numpy availability check, and `harness/tests/t7_store_and_seams.py`
+    imports `cli.__main__` inside the case that drives it. A module-level read would call
+    both of those claims false and block a commit over them.
+
+    `from . import x` is dropped rather than resolved: a relative import names no package
+    this check can compare against a map entry, and no test in this repo writes one.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    names: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            names.add(node.module)
+            # `from harness.eval import fixtures, runcache` — each name is a submodule or an
+            # attribute, and only the filesystem knows which. Both forms are recorded; the
+            # resolver below finds no file for an attribute and moves on.
+            for alias in node.names:
+                names.add(node.module + "." + alias.name)
+    return names
+
+
+def string_literals(source: str) -> Set[str]:
+    """Every string constant in a source that is not a docstring.
+
+    Docstrings are excluded because they are prose, and prose is what this whole script
+    treats as unverified. `harness/tests/t2_round_trip.py` opens with "Load
+    fixtures/sv09_export_untouched.csv" in its module docstring and then assigns the same
+    path to `SOURCE_FIXTURE` two dozen lines down. Only the second is the test reading the
+    file; counting the first would let a sentence satisfy the claim.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    docstrings: Set[int] = set()
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            if isinstance(body[0].value.value, str):
+                docstrings.add(id(body[0].value))
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    }
+
+
+def follow_target(dotted: str) -> Optional[Path]:
+    """A dotted module name as a file under FOLLOW_ROOT, or None for anything else."""
+    stem = dotted.replace(".", "/")
+    for candidate in (ROOT / (stem + ".py"), ROOT / stem / "__init__.py"):
+        if rel(candidate).startswith(FOLLOW_ROOT) and exists(candidate):
+            return candidate
+    return None
+
+
+def test_reach(path: Path) -> Tuple[Set[str], Set[str]]:
+    """(top-level packages the test imports, path literals it names). One level deep."""
+    source = read(path)
+    names = imported_names(source)
+    literals = string_literals(source)
+    # `sorted()` copies, so the sets may grow inside the loop without the new entries being
+    # followed in turn. That is not an implementation detail — it IS the one level.
+    for dotted in sorted(names):
+        helper = follow_target(dotted)
+        if helper is None or helper == path:
+            continue
+        helper_source = read(helper)
+        names |= imported_names(helper_source)
+        literals |= string_literals(helper_source)
+    return {name.split(".", 1)[0] for name in names}, literals
+
+
+def is_importable(target: Path) -> bool:
+    """Does this directory hold Python at all?
+
+    Not `__init__.py`: `server/` and `harness/` have none and are imported anyway, as
+    namespace packages. Holding a `.py` child is the property that matters, and it is what
+    separates a package from `fixtures/`, which holds CSVs, and `app/`, which holds
+    TypeScript. Those two have no import to check, so the claim on them is checked the only
+    other way a parse can see — a path literal.
+    """
+    return any(name.endswith(".py") for name in child_names(target))
+
+
+def reach_findings(
+    components: Sequence[Dict[str, object]], tests: Dict[str, Path]
+) -> Tuple[List[Finding], int]:
+    """(findings, claims checked). Split out from the check so the self-test can drive it.
+
+    The self-test feeds it the exact false claim docs/DEBTS.md recorded — `store/queues.py`
+    citing T3 — against the real harness, rather than a synthetic stand-in for it.
+    """
+    findings: List[Finding] = []
+    claims = 0
+    cache: Dict[str, Tuple[Set[str], Set[str]]] = {}
+
+    def reach(name: str) -> Tuple[Set[str], Set[str]]:
+        if name not in cache:
+            cache[name] = test_reach(tests[name])
+        return cache[name]
+
+    for component in components:
+        path = str(component.get("path", ""))
+        target = ROOT / path
+        if not path or not exists(target):
+            continue  # the repo map row already reports a component path that is not there
+        package = path.strip("/").split("/")[0]
+        importable = is_importable(target)
+
+        entries: List[Tuple[str, Sequence[str]]] = [(path, component.get("tested_by") or [])]
+        for module_name, entry in (component.get("modules") or {}).items():
+            entries.append((path + str(module_name), list(entry.get("tested_by") or [])))
+
+        for where, cited in entries:
+            for name in cited:
+                # An id that is not a registered test is already a finding on the repo map
+                # row, and there is no file here to parse. Reporting it twice under two
+                # labels would make one defect read as two.
+                if name not in tests or not exists(tests[name]):
+                    continue
+                claims += 1
+                packages, literals = reach(name)
+
+                if importable:
+                    if package in packages:
+                        continue
+                    in_repo = sorted(
+                        found
+                        for found in packages
+                        if exists(ROOT / found) or exists(ROOT / (found + ".py"))
+                    )
+                    findings.append(
+                        Finding(
+                            f"docs/map.py -> {where}",
+                            f"tested_by claims {name}, and {rel(tests[name])} imports no "
+                            f"`{package}`.\n"
+                            f"  {name} reaches: {', '.join(in_repo) or '(nothing in this repo)'}\n"
+                            f"  Either the claim is false and goes, or the test should import "
+                            f"what it is credited with. Do not answer this in prose: the "
+                            f"entry's `note` is read by people and this row is not.",
+                        )
+                    )
+                    continue
+
+                if any(literal.startswith(where) for literal in literals):
+                    continue
+                findings.append(
+                    Finding(
+                        f"docs/map.py -> {where}",
+                        f"tested_by claims {name}, and {rel(tests[name])} names no path "
+                        f"under `{where}`.\n"
+                        f"  `{path}` holds no Python, so there is no import to check. The "
+                        f"only evidence a parse can see is the test naming a path under it "
+                        f"in its code — a mention in its docstring is prose and does not "
+                        f"count.",
+                    )
+                )
+    return findings, claims
+
+
+def check_tested_by_reach(report: Report) -> None:
+    """A `tested_by` claim in docs/map.py, against what the cited test actually imports.
+
+    The repo-map row proves a cited test id is registered in `harness/run.py:TESTS`. It has
+    never proved the test goes anywhere near the module claiming it, and docs/DEBTS.md
+    recorded the measurement: of the eleven entries audited by hand on 2026-08-11, ten were
+    true and one was false — `store/queues.py` claimed T3 and T4 while nothing under
+    `harness/` imported `store` at all. D17 says the map is audited exactly as hard as it is
+    trusted, and this was the field where it was trusted and not audited.
+
+    **WHAT A PASSING CLAIM PROVES, EXACTLY**: the cited test's import graph — the test module
+    plus one level into its own `harness/` helpers — contains the top-level package the
+    entry lives in. For a directory holding no Python, that the test names a path under it in
+    a string literal outside its docstrings.
+
+    **WHAT IT DOES NOT PROVE, AND THE DISTANCE IS LARGE**: not that the test imports the
+    *module*, not that it calls anything the module defines, and not that any assertion
+    depends on it. `from pipeline import join` satisfies every entry in `pipeline/` at once.
+    A test could import a package and exercise none of it and this row would stay green.
+    Overclaiming here would be the same defect one level up — an unenforced claim about a
+    checker for unenforced claims — so the label is `tested_by reach` and not `tested_by
+    coverage`, and the summary says "reaches" rather than "tests".
+
+    **Package granularity, not module granularity, and that was measured too.**
+    `harness/tests/t6_geometry.py` imports the bare package (`import geometry`) and then uses
+    `geometry.detect` through it, so a module-granular rule would call both correct
+    `geometry/` entries false. A false positive that blocks is worse than one that prints
+    (D16), and this row blocks — so it asks the question it can answer without judgment.
+
+    **Blocking, because an import either is in the parse or is not.** That is D16's test for
+    a mechanical finding. The residual risk is a test that reaches code without importing
+    it — through a subprocess or a generated file. No harness test does today (`subprocess`
+    appears nowhere under `harness/tests/`), and if one ever does the fix is to drop the
+    claim or to make the test import what it is credited with. It is deliberately not
+    something a `note` can talk its way out of: that is what "unenforced" meant.
+    """
+    if not exists(MAP):
+        return  # the repo map row above already reports a missing map, loudly
+    components = literals_from_module(MAP).get("COMPONENTS") or []
+    tests = {name: path for name, path in registered_tests()}
+    findings, claims = reach_findings(components, tests)
+    report.add(
+        "tested_by reach",
+        MECHANICAL,
+        findings,
+        f"{claims} claims, every cited test reaches what it names",
+    )
 
 
 # ----------------------------------------------------------- status.py's declared sources
@@ -1658,6 +1911,11 @@ _TYPE_ROW_RE = re.compile(r"^(" + "|".join(DOC_TYPE_TOKENS) + r")\s+(.+?)\s*\(")
 _SPACING_ROW_RE = re.compile(r"^Spacing\s+([\d ]+\d)")
 _RADIUS_ROW_RE = re.compile(r"^Radius\s+(\d+px)\b")
 
+# The one definition, shared with strip_css_comments() in the `raw colour` section below.
+# It was declared twice, identically, once per section — harmless only for as long as the two
+# stayed identical, and the second binding silently won for BOTH call sites, so an edit to
+# this one would have been discarded without a diff to show for it. Two checks reading the
+# same CSS must not be able to disagree about what a comment is.
 _CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _CSS_PROPERTY_RE = re.compile(r"--([A-Za-z0-9_-]+)\s*:\s*([^;]+);")
 _SHORTHAND_RE = re.compile(r"#[0-9a-f]{3}$")
@@ -1932,11 +2190,15 @@ _POSITIONAL_RE = re.compile(r"\bchecks?\s+\d{1,2}\b", re.IGNORECASE)
 APP_STYLES = ROOT / "app" / "src"
 
 _RAW_COLOUR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
-# Replaced by as many newlines as it spans, so a finding's line number survives the strip.
-_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 
 def strip_css_comments(text: str) -> str:
+    """A comment replaced by as many newlines as it spanned, so line numbers survive.
+
+    `_CSS_COMMENT_RE` is the one declared in the design-tokens section above and is
+    deliberately not redeclared here — see the note on it. The newline-preserving
+    substitution is this function's business; what counts as a comment is not.
+    """
     return _CSS_COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
 
 
@@ -2105,6 +2367,201 @@ def check_audit_invocation(report: Report) -> None:
                             )
                         )
     report.add("audit invocation", MECHANICAL, findings, f"{len(INVOKERS)} callers, flags all declared")
+
+
+# ------------------------------------------------- the checks defined here vs the ones run
+
+
+SELF = Path(__file__).resolve()
+
+# Checks defined in this file that `audit()` deliberately does not call: name -> why.
+#
+# EMPTY, AND THAT IS THE FINISHED STATE, the same shape as D18's seam list and for the same
+# reason. It exists so that the escape route is the loud one. Without it, the only ways to
+# silence the row below are to delete a check or to rename it out of both of the signals
+# `defined_checks` reads, and both of those land in a diff looking like tidying. An entry
+# here is an argument somebody had to write down and a reviewer can disagree with.
+#
+# Self-cleaning in both directions, the property D16 wants of `scripts/docs-audit-allow.txt`:
+# an entry naming a check `audit()` does call is stale and reported, and an entry naming
+# nothing defined here is dangling and reported. A list that only grows stops being read.
+UNDISPATCHED: Dict[str, str] = {}
+
+
+def _emits_row(func: ast.AST) -> bool:
+    """True when the body hands a row to `Report.add` — the act that makes it a check."""
+    for node in ast.walk(func):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "report"
+        ):
+            return True
+    return False
+
+
+def defined_checks(tree: ast.Module) -> Dict[str, int]:
+    """Every module-level function this source marks as a check -> the line it starts on.
+
+    Two signals, unioned and not intersected. The `check_` prefix can be renamed away in a
+    diff that reads as tidying; the `report.add` call can be moved into a helper. Requiring
+    both would mean losing either one hides a function from this row, which is precisely the
+    silent failure the row exists to catch — so a function is a check if it carries EITHER.
+    """
+    return {
+        node.name: node.lineno
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and (node.name.startswith("check_") or _emits_row(node))
+    }
+
+
+def dispatched_names(tree: ast.Module, names: Iterable[str]) -> Optional[Set[str]]:
+    """Which of `names` appear anywhere inside `audit()`. None when there is no `audit()`.
+
+    Every name in the function, not the top-level call statements only. The retired count
+    machinery read statements and its own docstring named the failure: restructure some of
+    the calls into a loop, leave the rest, and the reader sees fewer checks than there are.
+    A walk sees a name in a tuple, a loop, a branch or a `try`, so the only restructuring it
+    misses is one that moves dispatch out of `audit()` entirely — which the row reports as
+    itself rather than guessing at.
+
+    Scoped to `audit()` on purpose. A file-wide search would be vacuous: `self_test` drives
+    check functions by name to prove they fire, so a name it exercises would read as
+    accounted for while `audit()` called none of them.
+    """
+    wanted = set(names)
+    audit_fn = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "audit"
+        ),
+        None,
+    )
+    if audit_fn is None:
+        return None
+    return {
+        node.id for node in ast.walk(audit_fn) if isinstance(node, ast.Name) and node.id in wanted
+    }
+
+
+def check_dispatch(report: Report, source: Path = SELF) -> None:
+    """Every check defined in this file, against the ones `audit()` actually calls.
+
+    The failure: add a check function, forget the call. It never runs, the report still
+    looks full, the hook still passes, and nothing in the repo can say the auditor is
+    smaller than it looks. `docs/DEBTS.md` carried that as the one entry where a check can
+    *vanish* rather than misreport, and it was uncovered from 2026-08-11 — the retired
+    count-of-checks machinery had an `unaccounted` set doing this incidentally, and deleting
+    the published number (D18, correctly) took the detector out with it.
+
+    **A reconciliation, not a count, and the difference is the whole design.** D18 deleted
+    that number because nothing downstream consumed it and keeping one restated number
+    honest cost more machinery than any check in the file. Nothing here totals anything: not
+    the summary line, not a finding, not the JSON row. A total would be back in circulation
+    the moment it were printed — the next session restates it in a doc, and the machinery
+    that was deleted has to come back to keep the restatement honest. What this row emits
+    instead is the name of a function you can go and call, which is the only output that was
+    ever actionable.
+
+    **Blocking, and this is where it parts company with the row it replaces.** That one
+    downgraded to ADVISORY when its reader got confused, because publishing a wrong count
+    was worse than publishing none. There is no number to publish here, so the confused
+    state is not a reason to soften: an unrun check is provably not running, which is D16's
+    test for mechanical, and a reader that cannot see how `audit()` dispatches cannot tell
+    you whether *anything* runs. Both are things to fix before a commit rather than
+    questions to leave for a human, and the second is the more urgent of the two.
+
+    **Read from the source, never from a live `audit()` run.** A registry gathered by
+    running the function agrees with itself no matter what the file says. In `--staged` mode
+    `read()` returns the staged blob, which makes this the one check whose subject is the
+    file the commit will carry rather than the file that is executing — stage a new check
+    without its call and the hook fails on it, which is the exact moment `docs/DEBTS.md`
+    describes.
+
+    `source` is which file to reconcile: this one in every real run, a fixture under
+    `--self-test`. The reader's behaviour on a shape it cannot read has to be provable
+    without restructuring the live script to find out.
+    """
+    try:
+        tree = ast.parse(read(source))
+    except (OSError, SyntaxError) as exc:
+        report.add(
+            "check dispatch",
+            MECHANICAL,
+            [
+                Finding(
+                    rel(source),
+                    f"cannot be parsed, so nothing can say which checks this file runs.\n"
+                    f"{exc}",
+                )
+            ],
+        )
+        return
+
+    checks = defined_checks(tree)
+    called = dispatched_names(tree, checks)
+    findings: List[Finding] = []
+
+    if called is None:
+        findings.append(
+            Finding(
+                rel(source),
+                "defines no `audit()`, which is where this file's checks are dispatched "
+                "from and where this row reads them.",
+            )
+        )
+    elif checks and not called:
+        findings.append(
+            Finding(
+                rel(source),
+                "`audit()` names none of the checks defined in this file. Either nothing "
+                "this script reports is running, or dispatch moved out of `audit()` and "
+                "this reader has to move with it.\nReported once rather than once per "
+                "check: the fault is in the reading, and a wall of findings would each "
+                "name the wrong cause.",
+            )
+        )
+    else:
+        for name, line in sorted(checks.items(), key=lambda item: item[1]):
+            if name in called or name in UNDISPATCHED:
+                continue
+            findings.append(
+                Finding(
+                    f"{rel(source)}:{line}",
+                    f"`{name}` is defined here and `audit()` never calls it, so it has "
+                    f"never run. The row it would print is simply absent from the report, "
+                    f"and an absent row is the one failure this file cannot show you.\n"
+                    f"Call it from `audit()`, or record it in UNDISPATCHED with the reason "
+                    f"it is defined and not dispatched.",
+                )
+            )
+
+    for name, why in sorted(UNDISPATCHED.items()):
+        if name not in checks:
+            findings.append(
+                Finding(
+                    rel(source),
+                    f"UNDISPATCHED names `{name}` ({why}), which this file does not define. "
+                    f"Renamed or deleted; either way the entry now exempts nothing.",
+                )
+            )
+        elif called and name in called:
+            findings.append(
+                Finding(
+                    rel(source),
+                    f"UNDISPATCHED records `{name}` as deliberately not dispatched ({why}), "
+                    f"and `audit()` calls it. Drop the entry: an exemption that outlives its "
+                    f"reason is how the list stops being read.",
+                )
+            )
+
+    report.add(
+        "check dispatch", MECHANICAL, findings, "every check defined here is called by audit()"
+    )
 
 
 # ------------------------------------------------------------------ Layer 2: coupling
@@ -2447,6 +2904,106 @@ def self_test() -> int:
             str(sorted(source_names(root, DEFAULT_SOURCE_SUFFIXES, False))),
         )
 
+    # A tested_by claim. Every case below is a way for this row to pass a claim it should
+    # refuse, or refuse one it should pass — and the blocking direction is the expensive one,
+    # so the correct claims are asserted first and against the real harness.
+    print("\na tested_by claim is checked against what the cited test imports")
+    ok(
+        "geometry" in imported_names("def run():\n    import geometry\n"),
+        "an import inside a function is found — t6's shape, and it is a correct claim",
+        str(imported_names("def run():\n    import geometry\n")),
+    )
+    names = imported_names("from harness.eval import fixtures, runcache\n")
+    ok(
+        {"harness.eval", "harness.eval.fixtures", "harness.eval.runcache"} <= names,
+        "a from-import records the package and each name, since only disk knows which is a module",
+        str(sorted(names)),
+    )
+    ok(
+        imported_names("from . import sibling\n") == set(),
+        "a relative import names nothing this can resolve, and is dropped",
+        str(imported_names("from . import sibling\n")),
+    )
+    literals = string_literals('"""Load fixtures/doc.csv"""\nA = "fixtures/code.csv"\n')
+    ok(
+        literals == {"fixtures/code.csv"},
+        "a path in a docstring is prose; a path in an assignment is the test reading a file",
+        str(sorted(literals)),
+    )
+
+    # The follow's boundary, stated as two assertions because the whole value of this row
+    # is what it declines to follow.
+    ok(
+        follow_target("harness.eval.fixtures") is not None
+        and follow_target("pipeline.join") is None,
+        "the follow reaches a harness helper and stops at a product package",
+        f"{follow_target('harness.eval.fixtures')} / {follow_target('pipeline.join')}",
+    )
+    registry = {name: path for name, path in registered_tests()}
+    if "T7" in registry and "T1" in registry:
+        packages, _ = test_reach(registry["T7"])
+        ok(
+            "store" in packages and "geometry" not in packages,
+            "T7 reaches store directly and does NOT reach geometry through cli — "
+            "the transitive follow that would make this row vacuous is absent",
+            str(sorted(packages)),
+        )
+        packages, _ = test_reach(registry["T1"])
+        ok(
+            "identify" in packages,
+            "T1 reaches identify",
+            str(sorted(packages)),
+        )
+
+    # The false claim docs/DEBTS.md recorded, replayed against the real harness rather than
+    # against a stand-in for it. `store/queues.py` cited T3 and T4 while nothing under
+    # harness/ imported store; T7 later arrived and does import it, so the case pins T3 —
+    # a test that reaches pipeline and nothing else.
+    if registry:
+        found, claims = reach_findings(
+            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T3"]}}}], registry
+        )
+        ok(
+            len(found) == 1 and claims == 1 and "store" in found[0].message,
+            "the historical false claim — store/queues.py citing T3 — is reported",
+            str(found),
+        )
+        found, claims = reach_findings(
+            [{"path": "pipeline/", "modules": {"join.py": {"tested_by": ["T3"]}}}], registry
+        )
+        ok(not found and claims == 1, "and the true claim beside it is not", str(found))
+        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T2"]}], registry)
+        ok(
+            not found,
+            "a directory holding no Python passes on a path literal — fixtures/ from T2",
+            str(found),
+        )
+        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T7"]}], registry)
+        ok(
+            len(found) == 1,
+            "and fails when the cited test never names a path under it",
+            str(found),
+        )
+        found, claims = reach_findings(
+            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T99"]}}}], registry
+        )
+        ok(
+            not found and claims == 0,
+            "an unregistered id is the repo map row's finding, not counted or repeated here",
+            str(found),
+        )
+        found, _ = reach_findings([{"path": "no_such_dir/", "tested_by": ["T3"]}], registry)
+        ok(not found, "and a component path that does not exist is the same", str(found))
+
+    report = Report()
+    check_tested_by_reach(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label.get("tested_by reach"),
+        "every tested_by claim in this repo's own map reaches what it names",
+        str(by_label.get("tested_by reach")),
+    )
+
     # The token row's silent failures, in the order they would bite: a normaliser that
     # hides a real difference, a parser that reads a value the browser never sees, and a
     # comparison that runs in one direction only.
@@ -2661,6 +3218,117 @@ def self_test() -> int:
         finally:
             INVOKERS[:] = saved
 
+    # A check that is defined and never dispatched prints nothing at all, so this row is the
+    # only one whose failure mode is an ABSENT row. Every case below is a way for the
+    # reconciliation to look like it ran: a reader that cannot see a loop, a check renamed
+    # out of the prefix, an exemption nobody re-read.
+    print("\nevery check defined is reconciled against the ones audit() calls")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture.py"
+
+        def dispatch(source: str, exempt: Optional[Dict[str, str]] = None) -> List[Finding]:
+            fixture.write_text(source, encoding="utf-8")
+            saved_exempt = dict(UNDISPATCHED)
+            UNDISPATCHED.clear()
+            UNDISPATCHED.update(exempt or {})
+            try:
+                report = Report()
+                check_dispatch(report, fixture)
+                return {check: found for check, _, found, _ in report.checks}["check dispatch"]
+            finally:
+                UNDISPATCHED.clear()
+                UNDISPATCHED.update(saved_exempt)
+
+        emit = "def {0}(report):\n    report.add('{0}', 'mechanical', [])\n\n"
+        wired = (
+            emit.format("check_one")
+            + emit.format("check_two")
+            + "def audit():\n    report = Report()\n    check_one(report)\n    check_two(report)\n"
+        )
+        ok(not dispatch(wired), "two checks defined, both called, is clean", str(dispatch(wired)))
+
+        forgotten = wired.replace("    check_two(report)\n", "")
+        found = dispatch(forgotten)
+        ok(
+            len(found) == 1 and "check_two" in found[0].message,
+            "the one whose call was forgotten is named, and only it",
+            str(found),
+        )
+        ok(
+            not dispatch(forgotten, {"check_two": "deliberately not run"}),
+            "an UNDISPATCHED entry accounts for it — the loud escape route",
+            str(dispatch(forgotten, {"check_two": "deliberately not run"})),
+        )
+        found = dispatch(wired, {"check_two": "stale reason"})
+        ok(
+            len(found) == 1 and "check_two" in found[0].message,
+            "and the entry is reported the moment audit() calls it after all",
+            str(found),
+        )
+        found = dispatch(wired, {"check_ghost": "renamed away"})
+        ok(
+            len(found) == 1 and "check_ghost" in found[0].message,
+            "an entry naming nothing defined here is dangling, so the list cannot only grow",
+            str(found),
+        )
+
+        # Dispatch through a loop: the exact restructuring whose halfway version defeated the
+        # retired statement-reading registry. A name is a name wherever it appears.
+        looped = (
+            emit.format("check_one")
+            + emit.format("check_two")
+            + "def audit():\n    report = Report()\n"
+            + "    for run in (check_one, check_two):\n        run(report)\n"
+        )
+        ok(not dispatch(looped), "dispatch through a loop is dispatch", str(dispatch(looped)))
+
+        # The rename hole, closed by reading both signals. `audit_two` emits a row and no
+        # longer looks like a check by name — which is what a diff that reads as tidying does.
+        renamed = (
+            emit.format("check_one")
+            + emit.format("audit_two")
+            + "def audit():\n    report = Report()\n    check_one(report)\n"
+        )
+        found = dispatch(renamed)
+        ok(
+            len(found) == 1 and "audit_two" in found[0].message,
+            "a check renamed out of the prefix still emits a row, and is still found",
+            str(found),
+        )
+
+        moved = (
+            emit.format("check_one")
+            + "CHECKS = (check_one,)\n\n"
+            + "def audit():\n    report = Report()\n    for run in CHECKS:\n        run(report)\n"
+        )
+        found = dispatch(moved)
+        ok(
+            len(found) == 1 and "none of the checks" in found[0].message,
+            "dispatch moved out of audit() is one finding about the reader, not one per check",
+            str(found),
+        )
+        found = dispatch(emit.format("check_one"))
+        ok(
+            len(found) == 1 and "no `audit()`" in found[0].message,
+            "a file with no audit() at all says so, rather than reporting every check unrun",
+            str(found),
+        )
+        found = dispatch("def audit(:\n")
+        ok(
+            len(found) == 1 and "cannot be parsed" in found[0].message,
+            "and a source that will not parse is a finding, not an empty roster",
+            str(found),
+        )
+
+    report = Report()
+    check_dispatch(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["check dispatch"],
+        "this file's own checks are every one of them called by audit()",
+        str(by_label["check dispatch"]),
+    )
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -2699,11 +3367,28 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_current_gate(report)
     check_map(report, allowed)
+    check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)
     check_raw_colour(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
+    # Last, and it is the row that says the rows above are all of them. It reconciles this
+    # file's check definitions against the calls in this function.
+    #
+    # IT DOES NOT ANSWER FOR ITSELF, and an earlier draft of this comment claimed it did.
+    # Measured: delete this one line and every other row still prints green, the run exits
+    # 0, and the `check dispatch` row is simply absent — the exact silent shrinkage the row
+    # exists to catch, one level up. A detector cannot detect its own absence; that is the
+    # shape of the thing, not a bug to patch, and no reconciliation added here can close it
+    # because
+    # the reconciler would need the same single call nothing vouches for. What catches it
+    # is `--self-test`, whose last case calls check_dispatch() directly and asserts this
+    # function names every check — and `--self-test` runs by hand, on no gate. So this line
+    # is the root of the recursion: unwiring anything else fails the commit, and unwiring
+    # THIS fails nothing automatic. docs/DEBTS.md records it under the entry that shipped
+    # the row; do not delete it on the strength of the audit staying green.
+    check_dispatch(report)
     if staged_only:
         check_coupling(report)
     return report

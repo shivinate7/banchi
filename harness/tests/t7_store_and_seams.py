@@ -60,6 +60,15 @@ case an existing section could not have failed on:
   queue it cannot order   `open_entries`), so a queue record with a non-numeric market or a
                           string box raised out of the health route.
 
+`check_history` LANDED ON 2026-08-13 WITH THE LINES IT ASSERTS. Three routes here write
+without moving a card between states — the PUT correction, the undo and the review answer —
+and until that day none of them appended anything to `history.jsonl`, which `docs/DEBTS.md`
+carried as a known gap. The section asserts the part that cannot be recovered afterwards: the
+value a correction replaced, the boundary between two physical cards at one reused position,
+and which queue's offer a human chose from. It also asserts the two properties that make the
+new lines safe in a file another route reads — that no event name is a listing state, and
+that a logged event is discarded when the write it rides in raises.
+
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
 after. Every queue entry they have ever been handed was hand-built — by the harness below,
@@ -80,6 +89,7 @@ import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from datetime import datetime
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
@@ -1503,10 +1513,11 @@ def check_mark_sold(checks: Checks) -> None:
             "and the store agrees",
         )
         checks.equal(
-            [e["event"] for e in Store().history() if e.get("position") == "3/1"],
+            [e.get("event") for e in events_for("3/1")],
             [master.CAPTURED, master.PUSHED, master.STAGED, master.LIVE, master.SOLD, master.LIVE],
-            "history reads `live, sold, live` — the reversal needs no `undone` event, which "
-            "docs/DEBTS.md records as a D10 question rather than a logging one",
+            "history reads `live, sold, live` — a reversal is two real transitions and needs "
+            "no event of its own, which is why this route added none when the three writes "
+            "beside it did (see `check_history`)",
         )
 
         refusal(
@@ -1650,6 +1661,339 @@ def check_mark_sold(checks: Checks) -> None:
         and capture_server._REVIEW_ANSWER_RE.match("/review/3/17") is None,
         "and the answer matches /review/<box>/<index>/answer and nothing shorter",
     )
+
+
+# ---------------------------------------------------------------------------------- history
+
+
+def events_for(key: str) -> list:
+    """Every `history.jsonl` line for one position, in the order they were appended."""
+    return [event for event in Store().history() if event.get("position") == key]
+
+
+def last_event(key: str) -> dict:
+    """The newest line for one position, or an empty dict when there is none.
+
+    NEVER INDEXES OFF THE END AND NEVER SUBSCRIPTS A KEY, and the reason is `answers`' reason
+    one section up: a missing event IS the failure under test here, so a bare `[-1]` or
+    `event["changed"]` turns one red line into a traceback that hides every check behind it.
+    Measured — the first draft of this section did exactly that under four of the ten
+    mutations it was checked against, reporting a KeyError instead of the assertion that was
+    supposed to catch them.
+    """
+    events = events_for(key)
+    return events[-1] if events else {}
+
+
+def check_history(checks: Checks) -> None:
+    """The three routes that write without moving a card between states.
+
+    THE ONLY APPEND-ONLY FILE IN THE STORE, which is what makes this worth a section. Every
+    other file here is replaced whole on every write, so each of them answers "what does this
+    card say now" and none of them can answer "what did it say in August". `docs/DEBTS.md`
+    carried the omission for two months on the grounds that the store logs state transitions
+    and a correction, a deletion and an answer are none of them — true about the store's
+    vocabulary, and never an argument about the audit trail.
+
+    WHAT IS ASSERTED IS THE PART THAT CANNOT BE RECOVERED. Each of these three routes
+    overwrites or destroys the only copy of something: the correction rewrites the record and
+    the sidecar in place, the undo deletes a record whose position is handed straight to the
+    next capture, and the answer writes a SKU that a later run may overwrite. So the
+    assertions below are about the PRIOR value, the BOUNDARY between two physical cards at
+    one key, and WHICH OFFER a human chose from — not about the routes' happy paths, which
+    have their own sections above.
+
+    AND THE ONE WAY THESE LINES COULD BREAK SOMETHING. `_state_before_sale` reads this file
+    backwards to find the state a sale should reverse to, so an event name that collided with
+    `master.STATES` would restore a sold card to `corrected`. Both the disjointness and the
+    reversal path are asserted at the end.
+    """
+    checks.note("")
+    checks.note("HISTORY — the three writes that are not state transitions")
+
+    def parses(stamp) -> bool:
+        try:
+            datetime.fromisoformat(str(stamp))
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    with isolated_home():
+        # ---------------------------------------------------------- the PUT correction
+        capture_server.do_capture(capture_payload(3, set_hint="sv9", variant="holo"))
+        capture_server.do_capture(capture_payload(3))
+
+        capture_server.do_put_card(3, 1, {"variant": "reverse_holo"})
+        corrections = events_for("3/1")
+        checks.equal(
+            [e.get("event") for e in corrections],
+            [master.CAPTURED, capture_server.CORRECTED],
+            "a PUT correction appends one event — the gap docs/DEBTS.md recorded from "
+            "2026-06 to 2026-08-13",
+        )
+
+        corrected = last_event("3/1")
+        checks.equal(
+            corrected.get("changed"),
+            {"metadata_finish": {"from": "holo", "to": "reverse_holo"}},
+            "and it carries the value it REPLACED: the record and the sidecar are both "
+            "overwritten in place, so this line is the only thing left that says the card "
+            "was ever toggled holo (D3 rung 1 — the toggle is a claim, and the claim is "
+            "what the ladder prices against)",
+        )
+        checks.ok(
+            "metadata_finish" in (corrected.get("changed") or {}),
+            "keyed by the RECORD's field name, not the wire's `variant` — a history line is "
+            "read while holding inventory.json open",
+            f"changed was: {corrected.get('changed')!r}",
+        )
+
+        # The shape, asserted against a line the STORE wrote rather than against a literal.
+        # `_history` rebuilds `Inventory._log`'s record instead of calling it, and this is
+        # what stops the two from drifting into two vocabularies for one file.
+        captured_event = corrections[0] if corrections else {}
+        checks.equal(
+            sorted(set(corrected) & set(captured_event)),
+            ["at", "event", "position"],
+            "and it shares exactly the three keys store/master.py:_log writes — the server "
+            "builds the record itself, so the shapes are held together here",
+        )
+        checks.ok(
+            parses(corrected.get("at")),
+            "with a timestamp in the same ISO form master.now() produces",
+            f"at was: {corrected.get('at')!r}",
+        )
+
+        capture_server.do_put_card(3, 1, {"variant": "reverse_holo"})
+        capture_server.do_put_card(3, 1, {})
+        checks.equal(
+            len(events_for("3/1")),
+            2,
+            "a PUT that restates the current claim logs NOTHING, and neither does one "
+            "naming no settable field — the question this event answers is when the claim "
+            "CHANGED, and a re-save has no answer to contribute",
+        )
+
+        capture_server.do_put_card(3, 1, {"set_hint": None})
+        cleared = last_event("3/1")
+        checks.equal(
+            cleared.get("changed"),
+            {"set_hint": {"from": "sv9", "to": None}},
+            "clearing a hint back to no claim is a change and is logged as one",
+        )
+
+        capture_server.do_put_card(3, 2, {"set_hint": "sv9"})
+        first_claim = last_event("3/2")
+        checks.ok(
+            "from" in first_claim.get("changed", {}).get("set_hint", {})
+            and first_claim["changed"]["set_hint"]["from"] is None,
+            "and a first claim on a card that had none keeps its `from: null` — the nesting "
+            "is what protects it, since _history drops a None EXTRA and a dropped `from` "
+            "would read as a field nobody touched",
+            f"changed was: {first_claim.get('changed')!r}",
+        )
+
+        before = len(Store().history())
+        refusal(
+            checks,
+            lambda: capture_server.do_put_card(3, 1, {"state": "sold"}),
+            "field_not_settable",
+            "a PUT naming an unsettable field still refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_card(9, 9, {"set_hint": "sv9"}),
+            "card_not_found",
+            "and one naming an absent position still refuses",
+        )
+        checks.equal(
+            len(Store().history()),
+            before,
+            "and neither refusal appended a line: nothing changed, so nothing is recorded",
+        )
+
+        # THE SEAM ITSELF, asserted directly rather than left to follow from the routes.
+        # `_history` appends to `Inventory.events` so that `Store.write()` flushes the line
+        # with the change it describes — and the tempting simplification is to call
+        # `files.append_jsonl` and be done. Measured: with that substitution every other check
+        # in this section still passed, because the routes only log on paths that go on to
+        # commit. What it costs is invisible until something raises between the log and the
+        # commit, at which point history claims a correction the store never took.
+        before = len(Store().history())
+        try:
+            with Store().write() as snapshot:
+                capture_server._history(
+                    snapshot.inventory,
+                    capture_server.CORRECTED,
+                    "3/1",
+                    changed={"set_hint": {"from": "sv9", "to": "sv8"}},
+                )
+                raise RuntimeError("deliberate")
+        except RuntimeError:
+            pass
+        checks.equal(
+            len(Store().history()),
+            before,
+            "a logged event is DISCARDED when the write it rides in raises — the line and "
+            "the change commit together or not at all, which is the whole reason this "
+            "appends to the snapshot rather than to the file",
+        )
+
+        # ------------------------------------------------------------------- the undo
+        capture_server.do_capture(capture_payload(4))
+        capture_server.do_capture(capture_payload(4))
+        capture_server.do_delete_card(4, 2)
+
+        removed = last_event("4/2")
+        checks.equal(
+            removed.get("event"),
+            capture_server.REMOVED,
+            "undo appends a `removed` event — named for what happened to the record, not "
+            "for the button that did it",
+        )
+        checks.equal(
+            removed.get("state"),
+            master.CAPTURED,
+            "carrying the state it was in, which is what says whether an identification fee "
+            "was spent on the photograph that was just deleted",
+        )
+        checks.ok(
+            removed.get("cache_deleted") is False and "sku" not in removed,
+            "with no paid answer discarded and no sku to record — a None extra is dropped, "
+            "so an absent key reads as a fact nobody recorded rather than as a null",
+            f"event was: {removed!r}",
+        )
+
+        capture_server.do_capture(capture_payload(4))
+        checks.equal(
+            [e.get("event") for e in events_for("4/2")],
+            [master.CAPTURED, capture_server.REMOVED, master.CAPTURED],
+            "THE ONE THIS EVENT EXISTS FOR: undo releases the index (D10), so the next "
+            "capture takes the same key — and without the middle line the log reads as one "
+            "position captured twice, with nothing to say a different physical card is in "
+            "that slot now",
+        )
+
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("4/2", master.IDENTIFIED, sku="8608860")
+            snapshot.cache.put("4/2", {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
+        capture_server.do_delete_card(4, 2)
+        paid = last_event("4/2")
+        checks.equal(
+            paid.get("state"),
+            master.IDENTIFIED,
+            "undoing an IDENTIFIED card records that state, which is the one that cost money",
+        )
+        checks.ok(
+            paid.get("cache_deleted") is True and paid.get("sku") == "8608860",
+            "and records that the paid answer went with it, and what it had said",
+            f"event was: {paid!r}",
+        )
+
+        # A third capture into box 4, so that 4/1 is not the newest — the two undos above
+        # took 4/2 back off, and a refusal has to be set up rather than assumed.
+        capture_server.do_capture(capture_payload(4))
+        before = len(Store().history())
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(4, 1),
+            "undo_not_newest",
+            "a refused undo still refuses",
+        )
+        checks.equal(
+            len(Store().history()),
+            before,
+            "and appends nothing — a refusal destroyed nothing to record",
+        )
+
+        # ---------------------------------------------------------- the review answer
+        reverse = CANDIDATES[1]
+        capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
+            snapshot.review.upsert(entry(5, 1, market="12.00"))
+
+        before = len(Store().history())
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                5, 1, {"sku": "9999999", "condition": reverse["condition"]}
+            ),
+            "sku_not_a_candidate",
+            "an answer naming a row nothing offered still refuses",
+        )
+        checks.equal(
+            len(Store().history()),
+            before,
+            "and writes no history: the card was not answered, so nothing claims it was",
+        )
+
+        capture_server.do_review_answer(
+            5, 1, {"sku": reverse["sku"], "condition": reverse["condition"]}
+        )
+        answered = last_event("5/1")
+        checks.equal(
+            answered.get("event"),
+            capture_server.ANSWERED,
+            "an answer appends its own event",
+        )
+        checks.equal(
+            answered.get("sku"),
+            reverse["sku"],
+            "carrying WHAT the human chose — the card record is the only other place it "
+            "lands, and set_state and emit can both overwrite that while review.json goes "
+            "on saying a human answered",
+        )
+        checks.equal(
+            answered.get("condition"),
+            reverse["condition"],
+            "and the condition of the row he chose, taken from the candidate rather than "
+            "from the request",
+        )
+        checks.equal(
+            answered.get("queue"),
+            queues.MAIN,
+            "and WHICH queue's offer governed the choice — the file to check the answer "
+            "against afterwards, and the thing the laundering refusal turns on",
+        )
+        checks.equal(
+            answered.get("reason"),
+            "metadata_detection_disagreement",
+            "and the machine reason string, identical to the one on screen, in the run "
+            "report and in review.json — docs/DESIGN.md keeps that one string greppable, "
+            "and this is the fourth place it reads the same",
+        )
+
+        # ----------------------------------------------- and none of them is a state
+        checks.equal(
+            sorted(set(capture_server.SERVER_EVENTS) & set(master.STATES)),
+            [],
+            "no server event shares a name with a listing state — _state_before_sale scans "
+            "this file for the last event naming a state, so a collision would restore a "
+            "reversed sale to `corrected`",
+        )
+
+        # THE PATH THAT COLLISION WOULD BREAK, walked end to end rather than argued. A card
+        # corrected after it went live has a `corrected` line sitting directly under its
+        # `sold` line, which is exactly where the backwards scan starts looking.
+        capture_server.do_capture(capture_payload(6))
+        with Store().write() as snapshot:
+            for state in (master.PUSHED, master.STAGED, master.LIVE):
+                snapshot.inventory.set_state("6/1", state)
+        capture_server.do_put_card(6, 1, {"set_hint": "sv9"})
+        sold = capture_server.do_mark_sold(6, 1, {})
+        checks.equal(
+            sold["restores_to"],
+            master.LIVE,
+            "a card corrected between going live and being sold still restores to LIVE — "
+            "the scan skips every non-state event, which is what makes the new lines safe "
+            "to add to a file another route reads",
+        )
+        checks.equal(
+            capture_server.do_mark_sold(6, 1, {"undo": True})["state"],
+            master.LIVE,
+            "and the reversal actually puts that state back, past the correction",
+        )
 
 
 # ------------------------------------------------------------------------- the sidecar seam
@@ -1991,6 +2335,7 @@ def run() -> Result:
     check_queues(checks)
     check_review_answer(checks)
     check_mark_sold(checks)
+    check_history(checks)
     check_sidecar_seam(checks)
     check_concurrency(checks)
     check_cli_seams(checks)

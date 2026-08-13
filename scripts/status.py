@@ -49,11 +49,16 @@ WIDTH = 76
 LABEL = 15  # column where values start, so the left rail reads as a column
 
 
-# Every file this script reads, declared in one place so the audit's status-sources check
-# can verify it WITHOUT running it. Pure literals for the reason docs/map.py is: the audit
-# parses with `ast.literal_eval` rather than importing, because a read-only check must not
-# execute the code it is checking. A `Source` class here would be a Call node, unreadable
+# Every file this script reads OR RUNS, declared in one place so the audit's status-sources
+# check can verify it WITHOUT running it. Pure literals for the reason docs/map.py is: the
+# audit parses with `ast.literal_eval` rather than importing, because a read-only check must
+# not execute the code it is checking. A `Source` class here would be a Call node, unreadable
 # to it.
+#
+# "or runs" is not padding. `scripts/docs-audit.py` is a subprocess, not a read, and it sat
+# outside this list as a hardcoded path for exactly that reason — so a rename would have
+# deleted the docs-audit line from this output with nothing failing anywhere. Declaring it
+# costs one entry and buys the same tripwire every other path here gets.
 #
 # `kind` says what must be true of the target:
 #   literals  a .py whose module-level literal assignments include every name in `requires`
@@ -76,6 +81,12 @@ SOURCES = (
         "kind": "defs",
         "requires": ("decision_gists",),
         "why": "the lift of bolded rulings out of docs/DECISIONS.md — reused, never reimplemented",
+    },
+    {
+        "path": "scripts/docs-audit.py",
+        "kind": "defs",
+        "requires": ("build_parser", "main"),
+        "why": "the docs-audit health line, read from its `--json` and never from its render",
     },
     {
         "path": "harness/results/t1*.json",
@@ -367,28 +378,96 @@ def t1_blocks() -> List[str]:
     return out
 
 
+# The auditor's `--json` vocabulary, the one thing this file consumes that is not a file.
+# Named here because classifying a row means knowing what a severity string means, and a
+# reader that guesses is the failure this module is arranged against.
+AUDIT_ROW_KEYS = ("label", "severity", "findings")
+AUDIT_BLOCKING = "mechanical"  # D16 layer 1: provably wrong, exits 1
+AUDIT_ASKING = "advisory"      # D16 layer 2: a question, exits 2
+
+
 def audit_line() -> List[str]:
-    """Run the mechanical docs audit inline. Stdlib, fast, and it never writes (D16)."""
-    script = ROOT / "scripts" / "docs-audit.py"
-    if not script.exists():
-        miss("scripts/docs-audit.py", "cannot report doc-audit health")
+    """Run the mechanical docs audit inline and read its `--json`, never its render.
+
+    Stdlib, fast, and it never writes (D16). Nothing here gates: a red audit is health to
+    report, not a source that could not be read, so `make status` still exits 0 on one.
+
+    WHY THE MACHINE SURFACE. `b2d35ce` added `--json` for exactly this — "a machine
+    surface, so nothing retires on a parsed render" — and `scripts/audit-history.py` has
+    honoured it since, while this reader went on counting `  ok ` and `  FAIL ` prefixes
+    out of a report written for a human. Both surfaces can drift. The difference is that
+    renaming a key is a deliberate edit to something declared an interface, whereas
+    rewording a heading is prose nobody thinks of as one — so the render breaks its
+    consumers silently and by accident, which is the only kind of breakage that matters
+    here. The alternative was tightening those two prefixes into stricter patterns; it
+    keeps the coupling exactly as it was and only moves the day it bites.
+
+    A payload this cannot read is a MISSING, loud and non-zero, never a confident count of
+    zero — the module rule for a source that moved, applied to a surface that moved.
+    """
+    found = resolve("scripts/docs-audit.py")
+    if not found:  # resolve() has already recorded why
         return [field("docs audit", "MISSING: scripts/docs-audit.py")]
     try:
         done = subprocess.run(
-            [sys.executable, str(script)],
+            [sys.executable, str(found[0]), "--json"],
             cwd=str(ROOT), capture_output=True, text=True, check=False,
         )
     except OSError as exc:
         return [field("docs audit", f"did not run — {exc}")]
 
-    checks = sum(1 for line in done.stdout.splitlines() if line.startswith("  ok "))
-    failed = sum(1 for line in done.stdout.splitlines() if line.startswith("  FAIL"))
-    asked = sum(1 for line in done.stdout.splitlines() if line.startswith("  ask "))
-    if done.returncode == 0:
-        return [field("docs audit", f"clean · {checks} checks")]
-    verdict = f"{failed} FAILING" if failed else f"{asked} question(s)"
+    def unreadable(why: str) -> List[str]:
+        miss("scripts/docs-audit.py", why)
+        return [field("docs audit", f"MISSING: {why}")]
+
+    # A dropped or renamed `--json` lands here: argparse writes usage to stderr, exits on
+    # its usage code and leaves stdout empty. Its last stderr line names the flag it
+    # rejected, which is the single fact needed to repair this call, so it is carried into
+    # the message rather than thrown away.
+    #
+    # STDERR ONLY, never a fallback to stdout. A renamed payload key raises here with
+    # stdout holding valid JSON, whose last line is `}` — measured, and it read as though
+    # the auditor had said something. The exception already names the missing key; a tail
+    # that adds nothing is worse than no tail, because it looks like evidence.
+    try:
+        payload = json.loads(done.stdout)
+        rows, code = payload["rows"], payload["exit"]
+    except (ValueError, KeyError, TypeError) as exc:
+        tail = done.stderr.strip().splitlines()
+        detail = f" — {tail[-1][:64]}" if tail else ""
+        return unreadable(f"--json is not a rows/exit payload ({exc}){detail}")
+
+    if not isinstance(rows, list) or not all(
+        isinstance(row, dict) and all(key in row for key in AUDIT_ROW_KEYS) for row in rows
+    ):
+        return unreadable("--json rows are not " + "/".join(AUDIT_ROW_KEYS) + " records")
+
+    # A severity this file has never heard of cannot be counted as either bucket, and
+    # dropping it would under-report the audit — the exact silent shrinkage the module
+    # docstring says is worse than no status tool. Adding a severity to the auditor is
+    # therefore a change here too, announced by this line rather than discovered later.
+    unknown = sorted({str(row["severity"]) for row in rows} - {AUDIT_BLOCKING, AUDIT_ASKING})
+    if unknown:
+        return unreadable(f"--json rows carry unclassifiable severity: {', '.join(unknown)}")
+
+    clean = [row for row in rows if not row["findings"]]
+    failing = [row for row in rows if row["findings"] and row["severity"] == AUDIT_BLOCKING]
+    asking = [row for row in rows if row["findings"] and row["severity"] == AUDIT_ASKING]
+
+    # `exit` and the rows come out of one run, so they cannot honestly disagree. If they
+    # do, this reader is looking at a payload it does not understand and must say so —
+    # picking whichever of the two it likes is how a wrong number gets printed confidently.
+    if (not failing and not asking) != (code == 0):
+        return unreadable(
+            f"--json exit {code} disagrees with its own rows "
+            f"({len(failing)} failing, {len(asking)} question)"
+        )
+
+    if not failing and not asking:
+        return [field("docs audit", f"clean · {len(rows)} checks")]
+    verdict = f"{len(failing)} FAILING" if failing else f"{len(asking)} question(s)"
     return [
-        field("docs audit", f"{verdict} · {checks} clean — run `make docs-audit`"),
+        field("docs audit", f"{verdict} · {len(clean)} clean — run `make docs-audit`"),
     ]
 
 

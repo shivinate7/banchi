@@ -228,15 +228,212 @@ COMPONENTS = [
     {
         "path": "scripts/",
         "status": "built",
-        "does": "opsec guards, the stop gate, the post-edit typecheck hook, the docs audit, "
-                "the screenshot runner, `make status` — which reads this file for the next "
-                "step and the gate — and audit-history, which replays the auditor over old "
-                "trees. Diagnostic; never gates, per D18.",
-        "governed_by": ["D14", "D16", "D18"],
-        "note": "scripts/status.py declares every file it reads in a SOURCES literal, and "
-                "the audit's status-sources check verifies that list. Its values are "
-                "derived so they cannot go stale; that check is what catches its *reader* "
-                "going stale.",
+        "does": "the gate machinery and the tools around it: the pre-commit hook, the docs "
+                "audit it runs, the opsec guard that is that hook's disabled PreToolUse "
+                "twin, the Stop hook, the PostToolUse typecheck hook, D17's "
+                "decision-context hook, `make status`, the screenshot runner and its "
+                "manifest, and audit-history — diagnostic, never gating, per D18.",
+        "governed_by": ["D14", "D16", "D17", "D18"],
+        # What the orphan rule covers here, and the one hole no declaration can close.
+        # Declaring the key is also what makes the scan recursive, which is the only way
+        # scripts/githooks/ is reached at all.
+        #
+        # `.sh` is most of the reason to declare anything. guard-opsec.sh and the
+        # pre-commit hook ARE the opsec enforcement, and a repo whose one repo-wide rule
+        # is that a live code card is a bearer instrument cannot leave its enforcement in
+        # the directory the index does not scan. `.txt` because both files carrying it are
+        # tracked INPUTS that tooling reads and fails against — the allowlist and the
+        # screenshot manifest — not notes; a third arriving unnamed is exactly the drift
+        # this rule exists for. `.md` is deliberately absent: no markdown lives here, and
+        # declaring a suffix for a language a directory does not contain is how a scan
+        # reports a clean run over nothing, which is the failure `app/` spent a day on.
+        #
+        # THE HOLE: `githooks/pre-commit` has no suffix, and scan_plan rejects any entry
+        # that does not start with a dot, so no value here can reach it. It is listed
+        # below, so its *disappearance* is caught — but a second extensionless hook
+        # (`pre-push`, `commit-msg`) would land unnamed and nothing would fail. Left to
+        # docs/DEBTS.md rather than worked around: the limit is in scripts/docs-audit.py,
+        # and inventing a second key in this file to route around it would put the
+        # workaround inside the thing the rule audits.
+        "source_suffixes": [".py", ".sh", ".txt"],
+        "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
+                "scanned this directory — the rule is guarded on `modules`, and an entry "
+                "with none has nothing to be an orphan of. Measured before the fix: "
+                "`touch scripts/__probe.py` left the row reading `ok repo map`, while the "
+                "same file under pipeline/ failed the commit. That is how audit-history.py "
+                "was added — into the one directory the rule did not cover, with this "
+                "file's prose updated by hand and nothing that would have failed had the "
+                "author forgotten. Writing the list is why it stayed open: a `does` and a "
+                "`governed_by` per file is a content decision about what governs the "
+                "tooling, not a mechanical repair. "
+                "WHAT IS STILL UNPROVEN, and it is the same limit app/ carries: the rule "
+                "proves a file has an entry, never that the entry is true. A `does` "
+                "describing the wrong file passes exactly as well.",
+        "modules": {
+            # ---- the commit path. D18's rule is not advice here; this IS the path ----
+            "githooks/pre-commit": {
+                "does": "the commit gate: fixtures read-only, no image staged outside "
+                        "captures/, no printed code-card layout in the staged diff, then "
+                        "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
+                        "the coupling question, 64 warning loudly that the auditor was "
+                        "invoked with a flag it does not accept. Tracked and reviewable "
+                        "through core.hooksPath rather than living unversioned inside git.",
+                # D18 binds this file harder than any other in the repo: it is the path
+                # that decides whether a commit proceeds, so "nothing that writes may run
+                # here" is a property to preserve rather than a principle to admire. D11
+                # is the fixtures it makes read-only — ground truth that still passes T2
+                # after it drifts, which is why an edit has to be stopped and not caught.
+                # D14 is why a code-shaped literal is worth a rule at all: the other track
+                # on the shared rig handles bearer instruments.
+                "governed_by": ["D11", "D14", "D16", "D18"],
+                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
+                        "declare. Listed, so its absence would be a finding; unprotected, "
+                        "so a sibling hook's arrival would not be.",
+            },
+            "docs-audit.py": {
+                "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
+                        "question under `--staged`. `--json` is the machine surface "
+                        "nothing downstream may parse a render instead of, and "
+                        "`--self-test` is what checks the checker. It NEVER writes, and it "
+                        "parses with `ast` rather than importing, so it does not run "
+                        "project code. Stdlib only — the pre-commit hook runs bare python3 "
+                        "with nothing installed.",
+                # D2 is here because the file names it, not because it governs: one comment
+                # uses `C1` and `D2` as examples of a citation that could plausibly become
+                # a variable name one day. The superset rule reads a citation literally and
+                # cannot tell an illustration from a ruling. The cost of that is a listed
+                # decision nobody needed; the cost of the alternative is the rule guessing.
+                "governed_by": ["D2", "D16", "D17", "D18"],
+            },
+            "docs-audit-allow.txt": {
+                "does": "paths and identifiers the docs name before they exist, one "
+                        "`path  # reason` line each. Self-cleaning: the audit FAILS when "
+                        "an entry comes true, which forces the line out at that moment "
+                        "rather than leaving a list nobody has read since.",
+                # D15 is its one live entry: step 9's image-mirror override, named by
+                # docs/GATES.md before the mirror exists. D16 is where self-cleaning is
+                # decided. The env var is described here rather than spelled — this file
+                # is inside the auditor's code haystack, so writing the identifier out
+                # would BE the reference that retires the entry, and the allowlist row
+                # duly failed on the first draft of this line.
+                "governed_by": ["D15", "D16"],
+            },
+
+            # ---- the hooks. Every one advisory by construction except the Stop gate ----
+            "stop-gate.sh": {
+                "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
+                        "the turn end on a failure. Arms itself on the absence of the last "
+                        "NOT_IMPLEMENTED marker rather than on a toggle, so nobody has to "
+                        "remember to switch it on; PKMNSCAN_GATE=off is the visible escape "
+                        "hatch, and `--status` says armed or disarmed and why.",
+                # Thin on purpose rather than padded. The contract it runs is docs/GATES.md,
+                # which is prose and not a numbered decision, so what D16 settles about this
+                # file is what may NOT be put behind it: a docs check here would fire at the
+                # end of every turn, including turns that touched no markdown. That is the
+                # whole reason the audit is commit-time and on-demand.
+                "governed_by": ["D16"],
+            },
+            "guard-opsec.sh": {
+                "does": "the PreToolUse twin of the commit hook's opsec rules — fixture "
+                        "writes, images outside captures/, content matching the printed "
+                        "code-card layout. DISABLED in .claude/settings.json since "
+                        "2026-08-03: it blocked placeholders in prose about the format and "
+                        "cost two blocked writes in one session.",
+                # D16 is where being off is recorded and what it costs — with this quiet,
+                # `--no-verify` drops the code-card literal rule with nothing behind it,
+                # and only the permissions.deny rules still cover fixtures. Read that
+                # entry before re-enabling: the failure was over-triggering, so the fix is
+                # a narrower pattern, never a toggle.
+                "governed_by": ["D11", "D14", "D16"],
+            },
+            "decision-context.py": {
+                "does": "D17's PreToolUse hook: reads this file, lifts each governing "
+                        "decision's own bolded lead-in out of docs/DECISIONS.md, and emits "
+                        "additionalContext — never permissionDecision, which would "
+                        "auto-approve every Write in the project. Never blocks, never "
+                        "writes, exits 0 on its own bugs, silent for files no entry covers. "
+                        "Its decision_gists() is reused by status.py, never reimplemented.",
+                # D2 and D3 are the docstring's worked examples, not rulings about the hook.
+                # D3 is the decision an agent violated because nothing told it, which is why
+                # this file exists at all; D2 is the one the first draft wrongly attached to
+                # pipeline/pricing.py by merging package lists into modules. Both are cited,
+                # and the superset rule takes a citation at face value — same trade as
+                # docs-audit.py above.
+                "governed_by": ["D2", "D3", "D17"],
+            },
+            "typecheck-hook.py": {
+                "does": "PostToolUse hook: runs app/'s own tsc --noEmit, and only after a "
+                        "`.ts` or `.tsx` under app/ is written. It cannot block — "
+                        "PostToolUse fires after the write — so a failure is exit 2 with "
+                        "tsc's output on stderr and every other outcome is silence.",
+                # D13 is the stack it exists for: every harness test is Python, so nothing
+                # else in this repo gives an automatic signal on TypeScript. D17 is the
+                # temperament and the known limit it inherits — the hook payload shape has
+                # moved between releases, and an advisory that fails a turn on its own
+                # malfunction is worse than no advisory.
+                "governed_by": ["D13", "D17"],
+            },
+
+            # ---- diagnostics. Neither may grow an exit code a gate could read ----
+            "status.py": {
+                "does": "`make status`. Holds no fact about the project: the step and the "
+                        "gate come from this file, the T1 score from harness/results/, the "
+                        "branch from git, the health line from docs-audit.py's `--json`. "
+                        "Every path it reads OR RUNS is declared in one SOURCES literal so "
+                        "the audit's status-sources check can verify the reader without "
+                        "importing it, and a source it cannot read prints MISSING and exits "
+                        "non-zero rather than quietly printing less.",
+                # D17 is the map it reads, including the `step` field it resolves "do this
+                # next" through — which is why an entry without one prints a dead end. D16
+                # is the audit it shells out to for its health line, and the reason SOURCES
+                # is pure literals: a check that verifies a reader must not execute it.
+                "governed_by": ["D16", "D17"],
+                "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
+                        "said the opposite until integration: the debt was closed and this "
+                        "entry rewritten in the same run by different hands, and nothing "
+                        "mechanical could have caught the disagreement — a `note` is prose "
+                        "and the orphan rule only proves the entry exists. The auditor is "
+                        "in SOURCES for the same reason: it is a subprocess rather than a "
+                        "read, which is exactly why its path sat hardcoded and uncovered "
+                        "while every other path here was audited.",
+            },
+            "audit-history.py": {
+                "does": "replays today's auditor over every historical tree to answer one "
+                        "question: which checks have ever had something to say. Reads "
+                        "`--json`, never the human render.",
+                # D18 is why it has deliberately no exit code a hook could grow to depend
+                # on: the moment one exists, the by-construction confound in its header —
+                # silent prevention and uselessness are indistinguishable after the hook
+                # landed — starts deciding commits. D16 is the auditor it replays and the
+                # retirement argument its table feeds.
+                "governed_by": ["D16", "D18"],
+            },
+
+            # ---- the render loop docs/DESIGN.md calls mandatory ----
+            "screenshot.sh": {
+                "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
+                        "one per line of views.txt under --manifest. Returns non-zero "
+                        "unless a non-empty PNG lands on disk — an exit 0 from the CLI is "
+                        "not proof that anything was written.",
+                # D5 is why the loop exists: the agent cannot see its own output, and the
+                # screens that most need looking at are the second persona's. D13 is what
+                # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
+                # keeps it off `make check`: it writes, and nothing that writes may run on
+                # the path that decides whether work is done.
+                "governed_by": ["D5", "D13", "D18"],
+            },
+            "views.txt": {
+                "does": "the manifest `make screenshot` walks: one `<name> <url>` line per "
+                        "view worth looking at. Tracked, unlike the renders — it used to "
+                        "live under captures/, which .gitignore excludes wholesale, so the "
+                        "list could not be committed and a fresh clone started with none.",
+                # D5 is what the list is for: five owner screens and the Fulfiller's, which
+                # is the one render where the absence of the nav strip is the point. D13 is
+                # why the hash route in each URL is load-bearing rather than decoration —
+                # drop it and a render is named after one view and shows another.
+                "governed_by": ["D5", "D13"],
+            },
+        },
     },
     {
         "path": "fixtures/",
@@ -267,11 +464,20 @@ COMPONENTS = [
                 # of step 7a's undo. The count is written out rather than left as "the routes"
                 # because it is the one number here a reader checks against the handlers, and
                 # it was wrong for exactly one commit at six.
-                "does": "the nine routes, the sidecar identify reads back, the photo store",
+                "does": "the nine routes, the sidecar identify reads back, the photo store, "
+                        "and SERVER_EVENTS — `corrected`, `removed`, `answered`, appended "
+                        "to history.jsonl through _history inside the route's own "
+                        "Store.write(), so the line and the change it describes commit "
+                        "together or neither does. None of the three is a member of "
+                        "master.STATES, which is what keeps _state_before_sale from "
+                        "restoring a reversed sale to one of them.",
                 # D5 is here because the file cites it: the concurrency it is tested at is two
                 # and four simultaneous captures, and two is D5's two people on two devices.
                 # D4 and D7 arrived with 7b — the review answer is D4's one-tap choice, and
                 # mark-sold is the per-position half of D7's aggregate-by-SKU rule.
+                # D10 earned a second job with the history lines: index reuse after an undo is
+                # what decides that a removal must be logged at all, since without the line
+                # the log reads `captured 3/2` twice over two physical cards.
                 "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13"],
                 "tested_by": ["T7"],
             },

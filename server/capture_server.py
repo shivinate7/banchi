@@ -62,7 +62,7 @@ with their own cases in the same test, which is the schedule `docs/specs/capture
 section 3 set for the undo route and the one thing it got right about scheduling.
 
 WHAT T7 STILL DOES NOT REACH, from `docs/DEBTS.md`, so a green harness is read for what it
-is. Three named cases rather than a package nobody looks at:
+is. Two named cases rather than a package nobody looks at:
 
   twenty-way contention   T7 runs two and four simultaneous captures, matching D5's two
                           devices. The twenty-way case is what found `request_queue_size`
@@ -71,12 +71,15 @@ is. Three named cases rather than a package nobody looks at:
   the bare-interpreter    `make server` runs this on system `python3` with no venv. T7
   start                   imports the module under whichever interpreter runs the harness,
                           so it cannot see a missing dependency that the harness supplies.
-  the PUT history line    a correction through `do_put_card` appends nothing to
-                          `history.jsonl`. T7 asserts the correction reaches the sidecar,
-                          which is the part that costs money when it fails; the missing
-                          history line is still missing. `do_review_answer` joins it below,
-                          for the same reason and with the same shrug: the store logs state
-                          transitions, and writing a SKU onto a card is not one.
+
+THE THIRD CASE WAS THE MISSING HISTORY LINE, AND IT IS WRITTEN NOW (2026-08-13). Three
+routes here write without moving a card between states — the PUT correction, the undo, and
+the review answer — and each appends its own event, argued at `SERVER_EVENTS` below and
+again at each route. The paragraph this replaces recorded the omission with a shrug: the
+store logs state transitions and none of these is one. That much is true and was never the
+question, since `store/__init__.py` calls this file the audit trail and says the history IS
+inventory truth over time — which is a claim about the physical positions in a box, not
+about the state enum. `docs/DEBTS.md` now records what the three lines still do not cover.
 """
 
 from __future__ import annotations
@@ -156,6 +159,30 @@ SOLD_FIELDS = ("undo",)
 # out `pushed, staged, live, sold` and silently permits whatever comes next, and the failure
 # that produces is an undo that deletes a card TCGplayer already knows about.
 UNDOABLE_STATES = (master.CAPTURED, master.IDENTIFIED)
+
+# What this server appends to `history.jsonl` for a write that moves no card between states.
+# `store/master.py:_log` is reached from `record_capture` and `set_state` alone, and every
+# event either of them has ever written is a member of `master.STATES` — so the three routes
+# named below wrote nothing at all until 2026-08-13, and each said so in a comment citing
+# `docs/DEBTS.md`. The argument for each line is at its own route; what is common to all
+# three is that they change a claim the pipeline will act on and spend money against, and
+# that the file they change is overwritten in place.
+#
+# NONE OF THESE IS A STATE, AND WHAT ENFORCES THAT IS THEIR ABSENCE FROM `master.STATES`.
+# `_state_before_sale` — the only reader of `history.jsonl` in this repo — scans backwards
+# for the last event naming a state and filters against that tuple, so a name added here is
+# inert to it by construction. A name that collided would restore a reversed sale to
+# `corrected`. T7 asserts the two sets are disjoint rather than leaving that to whoever adds
+# the fourth event.
+#
+#   corrected  an operator changed a recorded claim: the set hint or the finish toggle (D3).
+#   removed    undo deleted a record and released its position for the next capture (D10).
+#   answered   a human chose one catalog row for a card the pipeline refused to guess (D4).
+CORRECTED = "corrected"
+REMOVED = "removed"
+ANSWERED = "answered"
+
+SERVER_EVENTS = (CORRECTED, REMOVED, ANSWERED)
 
 
 class BadRequest(ValueError):
@@ -326,6 +353,39 @@ def _optional_flag(payload: dict, key: str, code: str) -> bool:
             f"{key} was {raw!r}; send the JSON literal true or false, not a string.",
         )
     return raw
+
+
+# ------------------------------------------------------------------------------- history
+
+
+def _history(inventory: master.Inventory, event: str, key: str, **extra) -> None:
+    """Append one event to `history.jsonl`. Call it inside the caller's `Store.write()`.
+
+    THE APPEND GOES ONTO `Inventory.events`, WHICH IS WHY THE CALL SITE MATTERS. `Store.write()`
+    drains that list after it has replaced the four JSON files, so the line and the change it
+    describes commit together or neither does — and an exception anywhere in the block
+    discards both, which `check_store` in T7 already asserts for a capture. Writing to
+    `history.jsonl` from here directly would put a line in an append-only file for a change
+    that a later raise in the same block throws away, and a log that disagrees with the store
+    is worse than no log: it is believed.
+
+    IT REBUILDS `Inventory._log`'s RECORD RATHER THAN CALLING IT, and both alternatives were
+    worse. Reaching across the package for a private method makes a rename break a write path
+    at runtime with nothing to catch it first. Giving `store/master.py` a public wrapper puts
+    these three names beside the state vocabulary, which is the exact confusion
+    `docs/DEBTS.md` was guarding against when it called an `undone` event a D10 question
+    rather than a logging one — the store goes on logging states only, and the route that
+    knows why a write happened names it. What that costs is a second copy of a three-key
+    record, so T7 asserts the shape against a capture event the store wrote itself.
+
+    NONE-VALUED EXTRAS ARE DROPPED, which is `_log`'s own convention and not a detail: an
+    absent key reads as a fact nobody recorded, and `null` reads as a fact recorded as
+    nothing. A before-value that IS None therefore travels nested inside a non-None mapping —
+    see `do_put_card`, where the difference decides whether a cleared set hint is legible.
+    """
+    record = {"at": master.now(), "event": event, "position": key}
+    record.update({key_: value for key_, value in extra.items() if value is not None})
+    inventory.events.append(record)
 
 
 # -------------------------------------------------------------------------------- routes
@@ -588,6 +648,17 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     The sidecar is skipped when the photo is absent — a card recorded by `emit` rather than
     captured has nothing for the reader to find, and a lone `.json` under the capture tree
     would serve no one.
+
+    IT APPENDS A `corrected` EVENT, AND THE REASON IS THE PARAGRAPH ABOVE. This route
+    overwrites the record in place and then overwrites the sidecar with the same values, so
+    the moment it returns there is nowhere left holding the claim the operator just replaced.
+    That is fine for a typo and expensive for the case the route exists for: D3 rung 1 makes
+    the toggle a *claim* the ladder trusts ahead of the catalog, so the value corrected here
+    is what decides which condition row the card matches and therefore what it is priced and
+    listed as. A card sold as the wrong finish is answerable a month later only if something
+    kept what it used to say. `docs/DEBTS.md` recorded the omission as "the store logs state
+    transitions and a correction is not one", which is true of the store and not an argument
+    about whether this belongs in the audit trail.
     """
     key = master.position_key(box, index)
     _reject_unknown(payload, PUT_FIELDS)
@@ -603,9 +674,30 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
                 "card_not_found",
                 f"No card at box {box}, card {index}. This route corrects; it never creates.",
             )
-        if "set_hint" in payload:
+        # THE PRIOR VALUE IS READ BEFORE THE ASSIGNMENT, which is the whole of what the log
+        # line is for, and it is why these are not two bare assignments any more.
+        #
+        # ONLY A VALUE THAT ACTUALLY MOVED IS RECORDED. A PUT restating what the card already
+        # says changed no claim — the app re-saving a screen is the shape that produces one —
+        # and logging it would fill the file with lines that mark nothing, in among the lines
+        # that mark the change somebody is looking for. The question this event answers is
+        # *when did the claim change*, so a no-op has no answer to contribute. The cost is
+        # that a PUT which only repairs a sidecar that had drifted from the record leaves no
+        # trace; `docs/DEBTS.md` records that as uncovered.
+        #
+        # KEYED BY THE RECORD'S FIELD NAMES, `metadata_finish` and not the wire's `variant`.
+        # Every other key this file writes into the log — `position`, `sku`, `run` — is a
+        # `Card` field, and a history line is read while holding `inventory.json` open. The
+        # wire name belongs to the request body and the sidecar, which are both inputs.
+        changed = {}
+        if "set_hint" in payload and card.set_hint != set_hint:
+            changed["set_hint"] = {"from": card.set_hint, "to": set_hint}
             card.set_hint = set_hint
-        if "variant" in payload:
+        if "variant" in payload and card.metadata_finish != metadata_finish:
+            changed["metadata_finish"] = {
+                "from": card.metadata_finish,
+                "to": metadata_finish,
+            }
             card.metadata_finish = metadata_finish
 
         photo = photo_path(card.box, card.index)
@@ -616,12 +708,18 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
                 sidecar_payload(card.box, card.index, card.set_hint, card.metadata_finish),
             )
 
+        # NESTED UNDER ONE `changed` MAPPING, and not flattened into `field`/`from`/`to`.
+        # `_history` drops a None extra, so a flat `from` would VANISH exactly when it is
+        # doing the most work — a hint that was cleared back to no claim, or a finish set on
+        # a card that had never carried one, would leave a line indistinguishable from one
+        # where that field was never touched. Inside a mapping the filter cannot see it. The
+        # shape also carries both fields from one PUT without a second event.
+        if changed:
+            _history(snapshot.inventory, CORRECTED, key, changed=changed)
+
         body = _card_summary(card, created=False)
         body["sidecar"] = str(sidecar_path(photo)) if wrote_sidecar else None
 
-    # Known gap, recorded in docs/DEBTS.md rather than repaired here: a correction made
-    # through this route appends nothing to history.jsonl, because the store logs state
-    # transitions and this is not one. Adding a log call means editing an uncovered module.
     return body
 
 
@@ -697,6 +795,29 @@ def do_delete_card(box: int, index: int) -> dict:
     sidecars beside them, so a stranded sidecar costs nothing while a stranded PHOTO is a
     paid Batch request for a card that no longer exists. Deleting the expensive one first
     means every partial failure left after it is a cheap one.
+
+    IT APPENDS A `removed` EVENT, WHICH `docs/DEBTS.md` SPENT A PARAGRAPH ARGUING AGAINST,
+    and the argument does not survive the index release two paragraphs above. What it said:
+    naming a transition for a record that no longer exists reads as the tombstone
+    `docs/specs/capture-app.md` section 3 forbids. A tombstone is a record left in
+    `inventory.json` that every consumer downstream has to learn to skip, and there is still
+    none — the card map has no key for this position, and nothing in the response hints at a
+    third condition between captured and absent. `history.jsonl` is a different kind of file:
+    append-only, and already holding the `captured` event for a record that is gone. The
+    question was never whether it may describe a deleted card. It is whether it may describe
+    one *once* and then stop.
+
+    THE DECIDING FACT IS THAT THE POSITION IS REUSED. D10 settles undo as a delete precisely
+    so the released index goes to the next capture, so without this line the log reads
+    `captured 3/2`, `captured 3/2`, with nothing between them — one key over two physical
+    cards, indistinguishable from a re-record of one. D10's first paragraph is what makes a
+    printed position label worth trusting a year later; this event is that same guarantee for
+    the only file that holds a box over time, and it is the boundary between the two cards.
+
+    THE NAME IS `removed` AND NOT `undone`. `undone` names the button, which is a fact about
+    a screen; this names what happened to the record. It is also deliberately outside
+    `master.STATES` — see `SERVER_EVENTS` — so nothing can read it as the third state D10
+    refuses.
     """
     key = master.position_key(box, index)
 
@@ -786,11 +907,30 @@ def do_delete_card(box: int, index: int) -> dict:
         sidecar_deleted = _unlink(sidecar)
         released = inventory.next_index(box)
 
-    # Known gap, the same one `do_put_card` carries: nothing is appended to history.jsonl.
-    # The store logs state transitions and a deletion is not one, and there is no `undone`
-    # event to log without adding a name to the enum in an uncovered module — which is the
-    # tombstone this route exists not to create. What history keeps is the `captured` event,
-    # and that stays true: the capture did happen. It is the record that is gone.
+        # LOGGED LAST, after every deletion this route performs, so the line describes work
+        # that actually happened rather than work that was about to be attempted. It commits
+        # with them or not at all — `_history` has why that is a property of where it appends
+        # and not of this ordering.
+        #
+        # WHAT IT CARRIES IS WHAT COST SOMETHING. The state at removal says whether an
+        # identification fee was spent on this photograph; `sku` and `run` say what the
+        # pipeline had already concluded about it, and both drop out for a card that was
+        # never identified. `cache_deleted` is the paid answer going in the bin, which is the
+        # one destruction here that money can measure — the two queue booleans in the
+        # response are about a question rather than about the card, and a discarded question
+        # leaves nothing to reconcile against later. The photo path is not carried: it is
+        # derived from the position, and naming a file that this route has just deleted only
+        # invites a reader to go looking for it.
+        _history(
+            inventory,
+            REMOVED,
+            key,
+            state=card.state,
+            sku=card.sku,
+            run=card.run,
+            cache_deleted=cache_deleted,
+        )
+
     return {
         "deleted": key,
         "box": int(box),
@@ -930,13 +1070,27 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     one no screen ever showed for the row being answered, and afterwards it is
     indistinguishable from one the pipeline proposed. See the code for which entry governs.
 
-    WHAT IT DELIBERATELY DOES NOT DO, three things, because each is a plausible-looking
+    IT APPENDS AN `answered` EVENT, and the reason is that the card record is the only place
+    the human's choice lands — and it is not this route's to keep. `Inventory.set_state`
+    takes a `sku` and writes it, and `cli/cmd_emit.py` moves a matched position to `pushed`
+    with the row its own join produced, so a later run can overwrite what was chosen here
+    while `review.json` goes on saying `cleared_by_human` beside it. The queue entry records
+    that a person answered; without this line, nothing records WHAT he answered, and the
+    two-field pair the whole route is built to validate is unreconstructible an hour after
+    the tap. The refusals above enforce the hard rule at the moment of the choice and never
+    again — afterwards a laundered SKU and an offered one are both just catalog rows on a
+    card. `docs/DEBTS.md` recorded the omission as "writing a SKU onto a card is not a state
+    transition", which is true and is a fact about the store's vocabulary rather than an
+    argument about the audit trail.
+
+    WHAT IT DELIBERATELY DOES NOT DO, two things, because each is a plausible-looking
     addition that `docs/DESIGN.md` does not ask for:
 
       it does not change state   The card stays `identified`. `emit` owns the move to
                                  `pushed`, and a state written here would be a second owner
                                  of a transition (`app/src/types.ts`: the app reads state and
-                                 never sets it).
+                                 never sets it). The event name above is outside
+                                 `master.STATES` for the same reason.
       it does not touch the      `store/cache.py` says the review screen writes
       identification cache       `cleared_by_human` there too, and this route does not.
                                  Marking a model answer human-cleared claims a person vouched
@@ -948,9 +1102,6 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
                                  whether the chosen row should replace the model's answer in
                                  `identifications.json` is a decision to make with that in
                                  hand rather than now.
-      it appends no history      Same gap `do_put_card` and `do_delete_card` carry, recorded
-      line                       in `docs/DEBTS.md`: the store logs state transitions and
-                                 writing a SKU onto a card is not one.
 
     ASSUMPTION, AND THE ONE WORTH READING TWICE: nothing downstream consumes this answer
     yet. `cli/cmd_emit.py` re-derives its join from the run's identifications and writes
@@ -1094,6 +1245,27 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             entry.cleared_by_human = True
             cleared[queue.name] = True
 
+        # THE GOVERNING QUEUE IS NAMED, not the pair that was cleared. Which files had this
+        # position in them is bookkeeping about the question; which file's rows the answer
+        # was allowed to come from is the thing the laundering refusal above turns on, and it
+        # is what a reader needs to check a choice against `review.json` afterwards.
+        #
+        # `reason` RIDES ALONG BECAUSE IT IS FREE AND BECAUSE IT IS THE SAME STRING
+        # EVERYWHERE. `docs/DESIGN.md` requires the machine reason code on screen beneath its
+        # human label precisely so it stays greppable from the screen to the run report to
+        # `review.json`; this makes the history the fourth place it reads identically, and
+        # `no_market_data` answered as a holofoil is a different kind of session from
+        # `metadata_detection_disagreement` answered the same way.
+        _history(
+            snapshot.inventory,
+            ANSWERED,
+            key,
+            sku=sku,
+            condition=offered_condition,
+            queue=offering.name,
+            reason=governing.reason,
+        )
+
         body = {
             "answered": key,
             "box": int(box),
@@ -1129,16 +1301,17 @@ def _state_before_sale(events: Sequence[dict], key: str) -> Optional[str]:
     IT DOES NOT NEED TO BE. `history.jsonl` is append-only and already records every
     transition — `set_state` and `record_capture` both log one — so the state a card was in
     before it sold is a fact the store has held all along. Reading it back needs no new event
-    name either, which matters: `docs/DEBTS.md` records that adding an `undone` event to the
-    store's vocabulary is a D10 question rather than a logging one, and this route asks
-    nothing of it. A sale and its reversal read as `live, sold, live`, which is what
-    happened.
+    name either, and the reversal still adds none: a sale and its reversal read as
+    `live, sold, live`, which is what happened.
 
     THE RULE IS THE LAST EVENT FOR THIS POSITION NAMING A STATE OTHER THAN `sold`. Scanning
     backwards rather than taking the second-to-last entry, so a position that somehow carries
     two adjacent `sold` events still restores to the state underneath them instead of to
-    `sold`. Filtered against `master.STATES` so a future non-state event in this log cannot
-    be handed to `set_state` as one.
+    `sold`. Filtered against `master.STATES` so a non-state event in this log cannot be
+    handed to `set_state` as one — which stopped being hypothetical on 2026-08-13, when the
+    three routes above began appending `SERVER_EVENTS`. A card corrected between being listed
+    and being sold has a `corrected` line sitting directly under its `sold` line, and this
+    filter is the whole of why the reversal skips past it to `live`. T7 asserts that path.
 
     NONE IS A REFUSAL AND NOT A DEFAULT. Defaulting to `live` is the obvious guess and is
     exactly what would make the reversal inexact for a card sold out of `pushed` or `staged`
