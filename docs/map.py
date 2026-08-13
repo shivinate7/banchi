@@ -46,15 +46,21 @@ BUILD_ORDER = [
     {"step": 4, "title": "Batch script v2: Batch API, variant ladder, catalog join", "status": "done",
      "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card — that is Gate B."},
     {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "done",
-     "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. No harness test reaches it — that gap is recorded in docs/DEBTS.md, not closed."},
+     "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. Shipped with no harness "
+             "coverage; T7 closed that 2026-08-13 — every route, every named refusal, and the "
+             "sidecar seam. What it still does not reach is in docs/DEBTS.md."},
     {"step": 6, "title": "Design tokens locked, one component built against them", "status": "done",
      "note": "tokens locked 2026-08-12 by interview; the pull-confirm built against them 2026-08-12 "
              "at app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by "
              "`make design-check`. Building it caught two places where docs/design-refs/locked.html "
              "disagrees with docs/DESIGN.md — see that directory's README."},
     {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "next",
-     "note": "the toolchain landed with step 6: app/ is a Vite + React + TS project with one "
-             "component, a gallery route and a Playwright spec. Step 7 adds screens to it."},
+     "note": "SPLIT AT GATE B. 7a is the Gate B path — shell, capture screen, undo, pull "
+             "preview — specified 2026-08-13 at docs/specs/capture-app.md, doc amendments "
+             "already applied, nothing built. 7b is the review queue, Fulfillment view, "
+             "inventory views and mark-sold, built after the gate against a real run. The "
+             "toolchain landed with step 6: app/ is a Vite + React + TS project with one "
+             "component, a gallery route and a Playwright spec."},
     {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "blocked", "blocked_by": "step 7"},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
     {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},

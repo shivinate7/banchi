@@ -95,6 +95,26 @@ answer and advances. Undo covers the mistake; a dialog only makes the ninety-nin
 answers cost two taps each. Genuinely destructive actions may still gate — but per the
 table below, none of those are reachable from the Fulfillment view at all.
 
+**Capture undo is the stated exception, and it gets no dialog either** (settled 2026-08-13).
+D10 makes undo a hard delete of the record, the sidecar and the photo, with no backup — so
+it is simultaneously the remedy this rule relies on and the one irreversible action in the
+app. Those two facts point opposite ways and the ruling is: one tap, no dialog.
+
+The reasoning matters more than the ruling, because the reasoning is what stops a later
+session from "fixing" it. **The deleted photo is of a card that is still physically in your
+hand**, so the remedy for a wrong undo is to photograph it again. That bounds the loss in a
+way a wrong pull or a wrong sale is not bounded, and the "genuinely destructive actions may
+still gate" clause above is about those. A dialog on the screen the owner spends the most
+hours in would also make the common case — one blurry photo, caught instantly — cost two
+actions, which is the thing this whole rule exists to prevent.
+
+Rejected and worth naming: confirming only on a *second consecutive* undo, which protects
+against a held key walking backwards through good cards at the cost of one more state to
+explain. If that ever happens in practice, it is the fix to reach for first.
+
+This says nothing about the Fulfiller's undo on mark-sold, which is a different control
+with its own row in the table below.
+
 **Deliberately not banned, so that no later session reinstates these as rules from an
 earlier draft of this file:** card-grid layouts, drop shadows and gradients were each
 offered as blanket negative constraints and each declined. Shadows do not appear today
@@ -108,7 +128,14 @@ built, looked at, and rejected. Do not add one, and do not write a rule about th
 **Everything in this section describes a screen that does not exist.** A Vite app exists as
 of step 6 and renders exactly one thing — the pull-confirm gallery — so the absence below is
 now specific rather than total: no queue screen, no candidate rows, no photo, no sort applied
-to anything on screen. Step 7 has not started. Read every statement below
+to anything on screen.
+
+**This warning governs this section and no other.** As of 2026-08-13 the capture screen, undo
+and the pull preview have an execution spec at `docs/specs/capture-app.md` and are build-order
+step 7a; the review queue is explicitly 7b and is built after Gate B, against a real run
+rather than against guesses about what one produces. So the queue is the part of this
+document with the furthest to fall, and it is the part still written entirely forward.
+Read every statement below
 as *shall*, never as *does* — it is a specification written before the thing it specifies,
 which is the same reason `docs/GATES.md` writes its thresholds as numbers before there is
 anything to measure. When step 7 lands, this section becomes checkable and someone should

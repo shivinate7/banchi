@@ -190,6 +190,17 @@ not a model finding, and the fix is a second capture angle rather than a prompt 
 
 ### Gate C — feeder integration
 
+**The feeder exists and runs today** (confirmed 2026-08-13). Cards are fed onto a tray,
+landing in the same spot each time. This gate is therefore tuning against a rhythm that
+already exists, not building one — which is a smaller job than this section was written to
+describe.
+
+It does not move auto-capture earlier. Gate B stays manual, on the original reasoning:
+auto-capture was scoped as an incremental addition after step 7 because of its own
+complexity, and a gate that tests the pipeline and an untuned trigger at once cannot say
+which one failed. `docs/specs/capture-app.md` builds the trigger as one replaceable piece
+so that this gate is an addition rather than a rewrite.
+
 The feeder pauses per card, so the favored method is v1's motion state machine
 (motion → stabilize → capture → cooldown), tuned once against a consistent mechanical
 rhythm. Video frame extraction (ffmpeg) is the fallback if tuning misbehaves. Confirm with
@@ -224,10 +235,24 @@ a 50-card run, then scale to a full box.
    Both are recorded in `docs/design-refs/README.md`; neither was visible in prose.
 7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
-   photo, Fulfillment view, CSV import with error reporting. The toolchain arrived with
+   photo, Fulfillment view. The toolchain arrived with
    step 6 — `app/` is a Vite + React + TypeScript project already, so this step adds
    screens rather than a build system. Extend `app/tests/pull-confirm.spec.ts` to the rest
    of `docs/DESIGN.md`'s Fulfillment table as the views that carry those rows land.
+
+   **Split at Gate B.** 7a is the Gate B path — the shell, the capture screen, undo and the
+   pull preview — specified in `docs/specs/capture-app.md`. 7b is the review queue, the
+   Fulfillment view, the inventory views and mark-sold, built after the gate against a real
+   run rather than against guesses about what one produces.
+
+   **"CSV import with error reporting" was struck from this list on 2026-08-13.** It was a
+   v1 feature that batch script v2 absorbed whole: `emit` writes `pushed`, `reconcile` moves
+   `pushed` to `staged` off the Export From Staged, and `join` moves `staged` to `live` off
+   the Filtered Export. Every state transition is owned by a command, and the app reads
+   state rather than setting it — so there was nothing left for the feature to do. Recorded
+   rather than deleted silently, because the phrase would otherwise be reinstated from an
+   older copy of this list. The bidirectional-reporting guarantee it once carried (v1 bug 5)
+   is T3's, and T3 is unaffected.
 8. Gate B smoke test.
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a

@@ -34,8 +34,8 @@ by their component name and points at directories that exist, not at files that 
 
 | order | item | size | waits for |
 |---|---|---|---|
-| 0 | doc-amendments | 5 edits, 4 files | — |
-| 1 | undo-route | ~60 lines in one built module | 0 |
+| 0 | ~~doc-amendments~~ | **done 2026-08-13, before this spec was committed** | — |
+| 1 | undo-route | ~60 lines in one built module | — |
 | 2 | server-client | ~120 lines, new | — |
 | 3 | capture-screen | ~350 lines, the bulk of it | 1, 2 |
 | 4 | trigger-seam | ~60 lines, folded into 3 | 3 |
@@ -47,9 +47,13 @@ Item 0 first for the reason `docs/specs/capture-server.md` puts its false-claim 
 first: a doc that contradicts what you are about to build will be read as authority by the
 session after this one.
 
-## 2. doc-amendments
+## 2. doc-amendments — APPLIED 2026-08-13
 
-Five edits, all of them corrections that this interview produced.
+Five edits, all of them corrections this interview produced. **They were applied before this
+spec was committed, rather than left as the execution session's first task**, so that a
+session opening these documents cold finds them agreeing with each other and with this file.
+The subsections below are kept as the record of what changed and why — read them as history,
+not as work outstanding.
 
 ### 2.1 — Step 7 no longer includes a CSV import
 
@@ -288,14 +292,30 @@ Tethered capture — talking to the Sony over USB and firing its shutter from co
 raised as possibly the smarter option. It is not, and the reason is in this repo rather
 than in an opinion about cameras.
 
-**`identify/images.py` downscales every photo to 1568px on the longest edge before it
-reaches the API, because anything larger is billed and then discarded.** A 1080p video
-frame is already 1920px on its long edge; a 4K frame is 3840px. A full-resolution still
-from either body is around 5500px, and roughly nine tenths of it is thrown away by the next
-step in the pipeline. **The single thing tethering buys is the single thing this pipeline
-deliberately discards.**
+`identify/images.py` downscales every photo to 1568px on the longest edge, because anything
+larger is billed and then discarded. That is true, and on its own it is **not** a sufficient
+argument — the first draft of this section made it and was wrong. Recorded here with its
+correction, because the corrected version is the one that changes how the rig is set up:
 
-Against that, tethering costs:
+**Resolution does matter, through the crop rather than through the whole card.**
+`geometry/crop.py` cuts the collector number and upscales it to at least 600px, on the
+stated grounds that a 40px number is a coin flip and enlarging it is the point. It can only
+enlarge pixels that were really captured. And T1's recorded misses are exactly numerator
+misreads — `051/197` for `031/197`, `271/167` for `211/167` — name right, digits wrong.
+
+So the number of real pixels landing on the number corner is a live accuracy variable, and
+the 1568px cap says nothing about it. Roughly, on a 63×88mm card:
+
+| capture | card long edge | number corner |
+|---|---|---|
+| framed to the 1568px target | 1568px | ~100px |
+| 4K, card filling the frame | ~3400px | ~230px |
+| full-resolution still | ~5500px | ~370px |
+
+**Tethering is still the wrong trade, but for a narrower reason than "resolution is
+discarded":** it buys about 1.6× the linear detail of a tightly-framed 4K frame, and most of
+that gap closes for free by framing the card to fill the field. Against that, tethering
+costs:
 
 - **Latency the feeder will not forgive.** A PTP shutter-and-download over USB is commonly
   one to three seconds per frame. Grabbing a frame from a video stream is one frame. Across
@@ -315,6 +335,10 @@ contract can be benchmarks, never components.
 
 **What the Cam Link path does require, and what gets it wrong if unstated:**
 
+- **Frame the card to fill the field.** The single largest lever on identification accuracy
+  available at capture time, per the table above, and it costs nothing but rig setup.
+- **Glare on the number corner is unrecoverable at any resolution.** Gate B's raking-light
+  shot is currently aimed at foil detection; check the number corner in the same pass.
 - **Request the resolution explicitly.** A browser video track defaults far below what the
   Cam Link can deliver — a 640x480 default would put the frame *under* the 1568px target and
   make every photo worse than the rig can produce. Ask for the native mode.
@@ -376,6 +400,29 @@ The rest of Gate B is unchanged in `docs/GATES.md`: twenty cards end to end, plu
 ten photos of known-variant cards for finish detection, including one raking-light shot. If
 the diffused rig suppresses the foil signal, that is a rig finding and the fix is a second
 capture angle, not a prompt change.
+
+### 10.1 — Open, and the owner's call: run more than twenty
+
+**Not decided. Recorded here so the question is asked on the day rather than discovered
+afterwards.** The twenty-card figure was written when the feeder was hypothetical and every
+card meant a hand placement. The machine now runs, so the marginal cost of pushing two
+hundred cards through after the gate criteria are met is a few minutes and a few dollars of
+Haiku.
+
+What the extra cards buy is the only thing this project currently has no way to obtain:
+
+- **A real identification accuracy number.** T1 is measured against flat catalog renders
+  with no foil, no glare and no rig lighting. It has never seen a photograph. Twenty cards
+  is an anecdote; two hundred is a rate.
+- **A real `set_ambiguous` count**, which is what decides whether the set hint earns its
+  control — a question that flipped twice during this interview because neither side had a
+  number.
+- **Real review-queue volume and shape**, which is what 7b's hardest screen should be
+  designed against.
+
+**The gate criteria should not move.** Pass or fail stays at twenty cards end to end; this
+is measurement taken alongside it, not a harder bar. Keeping those separate is the point —
+a gate that grows whenever someone wants more data stops being a gate.
 
 ## 11. What this plan does not do
 

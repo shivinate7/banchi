@@ -77,6 +77,8 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
+- `docs/specs/capture-app.md` — step 7a: the capture screen, undo, the pull preview, and the
+  one new server route. Interviewed and settled; NOT built. Its doc amendments are applied.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

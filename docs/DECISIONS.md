@@ -189,6 +189,31 @@ state is server-side JSON on the Mac, read and written through the capture serve
 owner's and Fulfiller's devices share one truth. Photos on Mac disk, box-keyed by capture
 position — see D6. Build environment is Claude Code on the Mac; code never lives in chat.
 
+**The rig's camera path, recorded 2026-08-13 because nothing in this repo ever said it.**
+A Sony RX100 VII or A7C, over HDMI into an Elgato Cam Link 4K.
+
+The consequence is why this belongs in a decision rather than in a spec's prose: **the Cam
+Link presents the camera to the browser as a plain UVC webcam.** It is not distinguishable
+by kind from a laptop's built-in camera — only by its device label and id. That is exactly
+why `facingMode: "environment"` was v1 bug 3, and it is why the device picker is a
+requirement rather than a nicety: there is no camera-facing hint to select on, and the
+wrong guess photographs a whole box through the wrong lens.
+
+**The camera is not driven directly, and that was asked rather than assumed.** Tethered
+capture over USB — Sony's Camera Remote SDK, or `gphoto2` in PC Remote mode — buys full
+sensor resolution at a cost of roughly one to three seconds per frame, a platform-specific
+native dependency, and a refocus per shot. Sony's Imaging Edge Desktop is ruled out before
+any of that by `CLAUDE.md`: no manual third-party UI step inside the autonomous pipeline.
+
+**Frame the card tight in the 4K field; that matters more than the sensor.** The reasoning
+is in `docs/specs/capture-app.md` and it corrects a simpler argument that was nearly
+recorded here: resolution is *not* irrelevant just because `identify/images.py` downscales
+the whole card to 1568px. The crop-retry path in `geometry/crop.py` upscales the collector
+number to at least 600px, and it can only enlarge pixels that were really captured — which
+is the failure mode T1's recorded misses actually have. Tight framing at 4K recovers most of
+what tethering would have bought, for free, and glare on the number corner is unrecoverable
+at any resolution.
+
 ## D14 — Two tracks, one rig
 
 Shared: physical rig, capture server, capture app shell (mode toggle), photo storage,
@@ -494,6 +519,24 @@ needs a decision entry of its own.
   with it"; T1 can A/B it directly (`PKMNSCAN_T1_SET_HINT=1`). Watch both directions: a
   hint that raises accuracy but also raises *confidence on wrong answers* is a bad trade,
   because it converts review-queue taps into silently mislisted cards.
+- **Send the number-corner crop on every card, not only on a retry.** `geometry/crop.py`
+  exists, is tested by T6, and upscales the collector number to at least 600px — but the
+  batch script only reaches for it when a first read comes back weak. T1's recorded misses
+  are not weak reads. `051/197` for `031/197` and `271/167` for `211/167` are confident
+  answers with the name right and the digits wrong, and a confidence threshold never fires
+  on them.
+
+  So: attach the crop alongside the downscaled card every time, and let the model read the
+  number from pixels that were not thrown away. T1 measures it directly, the same A/B shape
+  as the set-hint item above. Cost is roughly double the image tokens on a job D2 prices at
+  $5–15 per 10k cards, so the downside is a few dollars and the upside is the number the
+  gate rests on.
+
+  Honest limit, and why this is Someday rather than a plan: it might do nothing. The
+  crop-retry path was built on the assumption that enlarging the number helps, and that
+  assumption has never been measured on its own — which is exactly what makes it worth an
+  experiment rather than an edit.
+
 - **Cross-check the collector number against the local catalog** (needs D15). Not a
   replacement for the model's read — a second, independent derivation of the same fact, the
   same shape as D3 rung 3, where detected `finish` cross-checks capture metadata even when

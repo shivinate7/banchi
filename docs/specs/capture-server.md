@@ -191,6 +191,13 @@ Three edits:
           "docs/DEBTS.md records why that is not being fixed before step 5.",
   ```
 
+  > **Status, 2026-08-13:** that note was written and has since been replaced. T7 reaches
+  > `store/` and `server/`, so the sentence it instructed is no longer true and the map
+  > says something else now. The instruction is left as the record of what this session
+  > did; read `docs/map.py` for what the entry currently says. The convention the bullet
+  > above establishes — omit `tested_by` rather than invent a key for "uncovered" — still
+  > holds, and `store/queues.py` and `store/cache.py` still omit it.
+
 - **`docs/map.py:75`, the status legend** — currently `built    code exists and the
   harness covers it`. That is the sentence the false claim generalises from, and it is
   wrong for `cli/` too. Replace with: `built    code exists. tested_by names the harness
