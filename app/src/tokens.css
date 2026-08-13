@@ -2,11 +2,39 @@
  *
  * SOURCE OF TRUTH IS docs/DESIGN.md, NOT THIS FILE. Every value below was chosen by the
  * owner from rendered alternatives; changing one here without changing it there makes the
- * app disagree with the document that argues for it. Nothing audits that agreement today
- * — see docs/DEBTS.md, which records the gap rather than pretending it is covered.
+ * app disagree with the document that argues for it.
+ *
+ * THAT AGREEMENT IS AUDITED, as of 2026-08-13: the `design tokens` row of
+ * scripts/docs-audit.py parses the fenced block under `## Tokens` in docs/DESIGN.md — every
+ * colour by name, the three typefaces, every step of the spacing scale, the radius — and the
+ * custom properties declared on `:root` below, and compares them BOTH WAYS. A value that
+ * differs, a locked token this file never declares, and a token declared here that the block
+ * never locked are each a blocking finding naming both files and both values. So a hex edited
+ * here alone stops the commit rather than shipping a silent disagreement, which is what this
+ * comment used to have to warn about.
+ *
+ * WHAT THAT ROW DOES NOT SEE, so a green audit is read for what it is:
+ *
+ *   whether the palette is good   It proves two files agree, never that a colour earns its
+ *                                 place or clears 7:1. Contrast is asserted against RENDERED
+ *                                 pixels in app/tests/fulfillment.spec.ts and
+ *                                 app/tests/pull-confirm.spec.ts; the rest was the interview.
+ *   the sheets in design-refs/    Deliberately unchecked. They are drawings of
+ *                                 docs/DESIGN.md and are allowed to lose to it — that file
+ *                                 records two places where the sheet did. Forcing agreement
+ *                                 would mean re-drawing the reference before a token could
+ *                                 move, which inverts which of the two is the source.
+ *   the doc's second block        Step 6's three button states restate five of these values
+ *                                 in prose that nothing parses.
+ *   every hex outside this :root  The row reads one `:root` in one file, so a literal in any
+ *                                 other stylesheet is invisible to it. Paint from
+ *                                 var(--token) and never from a hex; PullConfirm.css is the
+ *                                 one file that does not, and nothing here can see it.
  *
  * Hand-written on purpose. Generating this file from the doc would put a writer on the
- * path that decides whether a commit proceeds, which D18 forbids by name.
+ * path that decides whether a commit proceeds, which D18 forbids by name — and would make
+ * the two agree by construction, turning every wrong value into a confidently rendered one.
+ * Checking lets them disagree in public.
  *
  * Custom-property names match docs/design-refs/locked.html so the rendered sheet and the
  * app read as one system.

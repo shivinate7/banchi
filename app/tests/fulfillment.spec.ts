@@ -16,6 +16,12 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
  * checking checks nothing, and a token edited in tokens.css without being re-argued in the
  * doc has to break something. This is that something.
  *
+ * EVERY SCREEN, NOT THE TWO THAT WERE EASY TO REACH. The walks below used to run against the
+ * list and the card panel, which left the loading screen, the failure screen, the empty list,
+ * the missing-photo screen, the receipts and the refusal lines unmeasured — and the copy on a
+ * screen nobody renders is exactly the copy nobody proofreads. `battery` is the whole table
+ * applied at once, and a screen that does not call it needs an argument made out loud.
+ *
  * The floors below are quoted from the table and are the only literals here that come from a
  * document rather than from the page.
  */
@@ -33,9 +39,10 @@ const UNDO_FLOOR_MS = 10_000 // "Undo  present on every mark-sold, >= 10s window
  * `App.tsx` owns the ROUTES table and is not this session's to edit. Hash form, verbatim,
  * for the reason the pull-confirm spec records at its own constant: a path-style
  * '/fulfillment' is served index.html by Vite, mounts the app with an empty hash and renders
- * the capture screen — a passing navigation to the wrong view. The `beforeEach` below asserts
- * the view is actually on screen before any test runs, so a route that has not been
- * registered fails here and loudly rather than as nine confusing measurements of nothing.
+ * the capture screen — a passing navigation to the wrong view. The `openList` helper below
+ * asserts the view is actually on screen before any test measures anything, so a route that
+ * has not been registered fails there and loudly rather than as nine confusing measurements
+ * of nothing.
  */
 const VIEW_ROUTE = '/#/fulfillment'
 const VIEW = 'main.fulfillment'
@@ -55,32 +62,6 @@ type FixtureCard = {
   name: string | null
   label?: string
   photo: string | null
-}
-
-function inventoryBody(cards: Record<string, FixtureCard>) {
-  const rows: Record<string, unknown> = {}
-  for (const [key, card] of Object.entries(cards)) {
-    rows[key] = {
-      box: card.box,
-      index: card.index,
-      photo: card.photo,
-      set_hint: null,
-      metadata_finish: null,
-      captured_at: '2026-08-13T10:00:00+00:00',
-      capture_id: null,
-      name: card.name,
-      number: '006',
-      printed_total: '197',
-      confidence: 'high',
-      sku: '1234567',
-      condition: 'Near Mint',
-      state: card.state,
-      state_at: '2026-08-13T11:00:00+00:00',
-      run: null,
-      ...(card.label === undefined ? {} : { label: card.label, section: 1, card: card.index }),
-    }
-  }
-  return { version: 1, cards: rows }
 }
 
 /* Three cards for sale in two boxes, one card that is not for sale, and one for sale that the
@@ -126,17 +107,57 @@ const CARDS: Record<string, FixtureCard> = {
   '9/12': { box: 9, index: 12, state: 'live', name: 'Great Ball', photo: '/captures/9/012.jpg' },
 }
 
-/* The stand-in photo, drawn at a card's aspect ratio.
+/** The state of each card as the stub store holds it right now, keyed the way
+ *  `store.master.position_key` keys them. Handed back by `stubServer` so a test can play the
+ *  OTHER device — D13 puts two of them on one store with no session between, and every
+ *  staleness bug on this screen is that fact arriving while a list is on screen. */
+type Store = Record<string, string>
+
+function inventoryBody(states: Store) {
+  const rows: Record<string, unknown> = {}
+  for (const [key, card] of Object.entries(CARDS)) {
+    rows[key] = {
+      box: card.box,
+      index: card.index,
+      photo: card.photo,
+      set_hint: null,
+      metadata_finish: null,
+      captured_at: '2026-08-13T10:00:00+00:00',
+      capture_id: null,
+      name: card.name,
+      number: '006',
+      printed_total: '197',
+      confidence: 'high',
+      sku: '1234567',
+      condition: 'Near Mint',
+      state: states[key] ?? card.state,
+      state_at: '2026-08-13T11:00:00+00:00',
+      run: null,
+      ...(card.label === undefined ? {} : { label: card.label, section: 1, card: card.index }),
+    }
+  }
+  return { version: 1, cards: rows }
+}
+
+/* THE STAND-IN PHOTO IS LANDSCAPE, AND THAT IS THE FIXTURE'S WHOLE JOB.
+ *
+ * It was drawn at 63x88 — the card's own shape, which is exactly the shape the stylesheet
+ * gives the element — so `object-fit: cover` had nothing to crop, and the one cropped image in
+ * this app was measured with its crop switched off. A rig frame is a landscape video frame
+ * with a portrait card inside it, so this is 4:3 and the fit rule does real work: swap `cover`
+ * for `contain` and the painted card drops to 270px on its short edge while the element's own
+ * box stays 360. The old fixture could not tell those two apart, which made the ">= 320px"
+ * row a measurement of a CSS rule rather than of a photograph.
  *
  * SVG rather than a base64 PNG because a PNG has to be handed to `route.fulfill` as a Buffer,
  * and `app/tsconfig.json` declares `"types": ["vite/client"]` with no Node types — so `Buffer`
  * does not exist in this project's type world and adding it would be a dependency and a
  * tsconfig edit for a fixture. A string body needs neither, and this one is legible in the
- * diff besides. The photo assertion measures the element's box, which the stylesheet sizes
- * from the 63x88 card shape rather than from the file, so the bytes only have to decode. */
+ * diff besides. */
 const PHOTO_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88">' +
-  '<rect width="63" height="88" fill="#52555b"/></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120">' +
+  '<rect width="160" height="120" fill="#e6e7ea"/>' +
+  '<rect x="57" y="4" width="46" height="112" fill="#52555b"/></svg>'
 
 /** Sales the page recorded, in order, so a test can assert what the screen actually sent.
  *
@@ -146,7 +167,54 @@ const PHOTO_SVG =
  *  test that read only the method would pass while the screen sold a card twice. */
 type Wire = { method: string; url: string; undo: boolean }
 
-/* How `GET /inventory` behaves, read at request time so a test can change its mind.
+/** One answer from the mark-sold route. */
+type Sold = { status: number; body: unknown }
+
+/** How the stub answers a mark-sold, given the direction, the position and the store as it
+ *  stands. Overridable per test so a refusal is one line rather than an `unroute` dance. */
+type SoldAnswer = (undo: boolean, key: string, states: Store) => Sold
+
+/* The default answer is a MODEL of `do_mark_sold` rather than a fixed 200, and the difference
+ * matters now that the view re-reads the cards after every sale. A stub that always answered
+ * 200 and never moved its own store would hand the re-read a card it had just sold, so the
+ * screen would put it straight back on his list — the test would then be measuring a
+ * contradiction the real server cannot produce. Both refusals below are the two-device case
+ * (D13) and are reached by a test setting a state, not by stubbing a status code. */
+const soldModel: SoldAnswer = (undo, key, states) => {
+  const was = states[key]
+  if (!undo && was === 'sold') {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: 'already_sold',
+          message: `Box ${key} is already sold. Send {"undo": true} to reverse that sale.`,
+        },
+      },
+    }
+  }
+  if (undo && was !== 'sold') {
+    return {
+      status: 409,
+      body: {
+        error: {
+          code: 'not_sold',
+          message: `Box ${key} is ${was ?? 'missing'}, not sold, so there is no sale to reverse.`,
+        },
+      },
+    }
+  }
+  // `restores_to` is what an undo of THIS call would put back — null on a reversal, because
+  // there is then nothing left to reverse.
+  return { status: 200, body: { position: key, undone: undo, restores_to: undo ? null : 'live' } }
+}
+
+/** A refusal in the server's own shape, for the cases no state can produce. */
+function refuses(code: string, message: string): Sold {
+  return { status: 409, body: { error: { code, message } } }
+}
+
+/* How the stubbed server behaves, read at request time so a test can change its mind.
  *
  * MUTABLE RATHER THAN A COUNT OF READS, and that is not a style choice: `main.tsx` mounts
  * under StrictMode, which double-invokes every effect in dev, so the view reads the inventory
@@ -154,22 +222,48 @@ type Wire = { method: string; url: string; undo: boolean }
  * that refused "the first read" therefore refused the answer nobody was listening to and the
  * screen rendered as though nothing had gone wrong — measured, before this was written. A
  * flag the test flips is indifferent to how many times React asks. */
-type Mood = { fail?: boolean; slow?: boolean }
+type Mood = {
+  fail?: boolean
+  slow?: boolean
+  /** Nothing is for sale, which is a screen with its own copy and no controls. */
+  empty?: boolean
+  /** Every photo 404s, which is the other screen the card panel can be. */
+  noPhoto?: boolean
+  sold?: SoldAnswer
+  /** How many times `GET /inventory` has been answered. The instrument for "the list is read
+   *  again", which is the only defence a client has against the other device. */
+  reads?: number
+}
 
-async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<void> {
+async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
+  const states: Store = {}
+  for (const [key, card] of Object.entries(CARDS)) {
+    states[key] = mood.empty === true ? 'captured' : card.state
+  }
+
   // The sold route first: nothing else may answer it, and a stub that quietly 404s would make
   // every mark-sold test measure the failure path while reading like the happy one.
   await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
     const request = route.request()
     const sent: unknown = request.postDataJSON()
-    wire.push({
-      method: request.method(),
-      url: request.url(),
-      undo: (sent as { undo?: unknown } | null)?.undo === true,
+    const undo = (sent as { undo?: unknown } | null)?.undo === true
+    const found = /\/inventory\/(\d+)\/(\d+)\/sold$/.exec(new URL(request.url()).pathname)
+    const key = found === null ? '' : `${found[1] ?? ''}/${found[2] ?? ''}`
+    wire.push({ method: request.method(), url: request.url(), undo })
+
+    const answer = (mood.sold ?? soldModel)(undo, key, states)
+    // A sale the stub accepted is a sale the next GET /inventory has to show. This is the
+    // store the other device would be looking at.
+    if (answer.status < 400 && key !== '') states[key] = undo ? 'live' : 'sold'
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(answer.body),
     })
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
   })
+
   await page.route(/\/inventory$/, async (route) => {
+    mood.reads = (mood.reads ?? 0) + 1
     // Long enough to read the screen and short enough not to be the test's runtime. The
     // loading state is the one screen here that nothing else can hold still.
     if (mood.slow === true) await new Promise((done) => setTimeout(done, 1200))
@@ -191,12 +285,25 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<vo
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(inventoryBody(CARDS)),
+      body: JSON.stringify(inventoryBody(states)),
     })
   })
+
   await page.route(/\/photo\/\d+\/\d+$/, async (route) => {
+    if (mood.noPhoto === true) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'photo_not_found', message: 'No photo for that position.' },
+        }),
+      })
+      return
+    }
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
   })
+
+  return states
 }
 
 // ------------------------------------------------------------------ reading the rendered page
@@ -295,20 +402,50 @@ async function runsIn(view: Locator): Promise<Run[]> {
 }
 
 /** Every visible thing on the whole page that can be pressed, with its box. Page-wide and not
- *  view-wide on purpose: a control outside this view is still under his thumb. */
+ *  view-wide on purpose: a control outside this view is still under his thumb.
+ *
+ *  The label carries the accessible name as well as the visible text, because the receipts
+ *  put the position in an `aria-label` — and the destructive-wording check below reads these
+ *  labels, so a control whose only name is an attribute must not be invisible to it. */
 async function targets(page: Page): Promise<{ where: string; box: DOMRect }[]> {
   return page.evaluate(() => {
     const out: { where: string; box: DOMRect }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
       if (!element.checkVisibility()) continue
       const classes = element.getAttribute('class')
+      const named = element.getAttribute('aria-label')
+      const text = `${(element.textContent ?? '').trim()} ${named ?? ''}`.trim()
       out.push({
-        where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${(element.textContent ?? '').trim().slice(0, 40)}`,
+        where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
         box: element.getBoundingClientRect().toJSON() as DOMRect,
       })
     }
     return out
   })
+}
+
+/** A rectangle in DOCUMENT coordinates. Playwright scrolls an element into view before
+ *  clicking it, so two viewport-relative boxes taken either side of a click can be measured
+ *  against different scroll positions — which would make the overlap test below quietly
+ *  meaningless. */
+type Box = { x: number; y: number; width: number; height: number }
+
+async function boxOf(target: Locator): Promise<Box> {
+  return target.evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return {
+      x: rect.x + window.scrollX,
+      y: rect.y + window.scrollY,
+      width: rect.width,
+      height: rect.height,
+    }
+  })
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return (
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+  )
 }
 
 /** The shortest distance between two rectangles. Zero when they overlap on both axes, which
@@ -321,15 +458,55 @@ function apart(a: DOMRect, b: DOMRect): number {
 
 const view = (page: Page): Locator => page.locator(VIEW)
 
-/* The four checks that apply to EVERY screen this view has, rather than to the one a test
- * happens to be looking at.
+/** The photo AS PAINTED, not as laid out.
+ *
+ *  `boundingBox()` measures the element, and the element carries `aspect-ratio` and a width
+ *  from the stylesheet — so it answers 360x503 whether the image decoded, decoded and was
+ *  cropped to fill, or letterboxed inside its own box with ground showing either side. The
+ *  constraints table says "card photo >= 320px on the short edge", and the thing that has to
+ *  be 320px is the card he is looking at. So this resolves `object-fit` the way the browser
+ *  does and returns the rectangle actually covered by image pixels, along with the natural
+ *  short edge — zero when nothing decoded, which no layout box can tell you. */
+async function paintedPhoto(
+  page: Page,
+): Promise<{ width: number; height: number; natural: number }> {
+  return view(page)
+    .locator('.fulfillment-photo')
+    .evaluate((node) => {
+      const img = node as HTMLImageElement
+      const box = img.getBoundingClientRect()
+      const wide = img.naturalWidth
+      const tall = img.naturalHeight
+      if (wide === 0 || tall === 0) return { width: 0, height: 0, natural: 0 }
+
+      const fit = window.getComputedStyle(img).objectFit
+      const natural = Math.min(wide, tall)
+      let scale: number
+      if (fit === 'cover') scale = Math.max(box.width / wide, box.height / tall)
+      else if (fit === 'contain') scale = Math.min(box.width / wide, box.height / tall)
+      else if (fit === 'scale-down') scale = Math.min(1, box.width / wide, box.height / tall)
+      else if (fit === 'none') scale = 1
+      // `fill` stretches to the box, so the painted area is the box.
+      else return { width: box.width, height: box.height, natural }
+
+      // Default `object-position` is 50% 50%, so what survives on each axis is whichever is
+      // smaller: the scaled image, or the box that clips it.
+      return {
+        width: Math.min(wide * scale, box.width),
+        height: Math.min(tall * scale, box.height),
+        natural,
+      }
+    })
+}
+
+/* THE CHECKS THAT APPLY TO EVERY SCREEN THIS VIEW HAS, rather than to the one a test happens
+ * to be looking at.
  *
  * They are functions and not a `test.step` inside each test because of what the breaking
  * exercise found: run against the list and the card panel only, the walk never reads the
- * screen he sees while the cards load or the one he sees when they do not. A banned word
- * there would have been invisible — and the copy on a failure screen is exactly the copy
- * nobody proofreads. Every screen calls all four, and the argument for a new screen not
- * calling them has to be made out loud.
+ * screen he sees while the cards load, the one he sees when they do not, the one with nothing
+ * to pull, the one whose photo is missing, or the receipt above any of them. A banned word or
+ * a 12px line on any of those was invisible.
  */
 
 async function noSmallText(page: Page, where: string): Promise<void> {
@@ -358,9 +535,13 @@ async function noThinContrast(page: Page, where: string): Promise<void> {
   }
 }
 
-async function fatTargets(page: Page, where: string): Promise<void> {
+/** `hasControls` is false ONLY for a screen that legitimately offers nothing to press — the
+ *  loading sentence is the one, and it is named at its call site. It is not an escape hatch:
+ *  the size and spacing assertions below run either way, and defaulting to true keeps a
+ *  screen that has quietly lost its controls failing. */
+async function fatTargets(page: Page, where: string, hasControls = true): Promise<void> {
   const found = await targets(page)
-  expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
+  if (hasControls) expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
 
   for (const target of found) {
     expect(target.box.width, `${where} ${target.where}: width`).toBeGreaterThanOrEqual(TARGET_FLOOR)
@@ -383,21 +564,162 @@ async function fatTargets(page: Page, where: string): Promise<void> {
   }
 }
 
-/** The list screen, loaded and rendered. */
-async function openList(page: Page, wire: Wire[] = []): Promise<void> {
-  await stubServer(page, wire)
+/* THE BANNED-WORD LIST, which is the one assertion here written against a future contributor
+ * rather than against a layout.
+ *
+ * docs/DESIGN.md: "copy passes a banned-word list: SKU, CSV, import, sync, batch, queue,
+ * staged". Every one of those is a word this repo uses constantly and correctly everywhere
+ * else — the specs, the owner's screens, the run report — which is exactly why the slip is
+ * plausible. It will not arrive as a mistake; it will arrive as somebody being helpful in a
+ * hurry.
+ *
+ * Matched case-insensitively with the common inflections and nothing more. A bare substring
+ * match reads "important" as "import" and fails on a word this screen might legitimately
+ * want; requiring a whole word misses "importing" and "queued", which are the same offence
+ * conjugated. The suffix set below is the narrow middle, and it is deliberately not clever:
+ * the failure it must not have is the one where it goes quiet.
+ *
+ * It reads attribute copy as well as text. `alt` and `aria-label` are what he hears if he
+ * ever turns a screen reader on, and copy nobody proofreads is exactly where a system word
+ * survives.
+ */
+const BANNED = ['sku', 'csv', 'import', 'sync', 'batch', 'queue', 'staged']
+const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})(s|d|es|ed|ing)?\\b`, 'i')
+
+async function copyIn(view: Locator): Promise<{ text: string; where: string }[]> {
+  return view.evaluate((root) => {
+    const describe = (element: Element): string => {
+      const classes = element.getAttribute('class')
+      return `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}`
+    }
+    const out: { text: string; where: string }[] = []
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    let node = walker.nextNode()
+    while (node !== null) {
+      const text = (node.textContent ?? '').trim()
+      const parent = node.parentElement
+      if (text !== '' && parent !== null && parent.checkVisibility()) {
+        out.push({ text, where: describe(parent) })
+      }
+      node = walker.nextNode()
+    }
+
+    for (const element of root.querySelectorAll('[alt], [aria-label], [title], [placeholder]')) {
+      for (const attribute of ['alt', 'aria-label', 'title', 'placeholder']) {
+        const value = element.getAttribute(attribute)
+        if (value !== null && value.trim() !== '') {
+          out.push({ text: value, where: `${describe(element)}[${attribute}]` })
+        }
+      }
+    }
+    return out
+  })
+}
+
+async function noJargon(page: Page, where: string): Promise<void> {
+  const copy = await copyIn(view(page))
+  expect(copy.length, `${where}: no copy to read`).toBeGreaterThan(0)
+  for (const line of copy) {
+    const found = BANNED_RE.exec(line.text)
+    expect(
+      found === null,
+      `${where} ${line.where}: "${found?.[0] ?? ''}" is on the banned list — "${line.text}"`,
+    ).toBe(true)
+  }
+}
+
+/* "Destructive actions: zero reachable from this view; assert no route to settings or import."
+ *
+ * A ROW ABOUT THE VIEW, WHICH MEANS EVERY SCREEN THE VIEW CAN BE. It was asserted on the list
+ * alone, which reduced it to "no visible anchor on the list screen" — and the screens it did
+ * not look at are the ones that gained controls: the card panel, the pulled step, and the
+ * receipts that now sit above both. So this is a function, and every screen calls it.
+ *
+ * A link is the route. The shell draws one to every other screen above every view, and the
+ * capture screen those reach carries an undo that hard-deletes a record, a sidecar and a
+ * photo (D10) — which is the destructive action this row is about. Counting VISIBLE links
+ * rather than links in the document is the honest form: `display: none` is not clickable, not
+ * focusable and not reachable by a screen reader.
+ *
+ * The wording check is read off the rendered controls rather than off a list of routes,
+ * because a button that deletes without navigating is the same hazard without the href.
+ */
+async function noWayOut(page: Page, where: string): Promise<void> {
+  for (const link of await page.locator('a[href]').all()) {
+    expect(
+      await link.isVisible(),
+      `${where}: a route out — ${await link.getAttribute('href')}`,
+    ).toBe(false)
+  }
+  await expect(page.locator('.app-nav'), `${where}: the shell drew chrome here`).toBeHidden()
+
+  for (const target of await targets(page)) {
+    expect(target.where.toLowerCase(), `${where}: a destructive control is on screen`).not.toMatch(
+      /delete|remove|erase|discard|settings|import/,
+    )
+  }
+}
+
+/** The whole table, at one screen. `hasControls` is passed straight through to `fatTargets`. */
+async function battery(page: Page, where: string, hasControls = true): Promise<void> {
+  await noSmallText(page, where)
+  await noThinContrast(page, where)
+  await noJargon(page, where)
+  await noWayOut(page, where)
+  await fatTargets(page, where, hasControls)
+}
+
+/** The list screen, loaded and rendered. Returns the stub's store so a test can play the
+ *  other device against it. */
+async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise<Store> {
+  const states = await stubServer(page, wire, mood)
   await page.goto(VIEW_ROUTE)
   await expect(
     view(page),
     `no Fulfillment view at ${VIEW_ROUTE} — is the route registered in App.tsx?`,
   ).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Cards to pull' })).toBeVisible()
+  return states
 }
 
-/** The card panel for one card, photo loaded. */
+/** The card panel for one card, photo loaded.
+ *
+ *  VISIBLE IS NOT DECODED, and the difference showed up as a real flake: `naturalWidth` was 0
+ *  on the wider viewport while the same measurement on the phone read a true number. So this
+ *  waits for `complete`, which is the browser saying the load attempt finished — either way.
+ *  It deliberately does NOT wait for success: a broken image is `complete` with a natural size
+ *  of zero, which is exactly the state the photo assertion has to be able to fail on. */
 async function openCard(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name }).click()
-  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
+  const photo = view(page).locator('.fulfillment-photo')
+  await expect(photo).toBeVisible()
+  await photo.evaluate(
+    (node) =>
+      new Promise<void>((settled) => {
+        const img = node as HTMLImageElement
+        if (img.complete) {
+          settled()
+          return
+        }
+        img.addEventListener('load', () => settled(), { once: true })
+        img.addEventListener('error', () => settled(), { once: true })
+      }),
+  )
+}
+
+/** Pull, then mark sold, on the card already open. */
+async function sellOpenCard(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page)).toContainText('Pulled.')
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+}
+
+/** The receipt panel for one card, found by the position it names. Scoped, because two sales
+ *  standing at once put two Undo buttons on screen and a bare role lookup is ambiguous
+ *  exactly when the thing under test is that both of them are there. */
+function receiptFor(page: Page, place: string): Locator {
+  return view(page).locator('.fulfillment-panel', { hasText: place })
 }
 
 // ------------------------------------------------------------------------------ the table
@@ -518,11 +840,14 @@ for (const screen of WIDTHS) {
     await openList(page)
     await openCard(page, 'Charizard ex')
 
-    const box = await view(page).locator('.fulfillment-photo').boundingBox()
-    expect(box, 'the photo has no layout box').not.toBeNull()
+    const painted = await paintedPhoto(page)
+    // A broken image still has a layout box, so the box alone cannot say whether there is a
+    // photograph in it. This is the difference between measuring a CSS rule and measuring a
+    // card.
+    expect(painted.natural, 'the photo did not decode, so nothing was measured').toBeGreaterThan(0)
     expect(
-      Math.min(box!.width, box!.height),
-      `short edge at ${screen.width}px`,
+      Math.min(painted.width, painted.height),
+      `painted short edge at ${screen.width}px`,
     ).toBeGreaterThanOrEqual(PHOTO_FLOOR)
   })
 
@@ -547,35 +872,26 @@ test(`every tap target is at least ${TARGET_FLOOR}x${TARGET_FLOOR}px and ${GAP_F
   await fatTargets(page, 'pulled')
 })
 
-test('no destructive action and no route out is reachable from this view', async ({ page }) => {
+test('no destructive action and no route out is reachable from any screen of this view', async ({
+  page,
+}) => {
   const wire: Wire[] = []
-  await openList(page, wire)
+  const mood: Mood = {}
+  await openList(page, wire, mood)
+  await noWayOut(page, 'list')
 
-  /* A link is the route. The shell draws one to every other screen above every view, and the
-   * capture screen those reach carries an undo that hard-deletes a record, a sidecar and a
-   * photo (D10) — which is the destructive action this row of the table is about. Counting
-   * VISIBLE links rather than links in the document is the honest form: `display: none` is
-   * not clickable, not focusable and not reachable by a screen reader, and the rule in
-   * Fulfillment.css that hides the nav is written to be replaced by App.tsx not rendering it
-   * at all. Either way this number is zero, and it is what will notice if both go. */
-  const links = await page.locator('a[href]').all()
-  for (const link of links) {
-    expect(await link.isVisible(), `a route out: ${await link.getAttribute('href')}`).toBe(false)
-  }
-  await expect(page.locator('.app-nav')).toBeHidden()
+  await openCard(page, 'Charizard ex')
+  await noWayOut(page, 'card')
 
-  // Nothing on screen offers to delete, remove, erase, or open a setting. Read off the
-  // rendered controls rather than off a list of routes, because a button that does it without
-  // navigating is the same hazard without the href.
-  const wording = (await targets(page)).map((target) => target.where.toLowerCase())
-  for (const label of wording) {
-    expect(label, 'a destructive control is on screen').not.toMatch(
-      /delete|remove|erase|discard|settings|import/,
-    )
-  }
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await noWayOut(page, 'pulled')
 
   // And the view itself writes nothing until he presses the one thing it offers.
   expect(wire, 'the view wrote to the server without being asked').toEqual([])
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(view(page)).toContainText('Marked sold.')
+  await noWayOut(page, 'sold')
 })
 
 test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS / 1000}s`, async ({
@@ -596,9 +912,10 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   expect(wire.map((call) => call.undo), 'the sale reached the server as a sale').toEqual([false])
   expect(wire[0]!.url, 'the sale named the card').toContain('/inventory/3/7/sold')
 
-  const undo = page.getByRole('button', { name: 'Undo' })
+  const undo = receiptFor(page, 'Box 3 · Section 1 · Card 7').getByRole('button', { name: 'Undo' })
   await expect(undo).toBeVisible()
-  // The sold card leaves the list while the sale stands.
+  // The sold card leaves the list while the sale stands, and stays gone across the re-read
+  // the sale triggers — the stub store moved with the sale, so this is the server agreeing.
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toHaveCount(0)
 
   /* Real time, not a fake clock. The window is a promise to a person who has just put a card
@@ -622,70 +939,233 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   ])
 })
 
-/* THE BANNED-WORD LIST, which is the one assertion here written against a future contributor
- * rather than against a layout.
- *
- * docs/DESIGN.md: "copy passes a banned-word list: SKU, CSV, import, sync, batch, queue,
- * staged". Every one of those is a word this repo uses constantly and correctly everywhere
- * else — the specs, the owner's screens, the run report — which is exactly why the slip is
- * plausible. It will not arrive as a mistake; it will arrive as somebody being helpful in a
- * hurry.
- *
- * Matched case-insensitively with the common inflections and nothing more. A bare substring
- * match reads "important" as "import" and fails on a word this screen might legitimately
- * want; requiring a whole word misses "importing" and "queued", which are the same offence
- * conjugated. The suffix set below is the narrow middle, and it is deliberately not clever:
- * the failure it must not have is the one where it goes quiet.
- *
- * It reads attribute copy as well as text. `alt` and `aria-label` are what he hears if he
- * ever turns a screen reader on, and copy nobody proofreads is exactly where a system word
- * survives.
+/* "Undo present on EVERY mark-sold" — the word that was not honoured, and the two ways it
+ * was not. A real order pull is two or three cards in a row, so both of these are the
+ * ordinary flow rather than an edge case.
  */
-const BANNED = ['sku', 'csv', 'import', 'sync', 'batch', 'queue', 'staged']
-const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})(s|d|es|ed|ing)?\\b`, 'i')
 
-async function copyIn(view: Locator): Promise<{ text: string; where: string }[]> {
-  return view.evaluate((root) => {
-    const describe = (element: Element): string => {
-      const classes = element.getAttribute('class')
-      return `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}`
-    }
-    const out: { text: string; where: string }[] = []
+test('a second sale does not take the first sale undo away', async ({ page }) => {
+  const wire: Wire[] = []
+  await openList(page, wire)
 
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    let node = walker.nextNode()
-    while (node !== null) {
-      const text = (node.textContent ?? '').trim()
-      const parent = node.parentElement
-      if (text !== '' && parent !== null && parent.checkVisibility()) {
-        out.push({ text, where: describe(parent) })
-      }
-      node = walker.nextNode()
-    }
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(receiptFor(page, 'Box 3 · Section 1 · Card 7')).toBeVisible()
 
-    for (const element of root.querySelectorAll('[alt], [aria-label], [title], [placeholder]')) {
-      for (const attribute of ['alt', 'aria-label', 'title', 'placeholder']) {
-        const value = element.getAttribute(attribute)
-        if (value !== null && value.trim() !== '') {
-          out.push({ text: value, where: `${describe(element)}[${attribute}]` })
-        }
-      }
-    }
-    return out
-  })
-}
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
 
-async function noJargon(page: Page, where: string): Promise<void> {
-  const copy = await copyIn(view(page))
-  expect(copy.length, `${where}: no copy to read`).toBeGreaterThan(0)
-  for (const line of copy) {
-    const found = BANNED_RE.exec(line.text)
-    expect(
-      found === null,
-      `${where} ${line.where}: "${found?.[0] ?? ''}" is on the banned list — "${line.text}"`,
-    ).toBe(true)
+  // Both receipts stand, each with its own Undo. One slot held one of these and dropped the
+  // other with no trace, on a screen whose only other route to recovery is the owner.
+  const first = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  const second = receiptFor(page, 'Box 1 · Section 1 · Card 3')
+  await expect(first.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  // The older one still works, and reaches the server for the card it names rather than for
+  // the most recent sale.
+  await first.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  expect(wire.at(-1)!.undo, 'the last call was a reversal').toBe(true)
+  expect(wire.at(-1)!.url, 'the reversal named the older card').toContain('/inventory/3/7/sold')
+  // And the newer sale is untouched: still sold, still offering its own undo.
+  await expect(page.getByRole('button', { name: 'Iono' })).toHaveCount(0)
+  await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
+test('the undo is still there after walking into another card', async ({ page }) => {
+  const wire: Wire[] = []
+  await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  // The card panel used to return before the receipt was rendered, so this navigation hid the
+  // control while its clock kept running — a ten-second promise visible for two of them.
+  await openCard(page, 'Pidgeot ex')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await battery(page, 'receipt over the card panel')
+
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+  expect(wire.at(-1)!.url, 'the reversal named the sold card').toContain('/inventory/3/7/sold')
+  await expect(receipt).toHaveCount(0)
+})
+
+/* `restores_to`, which the route computes deliberately and which reached no screen: the wire
+ * typed the answer as `{ position }` and this view typed its own wrapper as `Promise<void>`.
+ * The Undo was then drawn unconditionally, and pressing it on a card the server had already
+ * said it could not restore produced an instruction that fails identically forever.
+ */
+
+test('a sale the server cannot reverse offers no undo, and says why', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {
+    // `history.jsonl` holds no earlier state for this card, so the route answers the sale with
+    // `restores_to: null` — the advance warning that a reversal would refuse.
+    sold: (undo, key) => ({
+      status: 200,
+      body: { position: key, undone: undo, restores_to: null },
+    }),
   }
-}
+  await openList(page, wire, mood)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await expect(receipt).toContainText('Marked sold.')
+  await expect(
+    receipt.getByRole('button', { name: 'Undo' }),
+    'an undo was offered for a sale the server said it cannot reverse',
+  ).toHaveCount(0)
+  await expect(receipt).toContainText('You cannot take this one back here.')
+  await battery(page, 'sale with no undo')
+})
+
+test('an undo the server refuses with no remedy stops asking', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {
+    /* The sale reports a reversible card and the reversal then refuses anyway — the race the
+     * advance warning above cannot cover, and the one the old copy handled worst: the message
+     * said press Undo again, and pressing it again answered the same way, forever, on the one
+     * screen with nobody in the room. */
+    sold: (undo, key) =>
+      undo
+        ? refuses(
+            'sold_origin_unknown',
+            'Box 3, card 7 is sold, but history.jsonl records no earlier state for it.',
+          )
+        : { status: 200, body: { position: key, undone: false, restores_to: 'live' } },
+  }
+  await openList(page, wire, mood)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+
+  await expect(receipt).toContainText('This card stays sold. Ask for help to put it back.')
+  await expect(
+    receipt.getByRole('button', { name: 'Undo' }),
+    'the screen still asks him to press a control that answers the same way every time',
+  ).toHaveCount(0)
+  // None of the server's own words, which name a file and a state.
+  await expect(view(page)).not.toContainText('sold_origin_unknown')
+  await expect(view(page)).not.toContainText('history.jsonl')
+  await battery(page, 'undo refused')
+})
+
+/* The other device (D13), which is the reason the list is read again at all.
+ */
+
+test('a card the other device already sold is not this device sale, and gets no undo', async ({
+  page,
+}) => {
+  const wire: Wire[] = []
+  const store = await openList(page, wire)
+
+  // The other device sells it while his list is on screen. Nothing tells him.
+  store['3/7'] = 'sold'
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+
+  /* Answered as success this printed "Marked sold." and offered an Undo — and that Undo would
+   * have reached the server and reversed somebody else's real sale, putting a card a buyer has
+   * paid for back on TCGplayer. It is a receipt for a card leaving his list, not for anything
+   * he did, so it says so and offers nothing to press. */
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await expect(receipt).toContainText('Already sold.')
+  await expect(receipt).toContainText('Somebody else sold this card')
+  await expect(view(page), 'a sale this device did not make was reported as one').not.toContainText(
+    'Marked sold.',
+  )
+  await expect(
+    receipt.getByRole('button', { name: 'Undo' }),
+    'an undo of the other device real sale was on screen',
+  ).toHaveCount(0)
+
+  // One call, and never a reversal. This is the assertion the bug would have failed.
+  expect(wire.map((call) => call.undo)).toEqual([false])
+  // And the card is off his list, because the re-read agreed with the refusal.
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toHaveCount(0)
+  await expect(view(page)).not.toContainText('already_sold')
+  await battery(page, 'already sold elsewhere')
+})
+
+test('an undo of a sale the other device already reversed reads as done', async ({ page }) => {
+  const wire: Wire[] = []
+  const store = await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  // The other device puts it back first. `not_sold` then means the card is in the state the
+  // tap asked for, which is the one refusal this screen may read as success.
+  store['3/7'] = 'live'
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(receipt).toHaveCount(0)
+  await expect(view(page)).not.toContainText('not_sold')
+})
+
+test('the cards are read again when he comes back to them, and after a sale', async ({ page }) => {
+  const wire: Wire[] = []
+  const mood: Mood = {}
+  await openList(page, wire, mood)
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+
+  const beforeWalk = mood.reads ?? 0
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Back to the cards' }).click()
+  await expect
+    .poll(() => mood.reads ?? 0, { message: 'the list was not read again on the way back' })
+    .toBeGreaterThan(beforeWalk)
+
+  const beforeSale = mood.reads ?? 0
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(view(page)).toContainText('Marked sold.')
+  await expect
+    .poll(() => mood.reads ?? 0, { message: 'the list was not read again after the sale' })
+    .toBeGreaterThan(beforeSale)
+
+  // The re-read is the point: the sold card does not come back on the answer that follows it.
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toHaveCount(0)
+})
+
+/* The step that is one tap from a recorded sale.
+ */
+
+test('the sale is not one tap of overshoot from the pull', async ({ page }) => {
+  await openList(page)
+  await openCard(page, 'Charizard ex')
+
+  const pull = await boxOf(page.getByRole('button', { name: 'Pull' }))
+  await page.getByRole('button', { name: 'Pull' }).click()
+  const sell = await boxOf(page.getByRole('button', { name: 'Mark sold' }))
+
+  /* Pull and Mark sold were one control in one place, one state apart. A finger that lands
+   * twice — the ordinary way a person presses a button that did not seem to respond — pulled
+   * the card and sold it, with a photo he never looked at. Measured rather than argued: the
+   * second control may not occupy any part of the first one's footprint. */
+  expect(
+    overlaps(pull, sell),
+    'Mark sold overlaps where Pull was, so a double-tap on Pull sells the card',
+  ).toBe(false)
+  expect(sell.y, 'Mark sold begins above where Pull ended').toBeGreaterThanOrEqual(
+    pull.y + pull.height,
+  )
+})
+
+/* Every screen that is not the list or the card panel. Each was reachable and unmeasured.
+ */
 
 test('the copy carries no word from the system this is built out of', async ({ page }) => {
   await openList(page)
@@ -699,21 +1179,24 @@ test('the copy carries no word from the system this is built out of', async ({ p
   await noJargon(page, 'sold')
 })
 
-/* The two screens that come before the cards, held still long enough to be read.
- *
- * They are here because the breaking exercise found them missing: with the walks pointed only
- * at the list and the card, a banned word or a 12px line on either of these was invisible.
- * The failure screen is the more important of the two — it is the screen he sees on the
- * morning the Mac is asleep, it is the one carrying a sentence somebody will want to make
- * more informative, and the informative version of it is the server's own message.
- */
+test('the ordinary flow passes the whole table at every step', async ({ page }) => {
+  await openList(page)
+  await battery(page, 'list')
+  await openCard(page, 'Charizard ex')
+  await battery(page, 'card')
+  await page.getByRole('button', { name: 'Pull' }).click()
+  await battery(page, 'pulled')
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(view(page)).toContainText('Marked sold.')
+  await battery(page, 'sold')
+})
+
 test('the screen while the cards load is his too', async ({ page }) => {
   await stubServer(page, [], { slow: true })
   await page.goto(VIEW_ROUTE)
   await expect(view(page)).toContainText('Getting the cards.')
-  await noSmallText(page, 'loading')
-  await noThinContrast(page, 'loading')
-  await noJargon(page, 'loading')
+  // The one screen that offers nothing to press, and the only call site that says so.
+  await battery(page, 'loading', false)
   // And it does end. A loading state nothing clears is a broken screen that measures clean.
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
 })
@@ -730,10 +1213,7 @@ test('the screen when the cards do not load is his too, and trying again works',
   await expect(view(page)).not.toContainText('store_unreadable')
   await expect(view(page)).not.toContainText('inventory.json')
 
-  await noSmallText(page, 'load failed')
-  await noThinContrast(page, 'load failed')
-  await noJargon(page, 'load failed')
-  await fatTargets(page, 'load failed')
+  await battery(page, 'load failed')
 
   // "Try again" tries again. A remedy that does not work is worse than none, because it is
   // the one he will press repeatedly before asking anyone.
@@ -742,56 +1222,54 @@ test('the screen when the cards do not load is his too, and trying again works',
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
 })
 
-test('a card the other device already sold reads as sold, not as a failure', async ({ page }) => {
-  await openList(page)
-  await page.unroute(/\/inventory\/\d+\/\d+\/sold$/)
-  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
-    // What `do_mark_sold` answers when the card is already in the state being asked for —
-    // the other device got there first, which D13 permits and neither device is told about.
+test('a body this screen cannot read fails the same way a dead server does', async ({ page }) => {
+  /* The loader answered failures with `.then(ok, fail)`, which does not cover its own success
+   * handler: a 200 whose body has no `cards` threw inside it, became an unhandled rejection,
+   * and left the screen on "Getting the cards." with nothing shown and nothing to press. */
+  await page.route(/\/inventory$/, async (route) => {
     await route.fulfill({
-      status: 409,
+      status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        error: { code: 'already_sold', message: 'Box 3, card 7 is already sold.' },
-      }),
+      body: JSON.stringify({ version: 1 }),
     })
   })
+  await page.goto(VIEW_ROUTE)
 
-  await openCard(page, 'Charizard ex')
-  await page.getByRole('button', { name: 'Pull' }).click()
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(view(page)).toContainText('The cards did not load. Try again.')
+  await expect(view(page), 'the screen is still waiting for an answer it already had').not.toContainText(
+    'Getting the cards.',
+  )
+  await battery(page, 'unreadable body')
+})
 
-  /* Asserted because it is behaviour this file invented rather than behaviour the design
-   * specifies. Reporting the refusal would put him in a loop: the message would say press it
-   * again, pressing it again would answer the same way, and the card is sold either way. The
-   * screen says what is true instead. */
-  await expect(view(page)).toContainText('Marked sold.')
-  await expect(view(page)).not.toContainText('Nothing was saved')
-  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible()
+test('the screen with nothing to pull is his too', async ({ page }) => {
+  await openList(page, [], { empty: true })
+  await expect(view(page)).toContainText('No cards are for sale right now.')
+  // No rows, so no controls except the ones the shell might draw — which is zero, and
+  // `noWayOut` inside the battery is what says so.
+  await battery(page, 'nothing to pull', false)
+})
+
+test('the screen when the photo is missing is his too', async ({ page }) => {
+  await openList(page, [], { noPhoto: true })
+  await page.getByRole('button', { name: 'Charizard ex' }).click()
+
+  // The photo is gone and the card is not, so the screen says where it still is.
+  await expect(view(page)).toContainText('The photo is missing. The card is still in the place above.')
+  await expect(view(page).locator('.fulfillment-photo')).toHaveCount(0)
+  await expect(view(page)).toContainText('Box 3 · Section 1 · Card 7')
+  await battery(page, 'photo missing')
 })
 
 test('a refusal says what happened and what to do, in his words', async ({ page }) => {
   const wire: Wire[] = []
-  await openList(page, wire)
-  // The sale is refused by the server after the screen is up, so the failure lands where he
-  // is rather than on a screen that never rendered.
-  await page.unroute(/\/inventory\/\d+\/\d+\/sold$/)
-  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
-    await route.fulfill({
-      status: 409,
-      contentType: 'application/json',
-      // The server's own register, verbatim from the shape `_fail` sends. None of it may
-      // reach the screen: it names a route, a state and a command, and every one of those is
-      // correct and none of them is his.
-      body: JSON.stringify({
-        error: { code: 'store_busy', message: 'The staged import is locked; retry after batch.' },
-      }),
-    })
-  })
+  const mood: Mood = {
+    sold: () => refuses('store_busy', 'The staged import is locked; retry after batch.'),
+  }
+  await openList(page, wire, mood)
 
   await openCard(page, 'Charizard ex')
-  await page.getByRole('button', { name: 'Pull' }).click()
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await sellOpenCard(page)
 
   // What happened, and what to do next.
   await expect(view(page)).toContainText('Nothing was saved. Press Mark sold again.')
@@ -800,4 +1278,56 @@ test('a refusal says what happened and what to do, in his words', async ({ page 
   // And none of the server's words are on screen — neither the code nor the sentence.
   await expect(view(page)).not.toContainText('store_busy')
   await expect(view(page)).not.toContainText('locked')
+  await battery(page, 'sale refused')
+})
+
+test('a failed re-read keeps the cards he has and says the list may have moved', async ({
+  page,
+}) => {
+  const mood: Mood = {}
+  await openList(page, [], mood)
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+
+  // The Mac goes to sleep between the first read and the walk back to the list.
+  mood.fail = true
+  await openCard(page, 'Charizard ex')
+  await page.getByRole('button', { name: 'Back to the cards' }).click()
+
+  await expect(view(page)).toContainText('These cards may have changed since they were last checked.')
+  // The list he was using is still there. Taking it away because a re-read did not answer
+  // leaves him with less than he had.
+  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await battery(page, 'stale list')
+
+  mood.fail = false
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(view(page)).not.toContainText('These cards may have changed')
+})
+
+test('the failed-undo message leaves with the undo it tells him to press', async ({ page }) => {
+  test.setTimeout(90_000)
+  const wire: Wire[] = []
+  const mood: Mood = {
+    sold: (undo, key) =>
+      undo
+        ? refuses('store_busy', 'The staged import is locked; retry after batch.')
+        : { status: 200, body: { position: key, undone: false, restores_to: 'live' } },
+  }
+  await openList(page, wire, mood)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  const receipt = receiptFor(page, 'Box 3 · Section 1 · Card 7')
+  await receipt.getByRole('button', { name: 'Undo' }).click()
+
+  /* Held in screen-wide state, this sentence outlived the control it named: the window closed,
+   * the panel went, and the instruction stayed on screen pointing at a button that was no
+   * longer there. The structural half of the fix is asserted first — the sentence is INSIDE
+   * the panel that carries the Undo, so neither can outlive the other by construction. */
+  await expect(receipt).toContainText('The card did not come back. Press Undo again.')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  // And then the window really closes, in real time, and they go together.
+  await expect(view(page).locator('.fulfillment-panel')).toHaveCount(0, { timeout: 60_000 })
+  await expect(view(page)).not.toContainText('The card did not come back')
 })

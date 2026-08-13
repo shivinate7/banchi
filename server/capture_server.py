@@ -421,14 +421,47 @@ def _card_row(box: int, index: int, card: master.Card) -> dict:
     return row
 
 
+def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
+    """How many cards are still waiting in one queue, or None and a finding. Never raises.
+
+    `len(Queue)` IS A SORT, which is not obvious from the call and is what made this
+    necessary. It runs `open_entries`, which orders by `QueueEntry.sort_key` — so a `market`
+    that is not a number raises `decimal.InvalidOperation`, and a `box` that arrived as a
+    JSON string raises `TypeError` on the tuple compare (`Queue.parse` coerces nothing).
+    Both were measured escaping `/status`, the one route you reach for when something is
+    wrong. It already refuses to be taken down by a bad inventory record; this is the same
+    rule applied to the file 7b taught it to read.
+
+    NULL RATHER THAN A SUBSTITUTE NUMBER. Falling back to `len(queue.entries)` would answer
+    with the count of every record in the file, cleared or not — the number `do_status`
+    stopped publishing on purpose, because it says there is work left after the last card
+    has been answered. A count that is wrong in the direction of "there is more to do" is
+    worse here than no count, since this is the number the owner works from.
+
+    PER QUEUE, so a corrupt `review.json` does not also hide what is sitting in parked.
+    """
+    try:
+        return len(queue), None
+    except (ArithmeticError, TypeError, ValueError) as exc:
+        return None, (
+            f"{queues.FILENAMES[queue.name]} holds an entry that cannot be ordered "
+            f"({type(exc).__name__}: {exc}), so the {queue.name} queue cannot be counted."
+        )
+
+
 def do_status() -> dict:
     """Lock-free. Counts, the next index per box, and whether the inventory parses.
 
     Deliberately does NOT probe the lock. The only primitive the store exposes is an
     acquire, so reporting on it would make a read route a writer.
+
+    NOTHING IN HERE MAY RAISE ON BAD DATA. Every finding is reported in `problem` and the
+    field it belongs to answers null. That rule is older than this route's queue counts and
+    is why they are guarded the same way the inventory scan is.
     """
     snapshot = Store().read()
     inventory = snapshot.inventory
+    problems: List[str] = []
 
     body = {
         "captures_root": str(captures_root()),
@@ -445,11 +478,21 @@ def do_status() -> dict:
         # a card the owner has already answered would go on being counted here forever while
         # disappearing from the screen that works the queue. This is the number he reads to
         # decide whether there is work left, so it is the one that must not drift.
-        "queues": {
-            "review": len(snapshot.review),
-            "parked": len(snapshot.parked),
-        },
+        #
+        # Each side answers null when its file holds an entry that cannot be ordered —
+        # `_queue_depth` has why, and why the count is not faked. `app/src/types.ts` types
+        # this pair and has to widen to `number | null` to match.
+        "queues": {queues.MAIN: None, queues.PARKED: None},
     }
+
+    # Keyed off each queue's own `name`, which is where `_queue_depth` reads its filename
+    # from too — so the two wire keys and the finding that explains a null one cannot come to
+    # disagree about which file is meant.
+    for queue in (snapshot.review, snapshot.parked):
+        depth, finding = _queue_depth(queue)
+        body["queues"][queue.name] = depth
+        if finding:
+            problems.append(finding)
 
     # A corrupt record must not take down the health endpoint — that is the one route you
     # reach for when something is wrong. Report it as a finding instead.
@@ -458,10 +501,19 @@ def do_status() -> dict:
         body["next_index"] = {str(box): inventory.next_index(box) for box in boxes}
     except (master.BadPosition, TypeError, ValueError) as exc:
         body["next_index"] = None
-        body["problem"] = (
+        problems.append(
             f"the inventory holds a card whose box or index is not a number ({exc}). "
             "Positions cannot be allocated until it is corrected."
         )
+
+    # ONE `problem` STRING, JOINED, rather than a list or a second key. Two independent
+    # findings can now be true at once, and the alternatives both cost more than they pay
+    # for: a `problems` array changes the shape every client already reads for a case that
+    # is rare, and a second key invites a screen that shows one of them. With one finding
+    # the string is byte-identical to what this route has always answered, which is the
+    # property that made joining the cheap option.
+    if problems:
+        body["problem"] = " ".join(problems)
 
     return body
 
@@ -865,10 +917,18 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     says must never happen. `do_delete_card` pops rather than clears, and the difference is
     principled: there the card, the question and the photograph are all gone.
 
-    BOTH QUEUES ARE SEARCHED. A position can hold an entry in each file — nothing in
-    `store/queues.py` prevents it and `do_delete_card` already clears both for that reason —
-    so an answer that cleared only the first would leave the screen still showing a card
-    whose answer is already written.
+    BOTH QUEUES ARE SEARCHED AND BOTH ARE CLEARED. A position can hold an entry in each file
+    — nothing in `store/queues.py` prevents it and `do_delete_card` already clears both for
+    that reason — so an answer that cleared only the first would leave the screen still
+    showing a card whose answer is already written.
+
+    BUT ONLY ONE ENTRY'S CANDIDATES ARE THE OFFER, and until 2026-08-13 this validated
+    against the UNION of both. Measured before this was written: a position in both files,
+    review offering one SKU and a stale parked entry offering another, accepted the parked
+    SKU, wrote it onto the card and cleared both queues. That is the hard rule this route
+    exists to keep — never guess an identification — defeated by bookkeeping: the answer was
+    one no screen ever showed for the row being answered, and afterwards it is
+    indistinguishable from one the pipeline proposed. See the code for which entry governs.
 
     WHAT IT DELIBERATELY DOES NOT DO, three things, because each is a plausible-looking
     addition that `docs/DESIGN.md` does not ask for:
@@ -966,12 +1026,28 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
                 f"there is nothing to answer. Reload the queue.",
             )
 
-        # Union across the holders, review first. In practice one queue holds a card and this
-        # is a copy of one list; it is written this way so the answer does not depend on
-        # WHICH queue a card happened to land in, since both are cleared either way.
-        candidates: List[dict] = [
-            candidate for _, entry in holders for candidate in entry.candidates
-        ]
+        # ONE ENTRY GOVERNS THE OFFER, and it is the main-queue one whenever the position is
+        # in both. `holders` is built review-first above, so this is `holders[0]` and not a
+        # search. Every alternative was worse:
+        #
+        #   the union of both    what this did, and the bug. A stale parked entry launders a
+        #                        SKU the review entry never offered, and the laundering is
+        #                        invisible afterwards — the card carries a real SKU from a
+        #                        real catalog row, just not one that was ever proposed for it.
+        #   the intersection     safe and unanswerable. `cli/resolve.py:failure_entry` records
+        #                        no candidates at all, so a position sitting in both files
+        #                        with one of them a failure entry would refuse every answer
+        #                        forever, including the correct one.
+        #   naming the queue     the client would send which file its row came from. That is a
+        #   in the request       field the screen has no reason to know (it taps a position),
+        #                        and it puts the choice of what may be answered on the wire,
+        #                        where a stale client picks it.
+        #
+        # Main wins because main is the queue that is worked — `store/queues.py` splits them
+        # exactly so: work versus the low-value queue a card may never be worth a tap on. A
+        # card in both is a card the owner answers from the review screen.
+        offering, governing = holders[0]
+        candidates: List[dict] = list(governing.candidates)
         if not candidates:
             # `cli/resolve.py:failure_entry` records no candidates at all — an identification
             # that failed, or a card with no position, has no rows for a human to choose
@@ -982,20 +1058,23 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "no_candidates",
-                f"Box {box}, card {index} is queued as `{holders[0][1].reason}` and records "
-                f"no candidate rows, so there is nothing to choose. It needs a re-shoot or a "
-                f"re-identify, not an answer.",
+                f"Box {box}, card {index} is queued in {offering.name} as "
+                f"`{governing.reason}` and records no candidate rows, so there is nothing to "
+                f"choose. It needs a re-shoot or a re-identify, not an answer.",
             )
 
         chosen = _candidate_with_sku(candidates, sku)
         if chosen is None:
             offered = ", ".join(sorted(str(c.get("sku") or "") for c in candidates))
+            # The queue is NAMED, because the case this refusal now catches is a card sitting
+            # in both files whose two entries disagree — and "that is not one of the rows
+            # offered" reads as a bug to anyone looking at the other row on screen.
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "sku_not_a_candidate",
                 f"{sku} is not one of the rows offered for box {box}, card {index}. "
-                f"Offered: {offered}. Answer with one of those, or reload the queue if it "
-                f"has been re-joined since this screen was drawn.",
+                f"Offered in {offering.name}: {offered}. Answer with one of those, or reload "
+                f"the queue if it has been re-joined since this screen was drawn.",
             )
 
         offered_condition = str(chosen.get("condition") or "")
@@ -1023,7 +1102,11 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             "condition": offered_condition,
             # Reported the way undo reports what it removed, and for the same reason: a
             # write says what it touched. Both true is the entry-in-both-queues case, which
-            # is worth seeing rather than smoothing over.
+            # is worth seeing rather than smoothing over — and it is the case the client
+            # needs, since a screen holding both lists must drop BOTH rows on one answer or
+            # go on showing a card whose answer is already written. Both keys are always
+            # present, false rather than absent, so the app reads two booleans and never has
+            # to tell "not cleared" from "the server did not say".
             "review_cleared": cleared[queues.MAIN],
             "parked_cleared": cleared[queues.PARKED],
             "card": _card_row(box, index, card),
@@ -1071,6 +1154,47 @@ def _state_before_sale(events: Sequence[dict], key: str) -> Optional[str]:
     return None
 
 
+def _sale_origin(store: Store, key: str) -> Tuple[Optional[str], Optional[str]]:
+    """The state to put back, or None and the reason it cannot be known. Never raises.
+
+    A MALFORMED LINE IN `history.jsonl` DEGRADES TO "ORIGIN UNKNOWN" RATHER THAN TAKING THE
+    ROUTE DOWN, which is the whole reason this wrapper exists. `files.read_jsonl` refuses the
+    entire file over one bad line, and this read runs before either branch — so a single
+    corrupt line stopped the SALE as well as the reversal and answered a Fulfiller's tap with
+    `store_unavailable`. Measured: a hand-appended `{not json` left a card `captured` after a
+    503. A sale is the one event in this product that has already happened in the physical
+    world, and `CLAUDE.md`'s standing trade is that unlisted is fine and unrecorded is not.
+
+    WHAT DEGRADING COSTS IS THE UNDO CONTROL AND NOTHING ELSE, which is why it is the right
+    trade rather than a shrug. `restores_to` is already null-when-unknown and the app reads
+    that null as "do not offer undo", so the Fulfiller sees a recorded sale with no undo
+    button instead of a failed tap — and a reversal attempted anyway refuses in
+    `sold_origin_unknown`, exactly as it does for a truncated history. Nothing guesses.
+
+    THE READ STAYS INSIDE THE LOCK, which is the other repair that was considered. Moving it
+    out addresses the parse cost — O(history), and history only ever grows — but addresses
+    nothing about the corrupt line, and it pays for that with a value read before the lock
+    was taken. `store/session.py` opens by explaining that a snapshot from before the lock is
+    the lost update the lock exists to prevent: a card re-sold by the other device (D13)
+    between the read and the lock would restore to the state it held two sales ago, and the
+    reversal is the one thing here that must be exact. The cost is real and is recorded
+    rather than hidden — one parse per sale, under a lock `Store.write()` already holds for a
+    whole-store read.
+    """
+    try:
+        events = store.history()
+    except (files.StoreError, OSError, ValueError) as exc:
+        # Broad on purpose: a bad line, an unreadable file and non-UTF-8 bytes are one
+        # condition to this route — history cannot say — and each of them must leave the
+        # sale writable. Narrowing this to StoreError alone would re-open the same hole for
+        # the next way a log file goes wrong.
+        return None, f"history.jsonl could not be read ({type(exc).__name__}: {exc})"
+    state = _state_before_sale(events, key)
+    if state is None:
+        return None, "history.jsonl records no earlier state for it"
+    return state, None
+
+
 def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     """Mark one copy sold, or put its state back. D10, and the server half of undo.
 
@@ -1106,6 +1230,11 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     ONE `Store.write()` for either direction, and nothing outside the store is touched — no
     photo, no sidecar, no queue entry. A sold card keeps its capture photo, which is what the
     pull preview shows (D6) and what makes a dispute answerable afterwards.
+
+    A SALE IS NEVER BLOCKED BY `history.jsonl`. The log is read here to say what an undo
+    would put back, and `_sale_origin` degrades an unreadable one to "origin unknown" rather
+    than refusing — the reversal is what loses, and only the reversal. Its own docstring has
+    the argument, including why the read stays inside the lock.
     """
     _reject_unknown(payload, SOLD_FIELDS)
     undo = _optional_flag(payload, "undo", "undo_invalid")
@@ -1126,8 +1255,9 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
         # Read inside the lock, before either branch writes. The `sold` event of the sale
         # being reversed was committed by an earlier request, so it is on disk by now —
         # `Store.write()` appends history after the yield, which is why this cannot see an
-        # event the CURRENT request has queued and does not need to.
-        previous = _state_before_sale(store.history(), key)
+        # event the CURRENT request has queued and does not need to. `_sale_origin` never
+        # raises: an unreadable history makes the origin unknown, it does not block the sale.
+        previous, origin_unknown = _sale_origin(store, key)
         was = card.state
 
         if undo:
@@ -1142,10 +1272,13 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "sold_origin_unknown",
-                    f"Box {box}, card {index} is sold, but history.jsonl records no earlier "
-                    f"state for it, so there is no state to put back. Set it by hand rather "
-                    f"than letting this guess — a card restored to the wrong state is a "
-                    f"listing that disagrees with TCGplayer.",
+                    # The reason is carried rather than assumed: "no earlier state" and "the
+                    # log will not parse" are one refusal and two repairs, and the second one
+                    # is a file to go and fix.
+                    f"Box {box}, card {index} is sold, but {origin_unknown}, so there is no "
+                    f"state to put back. Set it by hand rather than letting this guess — a "
+                    f"card restored to the wrong state is a listing that disagrees with "
+                    f"TCGplayer.",
                 )
             restored = previous
         else:

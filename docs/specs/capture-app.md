@@ -40,16 +40,28 @@ one fact.
   guess. Whatever breakpoints the built screen draws, the first real run can invalidate all
   of them without one line of the code being wrong.
 
-- **The twelve reason codes have never all fired.** Six come from `pipeline/variant.py`
-  (`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
-  `detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`) and six from
-  `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-  `set_ambiguous`, `card_not_detected`, `no_market_data`). `docs/DESIGN.md` requires each on
-  screen as a human label with the machine string small beneath it, so twelve human labels
-  now exist — and each one is a translation of a string that has never been seen attached to
-  a photograph of a card. Some may never fire on this owner's stock at all. A label written
-  for a code that fires weekly and a label written for a code that fires once a year are
-  different pieces of copy, and there is currently no way to tell which is which.
+- **The twelve reason codes have never all fired, and two of them cannot reach a queue at
+  all today — one by construction and one for want of a producer.** Six
+  come from `pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
+  `metadata_detection_disagreement`, `detected_finish_not_stocked`, `ambiguous_no_signal`,
+  `duplicate_condition`) and six from `pipeline/routing.py` (`low_confidence`, `no_position`,
+  `identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`).
+  `docs/DESIGN.md` requires each on screen as a human label with the machine string small
+  beneath it, so twelve human labels now exist — and each one is a translation of a string
+  that has never been seen attached to a photograph of a card. A label written for a code
+  that fires weekly and a label written for a code that fires once a year are different
+  pieces of copy, and there is currently no way to tell which is which.
+
+  **Eleven of the twelve can reach the review queue at all**, which is a fact about the
+  pipeline rather than about the run that has not happened: `no_market_data` is routing's
+  fourth destination beside listed, main and parked, and `pipeline/join.py` writes a queue
+  entry only for `routing.MAIN` and `routing.PARKED`. A card with a blank or $0.00 market
+  cell is priced by hand in `decisions.json` (D9) and never appears on that screen.
+  Separately, `card_not_detected` is a constant nothing in `pipeline/`, `cli/` or `identify/`
+  ever assigns — it is reachable in principle and has no producer in the repo today. Neither
+  is a defect in the screen and neither costs more than a line in a lookup table; both are
+  recorded because §10.2 item 2 asks for the codes that fired ZERO times, and a zero for
+  these two would mean nothing about the owner's stock.
 
 - **The queue's volume and shape are unknown, including whether it is ever long.** Section 0
   says a twenty-card run is expected to produce close to zero review items at T1's committed
@@ -632,12 +644,17 @@ work — step 7a is where the number of files reading those tokens stops being o
 is the cheapest of the three. Doing it early in this session is defensible; doing it as a
 rider on the capture screen is not.
 
-**What actually happened, 2026-08-13.** The third was extended to reach `app/` in the review
-that followed this build, because the gap stopped being hypothetical: item 7 above was missed
-and nothing noticed. The second was not done in this session or the review, so the token
-block in `docs/DESIGN.md` and `app/src/tokens.css` are still checked by nobody, across seven
-stylesheets now instead of one. The first is unchanged. `docs/DEBTS.md` carries all three,
-and carries which of their stated moments have already gone by.
+**What actually happened, 2026-08-13. Two of the three were done anyway, and this paragraph
+is the record of which.** The third was extended to reach `app/` in the review that followed
+this build, because the gap stopped being hypothetical: item 7 above was missed and nothing
+noticed. **The second shipped in 7b** — the `design tokens` row of `scripts/docs-audit.py`
+now parses the fenced block under `## Tokens` in `docs/DESIGN.md` against the `:root`
+properties in `app/src/tokens.css` and blocks on any disagreement in either direction, so the
+sentence this paragraph used to carry — that the two are "checked by nobody" — is exactly the
+false claim section 2 puts first in the order of operations. It was true when written and
+stopped being true in the same session. The first is unchanged. `docs/DEBTS.md` carries all
+three, marks the second closed with what it does and does not cover, and records which of
+their stated moments went by.
 
 It does not settle what the Fulfiller's device points at, beyond making the server's base
 URL configurable so that the question stays answerable later.

@@ -4,6 +4,7 @@ import type {
   Inventory,
   QueueSnapshot,
   ReviewAnswer,
+  SaleResult,
   ServerStatus,
 } from './types'
 
@@ -420,20 +421,26 @@ export async function answerReview(answer: ReviewAnswer): Promise<{ answered: st
  * as `body_required`, uniformly for every write this server answers. Two characters on the
  * wire buys one set of rules about request size and encoding rather than two.
  *
- * THE `already_sold` AND `not_sold` REFUSALS ARE NOT SOFTENED HERE. Both mean the card is
- * already in the state the caller asked for, and the Fulfillment view treats them as success
- * on the grounds that the only person who could act on the refusal is not in the room. That
- * is a decision about one persona's screen (D5), not about the wire: on the owner's screens
- * the same refusal is worth seeing. So this module does what it does for every other route —
- * throws `ServerError` carrying the server's own code and message — and the screen that wants
- * the softer reading applies it where the reason for it is written down.
+ * NO REFUSAL IS SOFTENED HERE, and `already_sold` is the one that proves the rule rather than
+ * the one that bends it. It reads like `not_sold`'s twin — both are the server saying the card
+ * is already in some state — but they are not twins, and the Fulfillment view's ruling covers
+ * only one of them. `not_sold` on a reversal means the card is not sold, which is what the
+ * caller wanted. `already_sold` on a SALE means somebody else sold that copy, and answering it
+ * as success hands the caller an undo that would reverse the other device's real sale (D13:
+ * two devices, one store). That distinction belongs to the screen that draws the undo, so this
+ * module does what it does for every other route — throws `ServerError` carrying the server's
+ * own code and message — and each caller applies its own reading where the reason for it is
+ * written down.
+ *
+ * `restores_to` COMES BACK WITH THE ANSWER AND IS THE CALLER'S TO ACT ON. See `SaleResult` in
+ * types.ts for what it means and for the two casts that used to discard it.
  */
-async function sale(box: number, index: number, undo: boolean): Promise<{ position: string }> {
+async function sale(box: number, index: number, undo: boolean): Promise<SaleResult> {
   return (await request(`/inventory/${box}/${index}/sold`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(undo ? { undo: true } : {}),
-  })) as { position: string }
+  })) as SaleResult
 }
 
 /**
@@ -443,8 +450,12 @@ async function sale(box: number, index: number, undo: boolean): Promise<{ positi
  * ONE COPY, NOT ONE SKU. D7 keeps every copy as its own position with its own photo precisely
  * so an order pull can mark one of them sold and leave the rest listed. The position in the
  * path is the whole of the selection.
+ *
+ * READ `restores_to` ON THE ANSWER BEFORE DRAWING AN UNDO. It is null when the store's history
+ * cannot say what state this card was in before the sale, and a null there is the server
+ * telling the caller in advance that the reversal below will refuse.
  */
-export function markSold(box: number, index: number): Promise<{ position: string }> {
+export function markSold(box: number, index: number): Promise<SaleResult> {
   return sale(box, index, false)
 }
 
@@ -457,9 +468,14 @@ export function markSold(box: number, index: number): Promise<{ position: string
  *
  * The state that comes back is read out of `history.jsonl` rather than guessed — a card sold
  * out of `pushed` returns to `pushed`. When the log cannot say, the route refuses as
- * `sold_origin_unknown` rather than defaulting to `live`.
+ * `sold_origin_unknown` rather than defaulting to `live`. That refusal is predictable at the
+ * moment of the sale: `markSold` answers `restores_to: null` for exactly the cards this will
+ * refuse, so a screen that reads it never draws a control whose only outcome is that message.
+ *
+ * `restores_to` on THIS answer is always null, and means nothing beyond "there is nothing left
+ * to reverse". Do not read it as a second undo being available.
  */
-export function undoSale(box: number, index: number): Promise<{ position: string }> {
+export function undoSale(box: number, index: number): Promise<SaleResult> {
   return sale(box, index, true)
 }
 

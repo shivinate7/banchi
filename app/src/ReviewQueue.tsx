@@ -262,7 +262,10 @@ function sentence(entry: QueueEntryWire): Segment[] {
     case 'set_ambiguous': {
       const head: Segment[] =
         number === null
-          ? [say('This collector number')]
+          ? // The trailing space is the sentence's, not the segment renderer's: `parts.map`
+            // draws one span per segment with nothing between them, so a branch that ends
+            // flush against the next segment reads as `numbermatches`.
+            [say('This collector number ')]
           : [value(number), say(' ')]
       const tail: Segment[] =
         hint === null
@@ -399,6 +402,12 @@ const MAX_KEYED_CANDIDATES = 9
 const SKIP_KEY = 's'
 const SKIP_KEY_LABEL = 'S'
 
+/* Clearing the skips is a choice too, so it shows its key — but only while the note that
+ * offers it is on screen. A key bound permanently to a control that is drawn sometimes is a
+ * key that does nothing most of the time, which is the opposite of what showing it is for. */
+const CLEAR_KEY = 'c'
+const CLEAR_KEY_LABEL = 'C'
+
 /* Focus that swallows a key, the same set `trigger.ts` refuses to fire through and for the
  * same reasons — including SELECT, whose letter typeahead would otherwise both jump a list
  * and answer a card. This screen has no field today; the guard costs one function and stops
@@ -415,7 +424,17 @@ function isEditableTarget(target: EventTarget | null): boolean {
 /** One entry with the queue it came from. The key is prefixed because a position can appear
  *  in both files — `release` drops an entry from one queue when a later run moves it, and
  *  the two writes are not simultaneous. */
-type Row = { key: string; queue: QueueName; entry: QueueEntryWire }
+type Row = {
+  key: string
+  queue: QueueName
+  entry: QueueEntryWire
+
+  /** The OTHER queue holding this same position open, when there is one. Set by
+   *  `oneCardPerPosition` on the row it keeps, so a card in both files can say so on screen:
+   *  without it the count line reads `1 to review · 1 parked` above a single drawn row and
+   *  nothing explains where the second went. */
+  shadow?: QueueName
+}
 
 function rowsOf(snapshot: QueueSnapshot): Row[] {
   /* Main first, then parked, each in the order the server sent it.
@@ -439,13 +458,92 @@ function rowsOf(snapshot: QueueSnapshot): Row[] {
   return [...open(snapshot.review, 'review'), ...open(snapshot.parked, 'parked')]
 }
 
+/** One row per POSITION, review before parked, with the dropped twin recorded on the row
+ *  that survives.
+ *
+ *  A POSITION CAN HOLD AN OPEN ENTRY IN BOTH FILES AT ONCE. Nothing in `store/queues.py`
+ *  prevents it and `do_delete_card` clears both for that reason. Drawn straight out of
+ *  `rowsOf`, such a card is two cards on this screen, and answering one of them clears BOTH
+ *  entries server-side: the twin is left sitting in the worklist as a card that can no longer
+ *  be answered, since pressing it returns `already_answered` — a true refusal about a question
+ *  nobody is being asked.
+ *
+ *  THE REVIEW ENTRY IS THE ONE KEPT, AND THAT IS NOW A CORRECTNESS RULE RATHER THAN A
+ *  PREFERENCE. `do_review_answer` validates the answer against ONE entry's candidate rows —
+ *  `holders[0]`, built review-first, so the main entry governs whenever a position is in both.
+ *  This function keeps the same row for the same reason `rowsOf` emits review first, so the
+ *  rows this screen offers are exactly the rows that route will accept. Flip the preference
+ *  and the screen draws parked's candidates against a server governed by review's, and every
+ *  answer for a card in both files comes back `sku_not_a_candidate`.
+ *
+ *  IT USED TO BE MERELY D9'S TASTE, and the older reason still holds underneath: main is
+ *  where a card goes when its market price is at or above the threshold, and parked is the
+ *  low-value queue held apart precisely so an unidentifiable 15-cent card cannot get in front
+ *  of a $12 one — so keeping the parked entry would draw the cheaper of the two reasons, sort
+ *  the card by the cheaper of the two prices, and dim a row the operator is actually being
+ *  asked about. Both arguments point the same way, which is why the change on the server side
+ *  needed no change here. The comment is what needed correcting: it claimed the route "unions
+ *  their candidates", which was true when it was written and was the bug the route was
+ *  repaired to stop — a stale parked entry could launder a SKU the review entry never offered
+ *  onto a real card, invisibly, since afterwards it is a real row from a real catalog.
+ *
+ *  What is lost with the dropped row is the parked entry's reason and price, and `shadow`
+ *  names the file they are in. Its candidate rows go with it, and that is the point rather
+ *  than a cost: they were never answerable for this position while the review entry is open.
+ */
+function oneCardPerPosition(rows: Row[]): Row[] {
+  const at = new Map<string, number>()
+  const merged: Row[] = []
+
+  for (const row of rows) {
+    const seen = at.get(row.entry.position)
+    if (seen === undefined) {
+      at.set(row.entry.position, merged.length)
+      merged.push(row)
+      continue
+    }
+    const kept = merged[seen]
+    if (kept !== undefined) merged[seen] = { ...kept, shadow: row.queue }
+  }
+
+  return merged
+}
+
+/** Which queues the answer route says it cleared, or null when it did not say.
+ *
+ *  `POST /review/<box>/<index>/answer` reports `review_cleared` and `parked_cleared` — both
+ *  true is the entry-in-both-queues case, which that route calls worth seeing rather than
+ *  smoothing over. `server.ts:answerReview` types its return as the one field it names, so
+ *  the flags are read off the body here rather than by widening a type in a module this
+ *  screen does not own.
+ *
+ *  NULL IS NOT "CLEARED NOTHING", and the difference decides whether an answered card comes
+ *  back on screen. A server that sends neither flag is an older server, not one that cleared
+ *  less: the route clears every open entry it found or it refuses outright, so a success with
+ *  no report is a success for every row this screen was holding. Reading an absent field as
+ *  false would redraw a card whose answer is already written, where the only move left is to
+ *  press it again and be told `already_answered`.
+ */
+function clearedQueues(result: unknown): ReadonlySet<QueueName> | null {
+  if (typeof result !== 'object' || result === null) return null
+  const body = result as { review_cleared?: unknown; parked_cleared?: unknown }
+  if (typeof body.review_cleared !== 'boolean' && typeof body.parked_cleared !== 'boolean') {
+    return null
+  }
+  const cleared = new Set<QueueName>()
+  if (body.review_cleared === true) cleared.add('review')
+  if (body.parked_cleared === true) cleared.add('parked')
+  return cleared
+}
+
 export function ReviewQueue() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
 
-  /* Cards pushed to the back of this session's worklist. CLIENT-SIDE ONLY: nothing is
-   * written, the entry stays open in its queue file, and a reload forgets every one of them.
+  /* Cards pushed to the back of this session's worklist, IN THE ORDER THEY WERE SKIPPED.
+   * CLIENT-SIDE ONLY: nothing is written, the entry stays open in its queue file, and a
+   * reload forgets every one of them.
    *
    * ASSUMPTION — docs/DESIGN.md specifies no such control, and it is here because two cards
    * cannot be answered at all and would otherwise stop the queue dead. A card the pipeline
@@ -455,8 +553,20 @@ export function ReviewQueue() {
    * an answer outlives the question. Skipping writes nothing at all: the entry stays open in
    * its file, the run report still counts it, and a reload forgets the skip. Settled by real
    * queue traffic at Gate B: if nothing is ever skipped, delete it.
+   *
+   * A LIST RATHER THAN A SET, AND THAT IS WHAT MAKES SKIP WRAP. A set records only THAT a
+   * card was skipped, so once every open card had been skipped the back of the worklist was
+   * in the server's order again and re-skipping the card at the front of it moved nothing:
+   * the screen sat on one card and the key stopped doing anything. It was a dead end for
+   * exactly the card that has no way out of it — the pipeline offers no candidate rows, the
+   * route refuses to answer it, and skip is its only control. Re-skipping now moves a card
+   * behind the others it was skipped with, so the key always advances and the loop is a loop.
+   *
+   * The order inside the skipped group is therefore skip order, which is an order the screen
+   * can explain. That is the distinction the rejected version below turns on: rotating the
+   * array reorders cards nobody touched.
    */
-  const [deferred, setDeferred] = useState<ReadonlySet<string>>(new Set())
+  const [deferred, setDeferred] = useState<readonly string[]>([])
 
   /* The key whose photo 404'd rather than a boolean, for PullPreview.tsx's reason: an
    * `onError` for the previous card can land after the queue has advanced, and a boolean
@@ -469,45 +579,99 @@ export function ReviewQueue() {
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
 
+  /* A queue read in flight — the first one, and every Reload after it. The same two-value
+   * split, and it exists to make the two round trips this screen makes MUTUALLY EXCLUSIVE:
+   * an answer is refused while a read is in flight, and Reload is disabled while an answer
+   * is. A snapshot read before an answer landed can then never overwrite the rows that answer
+   * changed.
+   *
+   * BOTH DIRECTIONS WERE REACHABLE AND EACH WAS WRONG DIFFERENTLY. Reload pressed during an
+   * answer: the failure path re-inserts the card into a list the fresh snapshot already
+   * carries, and the worklist grows a duplicate row for one position. Answer pressed during a
+   * reload: the snapshot lands last and resurrects a card whose answer is already written,
+   * which then refuses as `already_answered` when it is pressed again — a card that cannot be
+   * got rid of without another reload.
+   *
+   * Rejected: a generation counter captured at answer time and compared in each callback,
+   * which leaves both requests in flight and then throws one of the two results away. This
+   * costs the operator one keystroke inside a window measured in milliseconds, and it is one
+   * rule rather than a rule per callback. */
+  const [loading, setLoading] = useState(true)
+  const loadingRef = useRef(true)
+
   useEffect(() => {
     // StrictMode runs effects twice in dev and a slow first response can land after the
-    // second one; the flag makes the late arrival a no-op rather than a flicker.
+    // second one; the flag makes the late arrival a no-op rather than a flicker — including
+    // in `finally`, so a cancelled read cannot clear a flag the live one has just set.
     let live = true
-    void getQueues().then(
-      (snapshot) => {
+    loadingRef.current = true
+    setLoading(true)
+    void getQueues()
+      .then(
+        (snapshot) => {
+          if (!live) return
+          setRows(rowsOf(snapshot))
+          setFailure(null)
+          setPhotoAbsent(null)
+          setDeferred([])
+        },
+        (err: unknown) => {
+          if (!live) return
+          setRows(null)
+          setFailure(describeFailure(err))
+        },
+      )
+      .finally(() => {
         if (!live) return
-        setRows(rowsOf(snapshot))
-        setFailure(null)
-        setPhotoAbsent(null)
-        setDeferred(new Set())
-      },
-      (err: unknown) => {
-        if (!live) return
-        setRows(null)
-        setFailure(describeFailure(err))
-      },
-    )
+        loadingRef.current = false
+        setLoading(false)
+      })
     return () => {
       live = false
     }
   }, [reloads])
 
-  /* The worklist: everything still open, with skipped cards moved to the back and their
-   * relative order preserved inside each group. Rejected: rotating the array, which is one
-   * line and loses the sort — a card skipped once would come back sitting between two others
-   * for no reason the screen could explain. */
-  const worklist = useMemo(() => {
-    if (rows === null) return []
-    const held = rows.filter((row) => !deferred.has(row.key))
-    const pushed = rows.filter((row) => deferred.has(row.key))
-    return [...held, ...pushed]
+  /* The worklist: one row per position, everything still open, with skipped cards moved to
+   * the back in skip order and the server's sort preserved inside the group that is left.
+   * Rejected: rotating the array, which is one line and loses the sort — a card skipped once
+   * would come back sitting between two others for no reason the screen could explain, where
+   * the skipped group's order is one the screen can name.
+   *
+   * `allSkipped` travels with it because it is the same partition read once: everything still
+   * waiting has been pushed to the back, so the next skip only moves the current card behind
+   * the others and the screen has to say so rather than looking stuck. */
+  const { worklist, allSkipped } = useMemo(() => {
+    if (rows === null) return { worklist: [] as Row[], allSkipped: false }
+
+    const cards = oneCardPerPosition(rows)
+    const skipped = new Set(deferred)
+    const held = cards.filter((row) => !skipped.has(row.key))
+
+    /* Rebuilt from `deferred` rather than filtered out of `cards`, because the skip order is
+     * the point. A key whose card has since gone — answered, or dropped by a reload — falls
+     * out here, which is cheaper than pruning the list on every change to `rows`. */
+    const byKey = new Map(cards.map((row) => [row.key, row]))
+    const pushed = deferred.flatMap((key) => {
+      const row = byKey.get(key)
+      return row === undefined ? [] : [row]
+    })
+
+    return { worklist: [...held, ...pushed], allSkipped: held.length === 0 && pushed.length > 0 }
   }, [rows, deferred])
 
   const current = worklist[0] ?? null
 
   const answer = useCallback(
     (row: Row, candidate: CandidateRow) => {
-      if (busyRef.current) return
+      // One round trip at a time, in both directions — see `loading`.
+      if (busyRef.current || loadingRef.current) return
+
+      /* EVERY ROW AT THIS POSITION, NOT THE ONE THAT WAS PRESSED. The route clears both
+       * queues for a position held in both, so dropping only the pressed row leaves a twin on
+       * screen that the server has already released. The worklist merges the two into one
+       * card (`oneCardPerPosition`); this is the same fact applied to the write. */
+      const position = row.entry.position
+      const dropped = rows === null ? [row] : rows.filter((held) => held.entry.position === position)
 
       /* Advance first. docs/DESIGN.md: answering writes the answer and advances, with no
        * acknowledgement to dismiss — so the next card is on screen before the write lands.
@@ -518,11 +682,28 @@ export function ReviewQueue() {
        * file lock, so a queue answered faster than the store can commit would stack writes
        * against a lock and report their failures out of order. One in flight means the card
        * a failure names is always the card just answered. */
-      const at = rows === null ? -1 : rows.findIndex((held) => held.key === row.key)
+      const at = rows === null ? -1 : rows.findIndex((held) => held.entry.position === position)
       busyRef.current = true
       setBusy(true)
       setFailure(null)
-      setRows((prev) => (prev === null ? prev : prev.filter((held) => held.key !== row.key)))
+      setRows((prev) =>
+        prev === null ? prev : prev.filter((held) => held.entry.position !== position),
+      )
+
+      /* Back where they were, together. The two rows for one position are not adjacent in
+       * `rows` — `rowsOf` writes every review row before the first parked one — so a restore
+       * puts the parked twin beside its review row rather than at the top of the parked
+       * block. That is invisible: the worklist merges them again before anything is drawn,
+       * and the order that matters is the server's, which a reload restores exactly. */
+      const restore = (back: Row[]) => {
+        if (back.length === 0) return
+        setRows((prev) => {
+          if (prev === null) return back
+          const next = [...prev]
+          next.splice(at < 0 ? 0 : Math.min(at, next.length), 0, ...back)
+          return next
+        })
+      }
 
       /* BOTH FIELDS, COPIED OFF THE ROW THAT WAS PRESSED. The route requires `condition`
        * even though the SKU implies it, and its reasoning is worth not defeating here: the
@@ -537,13 +718,23 @@ export function ReviewQueue() {
         condition: candidate.condition,
       })
         .then(
-          () => {
-            setDeferred((prev) => {
-              if (!prev.has(row.key)) return prev
-              const next = new Set(prev)
-              next.delete(row.key)
-              return next
-            })
+          (result: unknown) => {
+            /* WHAT CAME BACK, RATHER THAN WHAT THIS SCREEN ASSUMED. The route reports which
+             * queues it cleared, so a row whose queue it did not name goes back on screen
+             * instead of being dropped on the strength of a 200. Today the route clears every
+             * open entry it finds or refuses outright, so this restores nothing — which is
+             * the point of reading it rather than a reason not to: the day that stops being
+             * true, the screen follows the write instead of disagreeing with it silently. */
+            const cleared = clearedQueues(result)
+            if (cleared !== null) restore(dropped.filter((held) => !cleared.has(held.queue)))
+
+            /* Identity preserved when the answered card was never skipped, which is the
+             * common case and the hot one: a new array on every answer would invalidate the
+             * worklist memo once per card across a whole box for nothing. */
+            const answered = new Set(dropped.map((held) => held.key))
+            setDeferred((prev) =>
+              prev.some((key) => answered.has(key)) ? prev.filter((key) => !answered.has(key)) : prev,
+            )
           },
           (err: unknown) => {
             /* Loud, and back where it was. §5.5's rule for a failed capture is that the run
@@ -562,14 +753,7 @@ export function ReviewQueue() {
             const stale =
               err instanceof ServerError &&
               (err.code === 'already_answered' || err.code === 'not_in_queue')
-            if (!stale) {
-              setRows((prev) => {
-                if (prev === null) return [row]
-                const next = [...prev]
-                next.splice(at < 0 ? 0 : Math.min(at, next.length), 0, row)
-                return next
-              })
-            }
+            if (!stale) restore(dropped)
             setFailure(describeFailure(err))
           },
         )
@@ -582,15 +766,20 @@ export function ReviewQueue() {
   )
 
   const skip = useCallback((row: Row) => {
-    setDeferred((prev) => {
-      const next = new Set(prev)
-      next.add(row.key)
-      return next
-    })
+    /* Moved to the back of the skipped group rather than merely marked as skipped, so that
+     * skipping the last unskipped card and skipping an already-skipped one both advance. A
+     * set could only do the first, and the second is the case that mattered — see `deferred`. */
+    setDeferred((prev) => [...prev.filter((key) => key !== row.key), row.key])
   }, [])
 
+  /* Back to the server's order, with nothing written either way: a skip was never a write, so
+   * un-skipping is not one either. Offered only while every waiting card is skipped, which is
+   * the one state where the screen would otherwise just cycle. */
+  const clearSkips = useCallback(() => setDeferred([]), [])
+
   /* The key map, armed once and reading the current card through a closure React rebuilds
-   * whenever the card or the handlers change. Digits pick a candidate, S skips. */
+   * whenever the card or the handlers change. Digits pick a candidate, S skips, and C clears
+   * the skips for exactly as long as the note offering it is on screen. */
   useEffect(() => {
     if (current === null) return
 
@@ -601,13 +790,20 @@ export function ReviewQueue() {
       // Modifiers belong to the browser and the OS.
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (isEditableTarget(event.target)) return
-      if (busyRef.current) return
+      // Both flags, because a queue read in flight is about to replace every row on screen.
+      if (busyRef.current || loadingRef.current) return
 
       const key = event.key.toLowerCase()
 
       if (key === SKIP_KEY) {
         event.preventDefault()
         skip(current)
+        return
+      }
+
+      if (key === CLEAR_KEY && allSkipped) {
+        event.preventDefault()
+        clearSkips()
         return
       }
 
@@ -621,10 +817,15 @@ export function ReviewQueue() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, answer, skip])
+  }, [current, answer, skip, clearSkips, allSkipped])
 
   const counts = useMemo(() => {
     if (rows === null) return null
+    /* THE TWO QUEUE FILES' OWN DEPTHS, not the length of the worklist. A position open in
+     * both files is one card on screen and one entry in each file, so these two numbers can
+     * add up to more than there are cards to work — which is the same arithmetic the run
+     * report prints, and the merged row says `also parked` rather than leaving the difference
+     * unexplained. */
     return {
       review: rows.filter((row) => row.queue === 'review').length,
       parked: rows.filter((row) => row.queue === 'parked').length,
@@ -642,7 +843,16 @@ export function ReviewQueue() {
           One card at a time, worked expensive first. Answering advances; nothing asks twice.
         </p>
         <div className="review-controls">
-          <button className="review-reload" type="button" onClick={() => setReloads((n) => n + 1)}>
+          {/* Disabled while an answer is in flight, which is half of the mutual exclusion the
+              `loading` note argues for: a snapshot read before that answer landed would
+              resurrect the card it just cleared. Disabled during a read as well, because a
+              second read stacked on the first is two snapshots racing to be last. */}
+          <button
+            className="review-reload"
+            type="button"
+            onClick={() => setReloads((n) => n + 1)}
+            disabled={busy || loading}
+          >
             Reload
           </button>
           {counts === null ? null : (
@@ -676,10 +886,37 @@ export function ReviewQueue() {
         <p className="review-note-text">Nothing is waiting. Every queued card has been answered.</p>
       ) : null}
 
+      {/* THE END OF THE SKIP LOOP, NAMED. Skip wraps, so the screen never stops advancing —
+          but a card coming round for the second time looks exactly like a card that did not
+          move, and an operator who has skipped everything deserves to be told that rather
+          than left to work it out from the position label. The way out is the same one that
+          got him here, in reverse, and it costs nothing: no skip was ever written down. */}
+      {allSkipped ? (
+        <div className="review-note">
+          <p className="review-note-text">
+            Every card still waiting has been skipped, so skipping again only moves this one
+            behind the rest. Clear the skips to work them in queue order again — nothing was
+            written when you skipped them and nothing is written now.
+          </p>
+          <button
+            className="review-action"
+            type="button"
+            onClick={clearSkips}
+            disabled={busy || loading}
+          >
+            <span>Clear skips</span>
+            <kbd className="review-key">{CLEAR_KEY_LABEL}</kbd>
+          </button>
+        </div>
+      ) : null}
+
       {current === null ? null : (
         <Card
           row={current}
-          busy={busy}
+          /* One prop rather than a boolean beside a string: the controls are disabled for
+              exactly the window this line is on screen, and two props is two chances for
+              those to fall out of step. */
+          activity={busy ? 'writing the answer' : loading ? 'rereading the queues' : null}
           photoAbsent={photoAbsent === current.key}
           onPhotoAbsent={() => setPhotoAbsent(current.key)}
           onChoose={(candidate) => answer(current, candidate)}
@@ -698,7 +935,10 @@ export function ReviewQueue() {
 
 type CardProps = {
   row: Row
-  busy: boolean
+
+  /** What the screen is waiting on, in the words the busy line prints, or null when it is
+   *  waiting on nothing. Every control here is disabled for exactly that window. */
+  activity: string | null
   photoAbsent: boolean
   onPhotoAbsent: () => void
   /** The whole row, not its SKU. The route wants `sku` and `condition` copied off one
@@ -711,9 +951,10 @@ type CardProps = {
 
 /* Photo first, then the finding, then the rows. Single column, so the same layout works on a
  * laptop and a phone — docs/DESIGN.md rejects a left/right split by name. */
-function Card({ row, busy, photoAbsent, onPhotoAbsent, onChoose, onSkip }: CardProps) {
+function Card({ row, activity, photoAbsent, onPhotoAbsent, onChoose, onSkip }: CardProps) {
   const { entry } = row
   const parts = sentence(entry)
+  const busy = activity !== null
 
   /* NO SOLID ACCENT FILL ANYWHERE ON THIS SCREEN, and it took building the thing to see that
    * this is the plain reading rather than a gap.
@@ -765,10 +1006,18 @@ function Card({ row, busy, photoAbsent, onPhotoAbsent, onChoose, onSkip }: CardP
            identification that failed or a card with no position, and the route refuses such
            an entry as `no_candidates` — so the remedy is a re-shoot or a re-identify, and the
            only move on this screen is to skip past it. Rejected: hiding the card, which would
-           make a queue count that never goes down with nothing on screen to explain it. */
+           make a queue count that never goes down with nothing on screen to explain it.
+
+           THE COPY NAMES WHERE THE REMEDY IS, because skip is not one. Skip moves the card
+           and writes nothing; the entry stays open in its file whatever this screen does, so
+           a sentence that stopped at "skip past it" described a loop rather than a way out.
+           The way out is a command in a terminal, and it is worth one clause to say so. */
         <p className="review-note-text">
-          The pipeline offered no rows for this card, so there is nothing here to choose. It
-          needs another photograph or another identification run, not an answer. Skip past it.
+          The pipeline offered no rows for this card, so there is nothing here to choose, and
+          the answer route refuses it rather than inventing one. It needs another photograph or
+          another identification run — neither of which happens on this screen. Skip moves it
+          behind the rest of the worklist and writes nothing; the entry stays open in its queue
+          file until a later run replaces it.
         </p>
       ) : (
         <ul className="review-candidates">
@@ -823,10 +1072,12 @@ function Card({ row, busy, photoAbsent, onPhotoAbsent, onChoose, onSkip }: CardP
           <kbd className="review-key">{SKIP_KEY_LABEL}</kbd>
         </button>
 
-        {/* Not a spinner and not a disabled-everything overlay: a line that says which of the
-            two states the screen is in, in the utility face, because it is a state and not a
-            sentence. The controls above carry `disabled` for the same window. */}
-        {busy ? <span className="review-busy">writing the answer</span> : null}
+        {/* Not a spinner and not a disabled-everything overlay: a line that says which state
+            the screen is in, in the utility face, because it is a state and not a sentence.
+            The controls above carry `disabled` for the same window. It names the round trip
+            rather than saying "busy" — writing an answer and rereading the queues lock the
+            same controls and mean opposite things about whether your last press landed. */}
+        {activity === null ? null : <span className="review-busy">{activity}</span>}
       </div>
 
       {/* LAST, AND IT WAS BETWEEN THE SENTENCE AND THE CANDIDATES UNTIL THIS WAS RENDERED
@@ -851,7 +1102,11 @@ function Facts({ row }: { row: Row }) {
     { label: 'Card', value: text(entry.read.name) ?? 'not identified', body: text(entry.read.name) !== null },
     { label: 'Number', value: collectorNumber(entry.read) ?? 'none' },
     { label: 'Market', value: priceText(entry.market) },
-    { label: 'Queue', value: row.queue },
+    /* Both files when both hold this position open. The worklist draws one card and the count
+     * line counts two entries; this is the line that reconciles them, and a card queued twice
+     * is worth seeing rather than smoothing over — the same call `do_review_answer` makes when
+     * it reports each queue it cleared separately. */
+    { label: 'Queue', value: row.shadow === undefined ? row.queue : `${row.queue} · ${row.shadow}` },
     { label: 'Confidence', value: text(entry.confidence) ?? 'none recorded' },
     { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none' },
     { label: 'Toggle', value: text(entry.read.metadata_finish) ?? 'no claim' },
@@ -953,7 +1208,8 @@ function Waiting({
 }: {
   rows: Row[]
   currentKey: string | null
-  deferred: ReadonlySet<string>
+  /** In skip order, which is the order the tail of this list is in. */
+  deferred: readonly string[]
 }) {
   return (
     <section className="review-waiting">
@@ -972,7 +1228,12 @@ function Waiting({
             <span className="review-row-position">{row.entry.label}</span>
             <span className="review-row-reason">
               {row.entry.reason}
-              {deferred.has(row.key) ? ' · skipped' : ''}
+              {/* The queue that lost the merge, named on the row rather than only in the
+                  facts panel: this list is where the count line is read against the rows, and
+                  it is the only place a card queued twice can be seen at all once it is not
+                  the card being worked. */}
+              {row.shadow === undefined ? '' : ` · also ${row.shadow}`}
+              {deferred.includes(row.key) ? ' · skipped' : ''}
             </span>
           </li>
         ))}

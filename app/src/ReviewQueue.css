@@ -10,8 +10,13 @@
  *      the price does, and a parked row is dimmed rather than merely lower.
  *   3. Accent has exactly two jobs. Outline and text weight where the system is unsure —
  *      the reason chip, and the two conflicting claims in the sentence, which is the common
- *      case here. Solid fill only where there is exactly one thing to do, which on this
- *      screen is a card with no candidate rows at all, and that fill is PullConfirm's.
+ *      case here. Solid fill only where there is exactly one thing to do, WHICH IS NOWHERE
+ *      ON THIS SCREEN: a card with candidate rows has two answers or more, and a card with
+ *      none has zero, because `POST /review/<box>/<index>/answer` refuses a no-candidates
+ *      entry as `no_candidates` — it needs a re-shoot or a re-identify, not an answer. This
+ *      rule read the other way until the route was built, and told a later session to build
+ *      a fill for an action the design refuses to offer. Nothing in this file is filled, and
+ *      PullConfirm's fill stays the Fulfiller's loudest control.
  *   4. Mono carries all metadata. The body face is reserved for sentences a human reads,
  *      and this screen is mostly metadata, so the defaults below are inverted relative to
  *      PullPreview.css: dd is mono and the exception is marked.
@@ -32,19 +37,24 @@
    costs that scroll once per card across hundreds of them.
 
    So the chrome is tight — s5 vertically rather than s6, one line of lede, s3 between the
-   card's parts — and the photo carries a cap. Rejected: the left/right split that would fix
-   it outright, which docs/DESIGN.md forbids by name so that one layout serves a laptop and a
-   phone.
+   card's parts — and the photo carries a height cap. Rejected: the left/right split that
+   would fix it outright, which docs/DESIGN.md forbids by name so that one layout serves a
+   laptop and a phone.
 
-   THE PHOTO CAP IS WHERE THE TRADE IS, AND BOTH MEASUREMENTS ARE RECORDED SO THE NEXT
-   SESSION CAN MOVE IT WITH NUMBERS RATHER THAN TASTE. At 1280x900, with three candidate rows:
+   THE CAP IN FORCE IS 60vh AND IT IS DECLARED ON `.review-photo`, WITH THE ARGUMENT FOR IT
+   BESIDE IT. This block argued for 38vh over 34vh on rows-above-the-fold grounds, and was
+   left standing when the cap was raised — a comment reasoning toward a number the file does
+   not use, far enough above the rule that contradicts it that neither reader meets both.
+   Worse than no comment, because it reads as the current thinking. Those measurements were
+   real and the trade that replaced them is recorded where the number is, which is the one
+   place a session changing it will look.
 
-     38vh   photo 246x342, rows 1 and 2 whole, row 3 cut 24px short, actions below the fold
-     34vh   photo 220x306, all three rows whole, actions exactly at the fold
-
-   38vh wins because photo primacy is the document's — "photo full width at the top" — and
-   rows-above-the-fold is this file's inference from it. The actions carry keys and the keys
-   are what the owner's hand uses; a candidate row is read before it is chosen and cannot be.
+   THE RULE IS docs/DESIGN.md'S NOW, AND ONLY THE NUMBER IS THIS FILE'S. That section carries
+   "photo as large as the viewport allows" — a cap on height with width free to bind first, so
+   a phone gets a genuinely full-width photo and a laptop keeps the sentence and a candidate
+   in view beneath it — and it names this file as where the judgement lives. Both halves bind:
+   the number may not be changed here without re-reading that paragraph, and the paragraph may
+   not be satisfied by a second cap declared somewhere else.
 
    WORTH LOOKING AT ON THE OWNER'S OWN SCREEN before this is called done, and worth
    re-measuring against a real rig frame: this was tuned against a 63x88 portrait stand-in,
@@ -102,8 +112,17 @@
    in docs/DESIGN.md names what a row is: choice rows, queue rows, panels. A candidate row is
    a choice row and takes the ground below; a button is not, so it moves its border to --ink
    and leaves the ground alone. */
-.review-reload:hover {
+.review-reload:hover:not(:disabled) {
   border-color: var(--ink);
+}
+
+/* Disabled while a round trip is in flight, and it says so by going muted rather than by
+   disappearing: a control that vanishes for the length of a write is a control the owner
+   looks for at the moment he is least inclined to. Same treatment as `.review-action`,
+   because it is the same fact about the same window. */
+.review-reload:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .review-count {
@@ -113,7 +132,9 @@
   color: var(--muted);
 }
 
-/* ---- panels: the unwired seam, a refusal, a missing photo ---- */
+/* ---- panels: a refusal, a missing photo, the end of the skip loop ----
+   The unwired seam was the fourth and is gone; ReviewQueue.tsx says why where it used to be
+   drawn. Named rather than counted, so this line survives the next panel. */
 
 .review-note,
 .review-absent {
@@ -137,6 +158,14 @@
 
 .review > .review-note-text {
   margin-top: var(--s5);
+}
+
+/* A panel that carries an action as well as a sentence — today only the note that offers to
+   clear the skips. The margin is the panel's rather than the button's, for the reason the
+   paragraph above has none of its own: the button is not the first child, and giving
+   `.review-action` a margin everywhere would fight the flex gap in the card's own row. */
+.review-note .review-action {
+  margin-top: var(--s3);
 }
 
 /* The machine string beneath the human one — docs/DESIGN.md's reason-code rule, which exists
@@ -168,23 +197,29 @@
   margin-top: var(--s4);
 }
 
-/* "Photo full width at the top" is the rule, and a height cap is where it meets a portrait
-   card. A card is 63x88mm; at this column's width a full-width photograph is over a
+/* "Photo as large as the viewport allows" is the rule — docs/DESIGN.md's own words since
+   2026-08-13, when "full width at the top" was retired for being right on a phone and wrong
+   on a laptop. A card is 63x88mm; at this column's width a full-width photograph is over a
    thousand pixels tall, which puts every candidate row below the fold and costs a scroll per
    card across hundreds of them. So the cap wins on tall photographs and the width rule wins
-   on wide ones.
+   on wide ones, and `max-width: 100%` still binds first on a phone — which is what keeps one
+   column working on both.
 
    IT HUGS THE IMAGE RATHER THAN LETTERBOXING INSIDE A FULL-WIDTH BOX. The first draft set
    `width: 100%` with `object-fit: contain`, which drew a correct photograph beside an equal
    area of empty surface inside one border — a panel that looks like a bug. Rendered, looked
-   at, changed. */
-/* 60vh, not 38vh. At 38 the card drew about 245px wide on a 1280x900 render, which is small
-   for the only job this screen has: deciding whether the photograph agrees with a candidate
-   row, and whether the foil is what the toggle claimed. 60vh keeps the sentence and the first
-   candidate on screen beneath it while making the card meaningfully judgeable.
-   `max-width: 100%` still binds first on a phone, which is what keeps this one column
-   working on both — see docs/DESIGN.md, which now records the shape rather than leaving the
-   argument in a stylesheet. */
+   at, changed.
+
+   60vh, NOT 38vh, AND EVERY MEASUREMENT IS HERE BECAUSE THIS IS WHERE THE NUMBER IS. Taken
+   at 1280x900 with three candidate rows: at 34vh the photo drew 220x306 with all three rows
+   whole and the actions exactly at the fold; at 38vh it drew 246x342 with the third row cut
+   24px short. Both were budgeted against rows-above-the-fold, and both are too small for the
+   one job this screen has — deciding whether the photograph agrees with a candidate row, and
+   whether the foil is what the toggle claimed. The session that raised the cap recorded that
+   60vh keeps the sentence and the first candidate in view beneath it; that claim is the one
+   thing here nobody has re-measured since, and it is the first thing to check on the owner's
+   own screen. What is NOT in doubt is what it bought: 245px of card at 38vh is not a card you
+   can rule on. */
 .review-photo {
   display: block;
   width: auto;
@@ -493,15 +528,6 @@
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* The one standing caveat on the screen: leaving a card unlisted is not undoable from here.
-   Prose, muted, and permanent rather than a dialog — docs/DESIGN.md forbids the dialog, and a
-   sentence that is always there costs nothing to the ninety-nine correct answers. */
-.review-quiet {
-  font-family: var(--body);
-  font-size: 13px;
   color: var(--muted);
 }
 

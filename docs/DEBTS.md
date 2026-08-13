@@ -215,14 +215,21 @@ Three things from that enumeration are still not asserted anywhere:
 - **The bare-interpreter start.** The server runs on system `python3` with no venv, which
   is what makes `python3` rather than `$(PYTHON)` correct in the Makefile. T7 imports the
   module under whichever interpreter runs the harness, so it cannot see this.
-- **Neither a `PUT` correction nor a `DELETE` undo appends to `history.jsonl`.** Two routes
-  as of 2026-08-13, not one. The store logs state transitions and neither of these is one.
-  T7 asserts what costs money when it fails — that the correction reaches the sidecar, and
-  that undo removes the record, the sidecar and the photo — and the history lines are still
-  missing from both. Undo is the wider of the two: afterwards `history.jsonl` still carries
-  a `captured` event for a position whose record is gone. That is true rather than wrong —
-  the capture did happen, it is the record that was removed — but it is the one place those
-  two files disagree, and nothing says so at read time.
+- **No `PUT` correction, `DELETE` undo or review answer appends to `history.jsonl`.** Three
+  routes as of 2026-08-13, not two: `do_put_card`, `do_delete_card` and `do_review_answer`.
+  The store logs state transitions, and a corrected set hint, a removed record and a SKU
+  written onto a card are none of them. T7 asserts what costs money when each fails — that
+  the correction reaches the sidecar, that undo removes the record, the sidecar and the
+  photo, and that an answer naming a SKU the pipeline never offered is refused — and the
+  history lines are missing from all three. Each route says so where it writes and two of
+  them cite this file by name, which is the shape to keep: named at the code, recorded once
+  here, never a third place to hold in step. `do_mark_sold` is the counter-example and the reason
+  the rule is not "the server does not log" — a sale IS a state transition, so it logs.
+
+  Undo is still the widest of the three: afterwards `history.jsonl` carries a `captured`
+  event for a position whose record is gone. That is true rather than wrong — the capture did
+  happen, it is the record that was removed — but it is the one place those two files
+  disagree, and nothing says so at read time.
 
 **Cost**: low and bounded, which is the difference from the entry this replaces. Each is a
 single known case rather than a whole package nothing looks at.

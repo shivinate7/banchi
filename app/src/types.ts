@@ -96,7 +96,30 @@ export type ServerStatus = {
    *  need editing every time one is added. */
   states: Record<string, number>
 
-  queues: { review: number; parked: number }
+  /** How many cards are still waiting in each standing queue — open entries only, so an
+   *  answered card leaves this count the moment it leaves the screen that works it.
+   *
+   *  EITHER SIDE IS NULL WHEN THAT FILE HOLDS AN ENTRY THAT CANNOT BE ORDERED, and the null
+   *  is a refusal to count rather than an empty queue. `len(Queue)` runs `open_entries`, so
+   *  counting is a sort: a `market` that is not a number or a `box` that arrived as a JSON
+   *  string raises inside it. `server/capture_server.py:_queue_depth` catches that per queue
+   *  and answers null, so a corrupt `review.json` does not also hide what is sitting in
+   *  parked, and `problem` names the file to go and repair.
+   *
+   *  NOT WIDENED WHEN THE SERVER WAS, which is the mistake this comment exists to stop
+   *  repeating: `_queue_depth` landed with a note saying this pair "has to widen to
+   *  `number | null` to match", the two changes were made by different groups, and this side
+   *  stayed `number` while T7 asserted the null. Nothing broke, because no screen reads this
+   *  field yet — which is exactly what makes it worth typing correctly now. The first reader
+   *  would have been handed a `number` that is sometimes null, and this module casts rather
+   *  than validates, so nothing would have caught it before the arithmetic.
+   *
+   *  A COUNT THAT IS WRONG IN THE DIRECTION OF "THERE IS MORE TO DO" IS WORSE THAN NO COUNT
+   *  HERE, which is why the server refuses rather than substituting `len(queue.entries)`.
+   *  That number counts cleared entries too, so it says there is work left after the last
+   *  card has been answered — and this is the number the owner works from. A reader must
+   *  render the gap, never coerce the null to zero. */
+  queues: { review: number | null; parked: number | null }
 
   /** Box number (as a string key) to the index the next capture into it would get. This is
    *  the list of boxes already in use, and the capture screen's box picker is built from it
@@ -274,6 +297,44 @@ export type QueueEntryWire = {
 export type QueueSnapshot = {
   review: QueueEntryWire[]
   parked: QueueEntryWire[]
+}
+
+// -------------------------------------------------------------------------- the sale, both ways
+
+/** What `POST /inventory/<box>/<index>/sold` answers, in either direction.
+ *
+ *  A SUBSET OF THE BODY, the same shape `server.ts:undoCapture` takes of a much larger one.
+ *  `server/capture_server.py:do_mark_sold` also returns `box`, `index`, `state`,
+ *  `previous_state` and the whole card row; no screen reads any of them, and naming a field
+ *  here is a claim that something does.
+ *
+ *  `restores_to` IS THE FIELD THAT WAS DROPPED TWICE AND MUST NOT BE AGAIN. The route computes
+ *  it deliberately and says so in its own comment — "null on a sale means the undo control
+ *  should not be offered, which is worth knowing at the moment of the sale rather than at the
+ *  tap that fails" — and it reached no screen: this type was written as `{ position: string }`,
+ *  and the Fulfillment view's own wrapper returned `Promise<void>` on top of that. The result
+ *  was an Undo offered for a sale the server had already said it could not reverse, whose only
+ *  behaviour was a refusal telling a retired non-technical user to press it again. Null means
+ *  `history.jsonl` records no earlier state for the card, so an undo will refuse as
+ *  `sold_origin_unknown`; on a reversal it is always null, because there is then nothing left
+ *  to put back.
+ *
+ *  A PIPELINE STATE WORD (`live`, `pushed`, `staged`), never a sentence, and read as
+ *  present-or-null rather than displayed. Nothing on the Fulfillment view may render it: that
+ *  vocabulary is the owner's, and D5's second persona has no use for a state name. */
+export type SaleResult = {
+  /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
+  position: string
+
+  /** True when this call reversed a sale rather than recording one. The app reads this
+   *  rather than comparing states, so one field answers "which way did that go" in both
+   *  directions. */
+  undone: boolean
+
+  /** What an undo of THIS call would put the card back to, or null when there is none.
+   *  D10: sold is a state and never a removal, so a reversal is a state transition backwards
+   *  and this is the state it goes back to. */
+  restores_to: string | null
 }
 
 /** D4's one-tap choice, as `POST /review/<box>/<index>/answer` takes it.

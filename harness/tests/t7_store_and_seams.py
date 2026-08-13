@@ -45,6 +45,21 @@ refusal by code, and the two rules that are easy to state and easy to lose: an a
 only be one of the rows the pipeline offered, and a sale is a state that keeps its record
 and its position.
 
+THREE MORE REGRESSION CASES LANDED ON 2026-08-13, from the review of 7b, and each one is a
+case an existing section could not have failed on:
+
+  the laundered sku       `do_review_answer` validated against both queue entries' candidates
+                          POOLED, so a stale parked entry could authorise a SKU the review
+                          entry never offered. The both-queues case here gave the two entries
+                          IDENTICAL candidates and was therefore blind to it — the fixture is
+                          different on both sides now.
+  the sale a bad log      `do_mark_sold` reads `history.jsonl` to say what an undo would put
+  blocked                 back, and `read_jsonl` refuses the whole file over one bad line —
+                          which took the SALE down with the reversal.
+  /status counting a      7b turned the queue counts into a sort (`len(Queue)` runs
+  queue it cannot order   `open_entries`), so a queue record with a non-numeric market or a
+                          string box raised out of the health route.
+
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
 after. Every queue entry they have ever been handed was hand-built — by the harness below,
@@ -119,6 +134,25 @@ CANDIDATES = [
         "market": "4.20",
     },
 ]
+
+# A row NO REVIEW ENTRY EVER OFFERS, and the only reason it exists. A position can sit in
+# both queue files at once, and until 2026-08-13 the answer route validated against the two
+# entries' candidates POOLED — so a stale parked entry could hand a screen the authority to
+# write a SKU nothing had proposed for the row being answered.
+#
+# THE CASE COULD NOT FAIL BEFORE THIS LITERAL. `check_review_answer` already put a card in
+# both files, but built both entries from `entry()`, so the two candidate lists were
+# IDENTICAL and their union was indistinguishable from either one. A test that cannot fail
+# on the bug it covers is the thing this repo cares most about, so the fixture is different
+# on both sides now: a different set, a different number, a different condition string.
+STALE_CANDIDATE = {
+    "sku": "8608861",
+    "name": "Articuno",
+    "set": "SV08",
+    "number": "071/167",
+    "condition": "Near Mint",
+    "market": "0.05",
+}
 
 
 def entry(box: int, index: int, **extra) -> queues.QueueEntry:
@@ -208,6 +242,25 @@ def refusal(checks: Checks, fn, code: str, label: str) -> None:
         checks.ok(False, label, f"raised {type(caught).__name__}: {caught}")
     else:
         checks.ok(False, label, "did not refuse")
+
+
+def answers(checks: Checks, fn, label: str):
+    """Assert a route ANSWERS at all, and hand back what it said. `refusal`'s mirror.
+
+    For the routes whose contract is that they survive data they cannot make sense of —
+    `/status` on a corrupt store, a sale against an unreadable history. Written as a helper
+    for the same reason `Checks` collects failures rather than stopping at the first: an
+    exception escaping one of those is the regression itself, and letting it propagate turns
+    a red line into a crash that hides every check behind it. Returns None on a raise, so the
+    caller guards the assertions that read the answer.
+    """
+    try:
+        answer = fn()
+    except Exception as caught:  # noqa: BLE001 — raising IS the failure under test
+        checks.ok(False, label, f"raised {type(caught).__name__}: {caught}")
+        return None
+    checks.ok(True, label)
+    return answer
 
 
 # --------------------------------------------------------------------------- the allocator
@@ -946,6 +999,82 @@ def check_queues(checks: Checks) -> None:
             "number the owner reads to decide whether there is work left",
         )
 
+        # AND THAT COUNT IS A SORT, which is what made the health route breakable. `len(Queue)`
+        # runs `open_entries`, so a `market` that is not a number raises InvalidOperation and a
+        # `box` that arrived as a JSON string raises TypeError on the tuple compare — both
+        # measured escaping /status as a 500 once 7b put these counts in it. It is the one
+        # route you reach for when something is wrong, and it already refuses to be taken down
+        # by a bad inventory record; the queues are held to the same rule.
+        raw = Store().queue_path(queues.MAIN)
+        healthy = raw.read_text("utf-8")
+        for label, damage in (
+            ("a market that is not a number", {"market": "twelve"}),
+            ("a box that arrived as a string", {"box": "3"}),
+        ):
+            broken = json.loads(healthy)
+            broken["3/3"].update(damage)
+            raw.write_text(json.dumps(broken), encoding="utf-8")
+            report = answers(
+                checks,
+                capture_server.do_status,
+                f"{label}: /status still ANSWERS rather than raising",
+            )
+            if report is not None:
+                checks.ok(
+                    report["queues"]["review"] is None,
+                    f"{label}: with the count it cannot make left null",
+                )
+                checks.equal(
+                    report["queues"]["parked"],
+                    1,
+                    f"{label}: and parked is still counted — one corrupt file does not hide "
+                    f"what is waiting in the other",
+                )
+                checks.ok(
+                    "review.json" in report.get("problem", ""),
+                    f"{label}: and the problem names the file to go and fix",
+                    f"problem was: {report.get('problem')!r}",
+                )
+
+        # NOT the record count as a substitute. `len(queue.entries)` would answer 4 here and
+        # is the number this route deliberately stopped publishing: it counts cleared entries,
+        # so it says there is work left after the last card has been answered. Wrong in the
+        # direction of "more to do" is worse than silent on a number the owner works from.
+        checks.equal(
+            len(Store().read().review.entries),
+            4,
+            "the null is a REFUSAL to count, not an empty queue — the file still holds its "
+            "four records",
+        )
+
+        # Two findings at once, which only became reachable when the queues joined the
+        # inventory in here. They are joined into the one `problem` string every client
+        # already reads: with a single finding it is byte-identical to what this route has
+        # always answered, which is what made joining cheaper than a new shape.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/1"].box = "three"
+        broken = json.loads(healthy)
+        broken["3/3"]["market"] = "twelve"
+        raw.write_text(json.dumps(broken), encoding="utf-8")
+        both_wrong = answers(
+            checks,
+            capture_server.do_status,
+            "a corrupt inventory record AND a corrupt queue record at once: /status answers",
+        )
+        if both_wrong is not None:
+            checks.ok(
+                both_wrong["next_index"] is None
+                and both_wrong["queues"]["review"] is None,
+                "with each finding nulling its own field and neither taking the route down",
+            )
+            checks.ok(
+                "review.json" in both_wrong.get("problem", "")
+                and "the inventory holds a card" in both_wrong.get("problem", ""),
+                "and both sentences travel in the one `problem` string, so neither is the "
+                "one that got dropped",
+                f"problem was: {both_wrong.get('problem')!r}",
+            )
+
 
 # ------------------------------------------------------------------------ the review answer
 
@@ -958,6 +1087,12 @@ def check_review_answer(checks: Checks) -> None:
     the pipeline, and a screen that could write an arbitrary SKU onto a card would be that
     same rule broken by hand: an answer nothing ever proposed, indistinguishable afterwards
     from one that was, on the card the pipeline was least sure about.
+
+    AND IT IS CHECKED AGAINST ONE ENTRY'S ROWS, which is where that refusal was quietly
+    escapable. Two positions here sit in both queue files with DIFFERENT offers on each side
+    — 3/4 with rows in both, 3/6 with an empty offer in the one that governs — because a
+    fixture that gives both entries the same candidates cannot tell a union apart from either
+    list, and that is exactly the fixture this section shipped with.
     """
     checks.note("")
     checks.note("REVIEW ANSWER — POST /review/<box>/<index>/answer")
@@ -966,11 +1101,11 @@ def check_review_answer(checks: Checks) -> None:
     reverse = CANDIDATES[1]
 
     with isolated_home():
-        for _ in range(5):
+        for _ in range(6):
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            for key in ("3/1", "3/2", "3/3", "3/4", "3/5"):
+            for key in ("3/1", "3/2", "3/3", "3/4", "3/5", "3/6"):
                 snapshot.inventory.set_state(key, master.IDENTIFIED)
             snapshot.review.upsert(entry(3, 1, market="12.00"))
             # No candidates at all — `cli/resolve.py:failure_entry`'s shape, for a card whose
@@ -978,11 +1113,19 @@ def check_review_answer(checks: Checks) -> None:
             snapshot.review.upsert(
                 entry(3, 3, candidates=[], reason="identification_failed")
             )
-            # In BOTH files at once, which nothing in store/queues.py prevents.
+            # In BOTH files at once, which nothing in store/queues.py prevents — and the two
+            # entries OFFER DIFFERENT ROWS, which is the whole point of the pair. Identical
+            # candidates on both sides is what made this case blind to the union bug.
             snapshot.review.upsert(entry(3, 4, market="12.00"))
-            snapshot.parked.upsert(entry(3, 4, market="0.05"))
+            snapshot.parked.upsert(
+                entry(3, 4, market="0.05", candidates=[dict(STALE_CANDIDATE)])
+            )
             # Parked only, so the parked path is answerable on its own.
             snapshot.parked.upsert(entry(3, 5, market="0.05"))
+            # In both, with the EMPTY offer in the queue that governs. Answerable under a
+            # union — parked's rows would fill the gap — and refused when one entry decides.
+            snapshot.review.upsert(entry(3, 6, candidates=[], reason="card_not_detected"))
+            snapshot.parked.upsert(entry(3, 6, market="0.05"))
             # 3/2 is captured and identified and in no queue at all.
 
         good = {"sku": reverse["sku"], "condition": reverse["condition"]}
@@ -1118,9 +1261,9 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             [row["position"] for row in capture_server.do_queues()["review"]],
-            ["3/4", "3/3"],
-            "so it leaves the queue payload, and the two still waiting keep their order — "
-            "priced 3/4 ahead of unpriced 3/3",
+            ["3/4", "3/3", "3/6"],
+            "so it leaves the queue payload, and the ones still waiting keep their order — "
+            "priced 3/4 ahead of the unpriced pair, which fall back to box-walk order",
         )
 
         # The reason clearing beats deleting: a later `./pkmnscan join` re-queues every card
@@ -1146,22 +1289,112 @@ def check_review_answer(checks: Checks) -> None:
             "where the remedy is to reload rather than to retry",
         )
 
-        both = capture_server.do_review_answer(3, 4, good)
-        checks.ok(
-            both["review_cleared"] and both["parked_cleared"],
-            "a position sitting in BOTH files is cleared in both — clearing one would "
-            "leave the screen showing a card whose answer is already written",
+        # THE LAUNDERING CASE — the one this section gained on 2026-08-13, and the reason the
+        # offer is ONE entry's. 3/4 sits in both files: review offers the two rows above,
+        # parked offers a row review never did. Pooling them, which is what this route did,
+        # let a stale parked entry authorise a SKU nothing had proposed for the row being
+        # answered — and afterwards the card carries a real catalog SKU with nothing on it to
+        # say it was never offered. Measured before the fix: accepted, written to the card,
+        # and both queues cleared behind it.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(
+                3,
+                4,
+                {
+                    "sku": STALE_CANDIDATE["sku"],
+                    "condition": STALE_CANDIDATE["condition"],
+                },
+            ),
+            "a sku only the PARKED entry offered is refused for a card sitting in both — "
+            "the offer is one entry's rows, never the union of two files",
         )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "sku_not_a_candidate",
+                "and it refuses in the same code an invented sku gets, because it IS one: "
+                "no screen ever showed that row for the entry being answered",
+            )
+            checks.ok(
+                "review" in str(caught) and holo["sku"] in str(caught),
+                "and the refusal NAMES the queue whose rows govern — the other row is on "
+                "screen too, so `not offered` reads as a bug without it",
+                f"message was: {caught}",
+            )
+        unlaundered = Store().read()
+        checks.ok(
+            unlaundered.inventory.get("3/4").sku is None,
+            "and the refusal reached neither the card...",
+        )
+        checks.ok(
+            not unlaundered.review.entries["3/4"].cleared_by_human
+            and not unlaundered.parked.entries["3/4"].cleared_by_human,
+            "...nor either queue entry: a refused answer clears nothing, so the card is "
+            "still on screen to be answered properly",
+        )
+
+        # Wrapped, unlike the answers above it, because the refusal that must precede it is
+        # the whole point: a route that accepted the laundered sku has already cleared this
+        # card, and the legitimate answer then refuses `already_answered`. That is a red line
+        # about the case above, not a crash that hides the rest of the section.
+        both = answers(
+            checks,
+            lambda: capture_server.do_review_answer(3, 4, good),
+            "and the row the governing entry DID offer is still accepted — one entry decides "
+            "what may be answered, it does not make the card unanswerable",
+        )
+        if both is not None:
+            checks.ok(
+                both["review_cleared"] and both["parked_cleared"],
+                "a position sitting in BOTH files is cleared in both — clearing one would "
+                "leave the screen showing a card whose answer is already written",
+            )
+            checks.equal(
+                Store().read().inventory.get("3/4").sku,
+                reverse["sku"],
+                "and the sku written is the one review offered",
+            )
+
+        # The same rule from the other side. Review holds 3/6 with no candidates while parked
+        # holds it with two — under a union the parked rows fill the gap and the answer is
+        # accepted, which is precisely the laundering above wearing a different shape.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(3, 6, good),
+            "an EMPTY offer in the governing queue is not an opening for the other file's "
+            "rows — it refuses",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "no_candidates",
+                "and it refuses as no_candidates: the card needs a re-shoot or a "
+                "re-identify, not an answer borrowed from the parked entry",
+            )
+            checks.ok(
+                "review" in str(caught) and "card_not_detected" in str(caught),
+                "naming the queue it read the offer from and why that card is queued",
+                f"message was: {caught}",
+            )
 
         parked_only = capture_server.do_review_answer(3, 5, good)
         checks.ok(
             parked_only["parked_cleared"] and not parked_only["review_cleared"],
             "and a parked-only card is answerable on its own",
         )
+        checks.ok(
+            "review_cleared" in parked_only and "parked_cleared" in parked_only,
+            "both flags are on every answer, false rather than absent — the client drops "
+            "both rows from one response and never has to tell `not cleared` from `the "
+            "server did not say`",
+            f"body keys: {sorted(parked_only)}",
+        )
         checks.equal(
             capture_server.do_status()["queues"],
-            {"review": 1, "parked": 0},
-            "GET /status follows the answers down — 3/3 is all that is left open",
+            {"review": 2, "parked": 1},
+            "GET /status follows the answers down — what is left open is exactly the two "
+            "cards no valid answer was offered for (3/3 and 3/6, the latter still parked)",
         )
 
         # Nothing outside inventory.json and the queues moved. The paid answer in particular
@@ -1335,6 +1568,51 @@ def check_mark_sold(checks: Checks) -> None:
             Store().read().inventory.get("5/1").state,
             master.SOLD,
             "and the refusal changed nothing",
+        )
+
+        # A HISTORY THAT WILL NOT PARSE MUST NOT BLOCK THE SALE, and it did. `read_jsonl`
+        # refuses the whole file over one bad line and this route reads it before either
+        # branch, so a single corrupt line answered the Fulfiller's tap with
+        # `store_unavailable` and left a card he had physically sold recorded as unsold.
+        # Measured that way before `_sale_origin` existed. A sale is the one event here that
+        # has already happened in the world: unlisted is fine, unrecorded is not (CLAUDE.md).
+        with open(Store().history_path, "a", encoding="utf-8") as handle:
+            handle.write("{not json\n")
+        degraded = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(3, 3, {}),
+            "one malformed line in history.jsonl does not stop the sale being recorded",
+        )
+        if degraded is not None:
+            checks.equal(degraded["state"], master.SOLD, "the card is sold")
+            checks.equal(
+                degraded["restores_to"],
+                None,
+                "and it degrades to `origin unknown` instead — null is already the app's "
+                "signal not to offer undo, so what is lost is the control, never the record",
+            )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_mark_sold(3, 3, {"undo": True}),
+            "the REVERSAL is what loses, and it refuses rather than guessing a state back",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "sold_origin_unknown",
+                "in the same code a truncated history gets — one refusal, because there is "
+                "one condition: history cannot say",
+            )
+            checks.ok(
+                "history.jsonl" in str(caught) and "could not be read" in str(caught),
+                "but the message says WHICH of the two it is, since one of them is a file "
+                "to go and repair",
+                f"message was: {caught}",
+            )
+        checks.equal(
+            Store().read().inventory.get("3/3").state,
+            master.SOLD,
+            "and the card stays sold: the failed reversal changed nothing",
         )
 
     # Wiring, invisible from Python and fatal from a browser: a preflight that does not

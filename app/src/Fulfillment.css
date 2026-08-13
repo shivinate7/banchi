@@ -183,9 +183,41 @@
   border-radius: var(--r);
 }
 
+/* A column rather than a single slot, because the pull step and the sale step must not share
+   one. See `.fulfillment-pulled` below for what shared it and what that cost. */
 .fulfillment-action {
   width: 100%;
   max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* "Pulled." — a sentence occupying the slot the Pull button was in.
+ *
+ * SAME BOX MODEL AS THE BUTTON IT REPLACES, and that is the whole point rather than tidiness:
+ * same font size, same padding, same height floor, so the slot does not change height and
+ * "Mark sold" begins below where "Pull" ended. Pull and Mark sold were one control in one
+ * place, one state apart, and a double-tap on Pull recorded a sale — the shortest path in this
+ * product between looking at a photo and selling the card. Displacing the second control past
+ * the first one's footprint is what makes the overshoot land on nothing.
+ *
+ * NOT DRAWN AS A CONTROL. No fill, no border, no surface: it is the confirmation, and a
+ * sentence shaped like a disabled button is a button he will press. --ink on --bg, 19.4:1.
+ *
+ * Rejected: arming "Mark sold" on a short timer. A control that ignores a press is a control
+ * he presses harder, and a timer is invisible to the assertion that has to check this. The
+ * spec measures the two boxes and requires that they do not overlap. */
+.fulfillment-pulled {
+  width: 100%;
+  font-family: var(--body);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  min-height: 44px;
+  padding: var(--s5);
+  color: var(--ink);
+  text-align: center;
 }
 
 /* The one control that carries the solid accent fill, raised to this view's scale.
@@ -235,12 +267,23 @@
   outline-offset: 2px;
 }
 
-/* ---- the sale he can still take back ---- */
+/* ---- the receipts, and the notice that the list may have moved ---- */
 
-/* A panel in the space above the list rather than a strip across the top of the screen: the
-   list is where he is when this appears, and a message that arrives somewhere he is not
-   looking is a message with a window that has already closed. */
-.fulfillment-sold {
+/* A panel in the space above whatever screen he is on rather than a strip across the top: it
+   is where he is looking when it appears, and a message that arrives somewhere he is not
+   looking is a message with a window that has already closed.
+
+   ONE CLASS FOR BOTH, and it is `-panel` rather than `-sold` because it stopped being about a
+   sale. A receipt for a card that left his list and a notice that the list may have moved are
+   the same object to him — something above the screen, saying what happened, with at most one
+   quiet thing to press. Two classes would be two looks to learn for one meaning, which is the
+   argument `.fulfillment-plain` already makes about the three quiet buttons.
+
+   THERE CAN BE SEVERAL AT ONCE. Each sale still standing draws its own, because the undo
+   window is per sale — a second mark-sold does not end the first card's window and must not
+   take its panel down. Spacing comes from the parent's 24px gap, which is twice the 12px the
+   constraints table requires between the Undo buttons inside them. */
+.fulfillment-panel {
   width: 100%;
   display: flex;
   flex-direction: column;

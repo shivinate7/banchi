@@ -12,9 +12,18 @@ import './Inventory.css'
  * sentence names an app that did not exist when it was written. This is it: one row per
  * SKU carrying the count, expanding to the individual positions holding it.
  *
- * NOTHING HERE WRITES. Same rule as the pull preview, and for a stronger reason here — the
- * pull that marks a copy sold is the whole point of the map above, and it needs a route
- * that does not exist. Reading is the whole screen.
+ * NOTHING HERE WRITES, AND THAT IS A CHOICE RATHER THAN A MISSING ROUTE. This comment used
+ * to say the sale "needs a route that does not exist"; `POST /inventory/<box>/<index>/sold`
+ * shipped in the same commit as this file, and `server.ts:markSold` calls it — from
+ * Fulfillment.tsx, which is where D5 puts a pull. His view earns that write by carrying the
+ * guards docs/DESIGN.md asserts on it and only on it: photo-confirm before each pull, undo
+ * on every mark-sold with a ten-second window, no destructive action reachable at all. A
+ * sold button on a dense owner-side table would be the same irreversible-looking write with
+ * neither guard, and a second place to perform one action — which is how two devices end up
+ * disagreeing about which copy went. Rejected on the same grounds: making these rows link
+ * into his view, which would put a route to the Fulfillment screen in the owner's hands and
+ * nothing else, for a lookup that is already answered here. D7's map exists to make a pull
+ * ADDRESSABLE; performing it is his screen's job.
  *
  * OWNER-SIDE, so this is the dense end of docs/DESIGN.md's one system, two densities, and
  * the Fulfillment floors do not bind. It speaks the pipeline's vocabulary — `sku`, `pushed`,
