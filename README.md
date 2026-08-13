@@ -28,7 +28,7 @@ geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state
 app/                       the web app. Vite + React + TS. One component so far.
-harness/                   T1-T6. The Stop hook runs `make harness` at every turn end.
+harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
 inventory/                 the master store on disk. Real, local, never in git.
@@ -70,7 +70,8 @@ Fresh session, `/clear` first.
 > `make harness` must exit 0 only when all four pass. Commit the T1 accuracy score to
 > harness/results/. Show me the output, not a summary.
 
-The harness is six tests now: batch script v2 added T5 (pricing) and T6 (geometry).
+The harness is seven tests now: batch script v2 added T5 (pricing) and T6 (geometry),
+and T7 reaches `store/`, `server/` and `cli/` — the packages the first six never touched.
 
 ## The pipeline
 

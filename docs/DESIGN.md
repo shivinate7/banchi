@@ -177,7 +177,7 @@ asserts body size, tap targets and contrast against the one component that exist
 each contrast ratio from the *rendered* colours, so a token change breaks the test rather
 than the palette. The rest are still prose because the views that carry them do not exist;
 step 7 extends the same spec as each one lands. Nothing here is a harness test: the contract
-in `docs/GATES.md` is six tests about the pipeline, and this runs a browser.
+in `docs/GATES.md` is seven Python tests run at turn end, and this runs a browser.
 
 | Constraint | Assertion |
 |---|---|

@@ -27,7 +27,7 @@ help:
 	@echo
 	@echo "  make status       where you are: next step, gate, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
-	@echo "  make harness      T1-T6 verification tests. Run at turn end by the Stop hook."
+	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make check        harness + docs-audit + lint + typecheck"

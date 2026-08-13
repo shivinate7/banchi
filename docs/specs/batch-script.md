@@ -475,6 +475,12 @@ Adding T5 and T6 requires editing `docs/GATES.md`, `CLAUDE.md`'s `make harness` 
 ("all four verification tests"), `harness/run.py`'s `TESTS` list, and `README.md`. That is a
 deliberate contract change, not a drive-by. **The harness is six tests.**
 
+> **Status, 2026-08-13:** the harness is seven. T7 was added for `store/`, `server/` and
+> `cli/`, through exactly the process the paragraph above demands — argued first, the
+> contract in `docs/GATES.md` amended, every count reconciled in the same commit. The
+> sentence is left as written because the rule it states is the point and still holds; only
+> the number moved.
+
 ---
 
 ## Required document amendments

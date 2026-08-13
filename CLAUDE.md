@@ -11,7 +11,7 @@ Gate C. See @docs/GATES.md.
 
 ```
 make status         # where you are: next step, gate, T1 score, branch. Start here.
-make harness        # all six verification tests; the Stop hook runs it at turn end
+make harness        # all seven verification tests; the Stop hook runs it at turn end
 make dev            # Vite app on :5173. Blocks — background it.
 make server         # Python capture server on :8000. Blocks — background it.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.

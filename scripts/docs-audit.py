@@ -98,7 +98,7 @@ class Finding(NamedTuple):
 class Report:
     """Collects every finding, never stops at the first.
 
-    Same reasoning as harness/run.py running all six tests after one fails: a status
+    Same reasoning as harness/run.py running every test after one fails: a status
     signal that stops early hides the state of everything behind it.
     """
 

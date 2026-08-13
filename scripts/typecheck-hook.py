@@ -2,7 +2,7 @@
 """PostToolUse hook: typecheck `app/` after a TypeScript file is written.
 
 Nothing else in this repo gives an automatic signal on TypeScript. The Stop hook runs
-`make harness`, and the harness is six tests about the pipeline — it never invokes `tsc`.
+`make harness`, and every test in it is Python — none of them invokes `tsc`.
 Without this, a turn can write broken TypeScript and only find out when a human runs
 `make typecheck`.
 

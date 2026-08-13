@@ -2,7 +2,7 @@
 
 ## The harness is the contract
 
-`make harness` runs six tests and exits non-zero on any failure. Nothing is "done" until
+`make harness` runs seven tests and exits non-zero on any failure. Nothing is "done" until
 it exits 0 and you have seen the output. This is the whole reason the project can be run
 by an agent unattended — without it, "looks done" is the only available signal.
 
@@ -10,6 +10,14 @@ T1–T4 are the original contract. T5 and T6 arrived with batch script v2 (build
 step 4): a wrong price is a distinct failure from a wrong match, and a card the pipeline
 cannot find in its own photograph is a third thing again. Each deserves its own failing
 test name.
+
+T7 arrived before step 7 and widened what the harness is *for*. T1–T6 all check rules —
+what a card is worth, which row it matches, which queue it lands in. T7 checks bookkeeping
+and wiring: where a physical card is recorded, whether a correction reaches the file that
+will actually be read, which column a price is pulled from. That was a deliberate change to
+this contract, argued on the grounds that `store/`, `server/` and `cli/` held about 40% of
+product code with nothing checking any of it, and that build-order step 7 was about to add
+writers to all three.
 
 Every threshold below is a number, not an adjective. `ID_ACCURACY_FLOOR=0.95` is a spec;
 "about 95%" is an opinion an agent can talk itself past.
@@ -137,6 +145,29 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
   from the rig. Real detection rates are a Gate B number. A green T6 means the geometry is
   self-consistent, **not** that detection works. Treat it exactly as T1's finish blind spot
   is treated: recorded here so a green harness cannot be misread.
+
+### T7 — Inventory store, capture server, and the command seams
+
+The first test to reach `store/`, `server/` and `cli/`. Isolation is `PKMNSCAN_HOME` pointed
+at a temporary directory, so nothing here touches the real inventory.
+
+- **Pass**: positions never collide and a replay burns none; the sidecar round-trips through the reader identify uses; every refusal answers in its own code; command seams read the columns they name, and commands refuse rather than prompt
+- **Two cases are regressions, not new coverage.** Both were live bugs that passed every
+  gate in the repo on the day they shipped: the `PUT` that never reached the sidecar — which
+  passed its own route test while doing it — and the `c.box == box` filter that dropped a
+  string-typed record and returned an index that collided later. Both are recorded in
+  `docs/DEBTS.md`, and both were re-introduced deliberately to confirm this test catches
+  them before it was committed.
+- **What it checks that T1–T6 cannot.** They check rules and this checks wiring. A wrong
+  rule gives a wrong answer you can see; a wrong position gives a card that is exactly where
+  the inventory says it is not, found weeks later by a person opening the wrong slot.
+- **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
+  sockets, matching D5's two devices. The twenty-way case that found the listen backlog
+  proved something about a socket option and is not worth paying for at every turn end.
+- **Known gap**: undo, mark-sold and the pull routes do not exist yet, so nothing here
+  covers them. D10 already settles what undo must do — delete rather than tombstone, newest
+  capture in a box only, refused once the card's row has been written into an import file —
+  so those cases are writable the day the route is.
 
 ---
 

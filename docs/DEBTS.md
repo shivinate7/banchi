@@ -76,8 +76,12 @@ T4 while nothing under `harness/` imports `store` at all — and two modules tha
 exercised carry no entry. The false line was struck and the status legend corrected; the
 field is still unenforced in both directions.
 
-Underneath it: `store/` and `cli/` have zero harness coverage. 2,509 lines, about 40% of
-product code, and it includes the package the capture server writes through.
+Underneath it, when this was written: `store/` and `cli/` had zero harness coverage — 2,509
+lines, about 40% of product code, including the package the capture server writes through.
+**That part is closed as of 2026-08-13**; T7 reaches all three packages and the map now
+carries real `tested_by` entries for them. The field being *unenforced* is what survives:
+the map could still claim a test reaches a module it never imports, and now that more
+entries carry the claim there is more of it to be wrong about.
 
 **Cost**: the map can claim coverage that does not exist, in the file D17 argues must be
 audited exactly as hard as it is trusted. The claim is believed precisely because the map
@@ -146,85 +150,34 @@ start demanding entries too, and those are deliberately not components. Doing it
 means the suffix set becoming per-entry, which is a real change to the map's schema. Worth
 doing before step 7 gets far, and worth doing deliberately.
 
-### `server/` and the position allocator were verified by hand, and the cases died with the session
+### What T7 deliberately leaves uncovered in `server/`
 
-Recorded 2026-08-11, when `allocate_capture` and `next_index` landed in `store/master.py`
-and `server/capture_server.py` landed beside them.
+Recorded 2026-08-11 when `store/` and `server/` shipped with no automated coverage at all,
+and **rewritten 2026-08-13 when T7 closed most of it.** The forty-three cases that were
+exercised by hand and enumerated here now exist as running assertions in
+`harness/tests/t7_store_and_seams.py`, which is strictly better than a prose list — so the
+list is gone rather than kept as a second specification that can drift from the first.
 
-Nothing under `harness/tests` imports `store`, `cli` or `server`, so both shipped with no
-automated coverage — deliberately, per `docs/specs/capture-server.md`, which rules that
-fixing that gap is not a precondition for build-order step 5. They were instead exercised by
-hand before each commit, all passing, none committed. The enumeration is below because
-re-deriving it later costs more than writing it down, and because it is the closest thing to
-a specification either one has.
+Three things from that enumeration are still not asserted anywhere:
 
-**The allocator**, seventeen assertions:
+- **Twenty-way contention.** T7 runs two and four simultaneous captures, matching D5's two
+  devices. The twenty-way case is what found `request_queue_size` at its default of 5 —
+  8 served, 12 reset by the OS — and re-running it at the end of every turn buys nothing
+  the smaller case does not. If that constant is ever lowered, nothing will notice.
+- **The bare-interpreter start.** The server runs on system `python3` with no venv, which
+  is what makes `python3` rather than `$(PYTHON)` correct in the Makefile. T7 imports the
+  module under whichever interpreter runs the harness, so it cannot see this.
+- **A `PUT` correction appends nothing to `history.jsonl`.** The store logs state
+  transitions and a correction is not one. T7 asserts the correction reaches the sidecar,
+  which is the part that costs money when it fails; the missing history line is still
+  missing.
 
-- **Empty box** returns index 1; a box that has never been seen is created implicitly by
-  the first allocation.
-- **Sequential allocation** yields 1 then 2, keyed `3/1` and `3/2`.
-- **Boxes are independent** — allocating into box 7 leaves box 3's next index untouched.
-- **D10's permanent gap**: a card moved to `sold` keeps its record, and the high-water mark
-  continues past it rather than filling the hole.
-- **Deleting the highest record releases its index.** This is the behaviour step 7's undo
-  inherits, and it is why reuse-versus-burn was settled by whether undo deletes or
-  tombstones — not by the allocator. Settled 2026-08-12: undo deletes, so the index is
-  reused, and undo is restricted to the newest capture in a box. See D10.
-- **A string-typed record** — box and index arriving as JSON strings — is counted, not
-  skipped, so the next index clears it.
-- **An unparsable box or index refuses**, and the message names the offending card key.
-- **A replayed `capture_id`** returns the original card with `created` False and burns no
-  second index.
-- **One `capture_id` on two cards refuses**, naming both positions.
-- **`capture_id` survives a JSON round trip** through `to_payload` and `parse`.
-- **Allocation logs exactly one `captured` event.**
+**Cost**: low and bounded, which is the difference from the entry this replaces. Each is a
+single known case rather than a whole package nothing looks at.
 
-Separately measured on the same day, and the reason the coercion is written the way it is:
-with a string-typed record present, filtering on `c.box == box` drops it silently and
-returns an index that collides later, while coercing only the box raises `TypeError` from
-`max()` **inside the lock**. Only coercing both fields is correct. The record is hard to
-spot because `position_key` coerces while the fields do not — the key looks perfectly
-ordinary and the fields are wrong.
-
-**The capture server**, twenty-six route assertions plus three that matter more than the
-rest:
-
-- **Routes**: three captures into a fresh box return contiguous indices with the first
-  flagged `new_box`; the rendered label matches `pipeline/join.py`'s; a replayed
-  `capture_id` answers 200 with `created` false and burns no index; nine refusals answer
-  with their own code — absent and non-numeric and zero box, absent and non-base64 image, a
-  PNG refused rather than converted, a finish outside the enum, an unknown route; the photo
-  route returns JPEG bytes and 404s on an absent position; a PUT to an absent position 404s
-  rather than creating, and a PUT naming `state` is refused.
-- **The sidecar seam** — the one that can fail silently and costs money when it does. What
-  the server writes, read back through `identify.sidecar.scan`: every capture positioned
-  from its sidecar, `source` reading `sidecar`, no problem recorded, keys equal to
-  `store.master.position_key`, and scan order equal to position order.
-- **The PUT round trip.** A correction reaches the sidecar, which is what
-  `cli/cmd_identify.py` actually reads — including the case where the sidecar already named
-  a finish, and the case where a hint-only PUT must leave the finish alone. This is the one
-  that was broken and passing its own route test at the same time; see the section above on
-  two sources of truth.
-- **Twenty-way contention.** Twenty simultaneous captures into one box: twenty served,
-  indices contiguous, no duplicates, twenty photos, twenty records, every sidecar parsing.
-  Run against the default listen backlog of 5 it serves 8 and the OS resets 12 — a distinct
-  failure from anything the allocator does, and the 8 that landed were still contiguous and
-  duplicate-free.
-- **The money rule, both directions.** A stray `.png` under the capture root takes the scan
-  from 4 captures to 5, each a paid Batch request; a render under `captures/ui/` leaves it
-  at 4, which is the whole reason the root is `captures/cards/`.
-- **Bare interpreter.** The server starts and serves on system `python3` with no venv, which
-  is what makes `python3` rather than `$(PYTHON)` correct in the Makefile.
-
-**Cost**: the allocator is the one piece of step-5 logic the 20-card Gate B run exercises
-twenty times, and nothing re-checks any of the above on a later edit. A refactor that
-reintroduced the `c.box == box` filter would pass every gate in the repo, and so would one
-that dropped the sidecar write out of the PUT path.
-
-**Why not fixed**: adding a harness test for `store/` is a real decision about what the
-harness covers — the contract in `docs/GATES.md` is six tests about the pipeline, and
-`store/` and `cli/` were left out of it from the start. Do that deliberately, as its own
-argument, not as a rider on the capture server.
+**Why not fixed**: the first two cost more at every turn end than they can return, and the
+third is a log call in a module that now has coverage — so it is a small deliberate change
+rather than a risky one, and it should be made when `server/` is next opened for step 7.
 
 ---
 

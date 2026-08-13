@@ -54,7 +54,7 @@ blocks.
 | `make <target>` inside backticks or a fence, target absent from the Makefile | **BLOCKS** |
 | `pkmnscan <verb>` inside backticks or a fence, verb outside the four registered ones | **BLOCKS** |
 | The phrase "check" or "checks" followed by 1–2 digits | **BLOCKS**, and there is no allowlist for a phrase. Name a row by its printed label instead |
-| A decision id with no heading, or a test id outside T1–T6 (T7 is allowlisted) | **BLOCKS** |
+| A decision id with no heading, or a test id outside the registered set | **BLOCKS** |
 | An env var not already present in the code | **BLOCKS**. "Present" means it already appears in a `.py` file, the Makefile, `.env.example`, a script under `scripts/`, the pre-commit hook, or a `.claude` settings file. Grep before naming one — the set is larger than it looks |
 | An uppercase alphanumeric 3-4-3-3 hyphen group anywhere | **BLOCKS** — the code-card opsec rule, and it fires *before* the audit, so the message will not mention the docs |
 | 20 or more staged lines under `pipeline/`, `identify/`, `geometry/`, `store/` or `cli/` without `docs/specs/batch-script.md` also staged | **Advisory (exit 2)** — prints and allows. Section 5's allocator crosses that threshold, so expect it |

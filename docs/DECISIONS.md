@@ -313,10 +313,16 @@ of what was convenient — and unlike a failing test, nothing downstream ever no
 also why `/docs-audit` shows every proposed change in one table before touching anything,
 and never stages or commits: the owner's own `git diff` is the last link in the chain.
 
-**Not a harness test.** T7 was considered and rejected. The harness runs behind the `Stop`
-hook (`scripts/stop-gate.sh`), so a docs test there would fire at the end of every turn,
+**The docs audit is not a harness test, and must not become one.** Putting it in
+`harness/run.py:TESTS` was considered and rejected. The harness runs behind the `Stop` hook
+(`scripts/stop-gate.sh`), so a docs test there would fire at the end of every turn,
 including turns that touched no markdown at all. The trigger is commit-time and on-demand
-by choice. Do not add it to `harness/run.py:TESTS`.
+by choice.
+
+This paragraph used to make that point by naming the number the docs test would have taken,
+which stopped working the moment a real test needed a number. T7 is now the store, server
+and command-seam test (`docs/GATES.md`), and it is unrelated to this entry. The rule here
+was never about a number.
 
 **The allowlist is self-cleaning.** `scripts/docs-audit-allow.txt` records things the docs
 name before they exist — `PKMNSCAN_IMAGE_MIRROR` is documented by build-order step 9 today.

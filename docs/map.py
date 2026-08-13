@@ -99,13 +99,13 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9"], "tested_by": ["T7"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2"]},
-            "cmd_join.py": {"does": "resolve identifications against the export", "governed_by": ["D7", "D11"]},
-            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D11"]},
-            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D10"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1"]},
+            "cmd_join.py": {"does": "resolve identifications against the export", "governed_by": ["D7", "D11"], "tested_by": ["T7"]},
+            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D11"], "tested_by": ["T7"]},
+            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D10"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1"], "tested_by": ["T7"]},
         },
     },
     {
@@ -159,27 +159,30 @@ COMPONENTS = [
         "status": "built",
         "does": "the master store: inventory, cache, standing queues",
         "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
-        "note": "no harness test reaches this package — nothing under harness/ imports "
-                "store. `built` above means the code exists, not that it is covered; "
-                "docs/DEBTS.md records why that is not being fixed before step 5.",
+        "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
+                "the atomic replace. queues.py and cache.py are read through a session "
+                "there but nothing asserts their behaviour, so they carry no tested_by: an "
+                "unenforced claim is the defect docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
-                          "governed_by": ["D7", "D10"]},
+                          "governed_by": ["D7", "D10"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues",
                           "governed_by": ["D4", "D9"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2"]},
-            "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"]},
-            "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"]},
+            "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
+            "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
         },
     },
     {
         "path": "harness/",
         "status": "built",
-        "does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",
+        "does": "T1-T7. The Stop hook runs it at every turn end; the pre-commit hook does not.",
         "governed_by": ["D2", "D12", "D15"],
         "note": "the contract is docs/GATES.md; every threshold there is a number, not an adjective",
         "modules": {
             "run.py": {"does": "the explicit ordered TESTS registry — no discovery magic", "governed_by": ["D1"]},
+            # T7 lives under harness/tests/ like its siblings; the orphan rule does not
+            # scan that far, so this list stays the six-plus-one it always was.
         },
     },
     {
@@ -207,8 +210,9 @@ COMPONENTS = [
         "status": "built",
         "does": "capture server: POST /capture, /status, GET /photo/<box>/<position>, inventory state",
         "governed_by": ["D3", "D6", "D10", "D13"],
-        "note": "no harness test reaches this package either — see store/ above, and "
-                "docs/DEBTS.md for what was verified by hand instead. Writes only through "
+        "note": "T7 reaches this package as of 2026-08-13: every route, every named "
+                "refusal, and the sidecar seam read back through identify.sidecar.scan. "
+                "What it still does not cover is in docs/DEBTS.md. Writes only through "
                 "the store session, never straight to disk. The capture root is "
                 "captures/cards/ and not captures/, so screenshot renders under "
                 "captures/ui/ are never scanned as paid captures.",
@@ -216,6 +220,7 @@ COMPONENTS = [
             "capture_server.py": {
                 "does": "the five routes, the sidecar identify reads back, the photo store",
                 "governed_by": ["D3", "D6", "D10", "D13"],
+                "tested_by": ["T7"],
             },
         },
     },
@@ -253,8 +258,8 @@ COMPONENTS = [
                         "body, 7:1 contrast, 12px apart. Run by `make design-check`.",
                 "governed_by": ["D5"],
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
-                        "harness contract in docs/GATES.md is six tests about the pipeline; "
-                        "this runs a browser and is invoked on its own.",
+                        "harness contract in docs/GATES.md is seven Python tests run at turn "
+                        "end; this runs a browser and is invoked on its own.",
             },
         },
     },

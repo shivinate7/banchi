@@ -18,4 +18,3 @@
 # it, which is the moment the thing became real.
 
 PKMNSCAN_IMAGE_MIRROR  # build-order step 9 (D15) overrides the image mirror destination. Documented in docs/GATES.md before the mirror exists; step 9 is deliberately after Gate B.
-T7  # D16 records why the docs audit is NOT a harness test. Naming T7 is the point of that paragraph; there is no T7 to register.

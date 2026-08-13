@@ -1,4 +1,4 @@
-"""Shared types for the T1-T6 tests.
+"""Shared types for the T1-T7 tests.
 
 Each test module exposes:
 
