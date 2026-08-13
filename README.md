@@ -107,17 +107,6 @@ Start minimal and let Claude interview you before it plans:
 
 Then `/clear` and execute the spec in a clean session.
 
-## iCloud
-
-The project lives in iCloud Drive. The folder is pinned **Keep Downloaded**, which is what
-makes git safe here — without it, macOS evicts cold files, and `.git` pack files are ideal
-eviction candidates. Keep that pin on.
-
-Pinning stops eviction, not upload. iCloud does not read `.gitignore`, so before build-order
-step 7 brings in `node_modules` (tens of thousands of small files), exclude it from sync —
-name it `node_modules.nosync` and symlink, or keep it outside the synced tree. The same
-applies to `captures/` once it holds real card photos.
-
 ## Fixtures
 
 - `fixtures/sv09_export_untouched.csv` — real TCGplayer Filtered CSV export (SV09,

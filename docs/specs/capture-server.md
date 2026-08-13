@@ -595,22 +595,12 @@ or gap-filling: D10, and it is the one operation that would make the history fil
 
 And per 0.1: no edits to `scripts/docs-audit.py`, for any reason.
 
-### 6.7 — Two things to settle while building
+### 6.7 — What to settle while building
 
 **`make server` blocks.** Every other target returns. A foreground server is conventional
 and correct, but an agent that runs it in the foreground hangs its own turn, because the
 Stop hook runs the harness at turn end and never gets there. Keep it foreground; say in
 the help text that agents background it.
-
-**The capture root sits inside iCloud Drive.** `PKMNSCAN_HOME` already moves the whole
-state root and defaults to the repo, which lives under `~/Library/Mobile Documents/`. D15
-argues at length that iCloud with Optimize Mac Storage evicts cold files and leaves
-placeholders where an existence check returns false — and it makes that argument about the
-image mirror, which is the same class of file. Capture photos are hot when written and
-cold three weeks later, which is exactly when the review queue wants one. Default to the
-existing behaviour, name the hazard in the docstring, and tell the owner that pointing
-`PKMNSCAN_HOME` outside the iCloud tree before the first real box is the cheap fix. Do not
-invent a second env var for it.
 
 ---
 

@@ -151,6 +151,26 @@ No eBay needed.
 Sequential position assigned at capture. 25 cards per divider (configurable). Location =
 Box N, Section N, Card N. Sold cards leave permanent gaps — positions are never renumbered.
 
+**Undo deletes the record; it does not tombstone it** (settled 2026-08-12, before step 7
+built it). A tombstone would be a third thing the store has to explain — not captured, not
+sold, still occupying a position — and every reader would have to learn it. A deleted
+record is a card that was never captured, which is exactly what the operator means by undo.
+
+This decides index reuse, which is otherwise the allocator's most surprising behaviour.
+`next_index` is a high-water mark, `1 + max(index in this box)`, so deleting the newest
+record hands its index straight back to the next capture. That is the correct outcome and
+not an accident of the implementation: the position was assigned to a photo that no longer
+exists, and burning it would put a permanent hole in a box over a mis-tapped button.
+
+**Undo is the newest capture in a box, never an arbitrary one.** Deleting a record from the
+middle leaves a gap the high-water mark cannot reuse — indistinguishable, later, from the
+permanent gap a sale leaves, and the rule above says those mean different things. Restrict
+the operation rather than teach the allocator to fill holes: D10's first paragraph is what
+makes a printed position label worth trusting, and nothing that renumbers may exist.
+
+A sale is the opposite case and is unchanged. `sold` is a state, the record stays, and the
+gap is permanent.
+
 ## D11 — Listing path is a catalog join, never a from-scratch CSV
 
 TCGplayer flow: Pricing tab → Export Filtered CSV (All Printings, so one file covers every
@@ -204,14 +224,13 @@ the *filename*, and `printedTotal` lives only in `sets/en.json`. The join key is
 `zfill(3)(number) + "/" + printedTotal`, so joining card→set by filename is the one detail a
 loader must get right. There is no `tcgplayer` block either; see D8 for why that is fine.
 
-**The image mirror must live outside the iCloud tree.** The repo sits under
-`~/Library/Mobile Documents/com~apple~CloudDocs/`. iCloud with Optimize Mac Storage evicts
-large cold files and leaves `.icloud` placeholders behind, at which point an `is_file()` check
-returns False and the mirror silently fails the guarantee it exists to provide. 160 MB of eval
-images sync today; a full mirror is ~16.7 GB (measured: 834 KB average across 197 hires PNGs).
-Path is overridable; `harness/images/` moves out at the same time. Mirroring at all is the
-point — `images.pokemontcg.io` is the piece most likely to throttle or disappear, and it is
-the one piece the JSON repo does not cover.
+**The image mirror's path is a knob, because of its size.** A full mirror is ~16.7 GB
+(measured: 834 KB average across 197 hires PNGs) against the 160 MB of eval images held
+today, which is large enough that which disk it lands on is a choice worth having. Path is
+overridable through `PKMNSCAN_IMAGE_MIRROR`; `harness/images/` moves with it rather than
+being left behind as a second copy. Mirroring at all is the point —
+`images.pokemontcg.io` is the piece most likely to throttle or disappear, and it is the one
+piece the JSON repo does not cover.
 
 **Mirror scope is a knob with a default, not a constant.** Full catalog is the default. D12
 scopes the product to SWSH/SV, which would cut the mirror to under a third (~4.8 GB) — recorded

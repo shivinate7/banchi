@@ -204,10 +204,10 @@ a 50-card run, then scale to a full box.
     - Build the SQLite index. Cards join to sets by *filename* — `printedTotal` is only in
       `sets/en.json`, and it is half the join key.
     - Fill the image mirror from `images.pokemontcg.io`: rate-limited, resumable,
-      manifest-driven, per-file skip on a non-empty existing file. Destination is outside
-      the iCloud tree (D15) and overridable by `PKMNSCAN_IMAGE_MIRROR`; move
-      `harness/images/` there too. Dry-run the `Content-Length` sum first — ~16.7 GB is
-      extrapolated from a 197-image sample, so confirm before committing the disk.
+      manifest-driven, per-file skip on a non-empty existing file. Destination is
+      overridable by `PKMNSCAN_IMAGE_MIRROR` (D15); move `harness/images/` there too.
+      Dry-run the `Content-Length` sum first — ~16.7 GB is extrapolated from a 197-image
+      sample, so confirm before committing the disk.
 
     Deliberately after Gate B: no production code reads this data. `harness/eval/fixtures.py`
     is the only consumer, step 4's batch script does not depend on it, and a warm harness run

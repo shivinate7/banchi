@@ -14,10 +14,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
 
-# The store's root. Defaults to the repo, overridable because the repo lives in iCloud
-# Drive and someone may want state on a local disk — the same reasoning D15 applies to the
-# image mirror, though these files are small and hot rather than large and cold, so
-# eviction is not the pressing risk here.
+# The store's root. Defaults to the repo, overridable so the inventory and its photos can
+# live on a different disk from the code — the same knob D15 gives the image mirror, for
+# the same reason: where bulk state lands is the operator's call, not the repo's.
 HOME_ENV = "PKMNSCAN_HOME"
 
 INVENTORY_DIRNAME = "inventory"

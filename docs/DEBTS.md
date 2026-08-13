@@ -146,29 +146,6 @@ start demanding entries too, and those are deliberately not components. Doing it
 means the suffix set becoming per-entry, which is a real change to the map's schema. Worth
 doing before step 7 gets far, and worth doing deliberately.
 
-### The post-edit hook channel is gone, and step 7 is when it should come back
-
-Recorded 2026-08-11, from the step-5 spec work.
-
-`.claude/settings.json` ran `make lint typecheck` after every Write and Edit. Both targets
-exit 1 by design — `Makefile:3`, a target that exits 0 with nothing to run is a lie the
-rest of the project would be built on top of — and under one make invocation the abort on
-`lint` meant `typecheck` never ran at all. The pipe to `tail` then swallowed the status, so
-the hook itself exited 0 and blocked nothing. Five lines of failure text after every edit,
-from 2026-08-03 until it was deleted on 2026-08-11.
-
-Deleted rather than repointed. Pointing it at the harness costs far more output per edit
-for a check the Stop hook already runs at turn end, and dropping `lint`'s `exit 1` would
-make `make check` green by lying — which is the thing `Makefile:3` exists to refuse.
-
-**Cost**: there is now no automatic post-edit signal at all. Zero today, because there was
-nothing behind the channel. Real at build-order step 7, when TypeScript arrives and
-`make typecheck` starts meaning something.
-
-**Why not fixed**: there is nothing to point it at yet. Step 7 should re-add it — at the
-typecheck target alone, never at the composite — rather than rediscovering the question
-from an empty hooks block.
-
 ### `server/` and the position allocator were verified by hand, and the cases died with the session
 
 Recorded 2026-08-11, when `allocate_capture` and `next_index` landed in `store/master.py`
@@ -190,8 +167,9 @@ a specification either one has.
 - **D10's permanent gap**: a card moved to `sold` keeps its record, and the high-water mark
   continues past it rather than filling the hole.
 - **Deleting the highest record releases its index.** This is the behaviour step 7's undo
-  will inherit, and it is why reuse-versus-burn is settled by whether undo deletes or
-  tombstones — not by the allocator.
+  inherits, and it is why reuse-versus-burn was settled by whether undo deletes or
+  tombstones — not by the allocator. Settled 2026-08-12: undo deletes, so the index is
+  reused, and undo is restricted to the newest capture in a box. See D10.
 - **A string-typed record** — box and index arriving as JSON strings — is counted, not
   skipped, so the next index clears it.
 - **An unparsable box or index refuses**, and the message names the offending card key.
