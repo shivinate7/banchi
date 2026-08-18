@@ -164,10 +164,22 @@ at a temporary directory, so nothing here touches the real inventory.
 - **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
   sockets, matching D5's two devices. The twenty-way case that found the listen backlog
   proved something about a socket option and is not worth paying for at every turn end.
-- **Known gap**: undo, mark-sold and the pull routes do not exist yet, so nothing here
-  covers them. D10 already settles what undo must do — delete rather than tombstone, newest
-  capture in a box only, refused once the card's row has been written into an import file —
-  so those cases are writable the day the route is.
+- **Undo is covered as of 2026-08-13**, the day its route landed with step 7a: that it
+  answers with the position it removed, that the record, sidecar and photo all go, that a
+  second call walks back one more card, and that it refuses anything but the newest and
+  anything already written into an import file. All D10, and all written the same day the
+  route was, which is what this bullet promised when it said the cases were writable then.
+- **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
+  `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
+  standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This
+  bullet said those routes did not exist. **Of everything 7b shipped, the routes are the one
+  part that did not get built ahead of its evidence**, and that is worth noticing when
+  reading the rest of it.
+- **Known blind spot, and it is 7b's**: every queue entry these cases assert against was
+  hand-built by the test. What a green T7 says is that the routes behave the way
+  `docs/DESIGN.md` describes — **not** that a real run produces entries of that shape,
+  because no real run has produced one at all. Same standing as T6's synthetic composites
+  and T1's flat renders: self-consistency, not evidence. Gate B is where that changes.
 
 ---
 
@@ -180,6 +192,20 @@ end to end. Finding: an "Export From Staged" button exists — see T2.
 
 ### Gate B — 20-card end-to-end smoke test
 
+**This gate is a physical run, and it is next.** Build-order step 7 is done as of
+2026-08-13, so nothing further can be built toward this — twenty real cards, the rig, the
+camera, the lamp and a person feeding them. It cannot be simulated, and no harness result
+substitutes for it.
+
+**No part of this repo has met a card.** That is a statement about the whole tree and not
+about one unfinished screen. Step 4's pipeline is verified against fixtures and synthetic
+composites; step 5's server is verified against T7's temporary directories; step 7's app —
+both halves, capture and queue alike — is verified against `docs/DESIGN.md` and hand-built
+props. T1 scores flat catalog renders with no foil, no glare and no rig lighting, and
+`docs/map.py` and T6's own section both say in writing that a green harness is
+self-consistency rather than evidence. **Every number this project has is a number about
+itself.** Gate B is the first one that will be about a card.
+
 Manual capture button, no auto-detect. Capture → server save → batch script → join → CSV →
 import back into app → pull modal shows correct location.
 
@@ -187,6 +213,13 @@ Also validates what the harness cannot: **Haiku finish detection against ~10 rea
 known-variant cards.** Include one raking-light shot — the diffused glare-killing rig may
 suppress exactly the foil signal detection relies on. If it does, that is a rig finding,
 not a model finding, and the fix is a second capture angle rather than a prompt change.
+
+**Take measurements while it runs, and know which ones before the day.**
+`docs/specs/capture-app.md` section 10.2 lists them: queue depth as a rate, which of the
+twelve reason codes fired and which fired zero times, and the price distribution across the
+run and across the queue. Those three were guesses when 7b was built early, and this run is
+the first chance to replace them with numbers. **None of them moves the pass criteria** —
+pass or fail stays at twenty cards end to end, per that spec's section 10.1.
 
 ### Gate C — feeder integration
 
@@ -222,9 +255,16 @@ a 50-card run, then scale to a full box.
 5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
    state shared across devices.~~ — done 2026-08-11, spec at `docs/specs/capture-server.md`.
-   Positions are allocated inside the store lock by `allocate_capture`. **No harness test
-   reaches it**: nothing under `harness/tests` imports `server`, `store` or `cli`, so a
-   green harness says nothing about this step — see `docs/DEBTS.md`.
+   Positions are allocated inside the store lock by `allocate_capture`. **T7 reaches it as
+   of 2026-08-13**: every route, every named refusal, and the sidecar seam read back through
+   the reader `identify` uses. This line said the opposite for two days — the step shipped
+   with nothing under `harness/tests` importing `server`, `store` or `cli` — and the claim
+   outlived the gap it described. What T7 still does not assert is in `docs/DEBTS.md`, and
+   is now three named cases rather than a whole package.
+   The server carries nine routes now, not the five this line was written about: a sixth,
+   `DELETE /inventory/<box>/<index>`, arrived with step 7a's undo, and three more with 7b —
+   `GET /queues`, `POST /review/<box>/<index>/answer`, `POST /inventory/<box>/<index>/sold`.
+   All four came with their own T7 cases on the day they landed.
 6. ~~Design tokens locked and one component built against them~~ — done 2026-08-12.
    Tokens locked by interview against rendered alternatives rather than by inference; the
    pull-confirm built against them at `app/src/PullConfirm.tsx`, in all three states, on a
@@ -233,17 +273,57 @@ a 50-card run, then scale to a full box.
    `docs/design-refs/locked.html` contradicts `docs/DESIGN.md` — an 18px button label under
    the view's own 20px floor, and a keyboard chip on a control only the Fulfiller touches.
    Both are recorded in `docs/design-refs/README.md`; neither was visible in prose.
-7. Vite capture app: device picker, manual capture, set hint + variant toggles, position
+7. ~~Vite capture app: device picker, manual capture, set hint + variant toggles, position
    tracking, undo, inventory views (SKU → positions), review queue, pull preview with
-   photo, Fulfillment view. The toolchain arrived with
-   step 6 — `app/` is a Vite + React + TypeScript project already, so this step adds
-   screens rather than a build system. Extend `app/tests/pull-confirm.spec.ts` to the rest
-   of `docs/DESIGN.md`'s Fulfillment table as the views that carry those rows land.
+   photo, Fulfillment view.~~ — **both halves built 2026-08-13** on branch
+   `step-7-capture-app`. The toolchain arrived with
+   step 6 — `app/` is a Vite + React + TypeScript project already, so this step added
+   screens rather than a build system. `docs/DESIGN.md`'s Fulfillment table is now *written*
+   as assertions in full: three of its rows against step 6's component in
+   `app/tests/pull-confirm.spec.ts`, and all nine against the view in
+   `app/tests/fulfillment.spec.ts`. Both specs pass — 30 assertions, green since the routing
+   landed; see below for the several hours in which they did not.
 
-   **Split at Gate B.** 7a is the Gate B path — the shell, the capture screen, undo and the
-   pull preview — specified in `docs/specs/capture-app.md`. 7b is the review queue, the
-   Fulfillment view, the inventory views and mark-sold, built after the gate against a real
-   run rather than against guesses about what one produces.
+   **Split at Gate B — and then the split was not honoured.** 7a is the Gate B path: the
+   shell, the capture screen, undo, the pull preview and the trigger seam, specified in
+   `docs/specs/capture-app.md` and built to it, along with the one new server route and the
+   two eslint rules that make `make lint` real. 7b is the review queue, the Fulfillment
+   view, the inventory SKU views and mark-sold — scheduled *after* the gate, so that it
+   would be built against a real run rather than against guesses about what one produces.
+
+   **7b was built before Gate B, at the owner's explicit instruction.** The spec's scope
+   section and its "what this session must not build" list both said otherwise; both are
+   left standing there and marked overtaken, and that file's STATUS section carries what it
+   costs. The short form, and the reason this list carries it too: **the screens 7b added
+   display data that no run has ever produced.** The review queue's row hierarchy is tuned
+   against a price distribution nobody has measured, and the twelve reason codes it renders
+   have never all fired. Read those screens as specified-and-unvalidated, never as
+   observed.
+
+   **Built was not routed for a few hours, and the shape of that gap is worth keeping after
+   the fix.** 7b shipped with none of its three screens in `app/src/App.tsx`'s ROUTES table,
+   no client function in `app/src/server.ts` for the three routes it had added to the
+   capture server, and the review queue's calls arriving as a prop nothing supplied — both
+   files belonged to another group in that session and were left untouched. `make harness`,
+   `make lint`, `make typecheck` and `make docs-audit` were all green throughout. The only
+   check that could tell was `make design-check`, which **failed 16 of 30 assertions**,
+   every one of them reporting the unregistered route rather than a design defect; the
+   Fulfillment spec asserts the view is on screen before measuring anything, precisely so
+   that the alternative — nine confident measurements of whatever Vite serves for an unknown
+   hash — cannot happen. A wiring pass on 2026-08-13 registered six routes, added one client
+   function per new route, and took design-check to **30 of 30**.
+   **The finding outlives the fix: nothing on the path that decides whether a commit
+   proceeds looks at whether a screen can be opened, and the one check that does is
+   deliberately not on it** — it starts a browser and a dev server, which is a different
+   weight of check from the rest.
+
+   **The step is therefore done, and step 8 is next — which means the next action in this
+   repo is a physical one.** `docs/map.py` said in writing that moving `next` to step 8 was
+   "the owner's call to make on the day, not a call to make by editing this file", because
+   `make status` would then send whoever runs it to a twenty-card run against a build that
+   has never met a card. That is still exactly what it does. It is now also correct: with
+   nothing left in step 7 to build, meeting a card is the only remaining way to learn
+   anything, and Gate B is the name for doing it.
 
    **"CSV import with error reporting" was struck from this list on 2026-08-13.** It was a
    v1 feature that batch script v2 absorbed whole: `emit` writes `pushed`, `reconcile` moves

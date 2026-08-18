@@ -6,5 +6,37 @@
 # could not be committed, and the next clone would have started with none.
 #
 # The URLs assume `make dev` is already serving. It blocks, so background it first.
+#
+# WHAT THESE RENDERS SHOW DEPENDS ON WHETHER `make server` IS UP, and that is worth knowing
+# before comparing one against docs/design-refs/locked.html. Every view below except the
+# gallery reads the capture server: with it down they draw their failure panel, which is a
+# real screen and the wrong one to judge a layout by. With it up and an empty store they draw
+# their empty state. Neither shows a populated screen, and no run in this repo has ever
+# produced one — see docs/specs/capture-app.md's STATUS section.
 
-pull-confirm  http://localhost:5173/
+# The hash route is load-bearing, not decoration. The gallery answered at '/' while it was
+# the whole app at step 6; step 7a mounted the capture screen there. Dropping the '#/gallery'
+# renders the capture screen into captures/ui/pull-confirm.png — a screenshot that is named
+# after one view and shows another, which is worse than no screenshot, because the loop
+# docs/DESIGN.md calls mandatory is a human comparing this render against the reference.
+pull-confirm  http://localhost:5173/#/gallery
+
+# Step 7a's two screens. The capture screen renders without a camera in a headless render —
+# that is not a defect to work around, it is the first thing a person sees before granting
+# permission, and it is worth looking at deliberately rather than only ever seeing the happy
+# path. The layout underneath it renders either way.
+capture       http://localhost:5173/#/
+pull-preview  http://localhost:5173/#/pull
+
+# 7b's three screens, routed 2026-08-13. The review queue is the one to actually look at:
+# docs/DESIGN.md specifies its shape in more detail than any other screen in the product and
+# nobody has ever seen it hold a card, so the render is the only comparison available until
+# Gate B produces a queue.
+review        http://localhost:5173/#/review
+inventory     http://localhost:5173/#/inventory
+
+# The Fulfiller's, and the one render where the absence of something is the point: no nav
+# strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
+# not what enforces it — it is what lets a person see the view the assertions describe, at the
+# 1280px viewport `scripts/screenshot.sh` fixes. The spec measures it at 375px too.
+fulfillment   http://localhost:5173/#/fulfillment

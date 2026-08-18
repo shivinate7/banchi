@@ -1,0 +1,370 @@
+/* The inventory view — build-order step 7b. D7's SKU -> positions map.
+ *
+ * NO ACCENT ANYWHERE IN THIS FILE, the same deliberate absence PullPreview.css records and
+ * for the same reason: docs/DESIGN.md gives accent exactly two jobs — outline and text weight
+ * when the system is unsure, a solid fill when there is exactly one thing to do — and this
+ * screen is neither. It is sure about everything it shows, and there is nothing to do on it.
+ * The obvious first drafts both wanted the colour: marking the open group, and flagging a SKU
+ * whose copies disagree about a name. Either would give accent a third meaning, which is the
+ * drift that ends with it meaning "important" and therefore nothing.
+ *
+ * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header
+ * strip — docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it,
+ * and rejected it, and a screen made of stacked groups is exactly where one would creep back.
+ *
+ * Owner-side: the 4-16 end of the spacing scale, and the Fulfillment floors (20px body, 32px
+ * position labels, 44px tap targets) govern a different view. None is asserted here.
+ *
+ * Mono carries every number, position, state and machine string; the body face carries the
+ * card names and the sentences. That split is the one rule doing the most work in this file.
+ */
+
+.inventory {
+  padding: var(--s6);
+  /* Wider than the pull preview's 1100px: the group rows carry a name, a machine line and a
+     state tally side by side, and below about this the tally wraps under the name on every
+     row. Capped rather than uncapped so the copy tables do not stretch a 4-column read across
+     a whole 27-inch display. */
+  max-width: 1240px;
+}
+
+/* ---- head ---- */
+
+.inventory-title {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.inventory-lede {
+  color: var(--muted);
+  max-width: 76ch;
+  margin-top: var(--s2);
+  font-size: 15px;
+}
+
+.inventory-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+/* A word a human reads, so the body face. No fill — see the file header. 32px rather than the
+   44px tap floor, which is a Fulfillment constraint and does not reach this screen; this is a
+   mouse target in the desktop browser D13 names. */
+.inventory-reload {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+.inventory-reload:hover {
+  background: var(--hover);
+}
+
+.inventory-reload:focus-visible,
+.inventory-summary:focus-visible {
+  /* Ink, not accent: accent's two jobs are taken, and a keyboard user tabbing through this
+     screen is not being told the system is unsure about anything. */
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* Three counts, so the utility face — docs/DESIGN.md gives mono every number in the product. */
+.inventory-count {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---- the failure panel, and the two empty states ---- */
+
+.inventory-note {
+  max-width: 520px;
+  margin-top: var(--s5);
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A sentence a human reads, so the body face. */
+.inventory-note-text {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  max-width: 76ch;
+  margin-top: var(--s4);
+}
+
+/* The machine string beneath the human sentence, carrying a greppable token and never the
+   sentence above it again. Owner-side only; the Fulfillment banned-word list forbids this
+   register outright and no Fulfillment route renders this class. */
+.inventory-machine {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  word-break: break-all;
+}
+
+/* ---- the groups ---- */
+
+/* One surface with hairlines between the groups, not a stack of separate cards. A card per
+   group would need a gap between them, and a gap is the second separation mechanism this
+   system does not have. */
+.inventory-groups {
+  margin-top: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.inventory-group {
+  border-bottom: 1px solid var(--line);
+}
+
+.inventory-group:last-child {
+  border-bottom: 0;
+}
+
+.inventory-summary {
+  display: grid;
+  /* Marker, count, then the name and its machine line, then the state tally hard right.
+     The first two columns are max-content over spans that set their own min-width in the
+     utility face, which is what keeps the name starting at the same x in every group —
+     each <details> is its own grid, so nothing aligns across them by itself. */
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+  gap: var(--s3);
+  align-items: baseline;
+  padding: var(--s3);
+  cursor: pointer;
+
+  /* The browser's own disclosure triangle, removed in both spellings. See the marker rule
+     below for why it is drawn here instead. */
+  list-style: none;
+}
+
+.inventory-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Row hover, which is the only thing --hover is for, and this is a row. */
+.inventory-summary:hover {
+  background: var(--hover);
+}
+
+/* The disclosure marker, in the utility face so it is the same glyph at the same weight in
+   every browser this is opened in. A geometric-shapes character rather than an image or a
+   border triangle: it inherits colour from the token set, costs no markup, and turns with the
+   group. aria-hidden in the TSX — <details> already announces its own state. */
+.inventory-marker {
+  font-family: var(--util);
+  /* 12px, not the 10px every other utility caption in this app takes. Drawn at 10 it
+     measured 14px wide and read as a speck rather than as a control — the one thing on the
+     row that says the row opens. A caption is read; this is aimed at. */
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 2ch;
+}
+
+.inventory-marker::before {
+  content: '\25B8'; /* ▸ */
+}
+
+.inventory-group[open] .inventory-marker::before {
+  content: '\25BE'; /* ▾ */
+}
+
+/* The count of copies — the number D7 is actually about, so it is the heaviest thing in the
+   row and it is mono. min-width holds the column at one width across groups; a group of a
+   hundred simply widens its own. */
+.inventory-copies-count {
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 11ch;
+}
+
+.inventory-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+/* A card's name is a thing a human reads, so the body face — the one place on this row that
+   is not mono. */
+.inventory-name {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* sku, condition, collector number: metadata, so the utility face, and the same 11px the
+   machine line takes everywhere else in the app. */
+.inventory-meta {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.inventory-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  font-family: var(--util);
+  font-size: 11px;
+}
+
+.inventory-tally-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  /* No border and no fill. A chip here would read as a control, and none of these is
+     pressable — the whole tally is a reading of the group, not a filter. */
+}
+
+.inventory-tally-state {
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+/* The count in ink against the state name in muted, which is the same step from muted to ink
+   that carries selection everywhere else in this app: the number is what is being read and
+   the word is what it is called. */
+.inventory-tally-count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---- the copies ---- */
+
+/* Indented to the depth of the summary's third column, so the copy table starts under the
+   card name rather than under the marker. Reading down the open group is then reading down
+   one edge. */
+.inventory-body {
+  padding: 0 var(--s3) var(--s4) var(--s5);
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--s3);
+}
+
+/* Column captions in the utility face, uppercase and tracked — the same treatment every
+   field name in this app gets, from the capture screen's labels to the pull preview's facts. */
+.inventory-table th {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: var(--s1) var(--s3) var(--s1) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inventory-table td {
+  padding: var(--s1) var(--s3) var(--s1) 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: baseline;
+}
+
+.inventory-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Row hover again, and again because these are rows. */
+.inventory-table tbody tr:hover {
+  background: var(--hover);
+}
+
+/* Three of the four columns hold values compared against each other down a column, so none
+   of them may wrap and all three are mono. */
+.inventory-cell-position,
+.inventory-cell-state,
+.inventory-cell-since {
+  font-family: var(--util);
+  white-space: nowrap;
+}
+
+/* EXACTLY ONE COLUMN TAKES THE SLACK, so that state and date land at the same x in every
+   group on the page. `width: 1%` with nowrap is the collapse-to-content idiom; a column
+   without it absorbs whatever is left.
+
+   Measured before this rule existed: with all of them collapsed the browser shared the slack
+   out between them, and `state` sat at x=489 in the groups with no card column and at x=928
+   and x=897 in the two that had one — three different left edges for one field, down a page
+   whose whole job is comparing rows. State and date pack right now, against the group's own
+   tally directly above them.
+
+   The card name takes the slack where there is one, and the position where there is not.
+   Rejected: giving the position the slack in both cases, which pushes a short name — Snorlax,
+   most of them — into the middle of the row, a hand's width from the position it belongs to. */
+.inventory-cell-position,
+.inventory-table-named .inventory-cell-name {
+  width: auto;
+}
+
+.inventory-cell-state,
+.inventory-cell-since,
+.inventory-table-named .inventory-cell-position {
+  width: 1%;
+}
+
+/* The position: the payload of every row, and the one thing on it that sends someone to a
+   physical box. Full-strength ink where the rest of the row is muted. Martian Mono is tabular
+   by construction, so no font-variant-numeric — docs/DESIGN.md picked the face precisely so a
+   position label cannot shift width between cards by someone forgetting to set it. */
+td.inventory-cell-position {
+  font-size: 11px;
+  color: var(--ink);
+}
+
+/* Present only where the summary above cannot name the card for the whole group. Body face,
+   muted: it is prose, and it is not what the row is read for. */
+td.inventory-cell-name {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  /* One line. A long name that wraps makes rows different heights, and a table scanned for a
+     position reads worse when the rhythm breaks. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+/* The pipeline's own state word and the day it entered it. Metadata, so mono and muted. */
+td.inventory-cell-state,
+td.inventory-cell-since {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* A command name or a field name inside a sentence: a machine string, so the utility face at
+   the size of the sentence around it. Same treatment as the capture screen's inline position
+   label. */
+.inventory-inline {
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+}

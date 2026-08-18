@@ -16,7 +16,8 @@ make dev            # Vite app on :5173. Blocks — background it.
 make server         # Python capture server on :8000. Blocks — background it.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
-make check          # harness + docs-audit + lint + typecheck — lint is still a stub
+make lint           # eslint over app/: no facingMode, no split(","). JS only, no Python linter.
+make check          # harness + docs-audit + lint + typecheck — no stubs left in it
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
@@ -40,6 +41,11 @@ make check          # harness + docs-audit + lint + typecheck — lint is still 
   device picker. Two devices share one truth.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
+- **The app has six screens and six routes** — five the owner's, one the Fulfiller's. The
+  shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
+  forbids any route *out* of it, and the owner's nav would fail four other rows of the same
+  table on its own. Not-rendered rather than hidden: not focusable, not reachable by a screen
+  reader, not one specificity change from coming back.
 
 Deeper schema facts (Condition strings, secrets like `161/159`, blank-Number rows,
 apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
@@ -68,17 +74,22 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 ## Map
 
 - `docs/map.py` — the repo as data: what is built, what is TBD, and which decisions govern
-  each file. **Read this before editing anything under `pipeline/`, `identify/`, `store/`,
-  `geometry/` or `cli/`** — every entry there is settled and re-litigating one wastes a
-  session. Audited by `make docs-audit`, so it cannot quietly go stale.
+  each file. **Read this before editing anything under `app/`, `server/`, `pipeline/`,
+  `identify/`, `store/`, `geometry/` or `cli/`** — every entry there is settled and
+  re-litigating one wastes a session. Audited by `make docs-audit`, so it cannot quietly go
+  stale: adding a file under any of those without an entry fails the commit.
 - @docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 - @docs/GATES.md — gates, harness contract, build order.
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
-- `docs/specs/capture-app.md` — step 7a: the capture screen, undo, the pull preview, and the
-  one new server route. Interviewed and settled; NOT built. Its doc amendments are applied.
+- `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new
+  server route) was built to it. 7b (review queue, Fulfillment view, inventory view,
+  mark-sold, three more server routes) was built 2026-08-13 **before Gate B, which this spec
+  forbids**, at the owner's explicit instruction. **Read its STATUS section before trusting
+  those screens** — they display data no run has ever produced. Sections 0 and 9 are left
+  standing and marked overtaken; section 10.2 is what Gate B should measure as a result.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

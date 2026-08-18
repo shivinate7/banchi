@@ -29,6 +29,8 @@ Color      #FCFCFD  bg        the page. Everything sits on this.
            #F4F5F7  hover     row hover only. bg and surface are 1.5% apart, so
                               neither can serve as a hover state for the other.
            #17348F  pressed   accent, pressed. White on it: 10.9:1.
+           — and one token that names a value already in use —
+           #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
 
 Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px
 Body       Atkinson Hyperlegible (Google) 400/700
@@ -60,10 +62,14 @@ invisible; the difference between the two sentences is not.
 
 **Cabinet Grotesk comes from Fontshare, not Google Fonts.** That is a second font host and
 a second licence to read before step 7 ships — do it then, and self-host all three faces if
-the answer is at all unclear. It was picked over Bricolage Grotesque, Archivo Expanded and
-a single-family Geist system; the last of those was rejected specifically because it has no
-characterful face at all, and would have satisfied the token block by deleting one of its
-requirements.
+the answer is at all unclear. **Step 7 shipped on 2026-08-13 with the licence unread**, and
+`app/index.html` loads all three faces from their hosts and says so in its own comment. The
+condition on this paragraph has gone by; it is written down rather than quietly re-dated,
+which is the same rule `docs/DEBTS.md` applies to a fix trigger that fires and is passed.
+
+It was picked over Bricolage Grotesque, Archivo Expanded and a single-family Geist system;
+the last of those was rejected specifically because it has no characterful face at all, and
+would have satisfied the token block by deleting one of its requirements.
 
 **Atkinson Hyperlegible is a Fulfillment decision wearing a typeface.** It was drawn by the
 Braille Institute for low vision — disambiguated `0`/`O` and `1`/`l`/`I`, exaggerated
@@ -123,42 +129,68 @@ positive spec, and a positive spec is what a later session should argue with. Th
 for the panel header strip: a tinted bar carrying each panel's name and queue depth was
 built, looked at, and rejected. Do not add one, and do not write a rule about them either.
 
-## The review queue — SPECIFICATION. NONE OF THIS IS BUILT.
+## The review queue — BUILT 2026-08-13. Description, except where marked.
 
-**Everything in this section describes a screen that does not exist.** A Vite app exists as
-of step 6 and renders exactly one thing — the pull-confirm gallery — so the absence below is
-now specific rather than total: no queue screen, no candidate rows, no photo, no sort applied
-to anything on screen.
+**This section specified a screen that now exists, and reads as a description of it.**
+`app/src/ReviewQueue.tsx` and `app/src/ReviewQueue.css` render it at `#/review`. Read every
+statement below as *does* and hold it against the screen — one card at a time, photo first,
+single column; the sentence; the candidate rows with their keys; the human label over the
+machine string; a type scale that steps down with the price and a parked row dimmed rather
+than merely lower. The old header said "NONE OF THIS IS BUILT" and told you to read every
+line as *shall*; it survived the screen by one commit, which is exactly the drift it was
+written to prevent, pointing the other way.
 
-**This warning governs this section and no other.** As of 2026-08-13 the capture screen, undo
-and the pull preview have an execution spec at `docs/specs/capture-app.md` and are build-order
-step 7a; the review queue is explicitly 7b and is built after Gate B, against a real run
-rather than against guesses about what one produces. So the queue is the part of this
-document with the furthest to fall, and it is the part still written entirely forward.
-Read every statement below
-as *shall*, never as *does* — it is a specification written before the thing it specifies,
-which is the same reason `docs/GATES.md` writes its thresholds as numbers before there is
-anything to measure. When step 7 lands, this section becomes checkable and someone should
-check it; until then nothing here has been observed, and an agent that reads it as a
-description of working software will confidently document behaviour that has never run.
+**Built is not validated, and the two are kept apart deliberately.** 7b was built before
+Gate B at the owner's instruction, so nothing here has met a real queue: no card has been
+photographed, no `identify` run has been paid for, and `review.json` has never held a row.
+The *shape* is observable today; the numbers inside it are guesses, and a wrong guess
+renders perfectly. `docs/specs/capture-app.md`'s STATUS block enumerates what that costs and
+its §10.2 names the measurements Gate B should take against it.
 
-The one exception is marked inline: the sort order is description, not specification, and
-carries its citation.
+**What is still written forward, each marked where it stands rather than only here**: the
+price band edges the type scale cuts on, the reason labels, and Skip — a control this
+section never specified and which is recorded below as an open question rather than
+retrofitted into a decision. One paragraph also records where the built screen deliberately
+stops short of what this section asks: keys are drawn on the first nine candidates only.
 
 The hardest screen in the product and the one the owner spends hours in, so its shape is
 part of the design and not left to step 7.
 
-**One card at a time, photo first, single column.** Photo full width at the top, then one
+**One card at a time, photo first, single column.** Photo as large as the viewport allows at
+the top, then one
 sentence naming what the system found, then the candidate rows with their prices. No
 left/right split, so the same layout works on a laptop and a phone. Answering advances
 immediately.
 
-**Worked expensive-first, and that ordering has to be visible.** *Description, not
-specification:* `store/queues.py:sort_key` sorts priced cards first and descending, unpriced
-last, then box-walk order by box and index. That is built and runs today. What is *not*
-built is everything the design does with it: the row's name size and its price size shall
-both step down as the price does, and a parked row shall be dimmed rather than merely lower.
-A queue where every row looks equally important has thrown away a sort it already has.
+**"As large as the viewport allows" replaced "full width at the top" on 2026-08-13, after
+building it.** Full column width is right on a phone and wrong on a laptop: a card is 63×88,
+so at a 656px column it draws over 900px tall, and the sentence and the first candidate — the
+two things you are comparing the photo *against* — fall off the screen. The first
+implementation instead centred the image inside a full-width panel, which drew a correct
+photograph beside an equal area of empty surface inside one border, and looked like a bug.
+
+So the rule is a cap on **height**, with width free to bind first: on a phone the column is
+narrow and the photo is genuinely full width; on a laptop the height cap keeps the sentence
+and a candidate visible beneath it. The number is a judgement and lives in
+`app/src/ReviewQueue.css` rather than here — what this section fixes is that the photo is the
+largest thing on the screen and that what you compare it to stays in view with it. This is a
+judging screen: the photograph has to be big enough to settle whether the foil matches the
+toggle, which is the disagreement that put the card in this queue.
+
+**Worked expensive-first, and that ordering is visible.** `store/queues.py:sort_key` sorts
+priced cards first and descending, unpriced last, then box-walk order by box and index;
+`app/src/ReviewQueue.tsx:bandOf` puts every worklist row in one of five type-size bands cut
+from that same price, and a parked row is dimmed rather than merely lower. A queue where
+every row looks equally important has thrown away a sort it already has.
+
+**The band edges are the one number on this screen nobody has measured**, and they are
+marked as an assumption at the place they are cut as well as here. They are multiples of
+D9's $0.40 threshold, so they follow it if it moves — the same instinct D9 applies to its
+own sub-threshold bands — but the multiples are a guess at a price distribution that does
+not exist yet. Unpriced is deliberately not the bottom band: `pipeline/routing.py` holds
+that no price is not a low price, so drawing it smallest would teach the eye the opposite of
+what routing decided. `docs/specs/capture-app.md` §10.2 item 3 is the measurement that
+redraws them, and redrawing them invalidates nothing else in that file.
 
 **Accent does two jobs at two weights, and the heavy one has a rule.**
 
@@ -174,8 +206,8 @@ makes the fill mean two different things on two screens. Reserving it for single
 screens means its meaning never has to be learned twice, and it is why the Fulfiller's
 pull-confirm is the loudest thing he ever sees.
 
-**Reason codes: human label large, machine string small beneath it.** The pipeline emits
-twelve of them — six from the variant ladder in `pipeline/variant.py`
+**Reason codes: human label large, machine string small beneath it.** The pipeline defines
+twelve strings — six from the variant ladder in `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
 `detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`) and six from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
@@ -186,9 +218,48 @@ Showing only the raw string is honest and unreadable. Both, at two sizes, costs 
 chrome and keeps the string greppable across the screen, the run report and `review.json`.
 **Owner-side only**: the Fulfillment banned-word list forbids this register entirely.
 
-**Every choice shows its key.** Owner-side, an hour in the queue is a keyboard and not a
-mouse, and the keyboard hint is what the no-confirm-dialog decision looks like in the
-markup. The Fulfiller's screens are touch and show none.
+**Eleven of the twelve can reach this screen. `no_market_data` cannot, and this paragraph
+used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
+destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
+for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
+priced by hand in `decisions.json` (D9) and never appears here. The screen carries a label
+for it all the same, which is right: one line of a lookup table is cheaper than a bare
+machine string rendered the first time routing ever queues one. The claim to keep out of
+this file is the count — twelve are defined, eleven are reachable, and the two numbers
+answer different questions.
+
+**Every choice shows its key, and the built screen draws nine of them.** Owner-side, an hour
+in the queue is a keyboard and not a mouse, and the keyboard hint is what the
+no-confirm-dialog decision looks like in the markup. The Fulfiller's screens are touch and
+show none. Recorded as a deviation rather than folded into the sentence above:
+`app/src/ReviewQueue.tsx` keys candidates on the digits, because the choice *is* a numbered
+list and any other mapping is a second thing to learn — which stops at nine, since a tenth
+needs a modifier or a two-key sequence. Rows past the ninth draw no chip rather than a chip
+that does nothing. A card with ten candidate rows is rare enough that reaching for the mouse
+is the right cost; a real queue full of them is the argument for reopening this.
+
+**Skip is an OPEN QUESTION, not a decision.** The built screen carries a control this section
+never asked for: Skip, on `S`, which moves the current card to the back of this session's
+worklist. The owner never chose it, so it is recorded here as a question rather than left
+undocumented on the screen this file specifies hardest — and recorded as a question rather
+than written up as a decision, because inventing the owner's reasoning after the fact is how
+a build's convenience becomes a settled rule nobody argued for.
+
+It exists because two kinds of card cannot be answered at all, and without a way past them
+the queue stops dead on the first one. An entry with no candidate rows is refused by
+`POST /review/<box>/<index>/answer` as `no_candidates` — it needs another photograph or
+another identification run, not an answer. And a card the owner is not ready to rule on has
+no other move, because the only write this screen can make is final:
+`store/queues.py:Queue.upsert` refuses to re-queue a position a human has cleared,
+deliberately, so that an answer outlives the question.
+
+Skipping writes nothing — the entry stays open in its file, the run report still counts it,
+and a reload forgets every skip. That is the half worth defending: a skip that persisted
+would be a third state between open and answered, the same tombstone shape D10 refuses for
+undo, and it would have to be cleared by something. What settles the control is Gate B
+traffic (`docs/specs/capture-app.md` §10.2 item 1). If nothing is ever skipped, delete it.
+If most of a queue is, the screen needs a real defer that records a reason, and that is a
+decision entry rather than a button.
 
 **Mono carries all metadata.** Reason codes, set and collector number, age, counts,
 positions and prices are utility face, uppercase, tracked. The body face is reserved for
@@ -199,12 +270,22 @@ reading as a newspaper.
 
 The agent cannot see its own output, so these are Playwright assertions, not prose.
 
-**Three of these rows now run.** `app/tests/pull-confirm.spec.ts`, via `make design-check`,
-asserts body size, tap targets and contrast against the one component that exists — computing
-each contrast ratio from the *rendered* colours, so a token change breaks the test rather
-than the palette. The rest are still prose because the views that carry them do not exist;
-step 7 extends the same spec as each one lands. Nothing here is a harness test: the contract
-in `docs/GATES.md` is seven Python tests run at turn end, and this runs a browser.
+**All nine rows now run, against the view itself.** `app/tests/fulfillment.spec.ts` asserts
+every row of the table below on the Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps
+three of them on step 6's component. `make design-check` runs both — 30 assertions, observed
+passing 2026-08-13. Every contrast ratio is computed from the *rendered* colours rather than
+compared against a number published here, so a token edited in `app/src/tokens.css` without
+being re-argued in this file has to break something.
+
+The spec asserts the view is on screen before it measures anything, and that is not defensive
+padding: it is what caught 7b shipping unwired, failing 16 of 30 on an unregistered route
+rather than reporting nine confident measurements of whatever Vite serves for a hash it does
+not recognise.
+
+Two things this does not cover. The requirement under the table rather than in it — D5's "if
+a flow needs explaining twice, redesign the flow" — has no instrument but the Fulfiller
+filling a real order, and no order has been pulled. And none of this is a harness test: the
+contract in `docs/GATES.md` is seven Python tests run at turn end, and this runs a browser.
 
 | Constraint | Assertion |
 |---|---|

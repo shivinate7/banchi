@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "design-check": "playwright test"
   },
@@ -19,8 +20,11 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.39.5",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.67.0",
     "vite": "^7.1.0"
   },
+  "_comment_eslint": "eslint is held at ^9 while 10 is current, and the config carries two rules and no shared preset. Both choices are argued in the header of app/eslint.config.js, beside the rules themselves — not restated here, because the version and the reason drift apart the moment they live in two files. The `lint` script carries no --fix and must not gain one: `make check` runs it, and D18 keeps anything that writes off the path that decides whether work is done.",
   "_comment_playwright": "@playwright/test is pinned exactly, not caret-ranged. scripts/screenshot.sh pins the same version for its npx render, and two Playwright versions in one repo means two browser downloads and two behaviours. Bump both together or neither. 1.55.1 rather than 1.55.0: GHSA-7mvr-c777-76hp, browsers downloaded without verifying the SSL certificate, fixed in .1. The screenshot script was bumped in the same edit."
 }

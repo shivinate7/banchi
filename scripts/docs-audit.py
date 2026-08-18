@@ -67,7 +67,18 @@ EXIT_USAGE = 64
 
 # Directories that are not this project's source. `.venv` alone holds hundreds of vendored
 # READMEs, and auditing someone else's markdown would be noise with a straight face.
-SKIP_DIRS = {".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__"}
+#
+# `dist` and `test-results` joined when the repo-map orphan scan learned to recurse: they
+# are Vite's build output and Playwright's per-run output, both under `app/`, and a scan
+# that descends now has an opinion about them. Pruned here rather than left to the
+# gitignore filter in `check_map` because the two do different jobs — this one stops a
+# build tree being enumerated at all, and that one stops a finding being *reported* for
+# anything git calls local state. Neither subsumes the other: `app/playwright-report/` is
+# ignored and not listed here, and a scan of a fresh worktree walks it for nothing.
+SKIP_DIRS = {
+    ".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__",
+    "dist", "test-results",
+}
 
 ALLOWLIST = ROOT / "scripts" / "docs-audit-allow.txt"
 
@@ -1216,7 +1227,117 @@ def check_current_gate(report: Report) -> None:
 # ----------------------------------------------------------------------- the repo map
 
 MAP = ROOT / "docs" / "map.py"
-SOURCE_SUFFIX = ".py"
+
+# What the orphan scan counts as source when an entry says nothing. Every entry written
+# before the key below existed keeps exactly the behaviour it had: `.py`, one level deep.
+DEFAULT_SOURCE_SUFFIXES: Tuple[str, ...] = (".py",)
+
+# The optional per-entry key that widens it. A single repo-wide suffix set was the obvious
+# fix and is the wrong one: adding the web extensions to it would conscript
+# `docs/design-refs/*.html` and `*.css`, which are drawings of docs/DESIGN.md and
+# deliberately not components, into demanding map entries. Per-entry is the only shape that
+# lets `app/` declare what it is written in without deciding that for the rest of the tree —
+# and `docs/design-refs/` stays uncovered by having no entry with a module list at all,
+# rather than by an exemption someone has to maintain.
+SOURCE_SUFFIXES_KEY = "source_suffixes"
+
+
+def scan_plan(component: Dict[str, object]) -> Tuple[Tuple[str, ...], bool, List[str]]:
+    """What this entry's orphan scan covers: (suffixes, recursive, complaints).
+
+    **Declaring the key replaces the default set rather than adding to it.** `app/` holds no
+    `.py` and never will, so a union would have it hunting for a language it does not
+    contain; the entry is the right place to say what a directory is written in, and saying
+    it should not mean saying it twice.
+
+    **A declaration is also what turns the scan recursive, and the coupling is deliberate.**
+    A declaring directory keeps its source in subdirectories — `app/src/`, `app/tests/` —
+    so a flat scan of one would find nothing whatever suffixes it was handed, which is the
+    second half of why tonight's `.tsx` drift landed in silence. Recursing for *every* entry
+    was the first draft and was worse: `harness/` lists `run.py` alone, and everything under
+    `harness/tests/` and `harness/eval/` is deliberately undescribed (the map says so in a
+    comment). Turning a dozen of those into blocking findings is a content decision about
+    the map, argued in the map, not a side effect of widening a suffix set in here. So the
+    default stays flat and grandfathered, and an entry that declares is an entry that has
+    said what its whole tree is made of.
+
+    **A malformed declaration scans nothing and reports that it scanned nothing.** Falling
+    back to the `.py` default would leave `app/` printing a clean orphan scan that had
+    looked at no file it contains — a check gone quiet, which docs/DEBTS.md already names
+    as this auditor's worst failure mode. The complaints are MECHANICAL because the shape of
+    a literal is provable: there is no context this script is missing.
+    """
+    declared = component.get(SOURCE_SUFFIXES_KEY)
+    if declared is None:
+        return DEFAULT_SOURCE_SUFFIXES, False, []
+
+    # A bare string is the plausible mistake, and it is the dangerous one: `str.endswith`
+    # accepts a string as happily as a tuple, so `".tsx"` written without its brackets would
+    # scan for one suffix and look entirely correct doing it.
+    if isinstance(declared, str) or not isinstance(declared, (list, tuple)):
+        return (), False, [
+            f"`{SOURCE_SUFFIXES_KEY}` must be a list of suffixes — [\".tsx\", \".css\"] — "
+            f"and is {declared!r}. Nothing was scanned for orphans under this entry."
+        ]
+
+    complaints: List[str] = []
+    suffixes: List[str] = []
+    for item in declared:
+        if not isinstance(item, str) or not item.startswith(".") or len(item) < 2:
+            complaints.append(
+                f"`{SOURCE_SUFFIXES_KEY}` lists {item!r}, which is not a file suffix. "
+                f"A suffix starts with a dot — `\".tsx\"`, never `\"tsx\"`, which matches no "
+                f"filename and would report a clean scan for having looked at nothing."
+            )
+            continue
+        suffixes.append(item)
+
+    if declared and not suffixes:
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` names no usable suffix, so the orphan rule does not "
+            f"run over this directory at all."
+        )
+    if not declared:
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` is an empty list. An entry that declares the key is "
+            f"saying what its source is; declaring nothing switches the orphan rule off "
+            f"here, which is what leaving the key out already does more honestly."
+        )
+    if not component.get("modules"):
+        complaints.append(
+            f"`{SOURCE_SUFFIXES_KEY}` is declared but the entry lists no `modules`, and the "
+            f"orphan scan only runs where there is a module list to compare against. Either "
+            f"list the modules or drop the key — an inert declaration reads as coverage."
+        )
+    return tuple(suffixes), True, complaints
+
+
+def source_names(target: Path, suffixes: Tuple[str, ...], deep: bool) -> Set[str]:
+    """Source files under `target`, named the way docs/map.py names them.
+
+    Relative and slash-joined, because the map already keys `app/`'s modules by
+    `src/tokens.css` — so a recursive scan needs no translation step, the relative path IS
+    the key. `__init__.py` is excluded as package plumbing rather than a module anyone would
+    write a `does` for.
+
+    Deep mode reuses `_walk`, which buys two properties that would otherwise have to be
+    rebuilt here: it prunes SKIP_DIRS as it descends, so `app/node_modules` is never
+    enumerated rather than enumerated and discarded, and it reads the index in staged mode,
+    so the hook keeps auditing the tree the commit will carry.
+    """
+    if not suffixes:
+        return set()
+    if not deep:
+        return {
+            name
+            for name in child_names(target)
+            if name.endswith(suffixes) and name != "__init__.py"
+        }
+    return {
+        path.relative_to(target).as_posix()
+        for path in _walk(target, suffixes)
+        if path.name != "__init__.py"
+    }
 
 
 def literals_from_module(path: Path) -> Dict[str, object]:
@@ -1249,6 +1370,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     that went false; the orphan rule catches a claim that was never made — a module added
     without touching the map, which is exactly how an index quietly stops describing the
     thing it indexes.
+
+    What each entry's orphan scan looks at is the entry's own declaration — see `scan_plan`.
+    It reached `.py` and one directory deep until 2026-08-13, so `app/` was inert under a
+    rule its map entry looked covered by: every step 7a screen landed beside the described
+    modules in one evening and the row stayed green.
     """
     findings: List[Finding] = []
     if not exists(MAP):
@@ -1266,6 +1392,10 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     singles = decision_headings(ROOT / "docs" / "DECISIONS.md", "D")
     test_names = {name for name, _ in registered_tests()}
     claimed = 0
+    # (component path, orphan) pairs, reported after the loop rather than inside it. The
+    # gitignore question below is one batched git call for the whole map that way, instead
+    # of one per entry that lists modules.
+    orphans: List[Tuple[str, str]] = []
 
     def check_decisions(where: str, names: Sequence[str]) -> None:
         for name in names:
@@ -1275,7 +1405,17 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     def check_tests(where: str, names: Sequence[str]) -> None:
         for name in names:
             if name not in test_names and name not in allowed:
-                findings.append(Finding(where, f"tested_by cites {name}, which is not registered in harness/run.py:TESTS."))
+                findings.append(
+                    Finding(
+                        where,
+                        f"tested_by cites {name}, which is not registered in "
+                        f"harness/run.py:TESTS.\n"
+                        f"  This field names harness tests and nothing else. A Playwright "
+                        f"spec under app/tests/ is run by `make design-check`, not at turn "
+                        f"end, and belongs in the entry's `note` — see the two spec entries "
+                        f"in docs/map.py, which say so in prose for exactly this reason.",
+                    )
+                )
 
     for component in components:
         path = component.get("path", "")
@@ -1300,6 +1440,10 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         check_decisions(where, component.get("governed_by") or [])
         check_tests(where, component.get("tested_by") or [])
 
+        suffixes, deep, complaints = scan_plan(component)
+        for complaint in complaints:
+            findings.append(Finding(where, complaint))
+
         modules = component.get("modules") or {}
         for name, entry in modules.items():
             module_path = target / name
@@ -1322,21 +1466,30 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                     )
                 )
 
-        # Orphans: a source file the map never mentions.
+        # Orphans: a source file the map never mentions. Still guarded on `modules`, which
+        # is the exception docs/DEBTS.md records for `scripts/`: an entry with no module
+        # list has nothing to be an orphan of.
         if modules and exists(target):
-            on_disk = {
-                name
-                for name in child_names(target)
-                if name.endswith(SOURCE_SUFFIX) and name != "__init__.py"
-            }
-            for orphan in sorted(on_disk - set(modules)):
-                findings.append(
-                    Finding(
-                        f"docs/map.py -> {path}",
-                        f"`{path}{orphan}` exists but no entry describes it. Add it to "
-                        f"modules, with what it does and what governs it.",
-                    )
-                )
+            for orphan in sorted(source_names(target, suffixes, deep) - set(modules)):
+                orphans.append((path, orphan))
+
+    # A gitignored file is local state and not repo content — the same argument
+    # `ignored_paths` makes for a dangling reference, and it lands harder here because this
+    # row blocks: refusing a commit over `app/playwright-report/index.html` would be the
+    # auditor stopping work on a file the repo does not contain. One batched call, and in
+    # staged mode the list is empty by construction, since `_walk` reads the index and the
+    # index holds nothing ignored — so the pre-commit path pays nothing for this.
+    ignored = ignored_paths([owner + orphan for owner, orphan in orphans])
+    for owner, orphan in orphans:
+        if owner + orphan in ignored:
+            continue
+        findings.append(
+            Finding(
+                f"docs/map.py -> {owner}",
+                f"`{owner}{orphan}` exists but no entry describes it. Add it to "
+                f"modules, with what it does and what governs it.",
+            )
+        )
 
     # Exactly one thing is next. Two is how "current" stopped meaning anything the first
     # time: step 4 was done, step 5 untouched, and both read as the place work was
@@ -1380,6 +1533,249 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
         findings.append(Finding("docs/map.py", f"build-order step {number} is listed here but not in docs/GATES.md."))
 
     report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
+
+
+# ------------------------------------------------ whether a cited test reaches what it claims
+
+# Where the one-level follow stops, and the reason this row says anything at all.
+#
+# A test's own scaffolding is part of the test: harness/eval/ holds the fixture loader and
+# the run cache, and a test that kept its imports there would otherwise be reported as
+# reaching nothing — a false positive, on a blocking row, over a correct claim. So the
+# follow reaches modules under here and no further.
+#
+# PRODUCT PACKAGES ARE DELIBERATELY NOT FOLLOWED, and that is the whole design. Measured on
+# this tree: `cli/cmd_identify.py` imports `geometry`, `cli/resolve.py` imports `store`, and
+# `harness/tests/t7_store_and_seams.py` imports `cli`. One transitive hop would therefore
+# prove "T7 reaches geometry" — a package T7 does not touch and whose two modules correctly
+# cite T6. Transitive reachability through the product's own graph makes almost every claim
+# true and asserts nothing, which is to say it recreates the unenforced field this row
+# exists to enforce, using the machinery meant to enforce it.
+FOLLOW_ROOT = "harness/"
+
+
+def imported_names(source: str) -> Set[str]:
+    """Every absolute dotted module name a source imports. The whole tree, not just its body.
+
+    `ast.walk` rather than `tree.body`, because two of the seven tests import the thing they
+    are named for from inside a function: `harness/tests/t6_geometry.py` imports `geometry`
+    after its Pillow/numpy availability check, and `harness/tests/t7_store_and_seams.py`
+    imports `cli.__main__` inside the case that drives it. A module-level read would call
+    both of those claims false and block a commit over them.
+
+    `from . import x` is dropped rather than resolved: a relative import names no package
+    this check can compare against a map entry, and no test in this repo writes one.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    names: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            names.add(node.module)
+            # `from harness.eval import fixtures, runcache` — each name is a submodule or an
+            # attribute, and only the filesystem knows which. Both forms are recorded; the
+            # resolver below finds no file for an attribute and moves on.
+            for alias in node.names:
+                names.add(node.module + "." + alias.name)
+    return names
+
+
+def string_literals(source: str) -> Set[str]:
+    """Every string constant in a source that is not a docstring.
+
+    Docstrings are excluded because they are prose, and prose is what this whole script
+    treats as unverified. `harness/tests/t2_round_trip.py` opens with "Load
+    fixtures/sv09_export_untouched.csv" in its module docstring and then assigns the same
+    path to `SOURCE_FIXTURE` two dozen lines down. Only the second is the test reading the
+    file; counting the first would let a sentence satisfy the claim.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    docstrings: Set[int] = set()
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            if isinstance(body[0].value.value, str):
+                docstrings.add(id(body[0].value))
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    }
+
+
+def follow_target(dotted: str) -> Optional[Path]:
+    """A dotted module name as a file under FOLLOW_ROOT, or None for anything else."""
+    stem = dotted.replace(".", "/")
+    for candidate in (ROOT / (stem + ".py"), ROOT / stem / "__init__.py"):
+        if rel(candidate).startswith(FOLLOW_ROOT) and exists(candidate):
+            return candidate
+    return None
+
+
+def test_reach(path: Path) -> Tuple[Set[str], Set[str]]:
+    """(top-level packages the test imports, path literals it names). One level deep."""
+    source = read(path)
+    names = imported_names(source)
+    literals = string_literals(source)
+    # `sorted()` copies, so the sets may grow inside the loop without the new entries being
+    # followed in turn. That is not an implementation detail — it IS the one level.
+    for dotted in sorted(names):
+        helper = follow_target(dotted)
+        if helper is None or helper == path:
+            continue
+        helper_source = read(helper)
+        names |= imported_names(helper_source)
+        literals |= string_literals(helper_source)
+    return {name.split(".", 1)[0] for name in names}, literals
+
+
+def is_importable(target: Path) -> bool:
+    """Does this directory hold Python at all?
+
+    Not `__init__.py`: `server/` and `harness/` have none and are imported anyway, as
+    namespace packages. Holding a `.py` child is the property that matters, and it is what
+    separates a package from `fixtures/`, which holds CSVs, and `app/`, which holds
+    TypeScript. Those two have no import to check, so the claim on them is checked the only
+    other way a parse can see — a path literal.
+    """
+    return any(name.endswith(".py") for name in child_names(target))
+
+
+def reach_findings(
+    components: Sequence[Dict[str, object]], tests: Dict[str, Path]
+) -> Tuple[List[Finding], int]:
+    """(findings, claims checked). Split out from the check so the self-test can drive it.
+
+    The self-test feeds it the exact false claim docs/DEBTS.md recorded — `store/queues.py`
+    citing T3 — against the real harness, rather than a synthetic stand-in for it.
+    """
+    findings: List[Finding] = []
+    claims = 0
+    cache: Dict[str, Tuple[Set[str], Set[str]]] = {}
+
+    def reach(name: str) -> Tuple[Set[str], Set[str]]:
+        if name not in cache:
+            cache[name] = test_reach(tests[name])
+        return cache[name]
+
+    for component in components:
+        path = str(component.get("path", ""))
+        target = ROOT / path
+        if not path or not exists(target):
+            continue  # the repo map row already reports a component path that is not there
+        package = path.strip("/").split("/")[0]
+        importable = is_importable(target)
+
+        entries: List[Tuple[str, Sequence[str]]] = [(path, component.get("tested_by") or [])]
+        for module_name, entry in (component.get("modules") or {}).items():
+            entries.append((path + str(module_name), list(entry.get("tested_by") or [])))
+
+        for where, cited in entries:
+            for name in cited:
+                # An id that is not a registered test is already a finding on the repo map
+                # row, and there is no file here to parse. Reporting it twice under two
+                # labels would make one defect read as two.
+                if name not in tests or not exists(tests[name]):
+                    continue
+                claims += 1
+                packages, literals = reach(name)
+
+                if importable:
+                    if package in packages:
+                        continue
+                    in_repo = sorted(
+                        found
+                        for found in packages
+                        if exists(ROOT / found) or exists(ROOT / (found + ".py"))
+                    )
+                    findings.append(
+                        Finding(
+                            f"docs/map.py -> {where}",
+                            f"tested_by claims {name}, and {rel(tests[name])} imports no "
+                            f"`{package}`.\n"
+                            f"  {name} reaches: {', '.join(in_repo) or '(nothing in this repo)'}\n"
+                            f"  Either the claim is false and goes, or the test should import "
+                            f"what it is credited with. Do not answer this in prose: the "
+                            f"entry's `note` is read by people and this row is not.",
+                        )
+                    )
+                    continue
+
+                if any(literal.startswith(where) for literal in literals):
+                    continue
+                findings.append(
+                    Finding(
+                        f"docs/map.py -> {where}",
+                        f"tested_by claims {name}, and {rel(tests[name])} names no path "
+                        f"under `{where}`.\n"
+                        f"  `{path}` holds no Python, so there is no import to check. The "
+                        f"only evidence a parse can see is the test naming a path under it "
+                        f"in its code — a mention in its docstring is prose and does not "
+                        f"count.",
+                    )
+                )
+    return findings, claims
+
+
+def check_tested_by_reach(report: Report) -> None:
+    """A `tested_by` claim in docs/map.py, against what the cited test actually imports.
+
+    The repo-map row proves a cited test id is registered in `harness/run.py:TESTS`. It has
+    never proved the test goes anywhere near the module claiming it, and docs/DEBTS.md
+    recorded the measurement: of the eleven entries audited by hand on 2026-08-11, ten were
+    true and one was false — `store/queues.py` claimed T3 and T4 while nothing under
+    `harness/` imported `store` at all. D17 says the map is audited exactly as hard as it is
+    trusted, and this was the field where it was trusted and not audited.
+
+    **WHAT A PASSING CLAIM PROVES, EXACTLY**: the cited test's import graph — the test module
+    plus one level into its own `harness/` helpers — contains the top-level package the
+    entry lives in. For a directory holding no Python, that the test names a path under it in
+    a string literal outside its docstrings.
+
+    **WHAT IT DOES NOT PROVE, AND THE DISTANCE IS LARGE**: not that the test imports the
+    *module*, not that it calls anything the module defines, and not that any assertion
+    depends on it. `from pipeline import join` satisfies every entry in `pipeline/` at once.
+    A test could import a package and exercise none of it and this row would stay green.
+    Overclaiming here would be the same defect one level up — an unenforced claim about a
+    checker for unenforced claims — so the label is `tested_by reach` and not `tested_by
+    coverage`, and the summary says "reaches" rather than "tests".
+
+    **Package granularity, not module granularity, and that was measured too.**
+    `harness/tests/t6_geometry.py` imports the bare package (`import geometry`) and then uses
+    `geometry.detect` through it, so a module-granular rule would call both correct
+    `geometry/` entries false. A false positive that blocks is worse than one that prints
+    (D16), and this row blocks — so it asks the question it can answer without judgment.
+
+    **Blocking, because an import either is in the parse or is not.** That is D16's test for
+    a mechanical finding. The residual risk is a test that reaches code without importing
+    it — through a subprocess or a generated file. No harness test does today (`subprocess`
+    appears nowhere under `harness/tests/`), and if one ever does the fix is to drop the
+    claim or to make the test import what it is credited with. It is deliberately not
+    something a `note` can talk its way out of: that is what "unenforced" meant.
+    """
+    if not exists(MAP):
+        return  # the repo map row above already reports a missing map, loudly
+    components = literals_from_module(MAP).get("COMPONENTS") or []
+    tests = {name: path for name, path in registered_tests()}
+    findings, claims = reach_findings(components, tests)
+    report.add(
+        "tested_by reach",
+        MECHANICAL,
+        findings,
+        f"{claims} claims, every cited test reaches what it names",
+    )
 
 
 # ----------------------------------------------------------- status.py's declared sources
@@ -1485,6 +1881,301 @@ def check_status_sources(report: Report) -> None:
     report.add("status sources", MECHANICAL, findings, f"{checked} declared, all resolve")
 
 
+# ------------------------------------------------ the palette the app actually renders from
+
+DESIGN = ROOT / "docs" / "DESIGN.md"
+TOKENS_CSS = ROOT / "app" / "src" / "tokens.css"
+
+COLOUR = "colour"
+TYPEFACE = "typeface"
+LENGTH = "length"
+
+# The two files name the same token differently in exactly two places, and both differences
+# are cosmetic: the type rows are headed by the job a face does (`Utility`) where the
+# property is abbreviated (`--util`), and the spacing scale is one row of numbers where the
+# properties are `--s1`, `--s2` and so on. Renaming one side to match the other was the
+# obvious alternative and is the wrong one — app/src/tokens.css says in its own header that
+# its property names match docs/design-refs/locked.html, and the doc's block is laid out to
+# be read as a palette by a person. A three-line table is cheaper than either file getting
+# worse to spare it.
+DOC_TYPE_TOKENS = {"Display": "display", "Body": "body", "Utility": "util"}
+SPACING_TOKEN = "s"  # positional: the nth number on the Spacing row is `--s<n>`
+RADIUS_TOKEN = "r"
+
+# `Color      #FCFCFD  bg   the page.` and its continuation rows, which carry no label. The
+# optional leading word is what lets the first row of the group parse like the rest.
+_TOKEN_ROW_RE = re.compile(r"^\s*(?:[A-Z][a-z]*\s+)?(#[0-9A-Fa-f]{3,6})\s+([a-z][a-z0-9-]*)\b")
+# Built from the table above rather than beside it: a second enumeration of the same three
+# labels is the drift this whole check exists to catch, and there is no excuse for one here.
+_TYPE_ROW_RE = re.compile(r"^(" + "|".join(DOC_TYPE_TOKENS) + r")\s+(.+?)\s*\(")
+_SPACING_ROW_RE = re.compile(r"^Spacing\s+([\d ]+\d)")
+_RADIUS_ROW_RE = re.compile(r"^Radius\s+(\d+px)\b")
+
+# The one definition, shared with strip_css_comments() in the `raw colour` section below.
+# It was declared twice, identically, once per section — harmless only for as long as the two
+# stayed identical, and the second binding silently won for BOTH call sites, so an edit to
+# this one would have been discarded without a diff to show for it. Two checks reading the
+# same CSS must not be able to disagree about what a comment is.
+_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_CSS_PROPERTY_RE = re.compile(r"--([A-Za-z0-9_-]+)\s*:\s*([^;]+);")
+_SHORTHAND_RE = re.compile(r"#[0-9a-f]{3}$")
+
+
+class Token(NamedTuple):
+    kind: str
+    text: str  # as its own file writes it, so a finding can quote both spellings
+    value: str  # normalised, and the only thing ever compared
+
+
+def token_value(kind: str, text: str) -> str:
+    """One normaliser, run over both sides.
+
+    Deliberately not two. A doc-side and a css-side normaliser are two decisions about what
+    counts as the same value, and the failure mode of their disagreeing is a permanent
+    finding nobody can fix — or worse, a permanent pass. Every difference this collapses is
+    a difference CSS itself does not see:
+
+      colour     `#FFF` and `#ffffff` are one colour. A check that called them a
+                 disagreement would be reporting a spelling, and would be worked around by
+                 respelling the doc, which is D16's forbidden direction.
+      typeface   the stylesheet names the locked face plus a generic fallback. The interview
+                 chose a face; `sans-serif` behind it is a rendering nicety nobody locked.
+                 Family names are ASCII case-insensitive to CSS, so case is folded too.
+      length     whitespace only. `4px` and `4 px` are not the same value to CSS and are not
+                 collapsed here.
+    """
+    if kind == COLOUR:
+        text = " ".join(text.split()).lower()
+        return "#" + "".join(ch * 2 for ch in text[1:]) if _SHORTHAND_RE.match(text) else text
+    if kind == TYPEFACE:
+        return " ".join(text.split(",")[0].strip().strip("'\"").split()).lower()
+    return " ".join(text.split()).lower()
+
+
+def design_token_block(text: str) -> Optional[str]:
+    """The fenced block under the `## Tokens` heading, or None.
+
+    Scoped to that one section on purpose. docs/DESIGN.md carries a second fenced block —
+    step 6's three button states — which restates some of these hexes; it is a doc arguing
+    with itself rather than with the code, a different question with a different answer, and
+    folding it in here would put two comparisons behind one row's name.
+
+    An unterminated fence returns None, which the caller reports. Falling through to the
+    next fence in the file would compare the button states against the stylesheet and find
+    nothing wrong with either.
+    """
+    collecting = False
+    in_section = False
+    block: List[str] = []
+    for line in text.splitlines():
+        if not collecting and line.startswith("## "):
+            in_section = bool(re.match(r"^##\s+Tokens\b", line))
+            continue
+        if in_section and line.lstrip().startswith("```"):
+            if collecting:
+                return "\n".join(block)
+            collecting = True
+            continue
+        if collecting:
+            block.append(line)
+    return None
+
+
+def design_tokens(block: str) -> Dict[str, Token]:
+    """Every token the block locks: colours by name, the three faces, the scale, the radius.
+
+    A row this cannot read disappears from the doc side rather than being reported here, and
+    that is safe in one direction only — the stylesheet still declares the property, so the
+    comparison reports it as a token the block does not lock. Reformatting the block into a
+    markdown table would therefore fail loudly, one finding per token, rather than passing
+    on an empty comparison. The vacuous case, where nothing at all parses, is caught by the
+    caller.
+    """
+    tokens: Dict[str, Token] = {}
+    for line in block.splitlines():
+        colour = _TOKEN_ROW_RE.match(line)
+        if colour:
+            tokens[colour.group(2)] = Token(COLOUR, colour.group(1), token_value(COLOUR, colour.group(1)))
+            continue
+        face = _TYPE_ROW_RE.match(line)
+        if face:
+            name = DOC_TYPE_TOKENS[face.group(1)]
+            tokens[name] = Token(TYPEFACE, face.group(2), token_value(TYPEFACE, face.group(2)))
+            continue
+        spacing = _SPACING_ROW_RE.match(line)
+        if spacing:
+            for index, step in enumerate(spacing.group(1).split(), start=1):
+                # The block writes the scale bare where the stylesheet writes px. Reading the
+                # unit in is an assumption, and it is the one the rest of the file supports:
+                # `Radius 4px` on the next row carries its unit, and the Fulfillment table
+                # states every other length in px. What would settle it is the Spacing row
+                # spelling the unit out. Until then a scale in any other unit reads here as a
+                # disagreement, which is the safe direction to be wrong in.
+                tokens[f"{SPACING_TOKEN}{index}"] = Token(LENGTH, step, token_value(LENGTH, step + "px"))
+            continue
+        radius = _RADIUS_ROW_RE.match(line)
+        if radius:
+            tokens[RADIUS_TOKEN] = Token(LENGTH, radius.group(1), token_value(LENGTH, radius.group(1)))
+    return tokens
+
+
+def css_root_tokens(text: str) -> Dict[str, str]:
+    """Custom properties declared on `:root`, comments stripped first.
+
+    Stripping first is the point: a token commented out during a refactor still reads as a
+    declaration to a regex, and this check would then agree with the doc about a value the
+    browser never sees. Braces are counted rather than stopping at the first `}` so that a
+    `:root` nested inside an at-rule is read whole — docs/DESIGN.md bans a dark theme, and
+    an audit that silently truncated at one is an audit that would not notice it arriving.
+    """
+    body = _CSS_COMMENT_RE.sub(" ", text)
+    out: Dict[str, str] = {}
+    for match in re.finditer(r":root\b[^{]*\{", body):
+        depth = 1
+        index = match.end()
+        while index < len(body) and depth:
+            if body[index] == "{":
+                depth += 1
+            elif body[index] == "}":
+                depth -= 1
+            index += 1
+        for name, value in _CSS_PROPERTY_RE.findall(body[match.end():index]):
+            out[name] = value.strip()
+    return out
+
+
+def token_findings(doc: Dict[str, Token], css: Dict[str, str]) -> List[Finding]:
+    """Both directions, and every finding names both files and both values.
+
+    Both directions because either half of a drift is the same defect seen from one side. A
+    token in the doc and not the stylesheet is a decision the product never implemented; a
+    token in the stylesheet and not the doc is a value the owner never chose, which is the
+    more dangerous of the two — it renders perfectly and no interview ever saw it.
+    """
+    findings: List[Finding] = []
+    for name in sorted(set(doc) | set(css)):
+        locked = doc.get(name)
+        rendered = css.get(name)
+        if locked is None:
+            findings.append(
+                Finding(
+                    f"{rel(TOKENS_CSS)} + {rel(DESIGN)}",
+                    f"`--{name}: {rendered}` is declared in {rel(TOKENS_CSS)}, and the token "
+                    f"block in {rel(DESIGN)} locks no `{name}`.\n"
+                    f"  Lock it there, or delete it here. A token the doc never chose is a "
+                    f"value with no argument behind it.",
+                )
+            )
+            continue
+        if rendered is None:
+            findings.append(
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"{rel(DESIGN)} locks `{name}` at `{locked.text}`, and "
+                    f"{rel(TOKENS_CSS)} declares no `--{name}`.\n"
+                    f"  Nothing renders it, so the locked value is a decision the product "
+                    f"does not carry.",
+                )
+            )
+            continue
+        if token_value(locked.kind, rendered) != locked.value:
+            findings.append(
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"`{name}` disagrees.\n"
+                    f"  {rel(DESIGN)}:      {locked.text}\n"
+                    f"  {rel(TOKENS_CSS)}: {rendered}\n"
+                    f"  The doc is the source — it records what the owner picked from "
+                    f"rendered alternatives. Change the stylesheet, or take the value back "
+                    f"through an interview and change both.",
+                )
+            )
+    return findings
+
+
+def check_design_tokens(report: Report) -> None:
+    """The locked palette in docs/DESIGN.md against the custom properties the app renders.
+
+    docs/DESIGN.md's token block is the record of an interview: every value in it was chosen
+    by the owner from rendered alternatives, and the paragraphs under it argue for the
+    choices. app/src/tokens.css is what the browser actually paints. Nothing compared them
+    until this row existed, and docs/DEBTS.md recorded the gap with the reason it matters:
+    a wrong hex renders perfectly, so the failure is silent by construction and the document
+    is the one nobody re-reads.
+
+    **Blocking, because a disagreement is provable.** Two files state the same value; either
+    they match or they do not. There is no context this script is missing, which is D16's
+    test for a mechanical finding rather than a printed question.
+
+    **This is a check, not a generator, and the distinction is the whole of D18.** Nothing
+    here writes. The temptation it is placed against is a build step that rewrites
+    app/src/tokens.css from the block — which would run inside `make check`, make the two
+    agree by construction, and turn every wrong hex into a confidently rendered one.
+    Checking lets two things disagree in public.
+
+    **What a green row means, exactly**: the values agree. It says nothing about whether the
+    palette is any good — contrast is asserted in app/tests/pull-confirm.spec.ts against
+    rendered pixels, and taste is what the interview was for.
+    """
+    missing = [rel(path) for path in (DESIGN, TOKENS_CSS) if not exists(path)]
+    if missing:
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    " ".join(missing),
+                    "does not exist, so nothing compares the locked palette against what "
+                    "the app renders from.",
+                )
+            ],
+        )
+        return
+
+    block = design_token_block(read(DESIGN))
+    if block is None:
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    rel(DESIGN),
+                    "has no fenced block under its `## Tokens` heading, so there is no "
+                    "locked palette to compare against.\n"
+                    "  The block is the record of the interview that chose these values. "
+                    "If it moved, this check has to move with it.",
+                )
+            ],
+        )
+        return
+
+    doc = design_tokens(block)
+    css = css_root_tokens(read(TOKENS_CSS))
+    if not doc or not css:
+        # A side that parses to nothing must never report a clean row — same rule as a
+        # malformed `source_suffixes` scanning nothing and saying so. This is the state
+        # docs/DEBTS.md calls this auditor's worst failure mode: a check gone quiet.
+        report.add(
+            "design tokens",
+            MECHANICAL,
+            [
+                Finding(
+                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                    f"read {len(doc)} tokens from the block and {len(css)} from `:root`. "
+                    f"A side that parses to nothing compares nothing.",
+                )
+            ],
+        )
+        return
+
+    report.add(
+        "design tokens",
+        MECHANICAL,
+        token_findings(doc, css),
+        f"{len(doc)} locked tokens, all rendered as locked",
+    )
+
+
 # ------------------------------------------------------------------ naming checks by name
 
 
@@ -1494,6 +2185,70 @@ def check_status_sources(report: Report) -> None:
 # headers in this file ran 1 to 10 and then jumped, so two numbers in circulation pointed
 # at nothing at all.
 _POSITIONAL_RE = re.compile(r"\bchecks?\s+\d{1,2}\b", re.IGNORECASE)
+
+
+APP_STYLES = ROOT / "app" / "src"
+
+_RAW_COLOUR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+
+
+def strip_css_comments(text: str) -> str:
+    """A comment replaced by as many newlines as it spanned, so line numbers survive.
+
+    `_CSS_COMMENT_RE` is the one declared in the design-tokens section above and is
+    deliberately not redeclared here — see the note on it. The newline-preserving
+    substitution is this function's business; what counts as a comment is not.
+    """
+    return _CSS_COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
+def check_raw_colour(report: Report) -> None:
+    """A colour painted as a literal instead of read from a token.
+
+    The house rule is stated everywhere and was enforced nowhere: stylesheets use
+    `var(--token)` and never a raw hex, because the locked palette is only locked if the
+    palette is the only place colours come from. `design tokens` above proves
+    `app/src/tokens.css` agrees with `docs/DESIGN.md` — it cannot see a stylesheet that
+    bypasses both.
+
+    **Found by grep, not by argument.** `app/src/PullConfirm.css` painted `#ffffff` twice,
+    in the component the token block is the reference for, and survived a design review, a
+    six-lens adversarial review and two integration passes. It was reported three times as a
+    style note and refuted twice on the reasonable grounds that there was no token to use
+    instead — `--surface` means "raised panel", and saying that where you mean "text on the
+    loud button" conflates two things the palette keeps apart. The refutations were right and
+    the conclusion was still wrong: the answer was a missing token, not a permitted literal.
+    `--on-accent` now exists and names a value `docs/DESIGN.md`'s step 6 block had specified
+    from the beginning.
+
+    **Blocking, because there is nothing to judge.** A hex outside `tokens.css` either is or
+    is not there, which is D16's test. Comments are stripped first — a paragraph explaining
+    why `#000000` is the wrong ground is prose about a colour, not a colour.
+
+    **Scope is `app/src/*.css` only.** `docs/design-refs/` is full of hex on purpose: those
+    sheets are drawings of the spec, they import nothing, and `docs/design-refs/README.md`
+    already records that nothing audits the values inside them.
+    """
+    if not exists(APP_STYLES):
+        return
+
+    findings: List[Finding] = []
+    for path in sorted(APP_STYLES.glob("*.css")):
+        if path == TOKENS_CSS:
+            continue
+        for number, line in enumerate(strip_css_comments(read(path)).splitlines(), start=1):
+            for literal in _RAW_COLOUR_RE.findall(line):
+                findings.append(
+                    Finding(
+                        f"{rel(path)}:{number}",
+                        f"paints `{literal}` directly. Read it from a token in "
+                        f"app/src/tokens.css — and if no token means what you mean, the "
+                        f"missing token is the finding.",
+                    )
+                )
+
+    report.add("raw colour", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
+               if findings else "every colour comes from a token")
 
 
 def check_positional_references(report: Report, docs: List[Path]) -> None:
@@ -1612,6 +2367,201 @@ def check_audit_invocation(report: Report) -> None:
                             )
                         )
     report.add("audit invocation", MECHANICAL, findings, f"{len(INVOKERS)} callers, flags all declared")
+
+
+# ------------------------------------------------- the checks defined here vs the ones run
+
+
+SELF = Path(__file__).resolve()
+
+# Checks defined in this file that `audit()` deliberately does not call: name -> why.
+#
+# EMPTY, AND THAT IS THE FINISHED STATE, the same shape as D18's seam list and for the same
+# reason. It exists so that the escape route is the loud one. Without it, the only ways to
+# silence the row below are to delete a check or to rename it out of both of the signals
+# `defined_checks` reads, and both of those land in a diff looking like tidying. An entry
+# here is an argument somebody had to write down and a reviewer can disagree with.
+#
+# Self-cleaning in both directions, the property D16 wants of `scripts/docs-audit-allow.txt`:
+# an entry naming a check `audit()` does call is stale and reported, and an entry naming
+# nothing defined here is dangling and reported. A list that only grows stops being read.
+UNDISPATCHED: Dict[str, str] = {}
+
+
+def _emits_row(func: ast.AST) -> bool:
+    """True when the body hands a row to `Report.add` — the act that makes it a check."""
+    for node in ast.walk(func):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "report"
+        ):
+            return True
+    return False
+
+
+def defined_checks(tree: ast.Module) -> Dict[str, int]:
+    """Every module-level function this source marks as a check -> the line it starts on.
+
+    Two signals, unioned and not intersected. The `check_` prefix can be renamed away in a
+    diff that reads as tidying; the `report.add` call can be moved into a helper. Requiring
+    both would mean losing either one hides a function from this row, which is precisely the
+    silent failure the row exists to catch — so a function is a check if it carries EITHER.
+    """
+    return {
+        node.name: node.lineno
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and (node.name.startswith("check_") or _emits_row(node))
+    }
+
+
+def dispatched_names(tree: ast.Module, names: Iterable[str]) -> Optional[Set[str]]:
+    """Which of `names` appear anywhere inside `audit()`. None when there is no `audit()`.
+
+    Every name in the function, not the top-level call statements only. The retired count
+    machinery read statements and its own docstring named the failure: restructure some of
+    the calls into a loop, leave the rest, and the reader sees fewer checks than there are.
+    A walk sees a name in a tuple, a loop, a branch or a `try`, so the only restructuring it
+    misses is one that moves dispatch out of `audit()` entirely — which the row reports as
+    itself rather than guessing at.
+
+    Scoped to `audit()` on purpose. A file-wide search would be vacuous: `self_test` drives
+    check functions by name to prove they fire, so a name it exercises would read as
+    accounted for while `audit()` called none of them.
+    """
+    wanted = set(names)
+    audit_fn = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "audit"
+        ),
+        None,
+    )
+    if audit_fn is None:
+        return None
+    return {
+        node.id for node in ast.walk(audit_fn) if isinstance(node, ast.Name) and node.id in wanted
+    }
+
+
+def check_dispatch(report: Report, source: Path = SELF) -> None:
+    """Every check defined in this file, against the ones `audit()` actually calls.
+
+    The failure: add a check function, forget the call. It never runs, the report still
+    looks full, the hook still passes, and nothing in the repo can say the auditor is
+    smaller than it looks. `docs/DEBTS.md` carried that as the one entry where a check can
+    *vanish* rather than misreport, and it was uncovered from 2026-08-11 — the retired
+    count-of-checks machinery had an `unaccounted` set doing this incidentally, and deleting
+    the published number (D18, correctly) took the detector out with it.
+
+    **A reconciliation, not a count, and the difference is the whole design.** D18 deleted
+    that number because nothing downstream consumed it and keeping one restated number
+    honest cost more machinery than any check in the file. Nothing here totals anything: not
+    the summary line, not a finding, not the JSON row. A total would be back in circulation
+    the moment it were printed — the next session restates it in a doc, and the machinery
+    that was deleted has to come back to keep the restatement honest. What this row emits
+    instead is the name of a function you can go and call, which is the only output that was
+    ever actionable.
+
+    **Blocking, and this is where it parts company with the row it replaces.** That one
+    downgraded to ADVISORY when its reader got confused, because publishing a wrong count
+    was worse than publishing none. There is no number to publish here, so the confused
+    state is not a reason to soften: an unrun check is provably not running, which is D16's
+    test for mechanical, and a reader that cannot see how `audit()` dispatches cannot tell
+    you whether *anything* runs. Both are things to fix before a commit rather than
+    questions to leave for a human, and the second is the more urgent of the two.
+
+    **Read from the source, never from a live `audit()` run.** A registry gathered by
+    running the function agrees with itself no matter what the file says. In `--staged` mode
+    `read()` returns the staged blob, which makes this the one check whose subject is the
+    file the commit will carry rather than the file that is executing — stage a new check
+    without its call and the hook fails on it, which is the exact moment `docs/DEBTS.md`
+    describes.
+
+    `source` is which file to reconcile: this one in every real run, a fixture under
+    `--self-test`. The reader's behaviour on a shape it cannot read has to be provable
+    without restructuring the live script to find out.
+    """
+    try:
+        tree = ast.parse(read(source))
+    except (OSError, SyntaxError) as exc:
+        report.add(
+            "check dispatch",
+            MECHANICAL,
+            [
+                Finding(
+                    rel(source),
+                    f"cannot be parsed, so nothing can say which checks this file runs.\n"
+                    f"{exc}",
+                )
+            ],
+        )
+        return
+
+    checks = defined_checks(tree)
+    called = dispatched_names(tree, checks)
+    findings: List[Finding] = []
+
+    if called is None:
+        findings.append(
+            Finding(
+                rel(source),
+                "defines no `audit()`, which is where this file's checks are dispatched "
+                "from and where this row reads them.",
+            )
+        )
+    elif checks and not called:
+        findings.append(
+            Finding(
+                rel(source),
+                "`audit()` names none of the checks defined in this file. Either nothing "
+                "this script reports is running, or dispatch moved out of `audit()` and "
+                "this reader has to move with it.\nReported once rather than once per "
+                "check: the fault is in the reading, and a wall of findings would each "
+                "name the wrong cause.",
+            )
+        )
+    else:
+        for name, line in sorted(checks.items(), key=lambda item: item[1]):
+            if name in called or name in UNDISPATCHED:
+                continue
+            findings.append(
+                Finding(
+                    f"{rel(source)}:{line}",
+                    f"`{name}` is defined here and `audit()` never calls it, so it has "
+                    f"never run. The row it would print is simply absent from the report, "
+                    f"and an absent row is the one failure this file cannot show you.\n"
+                    f"Call it from `audit()`, or record it in UNDISPATCHED with the reason "
+                    f"it is defined and not dispatched.",
+                )
+            )
+
+    for name, why in sorted(UNDISPATCHED.items()):
+        if name not in checks:
+            findings.append(
+                Finding(
+                    rel(source),
+                    f"UNDISPATCHED names `{name}` ({why}), which this file does not define. "
+                    f"Renamed or deleted; either way the entry now exempts nothing.",
+                )
+            )
+        elif called and name in called:
+            findings.append(
+                Finding(
+                    rel(source),
+                    f"UNDISPATCHED records `{name}` as deliberately not dispatched ({why}), "
+                    f"and `audit()` calls it. Drop the entry: an exemption that outlives its "
+                    f"reason is how the list stops being read.",
+                )
+            )
+
+    report.add(
+        "check dispatch", MECHANICAL, findings, "every check defined here is called by audit()"
+    )
 
 
 # ------------------------------------------------------------------ Layer 2: coupling
@@ -1900,6 +2850,291 @@ def self_test() -> int:
         str(phony_gaps(read(ROOT / "Makefile"))),
     )
 
+    # The orphan scan's reach. Every case here is a way for the rule to look like it ran:
+    # the wrong suffixes find nothing, a flat scan of a nested tree finds nothing, and a
+    # typo in the declaration finds nothing — all three print the same clean row.
+    print("\nthe orphan scan covers what the map entry declares")
+    ok(
+        scan_plan({}) == (DEFAULT_SOURCE_SUFFIXES, False, []),
+        "an entry declaring nothing is scanned as it always was",
+        str(scan_plan({})),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx", ".css"], "modules": {"src/a.tsx": {}}})
+    ok(plan == ((".tsx", ".css"), True, []), "a declaration replaces the default, and recurses", str(plan))
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: ["tsx"], "modules": {"src/a.tsx": {}}})
+    ok(
+        plan[0] == () and len(plan[2]) == 2,
+        "a suffix without its dot is reported, not silently matched",
+        str(plan),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: ".tsx", "modules": {"src/a.tsx": {}}})
+    ok(
+        plan[0] == () and len(plan[2]) == 1,
+        "a bare string is reported — str.endswith would have accepted it",
+        str(plan),
+    )
+    plan = scan_plan({SOURCE_SUFFIXES_KEY: [".tsx"]})
+    ok(
+        len(plan[2]) == 1,
+        "declaring suffixes with no modules list is an inert declaration",
+        str(plan),
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for name in ("src/a.tsx", "src/deep/b.tsx", "node_modules/pkg/c.tsx",
+                     "dist/d.tsx", "test-results/e.tsx", "src/f.py"):
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("", encoding="utf-8")
+        found = source_names(root, (".tsx",), True)
+        ok(
+            found == {"src/a.tsx", "src/deep/b.tsx"},
+            "a deep scan reaches subdirectories and skips the build output",
+            str(sorted(found)),
+        )
+        ok(
+            source_names(root, (".tsx",), False) == set(),
+            "and the flat scan it replaced saw none of it — the defect, measured",
+            str(sorted(source_names(root, (".tsx",), False))),
+        )
+        ok(
+            source_names(root, DEFAULT_SOURCE_SUFFIXES, False) == set(),
+            "a `.py` entry is unaffected by any of it",
+            str(sorted(source_names(root, DEFAULT_SOURCE_SUFFIXES, False))),
+        )
+
+    # A tested_by claim. Every case below is a way for this row to pass a claim it should
+    # refuse, or refuse one it should pass — and the blocking direction is the expensive one,
+    # so the correct claims are asserted first and against the real harness.
+    print("\na tested_by claim is checked against what the cited test imports")
+    ok(
+        "geometry" in imported_names("def run():\n    import geometry\n"),
+        "an import inside a function is found — t6's shape, and it is a correct claim",
+        str(imported_names("def run():\n    import geometry\n")),
+    )
+    names = imported_names("from harness.eval import fixtures, runcache\n")
+    ok(
+        {"harness.eval", "harness.eval.fixtures", "harness.eval.runcache"} <= names,
+        "a from-import records the package and each name, since only disk knows which is a module",
+        str(sorted(names)),
+    )
+    ok(
+        imported_names("from . import sibling\n") == set(),
+        "a relative import names nothing this can resolve, and is dropped",
+        str(imported_names("from . import sibling\n")),
+    )
+    literals = string_literals('"""Load fixtures/doc.csv"""\nA = "fixtures/code.csv"\n')
+    ok(
+        literals == {"fixtures/code.csv"},
+        "a path in a docstring is prose; a path in an assignment is the test reading a file",
+        str(sorted(literals)),
+    )
+
+    # The follow's boundary, stated as two assertions because the whole value of this row
+    # is what it declines to follow.
+    ok(
+        follow_target("harness.eval.fixtures") is not None
+        and follow_target("pipeline.join") is None,
+        "the follow reaches a harness helper and stops at a product package",
+        f"{follow_target('harness.eval.fixtures')} / {follow_target('pipeline.join')}",
+    )
+    registry = {name: path for name, path in registered_tests()}
+    if "T7" in registry and "T1" in registry:
+        packages, _ = test_reach(registry["T7"])
+        ok(
+            "store" in packages and "geometry" not in packages,
+            "T7 reaches store directly and does NOT reach geometry through cli — "
+            "the transitive follow that would make this row vacuous is absent",
+            str(sorted(packages)),
+        )
+        packages, _ = test_reach(registry["T1"])
+        ok(
+            "identify" in packages,
+            "T1 reaches identify",
+            str(sorted(packages)),
+        )
+
+    # The false claim docs/DEBTS.md recorded, replayed against the real harness rather than
+    # against a stand-in for it. `store/queues.py` cited T3 and T4 while nothing under
+    # harness/ imported store; T7 later arrived and does import it, so the case pins T3 —
+    # a test that reaches pipeline and nothing else.
+    if registry:
+        found, claims = reach_findings(
+            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T3"]}}}], registry
+        )
+        ok(
+            len(found) == 1 and claims == 1 and "store" in found[0].message,
+            "the historical false claim — store/queues.py citing T3 — is reported",
+            str(found),
+        )
+        found, claims = reach_findings(
+            [{"path": "pipeline/", "modules": {"join.py": {"tested_by": ["T3"]}}}], registry
+        )
+        ok(not found and claims == 1, "and the true claim beside it is not", str(found))
+        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T2"]}], registry)
+        ok(
+            not found,
+            "a directory holding no Python passes on a path literal — fixtures/ from T2",
+            str(found),
+        )
+        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T7"]}], registry)
+        ok(
+            len(found) == 1,
+            "and fails when the cited test never names a path under it",
+            str(found),
+        )
+        found, claims = reach_findings(
+            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T99"]}}}], registry
+        )
+        ok(
+            not found and claims == 0,
+            "an unregistered id is the repo map row's finding, not counted or repeated here",
+            str(found),
+        )
+        found, _ = reach_findings([{"path": "no_such_dir/", "tested_by": ["T3"]}], registry)
+        ok(not found, "and a component path that does not exist is the same", str(found))
+
+    report = Report()
+    check_tested_by_reach(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label.get("tested_by reach"),
+        "every tested_by claim in this repo's own map reaches what it names",
+        str(by_label.get("tested_by reach")),
+    )
+
+    # The token row's silent failures, in the order they would bite: a normaliser that
+    # hides a real difference, a parser that reads a value the browser never sees, and a
+    # comparison that runs in one direction only.
+    print("\nthe locked palette is compared against the stylesheet, both ways")
+    ok(
+        token_value(COLOUR, "#FFF") == token_value(COLOUR, "#ffffff"),
+        "case and shorthand are spelling, not disagreement",
+        f'{token_value(COLOUR, "#FFF")} vs {token_value(COLOUR, "#ffffff")}',
+    )
+    ok(
+        token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif") == token_value(TYPEFACE, "Cabinet Grotesk"),
+        "the generic fallback in a font stack is not part of the token",
+        token_value(TYPEFACE, "'Cabinet Grotesk', sans-serif"),
+    )
+    ok(
+        token_value(LENGTH, "4px") != token_value(LENGTH, "4 px"),
+        "a length keeps its unit joined — CSS does not read those as one value",
+    )
+
+    sample = "\n".join(
+        [
+            "Color      #FCFCFD  bg        the page. Everything sits on this.",
+            "           #1E40AF  accent    unsure, and the only-action fill",
+            "",
+            "Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px",
+            "",
+            "Spacing    4 8 12        one scale, no other values",
+            "Radius     4px           one value, everywhere",
+        ]
+    )
+    parsed = design_tokens(sample)
+    ok(
+        set(parsed) == {"bg", "accent", "display", "s1", "s2", "s3", "r"},
+        "every row of the block yields its token, labelled row included",
+        str(sorted(parsed)),
+    )
+    ok(parsed["s2"].value == "8px", "the bare spacing scale is read in px", str(parsed["s2"]))
+    ok(
+        parsed["display"].value == "cabinet grotesk",
+        "the face is read without its host parenthetical",
+        str(parsed["display"]),
+    )
+
+    rendered = {
+        "bg": "#fcfcfd",
+        "accent": "#1E40AF",
+        "display": "'Cabinet Grotesk', sans-serif",
+        "s1": "4px",
+        "s2": "8px",
+        "s3": "12px",
+        "r": "4px",
+    }
+    ok(not token_findings(parsed, rendered), "two files that agree produce no finding", str(token_findings(parsed, rendered)))
+
+    drifted = dict(rendered, accent="#1e40b0")
+    findings = token_findings(parsed, drifted)
+    ok(
+        len(findings) == 1 and "#1E40AF" in findings[0].message and "#1e40b0" in findings[0].message,
+        "a changed hex is reported, naming both values",
+        str(findings),
+    )
+    ok(
+        len(findings) == 1 and "docs/DESIGN.md" in findings[0].message and "app/src/tokens.css" in findings[0].message,
+        "and naming both files",
+        str(findings),
+    )
+    ok(
+        len(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})) == 1,
+        "a locked token the stylesheet never declares is reported",
+        str(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})),
+    )
+    ok(
+        len(token_findings(parsed, dict(rendered, shadow="#000000"))) == 1,
+        "and a stylesheet token the block never locked",
+        str(token_findings(parsed, dict(rendered, shadow="#000000"))),
+    )
+
+    css = css_root_tokens(":root {\n  --ink: #08090a; /* was --ink: #ffffff; */\n}\n")
+    ok(css == {"ink": "#08090a"}, "a declaration inside a comment is not a token", str(css))
+    ok(
+        css_root_tokens(".card { --ink: #ffffff; }\n") == {},
+        "and a custom property on some other selector is not a locked token",
+        str(css_root_tokens(".card { --ink: #ffffff; }\n")),
+    )
+
+    # The extractor against the real file, because the synthetic block above is written to
+    # be parseable and docs/DESIGN.md is written to be read.
+    if exists(DESIGN):
+        block = design_token_block(read(DESIGN))
+        # Discriminated on a string only the step-6 fence carries. The obvious marker —
+        # `disabled`, one of its three state names — is also the last word of the `muted`
+        # row in this fence, so it failed against the correct block. Measured, not guessed.
+        ok(
+            block is not None and "Spacing" in block and "44px tall" not in block,
+            "the Tokens fence is the one extracted, not step 6's button states",
+            (block or "")[:70],
+        )
+    report = Report()
+    check_design_tokens(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["design tokens"],
+        "this repo's own tokens.css agrees with docs/DESIGN.md",
+        str(by_label["design tokens"]),
+    )
+
+    print("\na colour literal is found in CSS, and not in a comment about one")
+    ok(
+        strip_css_comments("a { color: #fff; } /* not #000 */").count("#") == 1,
+        "a hex inside a block comment is stripped",
+        strip_css_comments("a { color: #fff; } /* not #000 */"),
+    )
+    ok(
+        strip_css_comments("/* two\nlines */\n.x{}").splitlines()[2] == ".x{}",
+        "stripping preserves line numbers, so a finding points at the right line",
+        str(strip_css_comments("/* two\nlines */\n.x{}").splitlines()),
+    )
+    ok(
+        bool(_RAW_COLOUR_RE.search("color: #1E40AF;")) and not _RAW_COLOUR_RE.search("var(--accent)"),
+        "the literal pattern matches a hex and not a token reference",
+        "",
+    )
+    report = Report()
+    check_raw_colour(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["raw colour"],
+        "this repo's own stylesheets read every colour from a token",
+        str(by_label["raw colour"]),
+    )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -1925,6 +3160,15 @@ def self_test() -> int:
             [rel(p) for p in glob_files(ROOT / "docs", "*.md")] == ["docs/GATES.md"],
             "glob matches within one directory of the index",
             str([rel(p) for p in glob_files(ROOT / "docs", "*.md")]),
+        )
+        # The orphan scan's deep mode, through the index. It is the only check in this file
+        # that walks a directory tree, so it is the only one that could quietly go back to
+        # asking the worktree — and in the hook the worktree is the tree that will not be
+        # committed.
+        ok(
+            source_names(ROOT / "docs", (".md",), True) == {"GATES.md", "specs/batch-script.md"},
+            "a deep scan enumerates the index, nested paths and all",
+            str(sorted(source_names(ROOT / "docs", (".md",), True))),
         )
     finally:
         leave_staged_mode()
@@ -1974,6 +3218,117 @@ def self_test() -> int:
         finally:
             INVOKERS[:] = saved
 
+    # A check that is defined and never dispatched prints nothing at all, so this row is the
+    # only one whose failure mode is an ABSENT row. Every case below is a way for the
+    # reconciliation to look like it ran: a reader that cannot see a loop, a check renamed
+    # out of the prefix, an exemption nobody re-read.
+    print("\nevery check defined is reconciled against the ones audit() calls")
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = Path(tmp) / "fixture.py"
+
+        def dispatch(source: str, exempt: Optional[Dict[str, str]] = None) -> List[Finding]:
+            fixture.write_text(source, encoding="utf-8")
+            saved_exempt = dict(UNDISPATCHED)
+            UNDISPATCHED.clear()
+            UNDISPATCHED.update(exempt or {})
+            try:
+                report = Report()
+                check_dispatch(report, fixture)
+                return {check: found for check, _, found, _ in report.checks}["check dispatch"]
+            finally:
+                UNDISPATCHED.clear()
+                UNDISPATCHED.update(saved_exempt)
+
+        emit = "def {0}(report):\n    report.add('{0}', 'mechanical', [])\n\n"
+        wired = (
+            emit.format("check_one")
+            + emit.format("check_two")
+            + "def audit():\n    report = Report()\n    check_one(report)\n    check_two(report)\n"
+        )
+        ok(not dispatch(wired), "two checks defined, both called, is clean", str(dispatch(wired)))
+
+        forgotten = wired.replace("    check_two(report)\n", "")
+        found = dispatch(forgotten)
+        ok(
+            len(found) == 1 and "check_two" in found[0].message,
+            "the one whose call was forgotten is named, and only it",
+            str(found),
+        )
+        ok(
+            not dispatch(forgotten, {"check_two": "deliberately not run"}),
+            "an UNDISPATCHED entry accounts for it — the loud escape route",
+            str(dispatch(forgotten, {"check_two": "deliberately not run"})),
+        )
+        found = dispatch(wired, {"check_two": "stale reason"})
+        ok(
+            len(found) == 1 and "check_two" in found[0].message,
+            "and the entry is reported the moment audit() calls it after all",
+            str(found),
+        )
+        found = dispatch(wired, {"check_ghost": "renamed away"})
+        ok(
+            len(found) == 1 and "check_ghost" in found[0].message,
+            "an entry naming nothing defined here is dangling, so the list cannot only grow",
+            str(found),
+        )
+
+        # Dispatch through a loop: the exact restructuring whose halfway version defeated the
+        # retired statement-reading registry. A name is a name wherever it appears.
+        looped = (
+            emit.format("check_one")
+            + emit.format("check_two")
+            + "def audit():\n    report = Report()\n"
+            + "    for run in (check_one, check_two):\n        run(report)\n"
+        )
+        ok(not dispatch(looped), "dispatch through a loop is dispatch", str(dispatch(looped)))
+
+        # The rename hole, closed by reading both signals. `audit_two` emits a row and no
+        # longer looks like a check by name — which is what a diff that reads as tidying does.
+        renamed = (
+            emit.format("check_one")
+            + emit.format("audit_two")
+            + "def audit():\n    report = Report()\n    check_one(report)\n"
+        )
+        found = dispatch(renamed)
+        ok(
+            len(found) == 1 and "audit_two" in found[0].message,
+            "a check renamed out of the prefix still emits a row, and is still found",
+            str(found),
+        )
+
+        moved = (
+            emit.format("check_one")
+            + "CHECKS = (check_one,)\n\n"
+            + "def audit():\n    report = Report()\n    for run in CHECKS:\n        run(report)\n"
+        )
+        found = dispatch(moved)
+        ok(
+            len(found) == 1 and "none of the checks" in found[0].message,
+            "dispatch moved out of audit() is one finding about the reader, not one per check",
+            str(found),
+        )
+        found = dispatch(emit.format("check_one"))
+        ok(
+            len(found) == 1 and "no `audit()`" in found[0].message,
+            "a file with no audit() at all says so, rather than reporting every check unrun",
+            str(found),
+        )
+        found = dispatch("def audit(:\n")
+        ok(
+            len(found) == 1 and "cannot be parsed" in found[0].message,
+            "and a source that will not parse is a finding, not an empty roster",
+            str(found),
+        )
+
+    report = Report()
+    check_dispatch(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["check dispatch"],
+        "this file's own checks are every one of them called by audit()",
+        str(by_label["check dispatch"]),
+    )
+
     print("\n" + "=" * 72)
     if failures:
         print(f"{len(failures)} self-test {'failure' if len(failures) == 1 else 'failures'}")
@@ -2012,9 +3367,28 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_current_gate(report)
     check_map(report, allowed)
+    check_tested_by_reach(report)
     check_status_sources(report)
+    check_design_tokens(report)
+    check_raw_colour(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
+    # Last, and it is the row that says the rows above are all of them. It reconciles this
+    # file's check definitions against the calls in this function.
+    #
+    # IT DOES NOT ANSWER FOR ITSELF, and an earlier draft of this comment claimed it did.
+    # Measured: delete this one line and every other row still prints green, the run exits
+    # 0, and the `check dispatch` row is simply absent — the exact silent shrinkage the row
+    # exists to catch, one level up. A detector cannot detect its own absence; that is the
+    # shape of the thing, not a bug to patch, and no reconciliation added here can close it
+    # because
+    # the reconciler would need the same single call nothing vouches for. What catches it
+    # is `--self-test`, whose last case calls check_dispatch() directly and asserts this
+    # function names every check — and `--self-test` runs by hand, on no gate. So this line
+    # is the root of the recursion: unwiring anything else fails the commit, and unwiring
+    # THIS fails nothing automatic. docs/DEBTS.md records it under the entry that shipped
+    # the row; do not delete it on the strength of the audit staying green.
+    check_dispatch(report)
     if staged_only:
         check_coupling(report)
     return report

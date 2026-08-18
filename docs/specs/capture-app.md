@@ -1,25 +1,155 @@
-# Capture app — execution spec (build-order step 7a)
+# Capture app — execution spec (build-order step 7)
 
 Written 2026-08-13 by interview, the way `docs/specs/capture-server.md` was. Every choice
 below was made by the owner against a stated alternative; where a recommendation was
 overruled, the overruled option and its cost are named, because a decision nobody can see
 the losing side of is one the next session will quietly reverse.
 
-## 0. Scope — this is 7a, not step 7
+---
 
-Build-order step 7 lists ten things. **This spec covers only the ones Gate B exercises**,
-because Gate B is the first time any of this touches a real card, and everything built
-before it is unvalidated against reality.
+## STATUS — BUILT, AND NOT VALIDATED
 
-In scope: the app shell, the capture screen, undo, the pull preview, and one new server
-route. Out of scope and deliberately so: the review queue, the Fulfillment view, the
-inventory SKU views, and mark-sold. Those are 7b, built after Gate B against real data
-rather than against guesses about what a real run produces.
+**Read this before anything below it.** This spec covers the whole of build-order step 7 and
+both halves are built: 7a on 2026-08-13, and 7b — the review queue, the Fulfillment view, the
+inventory SKU views and mark-sold — the same day, ahead of Gate B, at the owner's instruction.
 
-The review queue in particular is the hardest screen in the product and the one
-`docs/DESIGN.md` specifies in most detail — and its *inputs* are guesses until a run
-exists. At T1's committed holdout accuracy a twenty-card run is expected to produce close
-to zero review items, so it is not needed to pass the gate.
+**The schedule question is closed and the validation question is not, and this section is
+only about the second.** 7b was originally scheduled after the gate so it would be built
+against a real run; it was built before instead, and the owner has since confirmed that
+ordering is settled rather than an outstanding deviation. Sections 0 and 9 have been
+rewritten to describe what this spec covers rather than to forbid what now exists — a
+prohibition left standing over built code is read by the next session as a defect report,
+which is the opposite of useful.
+
+**What does not change is that nothing here has met a card.** These screens are built *to*
+`docs/DESIGN.md` and validated against nothing, because the thing that would validate them
+has not happened. That is not an apology for the ordering — it is the same statement
+`docs/GATES.md` makes about every other number in this repo, and it is what Gate B is for.
+
+### What "not validated" means, concretely
+
+The data these screens display has never been produced by a real run. Not produced and
+awaiting review — never produced. On the day 7b was built, `make status` reported
+`inventory/ absent — nothing captured yet` and `runs/ absent — no identify run yet`. No card
+has been photographed, no `identify` call has been paid for, and no `review.json` or
+`parked.json` has ever existed with a row in it. Every item below is a consequence of that
+one fact.
+
+- **The review queue's row hierarchy is tuned against a price distribution nobody has
+  measured.** `docs/DESIGN.md` requires the row's name size and its price size to both step
+  down as the price does, and a parked row to be dimmed rather than merely lower. That is a
+  mapping from dollars to type sizes, and its input is the spread of `market` values in a
+  real queue file. The ordering underneath it is real — `store/queues.py:sort_key` is built,
+  runs today, and sorts priced-first-descending then box-walk. What it will be handed is a
+  guess. Whatever breakpoints the built screen draws, the first real run can invalidate all
+  of them without one line of the code being wrong.
+
+- **The twelve reason codes have never all fired, and two of them cannot reach a queue at
+  all today — one by construction and one for want of a producer.** Six
+  come from `pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
+  `metadata_detection_disagreement`, `detected_finish_not_stocked`, `ambiguous_no_signal`,
+  `duplicate_condition`) and six from `pipeline/routing.py` (`low_confidence`, `no_position`,
+  `identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`).
+  `docs/DESIGN.md` requires each on screen as a human label with the machine string small
+  beneath it, so twelve human labels now exist — and each one is a translation of a string
+  that has never been seen attached to a photograph of a card. A label written for a code
+  that fires weekly and a label written for a code that fires once a year are different
+  pieces of copy, and there is currently no way to tell which is which.
+
+  **Eleven of the twelve can reach the review queue at all**, which is a fact about the
+  pipeline rather than about the run that has not happened: `no_market_data` is routing's
+  fourth destination beside listed, main and parked, and `pipeline/join.py` writes a queue
+  entry only for `routing.MAIN` and `routing.PARKED`. A card with a blank or $0.00 market
+  cell is priced by hand in `decisions.json` (D9) and never appears on that screen.
+  Separately, `card_not_detected` is a constant nothing in `pipeline/`, `cli/` or `identify/`
+  ever assigns — it is reachable in principle and has no producer in the repo today. Neither
+  is a defect in the screen and neither costs more than a line in a lookup table; both are
+  recorded because §10.2 item 2 asks for the codes that fired ZERO times, and a zero for
+  these two would mean nothing about the owner's stock.
+
+- **The queue's volume and shape are unknown, including whether it is ever long.** Section 0
+  says a twenty-card run is expected to produce close to zero review items at T1's committed
+  holdout accuracy. That is still true, and it is the load-bearing half of the argument for
+  waiting: the screen `docs/DESIGN.md` calls the hardest in the product, and the one the
+  owner is said to spend hours in, was designed against a length nobody has observed. "A
+  queue where every row looks equally important has thrown away a sort it already has" is an
+  argument about a long list. Whether this is ever a long list is a Gate B number.
+
+- **The Fulfillment view's floors are asserted; its copy is not.** The constraints table in
+  `docs/DESIGN.md` is numbers precisely so a browser can check them, and a browser can. What
+  no test reaches is D5's actual requirement — "if a flow needs explaining twice, redesign
+  the flow" — whose only instrument is a retired, non-technical person using it to fill a
+  real order. No order has been pulled. The banned-word list catches the vocabulary it
+  names and nothing else.
+
+- **Nothing here has met a card.** The same sentence `docs/GATES.md` carries against step 4
+  and step 7a now carries against 7b, and it is the one to repeat: verified against
+  fixtures, synthetic images and hand-built props only.
+
+### Built was not wired for several hours, and only one check could tell
+
+Separate from everything above, and a different kind of gap: the three screens shipped
+existing, typechecking and linting clean, with **nothing reaching them.** `app/src/App.tsx`'s
+ROUTES table named three views, `app/src/server.ts` exported no client function for the three
+routes 7b had added to the capture server, and the review queue's two calls arrived as a prop
+nothing supplied. Both files were another group's during the session that built 7b and were
+correctly left alone.
+
+**`make design-check` was the only thing that said so, and it failed: 16 of 30 assertions**,
+every one reporting the unregistered route rather than a design defect. That is
+`app/tests/fulfillment.spec.ts` working exactly as written — it asserts the view is on
+screen before measuring anything, because the alternative is nine confident measurements of
+whatever Vite serves for a hash it does not recognise.
+
+**`make harness`, `make lint`, `make typecheck` and `make docs-audit` were all green
+throughout.** That combination is the finding, and it survives the fix: nothing on the path
+that decides whether a commit proceeds can tell whether a screen can be opened, and
+`make design-check` — the one check that can — is deliberately not on it, because it starts a
+browser and a dev server. Compare `docs/DEBTS.md`'s repo-map entry, where a whole directory
+went unaudited under a rule that looked like it covered it.
+
+**Wired 2026-08-13.** Six routes in the ROUTES table, one client function per new route in
+`server.ts`, the queue wire types moved into `types.ts`, and the shell drawing no nav over
+the Fulfillment view — which is what that view's row in the constraints table requires, and
+which replaced the `display: none` bridge `Fulfillment.css` was carrying. `make design-check`
+now runs 30 of 30. What that does **not** change is anything in the section above: the
+screens open, and the data they open onto has still never been produced by a run.
+
+### What this section is not
+
+It is not a precedent. The next thing scheduled behind a gate is still behind it, and the
+reason this is written as a status block rather than folded into section 0's prose is that a
+schedule broken once with a signature is recoverable, while a schedule quietly rewritten to
+match what was done is not.
+
+**What would settle every item above is Gate B, and section 10.2 says exactly which numbers
+to take while it runs.** That subsection exists because of this one: having built 7b early,
+the gate can now produce the measurements 7b was guessing at, and taking them is what turns
+a rule broken into a rule broken for something.
+
+---
+
+## 0. Scope — step 7, built in two passes
+
+This spec covers all of build-order step 7. It was written as a 7a spec and grew to cover
+both passes when 7b was built the same day; the two are still named separately below because
+they were built and reviewed separately, and because Gate B exercises only the first.
+
+**7a — the Gate B path.** The app shell, the capture screen, undo, the pull preview, and one
+new server route. This is the chain the gate walks: capture, server save, batch script, join,
+CSV, import, and a pull modal showing the right location.
+
+**7b — the rest.** The review queue, the Fulfillment view, the inventory SKU views and
+mark-sold, plus three more server routes.
+
+**Why the split existed, recorded because the reasoning outlives the schedule.** 7b was
+scheduled after the gate so that it would be built against a real run rather than against
+guesses about what one produces — the review queue especially, since it is the screen
+`docs/DESIGN.md` specifies in most detail and its *inputs* are guesses until a run exists. At
+T1's committed holdout accuracy a twenty-card run should produce close to zero review items,
+so 7b is not needed to pass the gate. It was built early anyway and that call is settled. The
+consequence did not go away with the schedule: §10.2 is where the gate replaces those guesses
+with numbers.
 
 ### 0.1 — The rule this session runs under
 
@@ -32,20 +162,34 @@ by their component name and points at directories that exist, not at files that 
 
 ## 1. Order of operations
 
-| order | item | size | waits for |
-|---|---|---|---|
-| 0 | ~~doc-amendments~~ | **done 2026-08-13, before this spec was committed** | — |
-| 1 | undo-route | ~60 lines in one built module | — |
-| 2 | server-client | ~120 lines, new | — |
-| 3 | capture-screen | ~350 lines, the bulk of it | 1, 2 |
-| 4 | trigger-seam | ~60 lines, folded into 3 | 3 |
-| 5 | pull-preview | ~120 lines | 2 |
-| 6 | eslint | config + 2 rules | 3 |
-| 7 | map-flip | ~20 lines | all, same commit |
+**All eight are done. Item 7 was missed in the build commit it was scheduled for and done in
+the review that followed** — see below.
+
+| order | item | size | waits for | state |
+|---|---|---|---|---|
+| 0 | ~~doc-amendments~~ | — | — | **done 2026-08-13**, before this spec was committed |
+| 1 | ~~undo-route~~ | ~60 lines in one built module | — | **done 2026-08-13**, `server/capture_server.py` |
+| 2 | ~~server-client~~ | ~120 lines, new | — | **done 2026-08-13**, `app/src/server.ts` |
+| 3 | ~~capture-screen~~ | ~350 lines, the bulk of it | 1, 2 | **done 2026-08-13**, `app/src/CaptureScreen.tsx` |
+| 4 | ~~trigger-seam~~ | ~60 lines, folded into 3 | 3 | **done 2026-08-13**, `app/src/trigger.ts` — its own module, not folded |
+| 5 | ~~pull-preview~~ | ~120 lines | 2 | **done 2026-08-13**, `app/src/PullPreview.tsx` |
+| 6 | ~~eslint~~ | config + 2 rules | 3 | **done 2026-08-13**, `app/eslint.config.js`; `make lint` stopped being a stub |
+| 7 | ~~map-flip~~ | ~20 lines | all, same commit | **missed in that commit**; done in the review that followed, and it took more than 20 lines |
 
 Item 0 first for the reason `docs/specs/capture-server.md` puts its false-claim sweep
 first: a doc that contradicts what you are about to build will be read as authority by the
 session after this one.
+
+**Item 7 is the one to read twice.** "All, same commit" was the whole of its schedule and it
+was not met: the build shipped and `docs/map.py` described none of the thirteen files it
+added, so the index D17 calls believed-therefore-dangerous was wrong about the directory that
+had just changed most. Nothing caught it, and nothing could — the repo-map orphan rule
+filtered on `.py` and did not descend, which `docs/DEBTS.md` had predicted in writing on
+2026-08-12. Both halves are fixed now: the map carries every file, and the orphan rule
+reaches this directory through a per-entry `source_suffixes` declaration it makes in the map
+itself. The lesson for the next spec that ends in a map-flip is that a step scheduled as
+"same commit" as everything else is a step with no schedule of its own — and that the map
+flip is the one item where nothing but the schedule was ever going to catch it.
 
 ## 2. doc-amendments — APPLIED 2026-08-13
 
@@ -365,8 +509,9 @@ into the gate.
 
 ## 8. eslint
 
-`make lint` is still a deliberate `exit 1`. Wire it here, because the device picker is the
-first code the v1-bug rules can actually catch:
+`make lint` was a deliberate `exit 1` when this was written, and stopped being one here —
+wired 2026-08-13 at `app/eslint.config.js`, because the device picker is the first code the
+v1-bug rules can actually catch:
 
 - no `facingMode` in any camera constraint (v1 bug 3)
 - no `split(",")` CSV parsing (v1 bug 2)
@@ -374,15 +519,27 @@ first code the v1-bug rules can actually catch:
 Both are listed in `docs/DECISIONS.md`'s v1 bug table with "lint rule" named as the guard,
 and neither has had one since the table was written.
 
-## 9. What this session must not build
+## 9. What step 7 still may not build
 
-No review queue. No Fulfillment view — and therefore none of the rest of `docs/DESIGN.md`'s
-constraints table beyond the three rows already asserted. No inventory browsing by SKU. No
-mark-sold, no order pull, no undo of a sale. No auto-capture, no motion state machine, no
-video frame extraction — Gate C, and section 6 is the seam that keeps that cheap. No
-identification, pricing, joining or CSV work of any kind in the app: the four commands own
-all of it. No second store in the browser. No auth, no login, no TLS. No renumbering,
+This list once opened by forbidding the review queue, the Fulfillment view, the inventory SKU
+views and mark-sold. All four are built and that ban is gone — a prohibition left standing
+over shipped code reads to the next session as a defect report. Recorded rather than deleted
+silently, because the four names would otherwise be reinstated from an older copy of this
+list, which is exactly how `docs/GATES.md` lost and regained a CSV-import line.
+
+**Everything else here still binds, and none of it was touched:**
+
+No auto-capture, no motion state machine, no video frame extraction — that is Gate C, and
+section 6 is the seam that keeps it cheap. No identification, pricing, joining or CSV work of
+any kind in the app: the four commands own all of it, and the app reads state rather than
+setting it. No second store in the browser. No auth, no login, no TLS. No renumbering,
 compaction or gap-filling, ever.
+
+`scripts/docs-audit.py` was forbidden here for the reason step 5 forbade it, and that ban is
+also lifted: the repo-map orphan rule could not see `app/`, which is what let the map go
+stale about the directory that had just changed most. The edits are recorded in
+`docs/DEBTS.md` and in D16's own terms — the file still never writes, still parses rather
+than imports, and still has no `--fix` flag.
 
 And no edits to `scripts/docs-audit.py`, for the same reason step 5 forbade them.
 
@@ -424,6 +581,68 @@ What the extra cards buy is the only thing this project currently has no way to 
 is measurement taken alongside it, not a harder bar. Keeping those separate is the point —
 a gate that grows whenever someone wants more data stops being a gate.
 
+**One item above inverted on 2026-08-13.** "Real review-queue volume and shape, which is
+what 7b's hardest screen should be designed against" was written while 7b was unbuilt. 7b is
+built, so the same numbers are no longer an input to a design — they are a check on a design
+already made. That is a worse position to be in and it is the position we are in; 10.2 is
+what makes the check happen rather than leaving it to be noticed.
+
+### 10.2 — What Gate B should measure, now that 7b exists
+
+**This subsection is the payoff for building 7b early, and writing it down is what turns a
+rule broken into a rule broken for something.** Every number below was a guess when the
+screens were built. The gate run is the first opportunity to replace one with a measurement,
+and an opportunity that is not written down before the day is one that gets spent on getting
+the cards through.
+
+**None of this moves the pass criteria.** 10.1's rule holds without exception: pass or fail
+is twenty cards end to end, and everything here is measurement taken alongside it. A number
+that comes back ugly is a finding to work, never a failed gate.
+
+Take these, in this order — the first three are the ones 7b was built without:
+
+1. **Queue depth, both queues, as a rate.** How many of the run's cards land in `review.json`
+   and how many in `parked.json`, over how many cards. Section 0 predicted close to zero on
+   twenty; the prediction is itself worth scoring, because everything the queue screen does
+   about hierarchy and expensive-first ordering is an answer to a list long enough to need
+   one. A run that reviews two cards in two hundred says the hierarchy is decoration; a run
+   that reviews forty says it is the product.
+
+2. **Which of the twelve reason codes fired, with counts — and explicitly, which fired
+   zero times.** The zero list is the more useful half and the one that will be skipped if
+   it is not asked for by name here. A human label written for a code that never fires is
+   copy nobody will ever read, sitting in a screen that pays for it in review surface; a
+   code firing far more than expected is a label that needs rewriting for the case it
+   actually describes. Both are invisible unless the zeros are recorded alongside the hits.
+
+3. **The price distribution across the run, and separately across the queue.** Minimum,
+   maximum and median of `TCG Market Price` for every card the run touched, and the same
+   three for queued cards only. D9 already has the join preserve the sub-threshold spread in
+   bands rather than lumping it, so the sub-$0.40 half comes for free; what is missing is the
+   top of the range, which is what decides whether the queue's largest price type is
+   carrying a $3 card or a $300 one. This is the direct input to the row hierarchy that was
+   guessed at, and it is the one measurement here that can be taken from the run's own
+   output without watching anything.
+
+4. **The `set_ambiguous` count**, which 10.1 already wants for a different reason — it
+   decides whether the set-hint control earns its place — and which is also a reason code in
+   item 2. Counted once, read twice.
+
+5. **`no_market_data` specifically, separated from the rest.** D9 makes it a distinct
+   disposition on the grounds that a missing price is an unknown price and not a low one, and
+   the failure it guards against is handing away a chase card at the floor. Nobody knows how
+   often a real export leaves that cell blank. If the answer is "often", it is the queue's
+   most common reason code and was built as one of twelve.
+
+6. **Whether the Fulfiller can complete a pull without being told how**, if he is available
+   on the day. One order, no coaching, and the thing to record is where he stopped rather
+   than whether he finished. This is the only item here that cannot be extracted from a file
+   afterwards, so it is the only one that has to be planned into the day itself.
+
+Items 1 through 5 are all derivable from the run's own output, which means they survive
+being forgotten in the moment — the run directory and the queue files still hold them a week
+later. Item 6 does not.
+
 ## 11. What this plan does not do
 
 It does not close the `tested_by` gap in `docs/map.py`, add the token-drift check for
@@ -432,6 +651,18 @@ It does not close the `tested_by` gap in `docs/map.py`, add the token-drift chec
 work — step 7a is where the number of files reading those tokens stops being one — and it
 is the cheapest of the three. Doing it early in this session is defensible; doing it as a
 rider on the capture screen is not.
+
+**What actually happened, 2026-08-13. Two of the three were done anyway, and this paragraph
+is the record of which.** The third was extended to reach `app/` in the review that followed
+this build, because the gap stopped being hypothetical: item 7 above was missed and nothing
+noticed. **The second shipped in 7b** — the `design tokens` row of `scripts/docs-audit.py`
+now parses the fenced block under `## Tokens` in `docs/DESIGN.md` against the `:root`
+properties in `app/src/tokens.css` and blocks on any disagreement in either direction, so the
+sentence this paragraph used to carry — that the two are "checked by nobody" — is exactly the
+false claim section 2 puts first in the order of operations. It was true when written and
+stopped being true in the same session. The first is unchanged. `docs/DEBTS.md` carries all
+three, marks the second closed with what it does and does not cover, and records which of
+their stated moments went by.
 
 It does not settle what the Fulfiller's device points at, beyond making the server's base
 URL configurable so that the question stays answerable later.

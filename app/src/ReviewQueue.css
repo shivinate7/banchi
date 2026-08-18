@@ -1,0 +1,673 @@
+/* The review queue — docs/DESIGN.md's own section, which specifies this screen in more
+ * detail than any other because it is the one the owner spends hours in.
+ *
+ * FOUR RULES DO ALL THE WORK IN THIS FILE, and they are the document's rather than this
+ * file's:
+ *
+ *   1. One card at a time, photo first, SINGLE COLUMN. No left/right split, so the same
+ *      layout works on a laptop and a phone.
+ *   2. The sort has to be visible: a row's name size and its price size both step down as
+ *      the price does, and a parked row is dimmed rather than merely lower.
+ *   3. Accent has exactly two jobs. Outline and text weight where the system is unsure —
+ *      the reason chip, and the two conflicting claims in the sentence, which is the common
+ *      case here. Solid fill only where there is exactly one thing to do, WHICH IS NOWHERE
+ *      ON THIS SCREEN: a card with candidate rows has two answers or more, and a card with
+ *      none has zero, because `POST /review/<box>/<index>/answer` refuses a no-candidates
+ *      entry as `no_candidates` — it needs a re-shoot or a re-identify, not an answer. This
+ *      rule read the other way until the route was built, and told a later session to build
+ *      a fill for an action the design refuses to offer. Nothing in this file is filled, and
+ *      PullConfirm's fill stays the Fulfiller's loudest control.
+ *   4. Mono carries all metadata. The body face is reserved for sentences a human reads,
+ *      and this screen is mostly metadata, so the defaults below are inverted relative to
+ *      PullPreview.css: dd is mono and the exception is marked.
+ *
+ * OWNER-SIDE. docs/DESIGN.md's Fulfillment floors — 20px body, 32px position labels, 44px
+ * tap targets — govern the Fulfiller's view and not this one, and borrowing them here would
+ * make this screen look like his and set the expectation that it is safe for him to use. It
+ * is not: it speaks the pipeline's vocabulary out loud, which his banned-word list forbids
+ * entirely.
+ *
+ * No shadow anywhere. The separation mechanism is the 1px --line hairline and nothing else.
+ */
+
+/* EVERY VERTICAL NUMBER ON THIS SCREEN IS SPENT AGAINST ONE MEASUREMENT, taken at 1280x900
+   in a browser rather than reasoned about: the photo, the position, the reason and the
+   sentence all sit above the candidate rows by docs/DESIGN.md's stated order, and the first
+   draft pushed the first candidate to y=806 of 900. A screen where the answer needs a scroll
+   costs that scroll once per card across hundreds of them.
+
+   So the chrome is tight — s5 vertically rather than s6, one line of lede, s3 between the
+   card's parts — and the photo carries a height cap. Rejected: the left/right split that
+   would fix it outright, which docs/DESIGN.md forbids by name so that one layout serves a
+   laptop and a phone.
+
+   THE CAP IN FORCE IS 60vh AND IT IS DECLARED ON `.review-photo`, WITH THE ARGUMENT FOR IT
+   BESIDE IT. This block argued for 38vh over 34vh on rows-above-the-fold grounds, and was
+   left standing when the cap was raised — a comment reasoning toward a number the file does
+   not use, far enough above the rule that contradicts it that neither reader meets both.
+   Worse than no comment, because it reads as the current thinking. Those measurements were
+   real and the trade that replaced them is recorded where the number is, which is the one
+   place a session changing it will look.
+
+   THE RULE IS docs/DESIGN.md'S NOW, AND ONLY THE NUMBER IS THIS FILE'S. That section carries
+   "photo as large as the viewport allows" — a cap on height with width free to bind first, so
+   a phone gets a genuinely full-width photo and a laptop keeps the sentence and a candidate
+   in view beneath it — and it names this file as where the judgement lives. Both halves bind:
+   the number may not be changed here without re-reading that paragraph, and the paragraph may
+   not be satisfied by a second cap declared somewhere else.
+
+   WORTH LOOKING AT ON THE OWNER'S OWN SCREEN before this is called done, and worth
+   re-measuring against a real rig frame: this was tuned against a 63x88 portrait stand-in,
+   and a Cam Link capture is a 16:9 frame with the card somewhere inside it (D13), which is a
+   different shape under the same cap. */
+.review {
+  padding: var(--s5) var(--s6);
+  /* One column, and narrow enough that the sentence does not run to newspaper measure.
+     Everything on this screen stacks inside it — photo, finding, candidates, worklist — so
+     a phone gets the same order with no rules to switch off. */
+  max-width: 720px;
+}
+
+/* ---- head ---- */
+
+.review-title {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.review-lede {
+  color: var(--muted);
+  margin-top: var(--s2);
+  font-size: 15px;
+}
+
+.review-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* A word a human reads, so the body face. No fill: the solid accent is reserved for a screen
+   with exactly one thing to do, and reloading is not it. */
+.review-reload {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+/* Border rather than ground, and this is the one place this file departs from
+   PullPreview.css on purpose. tokens.css says --hover is ROW HOVER ONLY, and the token block
+   in docs/DESIGN.md names what a row is: choice rows, queue rows, panels. A candidate row is
+   a choice row and takes the ground below; a button is not, so it moves its border to --ink
+   and leaves the ground alone. */
+.review-reload:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+/* Disabled while a round trip is in flight, and it says so by going muted rather than by
+   disappearing: a control that vanishes for the length of a write is a control the owner
+   looks for at the moment he is least inclined to. Same treatment as `.review-action`,
+   because it is the same fact about the same window. */
+.review-reload:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.review-count {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---- panels: a refusal, a missing photo, the end of the skip loop ----
+   The unwired seam was the fourth and is gone; ReviewQueue.tsx says why where it used to be
+   drawn. Named rather than counted, so this line survives the next panel. */
+
+.review-note,
+.review-absent {
+  padding: var(--s4);
+  margin-top: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A sentence a human reads, so the body face. No margin of its own: inside a panel it is
+   the first child and the panel's padding is the space, and inside the card the flex gap
+   is. The one case that needs it is the same paragraph standing alone directly under the
+   header — "Reading the queues", "Nothing is waiting" — which the child combinator below
+   covers without giving every instance a margin to fight. */
+.review-note-text {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.review > .review-note-text {
+  margin-top: var(--s5);
+}
+
+/* A panel that carries an action as well as a sentence — today only the note that offers to
+   clear the skips. The margin is the panel's rather than the button's, for the reason the
+   paragraph above has none of its own: the button is not the first child, and giving
+   `.review-action` a margin everywhere would fight the flex gap in the card's own row. */
+.review-note .review-action {
+  margin-top: var(--s3);
+}
+
+/* The machine string beneath the human one — docs/DESIGN.md's reason-code rule, which exists
+   so that what you saw on screen is greppable against the run report and review.json.
+
+   IT CARRIES A TOKEN, NEVER THE SENTENCE ABOVE IT AGAIN. A reason code, a refusal's code,
+   the URL that 404'd — something the line above does not already say. And it is NOT
+   uppercased: the rest of this file's mono metadata is, but a reason code that reads
+   `METADATA_NOT_STOCKED` on screen and `metadata_not_stocked` in the file is a string you
+   have to translate before you can grep it, which is the one job this line has.
+
+   Owner-side only. The Fulfillment banned-word list forbids this register entirely and no
+   Fulfillment route renders this class. */
+.review-machine {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  word-break: break-all;
+}
+
+/* ---- the one card ---- */
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+/* "Photo as large as the viewport allows" is the rule — docs/DESIGN.md's own words since
+   2026-08-13, when "full width at the top" was retired for being right on a phone and wrong
+   on a laptop. A card is 63x88mm; at this column's width a full-width photograph is over a
+   thousand pixels tall, which puts every candidate row below the fold and costs a scroll per
+   card across hundreds of them. So the cap wins on tall photographs and the width rule wins
+   on wide ones, and `max-width: 100%` still binds first on a phone — which is what keeps one
+   column working on both.
+
+   IT HUGS THE IMAGE RATHER THAN LETTERBOXING INSIDE A FULL-WIDTH BOX. The first draft set
+   `width: 100%` with `object-fit: contain`, which drew a correct photograph beside an equal
+   area of empty surface inside one border — a panel that looks like a bug. Rendered, looked
+   at, changed.
+
+   60vh, NOT 38vh, AND EVERY MEASUREMENT IS HERE BECAUSE THIS IS WHERE THE NUMBER IS. Taken
+   at 1280x900 with three candidate rows: at 34vh the photo drew 220x306 with all three rows
+   whole and the actions exactly at the fold; at 38vh it drew 246x342 with the third row cut
+   24px short. Both were budgeted against rows-above-the-fold, and both are too small for the
+   one job this screen has — deciding whether the photograph agrees with a candidate row, and
+   whether the foil is what the toggle claimed. The session that raised the cap recorded that
+   60vh keeps the sentence and the first candidate in view beneath it; that claim is the one
+   thing here nobody has re-measured since, and it is the first thing to check on the owner's
+   own screen. What is NOT in doubt is what it bought: 245px of card at 38vh is not a card you
+   can rule on. */
+.review-photo {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 60vh;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.review-absent {
+  width: 100%;
+  margin-top: 0;
+}
+
+/* Where the card physically is. Utility face because it is a position, 20px because it is
+   read against a box across the desk. Not the Fulfillment view's 32px floor — see the file
+   header for why this screen does not borrow his numbers. */
+.review-position {
+  font-family: var(--util);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* ---- the reason: human label large, machine string small beneath it ---- */
+
+.review-reason {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+}
+
+/* Accent at OUTLINE AND TEXT WEIGHT — the system is unsure, which is what every card in this
+   queue has in common. Never filled: this screen has two or more answers on it, and
+   docs/DESIGN.md's rule is that a screen with two answers gets no fill. 8.5:1 on --bg. */
+.review-reason-label {
+  font-family: var(--body);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s3);
+}
+
+.review-reason .review-machine {
+  margin-top: 0;
+}
+
+/* ---- the sentence ---- */
+
+/* One sentence naming what the system found. The body face, because it is the one thing on
+   this screen a human reads rather than compares. */
+.review-sentence {
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* A pipeline value inside that sentence — a collector number, a finish, a condition string.
+   Mono, because docs/DESIGN.md gives every number and every machine value in the product to
+   the utility face and does not make an exception for values that happen to sit inside
+   prose. 0.88em rather than 1em: Martian Mono sets much wider and taller than Atkinson at
+   the same nominal size, and an inline run at parity reads as a different, louder sentence. */
+.review-value {
+  font-family: var(--util);
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+/* One of the two conflicting claims. Accent at text weight, which is the other half of
+   accent's unsure job — the toggle says one thing and the photograph says another, and the
+   colour is on both of them rather than on the one the screen would prefer you picked.
+   Marking a single finding this way was the first draft and was wrong: a colour that lands
+   on every noun stops carrying the fact that two things disagree. */
+.review-claim {
+  font-family: var(--util);
+  font-size: 0.88em;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ---- the facts ---- */
+
+.review-facts {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border-top: 1px solid var(--line);
+}
+
+.review-fact {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: baseline;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-fact dt {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* INVERTED RELATIVE TO PullPreview.css, and deliberately. There, dd is the body face and the
+   values that get compared carry .is-util. Here almost every value IS compared — a finish, a
+   confidence level, a queue name, a price, a date — so mono is the default and the card's
+   own name is the marked exception. Same rule, opposite default, because the balance of the
+   screen is opposite. */
+.review-fact dd {
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-fact dd.is-body {
+  font-family: var(--body);
+  font-size: 15px;
+}
+
+/* ---- the candidate rows ---- */
+
+.review-candidates {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+/* A choice row. Outlined, never filled, however many there are and whatever they cost —
+   docs/DESIGN.md: filling the pricier candidate teaches the queue to drift toward
+   over-listing, and filling the toggle's answer would make the fill mean two different
+   things on two screens.
+
+   The rows are also all drawn identically. Sizing them by price the way the worklist below
+   is sized would be the same bias wearing a type scale: the worklist is SORTED by price and
+   the sizing shows a sort that exists, while these are the rows one card could be and have
+   no ranking at all. */
+.review-candidate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: var(--s3);
+  row-gap: var(--s1);
+  width: 100%;
+  text-align: left;
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+
+  /* SET HERE SO THE `inherit` ON THE CELLS BELOW HAS SOMETHING TO INHERIT. A button does not
+     take the page's colour: it starts at the UA's `buttontext`, which is pure #000000, so the
+     three cells inheriting from it rendered black rather than --ink. Measured in a browser —
+     `rgb(0, 0, 0)` where every other element on the screen reported `rgb(8, 9, 10)` — and
+     invisible by eye at 19:1 against 21:1, which is exactly why a screen full of tokens can
+     quietly contain a colour that is not one of them. The cells inherit rather than declaring
+     --ink each so that the :disabled rule below moves all three in one place. */
+  color: var(--ink);
+}
+
+/* Row hover, which is what --hover is for: the token block calls choice rows and queue rows
+   rows, and this is a choice row. */
+.review-candidate:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.review-candidate:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+.review-candidate-name {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 700;
+  color: inherit;
+}
+
+/* The field that actually distinguishes one candidate from another nine times out of ten —
+   Near Mint against Near Mint Holofoil against Near Mint Reverse Holofoil. Mono, because it
+   is a catalog string that has to match the export character for character. */
+.review-candidate-condition {
+  grid-column: 2;
+  grid-row: 2;
+  font-family: var(--util);
+  font-size: 12px;
+  color: inherit;
+}
+
+.review-candidate-price {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--util);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: right;
+  color: inherit;
+  white-space: nowrap;
+}
+
+/* Words standing in for a number, set as words. Quieting the cell says the price is missing;
+   it must never be read as saying the card is cheap, which is why nothing else about the row
+   changes. */
+.review-candidate-price.is-unpriced {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Set, collector number and the SKU that will be written into the import file. Small, and
+   present rather than hidden: this is the row that gets listed, and the SKU is what
+   `TCGplayer Id` matches on. */
+.review-candidate-meta {
+  grid-column: 2 / span 2;
+  grid-row: 3;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---- keys ---- */
+
+/* "Every choice shows its key." Owner-side only; the Fulfiller's screens are touch and show
+   none, which is why PullConfirm's keyHint is optional and omitted there. */
+.review-key {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* The tenth candidate and beyond have no key — a two-key sequence is a vocabulary to learn
+   for a case this rare. The blank holds the column so the names stay on one axis; a row that
+   shifted left where the chip stopped would read as a different kind of row. */
+.review-key-blank {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  min-width: 24px;
+  /* Matches the chip's box exactly: two 1px borders plus the vertical padding. */
+  height: calc(2px + (var(--s1) * 2) + 12px);
+}
+
+/* ---- the closing actions ---- */
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.review-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 36px;
+  padding: var(--s2) var(--s3);
+  cursor: pointer;
+}
+
+/* Border, not ground — see .review-reload. */
+.review-action:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.review-action:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* A state, not a sentence, so the utility face. It replaces the spinner this screen does not
+   have: the controls beside it are disabled for the same window, and a word that says which
+   window it is beats an animation that says only that something is happening. */
+.review-busy {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- what is waiting ---- */
+
+.review-waiting {
+  margin-top: var(--s6);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s4);
+}
+
+/* A section label, so the utility face uppercase and tracked — the same treatment App.css
+   gives a route name. Not the display face: that is 700/800 at >= 20px only, and a 20px
+   heading over a list of 13px rows would outrank the card above it. */
+.review-waiting-title {
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.review-waiting-list {
+  list-style: none;
+  margin-top: var(--s3);
+}
+
+/* Not pressable, and that is the design rather than an omission: making a row navigable
+   would be the list -> detail -> back loop docs/DESIGN.md forbids by name. The list is here
+   to show an order, and the way past a card is to answer it. */
+.review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--s4);
+  row-gap: var(--s1);
+  align-items: baseline;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-row-name {
+  grid-column: 1;
+  font-family: var(--body);
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-row-price {
+  grid-column: 2;
+  font-family: var(--util);
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.review-row-position {
+  grid-column: 1;
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.review-row-reason {
+  grid-column: 2;
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* THE SORT, DRAWN. `store/queues.py:sort_key` puts the expensive cards first, and these four
+   bands are that ordering made visible — name and price stepping down together, so a $40
+   card and a 3-cent one cannot look alike. Without this the queue is the dense grey table
+   docs/DESIGN.md names Collectr, Discogs and LibraryThing as the failure mode of.
+
+   THE BREAKPOINTS ARE A GUESS AND THE SIZES ARE NOT MEASURED. ReviewQueue.tsx:bandOf cuts
+   them at 25x, 5x and 1x D9's $0.40 threshold, and no real queue file has ever existed to
+   check that against. What would settle it is the price distribution of the first real run.
+
+   Unpriced sits at the mid size, not the bottom: `pipeline/routing.py` routes an unpriced
+   card to the main queue and never parks it, because no price is an unknown price and a
+   misread secret rare is exactly this case. Only its price cell is quieted, since there is
+   no number to show. */
+.review-row[data-band='top'] .review-row-name,
+.review-row[data-band='top'] .review-row-price {
+  font-size: 22px;
+}
+
+.review-row[data-band='high'] .review-row-name,
+.review-row[data-band='high'] .review-row-price {
+  font-size: 18px;
+}
+
+.review-row[data-band='mid'] .review-row-name,
+.review-row[data-band='mid'] .review-row-price,
+.review-row[data-band='unpriced'] .review-row-name {
+  font-size: 15px;
+}
+
+.review-row[data-band='low'] .review-row-name,
+.review-row[data-band='low'] .review-row-price {
+  font-size: 13px;
+}
+
+.review-row[data-band='unpriced'] .review-row-price {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Parked is DIMMED, not merely lower. Both facts are true of these rows — they sort below
+   every main-queue card and they are drawn quieter — and docs/DESIGN.md asks for the second
+   because the first is invisible once you are looking at the bottom of the list. --muted
+   clears 7:1 on both grounds, so dimming here costs no legibility. */
+.review-row[data-parked='true'] .review-row-name,
+.review-row[data-parked='true'] .review-row-price {
+  color: var(--muted);
+}
+
+/* The card being worked, marked in weight and ink on its metadata line rather than by a
+   ground or an accent. A ground would need --hover, which is hover's alone; accent already
+   has two jobs and "which row am I on" is neither. */
+.review-row[aria-current='true'] .review-row-position {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---- focus ---- */
+
+/* A keyboard with no visible focus is a mouse with no pointer, and this screen is a keyboard
+   for an hour at a time. --ink rather than --accent for the reason App.css gives: accent's
+   outline weight already means "the system is unsure" on this very screen, and a keyboard
+   user tabbing through candidates is not being told anything of the kind. */
+.review-reload:focus-visible,
+.review-candidate:focus-visible,
+.review-action:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
