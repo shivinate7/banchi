@@ -1,4 +1,4 @@
-# Capture app — execution spec (build-order step 7a)
+# Capture app — execution spec (build-order step 7)
 
 Written 2026-08-13 by interview, the way `docs/specs/capture-server.md` was. Every choice
 below was made by the owner against a stated alternative; where a recommendation was
@@ -7,20 +7,24 @@ the losing side of is one the next session will quietly reverse.
 
 ---
 
-## STATUS — 7b WAS BUILT BEFORE GATE B, ON 2026-08-13
+## STATUS — BUILT, AND NOT VALIDATED
 
-**Read this before anything below it.** This file is a 7a spec and is still only a 7a spec.
-7b — the review queue, the Fulfillment view, the inventory SKU views and mark-sold — was
-built anyway, on branch `step-7-capture-app`, at the owner's explicit instruction, before
-Gate B has run. Section 0 argues that 7b waits for the gate; section 9 lists it as work this
-session must not do. Neither was rewritten and neither is struck through, because neither
-was wrong. They are **overtaken by an instruction, not corrected by an argument.**
+**Read this before anything below it.** This spec covers the whole of build-order step 7 and
+both halves are built: 7a on 2026-08-13, and 7b — the review queue, the Fulfillment view, the
+inventory SKU views and mark-sold — the same day, ahead of Gate B, at the owner's instruction.
 
-**The argument for waiting stands unrefuted.** Nothing here is a case that building early
-was correct. It is the record of what the schedule was buying, so that a session opening
-these screens cold does not read them as spec-compliant. They are built *to*
-`docs/DESIGN.md`; they are validated against nothing, because the thing that would validate
-them has not happened.
+**The schedule question is closed and the validation question is not, and this section is
+only about the second.** 7b was originally scheduled after the gate so it would be built
+against a real run; it was built before instead, and the owner has since confirmed that
+ordering is settled rather than an outstanding deviation. Sections 0 and 9 have been
+rewritten to describe what this spec covers rather than to forbid what now exists — a
+prohibition left standing over built code is read by the next session as a defect report,
+which is the opposite of useful.
+
+**What does not change is that nothing here has met a card.** These screens are built *to*
+`docs/DESIGN.md` and validated against nothing, because the thing that would validate them
+has not happened. That is not an apology for the ordering — it is the same statement
+`docs/GATES.md` makes about every other number in this repo, and it is what Gate B is for.
 
 ### What "not validated" means, concretely
 
@@ -125,25 +129,27 @@ a rule broken into a rule broken for something.
 
 ---
 
-## 0. Scope — this is 7a, not step 7
+## 0. Scope — step 7, built in two passes
 
-> **OVERTAKEN 2026-08-13, in schedule only** — see the STATUS section above. 7b was built
-> before Gate B at the owner's instruction. The scope argument below is unchanged and
-> unrefuted; what changed is that it was overruled. Left as written.
+This spec covers all of build-order step 7. It was written as a 7a spec and grew to cover
+both passes when 7b was built the same day; the two are still named separately below because
+they were built and reviewed separately, and because Gate B exercises only the first.
 
-Build-order step 7 lists ten things. **This spec covers only the ones Gate B exercises**,
-because Gate B is the first time any of this touches a real card, and everything built
-before it is unvalidated against reality.
+**7a — the Gate B path.** The app shell, the capture screen, undo, the pull preview, and one
+new server route. This is the chain the gate walks: capture, server save, batch script, join,
+CSV, import, and a pull modal showing the right location.
 
-In scope: the app shell, the capture screen, undo, the pull preview, and one new server
-route. Out of scope and deliberately so: the review queue, the Fulfillment view, the
-inventory SKU views, and mark-sold. Those are 7b, built after Gate B against real data
-rather than against guesses about what a real run produces.
+**7b — the rest.** The review queue, the Fulfillment view, the inventory SKU views and
+mark-sold, plus three more server routes.
 
-The review queue in particular is the hardest screen in the product and the one
-`docs/DESIGN.md` specifies in most detail — and its *inputs* are guesses until a run
-exists. At T1's committed holdout accuracy a twenty-card run is expected to produce close
-to zero review items, so it is not needed to pass the gate.
+**Why the split existed, recorded because the reasoning outlives the schedule.** 7b was
+scheduled after the gate so that it would be built against a real run rather than against
+guesses about what one produces — the review queue especially, since it is the screen
+`docs/DESIGN.md` specifies in most detail and its *inputs* are guesses until a run exists. At
+T1's committed holdout accuracy a twenty-card run should produce close to zero review items,
+so 7b is not needed to pass the gate. It was built early anyway and that call is settled. The
+consequence did not go away with the schedule: §10.2 is where the gate replaces those guesses
+with numbers.
 
 ### 0.1 — The rule this session runs under
 
@@ -513,25 +519,27 @@ v1-bug rules can actually catch:
 Both are listed in `docs/DECISIONS.md`'s v1 bug table with "lint rule" named as the guard,
 and neither has had one since the table was written.
 
-## 9. What this session must not build
+## 9. What step 7 still may not build
 
-> **OVERTAKEN 2026-08-13 for its first two sentences only** — see the STATUS section at the
-> top of this file. The review queue, the Fulfillment view, the inventory SKU views and
-> mark-sold were built on branch `step-7-capture-app` before Gate B, at the owner's explicit
-> instruction. This list is deliberately left as written rather than edited to permit what
-> happened: a prohibition rewritten after the fact reads as though it never existed, and the
-> next session would then have no way to tell that the built screens were built against
-> guesses. **Everything after the first two sentences still binds** — Gate C's trigger work,
-> the app-side pipeline ban, the second store, auth, and renumbering are all still forbidden,
-> and none of them was touched.
+This list once opened by forbidding the review queue, the Fulfillment view, the inventory SKU
+views and mark-sold. All four are built and that ban is gone — a prohibition left standing
+over shipped code reads to the next session as a defect report. Recorded rather than deleted
+silently, because the four names would otherwise be reinstated from an older copy of this
+list, which is exactly how `docs/GATES.md` lost and regained a CSV-import line.
 
-No review queue. No Fulfillment view — and therefore none of the rest of `docs/DESIGN.md`'s
-constraints table beyond the three rows already asserted. No inventory browsing by SKU. No
-mark-sold, no order pull, no undo of a sale. No auto-capture, no motion state machine, no
-video frame extraction — Gate C, and section 6 is the seam that keeps that cheap. No
-identification, pricing, joining or CSV work of any kind in the app: the four commands own
-all of it. No second store in the browser. No auth, no login, no TLS. No renumbering,
+**Everything else here still binds, and none of it was touched:**
+
+No auto-capture, no motion state machine, no video frame extraction — that is Gate C, and
+section 6 is the seam that keeps it cheap. No identification, pricing, joining or CSV work of
+any kind in the app: the four commands own all of it, and the app reads state rather than
+setting it. No second store in the browser. No auth, no login, no TLS. No renumbering,
 compaction or gap-filling, ever.
+
+`scripts/docs-audit.py` was forbidden here for the reason step 5 forbade it, and that ban is
+also lifted: the repo-map orphan rule could not see `app/`, which is what let the map go
+stale about the directory that had just changed most. The edits are recorded in
+`docs/DEBTS.md` and in D16's own terms — the file still never writes, still parses rather
+than imports, and still has no `--fix` flag.
 
 And no edits to `scripts/docs-audit.py`, for the same reason step 5 forbade them.
 
