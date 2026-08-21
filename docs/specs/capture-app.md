@@ -558,6 +558,49 @@ ten photos of known-variant cards for finish detection, including one raking-lig
 the diffused rig suppresses the foil signal, that is a rig finding and the fix is a second
 capture angle, not a prompt change.
 
+### 10.0 — Rig settings, checked before the first card
+
+Measured from the shakedown of 2026-08-20, not reasoned about: eight frames were captured
+through the real camera and Cam Link into the real server, and every one of them carries all
+four faults below. They cost nothing to fix and are invisible afterwards, which is exactly
+why they belong on a checklist rather than in someone's memory.
+
+The shakedown is also the evidence that the front of the chain works. Eight contiguous
+positions, every sidecar readable, and `./pkmnscan identify --dry-run` over them reporting
+`photographs 8 / payload 1.5 MB in 1 batch chunk / estimated cost $0.01` — so the scan, the
+1568px downscale and the batch assembly all ran against real 4K JPEGs. What has never run is
+everything after the API call.
+
+- **Clean HDMI output ON at the camera.** The shakedown frames carry the camera's own
+  overlays burned in: focus brackets, the focus-distance scale, and an info bar reading
+  `1/30 F2.8 ±0.0 ISO AUTO`. The Cam Link records what the camera draws, and D13 is why —
+  it is a plain UVC device with no idea it is looking at a menu.
+
+- **Kill the pillarbox.** Those frames are 3840x2160 with live pixels only from x=478 to
+  x=3359. **Twenty-five per cent of the width is black bar**, so a nominal 4K capture is
+  really 2882 wide before the card is even framed inside it. Check the camera's HDMI output
+  resolution and aspect against what the Cam Link is receiving.
+
+- **Manual exposure, and stop down.** `1/30` at `F2.8` on auto ISO is the wrong end of every
+  trade for this job: slow enough to blur on any knock, thin enough in depth of field that a
+  card sitting proud of the tray loses a corner, and an ISO that drifts shot to shot so no
+  two photographs share a baseline. A static card under a fixed lamp wants a faster shutter,
+  a stopped-down aperture and a fixed ISO.
+
+- **Manual focus, locked at tray distance.** The tray does not move (D13, and Gate C's whole
+  premise), so autofocus has nothing to contribute and one hunt costs a frame.
+
+**And auto power off disabled**, which is the one that bites silently rather than visibly: a
+sleeping body drops the HDMI signal while the Cam Link stays enumerated. The capture screen
+now halts the run when the track dies, so this is a stoppage rather than a box of frozen
+frames — but it is still a stoppage nobody needs.
+
+**Frame the card to fill what is left.** D13 records why this matters more than the sensor:
+`identify/images.py` downscales the whole card to 1568px, but `geometry/crop.py` upscales the
+collector number to at least 600px and can only enlarge pixels that were really captured —
+and T1's recorded misses are numerator misreads. Tight framing is the largest accuracy lever
+available at capture time and it costs nothing.
+
 ### 10.1 — Open, and the owner's call: run more than twenty
 
 **Not decided. Recorded here so the question is asked on the day rather than discovered
