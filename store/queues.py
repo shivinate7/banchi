@@ -167,3 +167,37 @@ class Queue:
         age = self.oldest_days
         oldest = "" if age is None else f", oldest {age} days"
         return f"{count} cards in {self.name}{oldest}"
+
+
+def apply_run(
+    review: Queue,
+    parked: Queue,
+    main_entries: List[QueueEntry],
+    parked_entries: List[QueueEntry],
+    freed: set,
+) -> Tuple[int, int, List[str]]:
+    """One run's verdict on the standing queues, applied as a unit.
+
+    Upserts the run's entries, then releases everything the run superseded: positions that
+    resolved outright (`freed`), and — the case a real run caught on 2026-08-22 — the entry
+    a re-routed position leaves behind in the queue it moved OUT of. The garbage run put 45
+    misidentified cards in review; the corrected run re-identified the same positions and
+    parked 16 of them, and every one kept its stale review entry beside the live parked one,
+    because each queue's release was computed from that queue's own entries alone. The
+    review screen would have shown the same physical card twice, one of them describing an
+    identification that no longer existed. This function exists so the two queues are never
+    released in ignorance of each other again — and it lives here rather than in
+    `cli/cmd_join.py` so the seam T7 tests is the seam the command runs.
+
+    `Queue.release` still protects entries a human cleared: an answer outlives the
+    question, including across a re-route.
+
+    Returns (added_main, added_parked, released_positions).
+    """
+    added_main = sum(1 for queued in main_entries if review.upsert(queued))
+    added_parked = sum(1 for queued in parked_entries if parked.upsert(queued))
+    main_now = {queued.position for queued in main_entries}
+    parked_now = {queued.position for queued in parked_entries}
+    released = review.release(set(review.entries) - freed - parked_now)
+    released += parked.release(set(parked.entries) - freed - main_now)
+    return added_main, added_parked, released

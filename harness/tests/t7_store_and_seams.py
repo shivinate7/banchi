@@ -889,6 +889,74 @@ def check_undo(checks: Checks) -> None:
 # --------------------------------------------------------------------- the standing queues
 
 
+def check_queue_supersede(checks: Checks) -> None:
+    """`queues.apply_run` — a run's verdict applied to both queues as one unit.
+
+    THE RE-ROUTE CASE IS A REGRESSION, NOT NEW COVERAGE. It shipped as a live bug and was
+    caught by the first real run: the garbage identifications of 2026-08-22 put 45 entries
+    in review, the corrected re-identification parked 16 of the same positions, and every
+    one kept its stale review entry beside the live parked one — same physical card, two
+    open questions, one describing an identification that no longer existed. The two
+    release calls in `cli/cmd_join.py` were each computed from their own queue's entries
+    alone, so neither could see what the other had just been given. Re-introduced
+    deliberately (the two `- parked_now` / `- main_now` terms removed) to confirm this
+    case fails against the old math before it was committed.
+    """
+    checks.note("")
+    checks.note("QUEUE SUPERSEDE — queues.apply_run")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(5))
+
+        with Store().write() as snapshot:
+            # Run one's verdict: three open review entries.
+            snapshot.review.upsert(entry(5, 1, market="12.00"))
+            snapshot.review.upsert(entry(5, 2, market="0.75"))
+            snapshot.review.upsert(entry(5, 3, market="0.10"))
+            # The human answers 5/2 — the entry stays, cleared. An answer outlives the
+            # question, and the case below proves it outlives a re-route too.
+            snapshot.review.entries["5/2"].cleared_by_human = True
+
+        with Store().write() as snapshot:
+            # Run two re-identifies the same box: 5/1 resolves outright (freed), and 5/2
+            # and 5/3 now route to parked — the review->parked re-route the bug leaked on.
+            added_main, added_parked, released = queues.apply_run(
+                snapshot.review,
+                snapshot.parked,
+                [],
+                [
+                    entry(5, 2, market="0.05", reason="metadata_detection_disagreement"),
+                    entry(5, 3, market="0.05", reason="metadata_detection_disagreement"),
+                ],
+                freed={"5/1"},
+            )
+
+        after = Store().read()
+        checks.equal(added_main, 0, "run two queued nothing to main")
+        checks.equal(added_parked, 2, "and two cards to parked")
+        checks.equal(
+            sorted(after.parked.entries),
+            ["5/2", "5/3"],
+            "both re-routed positions hold live parked entries",
+        )
+        checks.ok(
+            "5/3" not in after.review.entries,
+            "the re-routed position's stale review entry is RELEASED — the regression: "
+            "each queue's release used to be computed from its own entries alone, so a "
+            "review->parked move left the same card open in both files",
+        )
+        checks.ok(
+            "5/1" not in after.review.entries,
+            "a freed position leaves review exactly as before",
+        )
+        checks.ok(
+            "5/2" in after.review.entries and after.review.entries["5/2"].cleared_by_human,
+            "and the human-cleared entry survives its own re-route: Queue.release protects "
+            "cleared_by_human, so the answer outlives the question across queues too",
+        )
+
+
 def check_queues(checks: Checks) -> None:
     """GET /queues — the two standing queues, in the order they are meant to be worked.
 
@@ -2333,6 +2401,7 @@ def run() -> Result:
     check_server_routes(checks)
     check_undo(checks)
     check_queues(checks)
+    check_queue_supersede(checks)
     check_review_answer(checks)
     check_mark_sold(checks)
     check_history(checks)

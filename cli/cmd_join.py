@@ -24,7 +24,7 @@ from pathlib import Path
 
 from cli import resolve, runs
 from pipeline import decisions, routing
-from store import master
+from store import master, queues
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
@@ -93,10 +93,13 @@ def run(args, say) -> int:
     # positions this run actually processed, so joining box 3 cannot evict box 7's entries.
     freed = resolved.processed_positions - resolved.queued_positions
     with store.write() as writable:
-        added_main = sum(1 for entry in main if writable.review.upsert(entry))
-        added_parked = sum(1 for entry in parked if writable.parked.upsert(entry))
-        released = writable.review.release(set(writable.review.entries) - freed)
-        released += writable.parked.release(set(writable.parked.entries) - freed)
+        # Upsert and release as one unit — `queues.apply_run` also releases the entry a
+        # re-routed position leaves behind in the OTHER queue, which the two independent
+        # release calls that used to sit here could not see. Found by a real run: 16
+        # positions moved review -> parked and every stale review entry survived.
+        added_main, added_parked, released = queues.apply_run(
+            writable.review, writable.parked, main, parked, freed
+        )
 
         # `live` is refreshed here and costs nothing new: the export's `Total Quantity` is
         # already read for D7's refill math (`SkuMatch.live_before`). A staged copy whose
