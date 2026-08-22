@@ -115,6 +115,22 @@ class IdentifiedCard:
     set_hint: Optional[str] = None
     confidence: Optional[str] = None
 
+    # A human's one-tap answer from the review screen, read off the inventory record by
+    # `cli/resolve.py`. When set, `join_batch` resolves to this row before the ladder runs
+    # — rung 0, `variant.HUMAN_ANSWERED`. The pair names one TCGplayer row exactly as the
+    # answer route validated it; a SKU the current export no longer carries falls through
+    # to the ladder rather than being guessed at.
+    answered_sku: Optional[str] = None
+    answered_condition: Optional[str] = None
+
+    # TCGplayer already holds this copy: its record is staged, live, or sold. Also read
+    # off the inventory by `cli/resolve.py`. A committed copy still matches and still
+    # counts in the report — it is a real card at a real position — but it must never be
+    # counted into `Add to Quantity`, written into an import file, or re-pushed: the first
+    # real post-import re-emit (2026-08-22) did all three, regressing 37 staged copies to
+    # `pushed` and writing files that would have doubled them in Staged if imported.
+    committed: bool = False
+
 
 def join_key(number, printed_total) -> str:
     """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error."""
@@ -230,6 +246,16 @@ class Catalog:
     def sets_for_key(self, key: str) -> List[str]:
         return list(self._sets_by_key.get(key, ()))
 
+    def row_for_sku(self, sku: str) -> Optional[tcgcsv.Row]:
+        """The one row a SKU names, or None when this export does not carry it.
+
+        For rung 0: a review answer names a SKU, and a SKU is TCGplayer's own identity for
+        one row, so the lookup is direct and can never be ambiguous. None is a real answer
+        — an answer taken against one export is being joined against another that dropped
+        the row — and the caller falls through to the ladder rather than guessing."""
+        index = self._order.get(sku)
+        return None if index is None else self.export.rows[index]
+
     def rows_for_key(self, key: str) -> List[tcgcsv.Row]:
         return list(self._by_number.get(key, ()))
 
@@ -297,6 +323,10 @@ class SkuMatch:
     live_cap: int = LIVE_QUANTITY_CAP
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
+    # Copies TCGplayer already holds (staged/live/sold records) — see
+    # `IdentifiedCard.committed`. Subset of `positions`; they occupy room under the cap
+    # and take nothing from the import file.
+    committed_positions: List[Position] = field(default_factory=list)
 
     @property
     def condition(self) -> str:
@@ -331,20 +361,31 @@ class SkuMatch:
         return len(self.positions)
 
     @property
+    def uncommitted_positions(self) -> List[Position]:
+        """The copies this run may still list — everything TCGplayer does not hold yet."""
+        held = {(p.box, p.index) for p in self.committed_positions}
+        return [p for p in self.positions if (p.box, p.index) not in held]
+
+    @property
     def add_to_quantity(self) -> int:
-        return max(0, min(self.live_cap - self.live_before, self.copies))
+        """New copies only. Committed copies occupy room under the cap alongside what the
+        export reports live, and contribute nothing to the file — re-importing a copy
+        TCGplayer already holds doubles it in Staged, which is the failure the first real
+        post-import re-emit produced."""
+        room = self.live_cap - self.live_before - len(self.committed_positions)
+        return max(0, min(room, len(self.uncommitted_positions)))
 
     @property
     def backstock(self) -> int:
-        return self.copies - self.add_to_quantity
+        return len(self.uncommitted_positions) - self.add_to_quantity
 
     @property
     def live_positions(self) -> List[Position]:
-        return self.positions[: self.add_to_quantity]
+        return self.uncommitted_positions[: self.add_to_quantity]
 
     @property
     def backstock_positions(self) -> List[Position]:
-        return self.positions[self.add_to_quantity :]
+        return self.uncommitted_positions[self.add_to_quantity :]
 
     @property
     def list_price(self) -> Optional[Decimal]:
@@ -638,10 +679,17 @@ def default_router(
         resolution: variant.Resolution,
     ) -> routing.Destination:
         resolved = not resolution.needs_review and resolution.row is not None
+        # A human answer also outranks the confidence gate: low confidence measures how
+        # legible the MODEL found the card, and the review screen exists so a person looks
+        # instead. Routing an answered card back to review for the model's uncertainty
+        # would re-ask a question the human answered while looking at the same photograph.
+        confidence = (
+            None if resolution.stage == variant.HUMAN_ANSWERED else card.confidence
+        )
         return routing.route(
             resolved=resolved,
             reason=resolution.reason,
-            confidence=card.confidence,
+            confidence=confidence,
             price=resolution.market_price,
             candidate_prices=found.market_prices,
             threshold=threshold,
@@ -672,7 +720,24 @@ def join_batch(
 
     for card in cards:
         found = catalog.candidates(card)
-        if found.set_ambiguous:
+
+        # Rung 0 — a human already answered this card on the review screen, and the answer
+        # outranks everything below, including a set collision: the SKU names one row with
+        # no key to collide. An answer whose row this export no longer carries (or carries
+        # under a different condition — a SKU is one condition, so that is export damage)
+        # falls through to the ladder rather than being guessed at.
+        answered_row = None
+        if card.answered_sku is not None:
+            row = catalog.row_for_sku(card.answered_sku)
+            if row is not None and (
+                card.answered_condition is None
+                or row[tcgcsv.CONDITION_COLUMN] == card.answered_condition
+            ):
+                answered_row = row
+
+        if answered_row is not None:
+            resolution = variant.answered(answered_row)
+        elif found.set_ambiguous:
             # A colliding key the set hint could not break. Never guessed (§5.1 rung 4).
             resolution = variant.Resolution(
                 stage=variant.REVIEW, reason=routing.SET_AMBIGUOUS
@@ -722,6 +787,8 @@ def join_batch(
             report.matches[sku] = match
         match.positions.append(card.position)
         match.stages.append(resolution.stage)
+        if card.committed:
+            match.committed_positions.append(card.position)
 
     # Deterministic, and equal to the export's own order.
     report.matches = OrderedDict(
@@ -729,6 +796,7 @@ def join_batch(
     )
     for match in report.matches.values():
         match.positions.sort(key=lambda p: (p.box, p.index))
+        match.committed_positions.sort(key=lambda p: (p.box, p.index))
 
     # A row with no market price is NOT sub-threshold — it is unpriced, which D9 keeps as
     # its own category precisely so it cannot be swept into a flat bulk price.

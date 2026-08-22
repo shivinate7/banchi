@@ -192,6 +192,121 @@ def run() -> Result:
             )
     c.ok(unique, "each card resolved to exactly one catalog row for its condition")
 
+    # --- rung 0: a human answer outranks the whole ladder -----------------------------
+    # REGRESSION, NOT NEW COVERAGE. The first real run (2026-08-22) parked 16 cards on
+    # metadata/detection disagreement; the owner answered every one on the review screen;
+    # and the next join re-derived the same disagreement and re-parked them, because the
+    # answer landed on the inventory record and nothing on the join path ever read it.
+    # An answered card must resolve to its answered row — the ladder's signals are the
+    # question, and the human already gave the answer while looking at the photograph.
+    answered_card = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=90),
+        name="Articuno",
+        number="161",
+        printed_total="159",
+        # The exact disagreement that parks a card: the toggle claims one finish, the
+        # photograph reads another. Without rung 0 this is METADATA_DETECTION_DISAGREEMENT.
+        metadata_finish="normal",
+        detected_finish="reverse_holo",
+        photo=f"captures/box{BOX}/0090.jpg",
+        confidence="high",
+        answered_sku=SECRET_RARE_SKU,
+        answered_condition="Near Mint Holofoil",
+    )
+    answered_report = join.join_batch(
+        [answered_card], catalog, live_cap=LIVE_QUANTITY_CAP, router=join.default_router()
+    )
+    c.equal(
+        len(answered_report.queue(routing.MAIN)) + len(answered_report.queue(routing.PARKED)),
+        0,
+        "an answered card is never re-queued — the answer consumed, not re-derived",
+    )
+    if c.ok(SECRET_RARE_SKU in answered_report.matches, "the answered SKU is the match"):
+        answered_match = answered_report.matches[SECRET_RARE_SKU]
+        c.equal(answered_match.condition, "Near Mint Holofoil", "at the answered condition")
+        c.equal(
+            answered_match.stages,
+            ["human_answered"],
+            "and the stage says a human decided it — greppable from screen to report",
+        )
+    # An answer against a row this export no longer carries falls through to the ladder
+    # rather than being guessed: the same card with an unknown SKU reviews exactly as it
+    # would have with no answer at all — here as METADATA_NOT_STOCKED, because 161/159 is
+    # holofoil-only and the toggle claims normal, which rung 1 reports ahead of the
+    # disagreement by its own stated ordering.
+    stale_answer = join.IdentifiedCard(
+        position=join.Position(box=BOX, index=91),
+        name="Articuno",
+        number="161",
+        printed_total="159",
+        metadata_finish="normal",
+        detected_finish="reverse_holo",
+        photo=f"captures/box{BOX}/0091.jpg",
+        confidence="high",
+        answered_sku="0000000",
+        answered_condition="Near Mint Holofoil",
+    )
+    stale_report = join.join_batch(
+        [stale_answer], catalog, live_cap=LIVE_QUANTITY_CAP, router=join.default_router()
+    )
+    c.equal(
+        [q.destination.reason for q in stale_report.queued],
+        ["metadata_not_stocked"],
+        "an answer naming a SKU the export dropped falls through to the ladder, never a guess",
+    )
+
+    # --- committed copies: TCGplayer already holds them -------------------------------
+    # REGRESSION. The first real post-import re-emit (2026-08-22) re-counted 37 staged
+    # copies into the files — quantities that would have DOUBLED in Staged on import —
+    # and re-pushed their records backwards from `staged`. A committed copy still matches
+    # and still counts as a copy in the report, but it takes no room in the import file
+    # and is never handed to the emitter's push loop.
+    committed_pair = [
+        join.IdentifiedCard(
+            position=join.Position(box=BOX, index=95),
+            name="Articuno",
+            number="161",
+            printed_total="159",
+            metadata_finish="holo",
+            photo=f"captures/box{BOX}/0095.jpg",
+            confidence="high",
+            committed=True,
+        ),
+        join.IdentifiedCard(
+            position=join.Position(box=BOX, index=96),
+            name="Articuno",
+            number="161",
+            printed_total="159",
+            metadata_finish="holo",
+            photo=f"captures/box{BOX}/0096.jpg",
+            confidence="high",
+        ),
+    ]
+    committed_report = join.join_batch(
+        committed_pair, catalog, live_cap=LIVE_QUANTITY_CAP, router=join.default_router()
+    )
+    if c.ok(SECRET_RARE_SKU in committed_report.matches, "both copies match their SKU"):
+        held = committed_report.matches[SECRET_RARE_SKU]
+        c.equal(held.copies, 2, "the report counts every physical copy, committed or not")
+        c.equal(held.add_to_quantity, 1, "the file takes only the copy TCGplayer lacks")
+        c.equal(
+            [(p.box, p.index) for p in held.live_positions],
+            [(BOX, 96)],
+            "and the push loop is handed only that copy — never a staged record",
+        )
+        c.equal(held.backstock, 0, "a committed copy is not backstock; it is on TCGplayer")
+
+    # A SKU whose every copy is committed adds nothing and is excluded from the files by
+    # the same gate that excludes a SKU at the live cap.
+    all_committed = join.join_batch(
+        [committed_pair[0]], catalog, live_cap=LIVE_QUANTITY_CAP, router=join.default_router()
+    )
+    c.equal(
+        [m.sku for m in all_committed.at_cap],
+        [SECRET_RARE_SKU],
+        "a fully committed SKU is reported, not re-emitted — nothing added, nothing lost",
+    )
+
     # --- required case: secret rare ---------------------------------------------------
     c.ok(SECRET_RARE_SKU in report.matches, "secret rare 161/159 matched")
     if SECRET_RARE_SKU in report.matches:

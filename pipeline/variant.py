@@ -63,6 +63,14 @@ CATALOG_FORCED = "catalog_forced"
 DETECTION = "detection"
 REVIEW = "review"
 
+# Rung 0, above the whole ladder: a human answered this card on the review screen. Not in
+# the ladder's own walk below, because it does not belong to it — the ladder infers, and
+# an answer is not an inference. `join_batch` applies it before the ladder runs. Added
+# 2026-08-22, when the first real run proved the answer route wrote answers that nothing
+# ever read back: sixteen answered cards re-derived their disagreement on every join and
+# re-parked forever, listed never.
+HUMAN_ANSWERED = "human_answered"
+
 # Review reasons. Distinct strings so the queue can be triaged and so a test can assert
 # which path fired, rather than only that something failed.
 NO_CATALOG_ROW = "no_catalog_row"
@@ -110,6 +118,17 @@ def _resolved(stage: str, row: tcgcsv.Row) -> Resolution:
         condition=row[tcgcsv.CONDITION_COLUMN],
         market_price=tcgcsv.parse_price(row[tcgcsv.MARKET_PRICE_COLUMN]),
     )
+
+
+def answered(row: tcgcsv.Row) -> Resolution:
+    """Rung 0 — the human's one-tap answer, applied to the row it chose.
+
+    The caller looked the row up by the answered SKU; this only shapes it as a resolution.
+    Metadata and detection are deliberately not consulted: their disagreement is the
+    question the review screen asked, and the answer is what the human said after looking
+    at the photograph beside the candidates. Re-checking the signals that raised the
+    question would re-raise it forever."""
+    return _resolved(HUMAN_ANSWERED, row)
 
 
 def resolve(

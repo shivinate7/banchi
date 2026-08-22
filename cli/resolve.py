@@ -21,7 +21,8 @@ from typing import Dict, List, Optional
 
 from cli import runs
 from pipeline import join, pricing, routing, tcgcsv
-from store import queues
+from store import master, queues
+from store.session import Store
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,15 @@ def load(
     export = tcgcsv.read_export(export_path)
     catalog = join.Catalog(export)
 
+    # The store's settled identities, read off the live inventory. A record carries
+    # `sku` + `condition` from exactly two writers — `do_review_answer` (a human chose the
+    # row, state still `identified`) and `cmd_emit`'s push (the pipeline chose it and
+    # committed to it) — and in both cases the identity is settled: re-walking the ladder
+    # against it can only re-raise a question that already has an answer, which is how the
+    # first real run's sixteen answered cards re-parked on every join. Read here rather
+    # than in the loop so the store is opened once.
+    held_cards = Store().read().inventory.cards
+
     cards: List[join.IdentifiedCard] = []
     failures: List[PreJoinFailure] = []
     photos: Dict[str, Optional[str]] = {}
@@ -171,6 +181,13 @@ def load(
         number = (identification.get("number") or "").strip() or None
         total = (identification.get("printed_total") or "").strip() or None
         finish = identification.get("finish")
+        held = held_cards.get(key)
+        answered = held is not None and bool(held.sku) and bool(held.condition)
+        committed = held is not None and held.state in (
+            master.STAGED,
+            master.LIVE,
+            master.SOLD,
+        )
         cards.append(
             join.IdentifiedCard(
                 position=join.Position(box=int(box), index=int(index)),
@@ -182,6 +199,9 @@ def load(
                 photo=record.get("photo"),
                 set_hint=record.get("set_hint"),
                 confidence=identification.get("confidence"),
+                answered_sku=held.sku if answered else None,
+                answered_condition=held.condition if answered else None,
+                committed=committed,
             )
         )
 
