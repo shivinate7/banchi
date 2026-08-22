@@ -537,6 +537,29 @@ needs a decision entry of its own.
   assumption has never been measured on its own — which is exactly what makes it worth an
   experiment rather than an edit.
 
+- **Re-shoot a stored photo in place, long after capture.** Gate B's owner asked for it by
+  name: a bad photo discovered late currently has no remedy, because D10's undo reaches
+  only the newest capture. The operation that fits D10 is not a delete at all — replace
+  the photo and sidecar at the same position, record untouched, position label unchanged,
+  allocator never involved. Needs a route, a screen affordance, and a decision entry
+  ratified by the owner before it is built.
+
+- **A `removed` state for cards that leave inventory without a sale.** Sold-in-person is
+  already `mark-sold` — a state, a kept record, a permanent gap that means what it says.
+  What has no representation is a card pulled out, damaged, or given away: today the
+  choices are a sale record that lies or a mid-box delete D10 forbids. The fix is
+  `sold`'s sibling — a terminal state, record kept, gap permanent — not a tombstone in
+  D10's sense, because D10's refusal was about *undo* inventing a third thing the store
+  explains, and `sold` already proved the state-machine shape. Needs a decision entry
+  ratified by the owner; reopens nothing in D10.
+
+- **The owner can't see what a run produced without reading CLI output.** Found at Gate B:
+  emit's import files existed only as filenames in terminal output the owner never saw,
+  because someone else was driving the commands. The app deliberately reads state rather
+  than owning transitions, but a read-only view of a run's outputs and next action —
+  "these files are waiting for Import to Staged" — is reading state too. Design question,
+  not a bolt-on; belongs with whoever next touches the owner-side screens.
+
 - **Cross-check the collector number against the local catalog** (needs D15). Not a
   replacement for the model's read — a second, independent derivation of the same fact, the
   same shape as D3 rung 3, where detected `finish` cross-checks capture metadata even when

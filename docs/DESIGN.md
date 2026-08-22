@@ -140,12 +140,13 @@ than merely lower. The old header said "NONE OF THIS IS BUILT" and told you to r
 line as *shall*; it survived the screen by one commit, which is exactly the drift it was
 written to prevent, pointing the other way.
 
-**Built is not validated, and the two are kept apart deliberately.** 7b was built before
-Gate B at the owner's instruction, so nothing here has met a real queue: no card has been
-photographed, no `identify` run has been paid for, and `review.json` has never held a row.
-The *shape* is observable today; the numbers inside it are guesses, and a wrong guess
-renders perfectly. `docs/specs/capture-app.md`'s STATUS block enumerates what that costs and
-its §10.2 names the measurements Gate B should take against it.
+**Built met a real queue at Gate B (2026-08-22), and this paragraph previously said it
+never had.** The run put real entries in both queue files, the owner answered 16 of them
+on this screen through the answer route, and the §10.2 measurements were taken —
+`docs/GATES.md`'s Gate B section holds them. What that run could *not* test is the one
+number called out below: its queue was uniformly sub-threshold commons, so the
+price-banded type hierarchy has still never seen the mixed-value list it was designed
+for. The rest of this section now describes a screen that has done its job once.
 
 **What is still written forward, each marked where it stands rather than only here**: the
 price band edges the type scale cuts on, the reason labels, and Skip — a control this

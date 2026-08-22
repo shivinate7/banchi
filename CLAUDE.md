@@ -4,8 +4,10 @@ Bulk-list pre-sorted Pokémon TCG singles on TCGplayer with zero attention per c
 physical location tracking. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
-**Current gate: B.** Gate A passed 2026-07-26. Nothing on the deferred list, ever, until
-Gate C. See @docs/GATES.md.
+**Current gate: C.** Gate A passed 2026-07-26; Gate B passed 2026-08-22 with 53 real
+cards end to end — the first numbers this project has about cards rather than about
+itself are in that gate's section. Nothing on the deferred list, ever, until Gate C.
+See @docs/GATES.md.
 
 ## Commands
 

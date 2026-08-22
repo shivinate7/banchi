@@ -86,13 +86,17 @@ BUILD_ORDER = [
              "design-check` went from 16 failures to 30 of 30 passing on that change alone — "
              "every one of those failures was the unregistered route, exactly as the spec was "
              "written to report. See the app/ entry below."},
-    {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "next",
-     "note": "unblocked 2026-08-13 when step 7 finished. THIS STEP IS PHYSICAL — twenty real "
-             "cards through the rig — and no part of this repo has met a card. Every number "
-             "the project has is a number about itself. docs/specs/capture-app.md section 10.2 "
-             "lists what to measure while it runs, which is the payoff for 7b having been "
-             "built early; section 10.1 keeps the pass criteria where they are."},
-    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked", "blocked_by": "Gate B"},
+    {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "done",
+     "note": "PASSED 2026-08-22, and over-delivered: 53 real ME01 cards through the feeder, "
+             "53/53 identified once the frames were stored upright, joined, emitted, staged on "
+             "TCGplayer through two clean reconcile round trips, and the pull preview showed "
+             "the right photo at the right physical location. Six defects were found by the run "
+             "and fixed with regression tests the same day — the Batch API custom_id refusal, "
+             "the capture canvas leak, the idle-scheduled JPEG encoder, the cross-queue "
+             "release leak, review answers that nothing consumed, and the post-import re-emit "
+             "double-count. docs/GATES.md's Gate B section carries the run's measurements."},
+    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "next",
+     "note": "unblocked 2026-08-22 when Gate B passed."},
     {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},
     {"step": 11, "title": "pokemontcg.io API key", "status": "done", "note": "done 2026-08-03; step 9 removes the need for it."},
     {"step": 12, "title": "Scale, polish, deferred list", "status": "blocked", "blocked_by": "all gates"},
@@ -105,15 +109,13 @@ BUILD_ORDER = [
 GATES = [
     {"gate": "A", "status": "passed", "on": "2026-07-26",
      "what": "TCGplayer seam: Level 4, SV09 fixture, 2-row Import to Staged end to end"},
-    {"gate": "B", "status": "next",
-     "what": "20-card end-to-end smoke test, plus Haiku finish detection against ~10 real photos",
-     "why_it_matters": "the harness cannot validate foil detection — T1's images have no foil "
-                       "texture. Unblocked 2026-08-13: step 7 is done, so nothing further can "
-                       "be built toward this. It is a physical run and it is the first thing "
-                       "in this project that will produce a number about a card rather than "
-                       "about the project."},
-    {"gate": "C", "status": "blocked", "blocked_by": "Gate B",
-     "what": "feeder integration: motion state machine, 50-card run, then a full box"},
+    {"gate": "B", "status": "passed", "on": "2026-08-22",
+     "what": "53 real cards end to end — capture through staged listings and the pull preview, "
+             "finish detection measured against the whole lot instead of ten staged photos"},
+    {"gate": "C", "status": "next",
+     "what": "feeder integration: motion state machine, 50-card run, then a full box",
+     "why_it_matters": "the feeder already ran Gate B at manual-trigger pace, so this gate "
+                       "tunes a trigger against a rhythm the run has now demonstrated."},
 ]
 
 # ---------------------------------------------------------------------------- components

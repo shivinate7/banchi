@@ -190,36 +190,56 @@ at a temporary directory, so nothing here touches the real inventory.
 Level 4 confirmed. SV09 fixture exported and committed. 2-row Import to Staged validated
 end to end. Finding: an "Export From Staged" button exists — see T2.
 
-### Gate B — 20-card end-to-end smoke test
+### Gate B — 20-card end-to-end smoke test. PASSED 2026-08-22
 
-**This gate is a physical run, and it is next.** Build-order step 7 is done as of
-2026-08-13, so nothing further can be built toward this — twenty real cards, the rig, the
-camera, the lamp and a person feeding them. It cannot be simulated, and no harness result
-substitutes for it.
+**Passed with 53 cards, not twenty** — a pre-sorted lot of ME01 commons and uncommons,
+fed by the feeder at manual-trigger pace, every card captured, identified, joined,
+emitted, imported to Staged, and reconciled back in two clean round trips with zero
+unmatched in either direction. The pull preview showed the right photo at the right
+physical location, which was the last link in the chain. "No part of this repo has met a
+card" was true when this section was written and is now false in the best way available:
+**the project's first numbers about cards, rather than about itself, are below.**
 
-**No part of this repo has met a card.** That is a statement about the whole tree and not
-about one unfinished screen. Step 4's pipeline is verified against fixtures and synthetic
-composites; step 5's server is verified against T7's temporary directories; step 7's app —
-both halves, capture and queue alike — is verified against `docs/DESIGN.md` and hand-built
-props. T1 scores flat catalog renders with no foil, no glare and no rig lighting, and
-`docs/map.py` and T6's own section both say in writing that a green harness is
-self-consistency rather than evidence. **Every number this project has is a number about
-itself.** Gate B is the first one that will be about a card.
+**Identification on real rig photos: 53/53, but only once the frames were upright.** The
+portrait-mounted camera (the right rig call — a portrait card fills the field) reaches the
+browser as a landscape frame, and sideways cards were misread wholesale: 45 of 53 to the
+review queue, names and numbers both garbled. The same frames rotated upright read 53/53
+with zero low-confidence retries and zero detection failures. The fix is a capture-time
+rotation setting; the A/B that convicted rotation was three frames, three perfect reads.
 
-Manual capture button, no auto-detect. Capture → server save → batch script → join → CSV →
-import back into app → pull modal shows correct location.
+**Finish detection got a 53-card measurement instead of the planned ten photos: 16 of 53
+normals read as foil (30% false-positive rate under the rig's lighting), and every one was
+a real card a human then ruled on.** Detection agreed with itself across duplicate copies
+— both Thievuls, both Eiscues, both Pyroars — so this is systematic sheen-under-lighting,
+not noise: a rig finding, exactly as the paragraph this replaces predicted, and D3's
+disagreement routing carried all 16 to a human instead of a wrong listing.
 
-Also validates what the harness cannot: **Haiku finish detection against ~10 real photos of
-known-variant cards.** Include one raking-light shot — the diffused glare-killing rig may
-suppress exactly the foil signal detection relies on. If it does, that is a rig finding,
-not a model finding, and the fix is a second capture angle rather than a prompt change.
+**The §10.2 measurements** (capture-app spec), from the corrected run: queue rate 16/53
+(30%), all `metadata_detection_disagreement`, all parked (sub-threshold prices).
+`no_catalog_row` fired 23 times against a commons-only export and zero times against the
+full-rarity export — an export-scope artifact, not a pipeline one. Fired zero times:
+`set_ambiguous`, `no_market_data`, `metadata_not_stocked`, `detected_finish_not_stocked`,
+`ambiguous_no_signal`, `duplicate_condition`, `low_confidence`, `no_position`,
+`identification_failed`, `card_not_detected` (the last two fired only in the discarded
+sideways run). Price distribution: $0.04–$0.40 across the run, median ≈ $0.10; the queue's
+spread matched the run's, so the review screen's price-banded hierarchy has yet to be
+tested by a mixed-value lot. The Fulfiller item was not exercised — no order existed.
 
-**Take measurements while it runs, and know which ones before the day.**
-`docs/specs/capture-app.md` section 10.2 lists them: queue depth as a rate, which of the
-twelve reason codes fired and which fired zero times, and the price distribution across the
-run and across the queue. Those three were guesses when 7b was built early, and this run is
-the first chance to replace them with numbers. **None of them moves the pass criteria** —
-pass or fail stays at twenty cards end to end, per that spec's section 10.1.
+**Six defects were found by the run and fixed the same day, each with a regression test
+observed failing against the old code first:** the Batch API refusing the store's
+`box/index` key as a `custom_id`; the capture screen leaking a 33 MB canvas per press;
+Chromium idle-scheduling the JPEG encode into 1–7 s stalls a capture burst never gives it;
+a re-routed position keeping its stale entry in the queue it left; review answers recorded
+by the answer route that nothing on the join path ever consumed (now rung 0 of the
+ladder); and a post-import re-emit that double-counted staged copies and regressed their
+states. The first three are why capture now sustains burst pace; the last three are why
+the queues, the answers, and the import files survived contact with a second cycle.
+
+**What the gate did not close:** the owner had no visibility into emitted import files —
+their names exist only in CLI output the owner never sees when someone else drives the
+commands. Recorded in `docs/DECISIONS.md`'s Someday list with two more operations the run
+surfaced (late re-shoot of a bad photo; a `removed` state for cards that leave inventory
+without a sale).
 
 ### Gate C — feeder integration
 
@@ -333,7 +353,9 @@ a 50-card run, then scale to a full box.
    rather than deleted silently, because the phrase would otherwise be reinstated from an
    older copy of this list. The bidirectional-reporting guarantee it once carried (v1 bug 5)
    is T3's, and T3 is unaffected.
-8. Gate B smoke test.
+8. ~~Gate B smoke test~~ — passed 2026-08-22, 53 cards end to end. The run's record and
+   measurements are in the Gate B section above; the six defects it caught are fixed with
+   regression tests in T3 and T7.
 9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
     - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
       `make` target that refreshes it and records the upstream commit SHA.

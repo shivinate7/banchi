@@ -7,7 +7,18 @@ the losing side of is one the next session will quietly reverse.
 
 ---
 
-## STATUS — BUILT, AND NOT VALIDATED
+## STATUS — BUILT, AND (AS OF GATE B) VALIDATED IN PART
+
+**Gate B passed on 2026-08-22 — 53 real cards end to end — and most of what this section
+holds open is now closed.** The capture screen ran a real feeder session at burst pace
+(after two capture-latency defects found by that very session were fixed); the review
+queue held real entries from a real run and the owner answered 16 of them through the
+answer route; the pull preview showed a stored photo at its correct physical location.
+§10.2's measurements were taken and live in `docs/GATES.md`'s Gate B section. Still
+unexercised: the Fulfillment view against a real order, and the review screen's
+price-banded hierarchy against a mixed-value lot — this run's queue was uniformly
+sub-threshold. The paragraphs below are kept as the record of what "not validated" meant
+before the run; read them as history with the two exceptions above still live.
 
 **Read this before anything below it.** This spec covers the whole of build-order step 7 and
 both halves are built: 7a on 2026-08-13, and 7b — the review queue, the Fulfillment view, the
