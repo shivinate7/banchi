@@ -580,6 +580,11 @@ COMPONENTS = [
                                          "3), the native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
                                  "governed_by": ["D13"]},
+            "src/encode-worker.ts": {"does": "the capture JPEG encode, on a worker thread the "
+                                             "main thread's idle scheduler cannot starve; one "
+                                             "reused OffscreenCanvas, fed transferred "
+                                             "ImageBitmaps by useCamera's grabFrameJpeg",
+                                     "governed_by": ["D13"]},
             "src/trigger.ts": {"does": "the trigger seam: whatever fires a capture, behind one "
                                        "interface. Manual today; Gate C's motion state machine "
                                        "drops into the same slot.",

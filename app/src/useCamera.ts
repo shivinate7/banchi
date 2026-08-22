@@ -290,8 +290,37 @@ export function useCamera(): Camera {
    * rhythm the operator reads as a slow button — and a long enough run wedges the
    * image-decode service for every page in the browser. Reusing one canvas measured
    * stable across the same run. Same failure shape as v1 bug 4, Web Audio contexts
-   * created per sound and never closed: a per-use resource that nothing releases. */
+   * created per sound and never closed: a per-use resource that nothing releases.
+   *
+   * Fallback-only as of 2026-08-22: the real capture path encodes in the worker below
+   * and touches no main-thread canvas at all. This ref serves the arm for an engine
+   * with no OffscreenCanvas or no Worker. */
   const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  /* The JPEG encoder lives on a worker thread, and the reason is a scheduler, not a CPU.
+   *
+   * `toBlob` — and, it turned out, main-thread `convertToBlob` — schedule their encode as
+   * main-thread IDLE work, and a capture burst is precisely a main thread with no idle:
+   * key events, a live 4K preview and React renders every few hundred ms. A Performance
+   * trace of a real burst (2026-08-22) showed 1.0 s, 2.3 s and once 6.9 s inside single
+   * encodes while every thread in the process sat empty — the 1.0/2.3 clusters are
+   * Chromium's own idle-task start and completion timeouts, which is as close to a
+   * signed confession as a scheduler gives. Switching to convertToBlob on a main-thread
+   * OffscreenCanvas was tried first and reproduced the identical clusters, which is how
+   * the scheduler was convicted rather than the API. On a worker there is no idle
+   * scheduler; the encode starts when asked. See encode-worker.ts for the other half.
+   *
+   * Created lazily on the first capture — StrictMode's double mount therefore never
+   * builds one — and terminated on unmount below. */
+  const encodeWorkerRef = useRef<Worker | null>(null)
+
+  useEffect(
+    () => () => {
+      encodeWorkerRef.current?.terminate()
+      encodeWorkerRef.current = null
+    },
+    [],
+  )
 
   /* Two error sources, kept apart internally and combined on the way out. Enumeration
    * failures survive a devicechange; a stream failure belongs to one acquisition and is
@@ -571,30 +600,59 @@ export function useCamera(): Camera {
       throw new Error('The camera has not delivered a frame yet. Wait for the preview, then capture.')
     }
 
-    /* See captureCanvasRef above for why this is never `document.createElement` per press.
-     * Dimensions are assigned only when they differ: assigning a canvas dimension clears
-     * the bitmap and resets context state even to an equal value, and may reallocate the
-     * one thing the ref exists to keep. Stale pixels from the previous card need no
-     * clearing — the frame is opaque, so drawImage overwrites every pixel at these exact
-     * dimensions — but only because a frame is guaranteed decoded: that is the readyState
-     * guard above, without which drawImage no-ops and the previous card is re-encoded. */
-    const canvas = captureCanvasRef.current ?? document.createElement('canvas')
-    captureCanvasRef.current = canvas
-    if (canvas.width !== width) canvas.width = width
-    if (canvas.height !== height) canvas.height = height
-    const context = canvas.getContext('2d')
-    if (context === null) throw new Error('This browser gave no canvas to capture into.')
-    context.drawImage(video, 0, 0, width, height)
-
-    /* toBlob rather than toDataURL. Both produce the same bytes, but toDataURL encodes a
-     * 4K frame synchronously on the main thread — a visible stall in the live preview at
-     * the moment the next card is being placed, which is the moment the owner is watching
-     * it. ImageCapture.takePhoto was the other candidate and was rejected: it is not
-     * implemented across browsers, and against a UVC capture card it returns the same
-     * video frame anyway. */
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
-    })
+    /* Two arms, the same JPEG bytes at the same quality; what differs is which thread
+     * runs the encoder, and that difference is the whole story on encodeWorkerRef. The
+     * worker arm is the real path: the frame crosses as a transferred ImageBitmap and
+     * comes back as a Blob, and no main-thread canvas exists at all. The element-canvas
+     * arm is the fallback for an engine with no OffscreenCanvas or no Worker, and it
+     * keeps the old idle-scheduled toBlob cost: slow under a busy main thread, correct
+     * always. toDataURL remains rejected in both arms — it encodes synchronously on the
+     * main thread, a visible stall in the live preview at the moment the next card is
+     * being placed. ImageCapture.takePhoto remains rejected too: not implemented across
+     * browsers, and against a UVC capture card it returns the same video frame anyway. */
+    let blob: Blob | null
+    if (typeof OffscreenCanvas !== 'undefined' && typeof Worker !== 'undefined') {
+      const worker =
+        encodeWorkerRef.current ??
+        new Worker(new URL('./encode-worker.ts', import.meta.url), { type: 'module' })
+      encodeWorkerRef.current = worker
+      /* The element holds a decoded frame — the readyState guard above proved it — so
+       * createImageBitmap resolves against exactly that frame, and the transfer list
+       * hands it across without a copy. One job in flight at a time is CaptureScreen's
+       * busyRef guarantee, which is what makes reassigning onmessage per call safe. */
+      const bitmap = await createImageBitmap(video)
+      blob = await new Promise<Blob>((resolve, reject) => {
+        worker.onmessage = (
+          event: MessageEvent<{ ok: true; blob: Blob } | { ok: false; message: string }>,
+        ) => {
+          if (event.data.ok) resolve(event.data.blob)
+          else reject(new Error(event.data.message))
+        }
+        worker.onerror = () => {
+          reject(new Error('The frame could not be encoded. Reload the page, then capture again.'))
+        }
+        worker.postMessage({ bitmap, quality: JPEG_QUALITY }, [bitmap])
+      })
+    } else {
+      /* See captureCanvasRef above for why this is one canvas and never a fresh one per
+       * press. Dimensions are assigned only when they differ: assigning a canvas
+       * dimension clears the bitmap and resets context state even to an equal value, and
+       * may reallocate the one thing the ref exists to keep. Stale pixels from the
+       * previous card need no clearing — the frame is opaque, so drawImage overwrites
+       * every pixel at these exact dimensions — but only because a frame is guaranteed
+       * decoded: that is the readyState guard above, without which drawImage no-ops and
+       * the previous card is re-encoded. */
+      const canvas = captureCanvasRef.current ?? document.createElement('canvas')
+      captureCanvasRef.current = canvas
+      if (canvas.width !== width) canvas.width = width
+      if (canvas.height !== height) canvas.height = height
+      const context = canvas.getContext('2d')
+      if (context === null) throw new Error('This browser gave no canvas to capture into.')
+      context.drawImage(video, 0, 0, width, height)
+      blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
+      })
+    }
     if (blob === null) throw new Error('The frame did not encode as JPEG.')
 
     return await blobToBase64(blob)
