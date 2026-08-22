@@ -24,6 +24,7 @@ identification, a cache hit, or a named failure. That is v1 bug #5 stated as a p
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -110,6 +111,33 @@ def _estimate(items: List[Item]) -> Decimal:
     return cost.quantize(Decimal("0.01"))
 
 
+def _custom_id(key: str) -> str:
+    """The store's key, translated for the Batch API's `custom_id` — and ONLY for it.
+
+    The API enforces `^[a-zA-Z0-9_-]{1,64}$`, and the store's position key is `box/index`
+    (`sidecar.py:key`), so the very first real submission this repo ever made — Gate B,
+    2026-08-22, 53 captures — was refused whole for the slash. T1 never saw it: eval ids
+    are hyphenated card ids, and the shakedown stopped at `--dry-run`, which builds
+    everything and submits nothing.
+
+    Translate at this seam rather than change the key: `3/7` is load-bearing in the
+    store, the cache, the queues and the join. The encoding is deterministic, so a
+    resumed run recomputes the same ids it submitted (RESUME BEATS RESUBMIT above), and
+    `_apply`'s lookup dict is built through this same function, so nothing ever decodes.
+    Illegal characters become `-xx-` hex; a result over the API's 64-char cap — reachable
+    only through the `file:` fallback key, never through a position — keeps its head and
+    takes a digest tail, trading reversibility nothing needs for uniqueness the batch
+    does."""
+    safe = "".join(
+        ch if (ch.isascii() and ch.isalnum()) or ch in "_-" else f"-{ord(ch):02x}-"
+        for ch in key
+    )
+    if len(safe) > 64:
+        digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        safe = safe[:48] + digest
+    return safe
+
+
 def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageRequest]:
     """Batch requests for the items that still need sending."""
     out: List[batch.ImageRequest] = []
@@ -121,7 +149,7 @@ def _requests(items: List[Item], with_crops: bool, say) -> List[batch.ImageReque
             regions = _crop_attachments(item, say)
         out.append(
             batch.ImageRequest(
-                custom_id=item.key,
+                custom_id=_custom_id(item.key),
                 media_type=item.prepared.media_type,
                 data_b64=item.prepared.data_b64,
                 set_hint=item.capture.set_hint,
@@ -296,7 +324,10 @@ def run(args, say) -> int:
     )
     say(f"run             {run_dir.directory}")
 
-    items_by_key = {item.key: item for item in items}
+    # Keyed by the SUBMITTED id, not the store key: outcomes come back named by
+    # custom_id, and building the lookup through the same translation is what lets
+    # `_apply` stay a plain dict.get with nothing to decode.
+    items_by_key = {_custom_id(item.key): item for item in items}
     usage_in = usage_out = 0
 
     existing = run_dir.batch_ids
