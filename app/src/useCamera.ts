@@ -280,6 +280,19 @@ export function useCamera(): Camera {
    * down mid-card. */
   const trackRef = useRef<MediaStreamTrack | null>(null)
 
+  /* ONE canvas, reused for every capture this session — never one per press.
+   *
+   * A fresh 4K canvas holds ~33 MB of raster backing store the JS collector cannot see:
+   * to it the element is a few bytes, so nothing reclaims the real memory until the
+   * browser is forced to, synchronously, mid-capture. Measured on this rig's own Mac,
+   * 2026-08-21: a burst of captures runs at ~100 ms each until the canvas budget fills,
+   * then every press costs 1–3 s while the browser digs itself out — a fast-then-crawl
+   * rhythm the operator reads as a slow button — and a long enough run wedges the
+   * image-decode service for every page in the browser. Reusing one canvas measured
+   * stable across the same run. Same failure shape as v1 bug 4, Web Audio contexts
+   * created per sound and never closed: a per-use resource that nothing releases. */
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
   /* Two error sources, kept apart internally and combined on the way out. Enumeration
    * failures survive a devicechange; a stream failure belongs to one acquisition and is
    * cleared by the next one, whether that is a different device or `retry` re-opening the
@@ -538,15 +551,37 @@ export function useCamera(): Camera {
      * size would throw away exactly the resolution the constraints above fought for, and
      * the loss would be invisible — a correctly framed, correctly exposed, quietly
      * useless photograph of a collector number. */
+    /* The readyState clause is what makes canvas reuse safe, so it may not be removed
+     * while the reuse below stands. Dimensions are populated at HAVE_METADATA, but the
+     * spec makes drawImage a silent no-op until a frame has actually decoded — and a
+     * no-op draw over a reused canvas would encode the PREVIOUS card's pixels as this
+     * card's photo, the exact silent failure the SIGNAL_MUTED machinery above exists to
+     * prevent. The window is real and self-made: `onTrackUnmuted` sets `ready` at
+     * HAVE_METADATA by its own admission, and a camera waking from the halt is the one
+     * moment the operator is pressing C on instruction. Before reuse this window
+     * produced an all-black JPEG — loud in the Last-capture panel; the guard upgrades
+     * both cases to a refusal that names the remedy. */
     const width = video.videoWidth
     const height = video.videoHeight
-    if (width === 0 || height === 0) {
+    if (
+      width === 0 ||
+      height === 0 ||
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+    ) {
       throw new Error('The camera has not delivered a frame yet. Wait for the preview, then capture.')
     }
 
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
+    /* See captureCanvasRef above for why this is never `document.createElement` per press.
+     * Dimensions are assigned only when they differ: assigning a canvas dimension clears
+     * the bitmap and resets context state even to an equal value, and may reallocate the
+     * one thing the ref exists to keep. Stale pixels from the previous card need no
+     * clearing — the frame is opaque, so drawImage overwrites every pixel at these exact
+     * dimensions — but only because a frame is guaranteed decoded: that is the readyState
+     * guard above, without which drawImage no-ops and the previous card is re-encoded. */
+    const canvas = captureCanvasRef.current ?? document.createElement('canvas')
+    captureCanvasRef.current = canvas
+    if (canvas.width !== width) canvas.width = width
+    if (canvas.height !== height) canvas.height = height
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('This browser gave no canvas to capture into.')
     context.drawImage(video, 0, 0, width, height)
