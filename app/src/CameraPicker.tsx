@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Camera } from './useCamera'
-import { PIPELINE_LONG_EDGE } from './useCamera'
+import { PIPELINE_LONG_EDGE, ROTATIONS } from './useCamera'
 import './CameraPicker.css'
 
 /* The device picker — docs/specs/capture-app.md section 6.1, D13.
@@ -91,6 +91,35 @@ export function CameraPicker({ camera }: { camera: Camera }) {
           </option>
         ))}
       </select>
+
+      {/* Which way the stored photo is turned, in degrees clockwise. The rig's camera is
+          mounted on its side so a portrait card fills the field — D13's frame-tight rule
+          done properly — and the Cam Link reports the sensor's landscape frame regardless,
+          so without this every stored photo holds a sideways card, which is what sent 45
+          of the first real run's 53 cards to the review queue misread. The live preview is
+          deliberately left as the camera sends it; the Last-capture panel shows the stored
+          photo, so one capture confirms the choice. Chips rather than a second select:
+          four values, one glance, and the active one reads without opening anything. */}
+      <p className="camera-picker-label" id="camera-picker-rotation-label">
+        Photo rotation
+      </p>
+      <div
+        className="camera-picker-rotation"
+        role="group"
+        aria-labelledby="camera-picker-rotation-label"
+      >
+        {ROTATIONS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="camera-picker-rotation-chip"
+            aria-pressed={value === camera.rotation}
+            onClick={() => camera.setRotation(value)}
+          >
+            {value}°
+          </button>
+        ))}
+      </div>
 
       {/* Accent as outline and text, never as fill. docs/DESIGN.md: the solid fill means
           there is exactly one thing to do, and a screen with two answers gets none. Every

@@ -58,6 +58,48 @@ const JPEG_QUALITY = 0.95
  * in the browser" is about captures, which still go straight to the Mac. */
 const REMEMBERED_DEVICE_KEY = 'pkmnscan.capture.deviceId'
 
+/* Same store and same justification as the device id above: which way the camera is
+ * mounted is a fact about THIS rig, wrong on any other machine, and nothing about a card
+ * lives in it. The value is degrees clockwise that a captured frame is turned before it
+ * is stored, so the card in the photo comes out upright. The live preview is deliberately
+ * untouched — it shows what the camera sends, and the stored photo is the record that has
+ * to be right; the Last-capture panel shows the stored photo, so one capture confirms the
+ * choice.
+ *
+ * Why this exists, measured 2026-08-22 on the first real identification run this repo
+ * ever made: the rig's camera is mounted on its side so a portrait card fills the
+ * portrait-oriented field — the right rig call by D13's frame-tight rule — but the Cam
+ * Link hands the browser the sensor's landscape frame regardless, so every stored photo
+ * held a sideways card. Haiku misread 45 of 53 sideways cards into the review queue as
+ * `no_catalog_row`, names and numbers both garbled; the same frames rotated upright read
+ * back at high confidence, three for three in the A/B. Rotating at capture time fixes
+ * every consumer at once — the model, geometry's crop bands, and the review queue's
+ * judging photo — where a fix in the identify path would have left a sideways photo on
+ * every screen that shows one. */
+const ROTATION_KEY = 'pkmnscan.capture.rotation'
+
+export type Rotation = 0 | 90 | 180 | 270
+
+export const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270]
+
+function readRememberedRotation(): Rotation {
+  try {
+    const stored = window.localStorage.getItem(ROTATION_KEY)
+    const value = stored === null ? 0 : Number(stored)
+    return (ROTATIONS as readonly number[]).includes(value) ? (value as Rotation) : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeRememberedRotation(value: Rotation): void {
+  try {
+    window.localStorage.setItem(ROTATION_KEY, String(value))
+  } catch {
+    /* Ignored on purpose. See readRememberedDeviceId. */
+  }
+}
+
 export type Camera = {
   /** Attach to a `<video>` that is rendered unconditionally. Gating the element on
    *  `ready` deadlocks: the frames that set `ready` cannot arrive until there is an
@@ -90,6 +132,12 @@ export type Camera = {
    *  again when the track ends or mutes — a dead signal leaves the element holding its
    *  last decoded frame, so nothing about the `<video>` says the picture is stale. */
   ready: boolean
+
+  /** Degrees clockwise a captured frame is turned before it is stored. The preview is
+   *  never rotated — see ROTATION_KEY. */
+  rotation: Rotation
+
+  setRotation(value: Rotation): void
 
   /** JPEG bytes as bare base64 — no `data:` prefix, because the server b64decodes the
    *  string it is handed. */
@@ -272,6 +320,23 @@ export function useCamera(): Camera {
    * This is what makes a stream error answerable at all: every other input to that effect
    * is unchanged when the owner wants to try the same camera again. */
   const [attempt, setAttempt] = useState(0)
+
+  const [rotation, setRotationState] = useState<Rotation>(readRememberedRotation)
+
+  /* Read inside the capture path through a ref, exactly as trackRef is: grabFrameJpeg must
+   * stay identity-stable, and a capture fired the moment after the control is tapped
+   * should carry the value that was just chosen rather than the one a stale closure
+   * remembers. */
+  const rotationRef = useRef<Rotation>(rotation)
+
+  const setRotation = useCallback((value: Rotation) => {
+    /* Storage first, then the ref, then state — the same ordering selectDevice uses and
+     * for the same reason: everything that reads this fact must agree before the render
+     * that announces it. */
+    writeRememberedRotation(value)
+    rotationRef.current = value
+    setRotationState(value)
+  }, [])
 
   /* The live video track, for the capture path. A ref rather than state because
    * `grabFrameJpeg` must stay identity-stable — it is in CaptureScreen's `doCapture`
@@ -631,7 +696,10 @@ export function useCamera(): Camera {
         worker.onerror = () => {
           reject(new Error('The frame could not be encoded. Reload the page, then capture again.'))
         }
-        worker.postMessage({ bitmap, quality: JPEG_QUALITY }, [bitmap])
+        worker.postMessage(
+          { bitmap, quality: JPEG_QUALITY, rotation: rotationRef.current },
+          [bitmap],
+        )
       })
     } else {
       /* See captureCanvasRef above for why this is one canvas and never a fresh one per
@@ -644,11 +712,23 @@ export function useCamera(): Camera {
        * the previous card is re-encoded. */
       const canvas = captureCanvasRef.current ?? document.createElement('canvas')
       captureCanvasRef.current = canvas
-      if (canvas.width !== width) canvas.width = width
-      if (canvas.height !== height) canvas.height = height
+      /* The same rotation the worker arm applies — see ROTATION_KEY. A quarter turn swaps
+       * the output dimensions; the transform below turns the frame about the output's
+       * centre. Reset-first rather than save/restore, because the canvas is reused and
+       * reset-first is exception-safe by construction: a throw mid-capture cannot leak a
+       * transform into the next capture when the next capture never trusts the state it
+       * inherits. */
+      const turn = rotationRef.current
+      const outWidth = turn % 180 === 0 ? width : height
+      const outHeight = turn % 180 === 0 ? height : width
+      if (canvas.width !== outWidth) canvas.width = outWidth
+      if (canvas.height !== outHeight) canvas.height = outHeight
       const context = canvas.getContext('2d')
       if (context === null) throw new Error('This browser gave no canvas to capture into.')
-      context.drawImage(video, 0, 0, width, height)
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      context.translate(outWidth / 2, outHeight / 2)
+      context.rotate((turn * Math.PI) / 180)
+      context.drawImage(video, -width / 2, -height / 2, width, height)
       blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
       })
@@ -670,6 +750,8 @@ export function useCamera(): Camera {
       missing,
       error: streamError ?? listError,
       ready,
+      rotation,
+      setRotation,
       grabFrameJpeg,
     }),
     [
@@ -681,6 +763,8 @@ export function useCamera(): Camera {
       streamError,
       listError,
       ready,
+      rotation,
+      setRotation,
       grabFrameJpeg,
     ],
   )

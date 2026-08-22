@@ -15,7 +15,10 @@
  * per press is the leak that was the first half of this fix.
  */
 
-type EncodeJob = { bitmap: ImageBitmap; quality: number }
+/* `rotation` is degrees clockwise the frame is turned before encoding — the rig's camera
+ * is mounted on its side (useCamera's ROTATION_KEY has the whole story), and rotating
+ * here costs nothing extra: the frame is already being drawn once. */
+type EncodeJob = { bitmap: ImageBitmap; quality: number; rotation: number }
 type EncodeAnswer = { ok: true; blob: Blob } | { ok: false; message: string }
 
 /* `self` typed locally to the two members this file uses. The DOM lib types `self` as
@@ -30,14 +33,33 @@ let canvas: OffscreenCanvas | null = null
 
 scope.onmessage = (event) => {
   void (async () => {
-    const { bitmap, quality } = event.data
+    const { bitmap, quality, rotation } = event.data
     try {
-      if (canvas === null) canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
-      if (canvas.width !== bitmap.width) canvas.width = bitmap.width
-      if (canvas.height !== bitmap.height) canvas.height = bitmap.height
+      /* The 0|90|180|270 invariant lives in useCamera's Rotation type, and this message
+       * seam is the one place it is not stated — so it is restated here as a refusal,
+       * matching the repo's refuse-rather-than-guess rule. An off-menu value would
+       * otherwise draw a diagonal frame into swapped dims: corners clipped, background
+       * bands exposed, delivered as a normal-looking JPEG. */
+      if (rotation % 90 !== 0) {
+        throw new Error(`rotation must be a quarter turn in degrees, not ${rotation}.`)
+      }
+      /* A quarter turn swaps the output dimensions; the transform turns the frame about
+       * the output's centre. Reset-first rather than save/restore, because the canvas is
+       * reused across jobs and reset-first is exception-safe by construction: a throw
+       * mid-job cannot leak a transform into the next job when the next job never trusts
+       * the state it inherits. */
+      const swap = rotation % 180 !== 0
+      const outWidth = swap ? bitmap.height : bitmap.width
+      const outHeight = swap ? bitmap.width : bitmap.height
+      if (canvas === null) canvas = new OffscreenCanvas(outWidth, outHeight)
+      if (canvas.width !== outWidth) canvas.width = outWidth
+      if (canvas.height !== outHeight) canvas.height = outHeight
       const context = canvas.getContext('2d')
       if (context === null) throw new Error('The encode worker got no canvas context.')
-      context.drawImage(bitmap, 0, 0)
+      context.setTransform(1, 0, 0, 1, 0, 0)
+      context.translate(outWidth / 2, outHeight / 2)
+      context.rotate((rotation * Math.PI) / 180)
+      context.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
       const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality })
       scope.postMessage({ ok: true, blob })
     } catch (err) {

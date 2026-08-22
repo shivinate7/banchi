@@ -55,6 +55,32 @@
   cursor: not-allowed;
 }
 
+/* The rotation chips. Utility face because a number of degrees is metadata by
+   docs/DESIGN.md's rule, and the same quiet weight as the rest of this component: chosen
+   once when the rig is set up, then silent. The active chip takes the accent as outline
+   and text — the light weight, never the fill, because this screen offers four answers. */
+.camera-picker-rotation {
+  display: flex;
+  gap: var(--s2);
+}
+
+.camera-picker-rotation-chip {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+.camera-picker-rotation-chip[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* Accent at its light weight: outline and text, never fill. docs/DESIGN.md gives the solid
    fill exactly one meaning — there is one thing to do — and reserves it so that the
    Fulfiller's pull-confirm is the loudest thing he ever sees. A missing camera, a refused
