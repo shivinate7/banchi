@@ -1030,7 +1030,10 @@ class _Places:
             # second-renderer failure with a number in it instead of a label.
             #
             # THE DENOMINATOR FAILS ALONE. `box_fill` is a whole-box scan and raises
-            # `BadPosition` on ANY record in the box, not just the one being rendered — so
+            # `BadPosition` on ANY record IN THE STORE — `next_index` coerces every
+            # record before filtering by box, so one corrupt record costs EVERY box its
+            # denominator, not just its own. Measured by T7's degrade case; this comment
+            # once said 'in the box' and understated it — so
             # letting it escape here cost every neighbour its label over one corrupt row, on
             # the route the app polls. T7 caught exactly that and it was right to: a label
             # needs only this record's own two integers and the box's layout, neither of

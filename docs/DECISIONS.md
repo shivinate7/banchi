@@ -437,8 +437,12 @@ three rules run **only** at commit time now. Their `PreToolUse` twin, `scripts/g
 has been disabled in `.claude/settings.json` since 2026-08-03 — it blocked any write
 containing a code-shaped literal, including placeholders in prose about the format, and cost
 two blocked writes in one session. Fixtures stay covered while it is off by the
-`permissions.deny` rules; the code-card literal does not. Revisit before the codes track
-handles real cards.
+`permissions.deny` rules; the code-card literal does not. **Revisited and re-enabled
+2026-08-23**, when D24's build made the condition true: the narrowed pattern blocks by shape
+(stands alone, mixes letters and digits, no all-repeated group), passes byte-exact
+reconstructions of both historical false positives, and fails open on its own bugs — so
+`--no-verify` no longer switches off the only opsec layer, and the commit-time rules are
+again the backstop rather than the whole guard.
 
 **Nothing on the audit path can write.** The script opens, compares, prints, and sets an
 exit code; it parses with `ast` rather than importing, so it does not even run project code.

@@ -431,7 +431,7 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D12", "D16", "D17", "D18", "D22", "D23"],
+                "governed_by": ["D2", "D6", "D12", "D16", "D17", "D18", "D22", "D23", "D24"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -466,17 +466,13 @@ COMPONENTS = [
                 "governed_by": ["D16"],
             },
             "guard-opsec.sh": {
-                "does": "the PreToolUse twin of the commit hook's opsec rules — fixture "
-                        "writes, images outside captures/, content matching the printed "
-                        "code-card layout. DISABLED in .claude/settings.json since "
-                        "2026-08-03: it blocked placeholders in prose about the format and "
-                        "cost two blocked writes in one session.",
-                # D16 is where being off is recorded and what it costs — with this quiet,
-                # `--no-verify` drops the code-card literal rule with nothing behind it,
-                # and only the permissions.deny rules still cover fixtures. Read that
-                # entry before re-enabling: the failure was over-triggering, so the fix is
-                # a narrower pattern, never a toggle.
-                "governed_by": ["D11", "D14", "D16"],
+                "does": "the PreToolUse opsec twin — RE-ENABLED 2026-08-23 with a narrowed "
+                    "shape match (stands alone, mixes letters and digits, no repeated "
+                    "group), after being disabled 2026-08-03 for over-triggering on "
+                    "placeholders. Fails open on its own bugs; the deliberately broad "
+                    "commit-time rules are the backstop for the ~2% of real codes the "
+                    "narrow shape lets past.",
+             "governed_by": ["D11", "D14", "D16", "D24"],
             },
             "decision-context.py": {
                 "does": "D17's PreToolUse hook: reads this file, lifts each governing "

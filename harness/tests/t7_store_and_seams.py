@@ -4181,6 +4181,197 @@ def check_box_routes_and_search(checks: Checks) -> None:
         )
 
 
+# -------------------------------------------------------------------------- place block
+
+
+def check_place_neighbors(checks: Checks) -> None:
+    """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.
+
+    `Card 17` IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT. Every sale
+    and every retirement leaves a permanent gap (D10), and once a section has one, those
+    two numbers diverge for every label behind it. D30's ruling is that a located place
+    block also carries what makes the label countable by hand again: the nearest
+    NON-TERMINAL records on either side, and how many permanent holes this card's own
+    section holds. Asserted on `GET /inventory`'s rows — the route the app polls — because
+    the block is wire-only and the wire is the only place the claim exists.
+
+    THE CONSTRUCTION UNDER TEST IS "RECORDS, NOT INDICES", read from three sides. A
+    terminal record is skipped as a landmark and counted as a hole — one ruling, two
+    directions. An unallocated index is neither: no record means no card was ever there,
+    so a declared section running past the fill adds nothing to the count. And a pooled
+    record is skipped BY RULING rather than by state (D24) — it has no slot to leave a
+    hole in, whatever state it is in.
+
+    THE DEGRADE CASE IS THE ONE THAT MATTERS, and it is this section's half of the
+    corrupt-record case `check_server_routes` arms. "Between Mantine and Thievul" is a
+    position claim somebody counts slots against, so a walk that skipped an unreadable
+    record would keep the sentence rendering while possibly naming the wrong neighbour —
+    the exact failure a position label may never cause, one hop removed. The decoration
+    therefore degrades WHOLE and STORE-WIDE, and costs nobody their label.
+    """
+    checks.note("")
+    checks.note("PLACE BLOCK — neighbours and section gaps (D30), server/capture_server.py")
+
+    with isolated_home():
+        # --- a gapped box tells the truth ------------------------------------------------
+        # Five captures, then a sale at 2 and a retirement at 4 — both through their own
+        # routes, so the states are the ones the store writes and not hand-set strings.
+        # Card 1 gets a name on the store directly: `name` is an identification result,
+        # not a capture claim — it is deliberately absent from `PUT_FIELDS` — so there is
+        # no route that sets it by hand, and the join that would is not in this fixture.
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(4))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/1"].name = "Mantine"
+        capture_server.do_mark_sold(4, 2, {})
+        capture_server.do_retire(4, 4, {"reason": "damaged"})
+
+        rows = capture_server.do_inventory()["cards"]
+        checks.equal(
+            rows["4/3"]["place"]["neighbors"],
+            {"prev": {"index": 1, "name": "Mantine"}, "next": {"index": 5, "name": None}},
+            "a card between two gaps names the nearest NON-TERMINAL records — the sold "
+            "card at 2 and the retired card at 4 are skipped as landmarks, never named: "
+            "a departed card cannot be the thing you count from (D30)",
+        )
+        checks.equal(
+            rows["4/3"]["place"]["section_gaps"],
+            2,
+            "and the same two records are COUNTED as this section's holes — skipped as a "
+            "landmark and counted as a gap are one ruling read from two sides",
+        )
+        checks.equal(
+            rows["4/1"]["place"]["neighbors"]["prev"],
+            None,
+            "the first card in a box answers `prev: null` — the box's edge, never a guess "
+            "past it",
+        )
+        checks.equal(
+            rows["4/5"]["place"]["neighbors"]["next"],
+            None,
+            "and the newest answers `next: null` the same way",
+        )
+        checks.equal(
+            rows["4/5"]["place"]["neighbors"]["prev"],
+            {"index": 3, "name": None},
+            "a neighbour nothing has identified degrades to its index: `name` is null ON "
+            "THE WIRE, and the null is the wire's whole job — the `#3` a screen shows for "
+            "it is the app's rendering, and a placeholder string minted here would be a "
+            "second vocabulary nothing audits",
+        )
+
+        # --- an unallocated tail is not a gap --------------------------------------------
+        # A declared divider far past the fill: section 1 of box 5 runs to index 50 while
+        # the box holds five cards. `section_gaps` counts terminal RECORDS, not unoccupied
+        # indices — that an empty tail adds nothing is the CONSTRUCTION, not a bounds
+        # check, and this is the box that would catch the bounds check creeping back in.
+        capture_server.do_create_box({"box": 5, "sections": [1, 51]})
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(5))
+        capture_server.do_mark_sold(5, 2, {})
+        place = capture_server.do_inventory()["cards"]["5/3"]["place"]
+        checks.equal(
+            place["section_end"],
+            50,
+            "a declared divider past the fill is still the section's stated end — the "
+            "block says 50 while the box holds five cards",
+        )
+        checks.equal(
+            place["section_gaps"],
+            1,
+            "and the 45 unallocated indices behind it add NOTHING to the gap count: an "
+            "index with no record is a card that was never captured, not a hole where one "
+            "used to be — only the sold record at 2 is a gap",
+        )
+
+        # --- pooled: no section is not "no holes" ----------------------------------------
+        # A code card captured into the same box burns index 6 as a KEY — the photo and
+        # sidecar are named after it — but it has no slot, so its block carries the pooled
+        # nulls and the located cards' sentences never mention it.
+        capture_server.do_capture(capture_payload(4, game="pokemon_code"))
+        pooled = capture_server.do_inventory()["cards"]["4/6"]["place"]
+        checks.ok(
+            not pooled["located"],
+            "a pokemon_code card's place block answers located: false (D24)",
+        )
+        checks.equal(
+            [pooled["neighbors"], pooled["section_gaps"]],
+            [None, None],
+            "and its `neighbors` and `section_gaps` are both null — NULL AND NOT ZERO, "
+            "because zero would claim a countable section with no holes, and 'no section "
+            "at all' is a different fact from 'no holes in it'",
+        )
+        # Retired, so that being skipped by RULING is distinguishable from being skipped
+        # by state: a terminal pooled record is what a state-only walk would count.
+        capture_server.do_retire(4, 6, {"reason": "given_away"})
+        rows = capture_server.do_inventory()["cards"]
+        checks.equal(
+            rows["4/5"]["place"]["neighbors"]["next"],
+            None,
+            "a pooled record is never named as anyone's neighbour — card 5's `next` is "
+            "still the box's edge, not the code card whose index happens to be 6",
+        )
+        checks.equal(
+            rows["4/3"]["place"]["section_gaps"],
+            2,
+            "and never counted as anyone's gap, even retired: it is skipped by RULING, "
+            "not by state — a card with no slot cannot leave a hole in one (D24)",
+        )
+
+        # --- the degrade rule: whole, store-wide, and never a guess ----------------------
+        # The other half of the corrupt-record case `check_server_routes` arms. The walk
+        # reads every record's own `box` and `index`, so it is armed here in a THIRD box —
+        # the store-wide claim is the claim, and a same-box corruption could not test it.
+        capture_server.do_capture(capture_payload(7))
+        intact = capture_server.do_inventory()["cards"]["4/3"]["place"]
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["7/1"].box = "seven"
+        rows = capture_server.do_inventory()["cards"]
+        degraded = rows["4/3"]["place"]
+        checks.equal(
+            [degraded["neighbors"], degraded["section_gaps"]],
+            [None, None],
+            "one record whose box will not coerce nulls the decoration for a card in a "
+            "DIFFERENT box: skipping the unreadable record would keep the sentence "
+            "rendering while possibly naming the wrong neighbour, and 'between X and Y' "
+            "is a position claim somebody counts slots against",
+        )
+        checks.equal(
+            [rows["5/3"]["place"]["neighbors"], rows["5/3"]["place"]["section_gaps"]],
+            [None, None],
+            "and the degrade is STORE-WIDE, not per-box — box 5 loses its sentences to "
+            "box 7's record too, because a walk that cannot read one record cannot vouch "
+            "for any neighbour it names anywhere",
+        )
+        checks.equal(
+            [
+                degraded["located"],
+                degraded["label"],
+                degraded["section"],
+                degraded["card"],
+                degraded["section_start"],
+                degraded["section_end"],
+            ],
+            [
+                intact["located"],
+                intact["label"],
+                intact["section"],
+                intact["card"],
+                intact["section_start"],
+                intact["section_end"],
+            ],
+            "while the label and the rest of the block survive untouched: a label needs "
+            "only this record's own two integers and the layout, and one bad row must "
+            "not take the route the app polls down to a row of nulls",
+        )
+        checks.equal(
+            rows["4/3"]["label"],
+            join.Position(4, 3).label,
+            "and the flat label on the row is still the one pipeline/join.py renders — "
+            "the decoration degrades ALONE",
+        )
+
+
 # -------------------------------------------------------------------------- concurrency
 
 
@@ -5396,6 +5587,7 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_box_routes_and_search(checks)
+    check_place_neighbors(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_cli_seams(checks)

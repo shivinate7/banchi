@@ -3179,6 +3179,277 @@ def check_raw_colour(report: Report) -> None:
                if findings else "every colour comes from a token")
 
 
+# ------------------------------------------------------------------ views opsec (D24)
+
+VIEWS_MANIFEST = ROOT / "scripts" / "views.txt"
+APP_SRC = ROOT / "app" / "src"
+APP_TSX = APP_SRC / "App.tsx"
+APP_SERVER_TS = APP_SRC / "server.ts"
+APP_TESTS = ROOT / "app" / "tests"
+
+# The one origin `make dev` serves. strictPort in app/vite.config.ts exists so that a busy
+# 5173 fails instead of quietly serving on 5174 — "where CLAUDE.md, this target and
+# scripts/views.txt would all three be wrong" (Makefile). This set is the same fact.
+APP_ORIGINS = {"localhost:5173", "127.0.0.1:5173"}
+
+# A file whose CODE mentions the photo service. `photoUrl` is the single mint of
+# `GET /photo/<box>/<index>` URLs (app/src/server.ts, D6); the literal path is the belt for
+# a caller that builds the URL by hand. Run against comment-stripped text only — types.ts
+# and Gallery.tsx both DISCUSS the route in prose and draw nothing from it.
+_PHOTO_USE_RE = re.compile(r"\bphotoUrl\b|/photo/")
+
+
+def _strip_ts_comments(text: str) -> str:
+    """Block and whole-line comments out of a .ts/.tsx file, so prose about the photo
+    service is never mistaken for a screen that draws from it. Trailing `// ...` after code
+    is kept — over-matching there costs a printed question, never a blocked commit."""
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"(?m)^\s*//.*$", "", text)
+
+
+def _resolve_ts_module(from_file: Path, spec: str) -> Optional[Path]:
+    base = from_file.parent / spec
+    for candidate in (Path(str(base) + ".tsx"), Path(str(base) + ".ts")):
+        if exists(candidate):
+            return candidate
+    return None
+
+
+def _routes_table() -> Optional[Dict[str, Optional[Path]]]:
+    """`app/src/App.tsx`'s ROUTES literal as route path -> component file, or None when the
+    table cannot be read at all — which is a finding, not a shrug, because every verdict
+    below hangs off it."""
+    if not exists(APP_TSX):
+        return None
+    text = read(APP_TSX)
+    table = re.search(r"const ROUTES[^=]*=\s*\[(.*?)\n\]", _strip_ts_comments(text), flags=re.S)
+    if table is None:
+        return None
+    pairs = re.findall(r"path:\s*'([^']*)'[^{}]*?view:\s*([A-Za-z0-9_]+)", table.group(1))
+    if not pairs:
+        return None
+    ident_to_spec: Dict[str, str] = {}
+    for names, spec in re.findall(
+        r"import\s+(?:type\s+)?([^;]*?)\s+from\s+['\"](\.[^'\"]+)['\"]", text
+    ):
+        for ident in re.findall(r"[A-Za-z0-9_]+", names):
+            ident_to_spec[ident] = spec
+    return {
+        path: _resolve_ts_module(APP_TSX, ident_to_spec[view]) if view in ident_to_spec else None
+        for path, view in pairs
+    }
+
+
+def _photo_reach(entry_file: Path) -> List[str]:
+    """Every file in the component's import subtree whose code touches the photo service.
+
+    Import-graph reach, not a judgment about what renders: a screen that imports a
+    component that draws stored photos can draw them, and whether its runtime state ever
+    does is exactly what this script cannot know. That asymmetry is why the row this feeds
+    is advisory — see check_views_opsec.
+    """
+    seen: Set[Path] = set()
+    stack = [entry_file]
+    reached: List[str] = []
+    while stack:
+        current = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            text = read(current)
+        except Exception:
+            continue
+        if current != APP_SERVER_TS and _PHOTO_USE_RE.search(_strip_ts_comments(text)):
+            reached.append(rel(current))
+        for spec in re.findall(r"from\s+['\"](\.[^'\"]+)['\"]", text):
+            if spec.endswith(".css"):
+                continue
+            resolved = _resolve_ts_module(current, spec)
+            if resolved is not None:
+                stack.append(resolved)
+    return sorted(reached)
+
+
+def _pooled_exclusion_evidence(route_path: str) -> Optional[str]:
+    """Committed proof that a route's screen never draws a pooled card's photo.
+
+    The Fulfillment shape, exactly as D24 demanded it: `app/tests/fulfillment.spec.ts`
+    asserts "a pooled card is never on his screen", in a spec `make design-check` runs.
+    The tie is mechanical — the spec named after the route, mentioning the pooled fact —
+    and self-cleaning: delete the assertion and the route rejoins the exposure list. The
+    root route has no segment to name a spec after, so it maps to `capture.spec.ts`: the
+    capture screen is what `/` renders, and the manifest has always called it that.
+    """
+    name = route_path.strip("/") or "capture"
+    if "/" in name:
+        return None
+    spec = APP_TESTS / f"{name}.spec.ts"
+    if exists(spec) and re.search(r"pooled|located", read(spec), re.I):
+        return rel(spec)
+    return None
+
+
+def check_views_opsec(report: Report) -> None:
+    """D24's standing sentence: scripts/views.txt may never name a URL whose render can
+    contain a code card. Enforcement existed for the images (captures/ is gitignored, both
+    hooks block a stray image) and never for the rule, so a URL whose render IS the leak
+    could sit in the manifest with every check green.
+
+    The premise is the registry's, not this check's: a game with `located: False` is a
+    pooled capture — a code card, a bearer instrument once photographed — and its photo
+    lands in the same store, behind the same `GET /photo/<box>/<index>`, as every located
+    card (D14: one rig, one photo storage). While such a game exists, any screen that draws
+    stored photos can draw a live code, and `make screenshot` would write it into
+    captures/ui/ — a screenshot, which CLAUDE.md's opsec rule names alongside listings and
+    commits. No pooled game in the registry, no rule to enforce; the row says so and stops.
+
+    **Two rows, split exactly on D16's line.**
+
+    The MECHANICAL row is the part with no judgment in it: a manifest line that
+    scripts/screenshot.sh could not render, a hash route that resolves to no entry in
+    app/src/App.tsx's ROUTES (the 7b lesson — sixteen confident measurements of an
+    unregistered route — as a commit gate), and a URL that addresses the photo service
+    itself, whose render is the raw stored bytes under every possible runtime state. Each
+    is provably wrong on the committed tree alone.
+
+    The ADVISORY row is the exposure the script can see but not judge: a route whose
+    component subtree reaches the photo service (`_photo_reach`). Whether that render
+    actually contains a code card depends on runtime state this script cannot have — is
+    the capture server up, does the store hold a pooled capture, does the screen's own
+    logic filter pooled cards out. Fulfillment filters and PROVES it, in a Playwright
+    assertion; this script cannot read React control flow, so treating reach as guilt
+    would block the manifest's whole reason to exist over four screens the owner put there
+    deliberately. A false positive that blocks is worse than one that prints (D16), so the
+    exposure prints, names the files that carry the reach, and names the three discharges:
+    drop the line, prove the screen pooled-free the way app/tests/fulfillment.spec.ts
+    does, or take the render-conditions question back to D24's owner.
+    """
+    if not exists(VIEWS_MANIFEST):
+        report.add("views opsec", MECHANICAL,
+                   [Finding(rel(VIEWS_MANIFEST), "does not exist, and `make screenshot` reads it.")])
+        return
+
+    games, _ = game_entries()
+    pooled = sorted(
+        str(entry.get("key"))
+        for entry in (games.get("GAMES") or ())
+        if isinstance(entry, dict) and entry.get("located") is False
+    )
+
+    routes = _routes_table()
+    blocking: List[Finding] = []
+    exposure: List[Finding] = []
+    if routes is None:
+        blocking.append(
+            Finding(
+                rel(APP_TSX),
+                "the ROUTES table could not be read, so no views.txt URL can be checked "
+                "against the screens it names. If the table moved or changed shape, this "
+                "check's reader has to move with it.",
+            )
+        )
+
+    entries: List[Tuple[int, str, str]] = []
+    for number, line in enumerate(read(VIEWS_MANIFEST).splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) < 2:
+            blocking.append(
+                Finding(
+                    f"{rel(VIEWS_MANIFEST)}:{number}",
+                    "names a view with no URL — scripts/screenshot.sh refuses this line too.",
+                )
+            )
+            continue
+        entries.append((number, parts[0], parts[1]))
+
+    from urllib.parse import urlsplit
+
+    checked = 0
+    for number, name, url in entries:
+        where = f"{rel(VIEWS_MANIFEST)}:{number}"
+        parts = urlsplit(url)
+        if pooled and "/photo/" in f"{parts.path}#{parts.fragment}":
+            blocking.append(
+                Finding(
+                    where,
+                    f"`{name}` addresses the photo service directly. GET /photo/<box>/"
+                    f"<index> serves raw stored bytes, the store accepts pooled captures "
+                    f"({', '.join(pooled)}), and a pooled capture's photo is a live code "
+                    f"(D24). There is no runtime state under which this render belongs in "
+                    f"the screenshot manifest.",
+                )
+            )
+            continue
+        if parts.netloc not in APP_ORIGINS:
+            exposure.append(
+                Finding(
+                    where,
+                    f"`{name}` is not the Vite app ({' or '.join(sorted(APP_ORIGINS))}), "
+                    f"so this check cannot see what it renders. If its render can contain "
+                    f"a stored photo, D24's sentence applies to it all the same.",
+                )
+            )
+            continue
+        if routes is None:
+            continue
+        route = (parts.fragment or "/").rstrip("/") or "/"
+        if route not in routes:
+            blocking.append(
+                Finding(
+                    where,
+                    f"`{name}` names `#{parts.fragment or '/'}`, which resolves to no "
+                    f"entry in app/src/App.tsx's ROUTES — the render would be the "
+                    f"no-such-view door wearing this view's filename. 7b shipped exactly "
+                    f"this shape once; a screen must be routed before it is rendered.",
+                )
+            )
+            continue
+        checked += 1
+        if not pooled:
+            continue
+        component = routes[route]
+        reach = _photo_reach(component) if component is not None else []
+        if not reach:
+            continue
+        evidence = _pooled_exclusion_evidence(route)
+        if evidence is not None:
+            continue
+        exposure.append(
+            Finding(
+                where,
+                f"`{name}` renders `#{route}`, whose screen can draw stored capture "
+                f"photos ({', '.join(reach)}), and the shared store accepts pooled "
+                f"captures ({', '.join(pooled)}) whose photo is a live code (D24). A "
+                f"render taken while the capture server is up over a store holding one "
+                f"writes a bearer instrument into captures/ui/. Not blocking: whether "
+                f"that state holds at render time is runtime fact this script cannot "
+                f"see. Discharge: drop this line, or prove the screen pooled-free in "
+                f"app/tests/{route.strip('/') or 'capture'}.spec.ts the way the "
+                f"Fulfillment view does, or take the render-conditions ruling to D24's "
+                f"owner.",
+            )
+        )
+
+    report.add(
+        "views opsec",
+        MECHANICAL,
+        blocking,
+        f"{checked} of {len(entries)} views resolve in ROUTES, none address the photo service",
+    )
+    report.add(
+        "views exposure",
+        ADVISORY,
+        exposure,
+        ("no pooled game in the registry — a stored photo is not a bearer instrument today"
+         if not pooled
+         else "no manifest view can draw a stored photo"),
+    )
+
+
 def check_positional_references(report: Report, docs: List[Path]) -> None:
     """A check named by its position, in the docs and in the code.
 
@@ -4303,6 +4574,7 @@ def audit(staged_only: bool) -> Report:
     check_status_sources(report)
     check_design_tokens(report)
     check_raw_colour(report)
+    check_views_opsec(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
