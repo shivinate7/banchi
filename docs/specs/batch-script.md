@@ -255,6 +255,14 @@ themselves.
 
 `pipeline/variant.resolve` is used unchanged. D3 is settled; nothing here reopens it.
 
+**One thing now happens before it, and it is not in `resolve`** (added 2026-08-22). D3's
+rung 0 — a human's answer from the review screen — is applied by `join_batch`, above the
+ladder rather than inside it, and it nulls confidence so the routing table below cannot
+re-queue an answered card. `resolve` is genuinely untouched; the addition is a
+short-circuit in front of it, because every rung `resolve` walks infers a finish from
+evidence and an answer is not an inference. It falls through to the ladder when the current
+export no longer carries that SKU, or carries it under a different Condition.
+
 ### 5.4 Routing — which queue a card lands in
 
 Confidence describes how legible the title and collector number were. It is the **only**

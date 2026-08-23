@@ -122,10 +122,14 @@ JPEG = b"\xff\xd8\xff" + b"\x00" * 64
 # read cannot drift from the shape `join` writes. The pair differs only by finish, which is
 # the case D3 rung 4 sends to review and the case the review screen exists for.
 #
-# HAND-BUILT, AND THAT IS THE LIMIT OF WHAT THESE CASES PROVE. No run has ever produced a
-# queue entry — Gate B is where the first one comes from — so these assert the routes against
-# `docs/DESIGN.md`, not against reality. Recorded here rather than only in the module
-# docstring because this literal is where the assumption physically lives.
+# HAND-BUILT, AND THAT IS THE LIMIT OF WHAT THESE CASES PROVE. They assert the routes
+# against `docs/DESIGN.md`, not against reality. Recorded here rather than only in the
+# module docstring because this literal is where the assumption physically lives.
+#
+# Gate B produced the first real entries on 2026-08-22 — 16 of them — and the shape above
+# survived contact: same keys, same candidate rows. What it did NOT do is widen the range.
+# All 16 were `metadata_detection_disagreement`; the other eleven reason codes have still
+# never been produced by a run, so this literal remains an assumption about them.
 CANDIDATES = [
     {
         "sku": "8608859",

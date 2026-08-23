@@ -9,10 +9,10 @@
     "reverse_holo": 5,
     "unknown": 27
   },
-  "finish_note": "T1 cannot validate `finish` \u2014 official API images are flat renders with no foil texture. Gate B validates it against real photos. See docs/GATES.md.",
+  "finish_note": "T1 cannot validate `finish` \u2014 official API images are flat renders with no foil texture. Gate B measured it on real photos 2026-08-22: 16 of 53 normals read as foil, a 30% false-positive rate under the rig's lighting. T1 stays green regardless. See docs/GATES.md.",
   "fixture_fingerprint": "df21fd125854",
   "gated_on": "holdout",
-  "generated_at": "2026-08-10T01:11:52+00:00",
+  "generated_at": "2026-08-23T01:23:30+00:00",
   "holdout_accuracy": 0.9706,
   "holdout_misses": [
     "sv3-31  key 051/197 != 031/197  (high)",

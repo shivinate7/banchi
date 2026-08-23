@@ -24,12 +24,26 @@ Cropping blind produces a miss indistinguishable from a bad read, and a systemat
 problem should show up as a pattern of detection failures rather than as a scatter of wrong
 identifications.
 
-Pillow + numpy, not OpenCV. The rig is fixed — consistent lighting, consistent background,
-one card roughly centred — which makes this the easy case rather than general document
-scanning: threshold against the background, brute-force the rotation that minimises the
-bounding box, read the edges off the projection profiles. `opencv-python-headless` is the
-recorded fallback IF measured detection rates are poor, and nothing has been measured:
-there is not one rig photo in this repo. Gate B is where that number comes from.
+Pillow + numpy, not OpenCV. `opencv-python-headless` was the recorded fallback IF measured
+detection rates turned out poor. **They were measured on 2026-08-22 and they were poor: 0 of
+53 Gate B photographs.** The fallback was still not taken, because opencv would not have
+helped — see below.
+
+TWO METHODS, IN ORDER, AND THE SECOND EXISTS BECAUSE THE FIRST MET A PHOTOGRAPH.
+
+  1. Threshold against the background, brute-force the rotation that minimises the bounding
+     box, read the edges off the projection profiles. This is the easy case the paragraph
+     above used to promise — "the rig is fixed, consistent lighting, consistent background,
+     one card roughly centred" — and every word of that is true of the rig and none of it
+     was enough. The card sits in a CLEAR STAND on a wood desk under a dark backdrop, and
+     its own artwork spans 88 to 231 against a border-ring median of 64. Consistent is not
+     the same as uniform, and this method needs uniform.
+
+  2. Find the card's BORDER instead: four long straight luminance edges whose spacing is a
+     card, assuming nothing about what is behind them. Runs only when (1) refuses. 53/53.
+
+`CardBox.method` says which one answered. docs/GATES.md's T6 section carries the
+measurement and why no threshold sits between the two ways (1) fails.
 """
 
 from geometry.detect import (  # noqa: F401

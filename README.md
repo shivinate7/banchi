@@ -122,10 +122,15 @@ five carry — that view's row in `docs/DESIGN.md`'s constraints table requires 
 it, and a strip of links to the capture screen's hard-delete undo is exactly the route it
 forbids. `docs/map.py`'s `app/` entry is the current account of what each file does.
 
-**They were also built before Gate B, which their own spec forbids**, at the owner's
-explicit instruction. What that costs is in `docs/specs/capture-app.md`'s STATUS section:
-those screens display data no run has ever produced, so read them as specified and
-unvalidated rather than as working software.
+**They were built ahead of Gate B at the owner's explicit instruction**, against their own
+spec's schedule — a question since settled rather than an outstanding deviation. What it
+cost used to be that the screens displayed data no run had ever produced. **Gate B ran them
+on 2026-08-22**: the capture screen drove a real feeder session, the review queue held 16
+real entries and every one was answered through the answer route, and the pull preview found
+a stored photo at its physical location. Two things are still unexercised and
+`docs/specs/capture-app.md`'s STATUS section names them — the Fulfillment view against a
+real order, and the review screen's price bands against a mixed-value lot, that run having
+priced $0.04 to $0.40 end to end.
 
 ## For anything larger
 

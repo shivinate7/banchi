@@ -48,8 +48,14 @@ per set and overall.
   committed score exists to show. `batch_ids` and `usage` are part of the comparison, so a
   fresh submission always writes even if the accuracy lands on the same number.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
-  `finish` field. That is Gate B's job. Do not let a green T1 be read as variant detection
-  working.
+  `finish` field. Do not let a green T1 be read as variant detection working. **Gate B did
+  that job on 2026-08-22 and the answer was bad**: 16 of 53 normals read as foil, a 30%
+  false-positive rate, and detection agreed with itself across every duplicate pair — both
+  Thievuls, both Eiscues, both Pyroars — so it is systematic sheen under the rig's lighting
+  rather than noise. D3's disagreement routing carried all 16 to a human instead of to a
+  wrong listing, which is the ladder working. The blind spot is therefore no longer that
+  the number is unknown; it is that T1 still cannot see it, so this test will stay green
+  while that rate is anything at all.
 
 **Below the floor, tune the prompt — but never against the cards you score on.** Fixing the
 specific images that failed and re-measuring on the same set reports a number that means
@@ -209,11 +215,19 @@ at a temporary directory, so nothing here touches the real inventory.
   bullet said those routes did not exist. **Of everything 7b shipped, the routes are the one
   part that did not get built ahead of its evidence**, and that is worth noticing when
   reading the rest of it.
-- **Known blind spot, and it is 7b's**: every queue entry these cases assert against was
-  hand-built by the test. What a green T7 says is that the routes behave the way
-  `docs/DESIGN.md` describes — **not** that a real run produces entries of that shape,
-  because no real run has produced one at all. Same standing as T6's synthetic composites
-  and T1's flat renders: self-consistency, not evidence. Gate B is where that changes.
+- **Known blind spot, and it is 7b's — half of it closed on 2026-08-22.** Every queue entry
+  these cases assert against is still hand-built by the test, so a green T7 still says only
+  that the routes behave the way `docs/DESIGN.md` describes. What is no longer true is the
+  sentence that used to follow: a real run HAS produced entries, 16 of them, and their shape
+  matches what the test builds — `position`, `reason`, `read`, `candidates`, `market`,
+  `first_seen`, `cleared_by_human`. All 16 were `metadata_detection_disagreement`, all
+  parked, and the owner answered every one through the answer route.
+
+  So the remaining gap is narrower and worth stating exactly: the fixtures are still
+  invented, and one run of one lot produced exactly one reason code out of twelve. Nothing
+  has exercised `no_catalog_row`, `set_ambiguous`, `low_confidence` or the other eight
+  against a real queue. Same standing as T6's synthetic composites: self-consistency over a
+  wider range than the evidence covers.
 
 ---
 
@@ -371,11 +385,15 @@ its own cadence instead of depending on that accident a second time.
    **7b was built before Gate B, at the owner's explicit instruction.** The spec's scope
    section and its "what this session must not build" list both said otherwise; both are
    left standing there and marked overtaken, and that file's STATUS section carries what it
-   costs. The short form, and the reason this list carries it too: **the screens 7b added
-   display data that no run has ever produced.** The review queue's row hierarchy is tuned
-   against a price distribution nobody has measured, and the twelve reason codes it renders
-   have never all fired. Read those screens as specified-and-unvalidated, never as
-   observed.
+   costs. The short form used to be that **the screens 7b added display data that no run has
+   ever produced** — true when written, false since 2026-08-22. Gate B put 53 real cards
+   through them: 16 real queue entries, all answered, and a pull preview that found the right
+   photo at the right physical location.
+
+   What survives is the narrower half, and it is worth keeping: all 16 entries carried **one
+   reason code out of twelve**, and the run priced $0.04-$0.40 end to end, so the review
+   queue's price-driven row hierarchy has still never been shown the mixed-value list it
+   exists to sort. Read those screens as validated in outline and unvalidated in range.
 
    **Built was not routed for a few hours, and the shape of that gap is worth keeping after
    the fix.** 7b shipped with none of its three screens in `app/src/App.tsx`'s ROUTES table,
@@ -400,7 +418,10 @@ its own cadence instead of depending on that accident a second time.
    `make status` would then send whoever runs it to a twenty-card run against a build that
    has never met a card. That is still exactly what it does. It is now also correct: with
    nothing left in step 7 to build, meeting a card is the only remaining way to learn
-   anything, and Gate B is the name for doing it.
+   anything, and Gate B is the name for doing it. **It was done on 2026-08-22 and the
+   paragraph above is now history** — kept because the reasoning for moving `next` onto a
+   physical step is the reasoning Gate C will need again, and it was right: the run found
+   six defects that every green check in the repo had passed.
 
    **"CSV import with error reporting" was struck from this list on 2026-08-13.** It was a
    v1 feature that batch script v2 absorbed whole: `emit` writes `pushed`, `reconcile` moves

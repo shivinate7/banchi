@@ -70,10 +70,13 @@ BUILD_ORDER = [
              "(GET /queues, POST /review/<box>/<index>/answer, POST /inventory/<box>/<index>/sold). "
              "7b WAS BUILT BEFORE GATE B, WHICH ITS OWN SPEC FORBIDS, at the owner's explicit "
              "instruction; that spec's STATUS section carries what it costs and its sections 0 "
-             "and 9 are left standing and marked overtaken. The short form: 7b's screens "
-             "display data no run has ever produced, so the review queue's price-driven row "
-             "hierarchy is tuned against a distribution nobody has measured and its twelve "
-             "reason codes have never all fired. "
+             "and 9 are left standing and marked overtaken. That short form USED to be that "
+             "7b's screens display data no run has ever produced; Gate B ran them 2026-08-22 "
+             "and it is no longer true. The review queue held 16 real entries and the owner "
+             "answered every one. What survives of it is narrower and still real: all 16 "
+             "carried ONE reason code of twelve, and the whole run priced $0.04-$0.40, so the "
+             "price-driven row hierarchy has still never seen the mixed-value list it sorts "
+             "for. "
              "THIS ROW IS `done` AND STEP 8 IS `next`, which the previous note called the "
              "owner's call to make on the day rather than by editing this file. It is made "
              "now because nothing is left to build: with 7b shipped there is no remaining "
@@ -161,7 +164,10 @@ COMPONENTS = [
                           "note": "real CSV library only — v1 bug 2 was a naive split(\",\")"},
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
                         "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11"], "tested_by": ["T3"]},
-            "variant.py": {"does": "the four-rung variant ladder", "governed_by": ["D3", "D12"], "tested_by": ["T4"]},
+            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+            # T3 is what covers it — T4 owns the four rungs that infer.
+            "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not",
+                           "governed_by": ["D3", "D12"], "tested_by": ["T3", "T4"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
@@ -216,8 +222,9 @@ COMPONENTS = [
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
                           "governed_by": ["D7", "D10"], "tested_by": ["T7"]},
-            "queues.py": {"does": "review.json and parked.json — the standing queues",
-                          "governed_by": ["D4", "D9"]},
+            "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
+                                  "cross-queue release a re-routed position needs",
+                          "governed_by": ["D4", "D9"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
             "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
@@ -525,11 +532,14 @@ COMPONENTS = [
                 "oversight: no harness test imports anything in this directory. Neither "
                 "Playwright spec is a harness test — see their own entries. "
                 "7b WAS BUILT BEFORE GATE B, AGAINST ITS OWN SPEC, at the owner's explicit "
-                "instruction, and what that costs is still true of every entry below: the "
-                "screens display data no run has ever produced — the review queue's "
-                "price-driven type scale is fitted to a distribution nobody has measured and "
-                "its twelve reason codes have never all fired — so read every 7b entry as "
-                "specified-and-unvalidated. "
+                "instruction. What that cost was true of every entry below until 2026-08-22, "
+                "when Gate B exercised them against 53 real cards: the review queue held 16 "
+                "real entries, the owner answered all 16 through the answer route, and the "
+                "pull preview found a stored photo at its physical location. Read the 7b "
+                "entries as validated in outline and unvalidated in range — one reason code "
+                "of twelve fired, and the price-driven type scale is still fitted to a "
+                "distribution ($0.04-$0.40, all one band) that cannot exercise it. The "
+                "Fulfillment view has still never met an order. "
                 "WHAT IS NO LONGER TRUE, recorded because the shape of it is worth keeping: "
                 "the three screens shipped unrouted, with no client for their routes and the "
                 "review queue's calls arriving as a prop nothing supplied, because src/App.tsx "

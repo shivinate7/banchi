@@ -2,6 +2,11 @@
 
 Resolve normal / holo / reverse holo per card, in order:
 
+  0. HUMAN_ANSWERED  a human already answered this card on the review screen. Above the
+                     ladder rather than in it, and `join_batch` applies it before the walk
+                     below ever starts — the ladder infers, and an answer is not an
+                     inference. Added 2026-08-22; see the constant's own comment for the
+                     bug that produced it.
   1. METADATA        capture-time variant toggle, stored in the card's JSON sidecar.
                      Primary path.
   2. CATALOG_FORCED  one condition row for that number in the fixture, so the row decides.
