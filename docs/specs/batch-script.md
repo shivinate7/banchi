@@ -458,7 +458,11 @@ three — for every game, and RAISED `UnknownFinish` rather than reviewing, so a
 `foil` would have ended a join with a stack trace. `variant.resolve` now takes a `game` and
 reads that game's entry out of `pipeline/games.py` through `variant.vocabulary`;
 `cli/resolve.py`'s whitelist for the model's detected finish was the same defect one seam
-along and moved with it. `--variant`'s own `choices` are still Pokémon's, which is a smaller
+along and moved with it, and so was `identify/sidecar.py`'s reader — which was the worst of
+the three, because it neither raised nor refused: it DROPPED a Riftbound `foil` claim and
+reported it as outside an enum the file had never named. It was also read three lines above
+the game key, while the rarity claim directly beneath it carries a comment saying that order
+is load-bearing. `--variant`'s own `choices` are still Pokémon's, which is a smaller
 version of the same thing and is recorded rather than fixed: the flag fills gaps in a
 sidecar-less directory, and no such directory exists for any other game yet.
 
