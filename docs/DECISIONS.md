@@ -880,6 +880,23 @@ ordinary path. Below it, "PKMNCODES eBay lot" becomes a third sub-threshold disp
 flat-at-the-floor and flat-price-for-the-run, and `emit` already refuses to write while a
 disposition is unanswered.
 
+**The own-box convention (owner, 2026-08-23).** Code cards live in their own box, sorted by
+set. Mixed boxes stay legal (D21), but a pooled card captured into a LOCATED box knowingly
+consumes a slot number and inflates that box's denominator — the high-water mark counts slots
+consumed, and a code card consumes one it will never occupy. Convention rather than refusal,
+because a refusal mid-feed is the rhythm-breaker the capture screen is built to avoid.
+`docs/CODES-DECISIONS.md` C8 carries the ledger this feeds.
+
+**The render-conditions ruling (owner, 2026-08-23), which is what closes the `views
+exposure` questions.** Screenshot renders are LOCAL-ONLY: `captures/ui/` is gitignored, the
+pre-commit hook blocks stray images, and the standing opsec rule already forbids a code-card
+photo in any listing, README, screenshot or commit. A pooled card's photo appearing in a
+local render is therefore contained by guards that already exist, and the five advisory
+questions the `views exposure` row asks are answered by this paragraph rather than by
+per-screen filtering — which would have cost the owner's own screens their code-card rows.
+The row stays: it is the tripwire that re-asks the question if a new screen starts rendering
+stored photos.
+
 **Two opsec triggers fire with this work and must be discharged in the same commit.**
 `scripts/guard-opsec.sh` has been disabled since 2026-08-03, and D16 says in writing *"Revisit
 before the codes track handles real cards."* This work makes that condition true. The recorded

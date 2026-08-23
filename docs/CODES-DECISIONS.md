@@ -93,3 +93,33 @@ Until Gate B passes: manual listing, semi-manual code delivery. Cash flow can st
 Small track: QR decode, SKU OCR, codes table, eBay lot listings, delivery worker. It rides
 the shared foundation and serves as the feeder's shakedown cruise — low stakes to fail on,
 since a misread QR fails to decode rather than mispricing a $40 card.
+
+## C8 — The code ledger: every code's text beside its photograph, for the dispute that will come
+
+Ratified by the owner 2026-08-23, in his own words: code cards *"live in the arbitrary box of
+code cards, ideally sorted by set"*, and *"we likely will need both the code card image +
+image to text csv of them saved (in case a customer says a certain code didn't work, we check
+that code retroactively, tap its image, and likely it was an image to text error)."*
+
+**The dispute flow is the spec.** A buyer says a code did not work. The owner looks the code
+up, opens the photograph it was read from, and re-reads it by eye — because the likeliest
+failure is the image-to-text step, and C6 already rules the remedy (replace, don't refund).
+Everything below exists to make that lookup two taps.
+
+**The mechanism rides what the singles track already built.** `pokemon_code` gets a real
+prompt profile whose job is transcription: the printed code, exactly as printed. The
+extracted code lands on the card record the way every identification does, which makes it
+searchable through the existing search with zero new UI — type the code, get the card, tap
+the photo. The ledger file is the fork's export: code text keyed to box/index and photo path.
+
+**A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS**, and that sentence decides
+its storage: it lives under the store beside `inventory.json`, gitignored like everything
+there, and never in a commit — the commit-time opsec rules and the re-enabled PreToolUse
+guard both fire on a code literal precisely because a file like this must never cross them.
+The runtime writing codes into a gitignored file is the sanctioned path; an agent pasting one
+into a tracked file is what the guards exist to stop.
+
+**Sorted by set is a capture convention, not a schema**: the set hint field already carries
+it, and the code-card box is its own box by the same owner ruling (recorded in D24 — a
+pooled card in a located box knowingly consumes a slot number, so the convention is what
+keeps the located boxes' denominators honest).
