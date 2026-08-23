@@ -626,7 +626,7 @@ COMPONENTS = [
                 # D10 earned a second job with the history lines: index reuse after an undo is
                 # what decides that a removal must be logged at all, since without the line
                 # the log reads `captured 3/2` twice over two physical cards.
-                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D30"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30"],
                 "tested_by": ["T7"],
             },
         },
@@ -727,11 +727,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D30"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26", "D30"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -809,7 +809,7 @@ COMPONENTS = [
                         "priced from the export, and an answer that writes and advances with "
                         "no dialog. Reads GET /queues and writes one candidate row back "
                         "through src/server.ts like every other screen.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D23", "D28"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D23", "D28", "D29"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -822,7 +822,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29"],
             },
             "src/Inventory.tsx": {
                 "does": "SEARCH AND SELL, over D7's SKU -> positions map. Type a card's name and "

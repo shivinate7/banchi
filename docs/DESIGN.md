@@ -221,6 +221,14 @@ same reason, detection agreeing with itself across every duplicate pair — one 
 about the rig's lighting, sixteen identical taps. Anything looser stays one card at a time,
 because a bulk write over cards a human has not compared is exactly what D4 exists to prevent.
 
+**The group confirm (D29, built 2026-08-23) is this screen's one solid fill, and the fill
+rule survives it**: the fill means "exactly one thing to do", and D29's eligibility — one
+shared reason, one candidate per card, one condition — is precisely what reduces the state to
+one action, so there is no second answer for the fill to be biased against. Reason chips on
+the Waiting heading filter the worklist (filtered rows dim, never hide); `G` opens the group
+offer, Enter confirms over the grid of photographs — the grid IS the confirmation — and `U`
+reverses the whole group.
+
 Photo as large as the viewport allows at
 the top, then one
 sentence naming what the system found, then the candidate rows with their prices. No

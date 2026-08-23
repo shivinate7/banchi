@@ -58,12 +58,23 @@ import './ReviewQueue.css'
  * window. D28 calls it a hole punched in the rule on purpose, and `store/queues.py:reopen` is
  * how narrow the hole is.
  *
- * TWO ROUTES, ONE OF THEM TWO-WAY, in `server/capture_server.py`:
+ * THREE ROUTES, ONE OF THEM TWO-WAY, in `server/capture_server.py`:
  *
  *   GET  /queues                      both standing queues, already in worked order
  *   POST /review/<box>/<index>/answer one candidate row, chosen  (D4) — or `{"undo": true}`,
  *                                     which takes that answer back and puts the card in the
  *                                     queue again (D28)
+ *   POST /review/group-answer         a homogeneous group answered in one write — the one
+ *                                     narrow exception to one-card-at-a-time, ratified in
+ *                                     docs/DECISIONS.md ("A homogeneous queue may be
+ *                                     answered as a group") on Gate B's sixteen-of-one-
+ *                                     reason evidence. Grouping and filtering are ALWAYS
+ *                                     available (the reason chips on the Waiting heading);
+ *                                     the write is offered only when every card in the
+ *                                     filtered worklist shares one reason and offers one
+ *                                     row of one condition — `groupOffer` holds the
+ *                                     reading, the route re-enforces it, and the state
+ *                                     that draws it shows every photograph first.
  *
  * The second one settled a question this screen had guessed at and guessed wrong. An earlier
  * draft offered "Leave unlisted" as a way to clear a card without picking a row; the route
@@ -769,19 +780,36 @@ function isFinalRefusal(err: unknown): boolean {
  *  what was dropped, at the index it was dropped from, which is exact and costs no round trip —
  *  the server reopened the same entry with the same candidates, so a `GET /queues` would answer
  *  with what is already in hand and would additionally undo every skip. */
-type Receipt = {
-  /** `Row.entry.position`. A second answer at one position replaces its receipt rather than
-   *  stacking one on it, which cannot happen today — the entry is cleared in between — and is
-   *  the same rule `Fulfillment.tsx` states for a second sale of one position. */
-  key: string
+/** One position an undo has to reach, with the label a refusal about it is drawn under. */
+type UndoTarget = {
   box: number
   index: number
+  /** `Row.entry.position` — the store's own key. */
+  position: string
+  /** The server's own rendered label. Never composed here (D10). */
+  label: string
+}
 
-  /** The server's own rendered label, for the machine line. Never composed here (D10). */
+type Receipt = {
+  /** The single answer's position, or the group's positions joined — either way, a key no
+   *  OTHER standing receipt can share, because every position in it is cleared server-side
+   *  for as long as the receipt stands. A second answer at one position replaces its receipt
+   *  rather than stacking one on it, which cannot happen today — the entry is cleared in
+   *  between — and is the same rule `Fulfillment.tsx` states for a second sale of one
+   *  position. */
+  key: string
+
+  /** ONE FOR A SINGLE ANSWER, THE WHOLE GROUP FOR A GROUP WRITE, and the undo walks them in
+   *  order. One list rather than two receipt kinds: a single answer is a group of one to the
+   *  reversal, and a second code path is a second thing to keep true. */
+  targets: UndoTarget[]
+
+  /** The machine line: the single target's own label, or `16 cards · <reason>` for a group —
+   *  with several receipts standing this line is what tells them apart. */
   label: string
 
-  /** Every row this answer dropped — both, for a position open in two queue files — and the
-   *  index in `rows` they were spliced out of. */
+  /** Every row this answer dropped — both queue twins per position, the whole worklist for a
+   *  group — and the index in `rows` the first was spliced out of. */
   dropped: Row[]
   at: number
 
@@ -790,7 +818,8 @@ type Receipt = {
   said: string
 
   /** Wall-clock deadline, fixed when the answer lands and never touched again. A duration held
-   *  here instead would have to be restarted on every re-render. */
+   *  here instead would have to be restarted on every re-render. ONE deadline for a whole
+   *  group: its sixteen answers landed in one write, so they age as one. */
   until: number
 }
 
@@ -850,6 +879,26 @@ export function ReviewQueue() {
    * array reorders cards nobody touched.
    */
   const [deferred, setDeferred] = useState<readonly string[]>([])
+
+  /* WORK ONE REASON AT A TIME (docs/DECISIONS.md, "A homogeneous queue may be answered as a
+   * group": grouping and filtering, ALWAYS — the filter is unconditional even when the group
+   * write below never qualifies). Null is every reason, which is the screen as it has always
+   * been. The chips on the Waiting heading set it, because that heading's shape line is
+   * where a queue's composition is read — Gate B's sixteen-of-one-reason was a fact about
+   * the RIG, and working one reason as a block is how such a fact is worked.
+   *
+   * A LENS, NOT STATE ABOUT ROWS: nothing is written, a filtered-out card is still open in
+   * its file and still counted by the run report, and it survives a Reload — the fresh
+   * snapshot is read through the same lens, unlike the skips, which a reload forgets. */
+  const [reasonFilter, setReasonFilter] = useState<string | null>(null)
+
+  /* THE GROUP STATE — the one narrow exception to one-card-at-a-time, entered on purpose
+   * and left the same way. While true (and while the worklist still qualifies), the screen
+   * draws every photograph the group write would answer for over ONE confirm control,
+   * because the ruling's own condition is that "a group write still shows the photographs
+   * it is about to answer for". Not persisted anywhere, exactly like a skip: reload the
+   * page and the queue is one card at a time again. */
+  const [grouping, setGrouping] = useState(false)
 
   /* The key whose photo 404'd rather than a boolean, for PullPreview.tsx's reason: an
    * `onError` for the previous card can land after the queue has advanced, and a boolean
@@ -940,8 +989,8 @@ export function ReviewQueue() {
    * `allSkipped` travels with it because it is the same partition read once: everything still
    * waiting has been pushed to the back, so the next skip only moves the current card behind
    * the others and the screen has to say so rather than looking stuck. */
-  const { worklist, allSkipped } = useMemo(() => {
-    if (rows === null) return { worklist: [] as Row[], allSkipped: false }
+  const { everyone, worklist, allSkipped } = useMemo(() => {
+    if (rows === null) return { everyone: [] as Row[], worklist: [] as Row[], allSkipped: false }
 
     const cards = oneCardPerPosition(rows)
     const skipped = new Set(deferred)
@@ -956,10 +1005,65 @@ export function ReviewQueue() {
       return row === undefined ? [] : [row]
     })
 
-    return { worklist: [...held, ...pushed], allSkipped: held.length === 0 && pushed.length > 0 }
-  }, [rows, deferred])
+    /* `everyone` IS THE WHOLE QUEUE AND `worklist` IS THE LENS OVER IT. The Waiting list
+     * draws everyone — a filtered-out card is still waiting, and a list that hid it would
+     * make the shape chips lie about a queue the count line still sums — while the card
+     * being worked, the keys and the group write all read the filtered view. The filter
+     * applies AFTER the skip partition, so a skip keeps its meaning across a filter change
+     * rather than being re-derived inside each lens. */
+    const everyone = [...held, ...pushed]
+    const match = (row: Row) => reasonFilter === null || row.entry.reason === reasonFilter
+    const heldIn = held.filter(match)
+    const pushedIn = pushed.filter(match)
+
+    return {
+      everyone,
+      worklist: [...heldIn, ...pushedIn],
+      allSkipped: heldIn.length === 0 && pushedIn.length > 0,
+    }
+  }, [rows, deferred, reasonFilter])
 
   const current = worklist[0] ?? null
+
+  /* THE GROUP OFFER, RE-DERIVED FROM LIVE ROWS ON EVERY CHANGE AND NEVER SNAPSHOTTED. The
+   * ruling's two conditions, read honestly: every card in the (filtered) worklist shares one
+   * reason code, and every one offers THE SAME SINGLE CANDIDATE — which this screen reads as
+   * exactly one row per entry, of one condition across the group, each row the entry's own.
+   * It cannot mean one shared SKU: sixteen different cards are sixteen different catalog
+   * rows, and answering card A with card B's SKU is not a reading of the entry, it is data
+   * corruption wearing one. What is identical across the sixteen taps is the SHAPE of each
+   * answer — same question, one possible reply each, every reply of one kind — and the
+   * server enforces the same three checks in `group_not_uniform`, so this memo is a
+   * convenience and never the guard.
+   *
+   * TWO CARDS MINIMUM. A "group" of one is the single flow with extra steps, and offering a
+   * second way to answer one card is two controls for one write.
+   *
+   * NO FILTER REQUIRED WHEN NONE IS NEEDED: a queue that is one reason end to end — Gate
+   * B's, sixteen times over — qualifies unfiltered, and demanding a filter tap first would
+   * be a ritual. The filter is for carving a qualifying group out of a mixed queue. */
+  const groupOffer = useMemo((): { rows: Row[]; reason: string; condition: string } | null => {
+    if (worklist.length < 2) return null
+    const first = worklist[0]
+    if (first === undefined) return null
+    const reason = first.entry.reason
+    const conditions = new Set<string>()
+    for (const row of worklist) {
+      if (row.entry.reason !== reason) return null
+      const only = row.entry.candidates[0]
+      if (only === undefined || row.entry.candidates.length !== 1) return null
+      conditions.add(only.condition)
+    }
+    const [condition] = [...conditions]
+    if (condition === undefined || conditions.size !== 1) return null
+    return { rows: worklist, reason, condition }
+  }, [worklist])
+
+  /* The state outlives its offer otherwise: answer the group, reload into a queue that no
+   * longer qualifies, and `grouping` would be pointing at a screen with nothing to draw. */
+  useEffect(() => {
+    if (grouping && groupOffer === null) setGrouping(false)
+  }, [grouping, groupOffer])
 
   /* Put dropped rows back where they came from. Two callers now — a refused answer, and an
    * answer taken back inside its window — which is why it stopped being a closure inside
@@ -1106,8 +1210,15 @@ export function ReviewQueue() {
           if (kept.length === 0 && canTakeBack(result as AnswerResult)) {
             remember({
               key: position,
-              box: row.entry.box,
-              index: row.entry.index,
+              /* A group of one, to the reversal — see `Receipt.targets`. */
+              targets: [
+                {
+                  box: row.entry.box,
+                  index: row.entry.index,
+                  position,
+                  label: row.entry.label,
+                },
+              ],
               label: row.entry.label,
               dropped,
               at,
@@ -1181,24 +1292,102 @@ export function ReviewQueue() {
       setBusy(true)
       setRefusal(null)
 
-      /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, for the reason the other three calls
+      /* ONE POSITION AT A TIME, IN ANSWER ORDER, AND NEVER IN PARALLEL. The group write is
+       * one route call because a partial WRITE must not exist; the reversal is this loop
+       * over the single undo because a partial REVERSAL is real and has to be reportable
+       * per position — the route's own comment argues the split. Sequential because
+       * `Store.write()` takes the file lock per call, and sixteen reversals fired at once
+       * stack against it and report their failures out of order — the same reason `answer`
+       * serialises.
+       *
+       * A FINAL REFUSAL SKIPS ONE CARD AND THE LOOP GOES ON; ANYTHING ELSE STOPS IT. Final
+       * (`FINAL_UNDO_CODES`) is a fact about that one answer — already reversed on the other
+       * device, or held by an emitted file — and the next position knows nothing of it. A
+       * dead server or a `store_busy` behind a running join will answer every remaining
+       * position identically, so pressing on would collect fifteen copies of one refusal;
+       * the un-walked tail stays on the receipt for another press instead. */
+      const walk = async () => {
+        const reversed: string[] = []
+        const finished: string[] = []
+        const failures: { label: string; failure: Failure }[] = []
+        for (const target of receipt.targets) {
+          try {
+            await undoAnswer(target.box, target.index)
+            reversed.push(target.position)
+          } catch (err: unknown) {
+            failures.push({ label: target.label, failure: describeFailure(err) })
+            if (isFinalRefusal(err)) {
+              finished.push(target.position)
+              continue
+            }
+            break
+          }
+        }
+        return { reversed, finished, failures }
+      }
+
+      /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, for the reason the other calls
        * in this file give: the two-argument form does not cover its own success handler, so a
-       * throw while putting the card back would land as an unhandled rejection with `.finally`
+       * throw while putting the cards back would land as an unhandled rejection with `.finally`
        * clearing `busy` — a screen that looks ready, a receipt still standing, and a card the
-       * server has already reopened sitting in neither list. */
-      void undoAnswer(receipt.box, receipt.index)
-        .then(() => {
-          putBack(receipt.dropped, receipt.at)
-          setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
+       * server has already reopened sitting in neither list. `walk` itself catches per
+       * position, so the `.catch` below is for a failure of the bookkeeping, not of a call. */
+      void walk()
+        .then(({ reversed, finished, failures }) => {
+          /* WHAT ACTUALLY REVERSED COMES BACK ON SCREEN, AND ONLY THAT. A position the loop
+           * never reached is still answered server-side, and drawing it back would be the
+           * queue disagreeing with the store about a card whose SKU is still written. */
+          const done = new Set([...reversed, ...finished])
+          const back = receipt.dropped.filter((row) => reversed.includes(row.entry.position))
+          if (back.length > 0) putBack(back, receipt.at)
+
+          /* The receipt SHRINKS to the tail the loop did not clear — reversed cards are back
+           * on screen, finally-refused ones have no reversal left to offer — and comes down
+           * whole when nothing remains. A shrunken group re-labels so the machine line keeps
+           * telling receipts apart, and degrades to the last target's own label at one. */
+          setReceipts((held) =>
+            held.flatMap((standing) => {
+              if (standing.key !== receipt.key) return [standing]
+              const targets = standing.targets.filter((target) => !done.has(target.position))
+              const first = targets[0]
+              if (first === undefined) return []
+              return [
+                {
+                  ...standing,
+                  targets,
+                  dropped: standing.dropped.filter((row) => !done.has(row.entry.position)),
+                  label:
+                    targets.length === 1 ? first.label : `${targets.length} still answered`,
+                },
+              ]
+            }),
+          )
+
+          /* REPORTED PER POSITION, NEVER SILENTLY — a partly-failed group reversal names
+           * every card it could not bring back. One failure keeps the server's own message
+           * under the card's own label; several are joined, each prefixed with its label,
+           * under a code that greps to this file the way `client_bug` does, because no one
+           * server refusal produced the composite. */
+          const [first] = failures
+          if (first !== undefined && failures.length === 1) {
+            setRefusal({ failure: first.failure, at: first.label })
+          } else if (failures.length > 1) {
+            setRefusal({
+              failure: {
+                code: 'group_undo_incomplete',
+                message: failures
+                  .map(({ label, failure }) => `${label}: ${failure.message}`)
+                  .join(' '),
+              },
+              at: null,
+            })
+          }
         })
         .catch((err: unknown) => {
           /* The label is the receipt's and not the current card's, the same capture
            * `Refusal` argues for: the card this is about left the screen when it was
            * answered, and by now there is usually a different one on it. */
           setRefusal({ failure: describeFailure(err), at: receipt.label })
-          if (isFinalRefusal(err)) {
-            setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
-          }
         })
         .finally(() => {
           busyRef.current = false
@@ -1207,6 +1396,110 @@ export function ReviewQueue() {
     },
     [putBack],
   )
+
+  /* THE GROUP WRITE. One route call for the whole worklist, and NOTHING IS DROPPED UNTIL THE
+   * SERVER ANSWERS — the opposite of `answer`, and the asymmetry is argued rather than
+   * inherited. The single answer advances optimistically because docs/DESIGN.md says
+   * answering advances with no acknowledgement, and the cost of being wrong is one card put
+   * back; the group state is already a deliberate stop in front of a confirm, there is no
+   * next card to hurry to, and optimistically clearing sixteen cards to restore them on a
+   * refusal is churn with no keystroke saved. The route is all-or-nothing — a resolved
+   * promise means every position landed, a rejection means none did — so this callback never
+   * has a partial state to reconcile.
+   *
+   * THE PAIRS ARE COPIED OFF EACH ROW'S OWN LONE CANDIDATE, never composed and never shared:
+   * each card answers with its own row, which is the honest reading of "the same single
+   * candidate" (`groupOffer` has the argument), and the server re-validates every pair
+   * against its own entry so a stale screen is caught rather than obeyed. */
+  const answerGroup = useCallback(() => {
+    if (busyRef.current || loadingRef.current) return
+    const offer = groupOffer
+    if (offer === null || rows === null) return
+
+    const positions = new Set(offer.rows.map((row) => row.entry.position))
+    const labels = new Map(offer.rows.map((row) => [row.entry.position, row.entry.label]))
+
+    busyRef.current = true
+    setBusy(true)
+    setRefusal(null)
+
+    /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, for the file's standing reason: the
+     * success handler below walks a response body and rebuilds three pieces of state, and a
+     * throw inside it has to land in the panel rather than as an unhandled rejection behind
+     * a screen that looks ready. */
+    void answerReviewGroup(
+      offer.rows.map((row) => ({
+        box: row.entry.box,
+        index: row.entry.index,
+        sku: row.entry.candidates[0]?.sku ?? '',
+        condition: row.entry.candidates[0]?.condition ?? '',
+      })),
+    )
+      .then((result) => {
+        /* WHAT CAME BACK, RATHER THAN WHAT THIS SCREEN ASSUMED — `answer`'s rule at group
+         * scale. A row is dropped only when the server names its queue cleared; today the
+         * route clears every open entry it validated or refuses whole, so the predicate
+         * keeps everything the group touched, and the day that stops being true the screen
+         * follows the write instead of disagreeing with it silently. */
+        const byPosition = new Map(result.results.map((member) => [member.position, member]))
+        const clearedRow = (row: Row): boolean => {
+          const member = byPosition.get(row.entry.position)
+          if (member === undefined) return false
+          return row.queue === 'review' ? member.review_cleared : member.parked_cleared
+        }
+        const dropped = rows.filter(clearedRow)
+        const at = rows.findIndex(clearedRow)
+        setRows((prev) => (prev === null ? prev : prev.filter((row) => !clearedRow(row))))
+
+        /* ONE RECEIPT FOR THE GROUP (the ruling's undo is D28's shape, whole), AND ONLY WHEN
+         * EVERY MEMBER CAN COME BACK. `restores_to` is the single answer's contract per
+         * member, and a group undo that reverses eleven of sixteen on its best day is the
+         * defect `SaleResult` records, at scale — so one held member suppresses the whole
+         * control rather than arming a press that half-works. */
+        const reversible = result.results.every((member) => member.restores_to !== null)
+        if (reversible && dropped.length > 0) {
+          remember({
+            key: result.answered.join('+'),
+            targets: result.results.map((member) => ({
+              box: member.box,
+              index: member.index,
+              position: member.position,
+              label: labels.get(member.position) ?? member.position,
+            })),
+            /* The count and the machine string, because with several receipts standing this
+             * line is the identifier — and a group's identity is its size and its reason,
+             * not any one card's label. */
+            label: `${result.count} cards · ${result.reason}`,
+            dropped,
+            at,
+            said: `Answered all ${result.count} as ${result.condition}.`,
+          })
+        }
+
+        /* Skips die with the cards they deferred, exactly as a single answer clears its own. */
+        const answered = new Set(dropped.map((row) => row.key))
+        setDeferred((prev) =>
+          prev.some((key) => answered.has(key)) ? prev.filter((key) => !answered.has(key)) : prev,
+        )
+
+        /* The group is spent, so the state and the lens close together: the filter's whole
+         * content was just answered, and a filter left standing over nothing would draw the
+         * empty-for-this-reason note about work that is already done. */
+        setGrouping(false)
+        setReasonFilter(null)
+      })
+      .catch((err: unknown) => {
+        /* NOTHING TO RESTORE — nothing was dropped. Both group refusals are in STALE_CODES,
+         * so the panel below the grid draws Reload, which is the remedy their messages name;
+         * the state stays open, because the grid re-derives from whatever the reload brings
+         * back and closes itself if the group no longer qualifies. */
+        setRefusal({ failure: describeFailure(err), at: `${positions.size} cards` })
+      })
+      .finally(() => {
+        busyRef.current = false
+        setBusy(false)
+      })
+  }, [groupOffer, rows, remember])
 
   const skip = useCallback((row: Row) => {
     /* Moved to the back of the skipped group rather than merely marked as skipped, so that
@@ -1310,6 +1603,34 @@ export function ReviewQueue() {
         return
       }
 
+      /* THE GROUP STATE OWNS THE KEYBOARD WHILE IT IS UP — Enter confirms, Escape leaves,
+       * and every one-card branch below is dead, because the state has exactly one thing to
+       * do and a digit landing on a candidate nobody can see would be a write from a screen
+       * that is not showing it. R and U stay live above this line on purpose: a reload
+       * re-derives the grid, and the undo acts on receipts, which are about cards already
+       * gone either way. See GROUP_KEY for why these two keys and not a digit. */
+      if (grouping && groupOffer !== null) {
+        if (key === 'enter') {
+          event.preventDefault()
+          answerGroup()
+          return
+        }
+        if (key === 'escape') {
+          event.preventDefault()
+          setGrouping(false)
+          return
+        }
+        return
+      }
+
+      /* Bound only while the offer stands, like C while the skip note is up — a key that
+       * does nothing most of the time is the opposite of what showing it is for. */
+      if (key === GROUP_KEY && groupOffer !== null) {
+        event.preventDefault()
+        setGrouping(true)
+        return
+      }
+
       if (current === null) return
 
       if (key === SKIP_KEY) {
@@ -1334,7 +1655,19 @@ export function ReviewQueue() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, answer, skip, clearSkips, allSkipped, reload, receipts, undo])
+  }, [
+    current,
+    answer,
+    skip,
+    clearSkips,
+    allSkipped,
+    reload,
+    receipts,
+    undo,
+    grouping,
+    groupOffer,
+    answerGroup,
+  ])
 
   const counts = useMemo(() => {
     if (rows === null) return null
@@ -1398,6 +1731,30 @@ export function ReviewQueue() {
               {counts.review} to review · {counts.parked} parked
             </span>
           )}
+          {/* THE LENS, NAMED WHERE THE COUNTS ARE, because the two are read together: a
+              16-card queue showing 3 cards is a puzzle until this span says why. The chips
+              that set the filter live on the Waiting heading beside the shape they filter;
+              this is only the reminder that one is on. */}
+          {reasonFilter === null ? null : (
+            <span className="review-count">showing only {reasonFilter}</span>
+          )}
+          {/* THE GROUP OFFER — drawn only while the (filtered) worklist qualifies, in the
+              controls row because it costs no height there and a control this consequential
+              must not be discoverable only below the photograph. Outlined, not filled: the
+              fill belongs to the confirm inside the state, where it is genuinely the only
+              thing to do. Pressing this writes nothing — it opens the photo-confirm state,
+              which is the confirmation, and the only one (docs/DESIGN.md bans a second). */}
+          {groupOffer === null || grouping ? null : (
+            <button
+              className="review-action"
+              type="button"
+              onClick={() => setGrouping(true)}
+              disabled={busy || loading}
+            >
+              <span>Answer all {groupOffer.rows.length} as a group</span>
+              <kbd className="review-key">{GROUP_KEY_LABEL}</kbd>
+            </button>
+          )}
         </div>
       </header>
 
@@ -1421,7 +1778,30 @@ export function ReviewQueue() {
       ) : null}
 
       {rows !== null && worklist.length === 0 ? (
-        <p className="review-note-text">Nothing is waiting. Every queued card has been answered.</p>
+        everyone.length === 0 ? (
+          <p className="review-note-text">
+            Nothing is waiting. Every queued card has been answered.
+          </p>
+        ) : (
+          /* The filter emptied the view, not the queue — reachable only with a lens on,
+             since an unfiltered worklist IS everyone. Cards are still waiting behind it,
+             so this states both facts and hands back the control that hid them. */
+          <div className="review-note">
+            <p className="review-note-text">
+              Nothing is waiting for this reason. {everyone.length} other{' '}
+              {everyone.length === 1 ? 'card is' : 'cards are'} still queued behind the
+              filter — nothing was written to them.
+            </p>
+            <button
+              className="review-action"
+              type="button"
+              onClick={() => setReasonFilter(null)}
+              disabled={busy || loading}
+            >
+              <span>Show every reason</span>
+            </button>
+          </div>
+        )
       ) : null}
 
       {/* The receipts, when there is no card to draw them inside — see `receiptPanel`.
@@ -1455,7 +1835,21 @@ export function ReviewQueue() {
         </div>
       ) : null}
 
-      {current === null ? null : (
+      {/* THE ONE EXCEPTION TO ONE-CARD-AT-A-TIME, in the card's own slot: the group state
+          replaces the card rather than floating over it, because it IS the screen while it
+          is up — the photographs it draws are the confirmation, and a card still answerable
+          underneath them would be two writes armed at once. */}
+      {current === null ? null : grouping && groupOffer !== null ? (
+        <GroupConfirm
+          offer={groupOffer}
+          activity={busy ? 'writing the answers' : loading ? 'rereading the queues' : null}
+          onConfirm={answerGroup}
+          onLeave={() => setGrouping(false)}
+          refusal={refusal}
+          onReload={reload}
+          receipts={receiptPanel}
+        />
+      ) : (
         <Card
           row={current}
           /* One prop rather than a boolean beside a string: the controls are disabled for
@@ -1472,8 +1866,15 @@ export function ReviewQueue() {
         />
       )}
 
-      {worklist.length === 0 ? null : (
-        <Waiting rows={worklist} currentKey={current?.key ?? null} deferred={deferred} />
+      {everyone.length === 0 ? null : (
+        <Waiting
+          rows={everyone}
+          currentKey={current?.key ?? null}
+          deferred={deferred}
+          filter={reasonFilter}
+          onFilter={setReasonFilter}
+          disabled={busy || loading}
+        />
       )}
     </main>
   )
@@ -1628,6 +2029,141 @@ function Receipts({
         </div>
       ))}
     </>
+  )
+}
+
+/* THE GROUP STATE — docs/DECISIONS.md's one narrow exception to one-card-at-a-time, drawn.
+ *
+ * "A GROUP WRITE STILL SHOWS THE PHOTOGRAPHS IT IS ABOUT TO ANSWER FOR" is the ruling's own
+ * condition and this grid is its discharge: every card the confirm will write is on screen,
+ * with its position label, before anything can be pressed. The photographs are smaller than
+ * the one-card view's — this is not the judging screen, and it must not pretend to be. The
+ * judgement a group answer rests on is the one already made about the SHARED fact (Gate B:
+ * sixteen normals reading as foil is one fact about the rig, not sixteen about cards), and
+ * a card that needs individual comparison fails eligibility and never reaches this screen.
+ * What the grid is for is the other failure: a stranger in the group — a photograph that
+ * plainly is not the same kind of thing as its neighbours — which a strip of thumbnails
+ * shows better than sixteen sequential full-screen views would.
+ *
+ * THE CONFIRM IS FILLED, AND IT IS THE FIRST AND ONLY FILL ON THIS SCREEN — decided against
+ * the stylesheet's own "nothing in this file is filled" note, which was written about the
+ * one-card flow and is updated beside the rule. docs/DESIGN.md reserves the solid fill for
+ * a screen with exactly one thing to do, names pull-confirm and mark-sold, and bans it from
+ * any screen with two answers because every way of choosing which answer to fill is biased.
+ * This state HAS exactly one thing to do, and not loosely: the eligibility conditions are
+ * precisely what reduce it to one — every card offers one row, of one kind, for one shared
+ * reason, so there is no second answer for a fill to be biased against. "Back" is not an
+ * answer, it is leaving the screen, exactly as the pull modal's way back does not unfill
+ * PullConfirm. A group state that could ever offer two answers loses the fill the same
+ * moment it loses its eligibility.
+ *
+ * NO SECOND CONFIRMATION ANYWHERE. This state IS the photo-confirm; pressing the fill
+ * writes, immediately. An "are you sure" on top of it is banned by the same docs/DESIGN.md
+ * rule that has always governed this screen — the photographs are what you are sure WITH.
+ */
+function GroupConfirm({
+  offer,
+  activity,
+  onConfirm,
+  onLeave,
+  refusal,
+  onReload,
+  receipts,
+}: {
+  offer: { rows: Row[]; reason: string; condition: string }
+  activity: string | null
+  onConfirm: () => void
+  onLeave: () => void
+  refusal: Refusal | null
+  onReload: () => void
+  receipts: ReactNode
+}) {
+  const busy = activity !== null
+
+  /* Keys whose photograph 404'd, kept per mount: the state is short-lived and re-entered
+   * from live rows, so a stale entry costs one absent tile until the next reload — the
+   * same trade `photoAbsent` makes, minus the single-card ambiguity it exists to solve. */
+  const [absent, setAbsent] = useState<ReadonlySet<string>>(new Set())
+
+  return (
+    <section className="review-group">
+      <div className="review-reason">
+        <p className="review-reason-label">{reasonLabel(offer.reason)}</p>
+        {/* The machine string and the size, greppable against review.json and the run
+            report exactly as the one-card view keeps it. */}
+        <p className="review-machine">
+          {offer.reason} · {offer.rows.length} cards
+        </p>
+      </div>
+
+      {/* The sentence: what one press does, and what it does not. The values are in the
+          utility face for the file's standing reason — a condition string set in prose has
+          stopped being greppable. */}
+      <p className="review-sentence">
+        Every card below offers exactly one row —{' '}
+        <span className="review-claim">{offer.condition}</span> — for the same reason. One
+        press answers each card with its own row; nothing is guessed and nothing is shared
+        between them.
+      </p>
+
+      <ul className="review-group-grid">
+        {offer.rows.map((row) => (
+          <li key={row.key} className="review-group-cell">
+            {row.entry.box < 1 || row.entry.photo === null || absent.has(row.key) ? (
+              /* The absent states collapse to one tile here — which of the three it is
+                 matters on the judging screen and is drawn there; on a strip whose job is
+                 "is anything in this group not like the others", a missing photograph is
+                 one fact, and it is exactly the kind of stranger the grid exists to shows. */
+              <span className="review-group-absent">no photo</span>
+            ) : (
+              <img
+                className="review-group-photo"
+                src={photoUrl(row.entry.box, row.entry.index)}
+                alt={`The card photographed at ${row.entry.label}`}
+                loading="lazy"
+                onError={() =>
+                  setAbsent((prev) => {
+                    const next = new Set(prev)
+                    next.add(row.key)
+                    return next
+                  })
+                }
+              />
+            )}
+            <span className="review-group-pos">{row.entry.label}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="review-actions">
+        <button
+          className="review-group-confirm"
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          <span>
+            Answer all {offer.rows.length} as {offer.condition}
+          </span>
+          <kbd className="review-key">Enter</kbd>
+        </button>
+        {/* Leaving writes nothing and forgets nothing — the cards are exactly where they
+            were, one at a time. Quiet by construction, like Skip: it must not look like an
+            answer. */}
+        <button className="review-action" type="button" onClick={onLeave} disabled={busy}>
+          <span>Back to one at a time</span>
+          <kbd className="review-key">Esc</kbd>
+        </button>
+        {activity === null ? null : <span className="review-busy">{activity}</span>}
+      </div>
+
+      {/* The same slot the one-card view gives them, for the same reasons: a refusal about
+          the press just made, then the receipts about cards already gone. */}
+      {refusal === null ? null : (
+        <RefusalPanel refusal={refusal} onReload={onReload} disabled={busy} />
+      )}
+      {receipts}
+    </section>
   )
 }
 
@@ -1959,11 +2495,20 @@ function Waiting({
   rows,
   currentKey,
   deferred,
+  filter,
+  onFilter,
+  disabled,
 }: {
   rows: Row[]
   currentKey: string | null
   /** In skip order, which is the order the tail of this list is in. */
   deferred: readonly string[]
+  /** The active reason lens, or null for every reason. The chips below set it, because the
+   *  shape line is where a queue's composition is read and "work one reason at a time" is a
+   *  decision made while reading it. */
+  filter: string | null
+  onFilter: (reason: string | null) => void
+  disabled: boolean
 }) {
   /* WHAT THIS QUEUE IS MADE OF, in the pipeline's own strings and in descending count. Gate B
    * is the argument: 16 of 53 cards queued and every one of them was
@@ -1992,12 +2537,38 @@ function Waiting({
         {/* The machine string with its count, biggest group first — `16
             metadata_detection_disagreement` in Gate B's case. The reason code and not its
             human label: this line is read against the worklist rows below it, which carry the
-            same string, and against the run report, which carries it again. */}
+            same string, and against the run report, which carries it again.
+
+            A BUTTON SINCE THE GROUP DECISION, because the shape line is where "work one
+            reason at a time" gets decided and the control belongs where the decision is
+            made. Pressing a chip narrows the screen to that reason; pressing it again — or
+            the every-reason chip that appears beside it — widens it back. The chip writes
+            nothing: the lens is this screen's, the files never hear about it. The ROWS
+            below stay unpressable — the no-navigation rule is about them, and a filtered
+            list is still an order, not a menu. */}
         {shape.map(([reason, n]) => (
-          <span className="review-waiting-shape" key={reason}>
+          <button
+            className="review-waiting-shape"
+            type="button"
+            key={reason}
+            aria-pressed={filter === reason}
+            onClick={() => onFilter(filter === reason ? null : reason)}
+            disabled={disabled}
+          >
             {n} {reason}
-          </span>
+          </button>
         ))}
+        {filter === null ? null : (
+          <button
+            className="review-waiting-shape"
+            type="button"
+            aria-pressed={false}
+            onClick={() => onFilter(null)}
+            disabled={disabled}
+          >
+            every reason
+          </button>
+        )}
       </h2>
       <ul className="review-waiting-list">
         {rows.map((row) => (
@@ -2006,6 +2577,11 @@ function Waiting({
             className="review-row"
             data-band={bandOf(row.entry.market)}
             data-parked={row.queue === 'parked' ? 'true' : undefined}
+            /* Behind the lens, not gone: hiding a waiting card would make the shape chips
+               lie about a queue the count line still sums, so it dims instead — the parked
+               treatment, for the same reason it works there: "not what you are working on"
+               is a fact about emphasis, never about existence. */
+            data-filtered-out={filter !== null && row.entry.reason !== filter ? 'true' : undefined}
             aria-current={row.key === currentKey ? 'true' : undefined}
           >
             {/* `title` because this cell ellipsises: a long name — `Wally's Compassion -

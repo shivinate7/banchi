@@ -10,13 +10,16 @@
  *      the price does, and a parked row is dimmed rather than merely lower.
  *   3. Accent has exactly two jobs. Outline and text weight where the system is unsure —
  *      the reason chip, and the two conflicting claims in the sentence, which is the common
- *      case here. Solid fill only where there is exactly one thing to do, WHICH IS NOWHERE
- *      ON THIS SCREEN: a card with candidate rows has two answers or more, and a card with
- *      none has zero, because `POST /review/<box>/<index>/answer` refuses a no-candidates
- *      entry as `no_candidates` — it needs a re-shoot or a re-identify, not an answer. This
- *      rule read the other way until the route was built, and told a later session to build
- *      a fill for an action the design refuses to offer. Nothing in this file is filled, and
- *      PullConfirm's fill stays the Fulfiller's loudest control.
+ *      case here. Solid fill only where there is exactly one thing to do, WHICH IS EXACTLY
+ *      ONE PLACE ON THIS SCREEN: the group state's confirm (.review-group-confirm), and
+ *      nowhere in the one-card flow. There, a card with candidate rows has two answers or
+ *      more, and a card with none has zero, because `POST /review/<box>/<index>/answer`
+ *      refuses a no-candidates entry as `no_candidates` — it needs a re-shoot or a
+ *      re-identify, not an answer. This rule read "nothing in this file is filled" until
+ *      the group state existed, and that sentence was true of the screen it described: the
+ *      group confirm earns the fill precisely because its eligibility rules reduce the
+ *      state to one action — the argument is at the rule, and at `GroupConfirm` in the
+ *      component. PullConfirm's fill stays the Fulfiller's loudest control.
  *   4. Mono carries all metadata. The body face is reserved for sentences a human reads,
  *      and this screen is mostly metadata, so the defaults below are inverted relative to
  *      PullPreview.css: dd is mono and the exception is marked.
@@ -673,16 +676,44 @@
    machine strings and are NOT uppercased here for the reason `.review-machine` gives: a code
    that reads one way on screen and another in review.json has to be translated before it can
    be grepped. So it opts out of the heading's own text-transform, which is the only thing
-   this rule really does — the size and the face are the heading's.
+   this rule originally did — the size and the face were the heading's, until the chip
+   became a button and buttons inherit neither.
 
    Ink rather than muted, and heavier: the heading says which list this is, and the shape is
    the thing worth reading on it. Gate B's queue was one reason sixteen times over, which is a
-   fact about the rig's lighting and was not visible anywhere on this screen. */
+   fact about the rig's lighting and was not visible anywhere on this screen.
+
+   A BUTTON NOW — the reason filter, "work one reason at a time". The border is transparent
+   at rest rather than absent, so pressing a chip cannot shift its neighbours by two pixels;
+   the pressed state is surface-on-ink-border, which is this file's outlined-control
+   vocabulary and not a fill — a filter is not the one thing to do. */
 .review-waiting-shape {
+  font-family: var(--util);
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: none;
   color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  cursor: pointer;
+}
+
+/* Border, not ground — see .review-reload. */
+.review-waiting-shape:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.review-waiting-shape[aria-pressed='true'] {
+  background: var(--surface);
+  border-color: var(--ink);
+}
+
+.review-waiting-shape:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .review-waiting-list {
@@ -785,12 +816,134 @@
   color: var(--muted);
 }
 
+/* Behind the reason lens: still waiting, not being worked. The parked treatment, extended
+   to the row's metadata line as well — a parked row's position still matters to the walk
+   order the list shows, while a filtered-out row is outside the walk entirely for as long
+   as the lens is on. Dimmed and never hidden; the component says why. */
+.review-row[data-filtered-out='true'] .review-row-name,
+.review-row[data-filtered-out='true'] .review-row-price,
+.review-row[data-filtered-out='true'] .review-row-position,
+.review-row[data-filtered-out='true'] .review-row-reason {
+  color: var(--muted);
+}
+
 /* The card being worked, marked in weight and ink on its metadata line rather than by a
    ground or an accent. A ground would need --hover, which is hover's alone; accent already
    has two jobs and "which row am I on" is neither. */
 .review-row[aria-current='true'] .review-row-position {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* ---- the group state ---- */
+
+/* The one exception to one-card-at-a-time, and it borrows the card's own rhythm: a flex
+   column at the card's gap, in the card's slot. See GroupConfirm in the component for what
+   this state is and is not — everything here is only its clothes. */
+.review-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+/* "A group write still shows the photographs it is about to answer for." Thumbnails, not
+   judging-size photographs — the grid's question is "is anything here not like the others",
+   and sixteen cards at 96px answer it on one screen where sixteen at 60vh answer it over
+   sixteen scrolls. auto-fill against a minimum, so Gate B's sixteen make three rows at this
+   column's width and a 45-card group still fits without a rule change. */
+.review-group-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--s3);
+  width: 100%;
+}
+
+.review-group-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.review-group-photo {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+
+/* A photograph that is not there, holding the cell so the grid does not reflow around the
+   gap — the reserved-frame instinct at thumbnail scale. aspect-ratio rather than a fixed
+   height because the cells are fluid; 63/88 is the card. */
+.review-group-absent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 63 / 88;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* The position under each photograph, because the grid's photographs are the write's whole
+   manifest: a tile you can point at has to name the slot it is about. */
+.review-group-pos {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* THE FILL, AND THE ONLY ONE IN THIS FILE. The file header carries the argument; the short
+   form is that this state's eligibility rules reduce it to exactly one action, which is the
+   condition docs/DESIGN.md reserves the solid accent for — the same spec as PullConfirm's
+   default and pressed states, drawn from the same tokens. The key chip inside it moves to
+   on-accent for the same reason the label does: --muted on --accent is not a legible pair
+   and was never asked to be. */
+.review-group-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r);
+  min-height: 44px;
+  padding: var(--s2) var(--s4);
+  cursor: pointer;
+}
+
+.review-group-confirm:active:not(:disabled) {
+  background: var(--pressed);
+}
+
+/* Disabled while the write is in flight: PullConfirm's disabled spec, because it is the
+   same control family — surface, hairline, muted — rather than a dimmed fill that still
+   reads as pressable. */
+.review-group-confirm:disabled {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  cursor: not-allowed;
+}
+
+.review-group-confirm .review-key {
+  color: var(--on-accent);
+  border-color: var(--on-accent);
+}
+
+.review-group-confirm:disabled .review-key {
+  color: var(--muted);
+  border-color: var(--line);
 }
 
 /* ---- focus ---- */
@@ -801,7 +954,9 @@
    user tabbing through candidates is not being told anything of the kind. */
 .review-reload:focus-visible,
 .review-candidate:focus-visible,
-.review-action:focus-visible {
+.review-action:focus-visible,
+.review-waiting-shape:focus-visible,
+.review-group-confirm:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
