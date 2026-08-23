@@ -4,6 +4,8 @@ import type { FormEvent } from 'react'
 import type { CardSummary, Finish, FinishClaim } from './types'
 import { ServerError, capture, getStatus, newCaptureId, photoUrl, undoCapture } from './server'
 import { manualTrigger } from './trigger'
+import { motionTrigger } from './motion'
+import type { MotionDiagnostics } from './motion'
 import { useCamera } from './useCamera'
 import { CameraPicker } from './CameraPicker'
 import { PullConfirm } from './PullConfirm'
@@ -21,8 +23,8 @@ import './CaptureScreen.css'
  * in-flight guard, the halt state and the disabled control below all serve that one rule.
  */
 
-// The trigger seam (spec section 6). Gate B fires on a key and a button; at Gate C the
-// motion state machine drops into this same slot and this screen does not change.
+// The trigger seam (spec section 6). Gate B fired on this key and button; the motion
+// machine (Gate C, src/motion.ts) sits in the same slot behind the mode toggle below.
 //
 // 'c' rather than Space or Enter, which are the obvious rig keys and lost for a specific
 // reason: both activate whatever button currently has focus. Click Undo with the mouse and
@@ -192,6 +194,42 @@ export function CaptureScreen() {
   // answers `created: false` — see the capture path below for why that is the payoff of
   // holding the capture id rather than a curiosity.
   const [replayed, setReplayed] = useState<string | null>(null)
+
+  /* Which trigger is behind the seam. SESSION-ONLY, never persisted — deliberately unlike
+   * the camera choice and the rotation chip, both remembered per device. A remembered
+   * camera cannot take a photo on its own; a remembered MOTION mode arms an automatic
+   * shutter on page load, pointed at whatever happens to be in front of the lens, with
+   * nobody having asked for it this session. Arming the trigger is starting the run, so it
+   * is an act, not a setting. */
+  const [triggerMode, setTriggerMode] = useState<'manual' | 'motion'>('manual')
+
+  // The machine's own counters and live signal, for the HUD. Null until the first frame
+  // reaches the machine, which is also the "is it actually seeing anything" indicator.
+  const [motionDiag, setMotionDiag] = useState<MotionDiagnostics | null>(null)
+
+  /* Fires the SCREEN declined, by reason. The trigger's own suppressions (same card, empty
+   * stand) live in the machine's counters; these are the seam's other half — the trigger
+   * fired and the screen's guards ate it. Under a key that silence is fine, because the
+   * finger that pressed is attached to someone watching the screen. Under a feeder it is
+   * spec 5.5's exact failure: every entry here is a card that may have passed the lens
+   * unrecorded, so the count is rendered loudly rather than kept as a curiosity. */
+  const [swallowed, setSwallowed] = useState<{
+    busy: number
+    halted: number
+    noBox: number
+    notReady: number
+    held: number
+  }>({ busy: 0, halted: 0, noBox: 0, notReady: 0, held: 0 })
+
+  /* A mode change starts a fresh accounting period. Arming builds a fresh machine, so a
+   * HUD still showing the dead session's counters would render numbers no live machine
+   * owns — and the swallowed counts belong to the run that swallowed them, not to the
+   * session. Both zero together or the two halves of the readout desynchronise. */
+  const switchTrigger = useCallback((mode: 'manual' | 'motion') => {
+    setTriggerMode(mode)
+    setMotionDiag(null)
+    setSwallowed({ busy: 0, halted: 0, noBox: 0, notReady: 0, held: 0 })
+  }, [])
 
   // Read synchronously inside the capture path. React state cannot serve here: two fires in
   // one tick — a key repeat, or a focused button activated by the same press — would both
@@ -407,24 +445,69 @@ export function CaptureScreen() {
     }
   }, [undoTarget])
 
-  // Only the first of these is the seam Gate C replaces: the motion state machine becomes
-  // another capture trigger and this screen does not change. Undo is on the same primitive
-  // for its guards rather than for its future — auto-repeat, held modifiers and keys typed
-  // into an input are all decided once, in one module, instead of in a second window
-  // listener here that would have to be kept in step with it. Undo stays manual forever.
-  const captureTrigger = useMemo(() => manualTrigger(CAPTURE_KEY), [])
+  /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
+   * motion trigger is Gate C's, and the screen still does not know which one is armed —
+   * it renders `captureTrigger.name` and fires whatever calls back. Undo is on the manual
+   * primitive for its guards rather than for its future — auto-repeat, held modifiers and
+   * keys typed into an input are all decided once, in one module, instead of in a second
+   * window listener here that would have to be kept in step with it. Undo stays manual
+   * forever: an automatic anything must never reach a control that hard-deletes. */
+  const keyTrigger = useMemo(() => manualTrigger(CAPTURE_KEY), [])
+  const machineTrigger = useMemo(
+    // `camera.videoRef` is a stable ref object, so this is built once; each arm builds a
+    // fresh machine, so counters restart when the mode is toggled — which reads correctly,
+    // because toggling into motion is starting a run.
+    () => motionTrigger(camera.videoRef, setMotionDiag),
+    [camera.videoRef],
+  )
+  const captureTrigger = triggerMode === 'motion' ? machineTrigger : keyTrigger
   const undoTrigger = useMemo(() => manualTrigger(UNDO_KEY), [])
 
-  // Both triggers arm once and dispatch through a ref. Re-arming whenever the closure
-  // changes would work today — a keydown listener costs nothing to re-add — and would be
-  // wrong at Gate C, where the thing behind the capture seam holds phase (motion, stabilize,
-  // capture, cooldown). Tearing that down on every keystroke in the set hint field would
-  // reset the state machine mid-card.
+  /* Triggers arm once per identity and dispatch through a ref. Re-arming whenever the
+   * closure changes would tear the motion machine down on every keystroke in the set hint
+   * field and reset it mid-card — the exact failure the ref indirection was built against,
+   * back when the machine was still hypothetical. A MODE CHANGE is the one legitimate
+   * teardown moment, and it is exactly when `captureTrigger`'s identity changes, so the
+   * effect's dependency does the right thing in both directions. */
   const fireCaptureRef = useRef<() => void>(() => {})
   const fireUndoRef = useRef<() => void>(() => {})
   useEffect(() => {
-    fireCaptureRef.current = () => void doCapture()
-  }, [doCapture])
+    fireCaptureRef.current = () => {
+      /* In motion mode a declined fire is COUNTED, not just dropped. `doCapture` keeps its
+       * own guards (they are the authority and other callers rely on them); this wrapper
+       * reads the same conditions first so the drop leaves a number behind. Under a feeder
+       * that keeps delivering, each of these is a card that may have passed the lens with
+       * no record — spec 5.5's failure — and the halt banner below renders the `halted`
+       * count as exactly that sentence. */
+      if (triggerMode === 'motion') {
+        /* `held` is the replay guard meeting the machine, and it MUST come before the
+         * ordinary guards: while captureIdRef holds the id of a photograph the server may
+         * already have committed, the next capture will be sent under THAT id — and on a
+         * replay the server ignores the image entirely. A machine fire here would send
+         * the NEXT card's frame under the halted card's id: the server answers with card
+         * A's position, the screen says "already recorded", and card B passes the lens
+         * with no record while the UI reports it handled. So resolving a held id is
+         * human-only — the banner says to press the button — and the machine's fires are
+         * counted against `held` until it clears. */
+        const reason = busyRef.current
+          ? ('busy' as const)
+          : halt !== null
+            ? ('halted' as const)
+            : captureIdRef.current !== null
+              ? ('held' as const)
+              : box === null
+                ? ('noBox' as const)
+                : !camera.ready
+                  ? ('notReady' as const)
+                  : null
+        if (reason !== null) {
+          setSwallowed((prev) => ({ ...prev, [reason]: prev[reason] + 1 }))
+          return
+        }
+      }
+      void doCapture()
+    }
+  }, [box, camera.ready, doCapture, halt, triggerMode])
   useEffect(() => {
     fireUndoRef.current = () => void doUndo()
   }, [doUndo])
@@ -636,6 +719,29 @@ export function CaptureScreen() {
               docs/DESIGN.md, owner-side, so what you saw on screen is greppable across the
               app and the server log. */}
           {halt.code === null ? null : <p className="capture-halt-code">{halt.code}</p>}
+          {/* Spec 5.5's sentence, for the one situation where a halt is not enough on its
+              own: a machine trigger with a feeder still delivering. Each of these fires is
+              a card the trigger saw and the screen refused, and physically it may be in
+              the box by now with no photo and no position. The count is what turns "the
+              run was paused for a bit" into "go check the last N cards", which is the
+              difference between a pause and a loss. */}
+          {triggerMode === 'motion' && swallowed.halted > 0 ? (
+            <p className="capture-halt-message">
+              The motion trigger fired{' '}
+              <span className="capture-inline-label">{swallowed.halted}</span>{' '}
+              {swallowed.halted === 1 ? 'time' : 'times'} while captures were paused. If the
+              feeder kept moving, that many cards may have passed the lens unrecorded — set
+              them aside and re-feed them after you resume.
+            </p>
+          ) : null}
+          {triggerMode === 'motion' && halt.where === 'server' ? (
+            <p className="capture-halt-message">
+              After you resume, capture the held card with the button yourself. The machine
+              will not re-present a card it has already fired on, and the paused
+              photograph's id must go back with the same card — not with whatever the
+              feeder delivers next.
+            </p>
+          ) : null}
           {/* The fill moves here while the run is stopped: the capture control renders
               disabled, so there is again exactly one thing to do, which is what
               docs/DESIGN.md reserves the solid accent for. No key hint — an explicit
@@ -645,6 +751,10 @@ export function CaptureScreen() {
             label="Resume captures"
             onConfirm={() => {
               setHalt(null)
+              /* This pause's swallowed-fire count has been read and acted on — the banner
+               * told the operator how many cards to set aside. Carrying it into the next
+               * pause would tell them to re-feed cards they already re-fed. */
+              setSwallowed((prev) => ({ ...prev, halted: 0 }))
               /* Ask the server where the box actually is. The local high-water mark is a
                * guess from the moment a capture fails: the request may have committed and
                * lost its response, in which case this box's next index moved and nothing on
@@ -684,15 +794,78 @@ export function CaptureScreen() {
           </div>
           <div className="capture-controls">
             <CameraPicker camera={camera} />
+
+            {/* The trigger, chosen the way the finish is chosen: chips, aria-pressed, no
+                dialog. Toggling out of motion is the disarm — reversible in one tap, so per
+                docs/DESIGN.md it gets no confirmation. The answer to "how do I know it is
+                on" is threefold and all three are below this line: the pressed chip, the
+                machine string, and a HUD that only exists while the machine is watching. */}
+            <section className="capture-field">
+              <p className="capture-field-name">Trigger</p>
+              <div className="capture-boxes">
+                <button
+                  type="button"
+                  className="capture-chip"
+                  aria-pressed={triggerMode === 'manual'}
+                  onClick={() => switchTrigger('manual')}
+                >
+                  <span className="capture-chip-value">key</span>
+                  <span className="capture-chip-note">press {CAPTURE_KEY_LABEL}</span>
+                </button>
+                <button
+                  type="button"
+                  className="capture-chip"
+                  aria-pressed={triggerMode === 'motion'}
+                  onClick={() => switchTrigger('motion')}
+                >
+                  <span className="capture-chip-value">motion</span>
+                  <span className="capture-chip-note">fires itself</span>
+                </button>
+              </div>
+            </section>
+
             <PullConfirm
               label="Capture card"
               onConfirm={() => void doCapture()}
               disabled={!canCapture}
-              keyHint={CAPTURE_KEY_LABEL}
+              // In motion mode the C key is genuinely disarmed — the seam holds one trigger
+              // at a time — so advertising it would be a chip for a key that does nothing.
+              // The button itself stays live in both modes: a manual fire past a hesitant
+              // machine is an override, not a mode.
+              keyHint={triggerMode === 'manual' ? CAPTURE_KEY_LABEL : undefined}
             />
-            {/* Which trigger is armed, as the machine string it calls itself. One span, and
-                at Gate C it reads `motion` instead without this screen changing. */}
+            {/* Which trigger is armed, as the machine string it calls itself — `manual:C`
+                or `motion`. The line trigger.ts promised would answer this question. */}
             <p className="capture-trigger">{captureTrigger.name}</p>
+
+            {/* The machine's own vitals, only while it is the armed trigger. `d` is the
+                live frame-difference every threshold in motion.ts is set against, on
+                screen so the rig session TUNES against a number it can see: an empty
+                still scene should read well under 1, a card swap should spike past 6.
+                Mono, uppercase-free machine words — this is metadata, owner-side. */}
+            {triggerMode !== 'motion' ? null : motionDiag === null ? (
+              <p className="capture-quiet">
+                Motion is armed but no frame has reached it yet. Open a camera and the
+                readout appears here.
+              </p>
+            ) : (
+              <p className="capture-motion-hud">
+                <span>{motionDiag.phase}</span>
+                <span>d {motionDiag.d.toFixed(2)}</span>
+                <span>luma {Math.round(motionDiag.luma)}</span>
+                <span>fires {motionDiag.fires}</span>
+                <span>same {motionDiag.suppressedUnchanged}</span>
+                <span>empty {motionDiag.suppressedNoCard}</span>
+                <span>stall {motionDiag.stalled}</span>
+                {swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held ===
+                0 ? null : (
+                  <span className="capture-refused">
+                    dropped{' '}
+                    {swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held}
+                  </span>
+                )}
+              </p>
+            )}
             {blocked === null ? null : <p className="capture-quiet">{blocked}</p>}
             {/* The one thing the retry guard is for, said out loud. It appears only after a
                 resume, and it is the answer to the question the halt could not settle: the

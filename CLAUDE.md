@@ -38,7 +38,13 @@ make check          # harness + docs-audit + lint + typecheck — no stubs left 
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
   `claude-haiku-4-5-20251001`.
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
-- **Not a Claude artifact**: no `window.storage`, no `localStorage`, no
+- **Not a Claude artifact**: no `window.storage`, no `facingMode: "environment"`, and
+  nothing about a card or the inventory in `localStorage`. Inventory state is server-side
+  JSON; camera uses a device picker. Two devices share one truth. **The one exception is
+  `app/src/useCamera.ts`**, which keeps two facts about THIS rig in `localStorage` — the
+  chosen camera's `deviceId` and the capture rotation. Both are device-local by nature and
+  would be wrong if shared; neither is inventory. Nothing lints this, so the argument lives
+  in the comments beside the two keys.
   `facingMode: "environment"`. Inventory state is server-side JSON; camera uses a
   device picker. Two devices share one truth.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
@@ -70,6 +76,15 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   settled; if you want to reopen one, say which entry and why, and wait for me.
 - Report format: result first, then files touched, then risks. No task restatement, no
   summary of what I asked for.
+- **Design work is repo work.** A design, a parameter derivation, or a determination that
+  exists only in the conversation is NOT done — it lands in `docs/specs/` or a decision
+  entry in the same session that produced it, or it is declared abandoned. The session
+  that designed the motion trigger spent its tokens twice because the design lived in
+  chat while the repo still said "not built, not specified"; this rule is that session's
+  receipt. Corollary: **every wrap-up states what is BUILT, what is RECORDED, and what is
+  NEITHER** — the same specified/built/validated vocabulary the gates already use, applied
+  to the report itself. "Solved" with no bucket named is the phrasing this repo does not
+  accept.
 - When compacting: preserve the fixture schema facts, every `make` command, the current
   gate, and the list of modified files. Drop exploration narration.
 
@@ -98,6 +113,10 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   **Two things are still unexercised and its STATUS section names them**: the Fulfillment
   view against a real order, and the review screen's price-banded hierarchy against a
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
+- `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested
+  2026-08-22, thresholds derived from Gate B's measurements and NOT yet tuned at the rig.
+  Its §4 is the rig-tuning protocol; D19 is the decision. Read its STATUS before treating
+  a green `make design-check` as evidence about the feeder.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

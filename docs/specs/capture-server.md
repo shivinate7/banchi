@@ -34,7 +34,18 @@ this session does not fix that.** Verified: no module under `harness/tests/` imp
 `store` or `cli`. That is 2,509 lines, about 40% of product code, including the package
 the capture server writes through. The mitigation is honesty, not coverage: the capture
 server says so in its own module docstring, and `docs/map.py` stops implying otherwise
-(section 3.2). Do not add a harness test for the server in this plan, and do not register
+Leave lines 37-38 exactly as they are. Insert a blank line and this blockquote after line 38, before "### 0.3":
+
+> **Status, 2026-08-13:** T7 exists and is registered, and it reaches `store/`, `server/`
+> and `cli/` — added through exactly the process the batch-script spec's §11 demands:
+> argued first, the contract in `docs/GATES.md` amended, every published count reconciled
+> in the same commit. All three references in the paragraph above have since moved. D16's
+> paragraph was reworded to make its argument without naming a number, so it no longer
+> rejects the id by name; the allowlist line that recorded why self-cleaned away the day
+> the name came true, which is precisely what that mechanism is for; and
+> `server/capture_server.py` now says T7 reaches it, where the docstring this paragraph
+> cites once said the opposite. The instruction is left standing as the record of what
+> this session was told.
 T7 — D16 rejected that id by name and `scripts/docs-audit-allow.txt` records why.
 
 ### 0.3 — Writing docs in this repo without blocking your own commit

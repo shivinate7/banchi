@@ -94,13 +94,31 @@ BUILD_ORDER = [
              "53/53 identified once the frames were stored upright, joined, emitted, staged on "
              "TCGplayer through two clean reconcile round trips, and the pull preview showed "
              "the right photo at the right physical location. Six defects were found by the run "
-             "and fixed with regression tests the same day — the Batch API custom_id refusal, "
+             "and fixed the same day — the Batch API custom_id refusal, "
              "the capture canvas leak, the idle-scheduled JPEG encoder, the cross-queue "
              "release leak, review answers that nothing consumed, and the post-import re-emit "
-             "double-count. docs/GATES.md's Gate B section carries the run's measurements."},
-    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "next",
-     "note": "unblocked 2026-08-22 when Gate B passed."},
-    {"step": 10, "title": "Feeder integration", "status": "blocked", "blocked_by": "Gate C"},
+             "double-count. THREE OF THE SIX CARRY A REGRESSION TEST, each observed failing "
+             "against the old code before the fix was restored: the cross-queue release leak "
+             "in T7, and the last two in T3. The other three carry none, and the reason is "
+             "structural rather than an oversight — _custom_id lives in cli/cmd_identify.py "
+             "and no harness case names it, and the two capture-latency fixes are in app/, "
+             "which no harness test reaches at all (this file's app/ entry says so in its own "
+             "note). docs/GATES.md's Gate B section carries the run's measurements."},
+    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked",
+     "blocked_by": "Gate C",
+     "note": "unblocked 2026-08-22 when Gate B passed, and RE-SEQUENCED BEHIND GATE C the same "
+             "day by the owner: motion capture end to end before any other work. Nothing in "
+             "this step conflicts with that — it touches no app code — but one `next` is the "
+             "rule, and the owner chose which."},
+    {"step": 10, "title": "Feeder integration (Gate C)", "status": "next",
+     "note": "THIS STEP IS GATE C — its old `blocked_by: Gate C` named the gate that IS this "
+             "work, a circularity that was harmless while Gate B was open and stopped being "
+             "so when it passed. Moved to `next` 2026-08-22 at the owner's instruction. "
+             "Partly BUILT the same day: the motion trigger exists (app/src/motion.ts behind "
+             "trigger.ts's seam, a mode toggle and HUD on the capture screen, machine spec + "
+             "live browser spec in app/tests). What remains is physical and cannot be built: "
+             "tune the thresholds at the rig against the real feeder, the 50-card run, then "
+             "a full box. docs/specs/motion-trigger.md is the spec."},
     {"step": 11, "title": "pokemontcg.io API key", "status": "done", "note": "done 2026-08-03; step 9 removes the need for it."},
     {"step": 12, "title": "Scale, polish, deferred list", "status": "blocked", "blocked_by": "all gates"},
 ]
@@ -216,9 +234,12 @@ COMPONENTS = [
         "does": "the master store: inventory, cache, standing queues",
         "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
-                "the atomic replace. queues.py and cache.py are read through a session "
-                "there but nothing asserts their behaviour, so they carry no tested_by: an "
-                "unenforced claim is the defect docs/DEBTS.md names, not a rounding error.",
+                "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
+                "outright: check_queue_supersede calls it directly rather than watching it "
+                "through a route, which is what earned queues.py its tested_by. cache.py is "
+                "still only read through a session there, with nothing asserting its own "
+                "behaviour, so it carries no tested_by: an unenforced claim is the defect "
+                "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
                           "governed_by": ["D7", "D10"], "tested_by": ["T7"]},
@@ -606,9 +627,18 @@ COMPONENTS = [
                                              "ImageBitmaps by useCamera's grabFrameJpeg",
                                      "governed_by": ["D13"]},
             "src/trigger.ts": {"does": "the trigger seam: whatever fires a capture, behind one "
-                                       "interface. Manual today; Gate C's motion state machine "
-                                       "drops into the same slot.",
+                                       "interface. Two implementations now — the key, and "
+                                       "src/motion.ts — and the screen still cannot tell "
+                                       "which is armed except by the name it renders.",
                                "governed_by": ["D13"]},
+            "src/motion.ts": {"does": "Gate C's auto-capture: a pure MotionMachine (settle, "
+                                      "novelty, card-present luma, deferring refractory) under "
+                                      "a thin DOM sampler that feeds it one 64x36 luma grid per "
+                                      "decoded frame. Parameters derived from Gate B's measured "
+                                      "cadence and SNR — see docs/specs/motion-trigger.md. "
+                                      "BUILT 2026-08-22; thresholds are rig-tunable constants "
+                                      "and the rig has not yet tuned them.",
+                              "governed_by": ["D13", "D19"]},
 
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen: live camera left, last capture "
@@ -622,9 +652,13 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5"]},
-            "src/CameraPicker.tsx": {"does": "the device picker, and the resolution the track "
+            "src/CameraPicker.tsx": {"does": "the device picker, the resolution the track "
                                              "actually negotiated — shown so a short stream is "
-                                             "caught before a box is shot through it",
+                                             "caught before a box is shot through it — and the "
+                                             "photo-rotation chips that turn the stored frame "
+                                             "upright under a side-mounted camera: Gate B misread "
+                                             "45 of 53 sideways cards and read 53/53 once they "
+                                             "were stored upright.",
                                      "governed_by": ["D13"]},
             "src/CameraPicker.css": {"does": "its layout. No panel and no header strip, per "
                                              "docs/DESIGN.md.",
@@ -657,7 +691,9 @@ COMPONENTS = [
                 "does": "its layout, and the price-driven type scale that makes the sort "
                         "visible — name size and price size stepping down together, parked "
                         "rows dimmed. Accent outlined, never filled, wherever there are two "
-                        "answers. The bands are a guess at a distribution nobody has measured.",
+                        "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
+                        "to end, so every queue row landed in one band and no mixed-value lot "
+                        "has tested an edge.",
                 "governed_by": ["D5", "D9", "D13"],
             },
             "src/Inventory.tsx": {
@@ -706,6 +742,28 @@ COMPONENTS = [
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
                 "governed_by": ["D13", "D16", "D18"],
+            },
+            "tests/motion.spec.ts": {
+                "does": "the MotionMachine against synthetic frame sequences with an exact "
+                        "answer key: settle fires once, the novelty gate refuses the same "
+                        "card, an empty stand is suppressed, a jam stalls without firing, "
+                        "the refractory defers instead of dropping, and a reused mutated "
+                        "buffer cannot zero the diff. Run by `make design-check`.",
+                "governed_by": ["D19"],
+                "note": "NOT a harness test, same as its siblings. Pure arithmetic — no page, "
+                        "no server: the machine takes (nowMs, cells) and that is the whole "
+                        "reason it is a class apart from the DOM wrapper.",
+            },
+            "tests/motion-live.spec.ts": {
+                "does": "the DOM half in a real browser against the real capture screen: the "
+                        "mode toggle arms the machine, a canvas stream stands in for the Cam "
+                        "Link, a settle becomes a fire, and a fire with no box selected is "
+                        "COUNTED as dropped rather than silently eaten. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D5", "D13", "D19"],
+                "note": "No box is ever selected in this spec, deliberately: with one, the "
+                        "fire would POST /capture into a real store. The dropped counter IS "
+                        "the assertion.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "

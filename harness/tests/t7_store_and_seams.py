@@ -71,9 +71,14 @@ that a logged event is discarded when the write it rides in raises.
 
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
-after. Every queue entry they have ever been handed was hand-built — by the harness below,
-or by hand in a browser — so what is asserted here is that the routes behave as
-`docs/DESIGN.md` describes, NOT that a real run produces entries of this shape. A green T7
+after. Every queue entry these cases assert against is still hand-built — by the harness
+below, or by hand in a browser — so what is asserted here is that the routes behave as
+`docs/DESIGN.md` describes, not that a run produces entries of that shape. Half of that
+closed on 2026-08-22: Gate B put 16 real entries in front of them — the queue read
+served them, the owner answered every one through the answer route, and the shape
+survived contact, same keys and same candidate rows. What it did not do is widen the
+range. All 16 were `metadata_detection_disagreement`, so for the other eleven reason
+codes nothing has reached these routes but a fixture. A green T7
 says the same thing about 7b that a green T6 says about geometry: it is self-consistent.
 """
 
@@ -283,8 +288,9 @@ def answers(checks: Checks, fn, label: str):
 def check_allocator(checks: Checks) -> None:
     """The seventeen cases `docs/DEBTS.md` enumerates, plus the coercion that caused them.
 
-    `allocate_capture` is the one piece of step-5 logic Gate B exercises twenty times in a
-    row, and it is the only place in the project that decides where a physical card is.
+    `allocate_capture` is the one piece of step-5 logic Gate B exercised 53 times in a
+    row on 2026-08-22, and it is the only place in the project that decides where a physical
+    card is.
     """
     checks.note("")
     checks.note("ALLOCATOR — store/master.py")
@@ -1619,7 +1625,9 @@ def check_mark_sold(checks: Checks) -> None:
         # ASSUMPTION, asserted so a later change to it is visible rather than silent.
         # Neither docs/DESIGN.md nor D10 says which states may be sold from, and the route
         # is permissive: refusing a card that was never pushed would leave a person holding
-        # a card he has genuinely sold with no way to record it. Gate B settles it.
+                # a card he has genuinely sold with no way to record it. Gate B was supposed to
+        # settle it and did not — it passed 2026-08-22 with no order pulled and nothing
+        # ever marked sold, so the assumption stands. The first real order pull settles it.
         never_listed = capture_server.do_mark_sold(3, 3, {})
         checks.equal(
             never_listed["restores_to"],

@@ -149,7 +149,10 @@ a rule broken into a rule broken for something.
 
 This spec covers all of build-order step 7. It was written as a 7a spec and grew to cover
 both passes when 7b was built the same day; the two are still named separately below because
-they were built and reviewed separately, and because Gate B exercises only the first.
+they were built and reviewed separately, and because Gate B's pass criteria walk only the
+first. That second reason was written as a claim about the whole run, and the run overtook
+it: on 2026-08-22 Gate B also drove 7b's review queue and its answer route, for all 16
+queued cards.
 
 **7a — the Gate B path.** The app shell, the capture screen, undo, the pull preview, and one
 new server route. This is the chain the gate walks: capture, server save, batch script, join,
@@ -163,6 +166,14 @@ scheduled after the gate so that it would be built against a real run rather tha
 guesses about what one produces — the review queue especially, since it is the screen
 `docs/DESIGN.md` specifies in most detail and its *inputs* are guesses until a run exists. At
 T1's committed holdout accuracy a twenty-card run should produce close to zero review items,
+so 7b is not needed to pass the gate. It was built early anyway and that call is settled.
+**The prediction was scored at Gate B and was wrong, in a way T1 structurally could not have
+warned about**: identification came back 53/53, and 16 of 53 cards queued all the same —
+every one `metadata_detection_disagreement` out of finish detection, which is the blind spot
+`docs/GATES.md` records against T1. The conclusion outlived its premise rather than being
+confirmed by it: all 16 parked, and a parked card does not suppress output (T3), so the gate
+could have passed with the queue never opened — but the owner answered every one through 7b's
+answer route, and the defect that path exposed is now rung 0 of the ladder. The
 so 7b is not needed to pass the gate. It was built early anyway and that call is settled. The
 consequence did not go away with the schedule: §10.2 is where the gate replaces those guesses
 with numbers.
@@ -498,6 +509,10 @@ contract can be benchmarks, never components.
 - **Frame the card to fill the field.** The single largest lever on identification accuracy
   available at capture time, per the table above, and it costs nothing but rig setup.
 - **Glare on the number corner is unrecoverable at any resolution.** Gate B's raking-light
+  shot was never taken — finish detection was measured across all 53 cards under the one rig
+  lighting instead — so the number corner under raking light is still unmeasured. Check it
+  whenever a second lighting run happens, which `docs/DEBTS.md`'s border-search entry wants
+  for its own reasons.
   shot is currently aimed at foil detection; check the number corner in the same pass.
 - **Request the resolution explicitly.** A browser video track defaults far below what the
   Cam Link can deliver — a 640x480 default would put the frame *under* the 1568px target and
@@ -545,8 +560,17 @@ list, which is exactly how `docs/GATES.md` lost and regained a CSV-import line.
 
 **Everything else here still binds, and none of it was touched:**
 
-No auto-capture, no motion state machine, no video frame extraction — that is Gate C, and
-section 6 is the seam that keeps it cheap. No identification, pricing, joining or CSV work of
+The auto-capture ban is gone as of 2026-08-22 — a prohibition left standing over shipped
+code reads as a defect report, the same reason the 7b ban above came down. This list read
+"no auto-capture, no motion state machine, no video frame extraction" from the day it was
+written, and the reason was Gate B's: a gate testing the pipeline and an untuned trigger at
+once cannot say which failed. Gate B passed on the manual trigger, Gate C became current,
+and the owner ordered motion capture built end to end the same day. The motion state
+machine now exists behind section 6's seam (`app/src/motion.ts`, spec at
+`docs/specs/motion-trigger.md`, decision at D19). Video frame extraction stays unbuilt —
+not banned, rejected: D19 records why it lost as a capture path.
+
+Still binding, untouched: no identification, pricing, joining or CSV work of
 any kind in the app: the four commands own all of it, and the app reads state rather than
 setting it. No second store in the browser. No auth, no login, no TLS. No renumbering,
 compaction or gap-filling, ever.
@@ -584,7 +608,16 @@ why they belong on a checklist rather than in someone's memory.
 The shakedown is also the evidence that the front of the chain works. Eight contiguous
 positions, every sidecar readable, and `./pkmnscan identify --dry-run` over them reporting
 `photographs 8 / payload 1.5 MB in 1 batch chunk / estimated cost $0.01` — so the scan, the
+MATCH (exactly lines 587–588, both lines including the newline between them):
+
 1568px downscale and the batch assembly all ran against real 4K JPEGs. What has never run is
+everything after the API call.
+
+REPLACE WITH:
+
+1568px downscale and the batch assembly all ran against real 4K JPEGs. Everything after the
+API call was still unrun when this was written; it ran two days later, on 53 cards — see
+`docs/GATES.md`'s Gate B section.
 everything after the API call.
 
 - **Clean HDMI output ON at the camera.** The shakedown frames carry the camera's own
