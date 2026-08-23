@@ -524,7 +524,11 @@ COMPONENTS = [
     {
         "path": "app/",
         "status": "built",
-        "step": 7,
+        # step 7 built this directory and is done; 10 is the step still working in it —
+        # the motion trigger's constants are tuned here (src/motion.ts) even though the
+        # rest of Gate C is physical. scripts/status.py resolves "do this next" through
+        # this field, and without it step 10 printed as claimed by nobody.
+        "step": 10,
         "does": "the web app. Six routes behind a hand-written hash router, five of them the "
                 "owner's — the capture screen that Gate B runs on, the review queue, the "
                 "inventory SKU view, the pull preview and step 6's component gallery — and one "
