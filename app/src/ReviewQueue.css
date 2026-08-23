@@ -67,11 +67,22 @@
    and a Cam Link capture is a 16:9 frame with the card somewhere inside it (D13), which is a
    different shape under the same cap. */
 .review {
-  padding: var(--s5) var(--s6);
+  /* 16px, which is the top of the owner's end of the spacing scale and the page-chrome floor
+     docs/DESIGN.md now states outright. It was 24/32 — the Fulfiller's end of the same scale,
+     on the screen whose own file header argues that every pixel of chrome pushes the candidate
+     rows further below the fold. Nothing about this screen ever asked for his density; it was
+     inherited from nowhere in particular. */
+  padding: var(--s4);
   /* One column, and narrow enough that the sentence does not run to newspaper measure.
      Everything on this screen stacks inside it — photo, finding, candidates, worklist — so
-     a phone gets the same order with no rules to switch off. */
-  max-width: 720px;
+     a phone gets the same order with no rules to switch off.
+
+     688 RATHER THAN 720, WHICH IS THE SAME COLUMN AND NOT A NARROWER ONE. `box-sizing:
+     border-box` puts the padding inside this number, so the tuned content measure is
+     720 - 2x32 = 656px; dropping the padding to 16 without dropping this to 688 would have
+     widened the sentence to 688px on the quiet. The measure is what was tuned and the measure
+     is what is held. */
+  max-width: 688px;
 
   /* THE CAP, DECLARED ONCE AND READ TWICE — by the frame that reserves the space and by the
      photograph that fills it. docs/DESIGN.md requires one cap and says this file is where the
@@ -82,28 +93,100 @@
   --photo-cap: 48vh;
 }
 
-/* ---- head ---- */
+/* ---- head ----
+ *
+ * ONE ROW, NOT FOUR STACKED BLOCKS, and on this screen the argument is arithmetic rather than
+ * taste. Measured at 1440x900 with three candidate rows before the change: the photograph's
+ * reserved frame started at y=215 — a 46px nav and then 169px of title, lede, controls and
+ * gaps — which is 24% of the viewport spent before the one thing this screen exists to show.
+ * The candidate rows then began at y=807 and the Skip control was off the fold entirely.
+ *
+ * The title and the controls now share a line, which is where the bulk of it went: a 42px
+ * title block plus a 57px controls block became one 45px row. `.review-head` owns the rule
+ * under the whole header, because with the controls no longer the last child a border on
+ * them would draw halfway up the header.
+ *
+ * THE LEDE SURVIVES AND IS DEMOTED, which is deliberate on both counts. It is the one line on
+ * this screen that says the action is immediate and unasked-twice, and a screen that answers a
+ * card per keystroke should say so somewhere; but it is also the least-read text here by a
+ * wide margin, so it goes to the metadata size rather than sitting three points under the
+ * heading. Deleting it was the other option and it buys 20px — not enough to pay for the one
+ * sentence that explains the keyboard.
+ */
 
+.review-head {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* `wrap` rather than `nowrap`, and the worst case is what makes it safe: if the counts, the
+   Reload and a long group offer cannot fit beside the title, they wrap onto a second line
+   and the header is still shorter than the four stacked blocks it replaced. Nothing is ever
+   clipped and nothing overflows the column. */
+.review-head-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+/* 20px, down from 28px, and it is the display face's own floor rather than a value picked to
+   be small — docs/DESIGN.md locks Cabinet Grotesk at 700/800 and only at >= 20px, so this is
+   as tight as the face is allowed to be drawn. 800 weight is kept: the size carries less, so
+   the weight carries more, and the title still reads as the heading of the row it now shares
+   with two controls. */
 .review-title {
+  /* Never squeezed to make room for a control beside it. */
+  flex: none;
   font-family: var(--display);
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-.review-lede {
-  color: var(--muted);
-  margin-top: var(--s2);
-  font-size: 15px;
+/* `display: contents`, SO THE CONTROLS WRAP AS FOUR THINGS AND NOT AS ONE BLOCK. Rendered,
+   looked at, changed — twice, and both readings are worth keeping because the second is only
+   obviously right once the first has been seen.
+
+   As an ordinary nested flex row this element is a single item of the row above, so its width
+   is its whole content: with the reason filter on and a group offer standing, that is over
+   900px, it cannot sit beside the title, and it takes a full line of its own — leaving the
+   title alone on a 30px line above it that says nothing. Head height in that state: 159px,
+   which is most of what the change was undoing.
+
+   `display: contents` removes this box from the layout and hands its four children straight to
+   `.review-head-top`, so the wrap happens between controls: title, Reload and the counts fill
+   the first line and whatever is left starts a second. The element stays in the DOM, which is
+   the point of using this rather than deleting it — it is what `answer`'s comments, the group
+   offer's and the filter reminder's all refer to by name, and it is the row's one semantic
+   group.
+
+   `margin-left: auto` moves to the first control, where it does the same job it did here: the
+   slack in the line collects between the heading and the controls, the `.app-nav-group-aside`
+   mechanism from App.css. On a wrapped second line it right-aligns that line, which is the
+   behaviour wanted there too. */
+.review-controls {
+  display: contents;
 }
 
-.review-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s3);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
+.review-controls > :first-child {
+  margin-left: auto;
+}
+
+/* `flex: none`, AND THIS IS THE RULE THE ROW DOES NOT WORK WITHOUT — also rendered, looked at,
+   fixed. Flex items shrink by default, so with the reason filter on, the four controls squeezed
+   instead of wrapping: `0 to review · 6 parked` broke over two lines and
+   `Answer all 6 as a group` over three, turning a 33px row into a 75px stack of ragged
+   fragments. Each of these is one indivisible thing — a button, a count, a reminder — so the
+   row wraps at the gaps between them and never inside one. */
+.review-controls > * {
+  flex: none;
+}
+
+.review-lede {
+  color: var(--muted);
+  margin-top: var(--s1);
+  font-size: 13px;
 }
 
 /* A word a human reads, so the body face. No fill: the solid accent is reserved for a screen
@@ -332,6 +415,55 @@
   margin-top: 0;
 }
 
+/* ---- the card's own head: where it is, and why it is here ----
+ *
+ * ONE ROW, THE SAME TRADE THE PAGE HEAD MAKES AND FOR THE SAME BUDGET. Stacked, the position
+ * and the reason spent 110px between the photograph and the first candidate row; measured at
+ * 1440x900 with three candidates, that put the third row's bottom 12px past the fold. Side by
+ * side they spend 68px and all three rows land above it — which is the state this screen wants
+ * most, because comparing the photograph against the rows IS the job.
+ *
+ * `baseline` rather than `flex-start`: the position is 20px utility and the reason chip is 17px
+ * body inside a border, so aligning the boxes leaves two texts sitting at different heights
+ * with no rule joining them. Their baselines are the line the eye reads along.
+ *
+ * `wrap`, AND THE WORST CASE IS WHY THIS IS SAFE. A long position label beside a long reason —
+ * `Box 12 · Section 14 · Card 137` against `Toggle names a finish that is not stocked` — drops
+ * the reason to its own line and costs exactly what the stacked version always cost. It cannot
+ * clip, it cannot overflow the column, and it cannot cost more than the layout it replaces.
+ *
+ * D28 IS UNAFFECTED, and it is worth being exact rather than reassuring. That rule is about the
+ * candidate rows moving DURING one card's life — the unloaded photograph collapsing its own
+ * frame and springing back 538px under a travelling finger, which is why the frame above
+ * reserves its height. This row's height is fixed the moment the card is drawn and does not
+ * change again until the card does; it is the same class of thing as the sentence's second
+ * line, which ReviewQueue.css already records as a detail rather than a hazard. */
+.review-card-head {
+  /* `.review-card` is `align-items: flex-start`, so without this the row shrinks to its
+     contents and the push below has nothing to push against. */
+  align-self: stretch;
+
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+
+  /* `space-between` RATHER THAN `margin-left: auto` ON THE REASON, and the phone is what
+     decides it. Both put the reason at the far end while the two share a line. They differ
+     when the line breaks: an auto margin keeps pushing, so at 375px — where the position
+     label alone takes two lines — the reason ended up stranded against the right edge of a
+     line it was the only thing on. `justify-content` is applied per flex LINE, and a line
+     holding one item starts it, so the wrapped phone layout packs left exactly as the
+     stacked version always did. */
+  justify-content: space-between;
+}
+
+/* `flex-end` so the machine string hangs under the right edge of its own chip rather than
+   trailing off it, wherever on the line the pair ends up. */
+.review-card-head .review-reason {
+  align-items: flex-end;
+}
+
 /* Where the card physically is. Utility face because it is a position, 20px because it is
    read against a box across the desk. Not the Fulfillment view's 32px floor — see the file
    header for why this screen does not borrow his numbers. */
@@ -412,12 +544,21 @@
   border-top: 1px solid var(--line);
 }
 
+/* 4px, the bottom of the scale, because the hairline is already doing the separating. Nine
+   rows of one-line metadata at 8px spent 333px on facts nobody reads twice; at 4px they spend
+   261px, and the row is still 29px tall — well clear of anything anyone has to hit, because
+   nothing in this list is a control.
+
+   REJECTED: TWO COLUMNS. It halves the height again and the values will not take it — the
+   `WAITING` row reads `1d · since 2026-08-22T03:08:22+00:00`, which is about 260px of utility
+   face and would wrap in a 206px cell. A wrapped value costs back most of the height and
+   reads worse than the loose version it replaced. */
 .review-fact {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   gap: var(--s3);
   align-items: baseline;
-  padding: var(--s2) 0;
+  padding: var(--s1) 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -650,10 +791,13 @@
 
 /* ---- what is waiting ---- */
 
+/* 24 above the rule and 12 below it, down from 32 and 16. The rule is what separates the card
+   from the list; the space either side of it only has to say which side of the rule a thing is
+   on, and 32px was the Fulfiller's end of the scale doing an owner's job. */
 .review-waiting {
-  margin-top: var(--s6);
+  margin-top: var(--s5);
   border-top: 1px solid var(--line);
-  padding-top: var(--s4);
+  padding-top: var(--s3);
 }
 
 /* A section label, so the utility face uppercase and tracked — the same treatment App.css
@@ -730,7 +874,12 @@
   column-gap: var(--s4);
   row-gap: var(--s1);
   align-items: baseline;
-  padding: var(--s3) 0;
+  /* 8px, down from 12. Nothing in this list is pressable — the rule above says why — so no tap
+     target is being shrunk, and the hairline separates the rows on its own. Eight pixels a row
+     is 128px over a sixteen-card queue, which is the difference between seeing the shape of a
+     run and scrolling to find it. The type scale is untouched: the bands are what make this
+     list worth having, and every one of them still steps. */
+  padding: var(--s2) 0;
   border-bottom: 1px solid var(--line);
 }
 

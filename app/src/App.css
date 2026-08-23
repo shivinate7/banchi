@@ -26,7 +26,18 @@
 .app-nav {
   display: flex;
   align-items: stretch;
-  padding: 0 var(--s6);
+
+  /* 16px, DOWN FROM 32, AND THE REASON IS ALIGNMENT RATHER THAN DENSITY. docs/DESIGN.md's
+     page-chrome rule puts an owner screen's outer padding at 16px, so a 32px nav left the
+     first route name one full step out of line with the heading directly beneath it — a
+     misalignment on the one element that appears on every screen, and therefore the only one
+     that can be out of line with all of them at once. The nav is not a page and does not get
+     its own margin; it is the strip above the page and shares its reading edge.
+
+     The vertical is untouched. `.app-nav-link`'s 12px padding was already at the owner end of
+     the scale and the bar is 46px tall, which is a strip rather than a header — nothing there
+     was ever the waste. */
+  padding: 0 var(--s4);
 
   /* The 1px hairline and nothing else. docs/DESIGN.md: a tinted header strip carrying each
      panel's name was built, looked at and rejected, so the chrome sits on the page ground

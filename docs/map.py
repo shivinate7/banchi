@@ -797,7 +797,7 @@ COMPONENTS = [
                     "— the re-shoot control (D26, owner's placement ruling): replace a bad "
                     "stored photo from a file, record untouched, allocator never involved. "
                     "Everything else stays look-only, and the header argues the exception.",
-            "governed_by": ["D6", "D10", "D20", "D24", "D26", "D27", "D30", "D31"]},
+            "governed_by": ["D6", "D10", "D20", "D21", "D22", "D24", "D26", "D27", "D30", "D31"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve",
@@ -853,7 +853,7 @@ COMPONENTS = [
                         "for with a data-integrity bug. The live cap it once declined to draw "
                         "comes off the wire now (SearchGroup.cap), which is the condition its "
                         "own comment named as what would settle it.",
-                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D26", "D27", "D31"],
+                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -895,14 +895,14 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D27", "D31"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
                         "owner-side end. No accent anywhere in it and no exception — every box "
                         "carries four controls, so a fill would have to pick one and would then "
                         "mean 'important'. The seal's weight comes from the number on it.",
-                "governed_by": ["D5", "D20", "D31"],
+                "governed_by": ["D5", "D20", "D22", "D31"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "

@@ -48,6 +48,65 @@ radius. The alternative — two deliberately different visual worlds — was con
 rejected: it doubles the token surface and gives two components to keep in sync, and the
 Fulfillment constraints are already expressible as a floor applied to a subset of routes.
 
+**That rule reached the insides of components and never reached the page, which is where all
+the waste turned out to be.** "Owner screens use the 4–16 end of the scale" has always been
+read as a statement about the gaps inside a panel; nothing in this file said anything about
+the chrome a screen stacks above its first row of content, so every screen invented its own
+and each one looked reasonable alone. Measured at 1440x900 on 2026-08-23, with the owner
+looking at the result and calling it what it was: the Inventory screen spent **240px — 27% of
+the viewport** on a 32px page title, a three-line lede and two control bars before the first
+card. The review queue — the screen whose own stylesheet argues that every pixel of chrome
+pushes the candidate rows further below the fold — spent **215px**, on **32px of outer
+padding**, which is the Fulfiller's end of the scale drawn on the owner's densest screen.
+
+**So page chrome gets numbers, and they are these.** They govern every owner route and
+nothing else:
+
+- **Outer page padding is 16px, the same on all four sides.** `--s4`, the top of the owner
+  range. Not 24, not 32.
+- **The page title is the display face at 20px** — that face's own published floor, so this
+  is as small as it is allowed to be drawn rather than a size picked to be small — **and it
+  shares a line with the screen's controls and counts.** It is never a block of its own.
+- **A lede is one line at the metadata size**, beneath that row. If it runs to two lines it
+  is not a lede, and the second line is the thing to cut.
+- **The first row of real content sits within 150px of the top of the viewport**, nav
+  included. A screen that cannot reach that is carrying chrome nobody argued for.
+
+**The shared line is the half that pays, and the arithmetic is the whole argument.** A title
+block and a control bar are each about 45px tall; stacked they cost 99px with the gap, and
+side by side they cost 45. Nothing is given up, because a page title is one word and a
+control bar is short. On the review queue that one change moved the photograph's frame from
+y=215 to y=146 — which is one more candidate row on screen beside the photograph the operator
+is judging it against, and that is the entire job of that screen.
+
+**Rejected: deleting the ledes.** It is the cheapest 20px available on any screen and it is
+the wrong 20px. On an owner screen the lede is the only writing that is not a value or a
+label, and the screens that carry one are exactly the screens with a keyboard vocabulary that
+nothing else explains. Demote it; do not cut it.
+
+**Rejected: a second scale for page chrome.** The paragraph above already refuses two visual
+worlds because they double the token surface, and that argument does not weaken when the
+subject is a page header instead of a panel. Every number above is a step of the one spacing
+scale.
+
+**None of this reaches `#/fulfillment`.** That view keeps the 24–64 end of the scale and every
+floor in the constraints table below, and those floors win wherever the two could be read as
+disagreeing — a 20px title cap is an owner rule, and his view has a 20px *minimum* on every
+text node for the opposite reason. The one page in the app that is drawn to his floors on the
+owner's ground is the unresolved-hash panel, which argues for itself in `app/src/App.css`.
+
+**The nav shares the page's reading edge**, which is what "in line" means here and is the
+thing that is most visible when it is wrong. `app/src/App.css` pads the shell to the same
+16px, so the first route name in the strip sits directly above a screen's heading. It was
+32px — putting the one element that appears on every screen out of line with all of them at
+once.
+
+**Nothing mechanical enforces any of this.** The same standing limit the paragraphs above
+record for contrast: `scripts/docs-audit.py` compares hex values between this file and
+`app/src/tokens.css` and cannot see a padding, and the Playwright specs measure the
+Fulfillment view, which is the one route this section does not govern. A screen that drifts
+back to a 32px page header will do it silently.
+
 **Light only, everywhere. There is no dark theme and no theme switcher.** Not a deferral:
 building one means defining every token twice and running every contrast assertion twice,
 for a surface with one user who works under a desk lamp. Reopening this is a change to this

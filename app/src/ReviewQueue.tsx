@@ -1708,54 +1708,64 @@ export function ReviewQueue() {
   return (
     <main className="review">
       <header className="review-head">
-        <h1 className="review-title">Review queue</h1>
+        {/* THE TITLE AND THE CONTROLS SHARE A LINE. Four stacked blocks spent 169px of a 900px
+            viewport before the photograph, on the screen whose whole vertical budget is the
+            argument at the top of ReviewQueue.css; the measurements and the trade are in that
+            file's `head` section, because this is a layout fact and not a wiring one. The DOM
+            order is unchanged — heading, then its controls, then the lede — so a screen reader
+            and the tab ring read exactly what they read before. */}
+        <div className="review-head-top">
+          <h1 className="review-title">Review queue</h1>
+          <div className="review-controls">
+            {/* Disabled while an answer is in flight, which is half of the mutual exclusion the
+                `loading` note argues for: a snapshot read before that answer landed would
+                resurrect the card it just cleared. Disabled during a read as well, because a
+                second read stacked on the first is two snapshots racing to be last. */}
+            <button className="review-reload" type="button" onClick={reload} disabled={busy || loading}>
+              <span>Reload</span>
+              {/* "Every choice shows its key", and this control is a choice the server asks the
+                  operator to make by name in four of its refusals. */}
+              <kbd className="review-key">{RELOAD_KEY_LABEL}</kbd>
+            </button>
+            {counts === null ? null : (
+              <span className="review-count">
+                {counts.review} to review · {counts.parked} parked
+              </span>
+            )}
+            {/* THE LENS, NAMED WHERE THE COUNTS ARE, because the two are read together: a
+                16-card queue showing 3 cards is a puzzle until this span says why. The chips
+                that set the filter live on the Waiting heading beside the shape they filter;
+                this is only the reminder that one is on. */}
+            {reasonFilter === null ? null : (
+              <span className="review-count">showing only {reasonFilter}</span>
+            )}
+            {/* THE GROUP OFFER — drawn only while the (filtered) worklist qualifies, in the
+                controls row because it costs no height there and a control this consequential
+                must not be discoverable only below the photograph. Outlined, not filled: the
+                fill belongs to the confirm inside the state, where it is genuinely the only
+                thing to do. Pressing this writes nothing — it opens the photo-confirm state,
+                which is the confirmation, and the only one (docs/DESIGN.md bans a second). */}
+            {groupOffer === null || grouping ? null : (
+              <button
+                className="review-action"
+                type="button"
+                onClick={() => setGrouping(true)}
+                disabled={busy || loading}
+              >
+                <span>Answer all {groupOffer.rows.length} as a group</span>
+                <kbd className="review-key">{GROUP_KEY_LABEL}</kbd>
+              </button>
+            )}
+          </div>
+        </div>
         {/* One line, and it is one line for a reason the copy does not carry: every pixel
             of chrome on this screen pushes the candidate rows further below the fold. See
-            the vertical-budget note at the top of ReviewQueue.css. */}
+            the vertical-budget note at the top of ReviewQueue.css. Drawn at the metadata
+            size beneath the row above rather than deleted — it is the only place the screen
+            says that a keystroke is the whole of an answer. */}
         <p className="review-lede">
           One card at a time, worked expensive first. Answering advances; nothing asks twice.
         </p>
-        <div className="review-controls">
-          {/* Disabled while an answer is in flight, which is half of the mutual exclusion the
-              `loading` note argues for: a snapshot read before that answer landed would
-              resurrect the card it just cleared. Disabled during a read as well, because a
-              second read stacked on the first is two snapshots racing to be last. */}
-          <button className="review-reload" type="button" onClick={reload} disabled={busy || loading}>
-            <span>Reload</span>
-            {/* "Every choice shows its key", and this control is a choice the server asks the
-                operator to make by name in four of its refusals. */}
-            <kbd className="review-key">{RELOAD_KEY_LABEL}</kbd>
-          </button>
-          {counts === null ? null : (
-            <span className="review-count">
-              {counts.review} to review · {counts.parked} parked
-            </span>
-          )}
-          {/* THE LENS, NAMED WHERE THE COUNTS ARE, because the two are read together: a
-              16-card queue showing 3 cards is a puzzle until this span says why. The chips
-              that set the filter live on the Waiting heading beside the shape they filter;
-              this is only the reminder that one is on. */}
-          {reasonFilter === null ? null : (
-            <span className="review-count">showing only {reasonFilter}</span>
-          )}
-          {/* THE GROUP OFFER — drawn only while the (filtered) worklist qualifies, in the
-              controls row because it costs no height there and a control this consequential
-              must not be discoverable only below the photograph. Outlined, not filled: the
-              fill belongs to the confirm inside the state, where it is genuinely the only
-              thing to do. Pressing this writes nothing — it opens the photo-confirm state,
-              which is the confirmation, and the only one (docs/DESIGN.md bans a second). */}
-          {groupOffer === null || grouping ? null : (
-            <button
-              className="review-action"
-              type="button"
-              onClick={() => setGrouping(true)}
-              disabled={busy || loading}
-            >
-              <span>Answer all {groupOffer.rows.length} as a group</span>
-              <kbd className="review-key">{GROUP_KEY_LABEL}</kbd>
-            </button>
-          )}
-        </div>
       </header>
 
       {/* NO UNWIRED PANEL. This screen drew one until 2026-08-13 — a note saying the routes
@@ -2206,15 +2216,23 @@ function Card({
     <section className="review-card">
       <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
 
-      <p className="review-position">{entry.label}</p>
+      {/* WHERE IT IS AND WHY IT IS HERE, ON ONE LINE. Stacked, these two cost 110px of the
+          gap between the photograph and the candidate rows — on a screen that had the third
+          candidate row 12px below a 900px fold. Side by side they cost 68px and the whole
+          choice fits on screen with the photograph, which is the comparison this screen
+          exists to make. Nothing about the pair changes: the label is still the human one
+          with the machine string beneath it, at the sizes docs/DESIGN.md sets. */}
+      <div className="review-card-head">
+        <p className="review-position">{entry.label}</p>
 
-      <div className="review-reason">
-        {/* Accent at outline and text weight: the system is unsure. The chip carries the
-            human label; the machine string sits beneath it, lowercase and unstyled beyond
-            the utility face, because it has to grep against the run report and review.json
-            exactly as it reads here. */}
-        <p className="review-reason-label">{reasonLabel(entry.reason)}</p>
-        <p className="review-machine">{entry.reason}</p>
+        <div className="review-reason">
+          {/* Accent at outline and text weight: the system is unsure. The chip carries the
+              human label; the machine string sits beneath it, lowercase and unstyled beyond
+              the utility face, because it has to grep against the run report and review.json
+              exactly as it reads here. */}
+          <p className="review-reason-label">{reasonLabel(entry.reason)}</p>
+          <p className="review-machine">{entry.reason}</p>
+        </div>
       </div>
 
       <p className="review-sentence">
