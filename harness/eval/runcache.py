@@ -31,8 +31,19 @@ from identify import batch, prompt
 CACHE_DIR = Path(__file__).resolve().parents[2] / "harness" / ".cache" / "t1"
 
 
-def cache_key(prompt_id: str, fixture_id: str, set_hint_mode: str) -> str:
-    payload = "|".join([prompt_id, fixture_id, set_hint_mode])
+def cache_key(
+    prompt_id: str, fixture_id: str, set_hint_mode: str, extra: str = ""
+) -> str:
+    """`extra` carries a configuration's own contract pin beyond the three originals —
+    today the rarity-clause fingerprint, for a run made with claims injected — so a
+    reworded clause invalidates the claimed run's cache and nothing else. Empty (the
+    default and the production shape) it is omitted entirely, producing the byte-exact
+    key this function has always produced: every banked default and hinted run stays
+    warm across this signature change."""
+    parts = [prompt_id, fixture_id, set_hint_mode]
+    if extra:
+        parts.append(extra)
+    payload = "|".join(parts)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 

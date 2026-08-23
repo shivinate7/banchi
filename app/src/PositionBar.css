@@ -1,0 +1,137 @@
+/* The position bar — how far into its box a card sits, at two densities.
+ *
+ * ONE STYLESHEET AND ONE SET OF RULES, with `.position-bar-owner` and
+ * `.position-bar-fulfiller` changing sizes and nothing else. docs/DESIGN.md rejected two
+ * visual worlds by name: it doubles the token surface and gives two components to keep in
+ * sync, and the Fulfillment constraints are expressible as a floor applied to a subset of
+ * routes. Every colour below comes from a token, every gap from the spacing scale.
+ *
+ * THE SEPARATION MECHANISM IS THE 1px --line HAIRLINE AND NOTHING ELSE, as everywhere else in
+ * this product. The ticks between sections are that hairline; the track's edge is that
+ * hairline; there is no shadow and no second border weight.
+ *
+ * NO FILL BEHIND THE TRAVELLED PART OF THE BAR. PositionBar.tsx argues it at length: there is
+ * no token that means "quiet fill", and the answer to that is a token argued for in
+ * docs/DESIGN.md rather than a literal painted here. The `raw colour` row of
+ * scripts/docs-audit.py blocks the shortcut; this comment is why nobody should want it.
+ */
+
+.position-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  /* Lets the bar shrink inside a grid cell instead of forcing the row wider than its column,
+     which is the default that quietly breaks every dense table it is dropped into. */
+  min-width: 0;
+  width: 100%;
+}
+
+/* The box itself. `position: relative` is what the marker is absolutely positioned against, so
+   the marker's percentage is a percentage of the box and not of whatever ancestor happened to
+   be positioned. */
+.position-bar-track {
+  position: relative;
+  display: flex;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  /* Clips the marker to the rounded corners, so a card at either end of the box does not draw
+     a 2px spur outside the track. */
+  overflow: hidden;
+}
+
+/* One section. Width comes from the inline flex-grow — the span's own length in cards — and
+   nothing here may set a width, or the proportions stop being the box's. */
+.position-bar-segment {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+/* The last section has no divider after it: the end of the box is the track's own border, and
+   drawing both would put two hairlines a pixel apart and read as a section of width zero. */
+.position-bar-segment:last-child {
+  border-right: 0;
+}
+
+/* THE CARD'S OWN SECTION IS NOT PAINTED DIFFERENTLY, and the class is here so that the markup
+   can say which one it is without the stylesheet inventing a colour to say it with. The marker
+   already sits inside this segment, which is the answer to "which section is it in" drawn from
+   a fact rather than from a highlight. Left as a hook for a spec to assert against and for a
+   token to attach to if docs/DESIGN.md ever grows one. */
+.position-bar-here {
+  /* deliberately empty — see above */
+}
+
+/* The card. --ink and not --accent: docs/DESIGN.md gives accent exactly two jobs, "the system
+   is unsure" and "there is exactly one thing to do", and "the card is here" is neither.
+   Fulfillment.css makes the identical argument for its focus ring. --ink on --surface is
+   19.4:1, which is the strongest thing the palette has and the right weight for the one mark
+   on this component that carries the answer.
+
+   `left` is set inline from the server's own fraction. translateX(-50%) centres the marker on
+   that point rather than starting it there, so a card at 100% is drawn at the end of the box
+   instead of one marker-width past it. */
+.position-bar-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+
+/* The sentence. Utility face because docs/DESIGN.md gives every number in the product to
+   Martian Mono, and this string is four numbers and two words. Tabular by construction, so the
+   text does not jitter as the percentage changes between cards in a list. */
+.position-bar-text {
+  font-family: var(--util);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  margin: 0;
+}
+
+/* ---- the owner's density: the 4-16 end of the scale ---- */
+
+.position-bar-owner .position-bar-track {
+  height: 16px;
+}
+
+.position-bar-owner .position-bar-marker {
+  width: 2px;
+}
+
+/* 11px, uppercase and tracked — the metadata register every owner-side screen in this app
+   uses, and the register the Fulfillment view is forbidden. This is a caption under a graphic
+   on a screen the owner spends hours in, not a sentence he reads. */
+.position-bar-owner .position-bar-text {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- the Fulfiller's density: the 24-64 end, and every floor in the constraints table ---- */
+
+.position-bar-fulfiller .position-bar-track {
+  height: 26px;
+}
+
+/* Wider, because it is the mark he is reading across the room in a bright kitchen and 2px at
+   this track height is a hairline he has to look for. */
+.position-bar-fulfiller .position-bar-marker {
+  width: 3px;
+}
+
+/* 20px — the floor from docs/DESIGN.md's constraints table, which binds every text node in his
+   view and therefore binds this one wherever it is rendered at his density.
+
+   NOT UPPERCASE AND NOT --muted, which is where this stops being the owner's caption and
+   becomes his sentence. Fulfillment.css states the rule: there is no second body size and no
+   muted variant of it, because "a 'secondary' sentence on a screen with one user is a sentence
+   somebody decided he did not need to read". --ink on --surface, 19.4:1. */
+.position-bar-fulfiller .position-bar-text {
+  font-size: 20px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}

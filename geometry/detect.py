@@ -24,6 +24,13 @@ The method, and why each step is the cheap one:
      (63x88mm, 0.716). Something that is the wrong shape is not a card that was found
      badly — it is not a card, and saying so is the whole value of this step.
 
+     THE ASPECT IS THE GAME'S, PASSED IN, and only the default is this module's constant.
+     `pipeline/games.py:card_aspect` is the per-game statement of the same physical fact,
+     and it is `None` on the one entry that spans games printed at two different sizes.
+     A `None` aspect REFUSES — see `UnknownCardShape` — because this step is precisely
+     what separates "a card is here" from "a rectangle is here", and a detector that
+     skips it is the guess this module's contract forbids.
+
 Coordinates come back NORMALISED, as fractions of the rotated-and-expanded canvas, so
 detection can run on a 512px working copy while the crops are taken from the full-resolution
 original. Both sides call the same PIL rotate with the same arguments, so they agree by
@@ -43,6 +50,13 @@ except ImportError:  # pragma: no cover - environment problem, not logic
     Image = None
 
 # Standard TCG card: 63mm x 88mm. Short edge over long edge.
+#
+# THE DEFAULT, NOT THE ONLY VALUE, as of 2026-08-23. `detect_card` takes an `aspect` and
+# every gate below reads the argument rather than this constant; `pipeline/games.py` carries
+# the same physical fact per game (`card_aspect`), and `cli/cmd_identify.py` passes it in.
+# The default is deliberately this constant and not the registry's `pokemon` value: it keeps
+# a bare `detect_card(frame)` — which is every call T6 makes — byte-identical to what it did
+# before the parameter existed, so the sweep is the proof that nothing about Pokemon moved.
 CARD_ASPECT = 63.0 / 88.0
 
 # Detection runs here; results are normalised, so the full-resolution image never has to.
@@ -136,6 +150,36 @@ EDGE_BORDER_GUARD = 0.02
 
 class GeometryError(RuntimeError):
     """Detection could not run at all — missing dependency, unreadable image."""
+
+
+class UnknownCardShape(GeometryError):
+    """No aspect ratio was given, so there is no shape to look for. `card_aspect: None`.
+
+    A REFUSAL RATHER THAN A SKIPPED GATE, and the argument is `detect_card`'s own contract:
+    "None means a human should look, never guess". Step 5 of this module's method is REFUSE
+    ON SHAPE, and it is the step that makes a positive answer mean anything — area and fill
+    say "something is there", and only aspect says "and it is a card". A detector run with
+    that gate removed accepts the best-scoring rectangle in the frame, which on this rig is
+    as likely to be the stand, the desk edge or the next card along. Cropping to it produces
+    "a miss indistinguishable from a bad read", which `geometry/__init__.py` names as the one
+    outcome the whole package exists to avoid.
+
+    WHY REFUSING IS CHEAP HERE, AND IT IS THE OTHER HALF OF THE ARGUMENT. `card_aspect` is
+    None on exactly one registry entry, `misc` — the ~1% of the shelf that is a Magic,
+    Yu-Gi-Oh, Weiss Schwarz or foreign-language card. Yu-Gi-Oh is 59x86mm (0.686) where the
+    other three are 63x88mm (0.716), so no single number is true of the population and
+    picking one would author a measurement nobody took. What a refusal costs is a crop retry
+    on a card already being handled by hand. What widening the tolerance to span both would
+    cost is the gate itself: 0.686 and 0.716 with +/-15% each is a band from 0.583 to 0.823,
+    which admits shapes no card in any of these games is printed at.
+
+    A SUBCLASS OF `GeometryError` SO EXISTING CALLERS ARE UNCHANGED. `cli/cmd_identify.py`
+    already catches `GeometryError` around `detect_card`, records `not_found`, prints the
+    exception's own message and sends the card to a human with no crop retry — which is
+    exactly the handling this case wants. The distinct type is so a run report can tell
+    "we could not look" from "we looked and there is no card"; nothing has to catch it
+    separately to behave correctly.
+    """
 
 
 @dataclass(frozen=True)
@@ -320,7 +364,7 @@ def _edge_peaks(profile, count: int, min_sep: int, guard: int) -> List[int]:
     return sorted(chosen)
 
 
-def _edge_rect(gray):
+def _edge_rect(gray, aspect: float):
     """Best card-shaped rectangle in an upright frame, by its four borders."""
     height, width = gray.shape
     if height < 16 or width < 16:
@@ -353,8 +397,8 @@ def _edge_rect(gray):
                     if not (MIN_AREA_FRACTION <= area_fraction <= MAX_AREA_FRACTION):
                         continue
                     short, long_ = ((box_w, box_h) if box_w <= box_h else (box_h, box_w))
-                    aspect = short / float(long_)
-                    if abs(aspect - CARD_ASPECT) > CARD_ASPECT * ASPECT_TOLERANCE:
+                    measured = short / float(long_)
+                    if abs(measured - aspect) > aspect * ASPECT_TOLERANCE:
                         continue
                     border = columns[x0] + columns[x1] + rows[y0] + rows[y1]
                     if border < EDGE_MIN_BORDER:
@@ -379,11 +423,11 @@ def _edge_rect(gray):
                         continue
                     score = border * support * (area_fraction ** 0.5)
                     if best is None or score > best[0]:
-                        best = (score, x0, y0, x1, y1, aspect, float(min(shares)))
+                        best = (score, x0, y0, x1, y1, measured, float(min(shares)))
     return best
 
 
-def _edge_at(image, angle: float):
+def _edge_at(image, angle: float, aspect: float):
     """`_edge_rect` on the image rotated by `angle`, normalised to the rotated canvas."""
     turned = image if abs(angle) < 1e-9 else image.rotate(
         angle, resample=Image.BILINEAR, expand=True, fillcolor=0
@@ -393,10 +437,10 @@ def _edge_at(image, angle: float):
     if valid is None:
         return None
     r0, r1, c0, c1 = valid
-    found = _edge_rect(canvas[r0:r1, c0:c1])
+    found = _edge_rect(canvas[r0:r1, c0:c1], aspect)
     if found is None:
         return None
-    score, x0, y0, x1, y1, aspect, support = found
+    score, x0, y0, x1, y1, measured, support = found
     canvas_h, canvas_w = canvas.shape
     return (
         score,
@@ -404,12 +448,12 @@ def _edge_at(image, angle: float):
         (y0 + r0) / float(canvas_h),
         (x1 + c0) / float(canvas_w),
         (y1 + r0) / float(canvas_h),
-        aspect,
+        measured,
         support,
     )
 
 
-def _detect_by_edges(image) -> Optional[CardBox]:
+def _detect_by_edges(image, aspect: float) -> Optional[CardBox]:
     """The rescue path: find the card by its border rather than by its tone.
 
     Runs only after the mask path refuses. Returns None on anything it cannot justify —
@@ -428,7 +472,7 @@ def _detect_by_edges(image) -> Optional[CardBox]:
     best = None
     best_angle = 0.0
     for angle in _angles(0.0, EDGE_MAX_ANGLE, EDGE_COARSE_STEP):
-        found = _edge_at(working, angle)
+        found = _edge_at(working, angle, aspect)
         if found is not None and (best is None or found[0] > best[0]):
             best, best_angle = found, angle
     if best is None:
@@ -436,10 +480,10 @@ def _detect_by_edges(image) -> Optional[CardBox]:
     for angle in _angles(best_angle, EDGE_COARSE_STEP, EDGE_FINE_STEP):
         if abs(angle) > EDGE_MAX_ANGLE:
             continue
-        found = _edge_at(working, angle)
+        found = _edge_at(working, angle, aspect)
         if found is not None and found[0] > best[0]:
             best, best_angle = found, angle
-    _, left, top, right, bottom, aspect, support = best
+    _, left, top, right, bottom, measured, support = best
     return CardBox(
         angle=best_angle,
         left=left,
@@ -447,18 +491,46 @@ def _detect_by_edges(image) -> Optional[CardBox]:
         right=right,
         bottom=bottom,
         fill=support,
-        aspect=aspect,
+        aspect=measured,
         method="edges",
     )
 
 
-def detect_card(source) -> Optional[CardBox]:
+def detect_card(source, aspect: Optional[float] = CARD_ASPECT) -> Optional[CardBox]:
     """Find the card, or return None. None means "a human should look", never "guess".
 
     Returns coordinates as fractions of the image rotated by `CardBox.angle` with
     `expand=True` — feed the box straight to `geometry.crop.crop_regions`.
+
+    `aspect` IS THE GAME'S `card_aspect` (D22), short edge over long. It defaults to
+    `CARD_ASPECT`, so a one-argument call is exactly what it was before this parameter
+    existed and T6's whole sweep is the regression test for that. `cli/cmd_identify.py`
+    passes the value off `pipeline/games.py`, which is 0.716 for all four catalogued games —
+    the same physical fact this module used to keep only as a constant.
+
+    `aspect=None` REFUSES BY RAISING `UnknownCardShape` and does not look at the image. Its
+    docstring carries the argument; the short form is that a shape gate is what makes a
+    positive answer mean "card" rather than "rectangle", and this function's whole contract
+    is that it never guesses. Raising rather than returning None keeps the two apart: None
+    already means "I looked and found nothing", and a caller shown that for a card it never
+    examined would go looking at the photograph for a fault that is in the registry.
     """
     _require()
+    if aspect is None:
+        raise UnknownCardShape(
+            "no card aspect was given, so there is no shape to gate on and any rectangle "
+            "in the frame would pass. This is `card_aspect: None` in pipeline/games.py — "
+            "the `misc` entry, which spans games printed at different sizes. There is "
+            "nothing to fix here: the card is captured, located, noted and identified, and "
+            "goes to a human without a crop retry."
+        )
+    if not 0.0 < aspect <= 1.0:
+        raise GeometryError(
+            f"card aspect {aspect!r} is not a short-over-long ratio in (0, 1]. Check the "
+            "game's `card_aspect` in pipeline/games.py — a value above 1 is the ratio "
+            "written upside down."
+        )
+
     image = open_image(source)
     gray = _working_gray(image)
     if gray.size == 0:
@@ -466,7 +538,7 @@ def detect_card(source) -> Optional[CardBox]:
 
     mask = _foreground_mask(gray)
     if not mask.any():
-        return _detect_by_edges(image)
+        return _detect_by_edges(image, aspect)
 
     # Coarse sweep, then a fine sweep around the winner. Minimum bounding-box area is the
     # minimum-area rectangle; brute force beats a derivation nobody will re-check.
@@ -480,7 +552,7 @@ def detect_card(source) -> Optional[CardBox]:
             best_area, best_angle = found[0], angle
 
     if best_area is None:
-        return _detect_by_edges(image)
+        return _detect_by_edges(image, aspect)
 
     for angle in _angles(best_angle, COARSE_STEP, FINE_STEP):
         if abs(angle) > MAX_ANGLE:
@@ -493,13 +565,13 @@ def detect_card(source) -> Optional[CardBox]:
 
     found = _box_at(mask, best_angle)
     if found is None:
-        return _detect_by_edges(image)
+        return _detect_by_edges(image, aspect)
     area, x0, y0, x1, y1, canvas_w, canvas_h, covered = found
 
     width, height = x1 - x0, y1 - y0
     fill = covered / float(area)
     short, long_ = (width, height) if width <= height else (height, width)
-    aspect = short / float(long_)
+    measured = short / float(long_)
 
     # Refuse on shape. Measured against the ORIGINAL frame's area, not the expanded canvas,
     # so rotating does not make every card look smaller than it is.
@@ -510,11 +582,11 @@ def detect_card(source) -> Optional[CardBox]:
     # exactly these gates, so the refusal is handed to the border search rather than
     # returned. The gates themselves are unchanged and still refuse for the mask path.
     if not (MIN_AREA_FRACTION <= area_fraction <= MAX_AREA_FRACTION):
-        return _detect_by_edges(image)
+        return _detect_by_edges(image, aspect)
     if fill < MIN_FILL:
-        return _detect_by_edges(image)
-    if abs(aspect - CARD_ASPECT) > CARD_ASPECT * ASPECT_TOLERANCE:
-        return _detect_by_edges(image)
+        return _detect_by_edges(image, aspect)
+    if abs(measured - aspect) > aspect * ASPECT_TOLERANCE:
+        return _detect_by_edges(image, aspect)
 
     return CardBox(
         angle=best_angle,
@@ -523,5 +595,5 @@ def detect_card(source) -> Optional[CardBox]:
         right=x1 / float(canvas_w),
         bottom=y1 / float(canvas_h),
         fill=fill,
-        aspect=aspect,
+        aspect=measured,
     )

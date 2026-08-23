@@ -31,6 +31,16 @@ queue with its position retained, and output proceeds: reviews stop suppressing 
 (v2 §5.6), because holding 400 good cards hostage to 7 ambiguous ones is the wrong trade.
 Unlisted is acceptable; unrecorded is not, and that is what is actually being tested.
 
+OTHER EXPORTS ARE READ FOR TWO THINGS: THE NUMBER FOLD, AND THE GAME PARTITION. SV09 is
+padded, so every case in this file could pass against a join that read `39/236` and
+`039/236` as different cards — which it did, silently, for as long as SV09 was the only
+committed fixture. `_check_number_fold` joins against the unpadded Pokemon export and the
+letter-suffixed Riftbound one for exactly that reason: a fold can only be shown to work by
+a dialect the rest of the file does not speak. `_check_game_partition` reads the Riftbound
+export again as the OTHER GAME (D25): the file->game mapping off `Product Line` cells and
+never filenames, one catalog per game, the two refusals, the zero-row wrong-file refusal,
+one import file per game, and `pokemon` keeping its Code Card rows under the partition.
+
 MULTI-SET KEYING IS SYNTHETIC, and labelled. The committed fixture is a single-set export
 (SV09: Journey Together, 341 rows), so a cross-set key collision does not exist in it to
 test against. `_multi_set_catalog()` clones a handful of rows under a second Set Name with
@@ -40,12 +50,18 @@ Replace it the day a two-set export is committed.
 
 from __future__ import annotations
 
+import os
 import tempfile
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 
 from harness.tests import Checks, Result
+from cli import resolve, runs
 from pipeline import join, pricing, routing, tcgcsv, variant
+from store import files, master
+from store.session import Store
 
 NAME = "T3"
 DESCRIPTION = "Catalog join covers every card, unmatched reported both ways"
@@ -58,6 +74,19 @@ LIVE_QUANTITY_CAP = 4
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_FIXTURE = "fixtures/sv09_export_untouched.csv"
+
+# The two exports that spell a collector number differently from SV09, and the reason
+# `number_index_key` exists. They are here to be the OTHER dialect, which is the only way
+# the fold can be shown to work — and the Riftbound one is read a second time by
+# `_check_game_partition`, as the other GAME.
+WIDE_FIXTURE = "fixtures/pokemon_wide_export_untouched.csv"  # SM Cosmic Eclipse, unpadded
+RIFTBOUND_FIXTURE = "fixtures/riftbound_export_untouched.csv"  # letter-suffixed variants
+
+# The partition's own cases (D25). The Riftbound cell is quoted in full because it is not
+# guessable from the game's name, which is half the argument for reading cells at all.
+RIFTBOUND_LINE = "Riftbound League of Legends Trading Card Game"
+RIFTBOUND_DEFY_SKU = "8925787"  # Defy 045/298, Origins, Near Mint, 3.52
+RIFTBOUND_DEFY_NUMBER = "045/298"
 
 # Required-case rows, by SKU, so a fixture re-export that moves them fails loudly here
 # rather than quietly matching something else.
@@ -145,6 +174,741 @@ def _clean_batch():
     return cards
 
 
+@contextmanager
+def _isolated_home():
+    """A whole store in a temporary directory, restored on the way out.
+
+    The cases below read the live inventory through `cli/resolve.py`, which is the only path
+    that turns a SKU's listing COUNTS into per-position `committed` flags. Restores the
+    previous value rather than deleting the key: six other tests share this process.
+    """
+    previous = os.environ.get(files.HOME_ENV)
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ[files.HOME_ENV] = tmp
+        try:
+            yield Path(tmp)
+        finally:
+            if previous is None:
+                os.environ.pop(files.HOME_ENV, None)
+            else:
+                os.environ[files.HOME_ENV] = previous
+
+
+def _capture(copies):
+    """`copies` bare capture records at box 3, carrying no identity at all."""
+    with Store().write() as snapshot:
+        for index in range(1, copies + 1):
+            snapshot.inventory.record_capture(
+                master.Card(
+                    box=BOX, index=index, photo=f"captures/box{BOX}/{index:04d}.jpg"
+                )
+            )
+
+
+def _stock(sku, condition, copies, *, pushed=0, staged=0, live=0, sold=()):
+    """Record `copies` copies of one SKU at box 3, with the SKU's listing counts set.
+
+    Exactly the shape `cli/cmd_emit.py` leaves behind — the IDENTITY on each card, the
+    PROGRESS on the SKU — and written through the store rather than assembled as an
+    `Inventory` literal, so `cli/resolve.py` reads it the way a real run does.
+    """
+    _capture(copies)
+    with Store().write() as snapshot:
+        for index in range(1, copies + 1):
+            snapshot.inventory.set_state(
+                master.position_key(BOX, index),
+                master.IDENTIFIED,
+                sku=sku,
+                condition=condition,
+            )
+        for index in sold:
+            snapshot.inventory.set_state(master.position_key(BOX, index), master.SOLD)
+        entry = snapshot.inventory.listing(sku, condition=condition)
+        entry.pushed, entry.staged, entry.live = pushed, staged, live
+
+
+def _identifications(copies, name, number):
+    """An `identifications.json` payload, shaped as `cli/cmd_identify.py` writes it."""
+    return {
+        "prompt_fingerprint": "t3",
+        "cards": {
+            master.position_key(BOX, index): {
+                "photo": f"captures/box{BOX}/{index:04d}.jpg",
+                "box": BOX,
+                "index": index,
+                "set_hint": None,
+                "metadata_finish": "normal",
+                "status": "ok",
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": "normal",
+                },
+            }
+            for index in range(1, copies + 1)
+        },
+    }
+
+
+def _export_file(path, export, live_quantity=None):
+    """The committed fixture, optionally with one SKU's `Total Quantity` rewritten.
+
+    That column is what D8 and D11 make authoritative and what `SkuMatch.live_before` reads,
+    so a case about live quantity moves it here rather than anywhere the code could read it
+    back from.
+    """
+    rows = [dict(row) for row in export.rows]
+    if live_quantity is not None:
+        for row in rows:
+            if row[tcgcsv.SKU_COLUMN] == SEVEN_COPY_SKU:
+                row[tcgcsv.LIVE_QUANTITY_COLUMN] = str(live_quantity)
+    tcgcsv.write_csv(path, export.header, rows)
+    return Path(path)
+
+
+def _resolve_in(home, copies, export_path, *, name="Dunsparce", number="120"):
+    """`cli/resolve.py:load` over `copies` positions, against the store this home holds."""
+    run = runs.Run(directory=home, manifest={})
+    run.write_identifications(_identifications(copies, name, number))
+    return resolve.load(run, export_path)
+
+
+def _command(c, *argv):
+    """One `./pkmnscan` subcommand through the real dispatch. Returns what it printed."""
+    from cli import __main__ as entry
+
+    buffer = StringIO()
+    with redirect_stdout(buffer), redirect_stderr(buffer):
+        code = entry.main(list(argv))
+    text = buffer.getvalue()
+    c.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
+    return text
+
+
+def _check_committed_from_counts(c, export) -> None:
+    """`committed` derived from the SKU's listing COUNTS, which is where it lives now.
+
+    D7 amended: `pushed`, `staged` and `live` are quantities on a `Listing` and no longer
+    states a card wears, because copies of one SKU are fungible. `SkuMatch` is still
+    per-position, so `cli/resolve.py:_committed_keys` is the one place a count becomes a set
+    of addresses — and it is a COUNTING device, not an address: it picks that many unsold
+    copies in box-walk order and the join does nothing with them but `len()` and a set
+    subtraction.
+
+    Three ways to get it wrong, one case each. Commit every copy whenever any count is
+    non-zero, and a SKU never refills to the cap again. Count `live` alongside the other two,
+    and every SKU that has ever been live under-lists by its live quantity forever. Let a
+    sold copy back into the sellable set, and the import file offers a card that is in the
+    post.
+    """
+    # --- the count picks that many copies, and no more --------------------------------
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 7, staged=2)
+        resolved = _resolve_in(home, 7, _export_file(home / "export.csv", export))
+        held = resolved.report.matches.get(SEVEN_COPY_SKU)
+        if c.ok(held is not None, "seven copies with two staged still match their SKU"):
+            c.equal(held.copies, 7, "and every physical copy is counted in the report")
+            c.equal(
+                len(held.committed_positions),
+                2,
+                "TWO of them are committed — the staged COUNT, resolved into that many "
+                "positions and not into 'any non-zero count commits everything'",
+            )
+            c.equal(held.add_to_quantity, 2, "so there is room for two more under the cap")
+            c.equal(held.backstock, 3, "and three stay backstock at known positions")
+            c.equal(
+                [p.index for p in held.live_positions],
+                [3, 4],
+                "and the copies offered are the ones the count did not already claim",
+            )
+
+    # --- `live` is subtracted once, by the export, and never again here ----------------
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 6, live=3)
+        resolved = _resolve_in(
+            home, 6, _export_file(home / "export.csv", export, live_quantity=3)
+        )
+        held = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            len(held.committed_positions),
+            0,
+            "`live` COMMITS NOTHING. `SkuMatch.add_to_quantity` already subtracts the "
+            "export's Total Quantity, so counting the stored live number here would "
+            "subtract the same copies twice",
+        )
+        c.equal(
+            held.add_to_quantity,
+            1,
+            "three live against a cap of four leaves room for exactly one more — counting "
+            "live twice would say zero and under-list this SKU forever",
+        )
+        c.equal(held.backstock, 5, "and the rest is backstock, not lost")
+
+    # --- a sold copy is gone, whatever any count says ----------------------------------
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 7, sold=(3,))
+        resolved = _resolve_in(home, 7, _export_file(home / "export.csv", export))
+        held = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            [p.index for p in held.committed_positions],
+            [3],
+            "a SOLD copy is committed by its own state and not by any count — sold is "
+            "per-copy and stays per-copy",
+        )
+        c.ok(
+            3 not in [p.index for p in held.live_positions]
+            and 3 not in [p.index for p in held.backstock_positions],
+            "and it reaches neither the import file nor the backstock — the one thing a "
+            "card that has left the building may never do",
+            f"live: {[p.index for p in held.live_positions]}",
+        )
+
+    # --- the post-import re-emit, as counts --------------------------------------------
+    # REGRESSION. The first real cycle (2026-08-22) ran join -> emit -> import -> reconcile
+    # -> join -> emit and the second emit wrote every staged copy again: rows that would
+    # have DOUBLED in Staged on import, and records walked backwards from `staged` to
+    # `pushed`. Re-expressed against counts because that is where the fact lives now, and
+    # because a count is the thing that can be double-ADDED where a state could only be
+    # re-set.
+    with _isolated_home():
+        _capture(7)
+        run = runs.create("t3-cycle")
+        run.write_identifications(_identifications(7, "Dunsparce", "120"))
+        export_path = _export_file(run.path("export.csv"), export)
+        _command(c, "join", str(run.directory), "--export", str(export_path))
+
+        first = resolve.load(runs.open_run(run.directory), export_path)
+        seven = first.report.matches[SEVEN_COPY_SKU]
+        c.equal(seven.add_to_quantity, 4, "the first join offers four copies, the live cap")
+        c.equal(seven.backstock, 3, "and holds three as backstock")
+
+        _command(c, "emit", str(run.directory))
+        listing = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
+        c.equal(
+            (listing.pushed, listing.staged, listing.live),
+            (4, 0, 0),
+            "and emit records those four as a COUNT against the SKU — `pushed` is a "
+            "quantity now, not four cards each flagged at a position",
+        )
+        c.equal(
+            tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).by_sku()[SEVEN_COPY_SKU][
+                tcgcsv.QUANTITY_COLUMN
+            ],
+            "4",
+            "one row, Add to Quantity 4, three copies left in the box (D7)",
+        )
+
+        staged_path = _export_file(run.path("staged.csv"), export)
+        rows = [
+            dict(row, **{tcgcsv.QUANTITY_COLUMN: "4"})
+            for row in tcgcsv.read_export(staged_path).rows
+            if row[tcgcsv.SKU_COLUMN] == SEVEN_COPY_SKU
+        ]
+        tcgcsv.write_csv(staged_path, export.header, rows)
+        _command(c, "reconcile", str(run.directory), str(staged_path))
+
+        live_export = _export_file(run.path("live.csv"), export, live_quantity=4)
+        _command(c, "join", str(run.directory), "--export", str(live_export))
+        _command(c, "emit", str(run.directory))
+
+        after = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
+        c.equal(
+            len(tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).rows),
+            0,
+            "THE SECOND EMIT WRITES NO SECOND ROW. Four copies are already live on "
+            "TCGplayer and the cap is four, so there is nothing to add — importing this "
+            "file again is what doubled them",
+        )
+        c.equal(
+            (after.pushed, after.staged, after.live),
+            (0, 0, 4),
+            "and the counts walked forward only: pushed -> staged -> live, never back",
+        )
+        c.ok(
+            after.pushed + after.staged + after.live <= LIVE_QUANTITY_CAP,
+            "and the three stages together never exceed the cap across a full cycle — the "
+            "sum is what TCGplayer would be holding, and D7 caps that at a playset",
+            f"pushed {after.pushed} staged {after.staged} live {after.live}",
+        )
+
+
+def _check_answer_off_the_record(c, export) -> None:
+    """D3 rung 0, read off the LIVE INVENTORY rather than handed in as a field.
+
+    The block above this one drives rung 0 by setting `answered_sku` on an `IdentifiedCard`
+    directly, which proves the ladder honours an answer and proves nothing about whether one
+    ever arrives. `cli/resolve.py` is the seam that reads it back off the card record, and it
+    is the seam that was missing on 2026-08-22: sixteen answered cards re-derived their
+    disagreement on every join and re-parked forever, because the answer route wrote to a
+    record nothing on the join path read.
+
+    Re-fixtured for v2 rather than rewritten: the answer is `sku` + `condition` on the record
+    and is deliberately NOT a state, a count or a stage, so nothing in the listing model can
+    make it fall through.
+    """
+    with _isolated_home() as home:
+        # The disagreement that parks a card: the toggle says normal, the photograph reads
+        # reverse holo. 161/159 is holofoil-only, so without an answer this reviews.
+        _stock(SECRET_RARE_SKU, "Near Mint Holofoil", 1)
+        payload = _identifications(1, "Articuno", "161")
+        payload["cards"][f"{BOX}/1"]["identification"]["finish"] = "reverse_holo"
+        run = runs.Run(directory=home, manifest={})
+        run.write_identifications(payload)
+        resolved = resolve.load(run, _export_file(home / "export.csv", export))
+
+        c.equal(len(resolved.report.queued), 0, "an ANSWERED card is not re-queued")
+        if c.ok(SECRET_RARE_SKU in resolved.report.matches, "it matches the answered row"):
+            c.equal(
+                resolved.report.matches[SECRET_RARE_SKU].stages,
+                ["human_answered"],
+                "and the stage says a human decided it — read off the record, not inferred",
+            )
+
+        # FALL-THROUGH, both shapes, and neither is a guess. A SKU the export no longer
+        # carries and a SKU it carries under a different Condition are the same failure from
+        # two directions: the answer names one row exactly, and if that row is not there the
+        # card walks the ladder as though nobody had answered.
+        for label, sku, condition in (
+            ("a SKU this export no longer carries", "0000000", "Near Mint Holofoil"),
+            ("a SKU carried under a different Condition", SECRET_RARE_SKU, "Near Mint"),
+        ):
+            with Store().write() as snapshot:
+                snapshot.inventory.set_state(
+                    master.position_key(BOX, 1),
+                    master.IDENTIFIED,
+                    sku=sku,
+                    condition=condition,
+                )
+            fell = resolve.load(run, _export_file(home / "export.csv", export))
+            c.equal(
+                [q.destination.reason for q in fell.report.queued],
+                ["metadata_not_stocked"],
+                f"an answer naming {label} falls through to the ladder, never a guess",
+            )
+
+
+def _two_game_payload():
+    """One pokemon card and one riftbound card, as `cli/cmd_identify.py` would record
+    them: the game claim on each run record, per card and never per run (D21)."""
+    return {
+        "prompt_fingerprint": "t3-partition",
+        "cards": {
+            master.position_key(BOX, 1): {
+                "photo": f"captures/box{BOX}/0001.jpg",
+                "box": BOX, "index": 1, "set_hint": None,
+                "metadata_finish": "normal", "status": "ok",
+                "game": "pokemon",
+                "identification": {
+                    "name": "Dunsparce", "number": "120", "printed_total": "159",
+                    "confidence": "high", "finish": "normal",
+                },
+            },
+            master.position_key(BOX, 2): {
+                "photo": f"captures/box{BOX}/0002.jpg",
+                "box": BOX, "index": 2, "set_hint": "Origins",
+                "metadata_finish": "normal", "status": "ok",
+                "game": "riftbound",
+                "identification": {
+                    "name": "Defy", "number": RIFTBOUND_DEFY_NUMBER,
+                    "printed_total": None, "confidence": "high", "finish": "normal",
+                },
+            },
+        },
+    }
+
+
+def _check_game_partition(c, export) -> None:
+    """D25 — the join partitions by game, and `Product Line` is a real reader.
+
+    THE DEFECT THIS GUARDS AGAINST WAS MEASURED, NOT IMAGINED. `Product Line` sat in
+    `CANONICAL_HEADER` read by nothing, so two exports concatenated would have cross-joined
+    in silence — a Riftbound number matching a Pokemon row with nothing in a position to
+    notice. Blind is not agnostic. The cases here hold the four rules that close it: the
+    file->game mapping comes off each file's own cells and never its filename; catalogs are
+    built per game and never merged; a run refuses BEFORE any catalog is built when the
+    mapping cannot be exactly one file per game; and `emit` writes one import file per
+    game, because nothing has established Import to Staged accepts a mixed one.
+    """
+    riftbound = tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE)
+
+    # --- the reader reads cells ---------------------------------------------------
+    c.equal(
+        tcgcsv.product_lines(export),
+        ("Pokemon",),
+        "SV09's Product Line cells say Pokemon and nothing else",
+    )
+    c.equal(
+        tcgcsv.product_lines(riftbound),
+        (RIFTBOUND_LINE,),
+        "and the Riftbound export carries its own line, verbatim, in every row — a "
+        "string nobody would guess from a filename",
+    )
+
+    # --- the partition pair, and pokemon keeping its Code Card rows ----------------
+    code_rows = [r for r in export.rows if r[tcgcsv.RARITY_COLUMN] == "Code Card"]
+    c.ok(code_rows, "the fixture really does hold Code Card rows to keep")
+    pokemon_catalog = join.Catalog.from_export(export, "pokemon")
+    c.equal(
+        len(pokemon_catalog.export.rows),
+        len(export.rows),
+        "`pokemon` claims the whole Pokemon line — the Code Card rows INCLUDED, because "
+        "the entry sets no product_line_rarities and narrowing it to its claimed "
+        "rarities would drop the blank-Number rows the name fallback resolves",
+    )
+    c.equal(pokemon_catalog.dropped_rows, 0, "and the drop count reports zero")
+    c.equal(
+        [
+            r[tcgcsv.SKU_COLUMN]
+            for r in pokemon_catalog.rows_for_blank_number_name(BLANK_NUMBER_NAME)
+        ],
+        [BLANK_NUMBER_SKU],
+        "so the blank-Number case still resolves by name under the partition",
+    )
+    code_catalog = join.Catalog.from_export(export, "pokemon_code")
+    c.equal(
+        sorted(r[tcgcsv.SKU_COLUMN] for r in code_catalog.export.rows),
+        sorted(r[tcgcsv.SKU_COLUMN] for r in code_rows),
+        "`pokemon_code` narrows the SAME file to exactly its Code Card rows — the pair "
+        "(Product Line, Rarity) is the partition key, and the line alone could not "
+        "split the two games that share it",
+    )
+    c.equal(
+        code_catalog.dropped_rows,
+        len(export.rows) - len(code_rows),
+        "and its drop count is the rest of the file",
+    )
+
+    # --- a single-game join through the partition is the join it always was --------
+    direct = join.join_batch(
+        _clean_batch(), join.Catalog(export), live_cap=LIVE_QUANTITY_CAP
+    )
+    partitioned = join.join_batch(
+        _clean_batch(), pokemon_catalog, live_cap=LIVE_QUANTITY_CAP
+    )
+    c.equal(
+        [
+            (m.sku, m.copies, m.add_to_quantity, str(m.list_price))
+            for m in partitioned.matches.values()
+        ],
+        [
+            (m.sku, m.copies, m.add_to_quantity, str(m.list_price))
+            for m in direct.matches.values()
+        ],
+        "an all-Pokemon batch joins identically through the filtered catalog: same "
+        "SKUs, same order, same quantities, same prices — the compatibility half of "
+        "the partition",
+    )
+
+    # --- zero rows is the wrong file, and it refuses -------------------------------
+    caught = c.raises(
+        join.EmptyCatalog,
+        lambda: join.Catalog.from_export(export, "riftbound"),
+        "an SV09 export handed to the riftbound game refuses: zero rows after the "
+        "filter means the wrong file, the one case where stopping beats continuing",
+    )
+    if caught is not None:
+        c.ok(
+            "'Pokemon'" in str(caught),
+            "and the refusal names the file's own Product Line cells",
+            str(caught),
+        )
+
+    # --- file -> game off the cells, never the filename ----------------------------
+    with _isolated_home() as home:
+        _capture(2)
+        run_dir = runs.create("t3-partition")
+        run_dir.write_identifications(_two_game_payload())
+        sv09_path = _export_file(home / "export.csv", export)
+        # The Riftbound catalogue under the most Pokemon-shaped name available.
+        misleading = home / "sv09_export_pokemon.csv"
+        misleading.write_bytes((REPO_ROOT / RIFTBOUND_FIXTURE).read_bytes())
+
+        plan = resolve.exports_for(run_dir, [str(sv09_path), str(misleading)])
+        c.equal(
+            {game: path.name for game, path in plan.by_game.items()},
+            {"pokemon": "export.csv", "riftbound": "sv09_export_pokemon.csv"},
+            "the file->game mapping reads each file's Product Line cells: a Riftbound "
+            "export named like a Pokemon one still answers for riftbound",
+        )
+
+        # REFUSAL: a game present in the run with no export.
+        caught = c.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(run_dir, [str(sv09_path)]),
+            "a run holding a riftbound card refuses to join on a pokemon export alone",
+        )
+        if caught is not None:
+            message = str(caught)
+            c.ok(
+                "Box 3 · Section 1 · Card 2" in message,
+                "the refusal names the card's position",
+                message,
+            )
+            c.ok(
+                "PUT /inventory/" in message,
+                "and points at the correction route for a wrong game claim",
+                message,
+            )
+
+        # REFUSAL: two files claiming one game.
+        second = home / "second.csv"
+        second.write_bytes(Path(sv09_path).read_bytes())
+        caught = c.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(
+                run_dir, [str(sv09_path), str(second), str(misleading)]
+            ),
+            "two files carrying the Pokemon line refuse — no rule may pick between two "
+            "catalogs for one card",
+        )
+        if caught is not None:
+            c.ok(
+                str(sv09_path) in str(caught) and str(second) in str(caught),
+                "and both files are named",
+                str(caught),
+            )
+
+        # REFUSAL: a file whose cells match no registered game rides along with the
+        # others — accepted and silently unused is the same shape as silently dropped.
+        alien = home / "alien.csv"
+        tcgcsv.write_csv(
+            alien,
+            export.header,
+            [
+                dict(r, **{tcgcsv.PRODUCT_LINE_COLUMN: "Magic The Gathering"})
+                for r in export.rows[:3]
+            ],
+        )
+        c.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(
+                run_dir, [str(sv09_path), str(alien), str(misleading)]
+            ),
+            "a file matching no registered game refuses rather than being ignored",
+        )
+
+        # Every refusal above ran before any catalog was built: nothing queued,
+        # nothing written.
+        c.equal(
+            Store().read().queue_summary,
+            "0 cards in review | 0 cards in parked",
+            "the refusals touched no queue",
+        )
+        c.ok(
+            not run_dir.path(runs.REPORT).is_file()
+            and not run_dir.path(runs.IMPORT_LISTED).is_file(),
+            "and wrote nothing into the run directory",
+        )
+
+        # --- the two-game round trip through the real commands ---------------------
+        said = _command(
+            c, "join", str(run_dir.directory),
+            "--export", str(sv09_path), "--export", str(misleading),
+        )
+        c.ok(
+            "[pokemon]" in said and "[riftbound]" in said,
+            "the run report is per game",
+            said,
+        )
+
+        resolved = resolve.load(runs.open_run(run_dir.directory), plan.by_game)
+        c.equal(
+            list(resolved.joins),
+            ["pokemon", "riftbound"],
+            "one catalog and one report per game, in registry order, never merged",
+        )
+        c.equal(
+            list(resolved.joins["pokemon"].report.matches),
+            [SEVEN_COPY_SKU],
+            "the pokemon card matched in the pokemon catalog",
+        )
+        c.equal(
+            list(resolved.joins["riftbound"].report.matches),
+            [RIFTBOUND_DEFY_SKU],
+            "and the riftbound card in the riftbound catalog — never each other's",
+        )
+
+        _command(c, "emit", str(run_dir.directory))
+        listed = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+        riftbound_listed = tcgcsv.read_export(
+            run_dir.path(runs.import_listed_name("riftbound"))
+        )
+        c.equal(
+            [r[tcgcsv.SKU_COLUMN] for r in listed.rows],
+            [SEVEN_COPY_SKU],
+            "one import file per game: the un-suffixed file holds the pokemon row alone",
+        )
+        c.equal(
+            [r[tcgcsv.SKU_COLUMN] for r in riftbound_listed.rows],
+            [RIFTBOUND_DEFY_SKU],
+            "and import-listed-riftbound.csv its own row alone",
+        )
+        c.equal(
+            (
+                {r[tcgcsv.PRODUCT_LINE_COLUMN] for r in listed.rows},
+                {r[tcgcsv.PRODUCT_LINE_COLUMN] for r in riftbound_listed.rows},
+            ),
+            ({"Pokemon"}, {RIFTBOUND_LINE}),
+            "no import file spans two Product Lines — the accepted fixture proves the "
+            "format for one line only",
+        )
+
+    # --- the manifest: exports keyed by game, the old scalar backfilled on read -----
+    old = runs.Run(directory=Path("unused"), manifest={"export": {"path": "sv09.csv"}})
+    c.equal(
+        old.exports_by_game,
+        {"pokemon": Path("sv09.csv")},
+        "an old scalar manifest reads as the default game's file — backfilled at the read",
+    )
+    c.equal(
+        old.manifest,
+        {"export": {"path": "sv09.csv"}},
+        "and the read rewrote nothing: the backfill is read-side only",
+    )
+    recorded = runs.Run(
+        directory=Path("unused"),
+        manifest={"exports": {"riftbound": {"path": "r.csv"}}},
+    )
+    c.equal(
+        recorded.exports_by_game,
+        {"riftbound": Path("r.csv")},
+        "the recorded shape is a dict keyed by game",
+    )
+
+
+def _check_number_fold(c, sv09: join.Catalog) -> None:
+    """`number_index_key` — the fold both sides of the number comparison now pass through.
+
+    THE SILENT ZERO-JOIN. `Catalog.__init__` indexed the export's `Number` cell VERBATIM
+    while `join_key` composed a `zfill(3)`-padded key, so the two agreed only for exports
+    whose cells happen to be three wide. SV09 is one of those, which is why every case above
+    this one passed for months against a join that could not read half the exports in
+    `fixtures/`. The failure had the worst shape a join failure can take: every affected card
+    came back `no_catalog_row`, which is the report pointing at the EXPORT rather than at the
+    key, so the remedy it suggests is to go and get a different CSV.
+
+    THE MEASUREMENT IS THE ASSERTION, so the case cannot be satisfied by a lookup that
+    happens to work. `fixtures/pokemon_wide_export_untouched.csv` carries SM Cosmic Eclipse
+    with unpadded cells, and the number below is how many of its rows the old index put out
+    of reach.
+
+    THREE DIRECTIONS, BECAUSE A FOLD IS AS EASY TO OVER-APPLY AS TO OMIT. It has to reach the
+    unpadded export; it has to leave a secret rare exactly where it was, since `161/159`
+    already agreed on both sides and a fold that damaged it would trade one silent miss for
+    another; and it must not collapse two cards that a letter suffix distinguishes, which is
+    the case that rules out the tempting fix of padding the index to match `join_key`.
+    """
+    c.equal(
+        [
+            join.number_index_key("001/236"),
+            join.number_index_key("1/236"),
+            join.number_index_key("161/159"),
+            join.number_index_key("066a/298"),
+        ],
+        ["1/236", "1/236", "161/159", "66A/298"],
+        "number_index_key strips leading zeros from every digit run and folds case: two "
+        "spellings of one card land together, a secret rare is untouched, a suffix survives",
+    )
+    c.equal(
+        [join.number_index_key("EB01-009"), join.number_index_key("TG01/TG30")],
+        ["EB1-9", "TG1/TG30"],
+        "and it decorates nothing but the digits — a prefix or a hyphen is identity, not "
+        "padding, so both sides of a One Piece or a Trainer Gallery number keep their shape",
+    )
+
+    # --- an unpadded export joins ---------------------------------------------------
+    wide = tcgcsv.read_export(REPO_ROOT / WIDE_FIXTURE)
+    wide_catalog = join.Catalog(wide)
+    composed = join.join_key("1", "236")
+
+    c.equal(composed, "001/236", "the composed key is padded, as CLAUDE.md documents it")
+    c.ok(
+        not any(row[tcgcsv.NUMBER_COLUMN].strip() == composed for row in wide.rows),
+        "and that string appears in NO `Number` cell of the unpadded export — which is "
+        "exactly why a verbatim index found nothing and blamed the file",
+    )
+    c.equal(
+        len(wide_catalog.rows_for_key(composed)),
+        5,
+        "the fold finds the card anyway: five condition rows for 1/236, reached by a key "
+        "spelled 001/236",
+    )
+
+    unpadded_rows = [
+        row
+        for row in wide.rows
+        if (cell := row[tcgcsv.NUMBER_COLUMN].strip())
+        and cell.split("/")[0].isdigit()
+        and len(cell.split("/")[0]) < 3
+    ]
+    c.equal(
+        len(unpadded_rows),
+        950,
+        "950 rows in this export carry an unpadded cell — the size of the silent miss, "
+        "counted rather than described",
+    )
+
+    # END TO END, not just through the accessor. Two cards from that export, one of each
+    # finish the catalog stocks for them, joined the way a run joins: a lookup that works
+    # while `join_batch` still composes its key somewhere else would be a half-fix.
+    joined = join.join_batch(
+        [
+            _card(1, "Venusaur & Snivy GX", "1", total="236", metadata="holo"),
+            _card(2, "Alolan Vulpix", "39", total="236", metadata="normal"),
+        ],
+        wide_catalog,
+        router=join.default_router(),
+    )
+    c.equal(
+        sorted(joined.matches),
+        ["4230084", "4256285"],
+        "and a batch of unpadded cards resolves through join_batch to its own rows",
+    )
+    c.equal(
+        [q.destination.reason for q in joined.queued],
+        [],
+        "with nothing queued as no_catalog_row — the reason code that used to be the only "
+        "symptom",
+    )
+
+    # --- the padded export is undamaged ---------------------------------------------
+    secret = sv09.rows_for_key(join.join_key("161", "159"))
+    c.equal(
+        [row[tcgcsv.SKU_COLUMN] for row in secret],
+        [SECRET_RARE_SKU],
+        "SV09's secret rare 161/159 still reaches exactly one row: the fold changed a "
+        "spelling that was already three wide by not touching it",
+    )
+
+    # --- a letter suffix is a different card ----------------------------------------
+    # THE CASE THAT DECIDED THE IMPLEMENTATION. Padding the index instead of folding both
+    # sides is the shorter fix and it is wrong here: `066a` is already three wide before its
+    # suffix, so `zfill(3)` is a no-op on it while `66a` from another export is not, and the
+    # two dialects drift apart again. Stripping the run and keeping the suffix keeps them
+    # apart on purpose.
+    riftbound = join.Catalog(tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE))
+    alternate = riftbound.rows_for_key("066a/298")
+    plain = riftbound.rows_for_key("066/298")
+    c.equal(
+        sorted({row[tcgcsv.NAME_COLUMN] for row in alternate}),
+        ["Ahri, Alluring (Alternate Art)"],
+        "Riftbound's 066a/298 is Ahri, Alluring (Alternate Art) and nothing else",
+    )
+    c.ok(
+        "Ahri, Alluring" in {row[tcgcsv.NAME_COLUMN] for row in plain},
+        "066/298 is the plain Ahri, Alluring",
+    )
+    c.ok(
+        {row[tcgcsv.SKU_COLUMN] for row in alternate}.isdisjoint(
+            row[tcgcsv.SKU_COLUMN] for row in plain
+        ),
+        "and the two keys share NOT ONE SKU — a suffixed number is a different card, and a "
+        "fold that merged them would mis-list an $8.89 showcase as a $1.18 rare",
+    )
+
+
 def run() -> Result:
     c = Checks()
 
@@ -158,6 +922,8 @@ def run() -> Result:
     c.equal(
         join.join_key(161, "159"), "161/159", "join key accepts an int collector number"
     )
+
+    _check_number_fold(c, catalog)
 
     # --- clean batch ------------------------------------------------------------------
     cards = _clean_batch()
@@ -306,6 +1072,15 @@ def run() -> Result:
         [SECRET_RARE_SKU],
         "a fully committed SKU is reported, not re-emitted — nothing added, nothing lost",
     )
+
+    # Both blocks above hand `committed` and `answered_sku` to `join_batch` as fields, which
+    # proves the ladder honours them and proves nothing about whether one ever arrives. The
+    # two sections below drive the same two rules through `cli/resolve.py` against a real
+    # store, which is the seam where a count becomes a `committed` flag and where a human's
+    # answer is read back off the card record.
+    _check_committed_from_counts(c, export)
+    _check_answer_off_the_record(c, export)
+    _check_game_partition(c, export)
 
     # --- required case: secret rare ---------------------------------------------------
     c.ok(SECRET_RARE_SKU in report.matches, "secret rare 161/159 matched")

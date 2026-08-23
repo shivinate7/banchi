@@ -63,7 +63,14 @@ export function manualTrigger(key: string): Trigger {
 
     start(onFire) {
       const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key !== key) return
+        /* CASE-FOLDED, because `event.key` carries the SHIFTED character. With Caps Lock on,
+         * or a thumb still on Shift, `c` arrives as `C` and a raw `!==` declined it — both
+         * hotkeys dead, no error, no HUD change, nothing on screen. This file already names
+         * that failure class: a dead key at a rig reads as a broken app, and at feeder pace
+         * the operator is watching cards rather than the screen, so the first symptom is a
+         * box of photographs that were never taken. `ReviewQueue.tsx` already folds case on
+         * its own digit keys; this is the same fix in the place it was missing. */
+        if (event.key.toLowerCase() !== key.toLowerCase()) return
 
         /* Auto-repeat is a held key, and a held key is a stack of captures of one card
          * sitting in the lens. Undo walks backwards one call at a time

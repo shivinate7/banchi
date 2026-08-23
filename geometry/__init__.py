@@ -49,12 +49,21 @@ TWO METHODS, IN ORDER, AND THE SECOND EXISTS BECAUSE THE FIRST MET A PHOTOGRAPH.
 
 `CardBox.method` says which one answered. docs/GATES.md's T6 section carries the
 measurement and why no threshold sits between the two ways (1) fails.
+
+BOTH METHODS GATE ON A SHAPE, AND THE SHAPE IS THE GAME'S (D22). `detect_card(source,
+aspect=...)` takes `pipeline/games.py:card_aspect`; the default is this package's own
+constant, so every existing one-argument call is unchanged. An entry whose `card_aspect` is
+`None` — `misc`, which spans games printed at 0.716 and 0.686 — raises `UnknownCardShape`
+rather than detecting with the gate switched off. Refusing costs a crop retry on a card
+already being handled by hand; skipping the gate costs the difference between finding a card
+and finding a rectangle, which is the distinction the paragraph above is about.
 """
 
 from geometry.detect import (  # noqa: F401
     CARD_ASPECT,
     CardBox,
     GeometryError,
+    UnknownCardShape,
     detect_card,
 )
 from geometry.crop import (  # noqa: F401

@@ -22,12 +22,14 @@ inside them.
 Color      #FCFCFD  bg        the page. Everything sits on this.
            #FFFFFF  surface   raised: choice rows, queue rows, panels
            #08090A  ink       all body text, all headings, all money      19.4:1 on bg
-           #52555B  muted     metadata, secondary labels, disabled         7.29:1 on bg
+           #4E5157  muted     metadata, secondary labels, disabled         7.76:1 on bg
+                              7.96:1 on surface, 7.30:1 on hover — its darkest ground
            #E6E7EA  line      the 1px hairline. Every separation, no exceptions.
            #1E40AF  accent    unsure, and the only-action fill             8.5:1 on bg
            — plus two interaction states derived from the above —
            #F4F5F7  hover     row hover only. bg and surface are 1.5% apart, so
                               neither can serve as a hover state for the other.
+                              A GROUND THAT CARRIES TEXT: check text tokens against it.
            #17348F  pressed   accent, pressed. White on it: 10.9:1.
            — and one token that names a value already in use —
            #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
@@ -59,6 +61,33 @@ an exception and reasoned around. It was replaced rather than annotated. A palet
 described as "legal except one" hands the next near-miss a precedent, and the argument for
 accepting a 6.9 is identical to the argument for accepting a 6.5. The swatch difference is
 invisible; the difference between the two sentences is not.
+
+**`hover` is a ground that carries text, and this file did not say so until 2026-08-23.**
+The paragraph above was written while the answer to "every ground it sits on" was being read
+off the first two rows of the block — `bg` and `surface`, the two things a screen is
+obviously made of. `hover` was derived afterwards, as an interaction state, and interaction
+states are the row you skip when you are asking which colours a word can land on. But a
+hovered row does not empty itself. Every word stays exactly where it was, the row under the
+pointer is by definition the row somebody is reading, and `hover` is the darkest of the
+three grounds — so it is the one that decides, not the one that is safe to omit.
+
+**What that omission cost, stated because the number is the argument.** `muted` at `#52555B`
+measured 7.29:1 on `bg` and **6.86:1 on `hover`** — the same four-hundredths-shaped miss the
+paragraph above refused to annotate, hiding behind the ground nobody had checked. It was
+rendering: `app/src/ReviewQueue.css` puts `.review-candidate-meta` on `.review-candidate`,
+and that row takes `--hover` under the pointer. `muted` is now `#4E5157`, which clears on all
+three (7.76 / 7.96 / 7.30), and the same replace-rather-than-annotate rule was applied for
+the same reason.
+
+**Read the two paragraphs together as one rule with its blind spot named**: a token's floor
+is checked against every ground it can land on, and "ground" means any token a `background`
+is ever painted with — `bg`, `surface` and `hover` today, and anything added to that list
+tomorrow. `on-accent` is the only token in the block exempt by construction, and its row
+says why in three words: never a ground. Nothing mechanical enforces this. The `design
+tokens` row of `scripts/docs-audit.py` proves this file and `app/src/tokens.css` agree about
+a hex and cannot know what the hex means; the Playwright specs measure rendered pairs, and
+they measure the pairs the Fulfillment view actually draws, which is not all of them. Adding
+a ground token means recomputing every text token against it by hand.
 
 **Cabinet Grotesk comes from Fontshare, not Google Fonts.** That is a second font host and
 a second licence to read before step 7 ships — do it then, and self-host all three faces if
@@ -98,7 +127,35 @@ hairlines rather than air.
 **No confirm dialog on a reversible action.** No "are you sure", no success acknowledgement
 to dismiss, no list → detail → back loop in the review queue. Answering a card writes the
 answer and advances. Undo covers the mistake; a dialog only makes the ninety-nine correct
-answers cost two taps each. Genuinely destructive actions may still gate — but per the
+answers cost two taps each.
+
+**"Undo covers the mistake" was not true on the review queue, and D28 is the repair.** That
+clause is what this whole rule rests on — and on the one screen it matters most,
+`store/queues.py:Queue.upsert` refuses to re-queue a position a human has cleared, so there
+was no undo to cover anything. A single unmodified digit wrote a SKU onto a real card,
+permanently, while mark-sold — which is reversible — had a photo to confirm against, a
+two-step control and a twenty-second window. The reversible action carried three guards and
+the irreversible one carried none.
+
+D28 fixes the premise rather than the rule: the review answer gets the same twenty-second
+undo, and the candidate list stops moving between cards so the slip is rarer to begin with.
+
+**Both halves are built as of 2026-08-23.** The layout half first (a measured 538px round-trip
+under the finger became zero), then the undo: the answer route goes both ways with an `undo`
+flag exactly as mark-sold does, `restores_to` is read off the card inside the lock before the
+overwrite, and the screen draws a per-answer receipt with `U` on the newest. **The receipt is
+not the "acknowledgement to dismiss" this rule bans** — it demands nothing, blocks nothing,
+expires by itself at twenty seconds, and answering the next card never waits on it. What the
+rule banned was a step between the operator and the next card; the receipt is a way back that
+sits beside the flow rather than in it.
+
+One inherited limit, recorded where a future reader will wonder: **the sixteen Gate B answers
+predate the route logging `restores_to`, so they are not reversible** — an undo on any of them
+refuses `answer_origin_unknown` rather than guessing. The window exists for answers written
+from 2026-08-23 on.
+**A confirm dialog was considered and refused again** — one key per card is the property this
+rule exists to protect, and requiring a modifier or an Enter would have doubled the keystrokes
+on the screen the owner spends the most hours in. Genuinely destructive actions may still gate — but per the
 table below, none of those are reachable from the Fulfillment view at all.
 
 **Capture undo is the stated exception, and it gets no dialog either** (settled 2026-08-13).
@@ -157,7 +214,14 @@ stops short of what this section asks: keys are drawn on the first nine candidat
 The hardest screen in the product and the one the owner spends hours in, so its shape is
 part of the design and not left to step 7.
 
-**One card at a time, photo first, single column.** Photo as large as the viewport allows at
+**One card at a time, photo first, single column — with one narrow exception since D29.** A
+queue where every entry shares a reason code AND offers the same single candidate may be
+answered as a group. Gate B is the evidence D4 did not have: 16 of 53 entries, every one the
+same reason, detection agreeing with itself across every duplicate pair — one systematic fact
+about the rig's lighting, sixteen identical taps. Anything looser stays one card at a time,
+because a bulk write over cards a human has not compared is exactly what D4 exists to prevent.
+
+Photo as large as the viewport allows at
 the top, then one
 sentence naming what the system found, then the candidate rows with their prices. No
 left/right split, so the same layout works on a laptop and a phone. Answering advances
@@ -219,9 +283,10 @@ screens means its meaning never has to be learned twice, and it is why the Fulfi
 pull-confirm is the loudest thing he ever sees.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-twelve strings — six from the variant ladder in `pipeline/variant.py`
+thirteen strings — seven from the variant ladder in `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`) and six from
+`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
+`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and six from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
 `set_ambiguous`, `card_not_detected`, `no_market_data`). Showing only a friendly label
 creates a second vocabulary that nothing audits — the drift D16 exists to catch — and
@@ -230,14 +295,14 @@ Showing only the raw string is honest and unreadable. Both, at two sizes, costs 
 chrome and keeps the string greppable across the screen, the run report and `review.json`.
 **Owner-side only**: the Fulfillment banned-word list forbids this register entirely.
 
-**Eleven of the twelve can reach this screen. `no_market_data` cannot, and this paragraph
+**Twelve of the thirteen can reach this screen. `no_market_data` cannot, and this paragraph
 used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
 destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
 for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
 priced by hand in `decisions.json` (D9) and never appears here. The screen carries a label
 for it all the same, which is right: one line of a lookup table is cheaper than a bare
 machine string rendered the first time routing ever queues one. The claim to keep out of
-this file is the count — twelve are defined, eleven are reachable, and the two numbers
+this file is the count — thirteen are defined, twelve are reachable, and the two numbers
 answer different questions.
 
 **Every choice shows its key, and the built screen draws nine of them.** Owner-side, an hour
@@ -291,10 +356,19 @@ The agent cannot see its own output, so these are Playwright assertions, not pro
 
 **All nine rows now run, against the view itself.** `app/tests/fulfillment.spec.ts` asserts
 every row of the table below on the Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps
-three of them on step 6's component. `make design-check` runs both — 30 assertions, observed
-passing 2026-08-13. Every contrast ratio is computed from the *rendered* colours rather than
-compared against a number published here, so a token edited in `app/src/tokens.css` without
-being re-argued in this file has to break something.
+three of them on step 6's component. `make design-check` runs both. Every contrast ratio is
+computed from the *rendered* colours rather than compared against a number published here, so
+a token edited in `app/src/tokens.css` without being re-argued in this file has to break
+something.
+
+**The assertion count was published here and is not any more.** It read "30 assertions,
+observed passing 2026-08-13" and was still saying 30 when the suite had grown to 64 — restated
+wrongly in five files at once. D18's test decides it: a count is verifiable and there is
+nothing in it a later session could reasonably disagree with, so it is not load-bearing prose
+and the honest fix is to stop publishing it rather than to keep it fresh. `npx playwright test`
+owns the number. The two places `docs/GATES.md` still says "16 of 30" and "30 of 30" are
+deliberately left alone — they sit inside a dated account of the hours 7b shipped unwired, and
+renumbering evidence to match a later tree is the one thing a record may never do.
 
 The spec asserts the view is on screen before it measures anything, and that is not defensive
 padding: it is what caught 7b shipping unwired, failing 16 of 30 on an unregistered route
@@ -324,14 +398,23 @@ pull. One-tap mark-sold.
 ## Step 6 — done 2026-08-12
 
 Tokens locked, and the pull-confirm built against them in all three states. The spec it was
-built to, unchanged, because it is what `app/tests/pull-confirm.spec.ts` asserts:
+built to, because it is what `app/tests/pull-confirm.spec.ts` asserts:
 
 ```
 default    fill #1E40AF, label #FFFFFF, radius 4px, >= 44px tall     8.7:1
 pressed    fill #17348F, label #FFFFFF                             10.9:1
-disabled   fill #FFFFFF, 1px #E6E7EA border, label #52555B
+disabled   fill #FFFFFF, 1px #E6E7EA border, label #4E5157
            — never appears in the Fulfillment view
 ```
+
+**One value in that block has moved since step 6, and the word "unchanged" that used to
+introduce it has gone with it.** The disabled label is `muted`, and `muted` was redrawn on
+2026-08-23 for the hover-ground reason argued at the top of this file; it read `#52555B`
+here. Restated rather than rewritten silently, because nothing parses this second block —
+`scripts/docs-audit.py` reads the fence under `## Tokens` and stops there, so this is the
+one place in this file where a stale hex can sit unnoticed indefinitely. The ratio it is
+quoted at went up (7.48:1 to 7.96:1 on `surface`), so the assertion this block describes
+passes by more than it did; the spec computes it from the rendered colour either way.
 
 `app/src/PullConfirm.tsx` and its stylesheet, rendered on a gallery route at `app/src/Gallery.tsx`.
 `make screenshot` draws it into `captures/ui/`; `make design-check` measures it.

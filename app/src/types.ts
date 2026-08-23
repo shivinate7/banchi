@@ -21,7 +21,22 @@
  *  `variant` against — `pipeline/variant.py:FINISHES`, same three strings in the same
  *  spelling. D3 rung 1: this is a *claim* the operator makes per stack, not a hint, which
  *  is why a mis-toggled card reviews rather than being silently corrected downstream. */
-export type Finish = 'normal' | 'holo' | 'reverse_holo'
+/* THE FINISH VOCABULARY IS DATA NOW, NOT A TYPE, and this used to be
+ * `'normal' | 'holo' | 'reverse_holo'` — Pokemon's three, hard-coded.
+ *
+ * That union was correct while Pokemon was the only game and it became a defect the moment
+ * it was not. `GameEntry.finishes` is `string[]` and differs per game — Riftbound and One
+ * Piece stock `normal | foil`, with no reverse holo at all, and `misc` declares none. A
+ * literal union of one game's strings cannot express another's, so a screen typed against it
+ * silently kept drawing Pokemon's chips whatever game was chosen. Reported from the rig.
+ *
+ * Widened to `string` deliberately rather than to a union of every game's finishes: that
+ * union would be a second copy of `pipeline/games.py` maintained by hand on this side, which
+ * is the mirror `types.ts` and `CaptureScreen.tsx` both already refuse for the registry
+ * itself. The vocabulary has ONE home and the server is what enforces it — a finish outside
+ * the chosen game's list is refused with `variant_invalid`, and the app's job is to offer
+ * only what `GET /games` said, never to re-decide it. */
+export type Finish = string
 
 /** What the finish control on the capture screen holds, which is one state wider than the
  *  wire enum. `null` is NO CLAIM: the operator has not said anything about this stack, so
@@ -46,6 +61,86 @@ export type Finish = 'normal' | 'holo' | 'reverse_holo'
  *  collapsing into one set. */
 export type FinishClaim = Finish | null
 
+/** One entry of `pipeline/games.py`, as `GET /games` serves it (D21, D22).
+ *
+ *  A STRUCTURAL MIRROR OF THE REGISTRY, NOT A COPY OF ITS CONTENTS. There is deliberately
+ *  no `app/src/games.ts` holding the four game keys and their rarity lists: that would be a
+ *  second hand-authored copy of a hand-authored file, kept in step by nobody, buying nothing
+ *  the wire does not already give. So `key` is `string` and not a union — the app learns what
+ *  a game is at runtime, from the one place the pipeline learns it.
+ *
+ *  Every field the registry authors is here, including the ones no screen reads yet, for the
+ *  same reason `do_games` serves them: a projection would be a third opinion about what a
+ *  game is, and the first screen that wanted `card_aspect` would have to change a route.
+ */
+export type GameEntry = {
+  /** The registry key. What travels on the wire as `game`, and what lands in the record. */
+  key: string
+
+  /** What a picker shows. `Pokémon`, `Pokémon code cards`, `Misc` — accented and spaced,
+   *  unlike `key`. Never derived from `key` on this side; the registry authors both. */
+  display: string
+
+  /** The export's exact `Product Line` cell, or `null` for a game that spans several at
+   *  once and therefore has none. `null` rather than `''` is load-bearing on the Python
+   *  side — see the `misc` entry — so the type keeps the distinction rather than folding
+   *  both into a falsy string. */
+  product_line: string | null
+
+  /** The export's `Rarity` cells, verbatim and in stack order. Empty for a game with no
+   *  rarity ladder that means anything (`misc`), which D23 makes narrow nothing. */
+  rarities: string[]
+
+  /** The finish enum for this game, and the `Condition` string each finish maps to. Same
+   *  three strings as `Finish` for `pokemon`; a different set, or none, elsewhere. */
+  finishes: string[]
+  condition_by_finish: Record<string, string>
+
+  /** Rarity -> the finishes it may claim. A SUPERSET of what any one export proves, which
+   *  D23 makes load-bearing: a chip excluded by a rarity claim renders unselectable, and
+   *  that is only safe while this exceeds reality. */
+  finish_by_rarity: Record<string, string[]>
+
+  /** D24: does this card have a box, section and card position at all? `false` for code
+   *  cards, which are a count rather than a place. */
+  located: boolean
+
+  /** Strategy NAMES, dispatched in the Python module that owns each behaviour —
+   *  `pipeline/join.py`, `identify/prompt.py`, `geometry/crop.py`. Carried here because the
+   *  registry authors them, and because `prompt` is how a screen can tell a game that is
+   *  never identified (`operator_note`) from one whose prompt is merely unwritten. */
+  join_key: string
+  prompt: string
+  crop_bands: string[]
+
+  /** Short edge over long. `null` for a game whose cards are not one size — picking either
+   *  of two real answers would be authoring a number nobody measured. */
+  card_aspect: number | null
+
+  /** THESE TWO FLAGS ARE NOT THE SAME FLAG, AND A SCREEN THAT TREATS THEM ALIKE IS WRONG.
+   *
+   *  `unverified: true` is a measurement somebody owes: no TCGplayer export has been seen,
+   *  so the entry has no product line and no rarities and nothing captured under it could
+   *  ever be joined. That is an ERROR STATE — the server refuses a capture naming it, and a
+   *  screen should say so and say what would fix it.
+   *
+   *  `catalogued: false` is the finished answer: this game spans several product lines at
+   *  once, so there is no export that would settle it and none is coming. `misc` is that,
+   *  permanently and correctly. It is captured, located and described in a free-text note,
+   *  and rendering it as a fault would put a red flag on 1% of the shelf forever. */
+  unverified: boolean
+  catalogued: boolean
+}
+
+/** What `GET /games` answers. `default` is D21's read-side backfill, published rather than
+ *  guessed at: the app needs a game to start on, and picking the first entry or hardcoding
+ *  `'pokemon'` would be a second decision that has to agree with `games.DEFAULT_GAME` and
+ *  would stop agreeing the day the registry is reordered. */
+export type GameRegistry = {
+  default: string
+  games: GameEntry[]
+}
+
 /** What `POST /capture` and `PUT /inventory/<box>/<index>` answer with: where the card
  *  landed. */
 export type CardSummary = {
@@ -58,10 +153,15 @@ export type CardSummary = {
   /** `Box 3 · Section 2 · Card 17`, rendered by `pipeline/join.py:Position.label` at 25
    *  cards per section. The app displays this string and never composes a second one
    *  (capture-app spec section 5.1) — a client-side renderer is a copy of D10's divider
-   *  size that nothing keeps in step with the pipeline's. */
+   *  size that nothing keeps in step with the pipeline's.
+   *
+   *  STILL A STRING FOR A POOLED CARD (D24), and a different one: the capture screen
+   *  prints this for where the card landed, so the server answers the pooled fact —
+   *  `pipeline/join.py:pooled_label`, "Pokémon code cards · pooled" — never a position
+   *  label and never nothing. The nulls live one level down, in `place`. */
   label: string
-  section: number
-  card: number
+  section: number | null
+  card: number | null
 
   /** True only on the first capture into a box. Deliberately NOT a dialog: the owner
    *  declined a confirmation step on a new box number, and the cost of that — a typo like
@@ -173,6 +273,15 @@ export type InventoryCard = {
   section?: number
   card?: number
 
+  /** The fourth decoration, typed late: `do_inventory` has sent the whole `Place` block
+   *  beside the three flat keys since the block existed, and nothing on this side read it
+   *  until D24 needed the one field only the block carries. A POOLED CARD IS THE ROW THAT
+   *  MAKES THE DIFFERENCE VISIBLE: it arrives with `place` (carrying `located: false` and
+   *  the game's display name) and WITHOUT the three flat keys — where a row whose position
+   *  will not coerce arrives with neither, so a design fact and a fault never share a
+   *  shape. Optional for the same reason the three above are. */
+  place?: Place
+
   /** Filesystem path again, not a URL. See `CardSummary.photo`. */
   photo: string | null
 
@@ -183,6 +292,25 @@ export type InventoryCard = {
    *  server validated anything. Narrowing it here would make the type assert something
    *  about `inventory.json` that only `POST /capture` and `PUT /inventory` enforce. */
   metadata_finish: string | null
+
+  /** Which game the operator said this card is (D21). Loose `string | null` for the same
+   *  reason `metadata_finish` is: this comes off disk, and records written before the field
+   *  existed carry none. `null` here is NOT a no-claim the way a null finish is — D21 is
+   *  explicit that the two do not transfer, because a ladder infers a finish and nothing
+   *  infers a game — it means "written before the field existed", and the pipeline reads it
+   *  as `pokemon`. A screen showing a game should apply `GameRegistry.default` the same way,
+   *  and never invent its own fallback. */
+  game: string | null
+
+  /* D23's stack claim as the record carries it: a list of the game's exact Rarity cells,
+   * or null where the operator claimed nothing. Never a string — the sidecar reader
+   * defends against that spelling; this type states the honest one. */
+  rarity_claim: string[] | null
+
+  /** Free text the operator typed after the capture, saying what a card the pipeline will
+   *  never identify actually is. Only ever set through `PUT /inventory/<box>/<index>` —
+   *  never in a capture body, because the feeder does not wait for a keyboard. */
+  note: string | null
 
   captured_at: string | null
   capture_id: string | null
@@ -199,15 +327,50 @@ export type InventoryCard = {
   condition: string | null
   state: string
   state_at: string | null
+
+  /** Why a retired copy left — one of the four the server validates (`pulled`, `damaged`,
+   *  `lost`, `given_away`) — and null on a card in any other state. Written only by
+   *  `POST /inventory/<box>/<index>/retire` and cleared by its reversal; loose `string`
+   *  for the reason every stored field here is — this comes off disk, and the store owns
+   *  the vocabulary (D26). */
+  retire_reason: string | null
   run: string | null
 }
 
 /** `GET /inventory`, whole. Keys of `cards` are `store.master.position_key` — `"3/17"` for
  *  box 3, card 17 — so a lookup is `inventory.cards[`${box}/${index}`]`, and under
  *  noUncheckedIndexedAccess that read is `InventoryCard | undefined`. */
+/* One SKU's progress through TCGplayer, as QUANTITIES rather than as addresses.
+ *
+ * D7 amended: copies of a SKU are fungible, so `pushed`, `staged` and `live` count copies at
+ * each stage and name no position at all. They were per-card states until 2026-08-23 and
+ * `store/master.py:check_state` now refuses them as card states — which is why a screen that
+ * wants "how many of this are listed" reads it here and cannot count it off the copies.
+ *
+ * `live` IS AN ESTIMATE BETWEEN RUNS, deliberately. D8 and D11 put the authority in the
+ * TCGplayer export's `Total Quantity`, which `./pkmnscan join` reads on every run; a sale
+ * decrements this locally and the next join corrects it. Do not render it as a fact about
+ * the marketplace — render it as what this store last believed. */
+export type Listing = {
+  sku: string
+  condition: string | null
+  pushed: number
+  staged: number
+  live: number
+  at: string | null
+  staged_at: string | null
+}
+
 export type Inventory = {
   version: number
   cards: Record<string, InventoryCard>
+
+  /* Schema v2 added both, and `do_inventory` answers with `to_payload()` verbatim — so they
+   * have been on this wire since the day the store gained them. Declared optional because a
+   * v1 payload predates them and this type is cast, never validated: a screen reading a
+   * pre-v2 store must find `undefined` rather than a crash. */
+  boxes?: Record<string, BoxRecord>
+  listings?: Record<string, Listing>
 }
 
 // -------------------------------------------------------------------- the standing queues
@@ -337,6 +500,34 @@ export type SaleResult = {
   restores_to: string | null
 }
 
+/** Why a retired card left (D26). The send-side union — the four words the server's
+ *  `retire_reason_invalid` refusal enumerates — while the record's own `retire_reason`
+ *  stays a loose string, the same split `BoxState` draws between what may be SET and what
+ *  comes off disk. A closed vocabulary rather than free text so the history stays
+ *  greppable; a card that needs a sentence gets one in `note`, through `updateCard`. */
+export type RetireReason = 'pulled' | 'damaged' | 'lost' | 'given_away'
+
+/** What `POST /inventory/<box>/<index>/retire` answers, in either direction.
+ *
+ *  `SaleResult`'s shape on the sibling route (D26: `retired` is `sold`'s sibling — a copy
+ *  that left inventory without a sale, record kept, gap permanent), and a subset of the
+ *  body by the same rule: the route also returns `state`, `previous_state`, `reason` and
+ *  the whole card row, and naming a field here is a claim that something reads it. The
+ *  same warning travels with `restores_to`: null on a retirement means the reversal WILL
+ *  refuse (`retired_origin_unknown`), so a screen that reads it never draws an Undo whose
+ *  only behaviour is that refusal — the defect `SaleResult` records as having shipped
+ *  twice before the field was read. */
+export type RetireResult = {
+  /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
+  position: string
+
+  /** True when this call reversed a retirement rather than recording one. */
+  undone: boolean
+
+  /** What an undo of THIS call would put the card back to, or null when there is none. */
+  restores_to: string | null
+}
+
 /** D4's one-tap choice, as `POST /review/<box>/<index>/answer` takes it.
  *
  *  BOTH VALUES ARE COPIED OFF ONE CANDIDATE ROW, never composed. The route refuses a SKU the
@@ -354,4 +545,294 @@ export type ReviewAnswer = {
   index: number
   sku: string
   condition: string
+}
+
+/** What the card carried before an answer overwrote it — the pair a reversal puts back.
+ *
+ *  BOTH MEMBERS ARE LEGITIMATELY NULL AND THAT IS THE COMMON CASE, which is the one thing to
+ *  know before reading this. A card sitting in a review queue has usually never carried a SKU
+ *  at all — that is why it is in a queue — so the pair is `{sku: null, condition: null}` and
+ *  putting it back means returning the card to carrying no answer. Read the OBJECT as
+ *  present-or-null; never test its members for emptiness, which is the mistake that would
+ *  suppress the undo on exactly the cards that most need it.
+ *
+ *  A CATALOG SKU AND A CONDITION STRING, never a sentence. Owner-side only, like everything
+ *  the review queue draws: this vocabulary is the pipeline's. */
+export type AnswerOrigin = {
+  sku: string | null
+  condition: string | null
+}
+
+/** What `POST /review/<box>/<index>/answer` answers, in either direction.
+ *
+ *  A SUBSET OF THE BODY, the same shape `SaleResult` above takes of the sale's. The route also
+ *  returns `answered`, `box`, `index`, `sku`, `condition`, the two cleared flags, the two
+ *  reopened flags and the whole card row; naming a field here is a claim that something reads
+ *  it, and `server/capture_server.py` holds the full shape.
+ *
+ *  THE TWO CLEARED FLAGS ARE DELIBERATELY ABSENT even though something does read them.
+ *  `ReviewQueue.tsx:clearedQueues` takes an `unknown` and reads them off the body itself,
+ *  because it has to tell "the server said false" from "an older server said nothing" and a
+ *  typed `boolean` erases that difference — its own docstring has the argument and the card it
+ *  would otherwise redraw.
+ *
+ *  `restores_to` IS THE FIELD `SaleResult` RECORDS AS HAVING BEEN DROPPED TWICE, and this is
+ *  the second route to carry it. Null means the reversal will refuse and the undo must not be
+ *  drawn: either the answered SKU is already out of this Mac (`undo_too_late`) or the store's
+ *  history cannot say what the answer replaced (`answer_origin_unknown`). On a reversal it is
+ *  always null and means only that there is nothing left to reverse — not that a second undo
+ *  is available. */
+export type AnswerResult = {
+  /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
+  position: string
+
+  /** True when this call took an answer back rather than recording one. Read this rather than
+   *  comparing a card's SKU against a queue file, so one field answers "which way did that go"
+   *  in both directions. */
+  undone: boolean
+
+  /** What an undo of THIS call would put back, or null when it would be refused. */
+  restores_to: AnswerOrigin | null
+}
+
+// --------------------------------------------------------- where a card sits inside its box
+
+/** Where one card is, and how far into its box that is.
+ *
+ *  `GET /search` hangs one of these off every copy, and the server decorates every card it
+ *  already serves with one too. THE FLAT `label`/`section`/`card` KEYS DO NOT GO AWAY —
+ *  `CardSummary` and `InventoryCard` keep theirs, and the screens reading them are unchanged.
+ *  This is a second, richer view of the same fact, added because one question the flat keys
+ *  cannot answer turned out to be the one the owner asks at the box: not *which* slot, but
+ *  *how far in* — whether to open the lid at the front or dig to the back.
+ *
+ *  THE CLIENT RENDERS `label` AS GIVEN AND COMPUTES NO SECTION ARITHMETIC. Same rule
+ *  `CardSummary.label` states, restated here because this record hands the client the raw
+ *  numbers that make breaking it easy: D10's cards-per-divider is a configurable pipeline
+ *  constant, and a client that re-derives a section boundary from `index` owns a copy of it
+ *  that nothing keeps in step with `pipeline/join.py`.
+ *
+ *  WHAT IS PERMITTED IS PRESENTATION, and the line runs between a drawing and a claim. A
+ *  percentage computed from `fraction`, or a track segment whose width comes from
+ *  `section_start` and `section_end`, describes a picture of numbers the server sent —
+ *  nothing downstream reads it and no card moves if it is off by a pixel. `Section 2 · Card
+ *  17` assembled out of `index` and a divider size is a position claim, it is what somebody
+ *  carries to a physical box, and it is forbidden. `app/src/PositionBar.tsx` is the one
+ *  component that draws from these numbers and it argues the same line at its own `spansOf`.
+ */
+export type Place = {
+  /** `Box 3 · Section 2 · Card 17`, composed by `pipeline/join.py:Position.label`. Displayed
+   *  as given. See the paragraph above, and `server.ts:positionLabel` for the read that
+   *  refuses to substitute anything when it is missing.
+   *
+   *  NULL FOR A POOLED CARD (D24), never for a fault. A game whose registry entry says
+   *  `located: false` has no position to name, so its block carries no label, no section
+   *  and no fraction — `located` below is what says this is the design fact rather than
+   *  the coerce-failure, which arrives as no block at all. */
+  label: string | null
+
+  /** D24's split between a key and a place: does this card have a position at all? False
+   *  for a pooled game's card — a count, not a location — whose `box`/`index` below are
+   *  the store key and the photo route's arguments, never a slot. Optional because an
+   *  older server omits it, and absent must read as located: every block that server
+   *  sends carries a real label. */
+  located?: boolean
+
+  /** The registry key and display name of the game, PRESENT ONLY ON A POOLED BLOCK — the
+   *  honest thing a screen shows where a label would have gone. `GET /games` stays the
+   *  registry's one home; these two fields are a stamp, not a second copy. */
+  game?: string
+  game_display?: string
+
+  box: number
+
+  /** The card's sequential position in the box — D10's allocator number, 1-based, and the
+   *  numerator of the `#40 of 250` sentence. Not the slot within a section; that is `card`.
+   *  On a pooled block it is the KEY's second half, not a position — see `located`. */
+  index: number
+
+  section: number | null
+  card: number | null
+
+  /** What the owner calls this box, or null when he has not named it. A label for humans and
+   *  never an identifier: `box` is the identifier, and two boxes may carry the same name. */
+  box_name: string | null
+
+  /** The first and last `index` of the section this card is in. `section_end` is null when
+   *  the section has no end yet — the open end of an open box, and the whole of a box that
+   *  declares no sections at all. A null is "not decided", never "unbounded at zero". */
+  section_start: number
+  section_end: number | null
+
+  /** How many cards the box holds. For a closed box that number is final; for an open one it
+   *  is how many are in it so far and it moves with the next capture. `box_closed` is what
+   *  says which of those two sentences is true, and it is the whole reason both fields are on
+   *  the wire rather than one. */
+  box_total: number
+  box_closed: boolean
+
+  /** How far into the box this card sits, 0 to 1, or null when the server cannot say — an
+   *  empty box, or a record whose numbers do not support the division. NULL IS NOT ZERO and
+   *  must never be coerced to it: zero is the front of the box, which is a specific and wrong
+   *  place to send somebody. The same rule `ServerStatus.queues` states for its own nulls. */
+  fraction: number | null
+}
+
+// ------------------------------------------------------------------------------- the search
+
+/** One physical copy in a search result: the store's own key, its pipeline state, and where
+ *  it is. Deliberately NOT the whole `InventoryCard` — the search answers "where are my
+ *  copies of this card", and a screen that also received `confidence` and `capture_id` would
+ *  invite a second inventory view to grow inside a search result. */
+export type SearchCopy = {
+  /** `"<box>/<index>"`, `store.master.position_key`. Identity for React, and the string a
+   *  `curl /inventory` is grepped with. Never parsed into a position — a store key and a
+   *  physical location agree for the first section of a box and diverge after it. */
+  key: string
+
+  /** The pipeline's own word for what this ONE PHYSICAL CARD is — `captured`, `identified`,
+   *  `sold`, or since D26 `retired`: it left inventory without a sale, and it is exactly as
+   *  gone as a sold copy — not sellable, not on hand, its gap permanent.
+   *
+   *  `pushed`, `staged` AND `live` ARE NOT MEMBERS OF THIS SET ANY MORE and a screen must not
+   *  test for them. They are quantities per SKU, held in `SearchGroup.listed`, because copies
+   *  are fungible: the owner's ruling is that marking three of fifteen live means any three,
+   *  not three specific slots. `store/master.py:check_state` refuses them, which is what stops
+   *  a caller reaching for the old per-position flag and quietly getting one back.
+   *
+   *  THE PRACTICAL CONSEQUENCE FOR EVERY SCREEN THAT DRAWS A SELL CONTROL: every copy that
+   *  has not left — not `sold`, not `retired` — is sellable. There is no state to filter on
+   *  to find "the listed ones", because that question no longer has a per-copy answer.
+   *
+   *  Loose for the reason `InventoryCard.state` is: `store/master.py` owns the list, and an
+   *  app that enumerated it here would need editing every time one is added. Owner-side
+   *  screens show it verbatim; the Fulfiller's may not show it at all (D5). */
+  state: string
+  state_at: string | null
+
+  /** Whether `GET /photo/<box>/<index>` has bytes to serve. A hint that saves a request and a
+   *  broken image, never a guarantee: undo deletes a photo, so a screen still has to handle
+   *  the load failing. */
+  has_photo: boolean
+
+  place: Place
+}
+
+/** One SKU and every copy of it, which is D7's map with the position work already done.
+ *
+ *  `sku` is null for the group of copies the pipeline has written no import row for yet —
+ *  the same group `Inventory.tsx` renders as "No SKU yet", and for the same reason: a card is
+ *  given a SKU when `emit` writes its row and never before.
+ *
+ *  `names` IS A LIST BECAUSE THE COPIES MAY DISAGREE. Two copies read as `Rhyhorn` and
+ *  `Rhydhorn` are a run worth looking at, and a group that silently showed the first would
+ *  hide it. Same argument `Inventory.tsx:distinct` makes at more length. */
+export type SearchGroup = {
+  sku: string | null
+  names: string[]
+  number: string | null
+  printed_total: string | null
+  set_hint: string | null
+  condition: string | null
+
+  /** How many copies have reached each of the three listing states. Three counts and not one,
+   *  because `staged` and `live` are two facts about two different things — D7's refill maths
+   *  reads the LIVE number, and an import that was staged and never moved live has no live
+   *  quantity at all. Merging them here would hide exactly the box that is not earning. */
+  listed: { pushed: number; staged: number; live: number }
+
+  /** Copies still in the boxes — D7: "copies on hand is a count of UNSOLD positions".
+   *
+   *  NOT `copies.length`, AND THE TWO MUST NOT BE USED INTERCHANGEABLY. `copies` carries the
+   *  sold ones as well, because D10 keeps a sold record at a permanent gap and CLAUDE.md's
+   *  rule is that nothing silently drops a card — so a group with four copies of which one is
+   *  sold reports `on_hand: 3` and sends four entries. A screen wanting "how many are still
+   *  there" reads this field; a screen wanting "how many rows to draw" reads the array. */
+  on_hand: number
+
+  /** D7's live quantity cap — 4 today, and configurable there.
+   *
+   *  IT ARRIVES ON THE WIRE, WHICH IS WHAT `Inventory.tsx` SAID WOULD SETTLE IT. That screen
+   *  refuses to draw `2 of 4 live` and says why: `pipeline/join.py:LIVE_QUANTITY_CAP` is a
+   *  configurable Python constant, and writing the 4 in TypeScript is a copy nothing keeps in
+   *  step. The condition it named — "settled by the server reporting the cap" — is met here,
+   *  so a screen holding this group may draw the denominator. */
+  cap: number
+
+  copies: SearchCopy[]
+}
+
+/** `GET /search?q=<text>`. `query` is what the server searched for, echoed back — a slow
+ *  answer to an old keystroke is recognisable as one, which is the same job the sequence
+ *  guard in `useSearch.ts` does from the other end. */
+export type SearchResult = {
+  query: string
+  groups: SearchGroup[]
+}
+
+// --------------------------------------------------------------------------------- the boxes
+
+/** One section of one box, as `GET /boxes` reports it. `start` and `end` are `index` values in
+ *  the same space as `Place.index`, so a span drawn from these and a marker drawn from
+ *  `Place.fraction` are measuring the same box. */
+export type SectionDetail = {
+  section: number
+  start: number
+  end: number
+  count: number
+}
+
+/** What a box's `state` may be SET to, which is one thing and not the same thing as what may
+ *  come back off disk.
+ *
+ *  Narrow because it is sent: the server refuses anything it does not know as
+ *  `box_state_invalid`, and a union caught at the call site is better than a refusal caught at
+ *  the rig. Exactly the split `Finish` and `InventoryCard.metadata_finish` already draw — what
+ *  the wire accepts, and what a record written before the server validated anything may hold.
+ *
+ *  ASSUMED, AND THE ONE TYPE IN THIS FILE THAT IS. The route contract names the refusals
+ *  `box_state_invalid` and `box_closed` without publishing the vocabulary they police; these
+ *  two words are read off those codes and off `Place.box_closed`, which is a boolean and so
+ *  admits exactly two states. If the server speaks a third, this union is the one edit. */
+export type BoxState = 'open' | 'closed'
+
+/** One box: what it is called, how it is divided, and how full it is. `GET /boxes` serves a
+ *  list of these and `POST`/`PUT /boxes` answer with the one they wrote.
+ *
+ *  `state` IS A LOOSE STRING HERE AND A UNION AT THE SEND SIDE, which is not an inconsistency
+ *  — see `BoxState`. This value comes off disk. */
+export type BoxRecord = {
+  box: number
+  name: string | null
+
+  /** THE BOX'S DIVIDER INDICES, not a count of sections. D10 as amended 2026-08-23: a box
+   *  "carries its own list of divider indices — `[1, 31, 56]` means section 2 starts at card
+   *  31", set by the New section control at the moment the real divider goes in.
+   *
+   *  AN EMPTY LIST IS "UNDECLARED", NOT "ONE SECTION", and the difference is load-bearing:
+   *  D10 says an empty list is what the 25-rule renders, which is what keeps every label
+   *  written before boxes existed byte-identical. A screen may not read `[]` as a box with no
+   *  dividers and draw one span from it — `sections_detail` is where the rendered answer is,
+   *  computed once by `pipeline/join.py:Position` against whichever rule applies.
+   *
+   *  ONE FIELD IN THIS RECORD IS TYPED FROM D10 RATHER THAN FROM THE ROUTE CONTRACT, and it
+   *  is this one — the contract named `sections` without saying what shape it takes, on the
+   *  same day the decision that owns the concept was amended to make it a list. If the server
+   *  answers a count, this is the one edit and the call sites fail loudly at the compiler
+   *  rather than quietly at the box. */
+  sections: number[]
+  state: string
+  capacity: number
+  fill: number
+  next_index: number
+  cards: number
+  sold: number
+  sections_detail: SectionDetail[]
+}
+
+/** `GET /boxes`, whole. The envelope, where `BoxRecord` is the element — named the way
+ *  `QueueSnapshot` wraps `QueueEntryWire`, so a reader can tell at the import which of the two
+ *  is a list. */
+export type BoxSummary = {
+  boxes: BoxRecord[]
 }

@@ -8,7 +8,10 @@ different job:
                       return the answer to a picture that no longer exists — the single
                       worst failure available to a cache in this pipeline, because the
                       answer is plausible and the photo that disproves it is gone.
-  prompt fingerprint  RECORDED, and deliberately NOT a reuse gate.
+  prompt fingerprint  RECORDED per entry — the hash of the PROFILE THAT READ the
+                      answer, which since the per-game dispatch is not one value per
+                      run: a misc answer carries misc_card_v1's hash, a Pokemon answer
+                      Pokemon's. Deliberately NOT a reuse gate.
 
 WHY A PROMPT CHANGE DOES NOT INVALIDATE. T1 must invalidate strictly — a score has to come
 from the prompt being scored, and the harness already does that. Production inventory is a
@@ -16,6 +19,13 @@ different problem: re-reading thousands of correct answers because one line was 
 costs real money to mostly reproduce them. So a stale-prompt answer is reused, and the run
 report says how many came from an older prompt. The fingerprint's production value is that
 it is recorded, which is what makes a *targeted* re-read possible later.
+
+STALENESS IS JUDGED PER POSITION, against the profile that would read that card today —
+never against one run-wide hash. Game is a per-card claim (D21) and prompt follows game,
+so a run may legally mix contracts; measured against another game's contract, every misc
+answer would read stale forever, against a prompt it was never read with. The two listers
+below take a mapping for exactly this reason, and the caller supplies it because strategy
+lives on the sidecar, which this file never reads.
 
 `--reidentify-stale` is that targeted re-read: only entries that are both WEAK (confidence
 `low`, or currently sitting in a queue) and UNCLEARED. Everything else stands.
@@ -38,7 +48,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Mapping, Optional
 
 WEAK_CONFIDENCE = "low"
 
@@ -107,29 +117,42 @@ class Cache:
             return None
         return entry
 
-    def stale_prompt(self, prompt_fingerprint: str) -> List[str]:
-        """Positions whose answer came from an older prompt. Reported, not invalidated."""
+    def stale_prompt(self, current: Mapping[str, str]) -> List[str]:
+        """Positions whose answer came from an older prompt. Reported, not invalidated.
+
+        `current` maps each position of interest to the fingerprint of the profile that
+        would read it today — see the header for why this is a mapping and not one hash.
+        A position outside `current` is not the caller's to judge and is never returned.
+        """
         return sorted(
             key
             for key, entry in self.entries.items()
-            if entry.prompt_fingerprint != prompt_fingerprint
+            if key in current and entry.prompt_fingerprint != current[key]
         )
 
     def weak_and_uncleared(
-        self, prompt_fingerprint: str, queued: Iterable[str] = ()
+        self, current: Mapping[str, str], queued: Iterable[str] = ()
     ) -> List[str]:
         """What `--reidentify-stale` re-reads: weak, uncleared, and read by an older prompt.
 
         Weak means the model said `low`, OR the card is sitting in a queue right now — a
         card in a queue is one the pipeline already declined to trust, whatever the model's
         own confidence claimed.
+
+        `current` is per position, as in `stale_prompt` and for the header's reason: one
+        run-wide hash would re-read every misc answer forever. A position the caller does
+        not name — a card outside this run's capture dir, or one whose strategy has no
+        written prompt to re-read it with — is left alone.
         """
         in_queue = set(queued)
         out = []
         for key, entry in self.entries.items():
+            expected = current.get(key)
+            if expected is None:
+                continue
             if entry.cleared_by_human:
                 continue
-            if entry.prompt_fingerprint == prompt_fingerprint:
+            if entry.prompt_fingerprint == expected:
                 continue
             if entry.weak or key in in_queue:
                 out.append(key)

@@ -1,0 +1,128 @@
+/* The search field, at both densities.
+ *
+ * One palette, three faces, one 4px radius — docs/DESIGN.md's "one system, two densities",
+ * with `.search-field-owner` and `.search-field-fulfiller` changing scale and nothing else.
+ * Every colour comes from a token; the `raw colour` row of scripts/docs-audit.py blocks the
+ * alternative.
+ *
+ * NO SEARCH ICON, AND ITS ABSENCE IS NOT AN OVERSIGHT. There is no icon anywhere in this
+ * product: the separation mechanism is a hairline, the metadata register is mono, and an icon
+ * set would be a fourth visual vocabulary to keep in step for a control that already carries a
+ * label saying what it is. Adding one is a change to docs/DESIGN.md, not a CSS decision.
+ */
+
+.search-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* The box, not the input. The border lives out here so the key chip can sit inside it and the
+   whole thing reads as one control — an input with a chip floating beside it is two things. */
+.search-field-box {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* --ink and not --accent. Accent has exactly two jobs, "the system is unsure" and "there is
+   exactly one thing to do", and "your caret is here" is neither. The same argument
+   Fulfillment.css makes for its row focus, applied to the one control on the screen. */
+.search-field-box:focus-within {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.search-field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--body);
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+}
+
+/* The box already draws the focus ring for both of them; a second ring inside it would be two
+   rectangles a pixel apart. */
+.search-field-input:focus {
+  outline: none;
+}
+
+.search-field-input::placeholder {
+  color: var(--muted);
+}
+
+/* type="search" draws a browser cancel widget in WebKit at a size and colour nothing here
+   chose, and `make screenshot` renders in Chromium while the owner works in another browser —
+   a control that differs between the render and the screen breaks the comparison loop
+   docs/DESIGN.md calls mandatory. Cleared by retyping, the way every other field in this app
+   is. */
+.search-field-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+/* ---- the owner: dense, and a key to get here with ---- */
+
+/* Visually hidden, still read aloud, still associated. Not `display: none`, which removes it
+   from the accessibility tree — the whole point is that the label exists for the reader who
+   cannot see the placeholder. */
+.search-field-owner .search-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.search-field-owner .search-field-box {
+  padding: 0 var(--s2);
+  min-height: 36px;
+}
+
+.search-field-owner .search-field-input {
+  font-size: 15px;
+  padding: var(--s2) var(--s1);
+}
+
+/* The chip, in the utility face like every other key hint in this app. Owner-side only —
+   PullConfirm.css carries the same rule and the same reason. */
+.search-field-owner .search-field-key {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 5px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* ---- the Fulfiller: 24-64, and every floor in the constraints table ---- */
+
+/* His label is visible. It is an instruction rather than a name, and a placeholder that
+   vanishes the moment he types is not an instruction — it is the one that disappears exactly
+   when somebody who is unsure would want to re-read it. */
+.search-field-fulfiller .search-field-label {
+  font-family: var(--body);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+  margin-bottom: var(--s3);
+}
+
+/* 56px, not the 44px floor. 44 is what a target may not go below, not what a target should be
+   for a reader with reading glasses under a desk lamp — Fulfillment.css sets its rows the same
+   way. */
+.search-field-fulfiller .search-field-box {
+  padding: 0 var(--s4);
+  min-height: 56px;
+}
+
+.search-field-fulfiller .search-field-input {
+  font-size: 24px;
+  padding: var(--s3) var(--s1);
+}

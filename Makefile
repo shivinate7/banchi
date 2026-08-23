@@ -25,7 +25,7 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
-	@echo "  make status       where you are: next step, gate, T1 score, branch. Derived."
+	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
@@ -122,11 +122,13 @@ design-check:
 	$(NPM_GUARD)
 	@npm --prefix app run design-check
 
-# eslint over app/, config and rules in app/eslint.config.js. Its whole job is the two
-# guards docs/DECISIONS.md's v1 bug table has promised since it was written and never had:
-# no `facingMode` (bug 3, broke desktop camera selection) and no `split(",")` CSV parsing
-# (bug 2). Wired 2026-08-13 with the capture app's device picker, which is the first code
-# either rule could catch.
+# eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
+# guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
+# CSV parsing (bug 2) — and has since gained a rule per bug this project caught itself: the
+# two-argument `.then` that swallows its own success handler's throw, and `localStorage`
+# outside D27's carve-out. THE COUNT IS DELIBERATELY NOT STATED: this comment said "two" while
+# the config held four, and the config file is the register. The pattern is the point — a bug
+# becomes a guard, so the list only grows.
 #
 # JavaScript only, and this target does not claim otherwise. The stub it replaced promised
 # "ruff (Python) + eslint (JS)"; shipping the JS half under that name would leave `make

@@ -47,14 +47,21 @@
   --bg: #fcfcfd; /* the page. Everything sits on this. */
   --surface: #ffffff; /* raised: choice rows, queue rows, panels */
   --ink: #08090a; /* all body text, all headings, all money      19.4:1 on bg */
-  --muted: #52555b; /* metadata, secondary labels, disabled         7.29:1 on bg */
+  --muted: #4e5157; /* metadata, secondary labels, disabled  7.76:1 on bg, 7.30:1 on hover */
   --line: #e6e7ea; /* the 1px hairline. Every separation, no exceptions. */
   --accent: #1e40af; /* unsure, and the only-action fill             8.5:1 on bg */
 
   /* Two interaction states derived from the above. */
   --hover: #f4f5f7; /* ROW HOVER ONLY. bg and surface are 1.5% apart, so neither can
                        serve as a hover state for the other. Not a button state — the
-                       pull-confirm goes straight from default to pressed. */
+                       pull-confirm goes straight from default to pressed.
+
+                       IT IS A GROUND THAT CARRIES TEXT, which is the whole reason --muted
+                       moved. A hovered row does not empty itself: every word on it is
+                       still there, and it is the row somebody is reading. So the floor on
+                       the first line of this block applies here exactly as it does to bg
+                       and surface, and this is the darkest of the three. Check a text
+                       token against it. */
   --pressed: #17348f; /* accent, pressed. White on it: 10.9:1. */
 
   /* Label on an accent or pressed fill. NEVER a ground — that is --surface, and conflating

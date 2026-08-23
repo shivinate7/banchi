@@ -53,3 +53,32 @@
 .gallery-specimens .pull-confirm {
   width: 100%;
 }
+
+/* A second heading level, because the page stopped being one component's.
+ *
+ * It was "Pull-confirm, three states" and a single stack of specimens; the search-and-sell
+ * components share the page now, and a flat list of nine specimens with no grouping is the
+ * dense-grey-table failure docs/DESIGN.md names by the front door, applied to the one page
+ * whose job is to be looked at. Display face, one step under the title. */
+.gallery-heading {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: var(--s8);
+}
+
+/* Specimens that are screens rather than controls.
+ *
+ * `.gallery-specimens` is capped at 380px, which is right for a button and wrong for a row
+ * carrying a position label, a bar, a state and an action — at that width the bar's column
+ * collapses to nothing and the render shows a layout the product never has. Both classes are
+ * one specificity, so this must stay AFTER the rule it widens; it does, and moving it above
+ * would silently restore the 380px cap.
+ *
+ * 760px is a judgement about the render, not a breakpoint: `scripts/screenshot.sh` fixes the
+ * viewport at 1280px, and this leaves the owner's row wide enough to read at that width
+ * without stretching a Fulfiller card past the column docs/DESIGN.md gives his view. */
+.gallery-specimens-wide {
+  max-width: 760px;
+}

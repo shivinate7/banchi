@@ -41,13 +41,16 @@
    would fix it outright, which docs/DESIGN.md forbids by name so that one layout serves a
    laptop and a phone.
 
-   THE CAP IN FORCE IS 60vh AND IT IS DECLARED ON `.review-photo`, WITH THE ARGUMENT FOR IT
-   BESIDE IT. This block argued for 38vh over 34vh on rows-above-the-fold grounds, and was
-   left standing when the cap was raised — a comment reasoning toward a number the file does
-   not use, far enough above the rule that contradicts it that neither reader meets both.
-   Worse than no comment, because it reads as the current thinking. Those measurements were
-   real and the trade that replaced them is recorded where the number is, which is the one
-   place a session changing it will look.
+   THE CAP IN FORCE IS 60vh, DECLARED ONCE AS `--photo-cap` ON `.review` AND READ BY TWO
+   RULES: `.review-photo`'s max-height, and the min-height of the `.review-frame` that
+   reserves the space whether or not there is an image to put in it (D28). The argument for
+   the number is beside those rules, along with the 2026-08-22 measurement of what it costs.
+   This block argued for 38vh over 34vh on rows-above-the-fold grounds, and was left standing
+   when the cap was raised — a comment reasoning toward a number the file does not use, far
+   enough above the rule that contradicts it that neither reader meets both. Worse than no
+   comment, because it reads as the current thinking. Those measurements were real and the
+   trade that replaced them is recorded where the number is, which is the one place a session
+   changing it will look.
 
    THE RULE IS docs/DESIGN.md'S NOW, AND ONLY THE NUMBER IS THIS FILE'S. That section carries
    "photo as large as the viewport allows" — a cap on height with width free to bind first, so
@@ -66,6 +69,14 @@
      Everything on this screen stacks inside it — photo, finding, candidates, worklist — so
      a phone gets the same order with no rules to switch off. */
   max-width: 720px;
+
+  /* THE CAP, DECLARED ONCE AND READ TWICE — by the frame that reserves the space and by the
+     photograph that fills it. docs/DESIGN.md requires one cap and says this file is where the
+     number lives; two rules that both spell `60vh` would be two caps one edit away from
+     disagreeing, and the frame silently reserving a different height from the image it holds
+     is the exact defect D28 sent this session to remove. Not a design token: tokens.css owns
+     colour, type, spacing and radius, and this is a judgement about one screen. */
+  --photo-cap: 48vh;
 }
 
 /* ---- head ---- */
@@ -93,8 +104,14 @@
 }
 
 /* A word a human reads, so the body face. No fill: the solid accent is reserved for a screen
-   with exactly one thing to do, and reloading is not it. */
+   with exactly one thing to do, and reloading is not it.
+
+   inline-flex since 2026-08-22, to carry its key chip beside the word — the same shape
+   `.review-action` has always had, and for the same reason. */
 .review-reload {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
   font-family: var(--body);
   font-size: 14px;
   font-weight: 700;
@@ -160,12 +177,29 @@
   margin-top: var(--s5);
 }
 
-/* A panel that carries an action as well as a sentence — today only the note that offers to
-   clear the skips. The margin is the panel's rather than the button's, for the reason the
-   paragraph above has none of its own: the button is not the first child, and giving
-   `.review-action` a margin everywhere would fight the flex gap in the card's own row. */
+/* A panel that carries an action as well as a sentence — the note that offers to clear the
+   skips, and the refusal panel's own Reload. The margin is the panel's rather than the
+   button's, for the reason the paragraph above has none of its own: the button is not the
+   first child, and giving `.review-action` a margin everywhere would fight the flex gap in
+   the card's own row. */
 .review-note .review-action {
   margin-top: var(--s3);
+}
+
+/* THE REFUSAL PANEL, DRAWN INSIDE THE CARD BENEATH THE CANDIDATE ROWS. It used to sit between
+   the header and the card, which at a 60vh photograph is some 700px above the rows the
+   operator is looking at when he presses a digit — a refusal nobody sees, over a card that was
+   silently restored and is the next keypress's target. It cannot go ABOVE the rows, because
+   anything that appears there pushes every one of them down by its own height, which is the
+   movement this session was sent to remove.
+
+   The card is a flex column with its own gap, so the panel's standing top margin would double
+   the space; and `align-items: flex-start` means it must claim the width or it shrinks to its
+   own sentence. Both are the container's business rather than the panel's, which is why this
+   is a child rule and not an edit to `.review-note`. */
+.review-card > .review-note {
+  width: 100%;
+  margin-top: 0;
 }
 
 /* The machine string beneath the human one — docs/DESIGN.md's reason-code rule, which exists
@@ -215,19 +249,79 @@
    whole and the actions exactly at the fold; at 38vh it drew 246x342 with the third row cut
    24px short. Both were budgeted against rows-above-the-fold, and both are too small for the
    one job this screen has — deciding whether the photograph agrees with a candidate row, and
-   whether the foil is what the toggle claimed. The session that raised the cap recorded that
-   60vh keeps the sentence and the first candidate in view beneath it; that claim is the one
-   thing here nobody has re-measured since, and it is the first thing to check on the owner's
-   own screen. What is NOT in doubt is what it bought: 245px of card at 38vh is not a card you
-   can rule on. */
+   whether the foil is what the toggle claimed. What is NOT in doubt is what it bought: 245px
+   of card at 38vh is not a card you can rule on.
+
+   THE UNMEASURED CLAIM WAS MEASURED ON 2026-08-22 AND IT IS FALSE. The session that raised
+   the cap recorded that 60vh keeps the sentence and the first candidate in view beneath it,
+   and this comment named that as the one thing nobody had re-measured. Against the 16 real
+   Gate B entries at 1440x900: the photograph draws 305x540 at y=211, the sentence at y=873
+   fits, and the first candidate row's top is at y=911 — eleven pixels past a 900px fold, so
+   NO candidate row is on screen with the photograph. Getting the whole first row above the
+   fold means about 50vh, which is 253px of card and back inside the width the 38vh session
+   rejected as unrulable.
+
+   THE OWNER SETTLED IT AT 48vh ON 2026-08-23, shown both renderings side by side and asked
+   which way the trade went: "do 48vh sure for now and i'll decide later if i want it bigger".
+   Provisional by his own words, so the measurements above are kept in full — they are what a
+   later session needs to raise it again, and the 34vh/38vh findings are the evidence that
+   going further DOWN was already tried and rejected as unrulable.
+
+   48 rather than the 50 the measurement suggested: 50vh clears the fold by roughly 40px, and
+   48 buys a little more margin for a two-line reason sentence without reaching the 38vh
+   territory the earlier session convicted. At 48vh the photo draws ~432px tall and the first
+   candidate row's top lands near y=803, comfortably inside a 900px fold.
+
+   The previous ruling read: the number is left at 60vh and the finding reported instead,
+   because which way that trade goes is the owner's and not a stylesheet's. That was right,
+   and it is what produced the question that got answered. Changing it without asking would
+   have been settling an interview question with
+   a stylesheet. What this session fixed is the thing that has no case for the defence: the row
+   MOVING. */
 .review-photo {
   display: block;
   width: auto;
   max-width: 100%;
-  max-height: 60vh;
+  max-height: var(--photo-cap);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
+}
+
+/* THE RESERVED BOX (D28). The photograph is the only thing on this screen whose height is not
+   known before it is drawn, and every card's candidate rows sat directly on top of it: the
+   next card's image is unloaded at the instant of the advance, so the rows jumped UP to fill
+   the gap and dropped back when it decoded. Measured at 1440x900 on the Gate B captures, one
+   skip: the first candidate row's top went 911 -> 373 within 5ms and back to 911 at ~50ms. A
+   538px round trip under a finger already travelling toward a digit, and the answer that
+   finger writes is one `Queue.upsert` will not let a human take back.
+
+   min-height RATHER THAN height, so nothing is ever clipped. The image can only be as tall as
+   --photo-cap because its own max-height is the same value, so the frame is exact in the
+   common case; an absent-photo panel that ran longer than the cap would grow the frame rather
+   than overflow it, which costs a one-off shift on a card that has no photograph at all and
+   never hides a sentence.
+
+   WHAT IT COSTS: a photograph wider than it is tall does not fill the box, and the difference
+   is dead space above the position label. Portrait is the rig's normal case and fills it
+   exactly — Gate B's frames are 2160x3840 and draw 305x540 in a 540px box — but D13 records
+   that the Cam Link hands the browser a LANDSCAPE frame however the camera is mounted, so an
+   un-rotated capture binds on width at 720px, draws 405px tall and leaves 135px empty. That is
+   the price of the rows not moving, and it is paid on frames the capture-time rotation setting
+   is there to stop producing.
+
+   WHAT IS STILL NOT RESERVED, MEASURED RATHER THAN ASSUMED: the sentence. It is prose, one
+   line for most reasons and two for `set_ambiguous`, and each line moves the rows below it by
+   26px. Against the 538px the photograph was moving them, that is the difference between a
+   hazard and a detail — and reserving it would cost the same vertical budget the fold is
+   already short of, to hold space for a line that is usually not there. A homogeneous queue
+   (Gate B's was one reason sixteen times) does not vary at all. Recorded so the next session
+   measuring this finds the 26px already explained and does not go looking for a second bug.
+
+   It draws nothing of its own — see the note in ReviewQueue.tsx's `Photo`. */
+.review-frame {
+  width: 100%;
+  min-height: var(--photo-cap);
 }
 
 .review-absent {
@@ -470,19 +564,39 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   padding: var(--s1) var(--s2);
-  min-width: 24px;
+  /* 26px, AND THE SAME FLOOR IS ON `.review-key-blank`, BECAUSE THIS ONE IS A COLUMN AND NOT
+     A CHIP. Each candidate row is its own grid, so column 1's width is whatever that row's
+     first cell measures — and at 24px the floor never bound on a chip (a digit in Martian
+     Mono plus 16px of padding and two 1px borders comes to 25) while it always bound on the
+     blank beside it. Measured: the names in keyed rows started at x=82 and the names in
+     keyless ones at x=81. One pixel, invisible, and it made the comment on the blank — that
+     it holds the column so the names stay on one axis — quietly false. A floor above both
+     natural widths binds on both, which is what makes it a column. */
+  min-width: 26px;
   text-align: center;
 }
 
 /* The tenth candidate and beyond have no key — a two-key sequence is a vocabulary to learn
-   for a case this rare. The blank holds the column so the names stay on one axis; a row that
-   shifted left where the chip stopped would read as a different kind of row. */
+   for a case this rare. It holds the column so the names stay on one axis; a row that shifted
+   left where the chip stopped would read as a different kind of row.
+
+   IT DRAWS A DASH NOW RATHER THAN NOTHING, and the behaviour is unchanged: still no key,
+   still the mouse. An empty box the exact size of a chip is indistinguishable from a chip
+   that failed to render, on a screen where every other row carries one and the operator's
+   whole vocabulary is digits. No border, so it cannot be mistaken for a key that could be
+   pressed — a mark in the metadata face, in --muted, saying this row is answered with the
+   pointer. The height calc is gone with the empty box: a line of text sets its own. */
 .review-key-blank {
   grid-column: 1;
   grid-row: 1 / span 3;
-  min-width: 24px;
-  /* Matches the chip's box exactly: two 1px borders plus the vertical padding. */
-  height: calc(2px + (var(--s1) * 2) + 12px);
+  align-self: start;
+  /* The chip's floor, for the reason argued there. */
+  min-width: 26px;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: calc(2px + (var(--s1) * 2) + 12px);
+  color: var(--muted);
+  text-align: center;
 }
 
 /* ---- the closing actions ---- */
@@ -543,12 +657,32 @@
    gives a route name. Not the display face: that is 700/800 at >= 20px only, and a 20px
    heading over a list of 13px rows would outrank the card above it. */
 .review-waiting-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s3);
   font-family: var(--util);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* WHAT THE QUEUE IS MADE OF, on the heading of the list it describes. Reason codes are
+   machine strings and are NOT uppercased here for the reason `.review-machine` gives: a code
+   that reads one way on screen and another in review.json has to be translated before it can
+   be grepped. So it opts out of the heading's own text-transform, which is the only thing
+   this rule really does — the size and the face are the heading's.
+
+   Ink rather than muted, and heavier: the heading says which list this is, and the shape is
+   the thing worth reading on it. Gate B's queue was one reason sixteen times over, which is a
+   fact about the rig's lighting and was not visible anywhere on this screen. */
+.review-waiting-shape {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink);
 }
 
 .review-waiting-list {

@@ -167,7 +167,29 @@ export function CameraPicker({ camera }: { camera: Camera }) {
           fill, which docs/DESIGN.md reserves for a screen with exactly one thing to do. This
           screen offers at least two — reopen this camera, or pick a different one from the
           select above — so it takes the same outline weight as the notices it answers. */}
-      {camera.missing || camera.error !== null || underTarget ? (
+      {/* BEFORE ANYTHING HAS BEEN ASKED FOR, this is the opener rather than the retry, and it
+          is the only state in which the control is shown without something being wrong.
+          Nothing touches the camera on mount any more — see `useCamera.ts:started` — so on a
+          fresh screen there is no error to answer and no camera to reopen; there is a piece
+          of hardware nobody has reached for yet. Saying "Open the camera" is the honest
+          label for that, and drawing a notice instead would report a failure that has not
+          happened.
+
+          The paragraph above still holds for every other case: shown only when something is
+          wrong, because a permanently visible control to reopen a WORKING camera is an
+          invitation to drop the stream mid-box. `started` is what separates "not yet" from
+          "not working". */}
+      {!camera.started ? (
+        <>
+          <p className="camera-picker-notice">
+            The camera is not open yet. Nothing on this screen reaches for it until you ask,
+            so opening the app raises no permission prompt.
+          </p>
+          <button className="camera-picker-retry" type="button" onClick={camera.retry}>
+            Open the camera
+          </button>
+        </>
+      ) : camera.missing || camera.error !== null || underTarget ? (
         <button className="camera-picker-retry" type="button" onClick={camera.retry}>
           Reopen the camera
         </button>

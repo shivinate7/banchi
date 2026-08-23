@@ -3,49 +3,114 @@
  * docs/DESIGN.md gives the owner's screens a different standard from the Fulfiller's —
  * "the owner's screens are a tool — dense is fine" — and the Fulfillment floors (20px body,
  * 32px position labels, 44px tap targets) govern that view rather than this one. None of
- * them is asserted here because none of them applies here.
+ * them is asserted on the nav because none of them applies to the nav.
  *
- * OWNER-SIDE ONLY IS NOW ENFORCED AND NOT JUST DECLARED. This file said, before the
- * Fulfillment view existed, that the nav must never render on it — the constraints table
- * requires zero destructive actions reachable from that view, and a strip of links to the
- * capture screen's hard-delete undo (D10) is exactly the route it forbids. App.tsx stopped
- * rendering it there on 2026-08-13; the reasoning and the mechanism are both at `CHROME_FREE`
- * in that file, because the shell is the only place that can decide it.
+ * THE UNRESOLVED-HASH PANEL AT THE END OF THIS FILE IS THE EXCEPTION, and it is the only
+ * place in the app where both standards meet. It is drawn to HIS floors, on the owner's
+ * ground, because it is the one page the shell renders without knowing whose device is
+ * showing it. The argument is at `hasChrome` in App.tsx; the numbers are down there.
  *
- * So every rule below is measured against nothing but the owner's screens. Its 11px links and
- * sub-44px targets would fail four rows of the constraints table if they ever appeared on his
- * device, which is the sharpest possible statement of why they may not.
+ * OWNER-SIDE ONLY IS ENFORCED AND NOT JUST DECLARED. This file said, before the Fulfillment
+ * view existed, that the nav must never render on it — the constraints table requires zero
+ * destructive actions reachable from that view, and a strip of links to the capture screen's
+ * hard-delete undo (D10) is exactly the route it forbids. App.tsx stopped rendering it there
+ * on 2026-08-13, and stopped rendering it over an unresolved hash on 2026-08-22; the
+ * reasoning and the mechanism for both are at `CHROME_FREE` and `hasChrome` in that file,
+ * because the shell is the only place that can decide either.
+ *
+ * So every rule in the nav section below is measured against nothing but the owner's screens.
+ * Its 13px links and sub-44px targets would fail four rows of the constraints table if they
+ * ever appeared on his device, which is the sharpest possible statement of why they may not.
  */
 
 .app-nav {
   display: flex;
   align-items: stretch;
-  gap: var(--s5);
   padding: 0 var(--s6);
 
   /* The 1px hairline and nothing else. docs/DESIGN.md: a tinted header strip carrying each
      panel's name was built, looked at and rejected, so the chrome sits on the page ground
-     with a single --line rule under it. No shadow, no tint, no fill. */
+     with a single --line rule under it. No shadow, no tint, no fill. The grouping below is
+     built out of the same hairline and the gap either side of it, for the same reason: this
+     file has exactly one separation mechanism and does not get a second one for a new job. */
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
-/* Metadata, not prose: a view's name is a label, so it takes the utility face uppercase and
-   tracked, the same treatment .specimen-caption gives a state name in the gallery. */
+/* ---- the groups ----
+ *
+ * SEVEN LINKS IN ONE UNDIFFERENTIATED ROW WAS THE DEFECT. The row was written for three
+ * routes and grew to seven without anyone deciding it should, and at seven it drew the
+ * component sheet — a gallery of one button, kept in the build so it cannot go stale — with
+ * exactly the weight of the screen the owner spends an hour a day in.
+ *
+ * `Group` in App.tsx says which is which; this is where that costs pixels. Two mechanisms,
+ * one per boundary, and each is chosen by how far apart the two sides of it are:
+ *
+ *   run | look    ADJACENT, so the boundary is the hairline. There is nowhere else for it to
+ *                 go: 24px of gap already separates the links inside a group, and widening it
+ *                 to say something different would be one gap meaning two things.
+ *   look   aside  DISTANT, so the boundary is the space. The aside is pushed to the far end
+ *                 of the bar, and a vertical rule with four hundred pixels of air on one side
+ *                 of it is not separating anything — it reads as something left behind.
+ *
+ * A third group was considered and this is where it stopped being free: two hairlines in a
+ * seven-link row is a row with a diagram in it. The right-hand push already says everything
+ * the second rule would have.
+ */
+
+.app-nav-group {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s5);
+}
+
+/* `:not(.app-nav-group-aside)` rather than a rule below that undoes this one for the aside.
+   The undo was written first and it silently lost: an adjacent-sibling selector outranks a
+   single class, so the aside kept the hairline and the 24px gap it was supposed to trade for
+   the push, and the bar looked exactly as it had. Excluding it here means the two rules cannot
+   fight, which is worth more than the shorter selector. */
+.app-nav-group + .app-nav-group:not(.app-nav-group-aside) {
+  margin-left: var(--s5);
+  padding-left: var(--s5);
+  border-left: 1px solid var(--line);
+}
+
+/* Not the owner's work at all, and drawn where the eye goes last. `margin-left: auto` rather
+   than a fixed gap so the bar's slack collects here: everything the owner reaches on a rhythm
+   stays packed at the reading edge however wide the window is. */
+.app-nav-group-aside {
+  margin-left: auto;
+}
+
+/* ---- the links ----
+ *
+ * Metadata, not prose: a view's name is a label, so it takes the utility face uppercase and
+ * tracked, the same treatment .specimen-caption gives a state name in the gallery.
+ *
+ * 13px, UP FROM 11px, and the change is worth its own paragraph because 11px was legal. The
+ * Fulfillment floor is 20px and governs that view alone, so nothing was violated — but 11px
+ * put the one element that appears on EVERY screen at the bottom of the app's whole type
+ * scale, below every label it sits above. 13px is a size already in this file (the hash
+ * literal on the panel below has always been drawn at it) and is still firmly owner density:
+ * the padding stays on the 4–16 end of the spacing scale, the target stays under 44px, and
+ * nothing here drifts toward the standards written for his device.
+ */
 .app-nav-link {
   display: flex;
   align-items: center;
+  gap: var(--s2);
   padding: var(--s3) 0;
 
   /* Pulls the link's own bottom rule down onto the nav's hairline instead of stacking a
-     second line 1px above it. Without this the current-route marker reads as a double rule. */
+     second line above it. Without this the current-route marker reads as a double rule. */
   margin-bottom: -1px;
-  border-bottom: 1px solid transparent;
+  border-bottom: 2px solid transparent;
 
   font-family: var(--util);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   text-decoration: none;
@@ -58,12 +123,30 @@
   color: var(--ink);
 }
 
-/* The current route is --ink against --muted siblings, plus the rule under it.
-   Deliberately NOT --accent: docs/DESIGN.md gives accent exactly two jobs — outline and
-   text weight for "the system is unsure", solid fill for "there is one thing to do" — and
-   "which screen am I on" is neither. A third job is how a colour stops meaning anything. */
+/* ---- the current route ----
+ *
+ * THREE CHANNELS, AND NOT ONE OF THEM IS COLOUR ALONE. It was ink against muted siblings plus
+ * a 1px rule, which is a 4% difference in weight-per-pixel across a row of six at 11px: the
+ * marker was there and you had to look for it, which is the same as not having one on a screen
+ * you glance at to answer "where am I".
+ *
+ *   colour   --ink against --muted siblings, as before
+ *   weight   600 against 500 — the utility face carries 400/500/600, so this is the top of
+ *            what tokens.css locked rather than a value invented here
+ *   rule     2px --ink under the label, doubled from 1px, sitting on the nav's own hairline
+ *
+ * Weight and rule are the two that survive a monochrome print or a colour-blind reader, which
+ * is why the answer to "the marker is weak" was a second and third channel rather than a
+ * louder colour.
+ *
+ * DELIBERATELY NOT --accent, and this is the constraint that shaped the whole rule.
+ * docs/DESIGN.md gives accent exactly two jobs — outline and text weight for "the system is
+ * unsure", solid fill for "there is one thing to do" — and "which screen am I on" is neither.
+ * A third job is how a colour stops meaning anything.
+ */
 .app-nav-link[aria-current='page'] {
   color: var(--ink);
+  font-weight: 600;
   border-bottom-color: var(--ink);
 }
 
@@ -75,31 +158,159 @@
   outline-offset: -2px;
 }
 
-/* ---- the unresolved-hash panel ---- */
+/* ---- the key chips ----
+ *
+ * `,C`, `,R` and so on: docs/DESIGN.md's "Every choice shows its key", applied to the one
+ * owner-side control in the product that had no key at all. The chord and why it is a chord
+ * are at `LEADER` in App.tsx.
+ *
+ * THE WHOLE SEQUENCE ON EVERY CHIP, not the letter with the leader named once somewhere else.
+ * Two characters each is the cost, and what it buys is a nav that needs no legend: seven chips
+ * sharing a first character teach the prefix by repetition, in the place you are already
+ * looking. The alternatives were a lone `,` chip at the head of the bar, which is a punctuation
+ * mark floating in chrome with nothing to attach it to, and revealing the chips only while the
+ * leader is armed — which hides the keys from everyone who has not already found them, and a
+ * key nobody can discover is a key nobody presses.
+ *
+ * The same 10px bordered chip .capture-key, .review-key and .pull-preview-key draw, because a
+ * key off a keyboard should look the same everywhere in this app. Tracking is reset to zero
+ * and the uppercasing is dropped: the label above is a name and takes the nav's tracking, and
+ * this is two literal characters, where tracking is what makes `,C` read as two separate
+ * things. `--muted` on `--bg` is 7.76:1, which is the pairing every label in this nav already
+ * sits on — no new pairing is introduced by anything in this file.
+ */
+.app-nav-key {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 
-/* Same padding as .gallery, so a mistyped hash lands on a page laid out like the ones that
-   worked rather than on something that looks broken in a second way. */
-.no-such-view {
-  padding: var(--s6);
-  max-width: 60ch;
-}
-
-/* Body face: these are sentences a human reads, which is the one thing the utility face is
-   not for. Left at the inherited size — this is an owner-side dead end, not a Fulfillment
-   screen with a 20px floor. */
-.no-such-view p {
+  padding: 0 var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
   color: var(--muted);
 }
 
-.no-such-view p + p {
-  margin-top: var(--s2);
+/* ARMED, AND THE CHROME SAYS SO. The leader eats exactly one following keystroke wherever it
+   lands, so the state has to be visible or it is a trap — this is the whole disclosure, and it
+   is why the rule at `useLeader` can be "the next press belongs to the nav and to nothing
+   else" with no exceptions to explain. The chips come up to --ink and the bar's own hairline
+   with them: peripheral, on an element already on every screen, and gone again on the next
+   press or after CHORD_MS. Nothing moves, so nothing reflows underneath the armed state. */
+.app-nav[data-armed] {
+  border-bottom-color: var(--ink);
 }
 
-/* The hash itself is a literal string the owner may have typed or bookmarked, so it takes
-   the utility face and full-strength ink: it is the one part of the message worth reading
-   character by character. */
+.app-nav[data-armed] .app-nav-key {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* ---- the unresolved-hash panel ----
+ *
+ * THE ONE PAGE IN THIS APP DRAWN TO THE FULFILLER'S FLOORS ON THE OWNER'S GROUND. Every other
+ * screen knows whose it is; this one is whatever the browser was pointed at, on either device,
+ * and App.tsx's `hasChrome` explains at length why the safe reading of that is his. This is
+ * what the reading costs in CSS, and it is not much: one page, rendered rarely, drawn large.
+ *
+ *   body      >= 20px on every text node        the .no-such-view-say and .no-such-view-path rules
+ *   targets   >= 44px, >= 12px apart            56px min-height, 24px flex gap
+ *   contrast  >= 7:1                            --ink on --bg is 19.4:1, on --surface 19.9:1,
+ *                                               on --hover 18.3:1
+ *   jargon    no SKU, CSV, import, sync,        the copy carries none of them; "screen" and
+ *             batch, queue, staged              "address" are the words a person uses
+ *
+ * Read as a floor and not as a second design language. Same palette, same three faces, same
+ * 4px radius, same hairline — docs/DESIGN.md's "one system, two densities", with this page
+ * sitting at the far end of the one scale rather than in a world of its own.
+ */
+
+.no-such-view {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  /* 24px between everything, which is both the gap that reads as separate paragraphs at this
+     size and — where it falls between the two doors — the tap-target spacing floor with
+     twice the room to spare. One value doing both jobs honestly; it is not a coincidence
+     worth engineering around, but it is worth not breaking. */
+  gap: var(--s5);
+
+  padding: var(--s7) var(--s6);
+
+  /* Narrower than the 60ch this panel used to be. 60ch is a reading measure for the owner's
+     16px body; at 20px it is most of a laptop and the doors below stretch with it into two
+     bars nobody would read as buttons. */
+  max-width: 44ch;
+}
+
+/* Display face, which is otherwise unused on this side of the app — this is the one owner-side
+   page allowed to look like a page rather than a tool, because the person reading it may not
+   know what the tool is. 700 at 32px clears the face's own floor (700/800 only, >= 20px). */
+.no-such-view-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+/* Body face at --ink rather than --muted, and the change from --muted is deliberate: muted is
+   for metadata beside something else, and there is nothing else on this page. These two
+   sentences are the whole message. 19.4:1 on --bg. */
+.no-such-view-say {
+  font-size: 20px;
+  color: var(--ink);
+}
+
+/* The hash itself is a literal string somebody typed or bookmarked, so it takes the utility
+   face: it is the one part of the message worth reading character by character, and the owner
+   is the one who will. Its own line rather than inline in the sentence, because a mono run
+   inside a 20px body line at this size fights the line it is in. */
 .no-such-view-path {
   font-family: var(--util);
-  font-size: 13px;
+  font-size: 20px;
   color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---- the two doors ----
+ *
+ * A raised row with a hairline, which is what a choice looks like everywhere else in this app.
+ * NOT AN ACCENT FILL: docs/DESIGN.md reserves the solid fill for "there is exactly one thing
+ * to do", and this page has two answers because it genuinely does not know which of two people
+ * is reading it. Filling one of them would be the shell asserting the very thing it just
+ * admitted it cannot know.
+ *
+ * `stretch` rather than a content-width button, so both doors are the same width and neither
+ * reads as the recommended one. At 44ch that is well under a thumb's reach on a phone and
+ * still obviously a control on a laptop.
+ */
+.no-such-view-door {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+
+  min-height: 56px;
+  padding: var(--s3) var(--s5);
+
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+
+  font-size: 20px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* --hover is row hover only, and a door IS a row: a full-width raised choice with one label,
+   which is the case that token was derived for. --ink on --hover is 18.3:1. */
+.no-such-view-door:hover {
+  background: var(--hover);
+}
+
+.no-such-view-door:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }

@@ -61,6 +61,27 @@ NUMBER_COLUMN = "Number"
 NAME_COLUMN = "Product Name"
 CONDITION_COLUMN = "Condition"
 
+# The partition pair (D25). Both sat in CANONICAL_HEADER unread until 2026-08-23; they are
+# read now — `product_lines` below is the reader, and `pipeline/join.py:Catalog.from_export`
+# filters on the pair — but the reason they are named as constants is unchanged and worth
+# keeping.
+#
+# `Product Line` is the one that matters, and D25 is exact about why. The Deferred entry in
+# docs/DECISIONS.md used to call the catalog join "product-line-agnostic". Measured, it was
+# product-line BLIND — and blind is not agnostic. Agnostic means the join reads the column
+# and does not care what it says; blind means it cannot see the column at all, so two
+# exports concatenated into one file would CROSS-JOIN IN SILENCE, a Riftbound number
+# matching a Pokemon row with nothing anywhere in a position to notice.
+#
+# `Rarity` is the other half of the partition key, and the pair is what a registry needs.
+# `Product Line` alone cannot do it: `Code Card` is a Pokemon *Rarity*, not a separate
+# product line — all eight rows in fixtures/sv09_export_untouched.csv sit inside the
+# Pokemon export, and they are the only blank-`Number` rows in it — so the two games that
+# share the `Pokemon` line are told apart by rarity and by nothing else. See
+# `pipeline/games.py`, which authors the pair per game (D22).
+PRODUCT_LINE_COLUMN = "Product Line"
+RARITY_COLUMN = "Rarity"
+
 WRITABLE_COLUMNS: Tuple[str, ...] = (QUANTITY_COLUMN, PRICE_COLUMN)
 
 LINE_TERMINATOR = "\r\n"
@@ -124,6 +145,27 @@ def parse(data: bytes, source: Optional[Path] = None) -> Export:
 def read_export(path) -> Export:
     path = Path(path)
     return parse(path.read_bytes(), source=path)
+
+
+def product_lines(export: Export) -> Tuple[str, ...]:
+    """The distinct `Product Line` cells in this export, in first-appearance order.
+
+    THE READER D25 ASKED FOR, and the whole of what it says about a file: which product
+    lines its rows carry, verbatim, off the cells themselves. Which GAMES those lines map
+    to is the registry's question, answered where the registry is consulted
+    (`cli/resolve.py:exports_for`) — this module knows the format, not the games. Never
+    infer a game from a filename; this function is what a caller reads instead.
+
+    First-appearance order rather than sorted, so a report about the file lists the lines
+    the way the file does. A file with no rows answers with an empty tuple, which every
+    caller must treat as "this file claims nothing" rather than as license to guess.
+    """
+    seen: List[str] = []
+    for row in export.rows:
+        line = row.get(PRODUCT_LINE_COLUMN, "")
+        if line not in seen:
+            seen.append(line)
+    return tuple(seen)
 
 
 # --------------------------------------------------------------------------- writing

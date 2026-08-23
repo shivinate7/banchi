@@ -28,7 +28,10 @@ def _pricing_arguments(parser: argparse.ArgumentParser) -> None:
     """Shared by join and emit. emit prefers what the manifest recorded; these are seeds."""
     parser.add_argument(
         "--export",
-        help="TCGplayer Filtered CSV (All Printings). Recorded in the manifest by `join`.",
+        action="append",
+        help="TCGplayer Filtered CSV (All Printings). Repeatable, one file per game: "
+        "each file answers for the games its own Product Line column carries — never "
+        "its filename. Recorded per game in the manifest by `join`.",
     )
     parser.add_argument(
         "--rule",

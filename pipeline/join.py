@@ -10,6 +10,15 @@ invalid. Product Name is NEVER a join key — it inconsistently embeds the numbe
 ("Accelgor" in one row, "Black Belt's Training - 143/159" in another). Name matching
 exists only as a fallback for the rare catalog rows whose `Number` is blank.
 
+THAT KEY IS THE FORM A HUMAN READS; MATCHING GOES THROUGH `number_index_key`, ON BOTH SIDES.
+The index and the lookup disagreed about padding until 2026-08-23 — verbatim cells one side,
+`zfill(3)` the other — which silently missed every card in an unpadded export and reported
+it as `no_catalog_row`. That function's docstring holds the measurement and the fold.
+
+WHICH KEY A CARD IS LOOKED UP BY IS PER GAME (D21, D25), dispatched through
+`JOIN_KEY_STRATEGIES` below: Pokemon composes two printed halves, Riftbound and One Piece
+match one printed identifier verbatim, code cards go by name, and `misc` never joins at all.
+
 Duplicates aggregate by SKU at join time (D7): multiple copies collapse into ONE row with
 `Add to Quantity` = copies, live quantity capped at 4, the remainder held as backstock at
 known positions. Two rows with the same `TCGplayer Id` in one import file is undefined
@@ -60,12 +69,15 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-from pipeline import pricing, routing, tcgcsv, variant
+from pipeline import games, pricing, routing, tcgcsv, variant
 
 # D7 — a playset. Configurable, but never guessed at.
 LIVE_QUANTITY_CAP = 4
 
-# D10 — 25 cards per divider. Configurable.
+# D10 — 25 cards per divider. The DEFAULT layout, used for a box that declares none.
+# Sections are per-box and declared at capture time since D10's amendment; this constant is
+# what a box with an empty `sections` list renders with, which is what keeps every label
+# written before boxes existed byte-identical.
 CARDS_PER_SECTION = 25
 
 
@@ -73,25 +85,148 @@ class OutputSuppressed(Exception):
     """emit_import refused: something was unmatched and has not been reported yet."""
 
 
+class EmptyCatalog(Exception):
+    """`Catalog.from_export` filtered a game's rows out of an export and found none.
+
+    THE WRONG FILE, AND THE ONE CASE WHERE STOPPING BEATS CONTINUING (D25). Every other
+    join failure is per-card — a card with no row reviews, at a known position, while the
+    rest of the run proceeds. Zero rows is not per-card: it says the export handed to this
+    game carries none of its product line at all, so every card of the game would queue as
+    `no_catalog_row` and the report would point at 53 cards instead of at one flag. The
+    remedy is a different file, and a refusal is what says so.
+    """
+
+
 @dataclass(frozen=True)
 class Position:
     """D10 — sequential, assigned at capture. Sold cards leave permanent gaps; positions
-    are never renumbered."""
+    are never renumbered.
+
+    THE INDEX IS THE IDENTITY; THE LABEL IS A VIEW OF THE BOX'S CURRENT LAYOUT. `sections`
+    is the box's divider indices — `(1, 31, 56)` means section 2 starts at card 31 — and
+    editing it relabels every card behind the moved divider without touching a single index.
+    D10 (amended) accepts that: correcting a wrong layout is the point, and the label was
+    never printed on anything, only ever read live off a screen.
+
+    An EMPTY `sections` means the box has declared no layout, and the default divider size
+    renders it. That is the whole of the v1 compatibility story — every card recorded before
+    boxes existed renders through this branch and comes out unchanged.
+
+    THIS IS THE ONLY LABEL FORMULA IN THE REPO (`docs/specs/capture-server.md` §6.3). The
+    TypeScript side receives rendered strings and never computes a section.
+    """
 
     box: int
     index: int
+    sections: Tuple[int, ...] = ()
 
     @property
     def section(self) -> int:
-        return (self.index - 1) // CARDS_PER_SECTION + 1
+        if not self.sections:
+            return (self.index - 1) // CARDS_PER_SECTION + 1
+        count = 0
+        for start in self.sections:
+            if self.index >= start:
+                count += 1
+            else:
+                break
+        # An index before the first divider cannot happen with a validated layout (it starts
+        # at 1), but clamping beats returning 0 for a hand-edited file.
+        return max(1, count)
+
+    @property
+    def section_start(self) -> int:
+        """The index this card's section begins at."""
+        if not self.sections:
+            return (self.section - 1) * CARDS_PER_SECTION + 1
+        return self.sections[self.section - 1]
+
+    @property
+    def section_end(self) -> Optional[int]:
+        """The last index in this card's section, or None when it is the final one.
+
+        None rather than a guess: the final section runs to wherever the box ends, and only
+        a sealed box knows where that is (D20). The caller holding the capacity fills it in.
+        """
+        if not self.sections:
+            return self.section_start + CARDS_PER_SECTION - 1
+        if self.section < len(self.sections):
+            return self.sections[self.section] - 1
+        return None
 
     @property
     def card(self) -> int:
-        return (self.index - 1) % CARDS_PER_SECTION + 1
+        return self.index - self.section_start + 1
 
     @property
     def label(self) -> str:
         return f"Box {self.box} · Section {self.section} · Card {self.card}"
+
+
+# --------------------------------------------------------------- pooled, not located
+#
+# The owner's ruling ("Code cards are pooled inventory, not located", docs/DECISIONS.md):
+# a code card has no box, section or card position — it is a count. The index survives as
+# a KEY, because the photo and sidecar are named after it, but `Position.label` is never
+# rendered for one: a label names a slot somebody carries to a shelf, and there is no slot.
+# The seam is `pipeline/games.py`'s `located` flag, and these three helpers are its render
+# side. They live beside `Position.label` deliberately — that property's docstring calls
+# itself the only label formula in the repo, and the string that REPLACES a label belongs
+# next to it for the same reason: a second spelling of the pooled fact, composed ad hoc at
+# each surface, is a vocabulary nothing audits.
+
+
+def is_located(game: str) -> bool:
+    """Whether this game's cards have a physical position to render at all.
+
+    True for an unregistered game string, deliberately. An unknown game never survives to
+    a report through the join — `lookup_for` refuses it by name first — so the only caller
+    that can arrive here holding one is a reporter describing a record that predates the
+    registry, and the status-quo rendering (the label) is the answer that changes nothing.
+    """
+    try:
+        return bool(games.get(game)["located"])
+    except games.UnknownGame:
+        return True
+
+
+def pooled_label(game: str) -> str:
+    """What a screen shows where a position label would have gone, for a pooled card.
+
+    The game's display name and the word `pooled` — never `Box N · Section N · Card N`.
+    One composer, reached by `server/capture_server.py` and `cli/resolve.py` both, so the
+    capture answer and the queue entry cannot come to spell the pooled fact differently.
+    """
+    try:
+        display = str(games.get(game)["display"])
+    except games.UnknownGame:
+        display = str(game)
+    return f"{display} · pooled"
+
+
+def place_text(game: str, position: Position) -> str:
+    """The one line a list prints for where a card is: its label, or the pooled fact.
+
+    The pooled form carries the store key (`5/12`) because it is the only handle left —
+    an index is acceptable as a key, it is what the photo and sidecar are named after —
+    and because two pooled entries with identical lines would be indistinguishable in the
+    report that names them.
+    """
+    if is_located(game):
+        return position.label
+    return f"{pooled_label(game)} · {position.box}/{position.index}"
+
+
+def where_phrase(game: str, position: Position) -> str:
+    """`place_text` with its preposition, for a sentence mid-report.
+
+    Two forms rather than one because the preposition differs: a located card is AT a
+    slot, a pooled card is IN a pool, and "at Pokémon code cards · pooled" is a sentence
+    that has stopped meaning anything.
+    """
+    if is_located(game):
+        return f"at {position.label}"
+    return f"in the {game} pool ({position.box}/{position.index})"
 
 
 @dataclass(frozen=True)
@@ -115,11 +250,22 @@ class IdentifiedCard:
     set_hint: Optional[str] = None
     confidence: Optional[str] = None
 
+    # D23's multi-select rarity claim: the exact `Rarity` cells the operator said this
+    # card's stack holds, read off the capture sidecar by `cli/resolve.py`. A TUPLE, not a
+    # list, because this dataclass is frozen and a frozen carrier of a mutable member is a
+    # hashability bug waiting for its first `set()`. None or empty narrows nothing —
+    # `variant.resolve` treats the two identically, which is the compatibility guarantee
+    # that makes the claim strictly additive.
+    rarity_claim: Optional[Tuple[str, ...]] = None
+
     # A human's one-tap answer from the review screen, read off the inventory record by
     # `cli/resolve.py`. When set, `join_batch` resolves to this row before the ladder runs
     # — rung 0, `variant.HUMAN_ANSWERED`. The pair names one TCGplayer row exactly as the
     # answer route validated it; a SKU the current export no longer carries falls through
-    # to the ladder rather than being guessed at.
+    # to the ladder rather than being guessed at. Rung 0 deliberately does NOT consult
+    # `rarity_claim` above: a human who looked at the photograph beside the candidate rows
+    # outranks a claim about the stack it came from, and an answer that could be re-parked
+    # by a stack-level claim is the sixteen-cards failure D3 rung 0 exists to prevent.
     answered_sku: Optional[str] = None
     answered_condition: Optional[str] = None
 
@@ -131,10 +277,222 @@ class IdentifiedCard:
     # `pushed` and writing files that would have doubled them in Staged if imported.
     committed: bool = False
 
+    # WHICH GAME THIS CARD WAS CAPTURED AS (D21), and it decides which key finds its row.
+    # Defaulted rather than required, and the default is `games.DEFAULT_GAME` read by name
+    # rather than written out: every card built before this field existed is a Pokemon card,
+    # which is the read-side backfill D21 sanctions and the reason a run with only Pokemon
+    # in it joins byte-identically to the day before this line was added.
+    #
+    # D21 IS EXPLICIT THAT D3'S NULL-MEANS-NO-CLAIM DOES NOT TRANSFER HERE, and it is worth
+    # the sentence because the two fields sit two lines apart and look identical.
+    # `metadata_finish=None` is meaningful because there is a LADDER underneath it —
+    # `variant.resolve` infers a finish from the catalog, from detection, from a human. There
+    # is no ladder that infers a game: a missing game is not "no claim", it is "no export",
+    # and every consumer below would have nothing to join against. So this field is never
+    # None, and the substitution happens where the record is READ, never where it is written.
+    game: str = games.DEFAULT_GAME
+
 
 def join_key(number, printed_total) -> str:
-    """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error."""
+    """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error.
+
+    THE COMPOSITION FORM, WHICH IS NOT THE COMPARISON FORM. This builds the key a human
+    reads and a report prints, in the shape `CLAUDE.md` documents. Matching against the
+    export goes through `number_index_key` below, on BOTH sides, and that is the function
+    that decides whether two spellings are the same card. Same split `normalize_set` already
+    makes a few lines down: a label to show, and a fold to compare.
+    """
     return f"{str(number).strip().zfill(3)}/{str(printed_total).strip()}"
+
+
+def number_index_key(text) -> str:
+    """The one fold the number index and every number lookup pass through.
+
+    THIS EXISTS BECAUSE THE TWO SIDES USED TO DISAGREE, AND THE DISAGREEMENT WAS SILENT.
+    `Catalog.__init__` indexed on the export's `Number` cell VERBATIM while `join_key`
+    composed a `zfill(3)`-padded key, so the two agreed only for exports whose cells happen
+    to be three wide. Measured against `fixtures/pokemon_wide_export_untouched.csv`, which
+    carries SM Cosmic Eclipse: 99 distinct unpadded cells (`1/236`, `39/236`), 950 rows, and
+    ZERO of the composed keys appearing anywhere in the file. Every one of those cards would
+    have come back `no_catalog_row` — a miss blamed on the export rather than on the key,
+    which is the worst shape a join failure can take because the report points away from the
+    bug. D12 scopes the product to SWSH/SV, where every set is padded, which is why nothing
+    had ever noticed; Gate B's real 53-card run was ME01, already outside that scope.
+
+    PADDING THE INDEX INSTEAD WOULD HAVE BEEN THE WRONG FIX, and it is the tempting one.
+    `zfill(3)` on `066a/298` gives `066a/298` — unchanged, because it is already three wide
+    before the suffix — while `66a/298` from another export becomes `066a`... only if the
+    padding is applied to the digit run and not to the cell. One rule written twice in two
+    dialects is exactly how these two drifted apart in the first place.
+
+    SO: STRIP LEADING ZEROS FROM EVERY DIGIT RUN, KEEP EVERYTHING ELSE, FOLD CASE. Digit
+    runs are what padding decorates, and nothing else in these cells is decorative:
+
+        001/236   1/236      -> both `1/236`, which is the whole point
+        161/159              -> `161/159`, a secret rare, untouched and still unique
+        066a/298  066/298    -> `66A/298` and `66/298`, still two different Riftbound cards
+        EB01-009             -> `EB1-9`, and any spelling of it folds the same way
+        TG01/TG30            -> `TG1/TG30`, prefixes preserved
+
+    Measured across all four committed exports — SV09, the wide Pokemon export, Riftbound
+    and One Piece, 3,600 distinct cells between them — this fold introduces NO collisions: no
+    two different `Number` cells anywhere in them land on one key. That is the check to
+    re-run before widening it.
+
+    The technique is `normalize_set`'s, applied to a different string for the same reason:
+    two sources spell one identity differently and neither is wrong.
+    """
+    out: List[str] = []
+    digits: List[str] = []
+    for char in str(text or "").strip():
+        if char.isdigit():
+            digits.append(char)
+            continue
+        if digits:
+            out.append(str(int("".join(digits))))
+            digits = []
+        out.append(char)
+    if digits:
+        out.append(str(int("".join(digits))))
+    return "".join(out).upper()
+
+
+# ------------------------------------------------------------------ per-game dispatch
+#
+# `pipeline/games.py` says HOW a game's cards find their catalog rows, by name — the
+# `number_and_printed_total` key `CLAUDE.md` documents, or the `name_only` fallback that is
+# `pokemon_code`'s primary key because a code card carries no collector number at all. The
+# registry holds the NAME and this module holds the lookup, because the registry has to stay
+# `ast.literal_eval`-safe so the docs audit can read it without importing project code (D22).
+#
+# A PROTOCOL OR AN ABC PER GAME WAS CONSIDERED AND REJECTED. There is not one in `pipeline/`,
+# `identify/` or `geometry/` today, and it would move Pokemon's join key out of this module —
+# the one place `CLAUDE.md` points at for it — into a subclass beside three lines of code.
+# Names plus a per-module dict is also the only shape `scripts/docs-audit.py` can check: it
+# reads both files with `ast` and compares two sets of strings, running neither.
+#
+# A STRATEGY TAKES `(catalog, card)` AND ANSWERS `(rows, lookup)`. `lookup` is the string the
+# run report and the queue entry print, so it says which key was tried as well as what it
+# was — `number:031/197` and `name:Pikachu` are different questions with different remedies.
+
+
+def _lookup_number_and_printed_total(catalog: "Catalog", card: IdentifiedCard):
+    """The collector number, falling back to the name when the card prints none.
+
+    THE FALLBACK IS PART OF THIS STRATEGY AND NOT A SEPARATE ONE, which is what keeps today's
+    behaviour intact: a Pokemon code card sits inside the Pokemon export as a blank-`Number`
+    row, and T3 asserts it resolves. `name_only` is the strategy for a game whose cards NEVER
+    carry a number; this is the strategy for a game whose cards usually do.
+    """
+    if card.number is not None and card.printed_total is not None:
+        key = join_key(card.number, card.printed_total)
+        return catalog.rows_for_key(key), f"number:{key}"
+    # No collector number on the product (code cards, some promos). These are exactly the
+    # rows whose `Number` is blank, so the name fallback stays scoped to them.
+    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+
+
+def _lookup_printed_code(catalog: "Catalog", card: IdentifiedCard):
+    """The identifier exactly as printed, matched against `Number` verbatim.
+
+    THE OPPOSITE SHAPE TO THE ONE ABOVE, and the difference is where the string is built.
+    Pokemon prints two halves and this pipeline composes the key — zero-padding the left
+    one, because `25` and `025` are the same card and the export writes the padded form.
+    Riftbound and One Piece print ONE identifier (`OGN-001`, `OP01-001`) and the export's
+    `Number` cell carries that same string, so there is nothing to compose and nothing to
+    pad: padding here would turn a code the export holds into one it does not.
+
+    `printed_total` is not consulted at all, in either direction. A game keyed this way has
+    no denominator to disagree with, and reaching for one would invent half a key.
+
+    The blank-`Number` fallback is shared with the strategy above, and deliberately: sealed
+    products and promos land in the same rows whatever keys the rest of the export.
+    """
+    if card.number is not None:
+        key = str(card.number).strip()
+        if key:
+            return catalog.rows_for_key(key), f"code:{key}"
+    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+
+
+def _lookup_name_only(catalog: "Catalog", card: IdentifiedCard):
+    """The blank-`Number` rows, by name, and never the collector number.
+
+    For a game whose product has no collector number at all. Deliberately does not consult
+    `card.number` even when one is present: a number read off a card of this kind is a number
+    read off the wrong part of it, and matching on it would find a row belonging to something
+    else entirely.
+    """
+    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+
+
+# A game that is never joined at all — `misc`, the occasional Yu-Gi-Oh, Weiss Schwarz,
+# foreign-language or Magic card, captured and located and described by hand. The registry
+# gives it its own strategy name rather than reusing `name_only` against an empty catalog,
+# because "this never joins" and "this joined by name and found nothing" are different facts
+# with different remedies, and only the second one is worth looking into.
+NOT_JOINED = "not_joined"
+
+
+class NotJoinable(LookupError):
+    """A card whose game names `not_joined` reached the catalog.
+
+    Never raised in the ordinary course: a game that is never joined should be filtered out
+    before a catalog is built for the run (D25 partitions by game). If this fires, something
+    upstream let the card through, and stopping is better than matching it against whichever
+    export happened to be loaded.
+    """
+
+
+JOIN_KEY_STRATEGIES: Dict[str, Optional[Callable]] = {
+    "number_and_printed_total": _lookup_number_and_printed_total,
+    "printed_code": _lookup_printed_code,
+    "name_only": _lookup_name_only,
+    NOT_JOINED: None,
+}
+
+# Every strategy name the registry knows must have a lookup here, checked at import for the
+# reason `pipeline/variant.py` reconciles its finish enum there: the failure is otherwise a
+# `KeyError` raised mid-join, halfway through a run, with a card in hand. The reverse is not
+# checked — `not_joined` is authored ahead of the entry that will claim it, and blocking on
+# that would mean this file and the registry could only ever change together.
+_unrouted = [name for name in games.JOIN_KEY_STRATEGIES if name not in JOIN_KEY_STRATEGIES]
+if _unrouted:  # pragma: no cover - import-time contract, not a branch under test
+    raise RuntimeError(
+        "pipeline/join.py:JOIN_KEY_STRATEGIES has no lookup for "
+        + ", ".join(repr(name) for name in _unrouted)
+        + ", which pipeline/games.py lists in JOIN_KEY_STRATEGIES. Write the lookup here — "
+        "never let a game fall through to another game's key."
+    )
+
+
+def lookup_for(game: str) -> Callable:
+    """The lookup one game's cards use, or a refusal naming which kind of refusal it is.
+
+    `games.require` rather than `get` (D22): a game with no authored vocabulary refuses here
+    rather than borrowing Pokemon's. Joining is exactly the consumer that rule is written
+    for — the vocabulary IS the export, and a game with none has nothing to be joined
+    against. `require` raises two DIFFERENT refusals and each already names its own remedy:
+    `NotCatalogued` for a game that will never have a catalog (check `games.is_catalogued`
+    before the pipeline work), `EmptyVocabulary` for one still waiting on an export.
+
+    `require` RUNS FIRST, SO `NotJoinable` BELOW IS A BACKSTOP AND NOT THE MISC PATH. A misc
+    card that got this far refuses as `NotCatalogued`, whose message is the better one — it
+    says which predicate the caller skipped. What is left for `NotJoinable` is the case
+    those two cannot describe: a game the registry says HAS a catalog and a vocabulary, and
+    whose `join_key` is nevertheless `not_joined`. That combination is a registry
+    inconsistency rather than a data gap, and it should stop rather than pick a key.
+    """
+    entry = games.require(game)
+    name = str(entry["join_key"])
+    strategy = JOIN_KEY_STRATEGIES.get(name)
+    if strategy is None:
+        raise NotJoinable(
+            f"game {game!r} names join key {name!r}, which never joins. A card of this game "
+            "is captured, located and described by hand; filter it out of the run before a "
+            "catalog is built rather than matching it against an export it has no rows in."
+        )
+    return strategy
 
 
 def normalize_set(name: str) -> str:
@@ -200,22 +558,51 @@ class Catalog:
 
     Built from the export and nothing else (v2 §5.1). Collisions — one join key reaching
     rows in more than one `Set Name` — are computed here, once, before any card is joined.
+
+    ONE GAME PER CATALOG, NEVER MERGED (D25). `from_export` is the constructor that
+    enforces it; building directly from an export is the pre-D25 shape and remains legal
+    for a caller that has already scoped its rows. What may never exist is a single
+    `_by_number` spanning two games: it would report a cross-GAME collision through
+    `colliding_keys` as though it were the cross-SET collision that report is about —
+    different faults with different remedies, since a set hint fixes one and nothing fixes
+    the other.
     """
 
-    def __init__(self, export: tcgcsv.Export):
+    def __init__(
+        self,
+        export: tcgcsv.Export,
+        *,
+        game: Optional[str] = None,
+        dropped_rows: int = 0,
+    ):
+        # Which game's rows these are (None for a direct, pre-scoped build) and how many
+        # rows of the source file the game's filter dropped — reported by the caller, per
+        # D25's "reports the drop count".
+        self.game = game
+        self.dropped_rows = dropped_rows
         self.export = export
         self._by_number: Dict[str, List[tcgcsv.Row]] = {}
         self._blank_number_by_name: Dict[str, List[tcgcsv.Row]] = {}
         self._order: Dict[str, int] = {}
         self._sets_by_key: Dict[str, List[str]] = {}
+        # Folded key -> the export's own spelling of it, for anything printed at a human.
+        # `colliding_keys` is read off a run report and pasted into a search box, so it has
+        # to say `003/159` where the file says `003/159` — the fold is a comparison device
+        # and was never meant to be a vocabulary.
+        self._cell_by_key: Dict[str, str] = {}
 
         for index, row in enumerate(export.rows):
             self._order[row[tcgcsv.SKU_COLUMN]] = index
             number = row[tcgcsv.NUMBER_COLUMN].strip()
             set_name = row.get(tcgcsv.SET_COLUMN, "")
             if number:
-                self._by_number.setdefault(number, []).append(row)
-                key = number
+                # FOLDED, and `rows_for_key` folds what it is handed with the same function.
+                # That is the invariant: one rule, applied on both sides of the comparison.
+                # It used to be indexed verbatim here and looked up padded, which agreed only
+                # for exports whose cells were already three wide — see `number_index_key`.
+                key = number_index_key(number)
+                self._by_number.setdefault(key, []).append(row)
+                self._cell_by_key.setdefault(key, number)
             else:
                 name = row[tcgcsv.NAME_COLUMN].strip()
                 self._blank_number_by_name.setdefault(name, []).append(row)
@@ -223,6 +610,52 @@ class Catalog:
             seen = self._sets_by_key.setdefault(key, [])
             if set_name not in seen:
                 seen.append(set_name)
+
+    @classmethod
+    def from_export(cls, export: tcgcsv.Export, game: str) -> "Catalog":
+        """One game's catalog, cut from an export by the registry's partition pair (D25).
+
+        Keeps the rows whose `Product Line` cell is the game's `product_line` and — when
+        the entry sets `product_line_rarities` — whose `Rarity` cell is in that tuple. The
+        pair is the whole partition key, and both halves matter in the two games that share
+        the `Pokemon` line: `pokemon_code` narrows to its `Code Card` rows, while `pokemon`
+        sets no `product_line_rarities` and so KEEPS those same rows — they are the
+        blank-`Number` case its name fallback already resolves and T3 already asserts, and
+        a `pokemon` filter that dropped them would un-list every code card that sells above
+        threshold by the ordinary path.
+
+        `games.require`, not `get`: a game with no vocabulary has nothing to be joined
+        against, and `misc` refuses here as `NotCatalogued` — its `product_line` is `None`
+        precisely so this comparison could never be true anyway.
+
+        Refuses on zero rows — see `EmptyCatalog`. The drop count is carried on the
+        catalog (`dropped_rows`) for the caller to report: zero is the ordinary case for a
+        file exported per game, and a large number is a combined file working as intended.
+        """
+        entry = games.require(game)
+        line = entry["product_line"]
+        rarities = entry.get("product_line_rarities")
+        kept = tuple(
+            row
+            for row in export.rows
+            if row.get(tcgcsv.PRODUCT_LINE_COLUMN) == line
+            and (not rarities or row.get(tcgcsv.RARITY_COLUMN) in rarities)
+        )
+        if not kept:
+            lines = ", ".join(repr(v) for v in tcgcsv.product_lines(export)) or "none"
+            source = f" {export.source}" if export.source else ""
+            raise EmptyCatalog(
+                f"the export{source} holds no rows for game {game!r} "
+                f"(Product Line {line!r}"
+                + (f", Rarity in {rarities!r}" if rarities else "")
+                + f"); its own Product Line cells are: {lines}. This is the wrong file "
+                f"for this game — nothing was joined and nothing was written."
+            )
+        return cls(
+            tcgcsv.Export(header=export.header, rows=kept, source=export.source),
+            game=game,
+            dropped_rows=len(export.rows) - len(kept),
+        )
 
     @property
     def header(self) -> Tuple[str, ...]:
@@ -240,10 +673,28 @@ class Catalog:
     @property
     def colliding_keys(self) -> List[str]:
         """Keys reaching rows in more than one set. Reported at catalog build so the real
-        exposure is a number, not an assumption."""
-        return sorted(k for k, sets in self._sets_by_key.items() if len(sets) > 1)
+        exposure is a number, not an assumption.
+
+        IN THE EXPORT'S OWN SPELLING, not the fold. This list is printed in a run report and
+        pasted into a search box, and `3/159` is a string that appears nowhere in the file
+        the reader is holding. `sets_for_key` folds what it is given, so a caller can hand
+        one of these straight back."""
+        return sorted(
+            self._cell_by_key.get(key, key)
+            for key, sets in self._sets_by_key.items()
+            if len(sets) > 1
+        )
 
     def sets_for_key(self, key: str) -> List[str]:
+        """The sets a key reaches. Folds a number key; a `name:` key is passed through.
+
+        `_sets_by_key` holds both kinds — folded numbers, and `name:<product name>` for the
+        blank-`Number` rows — so folding unconditionally would mangle the second. The prefix
+        is the discriminator, and it is a literal here rather than a constant because it is
+        built as one two methods up, in the loop this reads back.
+        """
+        if not key.startswith("name:"):
+            key = number_index_key(key)
         return list(self._sets_by_key.get(key, ()))
 
     def row_for_sku(self, sku: str) -> Optional[tcgcsv.Row]:
@@ -257,23 +708,27 @@ class Catalog:
         return None if index is None else self.export.rows[index]
 
     def rows_for_key(self, key: str) -> List[tcgcsv.Row]:
-        return list(self._by_number.get(key, ()))
+        """Rows whose `Number` cell is this one, whatever either side's padding or case.
+
+        THE FOLD IS INSIDE THE ACCESSOR AND NOT AT THE CALL SITES, deliberately. Three
+        strategies reach for this — a composed `031/197`, a printed `066a/298`, and whatever
+        a future one composes — and asking each of them to remember to fold first is asking
+        for the same drift back. One door, one rule.
+        """
+        return list(self._by_number.get(number_index_key(key), ()))
 
     def rows_for_blank_number_name(self, name: str) -> List[tcgcsv.Row]:
         return list(self._blank_number_by_name.get(name.strip(), ()))
 
     def candidates(self, card: IdentifiedCard) -> Candidates:
-        """Rows this card could be, and how they were found."""
-        if card.number is not None and card.printed_total is not None:
-            key = join_key(card.number, card.printed_total)
-            rows = self.rows_for_key(key)
-            lookup = f"number:{key}"
-        else:
-            # No collector number on the product (code cards, some promos). These are
-            # exactly the rows whose `Number` is blank, so the name fallback stays scoped
-            # to them.
-            rows = self.rows_for_blank_number_name(card.name)
-            lookup = f"name:{card.name}"
+        """Rows this card could be, and how they were found.
+
+        WHICH KEY IS TRIED IS THE GAME'S CALL (D21/D25), read out of the registry rather
+        than decided here. `pokemon` names `number_and_printed_total`, which is the number
+        with the blank-`Number` name fallback underneath it — exactly the two branches this
+        method used to hold inline — so a Pokemon card takes the same path it always did.
+        """
+        rows, lookup = lookup_for(card.game)(self, card)
 
         sets: List[str] = []
         for row in rows:
@@ -415,9 +870,12 @@ class UnmatchedCard:
         conditions = ", ".join(
             r[tcgcsv.CONDITION_COLUMN] for r in self.candidates
         ) or "none"
+        # `where_phrase`, not the label: a pooled game's card has no position to name, and
+        # this line is a run report — one of the surfaces the pooled ruling forbids the
+        # label on. A located card reads exactly as it always did.
         return (
             f"{self.card.name} [{self.lookup}] {self.reason} "
-            f"at {self.card.position.label} (candidates: {conditions})"
+            f"{where_phrase(self.card.game, self.card.position)} (candidates: {conditions})"
         )
 
 
@@ -545,9 +1003,11 @@ class QueuedCard:
 
     @property
     def describe(self) -> str:
+        # Same rule as `UnmatchedCard.describe`: the phrase, so a pooled card's line
+        # carries the pooled fact and its key rather than a label it must never render.
         return (
             f"{self.card.name} [{self.lookup}] -> {self.destination.describe} "
-            f"at {self.card.position.label}"
+            f"{where_phrase(self.card.game, self.card.position)}"
         )
 
 
@@ -747,6 +1207,7 @@ def join_batch(
                 found.rows,
                 metadata_finish=card.metadata_finish,
                 detected_finish=card.detected_finish,
+                rarity_claim=card.rarity_claim,
             )
 
         if router is not None:

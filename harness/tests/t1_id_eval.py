@@ -33,6 +33,12 @@ Cost and time: the run is cached by prompt fingerprint + fixture fingerprint (se
 offline and makes no API call. Editing the prompt changes the fingerprint and re-submits
 automatically; `PKMNSCAN_RERUN_T1=1` forces it.
 
+Two A/B knobs, both off by default so the gate scores the floor: `PKMNSCAN_T1_SET_HINT=1`
+(D2 — what is the set hint worth) and `PKMNSCAN_T1_RARITY=1` (D23 job (c) — what is the
+rarity-claim clause worth, with the fixture's own rarity as a perfectly-sorted one-element
+claim). Each writes its own results file; see RARITY_ENV below for the both-directions
+warning a claimed run must be read under.
+
 Below the floor, tune the prompt directly — nothing external gates that (changed
 2026-08-03; the Scan & Identify comparison is parked in DECISIONS.md's Someday list). The
 one discipline that does apply: never tune against the cards you then score on. Fixing the
@@ -62,12 +68,39 @@ ID_ACCURACY_FLOOR = 0.95
 MIN_EVAL_SETS = 3
 EVAL_IMAGE_TARGET = 150
 
+# THE FINGERPRINT THE COMMITTED SCORE WAS MEASURED UNDER, asserted as a literal rather than
+# recomputed, because a check that recomputes both sides of a comparison proves nothing.
+# `harness/results/t1.json` records this same string beside `holdout_accuracy`; the two are
+# one measurement, and a run whose prompt hashes to anything else is scoring a different
+# contract than the number in that file.
+#
+# IT IS HERE TO MAKE A REFACTOR CHEAP AND A PROMPT CHANGE DELIBERATE. Per-game prompt
+# dispatch moved `SYSTEM_PROMPT`, both user turns and the schema into a `Profile` and moved
+# nothing else; this line is what proves the "and moved nothing else" half, at no cost. It
+# is NOT an argument against changing the prompt — docs/GATES.md says to rerun after any
+# prompt change, and doing so means editing this constant to the new hash in the same commit
+# as the re-measured `harness/results/t1.json`. What it stops is the OTHER thing: a wording
+# tidy nobody meant as a change, silently invalidating every cached run and re-submitting
+# 150 images at the end of a turn.
+PROMPT_FINGERPRINT = "1ef974bf511d"
+
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
 
 # D2 — the set hint is an optional accelerator recorded at capture, and identification
 # has to work without it. T1 scores the unhinted path so the number is the floor, not the
 # best case. Flip with PKMNSCAN_T1_SET_HINT=1 to measure what the hint is worth.
 SET_HINT_ENV = "PKMNSCAN_T1_SET_HINT"
+
+# D23 job (c) — the rarity-claim clause, A/B-gated the same shape as the set hint. Flip
+# with PKMNSCAN_T1_RARITY=1: every card is claimed as its OWN true rarity from the fixture
+# record, a one-element list — a perfectly sorted stack, the best case the feature can
+# ever see. The default run stays claimless, so the gate keeps scoring the floor.
+#
+# WATCH BOTH DIRECTIONS (DECISIONS.md, Someday): a clause that raises accuracy but also
+# raises confidence on wrong answers is a bad trade, because it converts review-queue
+# taps into silently mislisted cards. That is why a claimed run's results file records
+# `miss_confidence` beside its accuracy — the second number is the price of the first.
+RARITY_ENV = "PKMNSCAN_T1_RARITY"
 
 # Restrict a run to one split. Prompt iteration uses `tune` — it halves the upload and,
 # more importantly, keeps the holdout from being consulted on every attempt, which is
@@ -128,7 +161,25 @@ def _set_hint_mode() -> str:
     return "set_hint" if os.environ.get(SET_HINT_ENV) == "1" else "none"
 
 
-def _image_requests(cards, hint_mode: str) -> List[batch.ImageRequest]:
+def _rarity_on() -> bool:
+    return os.environ.get(RARITY_ENV) == "1"
+
+
+def _config(hint_mode: str, rarity_on: bool) -> str:
+    """The configuration name: cache-key component and results-file suffix in one.
+
+    "none" and "set_hint" are the two names that already exist and must not move — they
+    are baked into banked cache keys and the committed results filenames. A claimed run
+    appends "rarity", so each combination keeps GATES.md's rule: one file per
+    configuration, never shared, no date in the name.
+    """
+    parts = [] if hint_mode == "none" else [hint_mode]
+    if rarity_on:
+        parts.append("rarity")
+    return "-".join(parts) or "none"
+
+
+def _image_requests(cards, hint_mode: str, rarity_on: bool) -> List[batch.ImageRequest]:
     import base64
 
     requests = []
@@ -139,9 +190,27 @@ def _image_requests(cards, hint_mode: str) -> List[batch.ImageRequest]:
                 media_type=card.media_type,
                 data_b64=base64.standard_b64encode(card.path.read_bytes()).decode("ascii"),
                 set_hint=card.set_name if hint_mode == "set_hint" else None,
+                # The card's own true rarity as a one-element claim — see RARITY_ENV. A
+                # fixture record with no rarity string claims nothing, which is also what
+                # production does for a card with no claim in its sidecar.
+                rarity_claim=(card.rarity,) if rarity_on and card.rarity else None,
             )
         )
     return requests
+
+
+def _miss_confidence(scores: List[Score]) -> Dict[str, int]:
+    """How confident the model was on the cards it got WRONG. The second axis of the
+    rarity A/B: an accuracy gain paid for with more high-confidence misses is the trade
+    DECISIONS.md's Someday entry warns about, and it is invisible in the accuracy alone."""
+    counter = Counter(
+        score.outcome.identification.confidence
+        if score.outcome.identification
+        else "no-result"
+        for score in scores
+        if not score.correct
+    )
+    return dict(sorted(counter.items()))
 
 
 def _score(cards, run: batch.BatchRun) -> List[Score]:
@@ -178,7 +247,7 @@ def _per_set(scores: List[Score]) -> "OrderedDict[str, Dict[str, object]]":
     return buckets
 
 
-def _write_results(payload: dict, hint_mode: str) -> Tuple[Path, bool]:
+def _write_results(payload: dict, config: str) -> Tuple[Path, bool]:
     """One file per configuration. The suffix matters: a hinted run and an unhinted run
     are different measurements, and letting them share a filename means whichever ran
     last silently becomes 'the' committed score.
@@ -203,7 +272,7 @@ def _write_results(payload: dict, hint_mode: str) -> Tuple[Path, bool]:
     the one from the run that actually produced the number, which is the more truthful
     of the two anyway."""
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = "" if hint_mode == "none" else "-{0}".format(hint_mode)
+    suffix = "" if config == "none" else "-{0}".format(config)
     path = RESULTS_DIR / "t1{0}.json".format(suffix)
 
     if path.exists():
@@ -231,6 +300,22 @@ def run() -> Result:
     say = notes.append
 
     hint_mode = _set_hint_mode()
+    rarity_on = _rarity_on()
+    config = _config(hint_mode, rarity_on)
+
+    # FIRST, BEFORE ANY IMAGE IS LOADED AND LONG BEFORE ANYTHING COULD BE SUBMITTED. The
+    # cache key is built from this hash, so a moved fingerprint is a guaranteed cache miss
+    # and a guaranteed re-submission — at the end of every turn, under the Stop hook. Checked
+    # up here, the answer is free; checked after `run_batch`, the money is already spent.
+    if not checks.equal(
+        prompt.prompt_fingerprint(), PROMPT_FINGERPRINT, "the scored prompt is unmoved"
+    ):
+        return checks.result(
+            "  the prompt changed and no re-measurement was recorded.\n"
+            "       Rerun deliberately (docs/GATES.md), then set PROMPT_FINGERPRINT to the\n"
+            "       new hash in the same commit as the new harness/results/t1.json.\n"
+            "       Stopping here rather than re-submitting 150 images on a cache miss."
+        )
 
     try:
         cards = fixtures.load(log=say)
@@ -254,7 +339,11 @@ def run() -> Result:
 
     prompt_id = prompt.prompt_fingerprint()
     fixture_id = fixtures.fixture_fingerprint(cards)
-    key = runcache.cache_key(prompt_id, fixture_id, hint_mode)
+    # The claimed configuration folds the clause's own fingerprint into its key, so a
+    # reworded clause invalidates the claimed run's cache and leaves the default (and
+    # hinted) runs warm — the same reason the prompt fingerprint is in the key at all.
+    rarity_id = prompt.rarity_fingerprint() if rarity_on else ""
+    key = runcache.cache_key(prompt_id, fixture_id, hint_mode, extra=rarity_id)
 
     cached = None if runcache.forced() else runcache.load(key)
     if cached is not None:
@@ -262,7 +351,9 @@ def run() -> Result:
         source = "cached run {0}".format(cached["submitted_at"])
     else:
         try:
-            run_result = batch.run_batch(_image_requests(cards, hint_mode), log=say)
+            run_result = batch.run_batch(
+                _image_requests(cards, hint_mode, rarity_on), log=say
+            )
         except batch.BatchError as exc:
             return Result(
                 False,
@@ -363,7 +454,19 @@ def run() -> Result:
             s.explain() for s in by_split[fixtures.HOLDOUT] if not s.correct
         ],
     }
-    results_path, results_written = _write_results(payload, hint_mode)
+    if rarity_on:
+        # The claimed configuration's own record: which clause wording it ran under, what
+        # was claimed, and the both-directions number — accuracy is above, and this is
+        # what it cost in confidence-on-misses. Keys added ONLY in this configuration, so
+        # the default file (the committed score) keeps its exact shape and a warm
+        # re-scoring of it stays byte-identical.
+        payload["rarity_claim_mode"] = "true_rarity"
+        payload["rarity_fingerprint"] = rarity_id
+        payload["rarity_claimed"] = sum(1 for card in cards if card.rarity)
+        payload["miss_confidence"] = {
+            name: _miss_confidence(group) for name, group in by_split.items()
+        }
+    results_path, results_written = _write_results(payload, config)
 
     for line in notes:
         checks.note(line)
@@ -373,6 +476,27 @@ def run() -> Result:
             total, len(per_set), prompt.MODEL, prompt_id, fixture_id, hint_mode
         )
     )
+    if rarity_on:
+        checks.note(
+            "rarity claims: true rarity on {0}/{1} cards · clause {2} · this is the "
+            "A/B configuration, not the gate's floor".format(
+                payload["rarity_claimed"], total, rarity_id
+            )
+        )
+        checks.note(
+            "miss confidence — {0}".format(
+                "; ".join(
+                    "{0}: {1}".format(
+                        name,
+                        ", ".join(
+                            "{0} {1}".format(k, v) for k, v in dist.items()
+                        )
+                        or "no misses",
+                    )
+                    for name, dist in payload["miss_confidence"].items()
+                )
+            )
+        )
     checks.note(source)
     checks.note("")
     for set_id, bucket in per_set.items():
