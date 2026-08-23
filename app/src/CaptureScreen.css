@@ -15,39 +15,703 @@
      easier to judge a blur in, and the bar's controls drift apart. */
   max-width: 1400px;
   margin: 0 auto;
-  padding: var(--s5);
   display: flex;
   flex-direction: column;
-  gap: var(--s5);
+  gap: var(--s4);
+
+  /* ---- THE HEIGHT BUDGET ----
+   *
+   * The owner's requirement is that the whole screen shows at 100% zoom with no page
+   * scroll. A frame size that is a constant cannot meet it: `min(70vh, 620px)` was right on
+   * the window it was measured on, left a third of the height unspent on a taller one, and
+   * still overflowed once the control bar and the undo strip were counted. So the screen is
+   * given exactly the viewport's height here, and everything below divides it up.
+   *
+   * `height`, not `min-height`: this element is a flex column whose one flexible child is
+   * the two-column shell, and that is what makes the shell's height "whatever is left" —
+   * after the nav, after the padding, and after the halt banner when there is one. Nothing
+   * downstream has to know how tall a halt is, which is the failure the first draft of this
+   * block had: it reserved a fixed 390px for one, and a halt in motion mode with a
+   * swallowed-fire count measures 433.5px.
+   *
+   * Content that cannot fit overflows visibly and the page scrolls, which is deliberate and
+   * is the reason there is no `overflow: hidden` here. A scrollbar is the right failure and
+   * a clipped `role="alert"` is not.
+   *
+   * MEASURED, so the boundary is not a guess: at 1440x900 the one state that reaches it is
+   * the tallest halt there is — motion mode, a server halt AND a swallowed-fire count, 433.5px
+   * — while a card has already been captured. The frames are at their 200px floor by then, so
+   * each panel is ~131px wide, and at that width the said-block's position label and meta row
+   * wrap to about 235px instead of 63. The page scrolls 129px and the alert stays entirely
+   * above the fold. That is the intended shape of the failure: the thing that must be read is
+   * the thing that is visible.
+   *
+   * VERIFIED, NOT TRUSTED: `documentElement.scrollHeight <= clientHeight` at 1440x900 and
+   * 1920x1080, in both rotations, with and without the said-block a capture adds.
+   *
+   * WHAT A BANNER COSTS NOW, since the sidebar became content-height. It is the floor on the
+   * grid row, so the frames shrink toward it and the page scrolls for whatever is left over —
+   * where before, the sidebar absorbed a banner by scrolling inside itself and the frames
+   * took all of it. Measured at 1440x900, portrait, camera open: a 295px server halt takes
+   * the frames from 702 to 596 and scrolls the page 189px, with the whole alert above the
+   * fold. That is the same trade this block already chose, moved one element over: the thing
+   * that must be read is visible, and the failure is a scrollbar rather than a clipped
+   * control. The one case that pays more is the camera not being open yet, which is worth 127
+   * px of sidebar — a notice and a button that both go the moment a camera is picked.
+   *
+   * RE-VERIFIED 2026-08-23, and it had stopped being true. The page was overflowing by
+   * 3.5px at every viewport because `--nav-h` was a constant taken from a nav that had since
+   * grown — see that token. Nothing else on this screen could tell: the sidebar scrolled
+   * inside itself, which absorbed a change of that size by clipping a chip instead of by
+   * pushing the page over. The measurement now reads 0 at both viewports in both rotations,
+   * and it reads 0 for every scroll box inside `.capture` as well, which is the assertion
+   * that would have caught the first failure. */
+  height: calc(100dvh - var(--nav-h));
+  /* Vertical gutter s2, horizontal --pad — split since the pass-D rebuild. The nav strip
+     already separates the page from the chrome above, and the two 8px this returns are
+     spent where the column is tightest: the rarity-open worst case at 1440x900. --pad
+     stays the HORIZONTAL gutter because --stage-w reconstructs the stage width from it. */
+  padding: var(--s2) var(--pad);
+
+  /* The app shell's nav strip, measured at 45.5px on 2026-08-23. A CONSTANT BECAUSE THE NAV
+     IS ANOTHER FILE'S — App.css owns it, nothing here can measure it, and JS measurement is
+     not on the table for a layout. Rounded up, so the error is a pixel of slack rather than
+     a pixel of overflow.
+
+     IT WAS 42px FOR A NAV THAT MEASURED 41.5, AND THE NAV GREW WITHOUT THIS FOLLOWING — the
+     screen has been overflowing the viewport by 3.5px ever since, silently, which is exactly
+     the failure a constant taken from another file's rendering is going to have. Nothing
+     here can prevent the next one: re-measure `nav.app-nav` when this screen scrolls by a
+     few pixels for no reason anyone can see. */
+  --nav-h: 46px;
+
+  /* The page gutter, named because TWO RULES NEED IT and one of them is arithmetic.
+     `--stage-w` below reconstructs the stage column's width from the outside in, and it can
+     only do that if it knows this number. It read `2 * var(--s5)` while this was a literal
+     `var(--s5)` in the padding above — true, and true only until somebody changed one of
+     them, at which point the portrait frames would have been sized against a column width
+     that no longer existed. Tightened from --s5 to --s4 in the same edit that made it a
+     variable, which is precisely the change that would have broken it. */
+  --pad: var(--s4);
+
+  /* The control column. Wide enough for `reverse_holo` — the longest chip label in the
+     product — and for the box form on one line; narrow enough that the frames keep the
+     rest. Two more pickers are coming (Game, Rarity) and both are chip rows, so the width
+     that fits this row fits theirs.
+
+     WIDENED 2026-08-23, and the width is bought rather than taken. Measured at 1440x900:
+     `--portrait-by-height` is 690px and `--portrait-by-width` is 777px, so the portrait
+     pair is height-bound with 87px of width to spare — which converts to ~196px of sidebar
+     before the frames lose a single pixel. Every extra pixel here is a chip row that does
+     not wrap, and a wrapped row costs 38px of column against 0px of photograph. At 320px
+     the whole finish row wrapped; at 374 (26vw) it is one row, and the box chips and the
+     box form are one row each.
+
+     IT IS NOT FREE AT 1920x1080, which is the honest half. There the pair is width-bound
+     (832px against a height bound of 870px), so the 48px this adds costs ~43px of frame
+     height — 5%, on the window where the frames are already the largest they ever get. The
+     alternative was a sidebar that scrolls inside itself, which is what this change exists
+     to delete. */
+  --side-w: clamp(320px, 26vw, 400px);
+
+  /* The stage column's own chrome, in the taller of its two panels: the panel caption and
+     the gap under it (27px), plus the position label and the meta line that appear beneath
+     the last capture (75px). SIZED FOR THE POPULATED CASE. The said-block does not exist
+     until the first capture, and a budget that ignored it would fit perfectly until the
+     operator took a photograph and then scroll for the rest of the run.
+
+     120px against a measured 102px, and the 18px is not padding for its own sake: it is one
+     wrapped line of `.capture-said-meta`, which is a wrapping flex row whose width comes
+     from the frame and whose contents come from a set hint the operator typed. It does not
+     wrap at any window this was measured at; it is one long set code away from wrapping at
+     a narrow one, and the cost of reserving the line is 16px of photograph. */
+  --stage-chrome: 120px;
 }
 
-/* ---- the bar: box, set hint, finish. All three always visible (spec 5.3). ---- */
+/* ---- the two columns ---- */
 
-.capture-bar {
+/* Controls left, frames right. The owner's screen was a vertical stack — bar, frames,
+   full-width undo strip — that came to ~1150px on a 900px window while a third of the
+   width sat empty. Nothing here is new surface: the same controls, beside the frames
+   instead of above and below them.
+
+   `flex: 1 1 auto; min-height: 0` is what makes this "whatever the halt left over" — and
+   `min-height: 0` specifically, because a flex item refuses to shrink below its content
+   without it, which is how a stack overflows a fixed-height parent while every rule in it
+   looks right. `minmax(0, 1fr)` on the stage column is the same guard on the other axis: a
+   wide video track cannot push the column open, the way `.capture-panel`'s `min-width: 0`
+   guards one level further down.
+
+   THE STAGE COLUMN STRETCHES TO THE ROW AND THE SIDEBAR NO LONGER DOES (2026-08-23). The
+   stage has to have a definite height for the frames to be measured against it. The sidebar
+   needed one only because its field list scrolled inside itself, and that scroll box is
+   gone — see `.capture-side`. */
+.capture-shell {
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  gap: var(--s5);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The sidebar itself: one panel, in the surface-and-hairline treatment the control bar
+   used to have. Flex rather than grid, so a field can be added to the list without the
+   layout being re-decided around it.
+
+   `align-self: start` IS THE WHOLE OF THE NO-INNER-SCROLL RULE, and it replaces a
+   `min-height: 0` here plus an `overflow-y: auto` on the field list. The owner's words,
+   2026-08-23: "ensure fixing the sidebar so that there's no in line scrolling is a
+   priority, sick and tired of these oversized boxes rather than something sexier."
+
+   What that scroll box actually did on the screen it was meant to rescue: the box chip row
+   fell across its bottom edge and the chips were SLICED THROUGH THEIR NOTE LINE — half of
+   `next 86` and a cut edge. A clipped control does not read as scrollable, it reads as
+   broken, and it hid the real defect, which was that six fields of 44px chips with a note
+   line under each wanted 1004px of a 490px column.
+
+   So the column is content-height now and the content was made to fit — every chip on one
+   line, notes only where they say something, machine strings folded into the field's own
+   name row. If a future field pushes it past the viewport again the PAGE scrolls, which is
+   the failure `.capture`'s height budget already chose and argues for: a scrollbar is the
+   right failure and a clipped control is not. It is also the loud one, which is the point —
+   a sidebar that quietly scrolls inside itself is a sidebar nobody notices has outgrown the
+   screen. */
+.capture-side {
+  align-self: start;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--s6);
+  flex-direction: column;
+  /* s2, not s3, since the pass-D rebuild: the column's separations are hairlines carried
+     by the rows and group borders themselves, so the flex gap is only the air AROUND those
+     lines — and the 8px difference is exactly what the tallest state (rarity open,
+     thirteen rows, measured 824px at 1440x900) was overrunning its column by. */
+  gap: var(--s2);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  padding: var(--s4);
+  padding: var(--s3);
 }
 
-.capture-field {
+/* THE STAGE COLUMN, and the reason it is a wrapper rather than the stage itself.
+ *
+ * `container-type: size` makes this element a size query container, so `100cqh` inside it
+ * is its own height — the height the flex column above actually left for it, halt included.
+ * That is the value the frames are sized from, and it is why nothing in this file has to
+ * publish a constant for how tall a halt banner is.
+ *
+ * An element cannot query itself, which is the whole reason this wrapper exists: the stage
+ * needs the number in its own `grid-template-columns`. A container also cannot be sized by
+ * its contents — `container-type: size` implies `contain: size` — which is exactly the
+ * property wanted here and would be a bug anywhere the contents were meant to set the
+ * height. It does not clip: `contain: paint` is not implied, so the 200px floor below
+ * overflows visibly on a window too short for it rather than cropping a photograph. */
+.capture-main {
+  container-type: size;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The claims, in the order they are set up. No scroll box and no padding hack: both were
+   the scroll box's — the 2px was room for the ink focus ring, which a scroll box clips and
+   an ordinary block does not.
+
+   GAP ZERO, and that is pass D in one declaration: the fields are hairline-separated rows
+   now, each row carrying its own top border, so any gap between them would split a 1px
+   line into two lines with air in the middle. Separation is the border, per
+   docs/DESIGN.md's one mechanism. */
+.capture-side-fields {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The other half of that rule: the shutter and the undo, which never scroll. Everything in
+   the list above is a setting — chosen at the top of a run and then left alone — and these
+   two are the run itself. A capture button you have to scroll a column to find is a card
+   photographed late or not at all.
+
+   Separated by a 1px hairline and nothing else, which is docs/DESIGN.md's separation
+   mechanism and, per that file, the only one.
+
+   `flex: 0 0 auto` outlived the scroll box it was written against — it was the half of that
+   rule that said the fields give and the shutter never does. It is kept because it still
+   says the same thing about a column that is now content-height: whatever a future field
+   does to the list above, nothing squeezes these two. */
+.capture-side-foot {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  align-items: flex-start;
+  flex: 0 0 auto;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
 }
 
-.capture-field-wide {
-  flex-basis: 100%;
+/* ---- the fields: pass D's one-line grammar (spec 5.3's fields, one hairline row each) ----
+ *
+ * Approved by the owner from four rendered alternatives ("D is approved — proceed",
+ * 2026-08-23). Every field at rest is key chip · label · current value on one 32px line;
+ * the choosing lives behind the line, one field open at a time. The chip rows this
+ * replaces drew every option all the time — the "oversized boxes" — and their rules are
+ * carried into the new shapes rather than deleted: selection in ink and weight and never
+ * in --accent, machine strings small beside human words, notes only where they say
+ * something the label does not.
+ *
+ * The 18px key column, the 6px bit, the 1px and 2px mark radii and the 3px cell radius
+ * are off the spacing scale ON PURPOSE, each derived rather than chosen: the rest bit is
+ * the 12px option mark at half scale with its radius halved to keep the 2-on-12 corner
+ * ratio; the option mark's radius-2 on 12 is the same 1/6 corner --r's 4 gives a 24px
+ * control; the cell's 3 is the 4px outer radius minus its 1px border, so corners nest
+ * without any overflow:hidden. 1px hairlines and 2px rails are line weights, not spacing. */
+
+/* The collapsed row. A button — the whole line opens the field — with its own top hairline,
+   which is the entire separation mechanism in this column (gap zero above). */
+.capture-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 32px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-/* Utility face, uppercase, tracked — mono carries all metadata, and a field name is
-   metadata. Same treatment as the gallery's specimen captions, deliberately: this is one
-   system and a caption should not have two looks. */
+/* --hover's one job, row hover, on the one thing here that is a row. */
+.capture-row:hover {
+  background: var(--hover);
+}
+
+.capture-row:hover .capture-k {
+  color: var(--ink);
+}
+
+/* No hairline above the first thing in the claims list — the panel's own padding is the
+   separation there, and a line under nothing reads as a mistake. */
+.capture-side-fields > .capture-row:first-child,
+.capture-side-fields > .capture-open:first-child {
+  border-top: 0;
+}
+
+/* An open field carries its own bottom border, so the row after it starts with two lines
+   a pixel apart. One of them yields. */
+.capture-open + .capture-row {
+  border-top: 0;
+}
+
+.capture-k {
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.capture-lab {
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* The current value, right-aligned, utility face — machine values in the machine face.
+   Ellipsis rather than wrap: a long camera label may not turn a 32px row into two, because
+   the whole column's height budget is row-count arithmetic. */
+.capture-val {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  justify-self: end;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A value that is the DEFAULT — no claim, no hint, key trigger — drops to the muted weight:
+   the row still says the state, and the eye learns that dark values are choices somebody
+   made. Same distinction the dashed chip used to carry, in weight instead of a border. */
+.capture-val.is-default {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* A one-word fault state at rest (the camera row). Accent at text weight — the system is
+   unsure, which is accent's outline-weight job; the sentence itself is inside the field. */
+.capture-val-alert {
+  color: var(--accent);
+}
+
+/* The small annotation inside a value — `next 60`, `empty`. An <em> in the markup for the
+   inline semantics, drawn upright: italic mono is a second voice nothing here needs. */
+.capture-sub {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 400;
+  font-style: normal;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-left: var(--s2);
+}
+
+/* ---- THE BITFIELD: rarity at rest ----
+   One 6px mark per rarity of the chosen game, catalog stack order, filled = claimed —
+   constant width per game (13 marks under Pokemon, always), so within a run the positions
+   never shift and a filled fifth position means Double Rare every time you look. The
+   hollow border is MUTED, not line: at 6px the mark is the datum, not decoration beside a
+   name, and a hairline vanishes at that size — the filled marks would read as a count with
+   no positions under it. Radius 1 keeps the option mark's 2-on-12 corner ratio at half
+   scale. */
+.capture-bits {
+  display: flex;
+  gap: var(--s1);
+  align-items: center;
+  justify-self: end;
+}
+
+.capture-bit {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  border: 1px solid var(--muted);
+  background: var(--surface);
+}
+
+.capture-bit.on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+/* ---- the one open field: expands in place, rail flush to the panel edge ----
+   The 2px ink rail is the "you are here" mark, run out to the panel's own edge by the
+   negative margin so the open field reads as a state of the column rather than a nested
+   card. padding-left puts the contents back on the panel grid: 12px of panel padding
+   minus the 2px the rail spent. */
+.capture-open {
+  margin-left: calc(-1 * var(--s3));
+  /* No bottom padding: the field's own bottom hairline is the separation, and the mockup's
+     4px there was the difference between fitting and a 1px page scroll in the tallest
+     measured state (rarity open, landscape, 1440x900). */
+  padding: 0 0 0 calc(var(--s3) - 2px);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid var(--ink);
+}
+
+.capture-open .capture-row {
+  border-top: 0;
+}
+
+/* The head row of an open field closes it, but it is not a choice being hovered toward —
+   the hover wash stays off so the options below are the only things that light. */
+.capture-open .capture-row:hover {
+  background: transparent;
+}
+
+.capture-open .capture-k {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.capture-open .capture-lab {
+  color: var(--ink);
+}
+
+/* What the open head says on the right — `Choose any · 4 of 13`, `Box 1 · 30 boxes` —
+   where the closed row put its value. */
+.capture-meta {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.capture-meta-alert {
+  color: var(--accent);
+}
+
+/* ---- filter / text entry inside an open field ---- */
+
+.capture-entry {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s1) 0;
+}
+
+/* A bordered box that holds an input and, for the box filter, the live match count. The
+   focus ring draws on the box (focus-within) so input and count read as one control. */
+.capture-entrybox {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 0 var(--s2);
+  background: var(--surface);
+}
+
+.capture-entrybox:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.capture-filter {
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 0 var(--s2);
+  min-height: 32px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Inside an entrybox the input sheds its own chrome — the box carries it. */
+.capture-entrybox .capture-filter {
+  border: 0;
+  min-height: 30px;
+  padding: 0;
+  flex: 1 1 auto;
+}
+
+.capture-entrybox .capture-filter:focus-visible {
+  outline: none;
+}
+
+.capture-entrymeta {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ---- option rows ---- */
+
+.capture-opts {
+  display: flex;
+  flex-direction: column;
+}
+
+.capture-opt {
+  display: grid;
+  grid-template-columns: 18px 12px 1fr auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 24px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.capture-opt:hover {
+  background: var(--hover);
+}
+
+/* The 12px selection mark. Radius 2, not --r's 4: a 4px corner on a 12px box is a third of
+   the edge — a squircle. 2 on 12 is the same 1/6 corner that 4 gives a 24px control.
+   Selection selects on aria-pressed — the fact, not a class that could drift from it. */
+.capture-mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.capture-opt[aria-pressed='true'] .capture-mark {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.capture-opt-name {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.capture-opt[aria-pressed='true'] .capture-opt-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The shared suffix never takes the weight — even on a selected row — so the eye lands on
+   Radiant / Illustration / Hyper: the word that distinguishes, not the word they share. */
+.capture-sfx {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.capture-opt-trail {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+/* A sentence inside an open field, indented past the key and mark columns so it reads as
+   belonging to the options above it. Body face: it is prose a human reads. */
+.capture-opennote {
+  font-family: var(--body);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  margin: var(--s1) 0 0 26px;
+  max-width: 46ch;
+}
+
+/* ---- the segmented track: single-selects whose vocabulary fits one line ----
+   One bordered box subdivided by 1px hairlines. Cells are content-sized, flex 0 0 auto —
+   NO flex-grow, so a vocabulary swapping four finishes for three shortens the track and
+   moves no surviving cell. Selection is ink weight plus a 2px rail; a second selection
+   language beside the filled square, and that cost is named in the .tsx where the shapes
+   are defined. justify-items start on the line, because a grid stretches items by default
+   and a stretched track is the flex-grow reflow reborn — the box would inflate to the
+   column and pad itself with line-colour. */
+.capture-trackline {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: var(--s2);
+  align-items: center;
+  justify-items: start;
+  margin: var(--s1) 0;
+}
+
+.capture-track {
+  display: inline-flex;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.capture-cell {
+  flex: 0 0 auto;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-weight: 400;
+  padding: var(--s1) var(--s2);
+  white-space: nowrap;
+  border: 0;
+  border-bottom: 2px solid var(--surface);
+  cursor: pointer;
+}
+
+.capture-cell:first-child {
+  border-radius: 3px 0 0 3px;
+}
+
+.capture-cell:last-child {
+  border-radius: 0 3px 3px 0;
+}
+
+.capture-cell[aria-pressed='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
+/* Excluded by the rarity claim: drawn, dimmed, refusing — never hidden, so the operator
+   can see what the claim cost. Reduced opacity is legal here and only here: WCAG exempts
+   disabled controls from the contrast floor, and the full-contrast `not stocked` sentence
+   under the track says the same thing in words. */
+.capture-cell[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---- the SESSION group: same grammar, quieter ----
+   Game, Camera, Rotation and Trigger — set once when the rig is set up, then read. 24px
+   rows to the claims' 32, one size down on every face. Below the actions: the cadence bet
+   is that the rows above the shutter are the ones a stack actually touches. */
+.capture-session {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+
+.capture-groupcap {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--s1);
+}
+
+.capture-session .capture-row {
+  min-height: 24px;
+}
+
+/* The group caption already separates the first row from the hairline above the group. */
+.capture-groupcap + .capture-row,
+.capture-groupcap + .capture-open {
+  border-top: 0;
+}
+
+.capture-session .capture-k,
+.capture-session .capture-lab {
+  font-size: 10px;
+}
+
+.capture-session .capture-val {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.capture-session .capture-val.is-default {
+  font-weight: 400;
+}
+
+/* The /status failure, when there is one: a fault notice in the claims column, hairlined
+   like a row because it sits among rows. */
+.capture-servernote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  border-top: 1px solid var(--line);
+  padding: var(--s2) 0;
+}
+
+/* Utility face, uppercase, tracked — mono carries all metadata, and a caption is
+   metadata. Still used by the undo foot's "Undo deletes" caption. */
 .capture-field-name {
   font-family: var(--util);
   font-size: 10px;
@@ -57,113 +721,67 @@
   color: var(--muted);
 }
 
-.capture-boxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-/* A choice chip: a box in use, or one of the three finishes.
-
-   Selection is carried by ink and weight, never by --accent. Accent has exactly two jobs in
-   this system and "which box am I in" is neither of them; borrowing it here would mean the
-   fill on the capture button and the outline on a selected chip were the same signal saying
-   two different things. Rejected alternative: a solid --ink chip, which reads as loud as the
-   capture control and is the second thing your eye lands on rather than the tenth. */
-.capture-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: var(--s1);
-  font-family: var(--util);
-  background: var(--surface);
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: var(--s2) var(--s3);
-  /* The 44px tap floor is a Fulfillment constraint and does not govern this view. Applied
-     anyway: the owner reaches for these mid-run with a card in the other hand. */
-  min-height: 44px;
-  min-width: 44px;
-  cursor: pointer;
-}
-
-.capture-chip[aria-pressed='true'] {
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-/* The no-claim finish chip, which is the finish control's DEFAULT: the operator has said
-   nothing about this stack, so the capture sends no `variant` and the sidecar records none
-   (D3 rung 1).
-
-   Dashed, and nothing else different. Dashed reads as "nothing recorded here", which is
-   precisely the state, and it costs no colour: the pressed rule above still carries
-   selection in ink and weight, so the chip behaves like its three neighbours in every other
-   respect. Rejected: --accent, and the .capture-flag treatment. Both are the vocabulary of
-   something being wrong, and this is the state every run correctly sits in — a default drawn
-   as a warning teaches the operator to clear it by picking a finish, which is the exact
-   failure the state was added to prevent. */
-.capture-chip-unclaimed {
-  border-style: dashed;
-}
-
-.capture-chip-value {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.capture-chip-note {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-}
-
+/* Wraps, because the sidebar is narrower than the bar this used to sit in and the number
+   field plus its button measure within ~5px of the column's inner width. */
 .capture-inline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
 
-/* Both text inputs carry values that end up in a sidecar — a box number and a set code — so
-   both are the utility face. */
-.capture-number,
+/* The note input carries a value that ends up on a record, so it is the utility face.
+   (The box and set-hint entries moved into their fields' disclosures as `.capture-filter`;
+   this class survives for the note under the last capture.) */
 .capture-text {
   font-family: var(--util);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  padding: var(--s2) var(--s3);
-  min-height: 44px;
+  padding: var(--s1) var(--s2);
+  /* 36 rather than 44: an input is a slower target than a button — it is aimed at, then
+     typed into — and it is still a between-cards control rather than a mid-run one. */
+  min-height: 36px;
 }
 
-.capture-number {
-  width: 9ch;
-}
-
+/* Takes the rest of its row rather than a fixed 16ch. It sits beside nothing now — the
+   Set hint field is half the pair below Box — and a set code is four characters, so the
+   width is about not looking like a stub. */
 .capture-text {
-  width: 16ch;
+  width: 100%;
+  min-width: 0;
 }
 
 /* A secondary action: outline and ink, no fill. The fill belongs to the capture button and
-   to the resume button, and only one of those is ever live at a time. */
+   to the resume button, and only one of those is ever live at a time.
+
+   `.capture-undo-go` shares everything but its height, and takes that height back below:
+   these are settings and it is the run. */
 .capture-go,
 .capture-undo-go {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
   font-family: var(--body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
+  min-height: 36px;
+  padding: var(--s1) var(--s3);
   cursor: pointer;
+}
+
+/* THE ONE CONTROL IN THE APP THAT HARD-DELETES (D10), so it keeps the 44px the chips gave
+   up. It is pressed mid-run, one-handed, at the moment the operator has just seen a bad
+   photograph — which is exactly the press the height was ever for. */
+.capture-undo-go {
+  min-height: 44px;
+  font-size: 14px;
 }
 
 .capture-go:disabled,
@@ -173,14 +791,27 @@
 }
 
 /* --accent's two jobs are taken, so focus is drawn in ink. Never removed: an hour at this
-   screen is a keyboard, and a keyboard with no visible focus is a mouse with no pointer. */
-.capture-chip:focus-visible,
-.capture-number:focus-visible,
+   screen is a keyboard, and a keyboard with no visible focus is a mouse with no pointer.
+   Every control shape the sidebar now has is in this list — rows, option rows, track
+   cells, filters — because a focus ring that reaches only some controls teaches the tab
+   key to lie. (`.capture-filter` inside an entrybox draws its ring on the box instead;
+   see focus-within above.) */
+.capture-row:focus-visible,
+.capture-opt:focus-visible,
+.capture-cell:focus-visible,
+.capture-filter:focus-visible,
 .capture-text:focus-visible,
 .capture-go:focus-visible,
 .capture-undo-go:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* A focused row's ring hugs the row inside the panel: negative offset rather than the
+   default 2px out, which would clip on the panel's own edge for a full-width control. */
+.capture-row:focus-visible,
+.capture-opt:focus-visible {
+  outline-offset: -2px;
 }
 
 /* The keyboard hint. docs/DESIGN.md requires it owner-side and forbids it in the
@@ -227,6 +858,11 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--s3);
+  /* NEVER SHRINKS. It is a flex item in a fixed-height column now, and the default
+     `flex-shrink: 1` would let a tall banner be squeezed by the layout around it — a
+     `role="alert"` compressed to fit is the one failure this screen cannot afford. The
+     frames give up the height instead, and past the point where they can, the page scrolls. */
+  flex: 0 0 auto;
   background: var(--surface);
   border: 1px solid var(--accent);
   border-radius: var(--r);
@@ -262,6 +898,25 @@
   min-width: 280px;
 }
 
+/* THE HELD CAPTURE ID, CARRIED ACROSS A RELOAD (D27). It sits where the halt sits, is built
+   out of the same two rules, and is deliberately one notch quieter: no display-face title
+   and no control, because nothing is paused — the run continues the moment the right card is
+   back at the lens.
+
+   The accent outline is the halt's, and it is the correct borrowing rather than a
+   resemblance. docs/DESIGN.md gives --accent exactly two jobs, and "the system is unsure" is
+   the first of them: there is a photograph the server may or may not have recorded, and this
+   screen cannot tell which. That is the same uncertainty the halt is outlined for, one
+   request later. Rejected: an accent edge on one side only, which would have been a third
+   marker in a system whose separation mechanism is a 1px hairline and nothing else. */
+.capture-carried {
+  flex: 0 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  padding: var(--s3) var(--s4);
+}
+
 /* ---- the stage: live left, last capture right (spec 5.1) ---- */
 
 .capture-stage {
@@ -269,14 +924,6 @@
   grid-template-columns: 1fr 1fr;
   gap: var(--s5);
   align-items: start;
-}
-
-/* Below this the two frames are each too small to judge a blur in, which is the entire
-   reason the layout is a pair. Stacked, the last capture is still full width. */
-@media (max-width: 900px) {
-  .capture-stage {
-    grid-template-columns: 1fr;
-  }
 }
 
 .capture-panel {
@@ -312,6 +959,13 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  /* The landscape pair's height guard. It almost never binds — a 16/9 frame in half a
+     column is short — but a landscape frame takes its height from the column's width, so on
+     a wide, short window it is the one shape here that can reach past the fold on its own.
+     `object-fit: contain` on the media means a clamped frame letterboxes rather than crops,
+     which is the right way to lose those pixels: the edge of the card, and the finger
+     holding it, are what this panel exists to show. */
+  max-height: calc(100cqh - var(--stage-chrome));
 }
 
 /* The portrait pair, for a side-mounted camera (rotation 90/270). Asked for by the owner
@@ -323,9 +977,61 @@
    turn. */
 .capture-frame-portrait {
   aspect-ratio: 9 / 16;
-  height: min(70vh, 620px);
+  height: var(--portrait-h, min(70vh, 620px));
   width: auto;
   margin-inline: auto;
+  /* The portrait frame states its own height, so the base rule's guard is released here
+     rather than left to fight it. It could not win either way — `--portrait-h` is the
+     smaller of that same height budget and a width bound — but a max-height that can only
+     ever tie is a rule the next reader has to prove harmless. */
+  max-height: none;
+}
+
+/* THE STAGE NARROWS WITH THE FRAMES. Reported from the rig on 2026-08-23: with the pair
+   turned portrait, each frame drew ~350px of card centred in a ~950px half-width column,
+   and roughly half the screen was blank surface. The frames were right and the grid was
+   still landscape.
+
+   Columns size to their content and the pair centres, so the two frames sit beside each
+   other with one gap between them instead of four margins. The panel captions travel with
+   their frames, which is what makes the result read as a pair rather than as two things
+   that happen to be near each other. The landscape stage is untouched — 1fr 1fr is correct
+   when the frame fills the column. */
+.capture-stage-portrait {
+  /* HOW TALL A PAIR OF PORTRAIT FRAMES MAY BE, from the two things that can stop them.
+   *
+   * `min(70vh, 620px)` used to be the whole answer and it was a guess wearing a unit: 620px
+   * was measured on one window, and 70vh left a third of the height unspent on a tall one
+   * and still overflowed a short one once the bar and the undo strip were counted. Both
+   * bounds below are derived instead.
+   *
+   * HEIGHT: the stage column's own height — `100cqh`, read off the size container this grid
+   * sits inside — less its caption and its said-block. Not a viewport fraction and not a
+   * constant: it is what the flex column left after the nav, the padding and the halt.
+   *
+   * WIDTH: two 9/16 frames and the gap between them have to fit the stage column. That
+   * column's width is not measurable from here, so it is reconstructed — `.capture` is
+   * border-box and capped at 1400px, so its content box is min(1400px, 100vw) less its own
+   * padding, and the stage is what the sidebar and the column gap leave of that. The 8px is
+   * slack against sub-pixel rounding, and it is not decoration: a horizontal overflow
+   * raises a scrollbar, a scrollbar takes height, and the height is what this whole block
+   * is rationing.
+   *
+   * Whichever binds first wins, which is what makes the pair grow on a tall wide screen and
+   * shrink rather than overflow on a small one. */
+  --stage-w: calc(min(1400px, 100vw) - 2 * var(--pad) - var(--side-w) - var(--s5));
+  --portrait-by-width: calc((var(--stage-w) - var(--s6) - 8px) / 2 * 16 / 9);
+  --portrait-by-height: calc(100cqh - var(--stage-chrome));
+
+  /* ONE VALUE FEEDS BOTH the frame height and the column width, so a change to the cap
+     cannot leave the caption hanging off the side of the photo it names. The frame is
+     exactly 9/16, so the column is the height times 9/16 and the pair is frame-width by
+     construction. That invariant is why the two bounds above are resolved into a single
+     length here rather than applied separately to the frame and the track. */
+  --portrait-h: clamp(200px, min(var(--portrait-by-height), var(--portrait-by-width)), 1200px);
+  grid-template-columns: repeat(2, calc(var(--portrait-h) * 9 / 16));
+  justify-content: center;
+  gap: var(--s6);
 }
 
 /* The live <video> inside a portrait frame. The element still receives the camera's
@@ -377,18 +1083,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--s3);
+  gap: var(--s2);
 }
 
 .capture-controls .pull-confirm {
   width: 100%;
-}
-
-.capture-trigger {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
 }
 
 /* The motion machine's vitals — metadata, so the utility face carries it, same register
@@ -444,31 +1143,75 @@
   color: var(--muted);
 }
 
+/* The note on the last capture. Everything else about it is `.capture-text`; only the width
+   differs, and it differs because the two inputs hold different KINDS of value. A set hint is
+   a set code — `sv09` — and 16ch is generous for one. A note is a sentence fragment a human
+   types about a card the pipeline will never identify, and an input that scrolls after
+   sixteen characters cannot be read back while it is being written, which is exactly when it
+   is being checked. Declared after `.capture-text` rather than at a higher specificity: same
+   weight, later in the file, which is the cheapest override that cannot surprise anyone. */
+.capture-note {
+  flex: 1 1 20ch;
+  width: auto;
+  min-width: 0;
+}
+
 /* ---- undo (spec 5.4) ---- */
 
+/* AT THE FOOT OF THE SIDEBAR, below the settings and never among them. It was a full-width
+   strip under the frames, and it was ~90px of the height this layout needed back — the owner
+   said it "can clearly be on the side too", which is what moved it.
+
+   No panel of its own any more: it is inside the sidebar's panel, so the separation is a
+   1px hairline, which is docs/DESIGN.md's separation mechanism and, per that file, the
+   only one. `flex: 0 0 auto` outlived the scroll box that made it necessary and still says
+   the true thing: nothing squeezes the one control in the app that hard-deletes, because a
+   control you have to go looking for is one you reach for late.
+
+   ONE ROW, WRAPPING: what will be deleted on the left, the control that deletes it on the
+   right. Stacked it was 137px of a column that had none to spare, most of it the gap between
+   a thumbnail and a button that could have sat beside it. `flex-wrap` is what makes that
+   safe rather than clever — at a narrow width the two halves fall back to the stack this
+   replaces, and the server's undo refusals, which are the longest prose the app puts on
+   screen, keep a full-width line of their own inside `.capture-undo-action` either way. */
 .capture-undo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: var(--s3) var(--s4);
+  gap: var(--s2);
+  flex: 0 0 auto;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
 }
 
 .capture-undo-target {
   display: flex;
   align-items: center;
-  gap: var(--s4);
-  min-height: 64px;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* The position, in the sidebar, at the size of a label rather than the size of the stage's.
+   `.capture-label` is 20px because on the stage it is the one number that cannot be
+   reconstructed from the photograph — that argument is the stage's. Here the same string is
+   an aiming aid beside a thumbnail, in a column a third as wide, where 20px mono wrapped
+   `Box 3 · Section 1 · Card 7` across three lines and made the foot taller than the control
+   it names. */
+.capture-undo-target .capture-label {
+  font-size: 13px;
 }
 
 /* Small, and still recognisable as the card you just shot. The point is aiming the undo, not
-   judging the photo — that is what the panel above is for. */
+   judging the photo — that is what the panel above is for. Smaller again since the target and
+   its control share a row: 72px of thumbnail beside the position it belongs to reads as one
+   thing, where 112px pushed the button onto a line of its own. */
 .capture-undo-thumb {
-  width: 112px;
+  /* 56, down from 72 at the pass-D rebuild: the foot's width makes the target and its
+     button wrap to two rows in the landscape rotation, so every pixel of thumb height is
+     a pixel of column — and the aiming-a-delete job survives at 56 exactly as it did the
+     cut from 112. */
+  width: 56px;
   aspect-ratio: 16 / 9;
   object-fit: contain;
   background: var(--bg);
@@ -477,16 +1220,24 @@
 }
 
 /* Stored photos are portrait under a side-mounted camera, and a portrait photo in a
-   landscape thumb was 63px of card in 112px of letterbox. */
+   landscape thumb was 63px of card in 112px of letterbox. Capped by HEIGHT since the
+   pass-D rebuild: 40px wide meant 71px tall, and the sidebar's height is the axis the
+   whole column rations — the same aiming-not-judging argument, applied to the dimension
+   that binds. 44 matches the button beside it, so the foot's two rows are one height. */
 .capture-undo-thumb-portrait {
-  width: 63px;
+  height: 44px;
+  width: auto;
   aspect-ratio: 9 / 16;
 }
 
+/* Stacked, because the sidebar is one column wide and the server's undo refusals are the
+   longest prose the app puts on screen (see `.capture-refused` below). Beside the button
+   in a 288px column they would be four words a line. */
 .capture-undo-action {
   display: flex;
-  align-items: center;
-  gap: var(--s3);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
 }
 
 /* A refusal, not a failure of the run: outline weight, beside the control it came from.
@@ -508,4 +1259,66 @@
   font-size: 13px;
   color: var(--accent);
   max-width: 52ch;
+}
+
+/* ---- narrow: everything stacks, exactly as it did before there were two columns ----
+ *
+ * One breakpoint, and it is the one this file already had. Below 900px the two frames are
+ * each too small to judge a blur in — which is the entire reason the stage is a pair — and
+ * a 288px sidebar beside them would take a third of what is left. So the sidebar becomes a
+ * full-width block above the stage and the stage becomes one column, which is the layout
+ * this screen shipped with.
+ *
+ * THE NO-PAGE-SCROLL RULE IS DELIBERATELY NOT ENFORCED HERE. It is the owner's rig
+ * requirement, and the rig is a wide desktop monitor; below 900px there is no arrangement
+ * of two frames, six control fields and an undo that fits a viewport, and pretending
+ * otherwise would mean frames too small to do the one job they have. Scrolling is the
+ * correct answer at this width and the height budget is released rather than met.
+ */
+@media (max-width: 900px) {
+  /* THE VIEWPORT HEIGHT IS RELEASED FIRST, and everything else in this block follows from
+     it. With the page free to grow, `.capture-main` must stop being a size container in the
+     same breath: `container-type: size` implies `contain: size`, so a container with no
+     definite height from a parent collapses to nothing and takes both frames with it. The
+     two declarations are one decision and must never be separated. */
+  .capture {
+    height: auto;
+  }
+
+  .capture-main {
+    container-type: normal;
+  }
+
+  .capture-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Two overrides used to live here and both are gone, because the base rules became what
+     they were overriding to. `.capture-side-fields` released `overflow-y` — there is no
+     scroll box at any width now — and `.capture-undo` went back to a row, which is what the
+     wide layout draws as well since the target and its control were put on one line. A
+     media query that restates the thing it is inside is a rule the next reader has to prove
+     is doing nothing. */
+
+  .capture-undo-action {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s3);
+  }
+
+  .capture-stage {
+    grid-template-columns: 1fr;
+  }
+
+  /* The frames go back to the cap they had before the budget existed. The budget's width
+     bound is reconstructed from a sidebar that is no longer beside the stage, so it would
+     under-size the frames here for a reason that has stopped being true. */
+  .capture-stage-portrait {
+    --portrait-h: min(70vh, 620px);
+    grid-template-columns: minmax(0, calc(var(--portrait-h) * 9 / 16));
+  }
+
+  .capture-frame {
+    max-height: none;
+  }
 }

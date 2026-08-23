@@ -117,11 +117,20 @@ export type Camera = {
 
   selectDevice(id: string): void
 
-  /** Re-run acquisition for whatever is currently chosen. The only way back from a stream
-   *  error: re-picking the same camera in the select is a no-op twice over — a `<select>`
-   *  fires no change event for the value it already holds, and the effect that opens the
-   *  device is keyed on `deviceId`, which did not change. */
+  /** Open the camera, or re-run acquisition for whatever is currently chosen.
+   *
+   *  THIS IS ALSO HOW THE CAMERA FIRST OPENS. Nothing touches the camera on mount — see
+   *  `started` below — so the first press of this is what enumerates devices and acquires a
+   *  stream. Every later press is the retry it has always been: the only way back from a
+   *  stream error, since re-picking the same camera in the select is a no-op twice over — a
+   *  `<select>` fires no change event for the value it already holds, and the effect that
+   *  opens the device is keyed on `deviceId`, which did not change. */
   retry(): void
+
+  /** False until something asks for the camera. Distinct from `missing` and from `error`:
+   *  nothing has gone wrong, nothing has been looked for yet. The screen uses it to say
+   *  "not open" rather than drawing a failure for a device nobody has requested. */
+  started: boolean
 
   /** The remembered camera is not in the device list. Distinct from `error`, because it
    *  is answerable: the owner picks, or plugs the rig back in. */
@@ -399,6 +408,21 @@ export function useCamera(): Camera {
   const [listError, setListError] = useState<string | null>(null)
   const [streamError, setStreamError] = useState<string | null>(null)
 
+  /* NOTHING TOUCHES THE CAMERA UNTIL SOMEONE ASKS. This used to enumerate devices and open a
+   * stream on mount, which meant merely NAVIGATING to the capture screen raised a permission
+   * prompt — and `revealLabels` calls `getUserMedia` just to un-blank the device labels, so
+   * the prompt fired even before a camera was chosen.
+   *
+   * That cost the owner a stream of dialogs during any session where the screen was opened
+   * for a reason other than shooting cards: reviewing a layout, checking a box picker, or an
+   * automated browser that cannot grant permission at all and so can never make the prompt
+   * go away. The camera is hardware the operator walks up to deliberately; asking for it
+   * deliberately is the honest shape.
+   *
+   * The cost is one press at the start of a rig session, on a control that already existed
+   * for retrying. Weighed against a prompt on every visit, the owner chose the press. */
+  const [started, setStarted] = useState(false)
+
   /* Enumerate, then reconcile against what is remembered.
    *
    * localStorage is the single source of the chosen id and `deviceId` mirrors it, which is
@@ -454,6 +478,11 @@ export function useCamera(): Camera {
   }, [])
 
   useEffect(() => {
+    /* Gated, so mounting this screen reaches for no hardware. The devicechange listener is
+     * gated with it deliberately: it exists to notice the Cam Link being unplugged, and
+     * there is nothing to notice about a camera that was never opened. */
+    if (!started) return
+
     void reconcile()
 
     const media = mediaDevices()
@@ -473,7 +502,7 @@ export function useCamera(): Camera {
     }
     media.addEventListener('devicechange', onDeviceChange)
     return () => media.removeEventListener('devicechange', onDeviceChange)
-  }, [reconcile])
+  }, [reconcile, started])
 
   /* Open the chosen device, attach it, and tear it down again on every change of mind — and
    * on every `retry`, which is what `attempt` is doing in the dependencies below.
@@ -620,6 +649,10 @@ export function useCamera(): Camera {
    * settles on the same `deviceId`, which React bails out of, leaving exactly one
    * re-acquisition from the bump. */
   const retry = useCallback(() => {
+    /* Also the opener. `setStarted(true)` arms the effect above for every later mount of
+     * this hook's owner, and the `reconcile()` below is what makes the FIRST press act
+     * immediately rather than waiting on that effect to re-run. */
+    setStarted(true)
     setAttempt((count) => count + 1)
     void reconcile()
   }, [reconcile])
@@ -751,6 +784,7 @@ export function useCamera(): Camera {
       deviceId,
       selectDevice,
       retry,
+      started,
       missing,
       error: streamError ?? listError,
       ready,
@@ -763,6 +797,7 @@ export function useCamera(): Camera {
       deviceId,
       selectDevice,
       retry,
+      started,
       missing,
       streamError,
       listError,

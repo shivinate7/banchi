@@ -16,13 +16,19 @@ Results arrive in ANY order, so they are keyed by `custom_id` and never by posit
 Every submitted id is accounted for in the returned mapping — a card that errored, was
 cancelled, or expired comes back as an `Outcome` carrying the reason, because the hard
 rule is that nothing is silently dropped.
+
+Each request names the prompt profile that reads it (`strategy`), so one batch may
+legally mix games (D21). A strategy `prompt.profile` cannot answer is refused per item
+BEFORE submission, under its own status code — never submitted under another game's
+prompt, which comes back confident and wrong, and never dropped, which breaks the rule
+above. A refused card is an `Outcome` like any other, so the caller's report counts it.
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterator, List, Optional, Sequence
+from typing import Callable, Dict, Iterator, List, Mapping, Optional, Sequence
 
 import envfile
 from identify import prompt
@@ -37,6 +43,13 @@ DEFAULT_POLL_SECONDS = 15
 DEFAULT_TIMEOUT_SECONDS = 3_600  # most batches land in minutes; the API's own cap is 24h
 
 SUCCEEDED = "succeeded"
+
+# The two refusal codes for a request whose strategy names no usable profile. Statuses
+# rather than exceptions, because a refused card must come out of the run the way every
+# card does — as an `Outcome` under its `custom_id`, counted in the report — never as a
+# crash that takes the rest of the batch with it, and never as a silent omission.
+UNKNOWN_STRATEGY = "unknown_strategy"
+UNWRITTEN_PROMPT = "unwritten_prompt"
 
 
 class BatchError(RuntimeError):
@@ -64,7 +77,17 @@ class ImageRequest:
     media_type: str
     data_b64: str
     set_hint: Optional[str] = None  # D2: optional accelerator, identification works without
+    # D23's stack claim, travelling exactly as the set hint does: per card, optional, and
+    # rendered by `prompt.user_text` only when present. Validated against the game's own
+    # vocabulary at the sidecar read, so what arrives here is already legal to render.
+    rarity_claim: Optional[Sequence[str]] = None
     regions: Sequence[Attachment] = ()
+    # WHICH PROFILE READS THIS CARD. Per request, because game is a per-card claim (D21)
+    # and a batch may legally mix them. The default is the Pokemon profile, so a caller
+    # that predates the field — harness T1 builds requests without it — submits exactly
+    # what it always submitted. `run_batch` refuses, by name and per item, any strategy
+    # `prompt.profile` cannot answer; nothing falls through to another game's prompt.
+    strategy: str = prompt.DEFAULT_PROFILE
 
     @property
     def payload_bytes(self) -> int:
@@ -143,26 +166,63 @@ def _image_block(media_type: str, data_b64: str) -> dict:
     }
 
 
+def _message(exc: BaseException) -> str:
+    """`KeyError.__str__` reprs its argument; a refusal should read as it was written."""
+    return str(exc.args[0]) if exc.args else str(exc)
+
+
+def prompt_refusal(custom_id: str, strategy: str) -> Optional[Outcome]:
+    """The named refusal for a strategy no profile answers, or None when it is sendable.
+
+    Checked BEFORE submission, per item, because both alternatives are worse: submitting
+    under another game's prompt returns a confident wrong answer no threshold fires on,
+    and dropping the card breaks the rule that nothing is silently dropped. The error
+    text is the dispatch's own message, which already says what to do next.
+    `cli/cmd_identify.py` calls this too, so its preflight refuses in the same words the
+    transport would.
+    """
+    try:
+        prompt.profile(strategy)
+    except prompt.UnknownProfile as exc:
+        return Outcome(custom_id, UNKNOWN_STRATEGY, error=_message(exc))
+    except prompt.UnwrittenPrompt as exc:
+        return Outcome(custom_id, UNWRITTEN_PROMPT, error=_message(exc))
+    return None
+
+
 def build_request(item: ImageRequest) -> dict:
-    """One entry in the batch. Image blocks before text — vision reads better that way."""
+    """One entry in the batch. Image blocks before text — vision reads better that way.
+
+    Everything model-facing comes off the profile `item.strategy` names — model, token
+    cap, system prompt, user turn, schema — never off `prompt`'s module attributes, which
+    is what once sent every card in a batch under Pokemon's prompt whatever its game.
+    `prompt.profile` raises by name on a strategy it cannot answer; `run_batch` refuses
+    those per item before anything reaches here.
+    """
+    chosen = prompt.profile(item.strategy)
     content = [_image_block(item.media_type, item.data_b64)]
     content += [_image_block(r.media_type, r.data_b64) for r in item.regions]
     content.append(
         {
             "type": "text",
-            "text": prompt.user_text(item.set_hint, with_crops=item.with_crops),
+            "text": prompt.user_text(
+                item.set_hint,
+                with_crops=item.with_crops,
+                strategy=item.strategy,
+                rarity_claim=item.rarity_claim,
+            ),
         }
     )
     return {
         "custom_id": item.custom_id,
         "params": {
-            "model": prompt.MODEL,
-            "max_tokens": prompt.MAX_TOKENS,
-            "system": prompt.SYSTEM_PROMPT,
-            # Structured outputs: the response is guaranteed to match SCHEMA, so the
-            # parser handles surprises rather than tolerating slop.
+            "model": chosen.model,
+            "max_tokens": chosen.max_tokens,
+            "system": chosen.system,
+            # Structured outputs: the response is guaranteed to match the profile's
+            # schema, so the parser handles surprises rather than tolerating slop.
             "output_config": {
-                "format": {"type": "json_schema", "schema": prompt.SCHEMA}
+                "format": {"type": "json_schema", "schema": chosen.schema}
             },
             "messages": [{"role": "user", "content": content}],
         },
@@ -192,7 +252,14 @@ def _text_of(message) -> str:
     raise prompt.MalformedIdentification("response carried no text block")
 
 
-def _collect(client, batch_id: str, run: BatchRun) -> None:
+def _collect(
+    client, batch_id: str, run: BatchRun, strategies: Mapping[str, str]
+) -> None:
+    """`strategies` maps `custom_id` to the strategy the request was built under, so each
+    answer is read by the parser of the profile that produced it. An id the mapping does
+    not cover parses under the default profile — the only thing an untagged request can
+    ever have been submitted as — and a misc answer landing there fails loudly as missing
+    keys rather than being read as a Pokemon card."""
     for entry in client.messages.batches.results(batch_id):
         custom_id = entry.custom_id
         kind = entry.result.type
@@ -202,8 +269,16 @@ def _collect(client, batch_id: str, run: BatchRun) -> None:
             continue
         message = entry.result.message
         run.usage.add(message)
+        strategy = strategies.get(custom_id, prompt.DEFAULT_PROFILE)
+        # A paid answer whose CLAIMED strategy the dispatch refuses — reachable only on a
+        # reattach whose caller supplied one — keeps its named refusal rather than
+        # crashing the collection: re-running would buy the answer again to hit it again.
+        refusal = prompt_refusal(custom_id, strategy)
+        if refusal is not None:
+            run.outcomes[custom_id] = refusal
+            continue
         try:
-            identification = prompt.parse(_text_of(message))
+            identification = prompt.parse(_text_of(message), strategy)
         except prompt.MalformedIdentification as exc:
             run.outcomes[custom_id] = Outcome(custom_id, "malformed", error=str(exc))
             continue
@@ -248,6 +323,7 @@ def _say_counts(batch, say: Callable[[str], None]) -> None:
 def collect_batches(
     batch_ids: Sequence[str],
     *,
+    strategies: Optional[Mapping[str, str]] = None,
     api_key: Optional[str] = None,
     client=None,
     poll_seconds: int = DEFAULT_POLL_SECONDS,
@@ -260,6 +336,11 @@ def collect_batches(
     it has already paid for. Re-submitting would buy them a second time — which is why the
     ids are written to the manifest BEFORE the first poll, and why this exists to pick them
     up. Still no per-card path: this collects whole batches, same as `run_batch`.
+
+    `strategies` is `{custom_id: strategy}` for the requests those batches carried, so
+    each answer is parsed by the profile that produced it. Left None — or missing an id —
+    the default profile reads it, which is the only thing an untagged request can ever
+    have been submitted as.
     """
     say = log or (lambda _message: None)
     run = BatchRun()
@@ -273,7 +354,7 @@ def collect_batches(
         batch = _await_end(client, batch_id, poll_seconds, timeout_seconds, say)
         run.batch_ids.append(batch_id)
         _say_counts(batch, say)
-        _collect(client, batch_id, run)
+        _collect(client, batch_id, run, strategies or {})
     run.elapsed_seconds = time.monotonic() - started
     return run
 
@@ -308,10 +389,24 @@ def run_batch(
             raise BatchError(f"duplicate custom_id {item.custom_id!r}")
         seen.add(item.custom_id)
 
-    client = client or _client(api_key)
+    # THE REFUSALS, BEFORE THE CLIENT EXISTS. A request whose strategy no profile answers
+    # is excluded from submission under its own status code — never sent under another
+    # game's prompt, never dropped. Checked ahead of `_client` so a run of nothing but
+    # refusals answers without credentials or the SDK, exactly like an empty one.
+    sendable: List[ImageRequest] = []
+    for item in items:
+        refusal = prompt_refusal(item.custom_id, item.strategy)
+        if refusal is None:
+            sendable.append(item)
+        else:
+            run.outcomes[item.custom_id] = refusal
+    strategies = {item.custom_id: item.strategy for item in sendable}
+
+    if sendable:
+        client = client or _client(api_key)
     started = time.monotonic()
 
-    for chunk in _chunks(items):
+    for chunk in _chunks(sendable):
         requests = [build_request(item) for item in chunk]
         try:
             batch = client.messages.batches.create(requests=requests)
@@ -325,7 +420,7 @@ def run_batch(
 
         batch = _await_end(client, batch.id, poll_seconds, timeout_seconds, say)
         _say_counts(batch, say)
-        _collect(client, batch.id, run)
+        _collect(client, batch.id, run, strategies)
 
     # Closure: everything submitted is accounted for, matched or reported.
     for item in items:

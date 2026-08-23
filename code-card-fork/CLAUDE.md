@@ -3,8 +3,9 @@
 Shares the rig, capture server, and capture app shell (mode toggle) with singles. Shares
 nothing downstream: data model, identification, sales channel, and fulfillment are its own.
 Root operating rules apply, including the sequencing ruling — the codes MVP rides the
-shared foundation with a **manual** eBay sales end; the automated delivery worker is gated
-on singles Gate B.
+shared foundation with a **manual** eBay sales end. The automated delivery worker was gated
+on singles Gate B, which passed 2026-08-22 — the precondition is discharged and the gating
+system it belonged to is retired, so the worker is released rather than waiting.
 
 ## Things you will get wrong without being told
 

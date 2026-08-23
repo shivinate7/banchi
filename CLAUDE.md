@@ -4,21 +4,29 @@ Bulk-list pre-sorted Pokémon TCG singles on TCGplayer with zero attention per c
 physical location tracking. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
-**Current gate: C.** Gate A passed 2026-07-26; Gate B passed 2026-08-22 with 53 real
-cards end to end — the first numbers this project has about cards rather than about
-itself are in that gate's section. Nothing on the deferred list, ever, until Gate C.
-See @docs/GATES.md.
+**The gating system is retired as of 2026-08-23.** Gate A passed 2026-07-26; Gate B passed
+2026-08-22 with 53 real cards end to end — the first numbers this project has about cards
+rather than about itself are in that gate's section; Gate C passed 2026-08-22 with two
+85-card feeder runs. No gate is current, nothing is blocked behind one, and the deferred
+list is open.
+
+**`docs/GATES.md` is now a record of runs, not a schedule.** Its sections are the only
+place this project writes down what it has actually measured — 53 cards end to end, finish
+detection false-positive at 30%, `detect_card` at 0 of 53 and then 53 of 53, a 623 ms
+feeder cadence. **Those numbers are evidence and are never rewritten to match a later
+tree.** What was retired is the gate as a *control*: the blocking, the sequencing, and the
+"current gate" a session had to look up before it was allowed to build. See @docs/GATES.md.
 
 ## Commands
 
 ```
-make status         # where you are: next step, gate, T1 score, branch. Start here.
+make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make dev            # Vite app on :5173. Blocks — background it.
 make server         # Python capture server on :8000. Blocks — background it.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
-make lint           # eslint over app/: no facingMode, no split(","). JS only, no Python linter.
+make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
 make check          # harness + docs-audit + lint + typecheck — no stubs left in it
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
@@ -29,10 +37,20 @@ make check          # harness + docs-audit + lint + typecheck — no stubs left 
 
 ## Things you will get wrong without being told
 
-- **Join key** = `zfill(3)(number) + "/" + printedTotal`. The shape is pokemontcg.io's
-  schema (`printedTotal` is their field name), but at runtime both values come from the
-  identification and match against the export's `Number` column — nothing in the pipeline
-  calls that API. Never join on Product Name — it inconsistently embeds numbers.
+- **The join key is PER-GAME, and matching is normalised on both sides.** Pokemon composes
+  `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
+  is their field name), but at runtime both values come from the identification and match
+  against the export's `Number` column; nothing in the pipeline calls that API. One Piece
+  carries no denominator at all (`OP15-079`) and matches the printed identifier verbatim;
+  Riftbound does too, because 450 of its rows are denominator-less promos. `pipeline/games.py`
+  says which strategy a game uses.
+
+  **`zfill` is the COMPOSITION form only — never the matching form**, and getting that wrong
+  was a real silent zero-join: the catalog indexed `Number` verbatim while the key padded it,
+  so an export writing `39/236` was never found by a key built as `039/236`. 950 rows joined
+  nothing and reported `no_catalog_row`, which blames the export. Both sides now go through
+  `pipeline/join.py:number_index_key`. Never join on Product Name — it inconsistently embeds
+  numbers.
 - **Only two columns are ever written**: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
@@ -45,8 +63,6 @@ make check          # harness + docs-audit + lint + typecheck — no stubs left 
   chosen camera's `deviceId` and the capture rotation. Both are device-local by nature and
   would be wrong if shared; neither is inventory. Nothing lints this, so the argument lives
   in the comments beside the two keys.
-  `facingMode: "environment"`. Inventory state is server-side JSON; camera uses a
-  device picker. Two devices share one truth.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
 - **The app has six screens and six routes** — five the owner's, one the Fulfiller's. The
@@ -63,7 +79,9 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 - Never guess an identification, a variant, or a price. Ambiguity goes to the review
   queue with its photo. Never silently drop a card.
 - Never write output before reporting unmatched rows in both directions.
-- No new surface area until the current gate passes.
+- Scope is argued, not gated. New surface area needs a reason and a decision entry — it no
+  longer needs a gate to pass first, because none is open. This rule used to read "No new
+  surface area until the current gate passes."
 - No manual third-party UI step inside the autonomous pipeline. External tools without
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
@@ -85,8 +103,8 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   NEITHER** — the same specified/built/validated vocabulary the gates already use, applied
   to the report itself. "Solved" with no bucket named is the phrasing this repo does not
   accept.
-- When compacting: preserve the fixture schema facts, every `make` command, the current
-  gate, and the list of modified files. Drop exploration narration.
+- When compacting: preserve the fixture schema facts, every `make` command, and the list of
+  modified files. Drop exploration narration.
 
 ## Map
 

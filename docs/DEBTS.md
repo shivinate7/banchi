@@ -647,7 +647,237 @@ photographs may live, given the opsec rule that keeps `captures/` out of git.
 produced none: 53/53 at high confidence with zero retries, so `detect_card` was never
 reached in anger. Recorded so a green T6 is not read as more than it is.
 
+### A capture-time claim crosses ten hops and nothing binds them together
+
+Recorded 2026-08-22, from the multi-game foundation work (D21-D25). Nothing here is broken
+today; what is missing is any mechanism that would stop the next claim field being broken
+quietly.
+
+`set_hint` and `metadata_finish` are the two claims the operator sets on the capture screen,
+and D21 is about to add a third — `game` — with D23 proposing a fourth. Each one is the same
+value carried by hand through a chain of independent restatements, and the chain is the
+finding. Written out rather than counted, because the list is the register:
+
+1. `app/src/CaptureScreen.tsx` — the control and the client state it lives in
+2. `app/src/types.ts` — the shape the wire speaks
+3. `app/src/server.ts` — the body `POST /capture` actually sends
+4. `server/capture_server.py` — the route pulling the field off that body
+5. `server/capture_server.py:sidecar_payload` — the JSON written beside the photo
+6. `server/capture_server.py:PUT_FIELDS` — what the correction route is allowed to change
+7. `store/master.py:Card` — the dataclass field
+8. `store/master.py:Inventory.parse` — the reload filter
+9. `store/master.py:allocate_capture` — the keyword pass-through
+10. `identify/sidecar.py` — `_HINT_KEYS` / `_VARIANT_KEYS` and the `Capture` it builds, then
+    `pipeline/join.py` as the consumer that finally reads the claim
+
+**Two of them fail silently, and they are the two that matter.**
+
+- **`Inventory.parse` filters on `Card.__annotations__`.** A field the dataclass does not
+  declare is dropped on reload rather than kept, and nothing anywhere says so. The record
+  is written, the response is correct, the file on disk carries the value, and the next read
+  hands back a card that never had it. That behaviour is deliberate and documented on
+  `Card.capture_id` — it is why the retry guard could not live in the sidecar alone — so the
+  filter is right and its silence is the debt.
+- **`record_capture` upserts over a literal tuple**, `("photo", "set_hint", "metadata_finish")`.
+  A re-record copies exactly those three attributes onto the incumbent. A fourth claim added
+  everywhere else in the chain would survive a first capture and be discarded by every
+  re-record, which is the harder failure to see: it works until the operator corrects a card.
+
+The third restatement of the same list, `PUT_FIELDS`, is the one that already behaves —
+`_reject_unknown` refuses a body naming anything outside it, so the correction route fails
+loudly. That is the shape the other two want.
+
+**Cost.** Bounded but not small, and it is paid at exactly the wrong moment. Every symptom
+appears at the far end of the chain — a claim missing from a sidecar, a finish that reverts
+after a correction — and the debugging starts at the screen. Gate B's six defects included
+one of this family already: review answers written by a route that nothing on the join path
+consumed, which took a real run to find.
+
+**The fix WAS BUILT on 2026-08-23, with the `game`/`note` wire.** `CAPTURE_CLAIM_FIELDS` in
+`store/master.py` now binds `record_capture`'s upsert loop, `allocate_capture`'s pass-through,
+`sidecar_payload` (via `CLAIM_WIRE_NAMES`) and the server's `PUT_FIELDS` (derived, no longer a
+literal), with the import-time assertion that every name is declared on `Card` — hop 8's
+silence became a refusal, and T7's `check_capture_claim_chain` iterates the tuple so a new
+claim is covered the day it is added.
+
+**What the tuple measurably cannot reach**, recorded by its own builder so the entry keeps
+telling the truth: the three app-side hops (no Python constant reaches a `.tsx`, and `tsc`
+sees a field *added* to `types.ts`, never one omitted), and **a fourth restatement found
+during the build** — `cli/cmd_identify.py` constructs a `master.Card(...)` literally rather
+than through `allocate_capture`, so it carries the claim names by hand and nothing binds it.
+Correct today, unbound tomorrow.
+
+**Why it is a debt and not a plan.** The tuple is the easy half. The app-side hops (1-3) stay
+hand-carried whatever the store does, because no Python constant can reach a `.tsx`, and
+`make typecheck` sees a field added to `app/src/types.ts` and never one omitted from it. So
+the fix narrows the chain rather than closing it, and the remaining gap should be named when
+it lands rather than discovered later as an over-claim.
+
+### The `reason codes` row cannot see a constant nobody published
+
+Recorded 2026-08-22 with the row itself.
+
+It reconciles the three places the review reasons are published — the constants in
+`pipeline/variant.py` and `pipeline/routing.py`, `REASON_LABELS` in
+`app/src/ReviewQueue.tsx`, and the enumerated list in `docs/DESIGN.md` — in every direction
+where one of them names a string. What it cannot report is a new reason constant that
+appears in none of them: `self_named_strings` deliberately answers "is this string defined
+here" rather than "which strings here are reasons", because the second question needs a
+heuristic and a heuristic on a blocking row is a guess that stops commits.
+
+**Cost.** A reason emitted by the pipeline and rendered on screen as a bare machine string,
+which is the outcome `docs/DESIGN.md`'s two-size label rule exists to prevent. Small: the
+same commit that adds the constant almost always adds the label, and the row catches every
+case where it does not add the doc line.
+
+**What would close it.** An explicit roster in each module — the shape `routing.py` already
+half has in `UNPRICEABLE_REASONS` — read by this row instead of the self-naming convention.
+That is a change to two modules this workstream does not own, and it is worth doing when one
+of them is next opened rather than reached into now.
+
+### The `env vars` row runs in one direction only
+
+`scripts/docs-audit.py:check_env_vars` walks **docs to code**: every environment variable a
+markdown file names must exist somewhere real. It does not walk the other way, so a variable
+that is real and documented nowhere never fires, and the row stays green while saying nothing
+about it.
+
+Found 2026-08-23 by a test author, not by the audit. `PKMNSCAN_ALLOWED_ORIGINS` — the
+allowlist that stands between an unrelated browser tab and a hard delete — existed for a day
+and a half, documented in no `.md`, while the row read "9 documented, all real". So did
+`PKMNSCAN_EXPORTS`.
+
+**The part worth keeping is not the two names, it is the comment that sat above one of them.**
+`server/capture_server.py` asserted, in prose, that the variable was "documented in the docs
+the same day it landed" and that "`make docs-audit` has a blocking check … so an undocumented
+one here fails a commit". Both halves were false, and the second was false about the very
+mechanism it was invoking. That comment is now a correction rather than a claim, kept in place
+because it is where the next person looks to find out whether adding a knob is safe.
+
+**Why the reverse direction is not simply switched on.** Finding "a real environment variable"
+means deciding what counts as one — `os.environ` reads, `getenv` with and without a default,
+names assembled from a prefix, and a test's own scaffolding, which sets and restores several
+that are deliberately undocumented. That is a heuristic, and D16's rule is that a finding
+blocks only when it is provably wrong. A blocking row built on a guess about what looks like a
+variable is the shape that gets a gate switched off. The honest options are an advisory row,
+or a registry the code and the docs both read — neither costed yet.
+
+Both variables are documented now. The one-directional check is not fixed, and the next one
+will go the same way.
+
+### Misc cards reach the Batch API under Pokemon's prompt — closed 2026-08-23
+
+**This one cost money and produced confident nonsense, and it was the highest-value item
+in this file.** Recorded 2026-08-23; closed the same day, in the one commit its fix
+demanded.
+
+What it argued: the owner ruled that `misc` cards — the occasional Yu-Gi-Oh, Weiss
+Schwarz, foreign-language or Magic card, about 1% of stock — **are** identified and
+submitted to the Batch API, and a correct `misc_card_v1` profile existed that
+`identify/batch.py` never asked for. `ImageRequest` carried no strategy field,
+`build_request` read `prompt.SYSTEM_PROMPT` / `MODEL` / `MAX_TOKENS` / `SCHEMA` straight
+off the module, and `_collect` called `prompt.parse(text)` bare — so every request in a
+batch was built from the Pokemon profile whatever game the card was, and a Magic card so
+read came back **confident and wrong**, the no-threshold-fires failure shape of T1's
+recorded misses. The `prompt mismatch` warning in `--dry-run` said so out loud, and
+promised to stop firing on its own once the seam moved.
+
+What shipped: `ImageRequest.strategy`, defaulting to the Pokemon profile so every caller
+predating the field — harness T1 included — submits exactly what it always submitted.
+`build_request` reads everything model-facing off `prompt.profile(item.strategy)`;
+`run_batch` refuses per item, by name and before submission, any strategy the dispatch
+cannot answer (`unwritten_prompt`, `unknown_strategy`) — excluded from the batch, counted
+in the run report as a failure bound for the main queue, never submitted under another
+game's prompt, never dropped. `run_batch` and `collect_batches` carry
+`{custom_id: strategy}` so `_collect` parses each answer under the profile that produced
+it. `cli/cmd_identify.py` threads each card's sidecar strategy, refuses an unregistered
+game under its own `unknown_game` code, shows every refusal in the preflight so
+`--dry-run` prices only what will be sent — and the mismatch warning retired exactly as
+it promised, the comparison it printed having stopped being true.
+
+The cache moved in the same commit, as this entry required. Staleness is judged per
+position against the fingerprint of the profile that would read that card today —
+`store/cache.py:stale_prompt` and `weak_and_uncleared` take a `{position: fingerprint}`
+mapping now — and each write records the hash of the profile that read the answer.
+Existing Pokemon entries are untouched and keep hitting: their recorded fingerprint is
+the Pokemon profile's, which is still what a Pokemon card is judged against.
+
+**The one piece that did not ship: the operator's `note` still does not reach the misc
+prompt.** `set_hint` rides on templates `identify/prompt.py` owns (`user_with_hint`,
+`hint_clause`), so threading the note the same way means that file growing a note clause
+on `Profile` and a `user_text` parameter — a prompt-contract change with its own
+fingerprint questions, not a transport change. Left open deliberately rather than
+smuggled through `set_hint`, which would tell the model the note is a stack label.
+
+### Six registry fields are authored, audited, and read by nothing
+
+`pipeline/games.py` is swept by four audit rows, so every field in it is kept *consistent*.
+Nothing checks that a field is *consumed*. Measured 2026-08-23 by walking all sixteen fields
+for a real code read, excluding the registry's own accessors and the audit itself:
+
+| field | consumer |
+|---|---|
+| `located` | CLOSED 2026-08-23 — consumers: `_Places` and the three card decorators, `pipeline/join.py`'s pooled-label helpers, `cli/resolve.py`'s reports, and the three app views; the Fulfillment exclusion is asserted in `fulfillment.spec.ts` |
+| `finish_by_rarity` | **nothing** — present in `types.ts`, read by no code. D23's chip narrowing is unbuilt |
+| `product_line` | **nothing** — D25's "becomes a real reader" is unbuilt |
+| `product_line_rarities` | **nothing** — appears once, in the registry, and is not even in `types.ts` |
+| `rarities` | only `require`'s emptiness guard; no screen renders them |
+| `prompt` | per-card: nothing — see the entry above |
+
+`card_aspect` and `crop_bands` were in this table until 2026-08-23 and are now wired.
+
+**Each of the remaining six needs a design decision, not a wire.** `located` needs a rule about
+where a position label may render; `finish_by_rarity` needs the rarity picker; `product_line`
+needs the per-game catalog partition. Wiring one without its decision would put a behaviour in
+the code that no entry argues for — which is the opposite failure to this one and worse.
+
+**The general shape, worth stating once:** the audit rows police the registry against the
+exports. Nothing polices the registry against the *code*, so a field can be perfectly consistent
+and entirely inert. D22 says "a field no consumer reads is a field nothing keeps honest", and
+this table is that sentence measured.
+
+### `removed` names two different things, and one of them is already shipped
+
+D26 ratifies a `removed` **card state** — `sold`'s sibling for a card pulled out, damaged, lost
+or given away. `server/capture_server.py` already defines `REMOVED = "removed"` as the **history
+event** capture-undo appends.
+
+They cannot both exist under those names. The server states, and T7 asserts, that no event name
+may be a member of `master.STATES` — because `_state_before_sale` scans history backwards for
+the last event naming a state and filters against that tuple. Add `removed` to `STATES` and a
+months-old undo event starts parsing as a state, and a reversed sale becomes restorable to
+`removed`.
+
+**Nothing catches it at import; the T7 disjointness case will catch it at build time.** Three
+ways out — rename the state, rename the event, or narrow the reader — and which one is an owner
+decision, because the event name is already written into `history.jsonl` on disk.
+
 ## Reporting defects — a check runs but can report the wrong thing
+
+### `check_reason_codes` is anchored on the labels and the doc, so a bare constant is invisible
+
+Found 2026-08-23, live: `rarity_claim_mismatch` was defined in `pipeline/variant.py`, emitted
+by the ladder, and carried by neither `REASON_LABELS` nor `docs/DESIGN.md`'s enumeration — and
+the row read **"12 enumerated, 12 labelled, all defined", green**. Had it fired, the queue
+would have drawn a bare machine string, which is the exact outcome the two-size label rule
+exists to prevent and the exact drift the row was built to catch.
+
+The four reconciliations all START from the labels or from the doc and verify against the
+constants. No direction starts from the constants, so a reason born in the pipeline is
+invisible until someone remembers to publish it — which is the failure shape of every entry
+in this file.
+
+**Why the fifth direction is not simply added.** "A constant in `variant.py`" is not a
+reason; the harvest is `self_named_strings`, which also collects ladder stage names and every
+other `X = "x"`. Telling a reason from a stage mechanically means walking the AST for
+`Resolution(stage=REVIEW, reason=NAME)` call sites — knowable, deterministic, and blocking-
+grade, but it couples the check to `Resolution`'s call shape. Worth building; not worth
+building at 4am on a tree two agents are mid-edit in. Until it exists, the row's green means
+"everything published is consistent", not "everything emitted is published".
+
+The triple was completed by hand the same night, so the row is honest again — about the
+thirteen it can see.
+
 
 Full detail is in the review; the short form, by where it bites:
 

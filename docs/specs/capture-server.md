@@ -369,9 +369,12 @@ and it is small enough to review in one line.
 **`next = 1 + max(index of every card in that box, over all states, default 0)`.** A
 high-water mark. Not count+1, not first-free.
 
-Indices are 1-based and that is forced, not chosen: section and card are derived as
-`(index - 1) // 25 + 1` and `(index - 1) % 25 + 1` (`pipeline/join.py:85-94`), so index 0
-labels a slot that does not exist.
+Indices are 1-based and that is forced, not chosen: section and card are derived from the
+index, so index 0 labels a slot that does not exist. **The arithmetic used to be spelled out
+here as `(index - 1) // 25 + 1` and `(index - 1) % 25 + 1`, and D10's amendment made that a
+special case rather than the rule** — dividers are declared per box now, and the fixed
+25-card window is only what a box that declares none renders with. `pipeline/join.py:Position`
+is the formula; this file names it and does not restate it.
 
 *count+1* agrees with the high-water mark for sold cards — nothing deletes a record, `sold`
 is a state — and fails the moment anything does delete one, silently, through the upsert
@@ -397,9 +400,11 @@ the front door.
 
 ### 5.3 — Sections, and the constant
 
-Do not write a new formula or a new constant. `CARDS_PER_SECTION = 25` lives at
-`pipeline/join.py:69` under the comment naming D10, and `Position` derives section, card
-and the label from it. The server imports `join` and calls `Position(box, index).label`.
+Do not write a new formula or a new constant. `pipeline/join.py:Position` derives section,
+card and the label, and the server calls it — now with the box's own divider layout, since
+D10's amendment made sections per-box: `Position(box, index, sections)`. `CARDS_PER_SECTION`
+survives in that file as the default for a box that has declared no layout, which is what
+keeps every label written before boxes existed byte-identical.
 
 There is no cycle: `pipeline`, `identify` and `geometry` import `store` nowhere. And the
 label is the one part of this path with harness coverage — `harness/tests/t3_join_coverage.py`
@@ -410,9 +415,20 @@ covered line into the directory that by 0.2 has none.
 
 **Empty box**: `default=0` yields 1. No branch, no error.
 
-**A box that does not exist**: creation is implicit, and that is a description of the code
-rather than a preference — there is no box object anywhere in `store/`, only a flat dict
-keyed by box and index. A box exists when a card names it.
+**A box that does not exist**: creation is implicit, and it stays implicit even though a box
+is now an object. **This paragraph used to read "there is no box object anywhere in `store/`,
+only a flat dict keyed by box and index", and D20 built one** — `store/master.py:Box`, with a
+name, a divider layout, an open/closed lid and a capacity frozen at sealing. D20 quotes this
+very sentence as the state it was correcting, so it is rewritten here rather than left to
+contradict the entry that cites it.
+
+What did not change is that capture never demands a registry entry first: `allocate_capture`
+calls `ensure_box`, which creates an unnamed, undeclared, open box if the registry has never
+seen the number. Requiring registration would make the registry a second thing to keep in
+step with the cards, and the v1 migration produces exactly this shape, so the two paths
+cannot diverge. A **sealed** box is the one case that refuses — `BoxClosed`, checked before
+an index is computed, because capacity was frozen at the fill and one more card would falsify
+every fraction drawn from it.
 
 The hazard that creates is a typo: `box=33` for a card going into box 3 is a valid int, a
 new box, index 1, a real photo, and a real listing, and nothing downstream can tell. The
@@ -567,8 +583,32 @@ rule reaches them: what happened, and what to do next. Reserve 500 for bugs; eve
 anticipated condition gets its own code.
 
 **CORS**: the step 7 app is a different origin and the Fulfiller's device is on the LAN.
-Allow any origin, no credentials ever, answer preflight. No auth and no TLS — LAN tool,
-two known devices, D13 and D5. State that as a decision so nobody adds a login screen.
+No credentials ever, answer preflight. No auth and no TLS — LAN tool, two known devices,
+D13 and D5. State that as a decision so nobody adds a login screen.
+
+**"Allow any origin" was this spec's instruction and it opened a hole; corrected
+2026-08-23.** Reads still allow any origin, so `GET /photo/<box>/<index>` stays embeddable —
+the review queue and the pull preview both depend on that. **The three mutating verbs do
+not.** With `Access-Control-Allow-Origin: *` advertised alongside `DELETE`, any page open in
+the owner's browser could preflight and then send `DELETE /inventory/3/17`, which is D10's
+hard delete of the record, the sidecar and the photo with no backup. Nothing read `Origin`.
+That is a CSRF hole rather than a missing login, and the fix is an allowlist rather than the
+auth this section rightly still refuses.
+
+**An absent `Origin` is allowed to write, and that is load-bearing.** A browser page cannot
+omit the header; `curl`, `./pkmnscan` and the harness all do. Requiring it would kill every
+command-line path in the project at once — measured, not assumed: mutating the check to
+require the header turns eleven T7 assertions red, eight of them in the concurrency section
+that sends no origin at all.
+
+**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults — `http://localhost:5173` and
+`http://127.0.0.1:5173` — and cannot replace them. Comma- or whitespace-separated; entries
+are lowercased and lose a trailing slash, because that is what a human types. A port is
+never defaulted in, so `http://localhost` and `http://localhost:80` are different and the
+error is toward refusing. **`*` is not a wildcard here**: the list is compared by exact
+string, so setting the variable to `*` refuses everything rather than re-opening the hole —
+asserted in T7, because a wildcard sneaking back through configuration would undo the whole
+control silently.
 
 ### 6.5 — Concurrency
 

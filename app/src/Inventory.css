@@ -1,12 +1,19 @@
-/* The inventory view — build-order step 7b. D7's SKU -> positions map.
+/* The inventory view — D7's SKU -> positions map, and the search-and-sell flow built on it.
  *
- * NO ACCENT ANYWHERE IN THIS FILE, the same deliberate absence PullPreview.css records and
- * for the same reason: docs/DESIGN.md gives accent exactly two jobs — outline and text weight
- * when the system is unsure, a solid fill when there is exactly one thing to do — and this
- * screen is neither. It is sure about everything it shows, and there is nothing to do on it.
- * The obvious first drafts both wanted the colour: marking the open group, and flagging a SKU
- * whose copies disagree about a name. Either would give accent a third meaning, which is the
- * drift that ends with it meaning "important" and therefore nothing.
+ * ACCENT APPEARS EXACTLY ONCE, IN THE CONFIRM PANEL, AND NOWHERE ELSE. This file used to open
+ * "NO ACCENT ANYWHERE IN THIS FILE" on the grounds that the screen "is sure about everything
+ * it shows, and there is nothing to do on it". The second clause stopped being true when the
+ * sale landed here; the first never was the reason. docs/DESIGN.md's rule is unchanged and is
+ * what admits the one exception: a solid fill marks a screen with exactly one thing to do, and
+ * the photo-confirm is that screen — a photograph, a position, and one action. It is drawn by
+ * PullConfirm, which brings its own fill, so no rule in this file paints it.
+ *
+ * WHAT THE ORIGINAL PARAGRAPH WAS RIGHT ABOUT SURVIVES, because it was not an argument about
+ * this screen's mood: the two first drafts it named — accent on the open group, accent on a
+ * SKU whose copies disagree about a name — are still refused. Both would make the colour mean
+ * "important", which is the third meaning that ends with it meaning nothing. The list of
+ * copies gets no fill either, for the reason CardLocations.css gives: several things to do is
+ * not one thing to do.
  *
  * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header
  * strip — docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it,
@@ -42,6 +49,14 @@
   max-width: 76ch;
   margin-top: var(--s2);
   font-size: 15px;
+}
+
+/* The search field. Capped rather than full width: it is one line of text and a 1200px input
+   puts the caret a screen away from the results it produces. 30rem holds the longest card name
+   this catalogue has with room to spare. */
+.inventory-search {
+  margin-top: var(--s4);
+  max-width: 30rem;
 }
 
 .inventory-controls {
@@ -367,4 +382,261 @@ td.inventory-cell-since {
   font-family: var(--util);
   font-size: 13px;
   color: var(--ink);
+}
+
+/* ---- the search results, the receipts, and the confirm ---- */
+
+/* One group per card, with air between them rather than hairlines. That is the opposite of
+   `.inventory-groups` above and the difference is what is being separated: those are rows of
+   one list and these are whole panels, each already bordered by CardLocations.css. Stacking
+   bordered panels flush would draw a 2px rule between them, which is the second separation
+   weight this system does not have. */
+.inventory-found {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  margin-top: var(--s5);
+}
+
+/* The standing sales, above both bodies. See the TSX for why they live there and not in the
+   row. */
+.inventory-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s5);
+}
+
+.inventory-receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  max-width: 760px;
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A sentence a human reads, so the body face — and at full ink, because it is the only thing
+   on the screen reporting something that just changed. */
+.inventory-receipt-said {
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* The position, mono and tabular like every position in the product. Martian Mono is tabular
+   by construction, so no font-variant-numeric — docs/DESIGN.md picked the face for exactly
+   that. */
+.inventory-receipt-place {
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* The quiet owner-side control: hairline border, ink label, no fill. Identical to
+   `.inventory-reload` on purpose and declared beside it rather than by adding a class to that
+   selector, because the two are the same control at two call sites and a shared name is how
+   the next edit keeps them together. */
+.inventory-plain {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.inventory-plain:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.inventory-plain:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.inventory-plain:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+/* THE SCRIM IS THE PAGE GROUND AT PARTIAL ALPHA, not a black wash. There is no token for a
+   shadow or an overlay tint, and docs/DESIGN.md's lesson from --on-accent is that the answer
+   to "no token means what I mean" is a token argued for in that file, never a literal painted
+   here. `--bg` at 0.86 is the ground this app already sits on, dimming what is behind the
+   panel without introducing a colour the palette never locked. */
+.inventory-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s5);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  overflow-y: auto;
+}
+
+/* The panel. Separated from the scrim by the same 1px hairline as everything else — a shadow
+   would be the second separation mechanism this system does not have, and the scrim already
+   does the work of lifting it off the page. */
+.inventory-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  width: min(420px, 100%);
+  margin: auto;
+  padding: var(--s5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The panel's name, and the same words as the button that opened it — docs/DESIGN.md's rule
+   that an action keeps its name through the flow. Display face at 20px, which is the floor
+   that face is allowed at. */
+.inventory-confirm-head {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* The photograph, sized from the card rather than from the viewport: 63x88mm is the shape of
+   every card this product will ever hold, so the box is the right shape before the image loads
+   and the panel does not jump when it does. No 320px floor — that is a Fulfillment constraint
+   and this is the owner's screen. */
+.inventory-confirm-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The position is the payload: it is what says which copy is about to be sold. Larger than the
+   row's 13px because this is the one thing being checked, and mono so it cannot shift width. */
+.inventory-confirm-place {
+  font-family: var(--util);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+/* What the owner calls the box. A label for humans, never an identifier — quieter than the
+   position it sits under, because the position is the thing you walk with. */
+.inventory-confirm-boxname {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.inventory-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  margin-top: var(--s2);
+}
+
+/* The one fill on this screen fills the panel it sits in. Cancel keeps its own width beside
+   it, so the loud control is unmistakably the larger of the two. */
+.inventory-confirm-actions .pull-confirm {
+  flex: 1 1 auto;
+}
+
+/* `margin-left: auto` is right for a receipt, where Undo packs to the far end of a wide row,
+   and wrong here, where the two controls are a pair. */
+.inventory-confirm-actions .inventory-plain {
+  margin-left: 0;
+}
+
+/* The bar sizes to the panel rather than to its own content. */
+.inventory-confirm .position-bar {
+  width: 100%;
+}
+
+/* ---- D26: the retire control ---- */
+
+/* The action slot holding both quiet buttons. A row, not a column: the copy rows budget
+   ~56px and two stacked 32px buttons would double every row for the rare press. Both reuse
+   `.card-locations-sell`'s owner styling — same control, same weight, neither louder,
+   because a slot where Retire outdrew Mark sold would rank the two writes and no ruling
+   ranks them. */
+.inventory-copy-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The reason list: one full-width button per reason, stacked. A column because the labels
+   differ in length and a grid of uneven buttons reads as a ranking; the stack reads as the
+   list it is. */
+.inventory-retire-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+/* One reason: human label left, machine word right — docs/DESIGN.md's two-register rule
+   drawn horizontally because the control is one line tall. Quiet like every owner-side
+   control: hairline, surface, no fill — four answers, so no accent (see the panel's own
+   comment). */
+.inventory-retire-reason {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 40px;
+  padding: var(--s2) var(--s3);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.inventory-retire-reason:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.inventory-retire-reason:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.inventory-retire-reason:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.inventory-retire-label {
+  text-align: left;
+}
+
+/* The machine word rides the button's baseline; the shared class brings its own top margin
+   for the stacked case and it is unwanted here. */
+.inventory-retire-reason .inventory-machine {
+  margin-top: 0;
 }

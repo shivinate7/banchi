@@ -2,7 +2,16 @@
 
     snapshot = Store().read()                  # no lock; sees a whole file, never a torn one
     with Store().write() as s:                 # lock held, state re-read inside it
-        s.inventory.set_state(key, store.PUSHED)
+        s.inventory.set_state(key, store.IDENTIFIED)
+        s.inventory.listing(sku).bump(store.PUSHED)
+
+Two writes because there are two subjects. `set_state` moves ONE CARD between `store.STATES`
+— `captured`, `identified`, `sold` — and `bump` moves a QUANTITY on one SKU's listing
+through `store.LISTING_STAGES`. The second line used to read
+`s.inventory.set_state(key, store.PUSHED)`, which now raises `UnknownState`: `pushed`,
+`staged` and `live` are counts against a SKU rather than states a card wears (D7 amended),
+because every unsold copy of a SKU is equally sellable and an address there would be a
+fiction the pull then has to honour.
 
 The re-read inside `write()` is not belt-and-braces, it is the point. A lock around a
 snapshot taken before the lock was acquired loses updates exactly as quietly as no lock at

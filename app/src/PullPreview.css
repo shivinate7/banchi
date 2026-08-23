@@ -1,6 +1,12 @@
 /* The pull preview — docs/specs/capture-app.md §7. Look only, so nothing here draws a
  * control that looks pressable except the reload and the list rows.
  *
+ * The key chips are the one thing in this file with a border and a radius that is not a
+ * control, and they are drawn quiet enough — muted on surface, 10px, no fill — that the
+ * sentence above still holds. Said out loud because the next thing anyone would do with a
+ * bordered chip is make it clickable, and a click target on this screen is the one addition
+ * it does not take.
+ *
  * NO ACCENT ANYWHERE IN THIS FILE, and that is the one deliberate decision in it.
  * docs/DESIGN.md gives accent exactly two jobs: outline and text weight when the system is
  * unsure, and a solid fill when there is exactly one thing to do. This screen is neither —
@@ -70,6 +76,39 @@
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--muted);
+}
+
+/* The keyboard hint. docs/DESIGN.md requires it owner-side — "every choice shows its key" —
+   and forbids it in the Fulfillment view, which this is not.
+
+   A HINT AND NOT A CONTROL, which is the whole of its styling. No fill, no accent (see the
+   file header), muted against surface, and the same 10px bordered chip .capture-key and
+   .review-key already draw. Three screens in this app show a key and there are three copies of
+   this rule; the thing worth protecting is that there are not four LOOKS. A chip that drew
+   itself differently here would read as a different kind of thing to press, and it is not a
+   thing to press at all.
+
+   Two faces, one line: the chips are keys off a keyboard, which is metadata, so the utility
+   face; the words beside them are a sentence a human reads, so the body face. That is
+   docs/DESIGN.md's mono-carries-all-metadata rule applied inside a single span. */
+.pull-preview-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pull-preview-key {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  min-width: 24px;
+  text-align: center;
 }
 
 /* ---- body: the picker beside the card ---- */
@@ -149,6 +188,22 @@
 
 .pull-preview-row[aria-current='true'] .pull-preview-row-name {
   color: var(--ink);
+}
+
+/* The list became a tab stop when the arrow keys landed on it, and a focusable thing with no
+   visible focus is worse than one that cannot be reached at all — the rows had been living on
+   the browser's default outline until now, which is a look this app overrides everywhere else.
+
+   --ink and not --accent, for the reason this file's header gives and ReviewQueue.css gives
+   again: accent has exactly two jobs and "you are here" is neither.
+
+   INSET, where the rest of the app draws its focus ring outside the box. The list clips its
+   own overflow and the rows sit flush against its border, so an outset outline is drawn half
+   into a scroller that will not show it. */
+.pull-preview-list:focus-visible,
+.pull-preview-row:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
 }
 
 /* ---- the card ---- */

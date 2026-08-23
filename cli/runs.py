@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from pipeline import games
 from store import files
 
 MANIFEST = "manifest.json"
@@ -30,6 +31,27 @@ REPORT = "report.txt"
 RECONCILE = "reconcile.txt"
 IMPORT_LISTED = "import-listed.csv"
 IMPORT_SUBTHRESHOLD = "import-subthreshold.csv"
+
+
+def import_listed_name(game: str) -> str:
+    """The listed import file for one game. One import file per game, never mixed.
+
+    Nobody has established that TCGplayer's Import to Staged accepts a file spanning two
+    `Product Line`s, and `fixtures/staged-import-accepted.csv` proves it for one line only
+    — so each game gets its own file, which is correct under either answer. The default
+    game keeps the un-suffixed name every earlier run wrote: its files stay byte-identical
+    and stay found by anything that already knows the name.
+    """
+    return IMPORT_LISTED if game == games.DEFAULT_GAME else f"import-listed-{game}.csv"
+
+
+def import_subthreshold_name(game: str) -> str:
+    """The sub-threshold import file for one game. Same rule as `import_listed_name`."""
+    return (
+        IMPORT_SUBTHRESHOLD
+        if game == games.DEFAULT_GAME
+        else f"import-subthreshold-{game}.csv"
+    )
 
 
 class RunError(RuntimeError):
@@ -125,9 +147,40 @@ class Run:
         return bool(self.manifest.get("collected"))
 
     @property
+    def exports_by_game(self) -> Dict[str, Path]:
+        """The exports this run last joined against, keyed by game.
+
+        `exports` is the recorded shape: {game: source-dict}, one file per game. A run
+        written before it existed carries the old scalar `export`, and that is READ as the
+        default game's file — the backfill happens here, at the read, and is never written
+        back: an old manifest is a record of what an old run was, and rewriting it to the
+        new shape would forge a claim (`exports` says the game mapping was VERIFIED off the
+        files' own `Product Line` cells) that the old join never made.
+        """
+        recorded = self.manifest.get("exports")
+        if isinstance(recorded, dict):
+            return {
+                game: Path(source["path"])
+                for game, source in recorded.items()
+                if isinstance(source, dict) and source.get("path")
+            }
+        legacy = self.manifest.get("export") or {}
+        if legacy.get("path"):
+            return {games.DEFAULT_GAME: Path(legacy["path"])}
+        return {}
+
+    @property
     def export_path(self) -> Optional[Path]:
+        """The default game's export — the only game a scalar-era caller can mean.
+
+        Kept alongside `exports_by_game` because the scalar question is still a real one
+        ("which file did this run price Pokemon against?") and because the old manifests
+        that only answer this question are still on disk.
+        """
         source = self.manifest.get("export") or {}
-        return Path(source["path"]) if source.get("path") else None
+        if source.get("path"):
+            return Path(source["path"])
+        return self.exports_by_game.get(games.DEFAULT_GAME)
 
     @property
     def capture_dir(self) -> Optional[Path]:

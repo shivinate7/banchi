@@ -23,3 +23,41 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+
+/* THE FOCUS RING EVERY SCREEN WAS ASSUMED TO HAVE.
+ *
+ * Seven of the app's stylesheets style focus on their own controls and are unaffected by this
+ * rule — a class selector outranks a bare pseudo-class, so every one of them still wins,
+ * including SearchField.css, whose `.search-field-input:focus { outline: none }` deliberately
+ * suppresses a second ring inside the one its box already draws.
+ *
+ * What this covers is the other six, and one of them is the case that makes the rule worth
+ * having: PullConfirm, the component docs/DESIGN.md's step 6 section specifies down to three
+ * states and 44px, has no focus rule at all — and nothing in the repo could have told anyone.
+ * The design-check measures its fill, its label and its height; the harness never opens a
+ * browser; and the app manages focus nowhere, so a keyboard user landing on it saw whatever
+ * the user agent happened to draw over a 4px radius.
+ *
+ * A DEFAULT IN THE RESET RATHER THAN A NOTE ASKING EACH SCREEN TO REMEMBER. The failure mode
+ * of the note is silent and invisible to every check this repo has, which is the same
+ * argument eslint.config.js makes for turning a bug into a rule: "a paragraph in one file
+ * guards one file". A focusable element with no visible focus state is unusable by keyboard
+ * and there is no screen in this app where that is the intended design, so the safe value is
+ * the one you get by doing nothing.
+ *
+ * :focus-visible AND NOT :focus, which is the whole reason this is safe to make global. The
+ * ring appears for a keyboard or an assistive device and not for a mouse press, so it costs
+ * the owner's mouse-driven hours nothing and adds nothing to a screenshot of a resting screen.
+ *
+ * --ink, matching the nav and every screen that styles its own: the conventional accent ring
+ * is not available here, because docs/DESIGN.md gives accent exactly two jobs and neither of
+ * them is "you are here". Outline rather than a border or a shadow because it is drawn outside
+ * the box and takes part in no layout — a ring that moved the thing it was ringing would
+ * reflow a queue row under the reading eye. --ink on --bg is 19.4:1, and on --surface 19.9:1.
+ * `outline-offset` is positive so the ring clears the 4px radius instead of clipping the
+ * corners of the control it is announcing.
+ */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

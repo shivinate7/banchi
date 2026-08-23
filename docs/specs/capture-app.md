@@ -345,6 +345,17 @@ paraphrase them into something friendlier and less actionable.
 
 ## 5. capture-screen
 
+**OVERTAKEN 2026-08-23 — the control bar this section describes was rebuilt to Pass D**, the
+owner-approved hybrid of two design passes and an adversarial critique: one hairline row per
+field at rest, one field open at a time, a claims panel over a SESSION footer, rarity as a
+bitfield, the box list as a filter that never renders as a list. `docs/map.py`'s
+`CaptureScreen.tsx` entry carries the current shape; the mockup that served as the build spec
+is not in the repo (a scratchpad artifact), so the map and the component's own comments are
+the record. The section below is kept as the history of the chip-row era it specified —
+including the rules that survived the reskin unchanged: no confirmation on new-box entry,
+the trigger seam, and the undo foot.
+
+
 The screen the owner spends hours in. Everything here was chosen against a named
 alternative.
 
@@ -445,6 +456,28 @@ is a keyboard and not a mouse, and the visible hint is what the no-dialog decisi
 like in markup.
 
 ### 6.1 — The camera
+
+**NOTHING TOUCHES THE CAMERA UNTIL SOMEONE ASKS (changed 2026-08-23).** The screen used to
+enumerate devices and acquire a stream on mount, so merely *opening* the capture screen raised
+a browser permission prompt — and it fired even before a camera had been chosen, because
+`revealLabels` calls `getUserMedia` purely to un-blank the device labels, which are otherwise
+empty strings and therefore not a picker at all.
+
+The cost was paid on every visit made for a reason other than shooting cards: checking a box
+picker, reviewing a layout, or an automated browser that **cannot** grant permission and so
+can never make the prompt go away. `useCamera` now carries a `started` flag, and `retry()` is
+the opener as well as the retry — one press at the start of a rig session, on a control that
+already existed.
+
+**Three states that must not be collapsed**, because each has a different answer:
+`started === false` is *nobody has asked yet*; `missing` is *the remembered camera is not
+connected*; `error` is *it was asked for and it failed*. `CameraPicker` draws the first as a
+plain "Open the camera" with a note, never as a notice — reporting a failure for a device
+nobody requested is how a working rig comes to look broken.
+
+**This is not a headless mode and must never become one.** D13 turns on the device picker
+choosing a specific lens, and anything that lets a real session proceed without a camera would
+be a way to photograph nothing and not notice. The flag gates *asking*, not *requiring*.
 
 The device picker enumerates video inputs and selects by `deviceId`. **Never `facingMode`** —
 v1 bug 3, and the reason is now recorded in D13: the Cam Link presents the camera as a plain

@@ -62,6 +62,33 @@ type FixtureCard = {
   name: string | null
   label?: string
   photo: string | null
+
+  /** A pooled card — `pipeline/games.py`'s `located: false`, the ruling that a code card
+   *  is a count with no box, section or card position. The server sends its row with NO
+   *  flat label and a `place` block carrying `located: false` and the game's display name
+   *  (`server/capture_server.py:_Places`), and `pooledPlace` below is that shape. */
+  pooled?: true
+}
+
+/** The place block the server builds for a pooled card, field for field. The key stays —
+ *  it names the photo and sidecar — and everything location-shaped answers null. */
+function pooledPlace(card: FixtureCard) {
+  return {
+    located: false,
+    label: null,
+    box: card.box,
+    index: card.index,
+    section: null,
+    card: null,
+    box_name: null,
+    section_start: null,
+    section_end: null,
+    box_total: 0,
+    box_closed: false,
+    fraction: null,
+    game: 'pokemon_code',
+    game_display: 'Pokémon code cards',
+  }
 }
 
 /* Three cards for sale in two boxes, one card that is not for sale, and one for sale that the
@@ -78,7 +105,7 @@ const CARDS: Record<string, FixtureCard> = {
   '3/26': {
     box: 3,
     index: 26,
-    state: 'live',
+    state: 'identified',
     name: 'Pidgeot ex',
     label: 'Box 3 · Section 2 · Card 1',
     photo: '/captures/3/026.jpg',
@@ -86,7 +113,7 @@ const CARDS: Record<string, FixtureCard> = {
   '3/7': {
     box: 3,
     index: 7,
-    state: 'live',
+    state: 'identified',
     name: 'Charizard ex',
     label: 'Box 3 · Section 1 · Card 7',
     photo: '/captures/3/007.jpg',
@@ -94,17 +121,56 @@ const CARDS: Record<string, FixtureCard> = {
   '1/3': {
     box: 1,
     index: 3,
-    state: 'live',
+    state: 'identified',
     name: 'Iono',
     label: 'Box 1 · Section 1 · Card 3',
     photo: '/captures/1/003.jpg',
   },
-  // Captured but never listed. It must never appear: marking it sold would record a sale of
-  // something no buyer could have ordered.
-  '2/4': { box: 2, index: 4, state: 'captured', name: null, label: 'Box 2 · Section 1 · Card 4', photo: null },
+  /* TWO COPIES OF ONE CARD, IN TWO BOXES, and they are the whole reason the search path can be
+   * measured at all. D7 keeps every copy as its own position with its own photo, and the
+   * owner's ruling is that the screen must offer him all of them so he walks to whichever slot
+   * is nearest — which cannot be asserted against a fixture where every name is unique.
+   *
+   * The store has real ones: Thievul, Eiscue and Pyroar each have two copies in it after Gate
+   * B. This is that shape, at the size a fixture can carry.
+   *
+   * ONE OF THEM IS `captured`, deliberately. D7's amendment made `captured` a perfectly
+   * pullable card — it is on the shelf and nothing physically distinguishes it from the copy
+   * beside it — and a fixture where every sellable copy is `identified` would pass while the
+   * screen quietly filtered on a state it is not allowed to filter on. */
+  '4/2': {
+    box: 4,
+    index: 2,
+    state: 'captured',
+    name: 'Eiscue',
+    label: 'Box 4 · Section 1 · Card 2',
+    photo: '/captures/4/002.jpg',
+  },
+  '2/9': {
+    box: 2,
+    index: 9,
+    state: 'identified',
+    name: 'Eiscue',
+    label: 'Box 2 · Section 1 · Card 9',
+    photo: '/captures/2/009.jpg',
+  },
+  // ALREADY SOLD, and it must never appear. This row used to be `captured` and carry the
+  // comment "captured but never listed — marking it sold would record a sale of something no
+  // buyer could have ordered". D7's amendment retired that reasoning rather than this case:
+  // copies are fungible, every UNSOLD copy is sellable, and `captured` now means a card that
+  // is on the shelf and perfectly pullable. `sold` is what "must not appear" is made of now.
+  '2/4': { box: 2, index: 4, state: 'sold', name: null, label: 'Box 2 · Section 1 · Card 4', photo: null },
   // For sale, and undecorated — `do_inventory` leaves a row bare when its box or index will
   // not coerce. It must be counted on screen rather than dropped in silence.
-  '9/12': { box: 9, index: 12, state: 'live', name: 'Great Ball', photo: '/captures/9/012.jpg' },
+  '9/12': { box: 9, index: 12, state: 'identified', name: 'Great Ball', photo: '/captures/9/012.jpg' },
+  /* POOLED, AND IT MUST NEVER APPEAR — the assertion the pooled ruling asks this file for
+   * by name ("asserted in app/tests/fulfillment.spec.ts rather than left to prose"). A
+   * `pokemon_code` card is a count, not a location: unsold, photographed, searchable on the
+   * owner's screens — and never on this view, because there is nothing to walk to. It is
+   * deliberately NOT in the unplaced count either: that count is a fault count whose
+   * sentence ends "Ask for help", and a pooled card is working as designed. The name is
+   * distinctive so a leak anywhere on this view is caught by one string. */
+  '5/2': { box: 5, index: 2, state: 'identified', name: 'Trade Token', photo: '/captures/5/002.jpg', pooled: true },
 }
 
 /** The state of each card as the stub store holds it right now, keyed the way
@@ -133,7 +199,13 @@ function inventoryBody(states: Store) {
       state: states[key] ?? card.state,
       state_at: '2026-08-13T11:00:00+00:00',
       run: null,
-      ...(card.label === undefined ? {} : { label: card.label, section: 1, card: card.index }),
+      // A pooled row carries the block and no flat keys; a located row the flat keys; the
+      // coerce-failure row neither — the three shapes `do_inventory` actually serves.
+      ...(card.pooled === true
+        ? { game: 'pokemon_code', place: pooledPlace(card) }
+        : card.label === undefined
+          ? {}
+          : { label: card.label, section: 1, card: card.index }),
     }
   }
   return { version: 1, cards: rows }
@@ -204,14 +276,106 @@ const soldModel: SoldAnswer = (undo, key, states) => {
       },
     }
   }
-  // `restores_to` is what an undo of THIS call would put back — null on a reversal, because
-  // there is then nothing left to reverse.
-  return { status: 200, body: { position: key, undone: undo, restores_to: undo ? null : 'live' } }
+  /* `restores_to` is what an undo of THIS call would put back — null on a reversal, because
+   * there is then nothing left to reverse.
+   *
+   * `identified` AND NOT `live`, WHICH IS WHAT THIS LINE SAID. D7's 2026-08-23 amendment took
+   * `pushed`, `staged` and `live` off the card and made them quantities against the SKU, so
+   * `store/master.py:check_state` refuses all three and `history.jsonl` cannot record one as
+   * the state a sale came out of. A fixture answering with a word the store will not accept
+   * teaches every test built on it a vocabulary the server no longer speaks. */
+  return {
+    status: 200,
+    body: { position: key, undone: undo, restores_to: undo ? null : 'identified' },
+  }
 }
 
 /** A refusal in the server's own shape, for the cases no state can produce. */
 function refuses(code: string, message: string): Sold {
   return { status: 409, body: { error: { code, message } } }
+}
+
+/* `GET /search?q=` AS `do_search` ANSWERS IT: one group per card, every copy of it inside,
+ * each copy carrying its own `Place`.
+ *
+ * MODELLED RATHER THAN CANNED, for the same reason `soldModel` above is. The screen filters
+ * the answer against sales it has just made, and a fixed body would let a test pass while the
+ * screen re-offered a card the stub's own store says is sold. This reads `states`, so the
+ * search and the inventory cannot disagree about a card inside one test.
+ *
+ * A CARD WITH NO POSITION IS NOT IN A SEARCH RESULT. `do_inventory` leaves a row undecorated
+ * when its box or index will not coerce, and a `Place` is exactly what that row does not have
+ * — so `9/12` is in the inventory fixture, counted on the list screen, and absent here. That
+ * is the server's shape and not a convenience: the whole of what a search result does is say
+ * where a card is.
+ *
+ * Matched on a lower-cased substring of the name, which is `_matches`'s own rule for the name
+ * field. The other three things that route searches on — number, SKU and set hint — are the
+ * server's business and not this view's; nothing on his screen offers him a way to type one.
+ */
+function searchAnswer(q: string, states: Store) {
+  const text = q.trim().toLowerCase()
+
+  const byName = new Map<string, FixtureCard[]>()
+  for (const card of Object.values(CARDS)) {
+    // A pooled card IS in a search result — the server serves it whole, because the
+    // owner's screens search and count it — and the view under test is what must filter
+    // it. Only the coerce-failure row (no label, not pooled) is absent server-side.
+    if ((card.label === undefined && card.pooled !== true) || card.name === null) continue
+    if (!card.name.toLowerCase().includes(text)) continue
+    byName.set(card.name, [...(byName.get(card.name) ?? []), card])
+  }
+
+  const groups = [...byName.entries()].map(([name, held], at) => {
+    const copies = [...held]
+      // Box-walk order inside a group as well. Two copies arriving in fixture order would let
+      // an assertion about which copy is first pass for the wrong reason.
+      .sort((a, b) => a.box - b.box || a.index - b.index)
+      .map((card) => {
+        const key = `${card.box}/${card.index}`
+        return {
+          key,
+          state: states[key] ?? card.state,
+          state_at: '2026-08-13T11:00:00+00:00',
+          has_photo: card.photo !== null,
+          place:
+            card.pooled === true
+              ? pooledPlace(card)
+              : {
+                  located: true,
+                  label: card.label,
+                  box: card.box,
+                  index: card.index,
+                  section: 1,
+                  card: card.index,
+                  box_name: null,
+                  section_start: 1,
+                  section_end: 25,
+                  box_total: 25,
+                  box_closed: true,
+                  fraction: card.index / 25,
+                },
+        }
+      })
+
+    // D7: on hand is a count of UNSOLD positions, and never `copies.length` — the sold ones
+    // ride along so nothing silently drops a card.
+    const onHand = copies.filter((copy) => copy.state !== 'sold').length
+    return {
+      sku: String(1234560 + at),
+      names: [name],
+      number: '006',
+      printed_total: '197',
+      set_hint: null,
+      condition: 'Near Mint',
+      listed: { pushed: 0, staged: 0, live: onHand },
+      on_hand: onHand,
+      cap: 4,
+      copies,
+    }
+  })
+
+  return { query: q, groups }
 }
 
 /* How the stubbed server behaves, read at request time so a test can change its mind.
@@ -233,12 +397,19 @@ type Mood = {
   /** How many times `GET /inventory` has been answered. The instrument for "the list is read
    *  again", which is the only defence a client has against the other device. */
   reads?: number
+  /** `GET /search` refuses. Its own flag rather than `fail`, because the two failures land on
+   *  two different parts of one screen: the cards can load while the search does not, and the
+   *  list he already has must survive that. */
+  searchFail?: boolean
 }
 
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
   const states: Store = {}
   for (const [key, card] of Object.entries(CARDS)) {
-    states[key] = mood.empty === true ? 'captured' : card.state
+    // `sold` is what empties the list, not `captured`. Under D7 as amended a captured card is
+    // sellable — it is a real card at a real position — so the old spelling of "empty" now
+    // fills the screen instead of clearing it.
+    states[key] = mood.empty === true ? 'sold' : card.state
   }
 
   // The sold route first: nothing else may answer it, and a stub that quietly 404s would make
@@ -254,11 +425,39 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     const answer = (mood.sold ?? soldModel)(undo, key, states)
     // A sale the stub accepted is a sale the next GET /inventory has to show. This is the
     // store the other device would be looking at.
-    if (answer.status < 400 && key !== '') states[key] = undo ? 'live' : 'sold'
+    // Back to `identified`, the state it was sold out of — see `soldModel` for why not `live`.
+    if (answer.status < 400 && key !== '') states[key] = undo ? 'identified' : 'sold'
     await route.fulfill({
       status: answer.status,
       contentType: 'application/json',
       body: JSON.stringify(answer.body),
+    })
+  })
+
+  /* Before `/inventory`, because a regex that reaches this URL first would swallow it. The
+   * search route is the only one in this server with a query string, which is what makes it
+   * safe to match on `?` at all. */
+  await page.route(/\/search\?/, async (route) => {
+    if (mood.searchFail === true) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        // The server's register again, and again none of it may reach him. Two banned words
+        // and a filename, which is what makes it the right fixture for this path.
+        body: JSON.stringify({
+          error: {
+            code: 'store_unreadable',
+            message: 'inventory.json will not parse; the staged import may be mid-sync.',
+          },
+        }),
+      })
+      return
+    }
+    const asked = new URL(route.request().url()).searchParams.get('q') ?? ''
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(searchAnswer(asked, states)),
     })
   })
 
@@ -469,9 +668,15 @@ const view = (page: Page): Locator => page.locator(VIEW)
  *  short edge — zero when nothing decoded, which no layout box can tell you. */
 async function paintedPhoto(
   page: Page,
+  /* The card panel's photo by default, and the search result's when asked for. One function
+   * rather than two, because the constraint is one row of the table and the arithmetic that
+   * resolves `object-fit` is the part worth having in one place — the two elements are drawn
+   * by different stylesheets and are held to the same 320px. */
+  selector = '.fulfillment-photo',
 ): Promise<{ width: number; height: number; natural: number }> {
   return view(page)
-    .locator('.fulfillment-photo')
+    .locator(selector)
+    .first()
     .evaluate((node) => {
       const img = node as HTMLImageElement
       const box = img.getBoundingClientRect()
@@ -708,6 +913,57 @@ async function openCard(page: Page, name: string): Promise<void> {
   )
 }
 
+/* ------------------------------------------------------------------------------ the search
+ *
+ * THE SECOND WAY INTO THE SAME CARDS, and the reason it needed one: the store holds 229 cards,
+ * 176 of them with no name recorded, and the box-walk list has no filter and no photo on the
+ * row. Everything below asserts the same nine rows of the table against that path — a screen
+ * he can reach is a screen the table binds, and the walk-only version of this file was the
+ * shape docs/DESIGN.md warns about when it says the copy on a screen nobody renders is the
+ * copy nobody proofreads.
+ */
+
+/** The field, by its own visible label. `getByLabel` rather than a class, because the label
+ *  being real and associated is half of what makes the control usable — a lookup that would
+ *  still pass with the `<label>` deleted is not measuring the thing it looks like it does. */
+function searchBox(page: Page): Locator {
+  return page.getByLabel('Type the name of the card')
+}
+
+/** The list screen with a name typed into it, waited out to the given number of copies.
+ *
+ *  WAITED ON THE COPIES AND NOT ON A TIMEOUT. `useSearch` holds a 200ms debounce and reports
+ *  `loading` through it, so there is a real window in which the screen says it is looking and
+ *  a `waitForTimeout` would be a guess at when that ends. */
+async function openSearch(
+  page: Page,
+  text: string,
+  copies: number,
+  wire: Wire[] = [],
+  mood: Mood = {},
+): Promise<Store> {
+  const states = await openList(page, wire, mood)
+  await searchBox(page).fill(text)
+  await expect(view(page).locator('.card-locations-copy')).toHaveCount(copies)
+  return states
+}
+
+/** One copy's card in a search result, found by the position it names — the same scoping the
+ *  receipts need and for the same reason: several copies of one card put several identical
+ *  controls on screen, and a bare role lookup is ambiguous exactly when the thing under test
+ *  is that all of them are there. */
+function copyCard(page: Page, place: string): Locator {
+  return view(page).locator('.card-locations-copy', { hasText: place })
+}
+
+/** Pull, then mark sold, on one copy in a search result. The two steps, in the two places. */
+async function sellCopy(page: Page, place: string): Promise<void> {
+  const card = copyCard(page, place)
+  await card.getByRole('button', { name: 'Pull' }).click()
+  await expect(card).toContainText('Pulled.')
+  await card.getByRole('button', { name: 'Mark sold' }).click()
+}
+
 /** Pull, then mark sold, on the card already open. */
 async function sellOpenCard(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Pull' }).click()
@@ -724,17 +980,27 @@ function receiptFor(page: Page, place: string): Locator {
 
 // ------------------------------------------------------------------------------ the table
 
+/** Every card for sale, in the order he walks the boxes. Box then index — `2/4` is sold and
+ *  `9/12` has no position, so neither is in it.
+ *
+ *  ONE COPY OF THIS LIST, because three tests assert it and one of them asserts it after
+ *  putting a card back. Three hand-written copies of the same five strings is three places for
+ *  a fixture row to be added to two of them. */
+const WALK = [
+  'Box 1 · Section 1 · Card 3',
+  'Box 2 · Section 1 · Card 9',
+  'Box 3 · Section 1 · Card 7',
+  'Box 3 · Section 2 · Card 1',
+  'Box 4 · Section 1 · Card 2',
+]
+
 test('the cards for sale are listed in box-walk order, and nothing else is listed', async ({
   page,
 }) => {
   await openList(page)
-  // Box then index: 1/3, 3/7, 3/26. The fixture is written in another order, so this measures
-  // the sort rather than the object it came from.
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText([
-    'Box 1 · Section 1 · Card 3',
-    'Box 3 · Section 1 · Card 7',
-    'Box 3 · Section 2 · Card 1',
-  ])
+  // Box then index: 1/3, 2/9, 3/7, 3/26, 4/2. The fixture is written in another order, so this
+  // measures the sort rather than the object it came from.
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
   // Captured, not for sale, and therefore not his to sell.
   await expect(page.getByText('Box 2 · Section 1 · Card 4')).toHaveCount(0)
   // For sale but unplaced: counted on screen, never dropped in silence.
@@ -764,13 +1030,19 @@ test(`every text run clears ${CONTRAST_FLOOR}:1 against its own ground`, async (
   await noThinContrast(page, 'pulled')
 })
 
-test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figures`, async ({
-  page,
-}) => {
-  await openList(page)
-
-  const check = async (where: string) => {
-    const places = view(page).locator('.fulfillment-place')
+/* "Position label: font-size >= 32px, tabular figures", wherever one is drawn.
+ *
+ * A HELPER RATHER THAN A CLOSURE INSIDE ONE TEST, because there are now two stylesheets
+ * drawing a position label into this view — `.fulfillment-place` on the browse list and the
+ * card panel, and `.card-locations-place-large` on a searched copy. The row of the table is
+ * one row; a second copy of the probe below would be a second place for it to be relaxed. */
+async function bigTabularPlaces(
+  page: Page,
+  where: string,
+  selector = '.fulfillment-place',
+): Promise<void> {
+  {
+    const places = view(page).locator(selector)
     const count = await places.count()
     expect(count, `${where}: no position label on screen`).toBeGreaterThan(0)
 
@@ -813,10 +1085,15 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
       ).toBeLessThan(0.5)
     }
   }
+}
 
-  await check('list')
+test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figures`, async ({
+  page,
+}) => {
+  await openList(page)
+  await bigTabularPlaces(page, 'list')
   await openCard(page, 'Charizard ex')
-  await check('card')
+  await bigTabularPlaces(page, 'card')
 })
 
 /* Measured at two widths, and the narrow one is not padding on the test.
@@ -932,11 +1209,7 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   // A sale then a reversal, in that order, on the one route that takes both.
   expect(wire.map((call) => call.undo), 'the withdrawal reached the server').toEqual([false, true])
   // Back in box-walk order rather than appended: he walks the boxes in this order.
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText([
-    'Box 1 · Section 1 · Card 3',
-    'Box 3 · Section 1 · Card 7',
-    'Box 3 · Section 2 · Card 1',
-  ])
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
 })
 
 /* "Undo present on EVERY mark-sold" — the word that was not honoured, and the two ways it
@@ -1037,7 +1310,7 @@ test('an undo the server refuses with no remedy stops asking', async ({ page }) 
             'sold_origin_unknown',
             'Box 3, card 7 is sold, but history.jsonl records no earlier state for it.',
           )
-        : { status: 200, body: { position: key, undone: false, restores_to: 'live' } },
+        : { status: 200, body: { position: key, undone: false, restores_to: 'identified' } },
   }
   await openList(page, wire, mood)
 
@@ -1107,7 +1380,7 @@ test('an undo of a sale the other device already reversed reads as done', async 
 
   // The other device puts it back first. `not_sold` then means the card is in the state the
   // tap asked for, which is the one refusal this screen may read as success.
-  store['3/7'] = 'live'
+  store['3/7'] = 'identified'
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
@@ -1311,7 +1584,7 @@ test('the failed-undo message leaves with the undo it tells him to press', async
     sold: (undo, key) =>
       undo
         ? refuses('store_busy', 'The staged import is locked; retry after batch.')
-        : { status: 200, body: { position: key, undone: false, restores_to: 'live' } },
+        : { status: 200, body: { position: key, undone: false, restores_to: 'identified' } },
   }
   await openList(page, wire, mood)
 
@@ -1330,4 +1603,349 @@ test('the failed-undo message leaves with the undo it tells him to press', async
   // And then the window really closes, in real time, and they go together.
   await expect(view(page).locator('.fulfillment-panel')).toHaveCount(0, { timeout: 60_000 })
   await expect(view(page)).not.toContainText('The card did not come back')
+})
+
+/* ------------------------------------------------------------------ finding a card by name
+ *
+ * THE TABLE BINDS THIS PATH EXACTLY AS HARD AS THE WALK. The row that says "every text node in
+ * the view" says the view, not the screen that was easy to reach — which is the lesson this
+ * file already records once, about the loading screen and the empty list going unmeasured for
+ * as long as the walks only visited two screens. The search is four more screens: results,
+ * no match, the search that did not answer, and a copy past its first step. Each is below.
+ *
+ * WHY IT EXISTS AT ALL, since a test file should say what it is defending. The store holds 229
+ * cards, 176 of them with no name recorded, in box-walk order, with no photo on the row and no
+ * filter over it. Reading down that list to find the card an order names is not a thing this
+ * person can be asked to do, and the copy above `sellable` in Fulfillment.tsx called it a
+ * haystack in as many words.
+ */
+
+/** Every photo in a search result, load attempted.
+ *
+ *  VISIBLE IS NOT DECODED, the same flake `openCard` records: `naturalWidth` reads 0 on a
+ *  wide viewport while the identical measurement on a phone reads a true number. This waits
+ *  for `complete`, which is the browser saying the attempt finished — and deliberately not for
+ *  success, because a broken image is `complete` with a natural size of zero and that is the
+ *  state the photo assertion has to be able to fail on. */
+async function settlePhotos(page: Page): Promise<void> {
+  const photos = view(page).locator('.card-locations-photo')
+  const count = await photos.count()
+  for (let index = 0; index < count; index += 1) {
+    await photos.nth(index).evaluate(
+      (node) =>
+        new Promise<void>((settled) => {
+          const img = node as HTMLImageElement
+          if (img.complete) {
+            settled()
+            return
+          }
+          img.addEventListener('load', () => settled(), { once: true })
+          img.addEventListener('error', () => settled(), { once: true })
+        }),
+    )
+  }
+}
+
+/** The two copies of the fixture's one repeated card, in box-walk order. */
+const EISCUE = ['Box 2 · Section 1 · Card 9', 'Box 4 · Section 1 · Card 2']
+const [EISCUE_FIRST, EISCUE_SECOND] = EISCUE as [string, string]
+
+test('the search narrows to the copies of one card, and clearing it gives the whole walk back', async ({
+  page,
+}) => {
+  await openSearch(page, 'Eiscue', 2)
+
+  // Narrowed, not sat beside: the walk is not on screen while a name is in the field.
+  await expect(view(page).locator('.fulfillment-row')).toHaveCount(0)
+  await expect(view(page).locator('.card-locations-place-large')).toHaveText(EISCUE)
+
+  /* THE HALF THAT MATTERS MOST, because it is what the owner asked for by name: clearing the
+   * field gives him back exactly the list he had before this session existed. A search that
+   * cost him the walk would be a feature that took one away, on the one screen nobody has ever
+   * watched him use. */
+  await page.getByRole('button', { name: 'Show every card' }).click()
+  await expect(searchBox(page), 'the field kept the name after showing every card').toHaveValue('')
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expect(view(page).locator('.card-locations-copy')).toHaveCount(0)
+
+  // And emptying the field by hand is the same door. Two ways out, one destination.
+  await searchBox(page).fill('Eiscue')
+  await expect(view(page).locator('.card-locations-copy')).toHaveCount(2)
+  await searchBox(page).fill('')
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+})
+
+test('every copy the search finds is its own card, with its own photo, place, bar and action', async ({
+  page,
+}) => {
+  /* The owner's ruling, asserted rather than described: a card with copies in four places
+   * gives him four cards to scroll, so he walks to whichever slot is nearest. Copies are
+   * fungible (D7), so the choice is his — and a screen that picked one for him is wrong every
+   * time the box it picked is the one across the room. */
+  await openSearch(page, 'Eiscue', 2)
+  await settlePhotos(page)
+
+  await expect(view(page).locator('.card-locations-copy .card-locations-photo')).toHaveCount(2)
+  await expect(view(page).locator('.card-locations-copy .position-bar')).toHaveCount(2)
+  await expect(view(page).getByRole('button', { name: 'Pull' })).toHaveCount(2)
+
+  // One of the two is `captured` and the other `identified`. Both are on screen, which is D7's
+  // "every unsold copy is sellable" — there is no per-position listing flag left to filter on.
+  for (const place of EISCUE) {
+    const card = copyCard(page, place)
+    await expect(card.locator('.card-locations-photo')).toHaveCount(1)
+    await expect(card.getByRole('button', { name: 'Pull' })).toBeVisible()
+  }
+})
+
+test('the sale is not one tap of overshoot from the pull, on a search result too', async ({
+  page,
+}) => {
+  await openSearch(page, 'Eiscue', 2)
+  const card = copyCard(page, EISCUE_FIRST)
+
+  const pull = await boxOf(card.getByRole('button', { name: 'Pull' }))
+  await card.getByRole('button', { name: 'Pull' }).click()
+  const sell = await boxOf(card.getByRole('button', { name: 'Mark sold' }))
+
+  /* `CardLocations` gives every copy a single one-press "Mark sold" and says in its own header
+   * that the overshoot is the thing it does not cover. This is the cover: the same two steps in
+   * the same two places the card panel uses, wired in through `renderAction`. A finger that
+   * lands twice — the ordinary way a person presses a button that did not seem to respond —
+   * must not sell the card, so the second control may not occupy any part of the first one's
+   * footprint. Measured, not argued. */
+  expect(
+    overlaps(pull, sell),
+    'Mark sold overlaps where Pull was, so a double-tap on Pull sells the card',
+  ).toBe(false)
+  expect(sell.y, 'Mark sold begins above where Pull ended').toBeGreaterThanOrEqual(
+    pull.y + pull.height,
+  )
+})
+
+test('only one copy is ever past its first step, so only one fill is on screen', async ({
+  page,
+}) => {
+  /* docs/DESIGN.md reserves the solid accent for a screen with exactly one thing to do. A
+   * search can put four copies of one card on screen, so the rule has to survive that: pulling
+   * a second copy moves the pull rather than adding a second loud button. */
+  await openSearch(page, 'Eiscue', 2)
+  await expect(view(page).locator('.pull-confirm')).toHaveCount(0)
+
+  await copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page).locator('.pull-confirm')).toHaveCount(1)
+
+  await copyCard(page, EISCUE_SECOND).getByRole('button', { name: 'Pull' }).click()
+  await expect(view(page).locator('.pull-confirm')).toHaveCount(1)
+  await expect(copyCard(page, EISCUE_SECOND)).toContainText('Pulled.')
+  // And the first copy has gone back to offering its first step.
+  await expect(copyCard(page, EISCUE_FIRST)).not.toContainText('Pulled.')
+  await expect(copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Pull' })).toBeVisible()
+})
+
+test(`a copy sold from a search result leaves both lists, and keeps its undo for ${UNDO_FLOOR_MS / 1000}s`, async ({
+  page,
+}) => {
+  test.setTimeout(60_000)
+  const wire: Wire[] = []
+  await openSearch(page, 'Eiscue', 2, wire)
+
+  await sellCopy(page, EISCUE_FIRST)
+
+  // The sale names the copy, not the card: D7 keeps a position per copy precisely so that a
+  // pull can mark ONE of them and leave the rest alone.
+  expect(wire.map((call) => call.undo), 'the sale reached the server as a sale').toEqual([false])
+  expect(wire[0]!.url, 'the sale named the copy he pulled').toContain('/inventory/2/9/sold')
+
+  /* IT LEAVES THE SEARCH RESULT. The copies in hand were fetched before the sale and cannot
+   * know about it, and `CardLocations` draws each copy's own state from the wire — so a copy
+   * left standing would read "In the boxes." beside a receipt reading "Marked sold.", which is
+   * the screen contradicting itself in front of the one person who cannot ask which half is
+   * true. The other copy stays: it is a different physical card. */
+  await expect(copyCard(page, EISCUE_FIRST)).toHaveCount(0)
+  await expect(copyCard(page, EISCUE_SECOND)).toBeVisible()
+
+  const undo = receiptFor(page, EISCUE_FIRST).getByRole('button', { name: 'Undo' })
+  await expect(undo, 'a sale made from a search result was offered no undo').toBeVisible()
+
+  // And it leaves the walk underneath, which is the same physical card seen the other way in.
+  await page.getByRole('button', { name: 'Show every card' }).click()
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(
+    WALK.filter((place) => place !== EISCUE_FIRST),
+  )
+
+  /* Real time, not a fake clock, and the receipt has survived clearing the search since it is
+   * rendered above every screen this view has. The window is a promise to a person who has
+   * just put a card in an envelope and looked up. */
+  await page.waitForTimeout(UNDO_FLOOR_MS + 500)
+  await expect(undo, `undo left before ${UNDO_FLOOR_MS}ms`).toBeVisible()
+
+  await undo.click()
+  expect(wire.map((call) => call.undo), 'the withdrawal reached the server').toEqual([false, true])
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+
+  // And back into the search results too, because it is back in the boxes.
+  await searchBox(page).fill('Eiscue')
+  await expect(view(page).locator('.card-locations-place-large')).toHaveText(EISCUE)
+})
+
+test('the ordinary search passes the whole table at every step', async ({ page }) => {
+  await openSearch(page, 'Eiscue', 2)
+  await battery(page, 'search results')
+
+  await copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Pull' }).click()
+  await expect(copyCard(page, EISCUE_FIRST)).toContainText('Pulled.')
+  await battery(page, 'search pulled')
+
+  await copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Mark sold' }).click()
+  await expect(view(page)).toContainText('Marked sold.')
+  await battery(page, 'search sold')
+})
+
+test(`every position label in a search result is at least ${PLACE_FLOOR}px and tabular`, async ({
+  page,
+}) => {
+  await openSearch(page, 'Eiscue', 2)
+  await bigTabularPlaces(page, 'search results', '.card-locations-place-large')
+})
+
+for (const screen of WIDTHS) {
+  test(`a searched copy's photo is at least ${PHOTO_FLOOR}px on its short edge — ${screen.name}`, async ({
+    page,
+  }) => {
+    /* The phone is the case this row keeps failing on, and it failed here too before the
+     * stylesheet was changed for it: the group's own bordered box and the copy's, nested,
+     * spend 96px of a 375px screen on padding and left the photo at 227px. Measured at 1280
+     * alone it cleared the floor with room to spare — which is the shape of the miss this
+     * whole two-width loop exists for. */
+    await page.setViewportSize({ width: screen.width, height: screen.height })
+    await openSearch(page, 'Eiscue', 2)
+    await settlePhotos(page)
+
+    const painted = await paintedPhoto(page, '.card-locations-photo')
+    // A broken image still has a layout box, so the box alone cannot say whether there is a
+    // photograph in it — the difference between measuring a CSS rule and measuring a card.
+    expect(painted.natural, 'the photo did not decode, so nothing was measured').toBeGreaterThan(0)
+    expect(
+      Math.min(painted.width, painted.height),
+      `painted short edge at ${screen.width}px`,
+    ).toBeGreaterThanOrEqual(PHOTO_FLOOR)
+
+    await noSmallText(page, `${screen.name} search`)
+    await fatTargets(page, `${screen.name} search`)
+  })
+}
+
+test('the screen with no card of that name is his too', async ({ page }) => {
+  await openList(page)
+  await searchBox(page).fill('Zamazenta')
+
+  // What is true, and the one thing he can do about it. No count, no "0 results", no empty
+  // panel — none of those tell him anything he can act on.
+  await expect(view(page)).toContainText('No card here has that name. Check the spelling.')
+  await battery(page, 'no match')
+
+  // And the way out is still there, which is the whole reason it sits above the results.
+  await page.getByRole('button', { name: 'Show every card' }).click()
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+})
+
+test('a search that does not answer says what happened and what to do, in his words', async ({
+  page,
+}) => {
+  const mood: Mood = { searchFail: true }
+  await openList(page, [], mood)
+  await searchBox(page).fill('Eiscue')
+
+  await expect(view(page)).toContainText('The search did not finish. Type the name again.')
+  /* None of the server's own words. `useSearch` hands this screen a `Failure` carrying the
+   * server's sentence and its code, and `server.ts:describeFailure` says in its own comment
+   * that this view does not use it — those strings name a file and a state, and every one of
+   * them is correct and none of them is his. */
+  await expect(view(page)).not.toContainText('store_unreadable')
+  await expect(view(page)).not.toContainText('inventory.json')
+  await battery(page, 'search failed')
+
+  /* And the remedy is a real one. A sentence telling him to type the name again, on a screen
+   * where typing the name again cannot work, is worse than no sentence — it is the one he will
+   * follow repeatedly before asking anyone. */
+  mood.searchFail = false
+  await searchBox(page).fill('Eiscu')
+  await expect(view(page).locator('.card-locations-place-large')).toHaveText(EISCUE)
+})
+
+test('a refused sale from a search result says so beside the control it names', async ({
+  page,
+}) => {
+  const mood: Mood = {
+    sold: () => refuses('store_busy', 'The staged import is locked; retry after batch.'),
+  }
+  await openSearch(page, 'Eiscue', 2, [], mood)
+  await sellCopy(page, EISCUE_FIRST)
+
+  /* THE SENTENCE IS ON THE COPY HE PRESSED, not at the top of a list he has scrolled past.
+   * `trouble` is screen-wide state and the browse list draws it under the heading, which is
+   * right there and wrong here — a search can be four copies long, and an instruction to press
+   * a button he cannot see is an instruction to press nothing. */
+  const card = copyCard(page, EISCUE_FIRST)
+  await expect(card).toContainText('Nothing was saved. Press Mark sold again.')
+  await expect(card.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+
+  // Nothing was recorded, so the copy did not leave either list.
+  await expect(view(page).locator('.card-locations-copy')).toHaveCount(2)
+  await expect(view(page)).not.toContainText('Marked sold.')
+  // And none of the server's words are on screen — neither the code nor the sentence.
+  await expect(view(page)).not.toContainText('store_busy')
+  await expect(view(page)).not.toContainText('locked')
+  await battery(page, 'search sale refused')
+})
+
+/* ------------------------------------------------------------------ pooled, not located
+ *
+ * The owner's ruling ("Code cards are pooled inventory, not located", docs/DECISIONS.md;
+ * `pipeline/games.py`'s `located` flag) asks for exactly this assertion by name: non-located
+ * cards never enter the Fulfillment view or the pull flow, "asserted in
+ * app/tests/fulfillment.spec.ts rather than left to prose". A pooled card is a count with
+ * no box, section or card position — there is nothing for this screen to send him to — and
+ * the server keeps serving its row everywhere because the OWNER's screens still count and
+ * search it, so the view is what filters, and the view is what this measures.
+ */
+
+test('a pooled card is never on his screen — not on the walk, not in a search, not in a count', async ({
+  page,
+}) => {
+  await openList(page)
+
+  /* THE BROWSE. `5/2` is unsold, photographed and named, and must be nowhere: not a row
+   * (the walk is asserted whole, so an extra row fails above too), not its name, not the
+   * pooled fact's words — and NOT in the unplaced count, which stays at the one
+   * coerce-failure row. That count's sentence ends "Ask for help", and a pooled card is
+   * working as designed: counting it there sends someone to fix nothing. */
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expect(view(page)).not.toContainText('Trade Token')
+  await expect(view(page)).not.toContainText('pooled')
+  await expect(view(page)).toContainText('1 card for sale is not shown here')
+
+  /* THE SEARCH — the second way in, held to the same rule. The stub serves the pooled
+   * card's group exactly as `GET /search` would (the server filters nothing), so what this
+   * measures is the view dropping it: no copy card, no photo, no Pull, no position bar,
+   * and no fill anywhere on the screen. */
+  await searchBox(page).fill('Trade Token')
+  await expect(view(page)).toContainText(
+    'That card is not kept in the boxes, so there is nothing to pull.',
+  )
+  await expect(view(page).locator('.card-locations-copy')).toHaveCount(0)
+  await expect(view(page).getByRole('button', { name: 'Pull' })).toHaveCount(0)
+  await expect(view(page).locator('.position-bar')).toHaveCount(0)
+  /* Not the sold sentence: "every copy is sold" is a lie about a card that was never in
+   * the boxes, and the difference matters to the person who reads it — sold means gone,
+   * this means never his. */
+  await expect(view(page)).not.toContainText('Every copy of that card is sold.')
+
+  /* And the sentence he does see is held to the whole table, like every other screen. */
+  await battery(page, 'pooled search')
+
+  // The way back is intact, and the walk comes back without the pooled card, as always.
+  await page.getByRole('button', { name: 'Show every card' }).click()
+  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
 })

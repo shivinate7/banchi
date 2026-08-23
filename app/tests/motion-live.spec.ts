@@ -82,10 +82,14 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
   await expect(hud(page)).toHaveCount(0)
 
-  // Arm motion. All three indicators change: the pressed chip, the machine string, and
-  // the HUD placeholder (no camera is open yet, and the readout says so rather than
-  // rendering zeros that look like a working machine seeing nothing).
-  await page.getByRole('button', { name: /motion/ }).click()
+  // Arm motion. The trigger is a one-line field in the session group now (pass D,
+  // 2026-08-23): the row opens the field, the `motion` cell in the track arms it, and
+  // selecting closes the field again. The assertions are unchanged — what moved is only
+  // the path to the control. All three indicators change: the pressed cell, the machine
+  // string, and the HUD placeholder (no camera is open yet, and the readout says so
+  // rather than rendering zeros that look like a working machine seeing nothing).
+  await page.getByRole('button', { name: /Trigger/ }).click()
+  await page.getByRole('button', { name: 'motion', exact: true }).click()
   await expect(page.locator('.capture-trigger')).toHaveText('motion')
   await expect(page.getByText('Motion is armed but no frame has reached it yet')).toBeVisible()
   // The C-key chip leaves the capture button: the key is genuinely disarmed in this mode.
@@ -153,8 +157,11 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   }
   expect(trace.keyframes.length).toBeGreaterThan(0)
 
-  // Disarm: the key trigger is back, the HUD is gone, the chip released.
-  await page.getByRole('button', { name: /press C/ }).click()
+  // Disarm: reopen the trigger field and take the `key` cell — the old chip said
+  // `press C` beside its label and the track cell says only `key`, so the selector
+  // follows the control. The key trigger is back, the HUD is gone, the cell released.
+  await page.getByRole('button', { name: /Trigger/ }).click()
+  await page.getByRole('button', { name: 'key', exact: true }).click()
   await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
   await expect(hud(page)).toHaveCount(0)
 })

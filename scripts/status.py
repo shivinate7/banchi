@@ -275,11 +275,22 @@ def where_you_are(mapdata: Dict[str, object]) -> List[str]:
         if rest.strip():
             out.extend(cont(line) for line in wrap(rest.strip(), LABEL + 2))
 
+    # GATES ARE A RECORD NOW, NOT A SCHEDULE (retired 2026-08-23). This block used to find
+    # the one gate marked `next`, print what it blocked, and draw the chain of build steps
+    # standing between here and it. With nothing open, that code printed nothing at all —
+    # which would have quietly dropped the only line in `make status` that says this project
+    # has ever met a real card. So it reports the history instead of the schedule.
     open_gate = next((g for g in gates if g.get("status") == "next"), None)
     if open_gate:
         blocked = open_gate.get("blocked_by") or "nothing"
         out.append(field("Gate", f"{open_gate.get('gate')} (next) — blocked behind {blocked}"))
         out.extend(cont(line) for line in wrap(str(open_gate.get("what", "")), LABEL + 2))
+    elif gates:
+        passed = [g for g in gates if g.get("status") == "passed"]
+        names = ", ".join(f"{g.get('gate')} {g.get('on', '')}".strip() for g in passed)
+        out.append(field("Gates", f"retired — {len(passed)} passed: {names}"))
+        out.extend(cont(line) for line in wrap(
+            "docs/GATES.md is the record of what was measured, not a schedule.", LABEL + 2))
 
     out.append(field("Done", "steps " + ", ".join(str(d) for d in done)))
 

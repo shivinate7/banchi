@@ -1,10 +1,18 @@
 import type {
+  AnswerResult,
+  BoxRecord,
+  BoxState,
+  BoxSummary,
   CardSummary,
   Finish,
+  GameRegistry,
   Inventory,
   QueueSnapshot,
+  RetireReason,
+  RetireResult,
   ReviewAnswer,
   SaleResult,
+  SearchResult,
   ServerStatus,
 } from './types'
 
@@ -310,27 +318,95 @@ export async function getInventory(): Promise<Inventory> {
 export async function capture(input: {
   box: number
   imageBase64: string
+  /* REQUIRED, unlike the two claims below it, and the asymmetry is D21's. A finish or a
+   * set hint the operator did not set is a real state — no claim — with a ladder underneath
+   * it that infers one. There is no ladder that infers a game, so a missing game is not "no
+   * claim", it is "no export", and every consumer downstream would have nothing to join
+   * against. The picker always has an answer, so this argument always has one too.
+   *
+   * `string` and not a union: the registry is served by `GET /games` and never mirrored on
+   * this side, so the app has no compile-time list of games to narrow against. The server
+   * refuses an unregistered key as `game_invalid`. */
+  game: string
   setHint?: string
   variant?: Finish
+  /* D23's multi-select stack claim: the exact Rarity cells of the chosen game, as `GET
+   * /games` spells them. A LIST on the wire — the server refuses a bare string as
+   * `rarity_claim_invalid` rather than iterating it into six one-letter rarities, and an
+   * empty or absent list is no claim at all: no key is sent, nothing lands on the record,
+   * and the ladder walks exactly as it did before the field existed. */
+  rarityClaim?: readonly string[]
   captureId: string
 }): Promise<CardSummary> {
-  const payload: Record<string, string | number> = {
+  const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
     image: input.imageBase64,
     capture_id: input.captureId,
+    game: input.game,
   }
 
   /* Omitted rather than sent empty, matching `sidecar_payload`'s rule on the other side:
    * the file stays a record of claims the operator actually made (D3 rung 1). The server
-   * treats absent and null alike, so this costs nothing and keeps the two in step. */
+   * treats absent and null alike, so this costs nothing and keeps the two in step.
+   *
+   * `note` IS NOT SENT HERE AT ALL, and its absence is a decision rather than an omission.
+   * It is free text a human types, the feeder emits a card every ~623 ms, and a control
+   * that had to be filled in before the shutter would put a keyboard on the critical path
+   * of the run. It goes through `updateCard` afterwards, against a position that exists. */
   const hint = input.setHint?.trim()
   if (hint) payload.set_hint = hint
   if (input.variant) payload.variant = input.variant
+  if (input.rarityClaim && input.rarityClaim.length > 0) payload.rarity_claim = input.rarityClaim
 
   /* 201 on a new card, 200 on a replay. Neither is inspected: `created` in the body says
    * the same thing in the shape the screen already reads. */
   return (await request('/capture', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as CardSummary
+}
+
+/**
+ * Correct a capture claim on one card that already exists.
+ *
+ * THIS ROUTE CORRECTS AND NEVER CREATES. A position with no record answers `card_not_found`
+ * rather than being invented, which is what makes it safe to call from a screen holding a
+ * position it read a moment ago.
+ *
+ * A FIELD LEFT OUT IS LEFT ALONE; A FIELD SENT `null` IS CLEARED. Those are two different
+ * requests and this function keeps them apart with `in` rather than a truthiness test — a
+ * screen clearing a set hint back to no claim sends `null` and means it, and folding that
+ * into "absent" would make the claim unclearable. `game` has no null form: D21 makes it
+ * required, so there is nothing to clear it to.
+ *
+ * `note` IS THE ONE CLAIM THAT IS ONLY EVER SET HERE. The capture body does not carry it,
+ * deliberately: the operator types it AFTER the shutter, against a card that is already
+ * photographed and recorded, so a keyboard never sits on the critical path of a feeder run.
+ * A card whose note arrives a minute later — or never — is a perfectly good record.
+ *
+ * IT REWRITES THE SIDECAR TOO, server-side, and that is why a correction made here reaches
+ * the variant ladder: `cli/cmd_identify.py` builds its card from the sidecar and not from
+ * `inventory.json`.
+ */
+export async function updateCard(
+  box: number,
+  index: number,
+  fields: {
+    setHint?: string | null
+    variant?: Finish | null
+    game?: string
+    note?: string | null
+  },
+): Promise<CardSummary> {
+  const payload: Record<string, string | null> = {}
+  if ('setHint' in fields) payload.set_hint = fields.setHint ?? null
+  if ('variant' in fields) payload.variant = fields.variant ?? null
+  if ('game' in fields && fields.game !== undefined) payload.game = fields.game
+  if ('note' in fields) payload.note = fields.note ?? null
+
+  return (await request(`/inventory/${box}/${index}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })) as CardSummary
@@ -397,17 +473,70 @@ export async function getQueues(): Promise<QueueSnapshot> {
  * Answers one entry, never a batch. `Store.write()` takes the file lock per call, so a caller
  * that fires several at once stacks writes against a lock and gets their failures back out of
  * order — the review screen serialises for exactly that reason.
+ *
+ * READ `restores_to` ON THE ANSWER BEFORE DRAWING AN UNDO, which is the whole reason this now
+ * returns a named type rather than the one field it used to. Null is the server saying in
+ * advance that `undoAnswer` below will refuse. Present is the pair the reversal puts back, and
+ * both of its members are null for the ordinary case of a card that carried no SKU before —
+ * so it is read as present-or-null and never for its contents.
  */
-export async function answerReview(answer: ReviewAnswer): Promise<{ answered: string }> {
+export async function answerReview(answer: ReviewAnswer): Promise<AnswerResult> {
   const { box, index, sku, condition } = answer
-  /* Named for what it answered, the same subset `undoCapture` takes of a much larger body:
-   * the route also reports which queues it cleared and the whole card record, and no screen
-   * reads either. `server/capture_server.py:do_review_answer` holds the full shape. */
+  return answerCall(box, index, { sku, condition })
+}
+
+/* One route in both directions — `POST /review/<box>/<index>/answer`, with `{"undo": true}` to
+ * take the answer back. The same shape `sale()` below has, deliberately: two exported functions
+ * over one private call, because a boolean at the call site reads as `answerCall(box, index,
+ * true)` and the reader has to come here to learn which way that goes.
+ *
+ * A BODY IS ALWAYS SENT AND IS NEVER EMPTY. `_body()` refuses an empty request as
+ * `body_required` uniformly for every write this server answers; the undo's is two characters
+ * of flag.
+ *
+ * THE TWO DIRECTIONS TAKE DIFFERENT BODIES AND THE SERVER ENFORCES THAT. An undo carrying a SKU
+ * refuses as `field_not_settable` rather than being obeyed with the SKU ignored, so a client
+ * that has confused the two is told rather than being handed a write it did not mean. That is
+ * why this takes a body rather than a flag: there is no one shape to compose here.
+ *
+ * THE RESULT IS TYPED FOR BOTH, and `restores_to` is the field that makes it worth typing at
+ * all — see `AnswerResult` in types.ts. It was `{ answered: string }` until the undo existed,
+ * which is `SaleResult`'s own history repeating: a route computing a field deliberately, and a
+ * cast on this side quietly discarding it. */
+async function answerCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<AnswerResult> {
   return (await request(`/review/${box}/${index}/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sku, condition }),
-  })) as { answered: string }
+    body: JSON.stringify(body),
+  })) as AnswerResult
+}
+
+/**
+ * Take one review answer back. D28's twenty-second undo, server side.
+ *
+ * READ `restores_to` ON THE ANSWER BEFORE DRAWING THE CONTROL THAT CALLS THIS. It is null when
+ * the server has already decided the reversal will refuse — the answered SKU is out of this Mac
+ * (`undo_too_late`), or `history.jsonl` cannot say what the answer replaced
+ * (`answer_origin_unknown`) — and offering an undo whose only behaviour is that refusal is the
+ * defect `SaleResult` records as having shipped twice.
+ *
+ * THERE IS NO EXPIRY ON THE ROUTE AND NONE HERE. The twenty seconds are how long the control
+ * stays on screen, which is `ReviewQueue.tsx`'s decision and is made there — the same split
+ * `undoSale` describes below, and the owner's ruling for this screen: screen-held now,
+ * server-enforced only if it bites.
+ *
+ * WHAT COMES BACK IS THE CARD WAITING AGAIN. Every queue entry the answer cleared is reopened,
+ * so the position is in `GET /queues` once more; the SKU and condition on the card go back to
+ * whatever they were before the answer, which for most queued cards is nothing at all. The two
+ * refusals worth branching on are `not_answered` — the reversal already happened, here or on
+ * the other device — and `not_in_queue`, where a later run released the entry entirely.
+ */
+export function undoAnswer(box: number, index: number): Promise<AnswerResult> {
+  return answerCall(box, index, { undo: true })
 }
 
 // ------------------------------------------------------------------------------ mark sold
@@ -477,6 +606,235 @@ export function markSold(box: number, index: number): Promise<SaleResult> {
  */
 export function undoSale(box: number, index: number): Promise<SaleResult> {
   return sale(box, index, true)
+}
+
+// ---------------------------------------------------------------------------- retire, both ways
+
+/* One route in both directions — `POST /inventory/<box>/<index>/retire`, with
+ * `{"undo": true}` to reverse. `sale()`'s shape on `sold`'s sibling (D26: a copy that left
+ * inventory WITHOUT a sale — pulled, damaged, lost or given away — record kept, gap
+ * permanent), and a private call under two exported functions for `sale()`'s own reason: a
+ * boolean at the call site reads as `retirement(box, index, true)` and the reader has to
+ * come here to learn which way that goes.
+ *
+ * THE TWO DIRECTIONS TAKE DIFFERENT BODIES AND THE SERVER ENFORCES THAT. The recording
+ * direction carries the reason and nothing else; the reversal carries the flag and nothing
+ * else. An undo that also names a reason refuses as `field_not_settable` rather than being
+ * obeyed with the reason ignored — the same rule the review answer's undo applies, and the
+ * reason this takes a body rather than composing one shape for both.
+ *
+ * NO REFUSAL IS SOFTENED HERE, matching every other route in this module. The codes worth
+ * branching on: `already_retired` on a retirement is the other device's retirement (D13) —
+ * the sibling of `already_sold`'s ruling, and no undo may be offered because it would
+ * reverse a departure this device never recorded; `not_retired` on a reversal is success in
+ * the same sense `not_sold` is — the card is not retired, which is what the tap asked for;
+ * `already_sold` on a retirement means the copy left by the other door, and the remedy the
+ * message names is the sale route's own undo. Each caller applies its reading where the
+ * reason for it is written down. */
+async function retirement(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<RetireResult> {
+  return (await request(`/inventory/${box}/${index}/retire`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as RetireResult
+}
+
+/**
+ * Mark one copy retired: it left inventory without a sale, and why. D26, and D10's shape —
+ * retired is a state, never a removal, so the record stays, the position stays, and the gap
+ * it leaves is permanent. One copy, not one SKU, exactly as `markSold`.
+ *
+ * THE REASON IS REQUIRED AND IS ONE OF FOUR — the `RetireReason` union, refused server-side
+ * as `retire_reason_invalid` outside it. It is the one fact about the departure the record
+ * cannot re-derive later, which is why there is no reasonless overload of this call.
+ *
+ * READ `restores_to` ON THE ANSWER BEFORE DRAWING AN UNDO. Null means the store's history
+ * cannot say what state this copy was in before the retirement, and the reversal below will
+ * refuse as `retired_origin_unknown` — the same contract `markSold` states, learned the
+ * same expensive way.
+ *
+ * A retirement touches no listing count, deliberately: it is invisible to TCGplayer, so the
+ * SKU's `live` estimate is honestly unchanged. Pulling a live listing down is a TCGplayer
+ * action the next join then observes — the route's own docstring carries the argument.
+ */
+export function retireCard(
+  box: number,
+  index: number,
+  reason: RetireReason,
+): Promise<RetireResult> {
+  return retirement(box, index, { reason })
+}
+
+/**
+ * Put a retired copy back to the state it was in. The reversal half of the same control.
+ *
+ * There is no expiry on the route and none here — the same split every undo in this product
+ * keeps: what the screen's window governs is how long the control stays visible, and it is
+ * the calling screen's decision. The state that comes back is read out of `history.jsonl`
+ * rather than guessed, and the card's `retire_reason` is cleared with it — the history line
+ * is where the reason of a reversed retirement survives.
+ *
+ * `restores_to` on THIS answer is always null and means only "nothing left to reverse".
+ */
+export function undoRetire(box: number, index: number): Promise<RetireResult> {
+  return retirement(box, index, { undo: true })
+}
+
+// ------------------------------------------------------------------ search, and the boxes
+
+/**
+ * Every copy of every card whose name matches, grouped by SKU, each copy carrying where it is.
+ *
+ * ONE ROUTE FOR A QUESTION THAT USED TO COST THE WHOLE INVENTORY. `Inventory.tsx` answers the
+ * same question by pulling `GET /inventory` and grouping it in the browser, which is right for
+ * a screen whose job is to show everything; it is the wrong shape for a screen the owner opens
+ * because one card just sold, where the whole store is downloaded to look at four rows of it.
+ * The grouping is the server's here, and `SearchGroup` carries two numbers the app is
+ * forbidden from computing — the live cap (D7) and the position of each copy in its box (D10).
+ *
+ * `q` IS SENT AS TYPED, TRIMMED BY NOBODY HERE. `useSearch.ts` decides when a query is worth
+ * asking about and refuses to ask about an empty one; this function's job is to ask. A client
+ * that also trimmed would put the rule in two places and neither would own it.
+ *
+ * `encodeURIComponent` RATHER THAN `URLSearchParams`, because the base URL is a string and
+ * building a `URL` around it would resolve a relative `VITE_CAPTURE_SERVER` against the page
+ * — a silent redirection to the Vite dev server, answered with index.html, reported as
+ * `bad_response`. Card names carry `&` (`Billy & O'Nare`) and apostrophes, so the encoding
+ * itself is not optional: T3 keeps those in the fixture set precisely because they break
+ * naive string handling.
+ *
+ * Refuses an empty query as `query_required` rather than answering with everything. That is the
+ * server's ruling and it is the right one — a bare `GET /search` returning the whole store is a
+ * denial of service you write by accident — and it is why the hook below never sends one.
+ */
+export async function search(q: string): Promise<SearchResult> {
+  return (await request(`/search?q=${encodeURIComponent(q)}`, NO_CACHE)) as SearchResult
+}
+
+/**
+ * Every box, with its divider layout and how full it is.
+ *
+ * THE REASON A SCREEN WANTS THIS AND NOT JUST `Place`: a `Place` describes one card's own
+ * section, and nothing else about the box it is in. Drawing the whole box divided into all of
+ * its sections needs `sections_detail`, and reconstructing those spans from one section's
+ * width is the section arithmetic types.ts forbids — see `PositionBar.tsx:spansOf`, which
+ * takes them as an optional argument for exactly this reason.
+ *
+ * `/status` ALREADY LISTS THE BOXES IN USE AND THIS DOES NOT REPLACE IT. That field is
+ * `next_index` per box, which is what the capture screen's box picker is built from and is a
+ * different question — where does the next card go, versus how is this box laid out. Two
+ * routes because the capture screen polls one of them and must not start pulling divider
+ * layouts at capture pace.
+ */
+/**
+ * The per-game registry, exactly as `pipeline/games.py` authors it.
+ *
+ * THE ONLY COPY ON THIS SIDE OF THE WIRE, AND THAT IS THE POINT. An `app/src/games.ts`
+ * holding the same four keys, their rarity ladders and their finish matrices was considered
+ * and rejected: it is a second hand-authored copy of a hand-authored file, nothing keeps the
+ * two in step, and it buys the app nothing this route does not already hand it. The screens
+ * learn what a game is at runtime, from the one place the pipeline learns it.
+ *
+ * READ ONCE PER SCREEN, NOT POLLED. The registry changes when somebody edits a Python file
+ * and restarts the server, which is not something a capture session needs to watch for. It
+ * carries `NO_CACHE` all the same, for the reason every read here does: the server sends no
+ * cache headers, which leaves the decision to a heuristic.
+ *
+ * `default` COMES BACK WITH IT rather than being assumed. A screen that hardcoded `pokemon`
+ * would be a second decision that has to agree with `games.DEFAULT_GAME`, and would stop
+ * agreeing silently.
+ */
+export async function getGames(): Promise<GameRegistry> {
+  return (await request('/games', NO_CACHE)) as GameRegistry
+}
+
+export async function getBoxes(): Promise<BoxSummary> {
+  return (await request('/boxes', NO_CACHE)) as BoxSummary
+}
+
+/**
+ * Declare a box: its number, optionally what it is called and where its dividers are.
+ *
+ * A BOX IS CREATED BY CAPTURING INTO IT AND THIS ROUTE DOES NOT CHANGE THAT.
+ * `Inventory.allocate_capture` makes a box the first time a card lands in one — that is what
+ * `CardSummary.new_box` reports — so this is for declaring a box *before* or *beside* that,
+ * with a name and a layout. It is not on the capture path and nothing about capture waits for
+ * it.
+ *
+ * `sections` IS A LIST OF DIVIDER INDICES (D10), never a count. `[1, 31, 56]` means section 2
+ * starts at card 31. Omitted is not the same as `[]`: omitted leaves the box's layout alone,
+ * and `[]` declares it undeclared, which D10 says the 25-rule then renders. Both are real
+ * requests and this module sends what it is given rather than normalising one into the other.
+ *
+ * Refuses `box_exists` on a number already declared — take that as a fact rather than an
+ * error to retry through, and reach for `updateBox` if the intent was to rename or re-divide.
+ */
+export async function createBox(input: {
+  box: number
+  name?: string
+  sections?: number[]
+}): Promise<BoxRecord> {
+  const payload: Record<string, string | number | number[]> = { box: input.box }
+
+  /* Omitted rather than sent empty, the same rule `capture()` applies to `set_hint`: the
+   * record stays a record of what was actually declared. A name trimmed to nothing is no name,
+   * and sending `""` would set one — which then renders as an empty caption beside a position
+   * label and looks like a bug in the label. */
+  const name = input.name?.trim()
+  if (name) payload.name = name
+  if (input.sections !== undefined) payload.sections = input.sections
+
+  return (await request('/boxes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as BoxRecord
+}
+
+/**
+ * Rename a box, re-divide it, or open and close it. Any subset of the three.
+ *
+ * A PATCH AND NOT A WHOLE RECORD, and the distinction matters more here than anywhere else in
+ * this module. D13 has two devices sharing one store; a PUT that carried the whole box would
+ * make every edit a last-writer-wins overwrite of fields the caller never looked at, so the
+ * Fulfiller's device could silently undo a divider the owner moved thirty seconds earlier by
+ * renaming the box. Send the fields being changed.
+ *
+ * RE-DIVIDING RELABELS EVERY CARD BEHIND THE DIVIDER, and no card moves. D10 is explicit that
+ * the index is the identity and Section/Card are a *view* of it against the current layout, so
+ * this call rewrites labels and touches no position. The same entry records what that costs
+ * and declines to design it away: "a mis-tap relabels a filled box and nothing flags it", and
+ * the mitigation the owner chose is a `resectioned` history event rather than a restriction.
+ * A screen calling this on a box with cards in it is doing something the owner ruled is
+ * allowed — it is not this module's place to add the confirm D10 says to reach for *first if
+ * that failure ever actually happens*, and it is worth knowing that it has not yet.
+ *
+ * `box_closed` IS A REFUSAL ABOUT THE BOX, NOT ABOUT THIS CALL BEING WRONG. It means the box
+ * is closed and the edit asked for is one a closed box does not take. Branch on it if a screen
+ * can offer to reopen; do not paraphrase it into "something went wrong".
+ */
+export async function updateBox(
+  box: number,
+  patch: { name?: string; sections?: number[]; state?: BoxState },
+): Promise<BoxRecord> {
+  /* Built key by key rather than spread, so an `undefined` cannot reach `JSON.stringify` and
+   * be dropped there instead. Both routes end at the same place today; the difference is that
+   * this one is readable — a reader can see that omitted means untouched without knowing what
+   * `JSON.stringify` does with an undefined value. */
+  const payload: Record<string, string | number[]> = {}
+  if (patch.name !== undefined) payload.name = patch.name
+  if (patch.sections !== undefined) payload.sections = patch.sections
+  if (patch.state !== undefined) payload.state = patch.state
+
+  return (await request(`/boxes/${box}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as BoxRecord
 }
 
 // --------------------------------------------------------------------------- capture ids

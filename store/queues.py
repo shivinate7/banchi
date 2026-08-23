@@ -22,6 +22,14 @@ one, and `open_entries` hides it. That path stopped being untravelled on 2026-08
 16 entries were all answered through it. Absent an answer the queues still only grow, and
 that is the correct behaviour rather than a gap to be patched with a clearing command the
 spec does not list — a card in a queue is at a known position in a box, and is not lost.
+
+`reopen` IS THE ONE DOOR BACK OUT, AND IT IS D28's UNDO WINDOW RATHER THAN A LOOSENING OF ANY
+OF THAT. The paragraph above is written about a LATER RUN re-asking a question a human has
+already settled, which is the thing that must never happen; the answer's own undo is the same
+human reversing himself while the tap is still warm, which is a different caller entirely. The
+two rules coexist because they are about different callers, and every refusal above is
+unchanged: `upsert` still will not re-queue a cleared entry, and `release` still will not drop
+one. See `Queue.reopen` for how narrow the door is, and D28 for why it exists at all.
 """
 
 from __future__ import annotations
@@ -145,6 +153,48 @@ class Queue:
         )
         self.entries[entry.position] = entry
         return existing is None
+
+    def reopen(self, position: str) -> bool:
+        """Put one answered entry back to waiting. False when there was nothing to reopen.
+
+        D28's UNDO WINDOW, AND NOTHING WIDER. `upsert` above refuses to re-queue a position a
+        human has cleared and `release` below refuses to drop one, so that an answer outlives
+        the question that produced it. This is a hole punched through that on purpose rather
+        than a softening of it, and what makes the two compatible is the CALLER. `upsert`'s
+        refusal guards against a LATER RUN asking a question that has already been settled;
+        this is the same person reversing his own answer inside a window measured in seconds.
+        Neither is the other, and one file can honour both.
+
+        WHAT IT WILL NOT DO IS AS NARROW AS WHAT IT DOES. It flips one flag on one entry that
+        is already in this queue. It never creates an entry — a position whose row was dropped
+        is a card whose question is gone, and inventing a fresh one here would put a queue
+        entry on screen that no run produced. It does not touch `first_seen` either, which was
+        never touched on the way in: the card has been waiting since it was first queued, and
+        an answer that stood for twenty seconds does not reset how long that has been.
+
+        NO CLOCK LIVES HERE, and that is D28's ruling rather than an omission. The window is
+        the screen's — `app/src/ReviewQueue.tsx` decides how long the control stays up, exactly
+        as `app/src/Fulfillment.tsx` does for mark-sold — because a deadline enforced down here
+        would fail the reversal precisely when the store was slow to lock. A queue file has no
+        way to know what time the tap was in any case.
+
+        FALSE RATHER THAN A RAISE, AND THE CALLER IS EXPECTED TO CHECK IT. An entry that is
+        absent and an entry that was never answered are both "nothing to reopen" from here, and
+        they are two different refusals to the route above: `not_in_queue` sends the operator
+        to another card, `not_answered` tells him the reversal already happened. That is a
+        distinction this module has no vocabulary for and should not grow one for. A silent
+        no-op reported as a success is v1 bug 5's shape, so `server/capture_server.py` checks
+        this return the way it checks `Inventory.set_state`'s.
+
+        `release` IS UNCHANGED. A reopened entry is an open entry, so a later run may release
+        it exactly as it could before the answer — which is correct: once the answer has been
+        withdrawn there is no answer left for anything to outlive.
+        """
+        entry = self.entries.get(position)
+        if entry is None or not entry.cleared_by_human:
+            return False
+        entry.cleared_by_human = False
+        return True
 
     def release(self, positions) -> List[str]:
         """Drop entries that no longer belong here — a card that resolved on a later run.

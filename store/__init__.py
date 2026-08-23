@@ -5,12 +5,25 @@ cost money or state, which is only true if the answers already paid for and the 
 already made live somewhere else. That somewhere is here.
 
     inventory/
-      inventory.json        MASTER. Cards, positions, SKUs, listing states.
+      inventory.json        MASTER. Cards at positions, boxes, per-SKU listing counts.
       history.jsonl         Append-only event log. Never rewritten.
       identifications.json  The cache. Answers already paid for.
       review.json           Standing main review queue. Survives runs.
       parked.json           Standing low-value queue. Survives runs.
       .lock                 Exclusive lock file.
+
+TWO KINDS OF STATE, AND THEY ARE ABOUT DIFFERENT SUBJECTS. A `Card` wears one of `STATES`
+— `captured`, `identified`, `sold` — which describes one physical object at one position.
+A `Listing` holds a count at each of `LISTING_STAGES` — `pushed`, `staged`, `live` — which
+describes a SKU's progress through TCGplayer.
+
+The three stages used to be card states too, so listing progress was an address: four of
+seven copies were sellable and three were not, for no physical reason. The owner's ruling
+is that copies of one SKU are fungible, so they moved onto the SKU as quantities and WHICH
+copies back them is deliberately unrecorded. `check_state` refuses them, which is what
+turns the old `set_state(key, PUSHED)` into a raised `UnknownState` rather than a silent
+per-position flag. `Inventory.parse` migrates a v1 file: a card wearing a stage becomes
+`identified` and hands that stage to its SKU as a count.
 
 NOT SQLITE. D13 settles inventory as server-side JSON. D15's SQLite is the read-only
 *catalog* index at build step 9 and is a different thing entirely — a later session that
@@ -41,15 +54,20 @@ from store.files import (  # noqa: F401
 )
 from store.cache import Cache, CacheEntry  # noqa: F401
 from store.master import (  # noqa: F401
+    BOX_CLOSED,
+    BOX_OPEN,
     CAPTURED,
     IDENTIFIED,
+    LISTING_STAGES,
     LIVE,
     PUSHED,
     SOLD,
     STAGED,
     STATES,
+    Box,
     Card,
     Inventory,
+    Listing,
 )
 from store.queues import Queue, QueueEntry  # noqa: F401
 from store.session import Snapshot, Store  # noqa: F401

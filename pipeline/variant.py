@@ -45,22 +45,46 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, Optional, Sequence, Tuple
 
-from pipeline import tcgcsv
+from pipeline import games, tcgcsv
 
 NORMAL = "normal"
 HOLO = "holo"
 REVERSE_HOLO = "reverse_holo"
 
-FINISHES: Tuple[str, ...] = (NORMAL, HOLO, REVERSE_HOLO)
+# THE FINISH ENUM AND THE CONDITION MAP ARE THE POKEMON ENTRY'S, READ OUT OF THE REGISTRY.
+# They were written out here as literals until the registry existed, and the values have not
+# moved: `pipeline/games.py` was authored against fixtures/sv09_export_untouched.csv to
+# reproduce them exactly, so T3 and T4 pass untouched. That is the point of doing it this
+# way round — the registry is only trustworthy if it can restate what the ladder already
+# knew, byte for byte, before anything new is built on it.
+#
+# `require` rather than `get` (D22): a game with no authored vocabulary refuses here rather
+# than borrowing another game's. Pokemon's is never empty, so this raises only if somebody
+# empties the entry, which is the moment to hear about it.
+#
+# D12 still decides the *contents*: all Near Mint, hardcoded. Vintage condition strings
+# (1st Edition, Shadowless, Unlimited) are a spec change, not a parameter — and now not a
+# registry field either, since a game's `condition_by_finish` names one condition per
+# finish and has nowhere to put a second grading axis.
+_POKEMON = games.require(games.DEFAULT_GAME)
 
-# D12: all Near Mint, hardcoded. Vintage condition strings are a spec change, not a
-# parameter.
-CONDITION_BY_FINISH: Dict[str, str] = {
-    NORMAL: "Near Mint",
-    HOLO: "Near Mint Holofoil",
-    REVERSE_HOLO: "Near Mint Reverse Holofoil",
-}
+FINISHES: Tuple[str, ...] = tuple(_POKEMON["finishes"])
+
+CONDITION_BY_FINISH: Dict[str, str] = dict(_POKEMON["condition_by_finish"])
 FINISH_BY_CONDITION: Dict[str, str] = {v: k for k, v in CONDITION_BY_FINISH.items()}
+
+# The three names above are still literals, because a name derived from a position in a
+# tuple is a name that silently changes meaning when the tuple is reordered. This is the
+# seam where the two halves are reconciled, and it fails at import: a registry that renames
+# or drops a finish stops the process here, next to the mismatch, rather than at whichever
+# `CONDITION_BY_FINISH[...]` lookup happens to run first.
+_MISSING = [name for name in (NORMAL, HOLO, REVERSE_HOLO) if name not in CONDITION_BY_FINISH]
+if _MISSING or set(FINISHES) != set(CONDITION_BY_FINISH):
+    raise RuntimeError(
+        "pipeline/games.py's `pokemon` entry no longer describes this ladder: "
+        f"finishes={FINISHES}, conditions={sorted(CONDITION_BY_FINISH)}, "
+        f"unmatched here={_MISSING}"
+    )
 
 # Ladder stages, named for the rung that DECIDED — not merely one that was consulted.
 METADATA = "metadata"
@@ -79,6 +103,13 @@ HUMAN_ANSWERED = "human_answered"
 # Review reasons. Distinct strings so the queue can be triaged and so a test can assert
 # which path fired, rather than only that something failed.
 NO_CATALOG_ROW = "no_catalog_row"
+# D23 job (a): the operator's multi-select rarity claim contradicts every candidate row.
+# Emitted here in the ladder and not in routing, deliberately — routing answers "is this
+# trusted enough to list?" and stays the one pipeline module with no game in it; this
+# answers "which row is this?", which is the ladder's question. The name was argued in D23:
+# `metadata_rarity_disagreement` was rejected because the three `metadata_*` reasons are
+# all about the finish toggle, and `rarity_not_claimed` parses as the empty case.
+RARITY_CLAIM_MISMATCH = "rarity_claim_mismatch"
 METADATA_NOT_STOCKED = "metadata_not_stocked"
 METADATA_DETECTION_DISAGREEMENT = "metadata_detection_disagreement"
 DETECTED_FINISH_NOT_STOCKED = "detected_finish_not_stocked"
@@ -140,13 +171,49 @@ def resolve(
     candidates: Sequence[tcgcsv.Row],
     metadata_finish: Optional[str] = None,
     detected_finish: Optional[str] = None,
+    rarity_claim: Optional[Sequence[str]] = None,
 ) -> Resolution:
-    """Walk the ladder for one card. `candidates` are the catalog rows for its number."""
+    """Walk the ladder for one card. `candidates` are the catalog rows for its number.
+
+    `rarity_claim` is D23's multi-select stack claim: the exact `Rarity` cells the operator
+    says this stack holds. None or empty narrows nothing — the compatibility guarantee that
+    makes the claim strictly additive."""
     metadata_finish = _check(metadata_finish)
     detected_finish = _check(detected_finish)
 
     if not candidates:
         return Resolution(stage=REVIEW, reason=NO_CATALOG_ROW)
+
+    # D23 job (a) — FILTER-THEN-CONTRADICT, before any rung consults the rows. Filtering
+    # first means the claim breaks a duplicate-condition tie for free (two sets colliding
+    # on one key at different rarities), and it means every rung below runs on the narrowed
+    # set — rung 2 (CATALOG_FORCED) fires when the claim leaves one row, and rung 1 reads
+    # the catalog as the claim says it is, so a toggle naming a finish only an unclaimed
+    # rarity stocks reviews as METADATA_NOT_STOCKED, which is the honest verdict against
+    # the claimed catalog. When nothing survives at all, the claim contradicts the
+    # identification outright — the review reason that catches T1's recorded misses:
+    # `051/197` for `031/197` is a CONFIDENT answer no confidence threshold fires on, and a
+    # rarity contradiction does.
+    #
+    # A blank or missing `Rarity` cell PASSES the filter rather than being treated as a
+    # mismatch. Same principle as D9's `no_market_data`: a missing value is an unknown
+    # value, not a member of any band — a row that carries no rarity is evidence of
+    # nothing, and filtering it out would convert a data gap into a review tap for every
+    # claimed card in its set.
+    #
+    # Rung 0 (`answered`) never reaches this: `join_batch` resolves a human's answer before
+    # calling here at all. A human who looked at the photograph outranks a claim about the
+    # stack it came from.
+    if rarity_claim:
+        kept = [
+            row
+            for row in candidates
+            if not (row.get(tcgcsv.RARITY_COLUMN) or "").strip()
+            or (row.get(tcgcsv.RARITY_COLUMN) or "").strip() in rarity_claim
+        ]
+        if not kept:
+            return Resolution(stage=REVIEW, reason=RARITY_CLAIM_MISMATCH)
+        candidates = kept
 
     by_condition: Dict[str, tcgcsv.Row] = {}
     for row in candidates:

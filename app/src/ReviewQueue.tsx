@@ -1,7 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CandidateRow, QueueEntryWire, QueueName, QueueRead, QueueSnapshot } from './types'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type {
+  AnswerResult,
+  CandidateRow,
+  QueueEntryWire,
+  QueueName,
+  QueueRead,
+  QueueSnapshot,
+} from './types'
 import type { Failure } from './server'
-import { ServerError, answerReview, describeFailure, getQueues, photoUrl } from './server'
+import {
+  ServerError,
+  answerReview,
+  describeFailure,
+  getQueues,
+  photoUrl,
+  undoAnswer,
+} from './server'
 import './ReviewQueue.css'
 
 /* The review queue — build-order step 7b, specified in docs/DESIGN.md's own section.
@@ -14,21 +28,40 @@ import './ReviewQueue.css'
  *
  * BUILT BEFORE GATE B, WHICH ITS OWN SPEC SAYS NOT TO DO. docs/specs/capture-app.md §0 puts
  * 7b after the gate so it is designed against a real run; the owner overruled that on this
- * branch. The consequence is not decorative and is worth stating where the code is rather
- * than only in the spec: THE DATA THIS SCREEN DISPLAYS HAS NEVER EXISTED. No card has been
- * photographed, no `identify` run has been paid for, and `review.json` has never held a row.
- * Everything here is built to the document; nothing here has been held against a queue.
+ * branch, and this paragraph used to end "THE DATA THIS SCREEN DISPLAYS HAS NEVER EXISTED".
  *
- * So every number this file invents — the price bands, and only the price bands — is marked
- * as an assumption at the place it is invented, with what would settle it. Nothing else is
- * invented: the reason strings, the entry shape, the candidate shape, the sort and the
- * two-queue split are all read out of the modules that produce them, and the answer's shape
- * is read out of the route that takes it.
+ * IT EXISTS NOW. Gate B ran 53 cards on 2026-08-22, put 16 real entries in the parked queue,
+ * and the owner answered every one of them on this screen. What that settled and what it did
+ * not is in docs/GATES.md; the short form for a reader of this file is that the entry shape,
+ * the candidate shape, the sort and the answer route all held, and that the one number this
+ * file invents did not get its measurement — the whole run priced $0.04 to $0.40, so every
+ * card landed in one band and the price-driven type scale was never asked to separate
+ * anything. The bands are still marked as an assumption at the place they are cut, and what
+ * they now wait on is a MIXED-VALUE lot rather than merely another run.
  *
- * TWO ROUTES, BOTH BUILT THIS SESSION IN `server/capture_server.py`:
+ * Nothing else here is invented: the reason strings, the entry shape, the candidate shape,
+ * the sort and the two-queue split are all read out of the modules that produce them, and
+ * the answer's shape is read out of the route that takes it.
+ *
+ * WHAT THE RUN CHANGED IN THIS FILE IS D28. Answering was irreversible — `Queue.upsert`
+ * refuses to re-queue a position a human has cleared — and it was the one action in the
+ * product with no photo to confirm against, no undo and no acknowledgement, while mark-sold,
+ * which reverses, has all three. D28 orders two fixes: stop the list moving under the finger,
+ * and give the answer a twenty-second undo. BOTH ARE HERE NOW. The first is the reserved photo
+ * frame and the prefetch; the second is the receipt, `UNDO_KEY`, and `Queue.reopen` behind
+ * `{"undo": true}` on the answer route.
+ *
+ * THE UNDO DOES NOT SOFTEN `Queue.upsert`'s REFUSAL AND IS NOT MEANT TO. That refusal is about
+ * a later RUN re-asking a settled question; this is the same person reversing himself inside a
+ * window. D28 calls it a hole punched in the rule on purpose, and `store/queues.py:reopen` is
+ * how narrow the hole is.
+ *
+ * TWO ROUTES, ONE OF THEM TWO-WAY, in `server/capture_server.py`:
  *
  *   GET  /queues                      both standing queues, already in worked order
- *   POST /review/<box>/<index>/answer one candidate row, chosen  (D4)
+ *   POST /review/<box>/<index>/answer one candidate row, chosen  (D4) — or `{"undo": true}`,
+ *                                     which takes that answer back and puts the card in the
+ *                                     queue again (D28)
  *
  * The second one settled a question this screen had guessed at and guessed wrong. An earlier
  * draft offered "Leave unlisted" as a way to clear a card without picking a row; the route
@@ -36,9 +69,17 @@ import './ReviewQueue.css'
  * alongside `sku` so that a stale screen is caught rather than obeyed. Both are recorded at
  * the code they changed rather than only here.
  *
- * WHAT IS NOT HERE, and deliberately: no confirm dialog, no success acknowledgement to
- * dismiss, no list -> detail -> back loop. docs/DESIGN.md forbids all three by name.
- * Answering writes the answer and advances.
+ * WHAT IS NOT HERE, and deliberately: no confirm dialog, no acknowledgement to dismiss, no
+ * list -> detail -> back loop. docs/DESIGN.md forbids all three by name and D28 declines a
+ * modifier or an Enter on the answer in as many words — one key per card is the property being
+ * protected. Answering writes the answer and advances.
+ *
+ * THE RECEIPT IS NOT THE ACKNOWLEDGEMENT THAT RULE BANS, and the difference is the word
+ * "dismiss". Nothing has to be pressed to get past it: it appears below the candidate rows
+ * where it cannot move one, it expires on its own, and the next card is already on screen and
+ * answerable underneath it. What it carries is a control that did not exist before, which is
+ * the whole of what D28 reopened that rule for — the rule's own justification is "Undo covers
+ * the mistake", and on this screen undo did not exist.
  */
 
 /* ----------------------------------------------------------------------------- the wire
@@ -71,16 +112,25 @@ import './ReviewQueue.css'
  * label for it, so a reason added to the pipeline shows up here as a plain string rather
  * than as a blank line.
  *
- * The labels are also the least tested copy in the product, and for a reason no amount of
- * care fixes: none of these codes has ever fired against a photograph of a card. A label
- * written for a code that fires weekly and one written for a code that fires once a year are
- * different pieces of copy, and there is no way to tell which is which until Gate B runs.
+ * The labels are still the least tested copy in the product, and Gate B narrowed that rather
+ * than closing it. Exactly one of the twelve has fired against a photograph of a card:
+ * `metadata_detection_disagreement`, 16 times out of 53, which is 16 cards' worth of evidence
+ * for one label and none at all for the other eleven. (`no_catalog_row` fired 23 times against
+ * a commons-only export and zero times against the full one, which is a fact about the export
+ * rather than about the label.) A label written for a code that fires weekly and one written
+ * for a code that fires once a year are different pieces of copy, and after a real run the
+ * only one this repo can tell apart is the first.
  */
 const REASON_LABELS: Readonly<Record<string, string>> = {
   // pipeline/variant.py — the ladder could not settle the finish.
   no_catalog_row: 'Not in the export',
   metadata_not_stocked: 'Toggle names a finish that is not stocked',
   metadata_detection_disagreement: 'Toggle and photo disagree',
+  /* D23's stack claim contradicted the catalog: every candidate row's Rarity sits outside
+   * what the operator claimed the stack holds. Deliberately NOT `metadata_*` — those three
+   * are about the finish toggle, and a fourth reading as one at a glance is why the name
+   * was rejected (D23 records it). */
+  rarity_claim_mismatch: 'Claimed rarities match no row',
   detected_finish_not_stocked: 'Photo names a finish that is not stocked',
   ambiguous_no_signal: 'Nothing decided the finish',
   duplicate_condition: 'Two rows, one condition',
@@ -408,6 +458,63 @@ const SKIP_KEY_LABEL = 'S'
 const CLEAR_KEY = 'c'
 const CLEAR_KEY_LABEL = 'C'
 
+/* Reload had no key until 2026-08-22, on a screen whose whole argument for showing keys is
+ * that an hour in this queue is a keyboard and not a mouse. It is the prescribed remedy for
+ * every one of the four refusals in STALE_CODES below — each of those messages ends by
+ * telling the operator to reload the queue — so the one control the server names by name was
+ * the one control that made him find the pointer to obey it.
+ *
+ * ARMED EVEN WHEN THERE IS NO CARD ON SCREEN, which is not an edge case but the state that
+ * needs it most: a `GET /queues` that failed draws no card at all, and the key handler used
+ * to return before binding anything when `current` was null. So the reload branch sits above
+ * that guard and every other branch sits below it. */
+const RELOAD_KEY = 'r'
+const RELOAD_KEY_LABEL = 'R'
+
+/* Take the last answer back (D28). ARMED WITH NO CARD ON SCREEN, like reload and for a sharper
+ * version of the same reason: the answer that most wants taking back is often the one that
+ * emptied the queue, and a control that disappears at the moment it is needed is not a control.
+ *
+ * IT ACTS ON THE NEWEST RECEIPT STILL STANDING and never on the card in front of you, which is
+ * the one thing about it worth being careful with. Every other key on this screen is about the
+ * current card; this one is about the previous one. That is unavoidable — the answered card has
+ * left the screen by construction, because answering advances — and it is why the receipt draws
+ * the position it is about beside the key rather than trusting the operator to remember.
+ *
+ * ONE KEY AND NOT ONE PER RECEIPT. Older receipts are answered with the mouse and draw a dash
+ * where the chip goes, the same treatment `MAX_KEYED_CANDIDATES` gives a tenth candidate row
+ * and for the same reason: a blank column reads as a chip that failed to render. Digits are
+ * spoken for by the candidate rows, so numbering the receipts is not available even if a stack
+ * deep enough to want it ever appeared. */
+const UNDO_KEY = 'u'
+const UNDO_KEY_LABEL = 'U'
+
+/* Twenty seconds, and it is not a number this file chose: `Fulfillment.tsx:UNDO_WINDOW_MS` is
+ * the same value on the same product for the same job, and D28 asks for "the shape the product
+ * already ships" rather than a second one.
+ *
+ * THE CLOCK IS HELD HERE AND NOT BY THE SERVER, which is the owner's ruling taken on the day —
+ * screen-held now, server-enforced only if it bites — and it matches mark-sold exactly:
+ * `POST /review/<box>/<index>/answer` has no expiry, because a deadline down there fails the
+ * reversal precisely when the store is slow to lock. What the twenty seconds govern is how long
+ * the control stays on screen.
+ *
+ * WHAT THAT COSTS, RECORDED RATHER THAN DISCOVERED. Two things, both accepted:
+ *
+ *   it does not survive a reload   The receipts live in component state, so a refresh, a route
+ *                                  change or a crash takes every standing undo with it. The
+ *                                  answer is written and the card stays answered; what is lost
+ *                                  is the way back. The trigger for revisiting is the first
+ *                                  answer actually lost that way, and the fix would be a
+ *                                  deadline on the `answered` history line rather than a
+ *                                  longer window here.
+ *   the other device knows nothing A browser that never saw the answer never draws its undo
+ *                                  (D13: two devices, one store, no session between them). The
+ *                                  route would accept the reversal from either; only this
+ *                                  screen decides to offer it.
+ */
+const UNDO_WINDOW_MS = 20_000
+
 /* Focus that swallows a key, the same set `trigger.ts` refuses to fire through and for the
  * same reasons — including SELECT, whose letter typeahead would otherwise both jump a list
  * and answer a card. This screen has no field today; the guard costs one function and stops
@@ -536,9 +643,153 @@ function clearedQueues(result: unknown): ReadonlySet<QueueName> | null {
   return cleared
 }
 
+/* THE FOUR REFUSALS THAT MEAN THIS SCREEN IS HOLDING A QUEUE THE SERVER HAS MOVED PAST.
+ * Two kinds, and the difference is where the card is rather than what the screen should do:
+ *
+ *   already_answered      the entry is cleared and gone from the file. The two-device case
+ *   not_in_queue          D5 and D13 describe, or a client asking about the wrong card.
+ *                         There is nothing left to put back.
+ *
+ *   sku_not_a_candidate   the entry is STILL OPEN and this screen is drawing the wrong rows
+ *   condition_mismatch    for it — a later join rewrote the queue file after the snapshot was
+ *                         taken, so the SKU and condition copied off the row that was pressed
+ *                         are not the pair `do_review_answer` will accept.
+ *
+ * THE SECOND PAIR IS WHY THIS IS A SET AND NOT THE TWO-CODE TEST IT REPLACES, and it was a
+ * repeat-failure trap rather than a cosmetic gap. Those two refusals restored the card, which
+ * put it straight back under the same finger with the same digits over the same rows the
+ * server had just refused: press 1, refused, press 1, refused, for as long as the snapshot is
+ * held. A screen can inflict that indefinitely, and every press looks like a fresh attempt.
+ *
+ * DROPPING SUCH A CARD IS NOT THE SILENT LOSS THE RESTORE EXISTS TO PREVENT, which is the one
+ * thing worth being exact about here. That rule is about a card leaving the queue with nothing
+ * written and nothing re-queueing it. Here the entry is still open in its file — no answer was
+ * written, `Queue.upsert` has cleared nothing — so the Reload the server's own message asks for
+ * brings the card back with the rows the route will actually take. What may not happen is the
+ * card being dropped and the remedy being left to a control the operator has to go and find,
+ * which is why RELOAD_KEY exists and why the refusal panel draws its own Reload button.
+ */
+const STALE_CODES: ReadonlySet<string> = new Set([
+  'already_answered',
+  'not_in_queue',
+  'sku_not_a_candidate',
+  'condition_mismatch',
+])
+
+function isStale(err: unknown): boolean {
+  return err instanceof ServerError && STALE_CODES.has(err.code)
+}
+
+/* ---------------------------------------------------------------------------- the undo
+ *
+ * D28. Pressing a digit writes a SKU and a condition onto a real card, and `Queue.upsert`
+ * refuses to re-queue a position a human has cleared — so until 2026-08-23 the one
+ * irreversible action in this product had no photo to confirm against, no acknowledgement and
+ * no way back, while mark-sold, which reverses, had all three. This section is the way back.
+ *
+ * NO CONFIRM DIALOG CAME WITH IT AND NONE MAY. docs/DESIGN.md forbids one by name and D28
+ * rejects requiring a modifier or an Enter in as many words: one key per card is the property
+ * being protected, and doubling the keystrokes on the screen the owner spends the most hours
+ * in is exactly what the no-dialog rule exists to prevent. What D28 reopens is the
+ * no-acknowledgement rule, and only for this screen — on the grounds that the rule's own
+ * justification is "Undo covers the mistake", which was leaning on something that did not
+ * exist here.
+ */
+
+/** Whether the answer just written can be taken back, out of the server's own answer.
+ *
+ *  ABSENT IS READ AS NULL, the same guard `Fulfillment.tsx:canTakeBack` states for the sale and
+ *  in the same direction. A server old enough to answer this route without the field arrives as
+ *  `undefined` and would typecheck as an object, and this app casts rather than validates.
+ *  Suppressing an undo that would have worked costs one reload; offering one that cannot work
+ *  is the defect the field exists to remove.
+ *
+ *  THE OBJECT, NEVER ITS MEMBERS. `restores_to` is `{sku, condition}` and BOTH are null for the
+ *  ordinary queued card, which has never carried a SKU — that is why it is in a queue. Testing
+ *  for a non-empty string here would suppress the undo on almost every card in a real queue,
+ *  which is the reverse of the sale's shape and the one place these two readers differ. */
+function canTakeBack(result: AnswerResult): boolean {
+  const origin: unknown = result.restores_to
+  return typeof origin === 'object' && origin !== null
+}
+
+/* THE REFUSALS AFTER WHICH THE UNDO CONTROL COMES DOWN, because pressing it again answers
+ * identically forever. Four, and they divide the same way STALE_CODES does:
+ *
+ *   not_answered   there is no answer standing. The other device reversed it first (D5, D13),
+ *   not_in_queue   or a later run released the entry outright. Either way it is done.
+ *
+ *   undo_too_late          a refusal with a remedy the operator owns but cannot reach from
+ *   answer_origin_unknown   here: pull the listing on TCGplayer, or repair the log. The
+ *                           server's message names both, the panel prints it verbatim, and
+ *                           leaving the button up would only invite him to press it again.
+ *
+ * Everything else — a dead server, a `store_busy` behind a running join — is worth another
+ * press, so the receipt stays until its own twenty seconds run out. Same instinct as
+ * `Fulfillment.tsx`'s `sold_origin_unknown` ruling: a control with no remaining outcome is
+ * worse than no control, because it reads as one he failed to use correctly. */
+const FINAL_UNDO_CODES: ReadonlySet<string> = new Set([
+  'not_answered',
+  'not_in_queue',
+  'undo_too_late',
+  'answer_origin_unknown',
+])
+
+function isFinalRefusal(err: unknown): boolean {
+  return err instanceof ServerError && FINAL_UNDO_CODES.has(err.code)
+}
+
+/** One answer that can still be taken back, and everything needed to put the card back.
+ *
+ *  A LIST OF THESE AND NOT ONE SLOT, which `Fulfillment.tsx` learned the expensive way: a
+ *  second sale silently discarded the first card's undo and re-armed the clock for the new one.
+ *  This screen answers faster than that one sells, so a single slot would throw away a window
+ *  the operator had barely begun to notice he needed. Each receipt carries its own deadline, so
+ *  a second answer cannot extend or shorten the first card's.
+ *
+ *  IT HOLDS THE ROWS RATHER THAN RE-READING THEM. The undo puts the card back on screen from
+ *  what was dropped, at the index it was dropped from, which is exact and costs no round trip —
+ *  the server reopened the same entry with the same candidates, so a `GET /queues` would answer
+ *  with what is already in hand and would additionally undo every skip. */
+type Receipt = {
+  /** `Row.entry.position`. A second answer at one position replaces its receipt rather than
+   *  stacking one on it, which cannot happen today — the entry is cleared in between — and is
+   *  the same rule `Fulfillment.tsx` states for a second sale of one position. */
+  key: string
+  box: number
+  index: number
+
+  /** The server's own rendered label, for the machine line. Never composed here (D10). */
+  label: string
+
+  /** Every row this answer dropped — both, for a position open in two queue files — and the
+   *  index in `rows` they were spliced out of. */
+  dropped: Row[]
+  at: number
+
+  /** The sentence. "Answer" is the action, so the receipt says "Answered", which is
+   *  docs/DESIGN.md's rule that an action keeps its name through the whole flow. */
+  said: string
+
+  /** Wall-clock deadline, fixed when the answer lands and never touched again. A duration held
+   *  here instead would have to be restarted on every re-render. */
+  until: number
+}
+
+/** A refusal, with the card it was about.
+ *
+ *  THE LABEL IS CAPTURED AT THE MOMENT OF THE FAILURE AND NOT READ OFF THE CURRENT CARD.
+ *  Answering advances before the write lands, so by the time a refusal arrives the card on
+ *  screen is usually the NEXT one — and for a stale code the refused card is not restored, so
+ *  the panel is drawn beneath a card it is not about. The server's own message names the box
+ *  and index for its own refusals; `client_bug` names nothing, and neither does a glance. One
+ *  position label under the code is what makes the panel readable where it is drawn. Null when
+ *  the failure belongs to no card, which is every failure of `GET /queues`. */
+type Refusal = { failure: Failure; at: string | null }
+
 export function ReviewQueue() {
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [failure, setFailure] = useState<Failure | null>(null)
+  const [refusal, setRefusal] = useState<Refusal | null>(null)
   const [reloads, setReloads] = useState(0)
 
   /* Cards pushed to the back of this session's worklist, IN THE ORDER THEY WERE SKIPPED.
@@ -548,11 +799,25 @@ export function ReviewQueue() {
    * ASSUMPTION — docs/DESIGN.md specifies no such control, and it is here because two cards
    * cannot be answered at all and would otherwise stop the queue dead. A card the pipeline
    * offered no rows for is refused by the route as `no_candidates`; a card you are not ready
-   * to decide has no other move, because the only write this screen can make is final —
-   * `Queue.upsert` refuses to re-queue a position a human has cleared, deliberately, so that
-   * an answer outlives the question. Skipping writes nothing at all: the entry stays open in
-   * its file, the run report still counts it, and a reload forgets the skip. Settled by real
-   * queue traffic at Gate B: if nothing is ever skipped, delete it.
+   * to decide has no other move, because the only write this screen can make settles the
+   * question — `Queue.upsert` refuses to re-queue a position a human has cleared, deliberately,
+   * so that an answer outlives the question. Skipping writes nothing at all: the entry stays
+   * open in its file, the run report still counts it, and a reload forgets the skip.
+   *
+   * D28's UNDO DOES NOT REPLACE THIS, and it is worth saying which of the two arguments above
+   * it touches. An answer is reversible for twenty seconds now, so "final" became "final once
+   * the window closes" — but the card with no candidate rows still cannot be answered at all,
+   * and a card you are not ready to rule on is not helped by being able to un-rule for twenty
+   * seconds. Skip is still the only move for both, and the question below is still open.
+   *
+   * GATE B WAS NAMED HERE AS WHAT SETTLES IT AND DID NOT SETTLE IT. The run produced a real
+   * 16-card queue and the owner answered all 16 in one sitting, but nothing counted how many
+   * he skipped first — the instrument was never read, so the control is exactly as unsettled
+   * as it was, minus one opportunity. docs/DESIGN.md records that as the mistake to not repeat:
+   * counting skips has to be decided on BEFORE the next real queue session rather than noticed
+   * afterwards. If nothing is ever skipped, delete this. If most of a queue is, the screen
+   * needs a real defer that records a reason, and that is a decision entry rather than a
+   * button.
    *
    * A LIST RATHER THAN A SET, AND THAT IS WHAT MAKES SKIP WRAP. A set records only THAT a
    * card was skipped, so once every open card had been skipped the back of the worklist was
@@ -572,6 +837,15 @@ export function ReviewQueue() {
    * `onError` for the previous card can land after the queue has advanced, and a boolean
    * would blame the wrong card for a missing file. */
   const [photoAbsent, setPhotoAbsent] = useState<string | null>(null)
+
+  /* Answers still inside their twenty seconds (D28), newest first. See `Receipt` for why this
+   * is a list, and `UNDO_WINDOW_MS` for what a screen-held clock costs.
+   *
+   * NEWEST FIRST, which is the opposite of every other list on this screen and is right for the
+   * same reason `Fulfillment.tsx` orders its receipts that way: everything else here is a
+   * worklist in the server's sort, and these are events. The answer most likely to want taking
+   * back is the one just made, and `UNDO_KEY` acts on the head of this array. */
+  const [receipts, setReceipts] = useState<readonly Receipt[]>([])
 
   /* An answer in flight. `busy` draws it; `busyRef` decides, because two key presses in one
    * tick would both read a stale `false` and answer two cards against one round trip. Same
@@ -606,21 +880,29 @@ export function ReviewQueue() {
     let live = true
     loadingRef.current = true
     setLoading(true)
+    /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`. The two-argument form does not cover
+     * its own success handler: `rowsOf` walks two queue files off the wire and coerces as it
+     * goes, so a body this screen cannot read throws inside the handler and lands as an
+     * unhandled rejection rather than in the panel three lines down. What that costs here is
+     * worse than a blank screen — `.finally` still runs, so `loading` clears and the screen
+     * looks ready while `rows` stays null and `failure` stays null, which is the "Reading the
+     * queue." state with no failure shown and no control to press. Fulfillment.tsx recorded
+     * that symptom in those words; the eslint rule in `app/eslint.config.js` is what stops it
+     * being rediscovered a fourth time. */
     void getQueues()
-      .then(
-        (snapshot) => {
-          if (!live) return
-          setRows(rowsOf(snapshot))
-          setFailure(null)
-          setPhotoAbsent(null)
-          setDeferred([])
-        },
-        (err: unknown) => {
-          if (!live) return
-          setRows(null)
-          setFailure(describeFailure(err))
-        },
-      )
+      .then((snapshot) => {
+        if (!live) return
+        setRows(rowsOf(snapshot))
+        setRefusal(null)
+        setPhotoAbsent(null)
+        setDeferred([])
+      })
+      .catch((err: unknown) => {
+        if (!live) return
+        setRows(null)
+        /* No label: this failure is about the read and not about a card. See `Refusal`. */
+        setRefusal({ failure: describeFailure(err), at: null })
+      })
       .finally(() => {
         if (!live) return
         loadingRef.current = false
@@ -661,6 +943,62 @@ export function ReviewQueue() {
 
   const current = worklist[0] ?? null
 
+  /* Put dropped rows back where they came from. Two callers now — a refused answer, and an
+   * answer taken back inside its window — which is why it stopped being a closure inside
+   * `answer` and became one function.
+   *
+   * BOTH ROWS FOR A POSITION GO BACK TOGETHER AND NOT ADJACENTLY. `rowsOf` writes every review
+   * row before the first parked one, so a restore puts the parked twin beside its review row
+   * rather than at the top of the parked block. That is invisible: `oneCardPerPosition` merges
+   * them again before anything is drawn, and the order that matters is the server's, which a
+   * reload restores exactly.
+   *
+   * THE INDEX IS CLAMPED RATHER THAN TRUSTED, and after a Reload it is only approximately
+   * right: `rows` has been replaced by a fresh snapshot that does not contain the answered card
+   * at all, so a card put back then lands near where it used to be instead of in the server's
+   * sort. Accepted rather than solved — the alternative is re-reading the queues on every undo,
+   * which would also forget every skip — and R puts the sort back for the price of one press. */
+  const putBack = useCallback((back: Row[], at: number) => {
+    if (back.length === 0) return
+    setRows((prev) => {
+      if (prev === null) return [...back]
+      const next = [...prev]
+      next.splice(at < 0 ? 0 : Math.min(at, next.length), 0, ...back)
+      return next
+    })
+  }, [])
+
+  /** Stand a receipt up for one answer. A position answered twice replaces its own rather than
+   *  stacking, which cannot happen while the entry is cleared in between and is the same rule
+   *  `Fulfillment.tsx` states for a second sale of one position. */
+  const remember = useCallback((receipt: Omit<Receipt, 'until'>) => {
+    setReceipts((held) => [
+      { ...receipt, until: Date.now() + UNDO_WINDOW_MS },
+      ...held.filter((standing) => standing.key !== receipt.key),
+    ])
+  }, [])
+
+  /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per receipt —
+   * `Fulfillment.tsx`'s shape, and the reasoning transfers unchanged. Each receipt carries its
+   * own `until`, so this cannot re-arm anybody's window: it fires at the front of the queue,
+   * drops whatever has actually expired, and the state change arms it again for the next one.
+   * The 25ms of slack is what stops a timer firing a hair early from dropping nothing,
+   * returning the same array, and leaving the panel up forever — React bails out on an
+   * identical reference, so nothing would re-arm it. */
+  useEffect(() => {
+    if (receipts.length === 0) return
+    const soonest = Math.min(...receipts.map((receipt) => receipt.until))
+    const timer = window.setTimeout(
+      () =>
+        setReceipts((held) => {
+          const standing = held.filter((receipt) => receipt.until > Date.now())
+          return standing.length === held.length ? held : standing
+        }),
+      Math.max(0, soonest - Date.now()) + 25,
+    )
+    return () => window.clearTimeout(timer)
+  }, [receipts])
+
   const answer = useCallback(
     (row: Row, candidate: CandidateRow) => {
       // One round trip at a time, in both directions — see `loading`.
@@ -685,25 +1023,14 @@ export function ReviewQueue() {
       const at = rows === null ? -1 : rows.findIndex((held) => held.entry.position === position)
       busyRef.current = true
       setBusy(true)
-      setFailure(null)
+      setRefusal(null)
       setRows((prev) =>
         prev === null ? prev : prev.filter((held) => held.entry.position !== position),
       )
 
-      /* Back where they were, together. The two rows for one position are not adjacent in
-       * `rows` — `rowsOf` writes every review row before the first parked one — so a restore
-       * puts the parked twin beside its review row rather than at the top of the parked
-       * block. That is invisible: the worklist merges them again before anything is drawn,
-       * and the order that matters is the server's, which a reload restores exactly. */
-      const restore = (back: Row[]) => {
-        if (back.length === 0) return
-        setRows((prev) => {
-          if (prev === null) return back
-          const next = [...prev]
-          next.splice(at < 0 ? 0 : Math.min(at, next.length), 0, ...back)
-          return next
-        })
-      }
+      /* Back where they were, together — see `putBack`, which two callers share now that an
+       * answer can also be taken back on purpose. */
+      const restore = (back: Row[]) => putBack(back, at)
 
       /* BOTH FIELDS, COPIED OFF THE ROW THAT WAS PRESSED. The route requires `condition`
        * even though the SKU implies it, and its reasoning is worth not defeating here: the
@@ -717,52 +1044,150 @@ export function ReviewQueue() {
         sku: candidate.sku,
         condition: candidate.condition,
       })
-        .then(
-          (result: unknown) => {
-            /* WHAT CAME BACK, RATHER THAN WHAT THIS SCREEN ASSUMED. The route reports which
-             * queues it cleared, so a row whose queue it did not name goes back on screen
-             * instead of being dropped on the strength of a 200. Today the route clears every
-             * open entry it finds or refuses outright, so this restores nothing — which is
-             * the point of reading it rather than a reason not to: the day that stops being
-             * true, the screen follows the write instead of disagreeing with it silently. */
-            const cleared = clearedQueues(result)
-            if (cleared !== null) restore(dropped.filter((held) => !cleared.has(held.queue)))
+        /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, and this is the one of the four
+         * where the two forms are not merely differently safe. The success handler below
+         * walks a body the route is free to change — `clearedQueues` reads an `unknown` and
+         * that is the point of it — so under the two-argument form a shape it cannot parse
+         * threw past both handlers: the card stayed dropped from `rows` on the strength of a
+         * write nobody had confirmed, no failure was shown, and `.finally` cleared `busy` so
+         * the screen carried on to the next card as though the answer had landed. A card that
+         * silently leaves this queue is a card nothing re-queues, because the pipeline still
+         * considers the position resolved — which is the exact loss the failure handler two
+         * screens down is written to prevent.
+         *
+         * `.catch` NOW ALSO COVERS THE SUCCESS HANDLER, WHICH IS THE FIX AND NOT A SIDE
+         * EFFECT. Worth being exact about the one interaction: `clearedQueues` runs before
+         * anything is restored, so the common throw restores cleanly. A throw after `restore`
+         * has already run would restore twice, and that is invisible rather than merely rare
+         * — `oneCardPerPosition` merges every row for a position before the worklist is
+         * drawn, which is the same guard that lets a two-queue position be dropped and put
+         * back as a pair. */
+        .then((result: unknown) => {
+          /* WHAT CAME BACK, RATHER THAN WHAT THIS SCREEN ASSUMED. The route reports which
+           * queues it cleared, so a row whose queue it did not name goes back on screen
+           * instead of being dropped on the strength of a 200. Today the route clears every
+           * open entry it finds or refuses outright, so this restores nothing — which is
+           * the point of reading it rather than a reason not to: the day that stops being
+           * true, the screen follows the write instead of disagreeing with it silently. */
+          const cleared = clearedQueues(result)
+          const kept = cleared === null ? [] : dropped.filter((held) => !cleared.has(held.queue))
+          if (kept.length > 0) restore(kept)
 
-            /* Identity preserved when the answered card was never skipped, which is the
-             * common case and the hot one: a new array on every answer would invalidate the
-             * worklist memo once per card across a whole box for nothing. */
-            const answered = new Set(dropped.map((held) => held.key))
-            setDeferred((prev) =>
-              prev.some((key) => answered.has(key)) ? prev.filter((key) => !answered.has(key)) : prev,
-            )
-          },
-          (err: unknown) => {
-            /* Loud, and back where it was. §5.5's rule for a failed capture is that the run
-             * stops and says so; the same argument holds here — a card whose answer was
-             * refused and which quietly left the queue is a card that will never be looked
-             * at again, because nothing re-queues a position the pipeline still considers
-             * resolved.
-             *
-             * EXCEPT FOR THE TWO CODES THAT MEAN THE CARD IS NO LONGER WAITING. The route
-             * distinguishes `already_answered` — the two-device case D5 and D13 describe,
-             * where the other browser or the Fulfiller's tablet got there first — from
-             * `not_in_queue`, and separates them precisely because the remedies differ.
-             * Neither is a card to put back: restoring one would redraw a card whose answer
-             * is already written and invite a second press that fails the same way. The
-             * server's own message says to reload, and the panel prints it verbatim. */
-            const stale =
-              err instanceof ServerError &&
-              (err.code === 'already_answered' || err.code === 'not_in_queue')
-            if (!stale) restore(dropped)
-            setFailure(describeFailure(err))
-          },
-        )
+          /* THE RECEIPT, AND ONLY WHEN THE SERVER SAYS THE ANSWER CAN COME BACK (D28).
+           * `restores_to` is null for an answer the route has already decided it will refuse to
+           * reverse — the SKU is out of this Mac, or the log cannot say what the answer replaced
+           * — and a control whose only outcome is that refusal is the defect `SaleResult`
+           * records as having shipped twice. So the check is on the server's answer and never on
+           * this screen's optimism.
+           *
+           * A CARD THE SERVER DID NOT FULLY CLEAR GETS NO RECEIPT EITHER. `kept` is the rows put
+           * straight back on screen, and offering an undo for a card that is still in the
+           * worklist would be two ways to reach one state. It cannot happen today — the route
+           * clears every open entry it finds or refuses outright — which is exactly why it is
+           * cheap to be correct about now rather than the day that changes. */
+          if (kept.length === 0 && canTakeBack(result as AnswerResult)) {
+            remember({
+              key: position,
+              box: row.entry.box,
+              index: row.entry.index,
+              label: row.entry.label,
+              dropped,
+              at,
+              /* "Answer" is what the screen calls the action, so this is what it calls the
+               * thing that happened. The condition is what the choice was actually BETWEEN —
+               * every candidate row for a finish disagreement carries the same card name — so
+               * it is the one word that says which row was pressed. */
+              said: `Answered as ${candidate.condition}.`,
+            })
+          }
+
+          /* Identity preserved when the answered card was never skipped, which is the
+           * common case and the hot one: a new array on every answer would invalidate the
+           * worklist memo once per card across a whole box for nothing. */
+          const answered = new Set(dropped.map((held) => held.key))
+          setDeferred((prev) =>
+            prev.some((key) => answered.has(key)) ? prev.filter((key) => !answered.has(key)) : prev,
+          )
+        })
+        .catch((err: unknown) => {
+          /* Loud, and back where it was. §5.5's rule for a failed capture is that the run
+           * stops and says so; the same argument holds here — a card whose answer was
+           * refused and which quietly left the queue is a card that will never be looked
+           * at again, because nothing re-queues a position the pipeline still considers
+           * resolved.
+           *
+           * EXCEPT FOR THE FOUR CODES THAT MEAN THIS SCREEN IS BEHIND. Two say the card is
+           * no longer waiting and two say its rows have been rewritten under the snapshot;
+           * STALE_CODES names all four and argues the difference. None of them is a card to
+           * put back, and the reason is the same for both pairs: restoring redraws a card
+           * whose next press fails identically, which is a loop the operator can only lose.
+           * The server's own message says to reload in every one of the four, the panel
+           * prints it verbatim beneath the candidate rows, and the panel draws Reload itself.
+           *
+           * IT WAS TWO CODES UNTIL 2026-08-22 and the missing pair was the expensive half:
+           * `already_answered` at least ends with the card gone, while `sku_not_a_candidate`
+           * put the card back with the same wrong SKU under the same digit, forever. */
+          if (!isStale(err)) restore(dropped)
+          /* The card this was about, which is no longer the card on screen: the answer
+           * advanced before the write landed, and a stale one is not restored. */
+          setRefusal({ failure: describeFailure(err), at: row.entry.label })
+        })
         .finally(() => {
           busyRef.current = false
           setBusy(false)
         })
     },
-    [rows],
+    [rows, putBack, remember],
+  )
+
+  /* TAKE ONE ANSWER BACK (D28). The mirror of `answer` above and it holds the same two rules:
+   * one round trip at a time in both directions, and the card goes back where it was rather
+   * than being re-read.
+   *
+   * NOTHING IS ADVANCED OR DROPPED OPTIMISTICALLY HERE, WHICH IS THE OPPOSITE OF `answer`. That
+   * one advances before the write lands because docs/DESIGN.md says answering advances with no
+   * acknowledgement to dismiss, and the cost of being wrong is one card put back. This is the
+   * remedy for a wrong write, so it waits for the server: a card drawn back onto the screen on
+   * the strength of a reversal that then failed would be the queue disagreeing with the store
+   * about a card whose SKU is still written — and the operator would answer it again, on top of
+   * an answer that never came off.
+   *
+   * THE RECEIPT COMES DOWN ONLY WHEN IT HAS NOTHING LEFT TO DO: the reversal worked, or it was
+   * refused in one of the four codes that will answer identically forever. See
+   * `FINAL_UNDO_CODES`. Anything else — a dead server, a store busy behind a running join — is
+   * worth another press, and the window is what ends it. */
+  const undo = useCallback(
+    (receipt: Receipt) => {
+      if (busyRef.current || loadingRef.current) return
+      busyRef.current = true
+      setBusy(true)
+      setRefusal(null)
+
+      /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, for the reason the other three calls
+       * in this file give: the two-argument form does not cover its own success handler, so a
+       * throw while putting the card back would land as an unhandled rejection with `.finally`
+       * clearing `busy` — a screen that looks ready, a receipt still standing, and a card the
+       * server has already reopened sitting in neither list. */
+      void undoAnswer(receipt.box, receipt.index)
+        .then(() => {
+          putBack(receipt.dropped, receipt.at)
+          setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
+        })
+        .catch((err: unknown) => {
+          /* The label is the receipt's and not the current card's, the same capture
+           * `Refusal` argues for: the card this is about left the screen when it was
+           * answered, and by now there is usually a different one on it. */
+          setRefusal({ failure: describeFailure(err), at: receipt.label })
+          if (isFinalRefusal(err)) {
+            setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
+          }
+        })
+        .finally(() => {
+          busyRef.current = false
+          setBusy(false)
+        })
+    },
+    [putBack],
   )
 
   const skip = useCallback((row: Row) => {
@@ -777,12 +1202,64 @@ export function ReviewQueue() {
    * the one state where the screen would otherwise just cycle. */
   const clearSkips = useCallback(() => setDeferred([]), [])
 
-  /* The key map, armed once and reading the current card through a closure React rebuilds
-   * whenever the card or the handlers change. Digits pick a candidate, S skips, and C clears
-   * the skips for exactly as long as the note offering it is on screen. */
-  useEffect(() => {
-    if (current === null) return
+  /* The read, from three places now — the header button, the key, and the Reload the refusal
+   * panel draws for a stale answer. One callback rather than three inline `setReloads`, so
+   * that the mutual exclusion the `loading` note argues for has one place to be checked. */
+  const reload = useCallback(() => setReloads((n) => n + 1), [])
 
+  /* THE NEXT CARD'S PHOTOGRAPH, FETCHED WHILE THIS ONE IS BEING JUDGED (D28). The worklist
+   * already knows which card is next, the photo route is a plain GET, and the browser cache
+   * is what makes it free at the moment of the advance — so this is one request the operator
+   * never waits on.
+   *
+   * IT IS THE SECOND HALF OF THE FIX AND NOT THE FIRST. Reserving the frame is what stops the
+   * candidate rows moving; this is what stops the photograph arriving blank and popping in.
+   * Measured on the Gate B captures at 1440x900 before either landed: advancing drew the next
+   * card with a 2px-tall image, the first candidate row at y=373 instead of y=911, and the row
+   * came back 538px down the page ~50ms later — under a finger already travelling to a digit.
+   * Either fix alone leaves half of that; the frame holds the layout still and the prefetch
+   * fills it.
+   *
+   * ONE CARD AHEAD, NOT THE WHOLE WORKLIST. A queue is hundreds of 4K frames — Gate B's are
+   * 2160x3840 — and warming all of them would spend the rig's memory and the server's disk on
+   * cards the operator may answer in ten minutes or never reach. The next one is the only
+   * request whose result is certainly wanted, because it is the card the current keypress
+   * produces.
+   *
+   * The URL rather than the row as the dependency: `worklist` is rebuilt whenever a skip
+   * changes the order, and a string re-fires only when the next card actually changes. */
+  const nextPhoto = useMemo(() => {
+    const next = worklist[1]
+    if (next === undefined) return null
+    if (next.entry.box < 1 || next.entry.photo === null) return null
+    return photoUrl(next.entry.box, next.entry.index)
+  }, [worklist])
+
+  useEffect(() => {
+    if (nextPhoto === null) return
+    /* Held in a local rather than dropped on the floor: an `Image` whose only reference is
+     * the in-flight request is at the browser's discretion, and the point is the cache entry
+     * rather than this element. Nothing renders it and nothing reads it back — a failure here
+     * is silent by design, because the card it belongs to has its own three absent states and
+     * will report the same 404 itself when it is drawn. */
+    const warm = new Image()
+    warm.src = nextPhoto
+    return () => {
+      /* Dropping the src cancels a fetch still in flight. A skip can change the next card
+       * several times a second, and a queue's worth of abandoned 4K decodes is exactly the
+       * kind of idle work Gate B found stalling the capture path. */
+      warm.src = ''
+    }
+  }, [nextPhoto])
+
+  /* The key map, armed once and reading the current card through a closure React rebuilds
+   * whenever the card or the handlers change. R reloads, digits pick a candidate, S skips,
+   * and C clears the skips for exactly as long as the note offering it is on screen.
+   *
+   * ARMED WITH NO CARD ON SCREEN, which is new and is the whole reason the `current === null`
+   * guard moved inside the handler: reload is the remedy for the state where this screen has
+   * no card because the read failed, and it used to be the one state where no key was bound. */
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // A held key answering a run of cards is this screen's version of the held-undo hazard
       // docs/DESIGN.md names, and here every one of those answers is a write.
@@ -794,6 +1271,28 @@ export function ReviewQueue() {
       if (busyRef.current || loadingRef.current) return
 
       const key = event.key.toLowerCase()
+
+      /* ABOVE THE `current` GUARD, because the state with no card is the state that needs it.
+       * The button is disabled for the same window by the two flags checked above. */
+      if (key === RELOAD_KEY) {
+        event.preventDefault()
+        reload()
+        return
+      }
+
+      /* ALSO ABOVE THE `current` GUARD, and here the reason is sharper than reload's: the
+       * answer most likely to want taking back is often the one that emptied the queue, and
+       * with no card on screen every branch below this line is dead. It acts on the newest
+       * receipt still standing — see `UNDO_KEY`. */
+      if (key === UNDO_KEY) {
+        const newest = receipts[0]
+        if (newest === undefined) return
+        event.preventDefault()
+        undo(newest)
+        return
+      }
+
+      if (current === null) return
 
       if (key === SKIP_KEY) {
         event.preventDefault()
@@ -817,7 +1316,7 @@ export function ReviewQueue() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, answer, skip, clearSkips, allSkipped])
+  }, [current, answer, skip, clearSkips, allSkipped, reload, receipts, undo])
 
   const counts = useMemo(() => {
     if (rows === null) return null
@@ -831,6 +1330,29 @@ export function ReviewQueue() {
       parked: rows.filter((row) => row.queue === 'parked').length,
     }
   }, [rows])
+
+  /* ONE ELEMENT, DRAWN IN ONE OF TWO PLACES, and the two places are the whole of the layout
+   * question this raised. Inside the card it sits immediately below the last candidate row —
+   * `RefusalPanel`'s slot, chosen there by measurement as the closest place to the eye that
+   * cannot move a row, which is the constraint D28's other half exists to enforce. Nothing
+   * above the rows may grow or shrink, so the header, the sentence and the photo frame are all
+   * ruled out however much more visible they are.
+   *
+   * THE SECOND PLACE IS FOR THE CASE THAT MATTERS MOST. Answering the last card empties the
+   * worklist and `Card` is not rendered at all — and that is precisely the answer whose undo is
+   * most likely to be wanted, because a queue that has just ended is a queue nobody is about to
+   * scroll through. So the same element is drawn under the header when there is no card. It
+   * moves between parents rather than being duplicated: two call sites for one node, and the
+   * node holds no state to lose when React remounts it.
+   *
+   * REJECTED: A FIXED OVERLAY. It would solve both placements at once and never move anything,
+   * and it loses on two counts — it would float over the candidate rows, which are this
+   * screen's entire vocabulary, and it needs styles this session does not own. The in-flow slot
+   * is already argued for and already styled. */
+  const receiptPanel =
+    receipts.length === 0 ? null : (
+      <Receipts receipts={receipts} onUndo={undo} disabled={busy || loading} />
+    )
 
   return (
     <main className="review">
@@ -847,13 +1369,11 @@ export function ReviewQueue() {
               `loading` note argues for: a snapshot read before that answer landed would
               resurrect the card it just cleared. Disabled during a read as well, because a
               second read stacked on the first is two snapshots racing to be last. */}
-          <button
-            className="review-reload"
-            type="button"
-            onClick={() => setReloads((n) => n + 1)}
-            disabled={busy || loading}
-          >
-            Reload
+          <button className="review-reload" type="button" onClick={reload} disabled={busy || loading}>
+            <span>Reload</span>
+            {/* "Every choice shows its key", and this control is a choice the server asks the
+                operator to make by name in four of its refusals. */}
+            <kbd className="review-key">{RELOAD_KEY_LABEL}</kbd>
           </button>
           {counts === null ? null : (
             <span className="review-count">
@@ -869,22 +1389,29 @@ export function ReviewQueue() {
           it is missing does not compile. A panel about a state the type system now forbids is
           a panel nobody will ever see and everybody has to read. */}
 
-      {failure === null ? null : (
-        <div className="review-note">
-          <p className="review-note-text">{failure.message}</p>
-          {/* The code beneath the sentence and never the sentence again — a greppable token,
-              which is the whole of what the small line is for. */}
-          <p className="review-machine">{failure.code}</p>
-        </div>
-      )}
+      {/* A REFUSAL IS DRAWN HERE ONLY WHEN THERE IS NO CARD TO DRAW IT UNDER, which is a
+          failed `GET /queues` and nothing else. Every other refusal goes to the bottom of the
+          card, beneath the candidate rows — see `RefusalPanel` for the measurement that moved
+          it. This branch is what the header keeps: a read that produced no screen has to say
+          so where the screen would have been. */}
+      {current === null && refusal !== null ? (
+        <RefusalPanel refusal={refusal} onReload={reload} disabled={busy || loading} />
+      ) : null}
 
-      {rows === null && failure === null ? (
+      {rows === null && refusal === null ? (
         <p className="review-note-text">Reading the queues.</p>
       ) : null}
 
       {rows !== null && worklist.length === 0 ? (
         <p className="review-note-text">Nothing is waiting. Every queued card has been answered.</p>
       ) : null}
+
+      {/* The receipts, when there is no card to draw them inside — see `receiptPanel`.
+          BELOW THE TWO LINES ABOVE AND NOT OVER THEM: with the queue emptied, "Nothing is
+          waiting" is the state and the receipt is what just happened to get there, so it reads
+          in that order. Measured the other way round first, where the screen opened with a
+          receipt for a card and explained underneath it that there were no cards. */}
+      {current === null ? receiptPanel : null}
 
       {/* THE END OF THE SKIP LOOP, NAMED. Skip wraps, so the screen never stops advancing —
           but a card coming round for the second time looks exactly like a card that did not
@@ -921,6 +1448,9 @@ export function ReviewQueue() {
           onPhotoAbsent={() => setPhotoAbsent(current.key)}
           onChoose={(candidate) => answer(current, candidate)}
           onSkip={() => skip(current)}
+          refusal={refusal}
+          onReload={reload}
+          receipts={receiptPanel}
         />
       )}
 
@@ -947,11 +1477,155 @@ type CardProps = {
    *  to refuse. */
   onChoose: (candidate: CandidateRow) => void
   onSkip: () => void
+
+  /** The refusal the last write came back with, or null. Drawn at the bottom of this card
+   *  rather than above it — see `RefusalPanel`. */
+  refusal: Refusal | null
+  onReload: () => void
+
+  /** The standing undo receipts, already built, or null when there are none (D28).
+   *
+   *  A NODE AND NOT A LIST, because they are not this card's — they belong to cards already
+   *  answered, and this component is handed a place to put them rather than a reason to know
+   *  what they are. The alternative is passing `receipts` and `onUndo` down through a component
+   *  whose whole job is one card, which would make `Card` the thing that decides how an undo is
+   *  drawn. Where they go and why is at `receiptPanel`. */
+  receipts: ReactNode
+}
+
+/* WHERE THE EYE ALREADY IS, WHICH IS NOT WHERE THIS PANEL USED TO BE DRAWN.
+ *
+ * It was rendered between the header and the card. With the photo frame at 60vh that puts a
+ * refusal roughly 700px above the candidate rows the operator is looking at — off-screen at
+ * 1440x900, measured — so a refused answer was invisible at the moment it happened. The card
+ * had meanwhile been restored and was the next keypress's target, which is the worst possible
+ * pairing: an unseen refusal and a re-armed digit.
+ *
+ * ABOVE THE CANDIDATE ROWS WAS THE OBVIOUS FIX AND IT IS THE ONE THING THIS PANEL MAY NOT DO.
+ * Anything that appears between the sentence and the rows pushes every row down by its own
+ * height, which is precisely the movement D28 sent this session to remove. So it goes
+ * immediately BELOW the last candidate row: the closest place to the eye that cannot move a
+ * row, and the same reasoning `Facts` was moved to the bottom for.
+ *
+ * IT DRAWS ITS OWN RELOAD FOR A STALE REFUSAL, and only for those. The four codes in
+ * STALE_CODES all end their message by telling the operator to reload, and none of them
+ * restores the card — so the remedy is not the digit under his hand, and the header's button
+ * is a screen away. Every other refusal has already put the card back, where the remedy is to
+ * press the same digit again and the panel would be offering a detour.
+ *
+ * Not filled, like everything else on this screen. A refusal is not the one thing to do.
+ */
+function RefusalPanel({
+  refusal,
+  onReload,
+  disabled,
+}: {
+  refusal: Refusal
+  onReload: () => void
+  disabled: boolean
+}) {
+  return (
+    /* `role="alert"` because this panel now appears below the fold as often as not, and the
+       one thing it may not be is silent. It is owner-side, so a screen reader here is a
+       keyboard user's, not the Fulfiller's. */
+    <div className="review-note" role="alert">
+      <p className="review-note-text">{refusal.failure.message}</p>
+      {/* The code beneath the sentence and never the sentence again — a greppable token,
+          which is the whole of what the small line is for. The position rides with it because
+          the card this was about is usually no longer the card on screen: the answer advanced
+          before the write landed, and a stale one is never restored. */}
+      <p className="review-machine">
+        {refusal.failure.code}
+        {refusal.at === null ? '' : ` · ${refusal.at}`}
+      </p>
+      {STALE_CODES.has(refusal.failure.code) ? (
+        <button className="review-action" type="button" onClick={onReload} disabled={disabled}>
+          <span>Reload</span>
+          <kbd className="review-key">{RELOAD_KEY_LABEL}</kbd>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+/* THE UNDO RECEIPTS — D28's twenty seconds, drawn.
+ *
+ * ONE PANEL PER ANSWER, newest at the top, each with its own deadline. See `Receipt` for why
+ * this is a list and `UNDO_WINDOW_MS` for what the clock costs.
+ *
+ * IT REUSES `review-note`, WHICH IS `RefusalPanel`'s SHELL. Not a shortcut: this is the same
+ * kind of thing — a sentence, a machine line, and one control — sitting in the same slot, and a
+ * second panel style for it would be a second set of paddings and hairlines to keep in step
+ * with the first. The stylesheet is untouched by this change as a result.
+ *
+ * NOT FILLED, like everything else on this screen. `Card` has the rule in full: solid accent is
+ * reserved for a screen with exactly one thing to do, and this screen's whole business is a
+ * choice between rows. An undo is not that one thing either — it is the way back from a choice
+ * already made, which is what the Fulfiller's mark-sold undo is too, and that one is not filled
+ * on its own view.
+ *
+ * `role="status"` AND NOT `role="alert"`. The refusal panel is an alert because it reports a
+ * failure the operator may not be looking at; this reports a success and offers an option, and
+ * an assertive interruption on every single answer would make the screen unusable with a screen
+ * reader at exactly the pace this screen is built for.
+ */
+function Receipts({
+  receipts,
+  onUndo,
+  disabled,
+}: {
+  receipts: readonly Receipt[]
+  onUndo: (receipt: Receipt) => void
+  disabled: boolean
+}) {
+  return (
+    <>
+      {receipts.map((receipt, at) => (
+        <div className="review-note" role="status" key={receipt.key}>
+          <p className="review-note-text">{receipt.said}</p>
+          {/* The position, in the utility face, because the card this is about is no longer the
+              card on screen — the same capture `RefusalPanel` makes and for the same reason.
+              With several receipts standing this line is the only thing telling them apart, so
+              it is the identifier rather than decoration. */}
+          <p className="review-machine">{receipt.label}</p>
+          <button
+            className="review-action"
+            type="button"
+            onClick={() => onUndo(receipt)}
+            disabled={disabled}
+          >
+            <span>Undo</span>
+            {at === 0 ? (
+              <kbd className="review-key">{UNDO_KEY_LABEL}</kbd>
+            ) : (
+              /* A DASH RATHER THAN AN EMPTY BOX, the same treatment a tenth candidate row gets
+                 and the same reasoning: the key acts on the newest receipt, so an older one is
+                 answered with the mouse, and a blank where a chip belongs reads as a chip that
+                 failed to render rather than as a row that never had one. */
+              <span className="review-key-blank" aria-hidden="true" title="No key. Click this one.">
+                –
+              </span>
+            )}
+          </button>
+        </div>
+      ))}
+    </>
+  )
 }
 
 /* Photo first, then the finding, then the rows. Single column, so the same layout works on a
  * laptop and a phone — docs/DESIGN.md rejects a left/right split by name. */
-function Card({ row, activity, photoAbsent, onPhotoAbsent, onChoose, onSkip }: CardProps) {
+function Card({
+  row,
+  activity,
+  photoAbsent,
+  onPhotoAbsent,
+  onChoose,
+  onSkip,
+  refusal,
+  onReload,
+  receipts,
+}: CardProps) {
   const { entry } = row
   const parts = sentence(entry)
   const busy = activity !== null
@@ -1036,7 +1710,22 @@ function Card({ row, activity, photoAbsent, onPhotoAbsent, onChoose, onSkip }: C
                 {at < MAX_KEYED_CANDIDATES ? (
                   <kbd className="review-key">{at + 1}</kbd>
                 ) : (
-                  <span className="review-key-blank" aria-hidden="true" />
+                  /* A DASH RATHER THAN AN EMPTY BOX, AND THE BEHAVIOUR IS UNCHANGED. Rows
+                     past the ninth have no key — docs/DESIGN.md records that deviation and
+                     its reasoning, and this is not a reopening of it. What was wrong was
+                     silence: the blank held the column and said nothing, so a row with no key
+                     looked exactly like a row whose key had failed to render, on a screen
+                     where the operator's entire vocabulary is digits. The dash says the row
+                     is answered with the mouse, which is what the design decided.
+                     `aria-hidden`, because the glyph is a mark for the eye and a screen
+                     reader gets the row's name, condition and price either way. */
+                  <span
+                    className="review-key-blank"
+                    aria-hidden="true"
+                    title="No key. Click this row."
+                  >
+                    –
+                  </span>
                 )}
                 <span className="review-candidate-name">{candidate.name}</span>
                 <span className="review-candidate-condition">{candidate.condition}</span>
@@ -1062,6 +1751,17 @@ function Card({ row, activity, photoAbsent, onPhotoAbsent, onChoose, onSkip }: C
           ))}
         </ul>
       )}
+
+      {/* Beneath the rows, never above them. `RefusalPanel` holds the measurement and the
+          rule: this is the closest place to the eye that cannot move a candidate row. */}
+      {refusal === null ? null : (
+        <RefusalPanel refusal={refusal} onReload={onReload} disabled={busy} />
+      )}
+
+      {/* The undo receipts, in the same slot and for the same reason (D28). Under the refusal
+          rather than over it: a refusal is about the press just made and a receipt is about a
+          card already gone, so the newer thing is nearer the rows. */}
+      {receipts}
 
       <div className="review-actions">
         {/* Skip is the only control on this screen that is not a candidate row, and it is the
@@ -1134,8 +1834,44 @@ function Facts({ row }: { row: Row }) {
  * Three ways it can be absent, and they are different facts rather than one broken image:
  * the entry was never given a photo, the entry has no position to serve one from (box 0 is
  * `cli/resolve.py`'s marker for a pre-join failure, since D10 starts at 1), or the file is
- * gone from disk. Each says which, and prints what was asked for. */
-function Photo({ row, absent, onAbsent }: { row: Row; absent: boolean; onAbsent: () => void }) {
+ * gone from disk. Each says which, and prints what was asked for.
+ *
+ * ALL FOUR STATES ARE DRAWN INSIDE ONE RESERVED FRAME (D28), and that is the whole of the
+ * layout fix on this side of the wire. `.review-frame` holds the same height whether the
+ * image has loaded, is still loading, failed, or never existed — so the 538px round trip
+ * measured on the Gate B captures cannot happen, and the candidate rows below sit at one y
+ * for every card that carries the same reason. What still moves them is the sentence, by one
+ * 26px line where a reason has two; the number, the trade and why it is not reserved either
+ * are all in ReviewQueue.css beside the cap.
+ *
+ * A CARD WITH NO PHOTOGRAPH RESERVES THE SPACE TOO, which looks like waste and is the point.
+ * The alternative is a frame that collapses for exactly the entries the pipeline is least
+ * sure about — `no_position` and `identification_failed` have no photo by construction — so
+ * a mixed queue would move the rows on precisely the cards that most deserve a careful
+ * answer. A reserved box is only worth having if nothing is exempt from it. */
+function Photo(props: { row: Row; absent: boolean; onAbsent: () => void }) {
+  /* THE FRAME CARRIES NO BORDER, GROUND OR RADIUS OF ITS OWN. The border belongs to the
+     photograph, which still hugs its own edges exactly as it did before this wrapper existed
+     — docs/DESIGN.md records the alternative by name: a bordered box with a correct
+     photograph inside it and an equal area of empty surface beside it, which "looks like a
+     bug". A frame that reserves space and draws nothing is invisible when the photograph
+     fills it and invisible when it does not. */
+  return (
+    <div className="review-frame">
+      <PhotoContent {...props} />
+    </div>
+  )
+}
+
+function PhotoContent({
+  row,
+  absent,
+  onAbsent,
+}: {
+  row: Row
+  absent: boolean
+  onAbsent: () => void
+}) {
   const { entry } = row
 
   if (entry.box < 1) {
@@ -1211,9 +1947,40 @@ function Waiting({
   /** In skip order, which is the order the tail of this list is in. */
   deferred: readonly string[]
 }) {
+  /* WHAT THIS QUEUE IS MADE OF, in the pipeline's own strings and in descending count. Gate B
+   * is the argument: 16 of 53 cards queued and every one of them was
+   * `metadata_detection_disagreement` — systematic sheen under the rig's lighting rather than
+   * sixteen individual cards, which is a fact about the RIG and was worked out afterwards from
+   * the run report rather than seen on the screen that displayed all sixteen. A queue that is
+   * one reason repeated wants a different response from one with a spread in it, and D3 draws
+   * exactly that distinction: a run full of contradictions means a stack is misfiled, while
+   * disagreements scattered across a run mean individual cards are mis-sorted.
+   *
+   * ON THIS SECTION'S OWN HEADING AND NOT AT THE TOP OF THE SCREEN, which is where it was
+   * asked for. Every pixel above the card pushes the candidate rows further below the fold —
+   * they already start at y=911 of 900 at 1440x900 — and this list is where a shape is read
+   * against the rows that make it up. Nothing above the photograph moved to make room for it.
+   */
+  const shape = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const row of rows) counts.set(row.entry.reason, (counts.get(row.entry.reason) ?? 0) + 1)
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [rows])
+
   return (
     <section className="review-waiting">
-      <h2 className="review-waiting-title">Waiting</h2>
+      <h2 className="review-waiting-title">
+        <span>Waiting</span>
+        {/* The machine string with its count, biggest group first — `16
+            metadata_detection_disagreement` in Gate B's case. The reason code and not its
+            human label: this line is read against the worklist rows below it, which carry the
+            same string, and against the run report, which carries it again. */}
+        {shape.map(([reason, n]) => (
+          <span className="review-waiting-shape" key={reason}>
+            {n} {reason}
+          </span>
+        ))}
+      </h2>
       <ul className="review-waiting-list">
         {rows.map((row) => (
           <li
@@ -1223,7 +1990,12 @@ function Waiting({
             data-parked={row.queue === 'parked' ? 'true' : undefined}
             aria-current={row.key === currentKey ? 'true' : undefined}
           >
-            <span className="review-row-name">{text(row.entry.read.name) ?? 'not identified'}</span>
+            {/* `title` because this cell ellipsises: a long name — `Wally's Compassion -
+                132/132` is a real one from Gate B — is cut without a way to read the rest, and
+                this list is not pressable, so hover is the only affordance it can have. */}
+            <span className="review-row-name" title={text(row.entry.read.name) ?? undefined}>
+              {text(row.entry.read.name) ?? 'not identified'}
+            </span>
             <span className="review-row-price">{priceText(row.entry.market)}</span>
             <span className="review-row-position">{row.entry.label}</span>
             <span className="review-row-reason">

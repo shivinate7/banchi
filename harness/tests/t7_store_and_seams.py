@@ -60,6 +60,17 @@ case an existing section could not have failed on:
   queue it cannot order   `open_entries`), so a queue record with a non-numeric market or a
                           string box raised out of the health route.
 
+`check_origin_gate` IS THE ONLY SECURITY CONTROL THIS FILE WATCHES, and it is the only
+section that has to use real sockets. The server answered `Access-Control-Allow-Origin: *`
+on every route including `DELETE /inventory/<box>/<index>`, so any page the owner happened
+to have open in another tab could spend his inventory; the fix is an origin allowlist in
+`_dispatch`, ahead of every handler. It is unreachable from a `do_*` call — the gate reads a
+request HEADER, and an in-process call has none — so it went untested until 2026-08-23. The
+three properties easiest to break later each carry their reason at the assertion: a refusal
+changes nothing, an ABSENT `Origin` still writes (`curl`, `./pkmnscan` and this test send
+none, and requiring the header kills every command-line path at once), and `GET` stays open
+because `GET /photo` is loaded by an `<img>`, which sends no `Origin` either.
+
 `check_history` LANDED ON 2026-08-13 WITH THE LINES IT ASSERTS. Three routes here write
 without moving a card between states — the PUT correction, the undo and the review answer —
 and until that day none of them appended anything to `history.jsonl`, which `docs/DEBTS.md`
@@ -68,6 +79,39 @@ value a correction replaced, the boundary between two physical cards at one reus
 and which queue's offer a human chose from. It also asserts the two properties that make the
 new lines safe in a file another route reads — that no event name is a listing state, and
 that a logged event is discarded when the write it rides in raises.
+
+THREE SECTIONS LANDED ON 2026-08-23 FOR THE MULTI-GAME FOUNDATION (D20-D25), and each was
+named by the work that shipped the code rather than invented here:
+
+  `check_capture_claim_chain`   `store/master.py:CAPTURE_CLAIM_FIELDS` against `Card`, and
+                                the two hops docs/DEBTS.md says fail SILENTLY — the reload
+                                filter and the re-record upsert. Asserted over the tuple, so
+                                it grows with it; naming today's claims would pass on the day
+                                a fifth is added and dropped.
+  `check_game_and_note_seam`    D21's `game` and D23's `note` through the same seam
+                                `check_sidecar_seam` guards, plus `GET /games`. A game that
+                                reaches `inventory.json` and not the sidecar is a Riftbound
+                                card read by the Pokemon prompt and priced off the Pokemon
+                                export.
+  `check_box_routes_and_search` D20's three box routes and `GET /search`. Nothing had
+                                called `do_boxes`, `do_create_box`, `do_put_box` or
+                                `do_search` at all — `check_boxes_and_listings` asserts the
+                                STORE beneath them, which is a different question: a rule
+                                that is right behind a route nobody can reach correctly is
+                                still a box counted against the wrong denominator on the one
+                                screen built to repair it.
+
+TWO MORE SECTIONS LANDED ON 2026-08-23 FOR D26'S PAIR OF ROUTES, the day the routes did.
+`check_retire` mirrors `check_mark_sold` refusal for refusal — the two terminal states are
+siblings, and the rules asserted on one door are asserted on the other — plus the rules
+that exist only because there are two doors now: the `already_sold` <-> `card_retired`
+refusal pair, the deliberate asymmetry that a retirement moves no `live` count, and the
+reason that must survive a reversed retirement in the history line alone. `check_reshoot`
+covers the replace-in-place: the old bytes GONE rather than archived (an archived copy
+under the capture root is a paid Batch request — the same money rule `check_sidecar_seam`
+asserts), the sidecar rebuilt from the RECORD so a drifted one is repaired rather than
+trusted, and the `reshot` line carrying both capture ids — the only trace the first
+photograph ever existed.
 
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
@@ -105,7 +149,7 @@ from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
 from identify import sidecar  # noqa: E402
-from pipeline import join, tcgcsv, variant  # noqa: E402
+from pipeline import games, join, tcgcsv, variant  # noqa: E402
 from server import capture_server  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
@@ -121,6 +165,10 @@ PASS_CRITERIA = (
 # Enough to satisfy the server's magic-number check. It verifies rather than decodes — see
 # the JPEG_MAGIC comment there — so a real image would only make this test slower.
 JPEG = b"\xff\xd8\xff" + b"\x00" * 64
+
+# A second, distinguishable blob for the re-shoot cases: same magic, different bytes, so
+# "the old photo is GONE" (D26: replaced, not archived) is a comparison this file can lose.
+JPEG_RESHOT = b"\xff\xd8\xff" + b"\x11" * 64
 
 # Two rows the pipeline would have offered for one collector number, built through
 # `cli/resolve.py:_candidate_rows`'s six keys rather than by hand, so the shape 7b's routes
@@ -243,6 +291,129 @@ def capture_payload(box: int, **extra) -> dict:
     payload = {"box": box, "image": base64.b64encode(JPEG).decode("ascii")}
     payload.update(extra)
     return payload
+
+
+# --------------------------------------------------------------- the command-seam fixture
+#
+# REAL ROWS FROM THE COMMITTED EXPORT, cut down to three. The join matches on `TCGplayer Id`
+# and the routing turns on the prices, so an invented row would be testing the fixture. Three
+# because that is the smallest set that carries both shapes the ladder needs: a number with
+# two condition rows, which the capture toggle decides (D3 rung 1), and a holofoil-only
+# number, which the catalog decides on its own (rung 2).
+FIXTURE_EXPORT = Path(__file__).resolve().parents[2] / "fixtures" / "sv09_export_untouched.csv"
+
+DUNSPARCE_SKU = "8608459"  # 120/159 Near Mint, market 2.06
+DUNSPARCE_REVERSE_SKU = "8608464"  # 120/159 Near Mint Reverse Holofoil, market 2.60
+ARTICUNO_SKU = "8608859"  # 161/159 Near Mint Holofoil, market 22.03 — one row, no toggle
+SEAM_SKUS = (DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU)
+
+
+def write_export(path, *, live=None):
+    """A Filtered Export holding the three seam rows. `live` overrides `Total Quantity`.
+
+    That column is the one D8 and D11 make authoritative and the one `./pkmnscan join` reads
+    a SKU's `live` count from, so every case below that moves `live` moves it by rewriting
+    this file rather than by writing the number it expects to read back.
+    """
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    by_sku = source.by_sku()
+    rows = []
+    for sku in SEAM_SKUS:
+        row = dict(by_sku[sku])
+        if live is not None and sku in live:
+            row[tcgcsv.LIVE_QUANTITY_COLUMN] = str(live[sku])
+        rows.append(row)
+    tcgcsv.write_csv(path, source.header, rows)
+    return Path(path)
+
+
+def write_staged(path, quantities):
+    """An Export From Staged: the seam rows, with `Add to Quantity` set per SKU.
+
+    `Add to Quantity` is the column `emit` wrote and the only one that can carry a STAGED
+    quantity. `Total Quantity` is deliberately set to a DIFFERENT number by every caller
+    below, so a command reading the wrong column cannot pass.
+    """
+    source = tcgcsv.read_export(FIXTURE_EXPORT)
+    by_sku = source.by_sku()
+    rows = []
+    for sku, quantity in quantities.items():
+        rows.append(
+            dict(
+                by_sku[sku],
+                **{
+                    tcgcsv.QUANTITY_COLUMN: str(quantity),
+                    tcgcsv.LIVE_QUANTITY_COLUMN: "97",
+                },
+            )
+        )
+    tcgcsv.write_csv(path, source.header, rows)
+    return Path(path)
+
+
+def identifications_for(cards) -> dict:
+    """An `identifications.json` payload, shaped as `cli/cmd_identify.py` writes it.
+
+    Field for field, because `cli/resolve.py` reads it back key by key: a hand-made payload
+    that drifted from that shape would test the fixture instead of the seam. Each entry is
+    `(box, index, name, number, finish)`; a null finish is a card with no capture toggle,
+    which is what sends the ladder to rung 2.
+    """
+    return {
+        "prompt_fingerprint": "t7-seam",
+        "cards": {
+            master.position_key(box, index): {
+                "photo": str(capture_server.photo_path(box, index)),
+                "box": box,
+                "index": index,
+                "set_hint": None,
+                "metadata_finish": finish,
+                "status": "ok",
+                "error": None,
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": finish,
+                },
+            }
+            for box, index, name, number, finish in cards
+        },
+    }
+
+
+def seam_run(checks: Checks, cards, *, live=None):
+    """A joined run over `cards`, in whatever isolated home is current. Returns the run.
+
+    Captures a photo per card through the real route first, so the store holds the same
+    positions the identifications name — the ordinary case. The one case that deliberately
+    skips this is the position `emit` has never seen, which builds its payload by hand.
+    """
+    for box, index, *_ in cards:
+        while Store().read().inventory.next_index(box) <= index:
+            capture_server.do_capture(capture_payload(box))
+    run_dir = runs.create("t7-seam")
+    run_dir.write_identifications(identifications_for(cards))
+    export = write_export(run_dir.path("export.csv"), live=live)
+    said = command(checks, "join", str(run_dir.directory), "--export", str(export))
+    return runs.open_run(run_dir.directory), said
+
+
+def command(checks: Checks, *argv):
+    """Run one `./pkmnscan` subcommand and return what it printed. Exit 0 or a failure.
+
+    Through `cli/__main__.py:main` rather than by importing the command module, because the
+    dispatch and the argument defaults are part of the seam: a flag whose default moved would
+    otherwise be invisible here.
+    """
+    from cli import __main__ as entry
+
+    with quiet() as said:
+        code = entry.main(list(argv))
+    text = said.getvalue()
+    checks.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
+    return text
 
 
 def refusal(checks: Checks, fn, code: str, label: str) -> None:
@@ -418,7 +589,7 @@ def check_allocator(checks: Checks) -> None:
         "a state outside the enum is refused, never coerced",
     )
     checks.ok(
-        not master.Inventory().set_state("99/99", master.PUSHED),
+        not master.Inventory().set_state("99/99", master.IDENTIFIED),
         "set_state on an unknown position returns False rather than pretending (v1 bug 5)",
     )
 
@@ -575,8 +746,8 @@ def check_server_routes(checks: Checks) -> None:
 
         checks.equal(
             capture_server.PUT_FIELDS,
-            ("set_hint", "variant"),
-            "and the settable set is exactly set_hint and variant",
+            ("set_hint", "variant", "game", "rarity_claim", "note"),
+            "and the settable set is every capture claim, in the order the store names them",
         )
 
         # Three captures reached this box, not four: the replay above returned the third
@@ -639,8 +810,12 @@ def check_server_routes(checks: Checks) -> None:
             "names a position that does not exist, which is the one thing a label may never "
             "do (D10)",
         )
+        # `.get` rather than an index, so a MISSING label is reported as the failure it is
+        # instead of raising a KeyError that would hide every check behind it. The
+        # assertion itself is unchanged and is not softened: a neighbour's label is either
+        # the one `join.Position` renders or this line is red.
         checks.equal(
-            broken_inventory["cards"]["3/2"]["label"],
+            broken_inventory["cards"]["3/2"].get("label"),
             join.Position(3, 2).label,
             "and one bad record does not take the route down: every other row keeps its "
             "label, on the route the app polls",
@@ -765,21 +940,73 @@ def check_undo(checks: Checks) -> None:
             "undo at `identified` is ALLOWED — only the identification fee is lost",
         )
 
-        # Refused at `pushed`: `emit` has written the card's row into an import file, and a
-        # file on disk would now disagree with the inventory.
+        # Refused once `emit` has written the card's row into an import file, because a file
+        # on disk would now disagree with the inventory. THE FACT MOVED IN v2 AND THE GUARD
+        # HAD TO MOVE WITH IT: `pushed` is a count on the SKU's `Listing` and no longer a
+        # state a card wears, so this used to be `set_state("3/2", master.PUSHED)` and is a
+        # listing count now. The card itself reads `identified`, which is ON the undo
+        # allowlist — asserted below rather than assumed, because that is exactly what makes
+        # the state check alone insufficient and this case load-bearing.
+        checks.raises(
+            master.UnknownState,
+            lambda: Store().read().inventory.set_state("3/2", master.PUSHED),
+            "`pushed` is not a card state any more — set_state refuses it, so the old guard "
+            "cannot be reached for by accident",
+        )
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/2", master.PUSHED)
+            snapshot.inventory.set_state(
+                "3/2", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
+            )
+            snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").bump(
+                master.PUSHED, 1
+            )
+        checks.ok(
+            Store().read().inventory.get("3/2").state in capture_server.UNDOABLE_STATES,
+            "the card's own state is UNDOABLE — after v2 a pushed copy reads `identified`, "
+            "so a state check on its own would hard-delete a card TCGplayer has been told "
+            "about",
+        )
         refusal(
             checks,
             lambda: capture_server.do_delete_card(3, 2),
             "undo_too_late",
-            "undo at `pushed` refuses: its row is already in an import file",
+            "and undo still refuses: its SKU's row is already in an import file (D7 amended "
+            "— the fact lives on the listing, not on the card)",
         )
         checks.ok(
             Store().read().inventory.get("3/2") is not None
             and capture_server.photo_path(3, 2).is_file(),
             "and the refusal reached neither the record nor the photo",
         )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_card(3, 2),
+            "the refusal is a BadRequest the dispatcher can answer with",
+        )
+        if caught is not None:
+            checks.ok(
+                "8608859" in str(caught) and "1 pushed" in str(caught),
+                "and it names the SKU and how many copies are out of this Mac — a refusal "
+                "that does not say what is holding the card costs a round trip",
+                f"message was: {caught}",
+            )
+
+        # The other two stages hold it just as hard: `pushed` is where D10 draws the line,
+        # and everything past it is further out of reach, not less.
+        for stage in (master.STAGED, master.LIVE):
+            with Store().write() as snapshot:
+                entry = snapshot.inventory.listing("8608859")
+                entry.set(master.PUSHED, 0)
+                entry.set(stage, 1)
+            refusal(
+                checks,
+                lambda: capture_server.do_delete_card(3, 2),
+                "undo_too_late",
+                f"a SKU sitting at `{stage}` refuses the undo too — D10's line is `emit`, "
+                f"and every stage past it is further out of reach",
+            )
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("8608859").set(master.LIVE, 0)
 
         # State is read before position. This card is neither the newest nor undoable, and
         # the answer that matters is the second one: the other order would send the
@@ -884,11 +1111,19 @@ def check_undo(checks: Checks) -> None:
 
     # Wiring, asserted because it is invisible from Python and fatal from a browser: without
     # DELETE in the preflight answer the request is refused before the server ever sees it.
-    methods = dict(capture_server.CORS_HEADERS)["Access-Control-Allow-Methods"]
+    # Read off `ALL_METHODS` rather than the single `CORS_HEADERS` tuple this used to name —
+    # the header is built per request now, and the constant is what an ALLOWED origin is told.
     checks.ok(
-        "DELETE" in methods,
+        "DELETE" in capture_server.ALL_METHODS,
         "CORS advertises DELETE — a preflight that omits it refuses the undo at the browser",
-        f"methods: {methods}",
+        f"methods: {capture_server.ALL_METHODS}",
+    )
+    checks.ok(
+        "DELETE" not in capture_server.SAFE_METHODS,
+        "and an origin this server does not know is told GET and OPTIONS only, so the one "
+        "route that destroys anything cannot be preflighted from a page the owner never "
+        "opened",
+        f"safe methods: {capture_server.SAFE_METHODS}",
     )
     checks.ok(
         hasattr(capture_server.CaptureHandler, "do_DELETE"),
@@ -1327,6 +1562,27 @@ def check_review_answer(checks: Checks) -> None:
             "the returned card is a decorated inventory row — the same shape GET "
             "/inventory answers with, so the app needs no second vocabulary for a card",
         )
+        checks.equal(
+            body["restores_to"],
+            {"sku": None, "condition": None},
+            "and what an undo would put back: the pair of NULLS a never-identified card "
+            "held, which is the NORMAL case and not an empty one — a card is in a review "
+            "queue precisely because it has never carried a SKU, and the reversal returns "
+            "it to carrying none (D28)",
+        )
+        checks.ok(
+            body.get("undone") is False,
+            "and which direction the call went, false rather than absent, the way the "
+            "sale route says it",
+            f"undone was: {body.get('undone')!r}",
+        )
+        checks.equal(
+            last_event("3/1").get("restores_to"),
+            {"sku": None, "condition": None},
+            "and the `answered` HISTORY line carries the same pair — THE BLOCKER'S "
+            "REGRESSION: the line used to log only what the route WROTE, never what it "
+            "overwrote, so nothing anywhere could say what an undo should put back",
+        )
 
         answered = Store().read()
         checks.equal(answered.inventory.get("3/1").sku, reverse["sku"], "the sku reaches the card")
@@ -1494,6 +1750,375 @@ def check_review_answer(checks: Checks) -> None:
             "chosen, not that the model's read was vouched for",
         )
 
+    # ------------------------------------------------------------- the reversal (D28)
+    # {"undo": true} on the same route, in its own home: the last two cases corrupt the
+    # history log, and everything above reads a store whose log is intact.
+    checks.note("")
+    checks.note("REVIEW ANSWER UNDO — the same route, reversed (D28)")
+
+    prior = {"sku": DUNSPARCE_SKU, "condition": "Near Mint"}
+
+    with isolated_home():
+        for _ in range(6):
+            capture_server.do_capture(capture_payload(3))
+
+        with Store().write() as snapshot:
+            # 3/1 CARRIED A REAL PAIR BEFORE THE ANSWER — the case the null-pair answer
+            # above cannot cover — and sits in BOTH files, so its undo has two entries to
+            # reopen. first_seen is seeded to a fixed day on both, because "the undo does
+            # not reset how long the card has been waiting" is unfalsifiable against
+            # today().
+            snapshot.inventory.set_state(
+                "3/1", master.IDENTIFIED, sku=prior["sku"], condition=prior["condition"]
+            )
+            snapshot.review.upsert(entry(3, 1, market="12.00"))
+            snapshot.parked.upsert(
+                entry(3, 1, market="0.05", candidates=[dict(STALE_CANDIDATE)])
+            )
+            snapshot.review.entries["3/1"].first_seen = "2026-08-01"
+            snapshot.parked.entries["3/1"].first_seen = "2026-08-01"
+            # 3/2 WAS ANSWERED BY A SERVER OLDER THAN `restores_to` — the entry is cleared
+            # and the card carries a SKU, but its `answered` line records only what was
+            # written. Hand-built inside the store's own write, because no current route
+            # can produce this line any more; that is the point of the case.
+            snapshot.inventory.set_state(
+                "3/2",
+                master.IDENTIFIED,
+                sku=DUNSPARCE_REVERSE_SKU,
+                condition="Near Mint Reverse Holofoil",
+            )
+            snapshot.review.upsert(entry(3, 2, market="12.00"))
+            snapshot.review.entries["3/2"].cleared_by_human = True
+            capture_server._history(
+                snapshot.inventory,
+                capture_server.ANSWERED,
+                "3/2",
+                sku=DUNSPARCE_REVERSE_SKU,
+                condition="Near Mint Reverse Holofoil",
+                queue=queues.MAIN,
+                reason="metadata_detection_disagreement",
+            )
+            # 3/3 is captured and in no queue at all. 3/4 waits OPEN in review. 3/5 and
+            # 3/6 are the two listing-hold cases below.
+            snapshot.review.upsert(entry(3, 4, market="12.00"))
+            snapshot.review.upsert(entry(3, 5, market="12.00"))
+            snapshot.review.upsert(entry(3, 6, market="12.00"))
+
+        # The refusals that need no answer standing, first.
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"undo": True, "sku": "123"}),
+            "field_not_settable",
+            "an undo CARRYING A SKU is refused rather than obeyed with the sku silently "
+            "ignored — the two directions accept different fields, and a body claiming "
+            "both at once is a client that does not know which call it is making",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"undo": "true"}),
+            "undo_invalid",
+            "and `undo` must be a JSON boolean — the string \"true\" refuses, the same "
+            "rule the sale's flag was shaped by, because a string is not a boolean and "
+            "this flag's two readings are do-it and undo-it",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(9, 9, {"undo": True}),
+            "card_not_found",
+            "an undo against a position holding no card refuses as card_not_found — a "
+            "position with no record has nothing to reverse ONTO",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 3, {"undo": True}),
+            "not_in_queue",
+            "a card in NEITHER queue file refuses in its own code: the question is gone "
+            "entirely, and the remedy is another card, not a retry",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 4, {"undo": True}),
+            "not_answered",
+            "and an OPEN entry refuses in a third — nothing cleared it, so there is no "
+            "answer standing to take back",
+        )
+
+        # ------------------------------------------------ the pair the answer overwrote
+        overwrote = capture_server.do_review_answer(3, 1, good)
+        checks.equal(
+            overwrote["restores_to"],
+            dict(prior),
+            "an answer over a card that already carried a SKU reports the REAL pair it "
+            "overwrote, not nulls — read off the card inside the lock, the last moment "
+            "anything knows it",
+        )
+        checks.equal(
+            last_event("3/1").get("restores_to"),
+            dict(prior),
+            "and the `answered` line carries the same real pair — the other half of the "
+            "blocker's regression: the null-pair line above cannot tell `logged the prior "
+            "pair` from `logged a default`",
+        )
+
+        # THE D28 BOUNDARY, FIRST SIDE: while the answer stands, store/queues.py holds the
+        # door shut exactly as it did before reopen existed.
+        with Store().write() as snapshot:
+            requeued = snapshot.review.upsert(entry(3, 1, market="99.00"))
+            kept = snapshot.review.release(["3/2", "3/4", "3/5", "3/6"])
+        # `.get`, not a subscript, here and below: an entry these cases can lose IS the
+        # failure under test, and last_event's rule applies — a bare ["3/1"] turns that
+        # red line into a KeyError that hides every check behind it.
+        shut = Store().read().review.entries.get("3/1")
+        checks.ok(
+            not requeued
+            and shut is not None
+            and shut.cleared_by_human
+            and shut.market == "12.00",
+            "while the answer stands, Queue.upsert refuses to re-queue the position — "
+            "the entry is untouched, still cleared, still carrying its old fields",
+            f"requeued={requeued!r} entry={shut!r}",
+        )
+        checks.ok(
+            kept == [] and shut is not None,
+            "and Queue.release keeps the cleared entry even when a run stops naming it — "
+            "the answer outlives the question (D28's boundary, first side)",
+            f"released: {kept!r}",
+        )
+
+        # --------------------------------------------------------- the successful undo
+        # Wrapped, because a refusal here is the plausible regression: every guard this
+        # route runs sits in front of the one write the case is about, and an exception
+        # escaping would hide the store-side assertions below it.
+        undone = answers(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"undo": True}),
+            "an undo inside the window goes through — the window is the screen's, so the "
+            "server's only question is whether an answer is standing",
+        )
+        if undone is not None:
+            checks.ok(undone["undone"], "and it reports itself as a reversal")
+            checks.equal(
+                undone["sku"],
+                prior["sku"],
+                "and the pair the answer overwrote is back on the card — the sku",
+            )
+            checks.equal(
+                undone["condition"], prior["condition"], "and the condition with it"
+            )
+            checks.equal(
+                undone["restores_to"],
+                None,
+                "restores_to is null on the reversal — nothing left to reverse, never an "
+                "offer of a second undo",
+            )
+            checks.ok(
+                undone["review_reopened"] and undone["parked_reopened"],
+                "and BOTH files got their entries back for a position held by both — "
+                "reopening one would leave the card half-answered, waiting on one screen "
+                "and cleared on the other",
+            )
+        reopened = Store().read()
+        checks.equal(
+            reopened.inventory.get("3/1").sku, prior["sku"], "the store agrees on the sku"
+        )
+        checks.equal(
+            reopened.inventory.get("3/1").condition,
+            prior["condition"],
+            "and on the condition",
+        )
+        checks.equal(
+            reopened.inventory.get("3/1").state,
+            master.IDENTIFIED,
+            "and the card's STATE never moved — the answer set no state, so its reversal "
+            "sets none back",
+        )
+        in_review = reopened.review.entries.get("3/1")
+        in_parked = reopened.parked.entries.get("3/1")
+        checks.ok(
+            in_review is not None
+            and in_parked is not None
+            and not in_review.cleared_by_human
+            and not in_parked.cleared_by_human,
+            "the entries are open again in both files, waiting exactly as before",
+        )
+        checks.ok(
+            in_review is not None
+            and in_parked is not None
+            and in_review.first_seen == "2026-08-01"
+            and in_parked.first_seen == "2026-08-01",
+            "and first_seen is untouched on both — the card has been waiting since it "
+            "was first queued, and an answer that stood for twenty seconds does not "
+            "reset that",
+            f"first_seen: {in_review and in_review.first_seen!r}",
+        )
+
+        # THE D28 BOUNDARY, SECOND SIDE: after reopen there is no answer left to guard.
+        with Store().write() as snapshot:
+            snapshot.review.upsert(
+                entry(3, 1, market="99.00", candidates=[dict(STALE_CANDIDATE)])
+            )
+        requeued_entry = Store().read().review.entries.get("3/1")
+        checks.ok(
+            requeued_entry is not None
+            and requeued_entry.market == "99.00"
+            and not requeued_entry.cleared_by_human,
+            "after reopen, Queue.upsert MAY re-queue the position — the refusal above "
+            "guarded an answer, and there is no answer left to guard",
+            f"entry={requeued_entry!r}",
+        )
+        checks.ok(
+            requeued_entry is not None and requeued_entry.first_seen == "2026-08-01",
+            "and even the re-queue keeps first_seen: upsert preserves it on an existing "
+            "entry",
+            f"first_seen: {requeued_entry and requeued_entry.first_seen!r}",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 1, {"undo": True}),
+            "not_answered",
+            "a SECOND undo of one answer refuses as not_answered — the reopened entry IS "
+            "the guard against a double reversal; nothing has to remember the first one "
+            "happened",
+        )
+
+        # ------------------------------------------------------------ the listing hold
+        capture_server.do_review_answer(
+            3, 5, {"sku": holo["sku"], "condition": holo["condition"]}
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(holo["sku"], condition=holo["condition"]).set(
+                master.STAGED, 2
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 5, {"undo": True}),
+            "undo_too_late",
+            "an undo of a card whose SKU has a non-zero listing stage refuses — undo "
+            "stops at emit, or an import file and then TCGplayer would be left holding a "
+            "listing the inventory no longer claims",
+        )
+        late = Store().read()
+        late_entry = late.review.entries.get("3/5")
+        checks.ok(
+            late.inventory.get("3/5").sku == holo["sku"]
+            and late_entry is not None
+            and late_entry.cleared_by_human,
+            "and the answer still STANDS afterwards — a refusal changes nothing, on the "
+            "card or in the queue",
+            f"sku={late.inventory.get('3/5').sku!r}",
+        )
+
+        # The same hold, met at ANSWER time instead of at the tap that would have failed.
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(
+                reverse["sku"], condition=reverse["condition"]
+            ).set(master.PUSHED, 1)
+        held_body = capture_server.do_review_answer(3, 6, good)
+        checks.equal(
+            held_body["restores_to"],
+            None,
+            "an answer whose SKU already has a listing hold reports restores_to NULL — "
+            "the undo it would announce has already been decided against, and a control "
+            "offered for a refused reversal has exactly one behaviour",
+        )
+        checks.equal(
+            last_event("3/6").get("restores_to"),
+            {"sku": None, "condition": None},
+            "while the `answered` history line still records the pair — the two "
+            "deliberately disagree: the log states what is true, the field answers "
+            "whether to draw a button",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(3, 6, {"undo": True}),
+            "undo_too_late",
+            "and the null kept its promise: the undo is refused",
+        )
+
+        # ------------------------------------------------- when history cannot answer
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(3, 2, {"undo": True}),
+            "an answer whose newest `answered` line has no restores_to refuses — a log "
+            "written by a server that predates the field cannot say what to put back, "
+            "and nothing here guesses",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "answer_origin_unknown",
+                "in sold_origin_unknown's twin code",
+            )
+            checks.ok(
+                "records no answer" in str(caught),
+                "and the message says the LINE is what is missing, since the other cause "
+                "of this code is a file to go and repair",
+                f"message was: {caught}",
+            )
+        stale = Store().read()
+        stale_entry = stale.review.entries.get("3/2")
+        checks.ok(
+            stale.inventory.get("3/2").sku == DUNSPARCE_REVERSE_SKU
+            and stale_entry is not None
+            and stale_entry.cleared_by_human,
+            "and the refusal changed nothing: the answer stands and the entry stays "
+            "cleared",
+        )
+
+        # A LOG THAT WILL NOT PARSE COSTS THE REVERSAL AND NOTHING ELSE — the answer
+        # direction never reads history, only appends to it, which is the asymmetry
+        # `_answer_origin`'s docstring claims and this pair of cases holds it to.
+        with open(Store().history_path, "a", encoding="utf-8") as handle:
+            handle.write("{not json\n")
+        blind = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                3,
+                1,
+                {
+                    "sku": STALE_CANDIDATE["sku"],
+                    "condition": STALE_CANDIDATE["condition"],
+                },
+            ),
+            "the ANSWER direction still writes through a corrupt log",
+        )
+        if blind is not None:
+            checks.equal(
+                Store().read().inventory.get("3/1").sku,
+                STALE_CANDIDATE["sku"],
+                "and the sku reached the card",
+            )
+            checks.equal(
+                blind["restores_to"],
+                dict(prior),
+                "and it still reports restores_to — the pair is read off the CARD inside "
+                "the lock, never out of the log",
+            )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_answer(3, 1, {"undo": True}),
+            "the REVERSAL is what the corrupt line costs, and it refuses rather than "
+            "guessing a pair back",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "answer_origin_unknown",
+                "in the same code the missing line gets — one refusal, one condition: "
+                "history cannot say",
+            )
+            checks.ok(
+                "history.jsonl" in str(caught) and "could not be read" in str(caught),
+                "but the message names the file to repair",
+                f"message was: {caught}",
+            )
+        checks.equal(
+            Store().read().inventory.get("3/1").sku,
+            STALE_CANDIDATE["sku"],
+            "and the failed reversal changed nothing",
+        )
+
 
 # ------------------------------------------------------------------------------ mark sold
 
@@ -1503,8 +2128,14 @@ def check_mark_sold(checks: Checks) -> None:
 
     TWO RULES, AND THEY PULL IN OPPOSITE DIRECTIONS. A sale must not remove anything — the
     record and the position both survive, permanently — while the undo `docs/DESIGN.md`
-    requires on every mark-sold must put back the exact state the card came from, which for a
-    real order pull is as likely to be `pushed` or `staged` as `live`.
+    requires on every mark-sold must put back the exact state the card came from.
+
+    WHAT v2 CHANGED HERE. The states a card can be sold out of are `captured` and
+    `identified` and nothing else: `pushed`, `staged` and `live` are quantities on the SKU's
+    `Listing` (D7 amended), so a listed card still reads `identified` and the reversal has to
+    read the CARD rather than the listing. That is asserted below against a SKU whose listing
+    is fully live — the case that would have restored to `live` under the old model, and the
+    reason this section was rewritten rather than re-pointed.
     """
     checks.note("")
     checks.note("MARK SOLD — POST /inventory/<box>/<index>/sold")
@@ -1514,9 +2145,15 @@ def check_mark_sold(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            for state in (master.PUSHED, master.STAGED, master.LIVE):
-                snapshot.inventory.set_state("3/1", state)
-            snapshot.inventory.set_state("3/2", master.PUSHED)
+            snapshot.inventory.set_state(
+                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
+            )
+            # The SKU is out on TCGplayer, and 3/1 is one of its copies. Under the
+            # per-position model this card would have WORN `live`; here the quantity sits on
+            # the listing and the card's own state is what the reversal must read.
+            snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").set(
+                master.LIVE, 1
+            )
 
         refusal(
             checks,
@@ -1542,12 +2179,27 @@ def check_mark_sold(checks: Checks) -> None:
         sold = capture_server.do_mark_sold(3, 1, {})
         checks.equal(sold["state"], master.SOLD, "a sale moves the card to `sold`")
         checks.ok(not sold["undone"], "and reports that it was a sale, not a reversal")
-        checks.equal(sold["previous_state"], master.LIVE, "naming the state it came from")
+        checks.equal(
+            sold["previous_state"], master.IDENTIFIED, "naming the state it came from"
+        )
         checks.equal(
             sold["restores_to"],
-            master.LIVE,
+            master.IDENTIFIED,
             "and what an undo would put back, so the control can be offered — or not — at "
             "the moment of the sale rather than at the tap that would have failed",
+        )
+        checks.equal(
+            Store().read().inventory.listing_for("8608859").live,
+            0,
+            "AND THE SKU'S `live` COUNT FALLS BY ONE — the half of a sale that used to be "
+            "free. A sold copy simply stopped wearing `live` before v2; the number is a "
+            "quantity now, and nothing decrements it unless this route does",
+        )
+        checks.equal(
+            (sold["listing"] or {}).get("live"),
+            0,
+            "and the response says so, because a Fulfiller pulling the third of four wants "
+            "to see what is still live without a second request",
         )
 
         after = Store().read()
@@ -1580,22 +2232,30 @@ def check_mark_sold(checks: Checks) -> None:
         # -------------------------------------------------------------- the reversal
         back = capture_server.do_mark_sold(3, 1, {"undo": True})
         checks.ok(back["undone"], "an undo reports itself as a reversal")
-        checks.equal(back["state"], master.LIVE, "and puts the card back where it was")
+        checks.equal(back["state"], master.IDENTIFIED, "and puts the card back where it was")
         checks.equal(back["previous_state"], master.SOLD, "from sold")
         checks.equal(
             back["restores_to"], None, "with nothing left to reverse"
         )
         checks.equal(
             Store().read().inventory.get("3/1").state,
-            master.LIVE,
+            master.IDENTIFIED,
             "and the store agrees",
         )
         checks.equal(
+            Store().read().inventory.listing_for("8608859").live,
+            1,
+            "and the SKU's `live` count goes back up with it — the reversal is exact on "
+            "both halves of what the sale moved",
+        )
+        checks.equal(
             [e.get("event") for e in events_for("3/1")],
-            [master.CAPTURED, master.PUSHED, master.STAGED, master.LIVE, master.SOLD, master.LIVE],
-            "history reads `live, sold, live` — a reversal is two real transitions and needs "
-            "no event of its own, which is why this route added none when the three writes "
-            "beside it did (see `check_history`)",
+            [master.CAPTURED, master.IDENTIFIED, master.SOLD, master.IDENTIFIED],
+            "history reads `identified, sold, identified` — a reversal is two real "
+            "transitions and needs no event of its own, which is why this route added none "
+            "when the three writes beside it did (see `check_history`). Three lines shorter "
+            "than it was: the listing stages are quantities on a SKU now, and a quantity "
+            "moving is not a transition of this card",
         )
 
         refusal(
@@ -1605,21 +2265,31 @@ def check_mark_sold(checks: Checks) -> None:
             "and reversing a card that is not sold refuses in its own code",
         )
 
-        # THE REASON THE PRIOR STATE IS READ AND NOT ASSUMED. An order pull before any
-        # Export From Staged has been run touches cards at `pushed`; restoring one of those
-        # to `live` would claim TCGplayer is showing quantity against a SKU it has never
-        # been told about.
-        pushed = capture_server.do_mark_sold(3, 2, {})
+        # THE REASON THE PRIOR STATE IS READ AND NOT ASSUMED. This case used to sell a card
+        # out of `pushed`, on the grounds that an order pull before any Export From Staged
+        # touches cards at that stage. `pushed` is a quantity on the SKU now (D7 amended), so
+        # the same point is made one state lower down: a card that never left `captured` must
+        # come back to `captured`, and the route must not decide from the outside that
+        # anything it sold had been listed.
+        unlisted = capture_server.do_mark_sold(3, 2, {})
         checks.equal(
-            pushed["restores_to"],
-            master.PUSHED,
-            "a card sold out of `pushed` restores to PUSHED, not to live — the reversal is "
-            "exact rather than assuming the card was listed",
+            unlisted["restores_to"],
+            master.CAPTURED,
+            "a card sold out of `captured` restores to CAPTURED — the reversal is exact "
+            "rather than assuming the card was listed",
         )
         checks.equal(
             capture_server.do_mark_sold(3, 2, {"undo": True})["state"],
-            master.PUSHED,
+            master.CAPTURED,
             "and the reversal actually puts that state back",
+        )
+        checks.equal(
+            unlisted["listing"],
+            None,
+            "and a card with no SKU moves no listing count — `Inventory.listing()` creates "
+            "on read, so this route peeks instead: a sale of a never-emitted card would "
+            "otherwise invent a listing of zeros, and its reversal would then bump `live` "
+            "to 1 for a copy nothing ever pushed",
         )
 
         # ASSUMPTION, asserted so a later change to it is visible rather than silent.
@@ -1708,11 +2378,16 @@ def check_mark_sold(checks: Checks) -> None:
 
     # Wiring, invisible from Python and fatal from a browser: a preflight that does not
     # advertise POST refuses both of 7b's writes before the server ever sees them.
-    methods = dict(capture_server.CORS_HEADERS)["Access-Control-Allow-Methods"]
     checks.ok(
-        "POST" in methods,
+        "POST" in capture_server.ALL_METHODS,
         "CORS advertises POST, which both 7b writes travel on",
-        f"methods: {methods}",
+        f"methods: {capture_server.ALL_METHODS}",
+    )
+    checks.ok(
+        "POST" not in capture_server.SAFE_METHODS,
+        "and not to an origin this server does not know — a page the owner never opened "
+        "cannot preflight a sale",
+        f"safe methods: {capture_server.SAFE_METHODS}",
     )
     checks.equal(
         capture_server.SOLD_FIELDS,
@@ -1763,6 +2438,706 @@ def last_event(key: str) -> dict:
     """
     events = events_for(key)
     return events[-1] if events else {}
+
+
+# --------------------------------------------------------------------------------- retire
+
+
+def check_retire(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/retire — D26's departure without a sale.
+
+    `sold`'s SIBLING, AND THE SECTION MIRRORS `check_mark_sold` DELIBERATELY, refusal for
+    refusal: a terminal state, a kept record, a permanent gap, one route in both directions.
+    What is asserted beyond the mirror is exactly what makes it a second door rather than a
+    copy of the first: the REASON, which travels onto the record, into the history line and
+    back in the response, and must survive the reversal in the history line ALONE; the
+    `already_sold` <-> `card_retired` pair, each naming the other's reversal route; and the
+    deliberate asymmetry that a retirement moves no `live` count — `live` estimates
+    TCGplayer, which never saw a retirement — while `copies_on_hand` shrinks, which is what
+    keeps a departed copy out of D7's refill arithmetic.
+    """
+    checks.note("")
+    checks.note("RETIRE — POST /inventory/<box>/<index>/retire")
+
+    with isolated_home():
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(3))
+
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state(
+                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
+            )
+            # The SKU is out on TCGplayer with one live copy — the shape that makes the
+            # no-decrement assertion below able to fail in either direction.
+            snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").set(
+                master.LIVE, 1
+            )
+
+        # ----------------------------------------------------------------- the refusals
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(9, 9, {"reason": "damaged"}),
+            "card_not_found",
+            "a retirement against a position that holds no card refuses — this route "
+            "never creates one",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {}),
+            "retire_reason_invalid",
+            "a retirement with no reason refuses: the reason is the one fact about the "
+            "departure the record cannot re-derive later",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {"reason": "ate_it"}),
+            "retire_reason_invalid",
+            "and one outside RETIRE_REASONS refuses in the same code — the vocabulary is "
+            "closed so the history stays greppable; free text would be a second `note`",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {"state": "retired"}),
+            "field_not_settable",
+            "a body naming a field this route does not set refuses before anything else",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {"undo": True, "reason": "damaged"}),
+            "field_not_settable",
+            "and a body carrying BOTH `undo` and a reason refuses — a client that has "
+            "confused the two directions, whose reason would otherwise be silently ignored",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {"undo": "yes"}),
+            "undo_invalid",
+            "`undo` must be a JSON boolean, exactly as on the sale",
+        )
+
+        checks.equal(
+            len(Store().read().inventory.copies_on_hand("8608859")),
+            1,
+            "before the retirement the copy is on hand — the baseline the shrink below "
+            "is measured against",
+        )
+
+        # --------------------------------------------------------------- the retirement
+        gone = capture_server.do_retire(3, 1, {"reason": "damaged"})
+        checks.equal(gone["state"], master.RETIRED, "a retirement moves the card to `retired`")
+        checks.ok(not gone["undone"], "and reports that it was a retirement, not a reversal")
+        checks.equal(
+            gone["previous_state"], master.IDENTIFIED, "naming the state it came from"
+        )
+        checks.equal(
+            gone["restores_to"],
+            master.IDENTIFIED,
+            "and what an undo would put back, known at the moment of the write rather "
+            "than at the tap that would have failed",
+        )
+        checks.equal(gone["reason"], "damaged", "the response carries the reason")
+
+        after = Store().read()
+        checks.equal(
+            after.inventory.get("3/1").retire_reason,
+            "damaged",
+            "THE REASON LANDS ON THE RECORD — a `retired` state with no reason answers "
+            "none of the questions the state exists for",
+        )
+        retired_line = last_event("3/1")
+        checks.equal(
+            retired_line.get("event"), master.RETIRED, "the history line is the state's own"
+        )
+        checks.equal(
+            retired_line.get("reason"),
+            "damaged",
+            "AND THE REASON IS ON THE HISTORY LINE — the one-or-neither rule "
+            "Inventory.retire exists to hold together, and the only record of WHY once "
+            "the reversal below clears the field",
+        )
+        checks.equal(
+            retired_line.get("sku"),
+            "8608859",
+            "with the SKU it left as, the way a sale's line carries it",
+        )
+
+        checks.equal(
+            after.inventory.listing_for("8608859").live,
+            1,
+            "AND `live` DOES NOT MOVE — the deliberate asymmetry with the sale: `live` "
+            "estimates TCGplayer's own quantity, and TCGplayer never saw a retirement. "
+            "The listing is still up with one fewer copy behind it, and pulling it down "
+            "is a TCGplayer action the next join observes (D8, D11)",
+        )
+        checks.equal(
+            after.inventory.copies_on_hand("8608859"),
+            [],
+            "what shrinks is `copies_on_hand` — a retired copy has left the box, and "
+            "counting it would put it back into D7's refill arithmetic",
+        )
+
+        checks.ok(
+            after.inventory.get("3/1") is not None,
+            "RETIRED IS A STATE, NEVER A REMOVAL (D26, same shape as D10's sale): the "
+            "record survives",
+        )
+        checks.equal(
+            after.inventory.next_index(3),
+            5,
+            "and the position is a permanent gap — the next capture steps past it",
+        )
+        checks.ok(
+            capture_server.photo_path(3, 1).is_file(),
+            "and the capture photo survives, which is what lets the retirement be "
+            "questioned later",
+        )
+        checks.equal(
+            capture_server.do_status()["states"][master.RETIRED],
+            1,
+            "GET /status counts it retired",
+        )
+
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_retire(3, 1, {"reason": "lost"}),
+            "retiring it twice refuses — one physical card, one departure",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "already_retired",
+                "in its own code",
+            )
+            checks.ok(
+                "damaged" in str(caught),
+                "and the refusal ECHOES THE STANDING REASON — the second operator learns "
+                "why it already left instead of just that it did",
+                f"message was: {caught}",
+            )
+
+        # -------------------------------------------- the pair, and the capture-undo
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_mark_sold(3, 1, {}),
+            "SELLING A RETIRED CARD REFUSES — a sale recorded over a retirement would "
+            "replace the record of a departure with a transaction that did not happen",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
+            checks.ok(
+                "/inventory/3/1/retire" in str(caught),
+                "and it names the RETIRE route as the way back — a retired card that "
+                "genuinely sells is two honest steps, reverse then sell",
+                f"message was: {caught}",
+            )
+
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_card(3, 1),
+            "capture-undo still refuses a retired card — UNDOABLE_STATES is an allowlist "
+            "and `retired` is not on it, so a departure is never erased by deleting the "
+            "record of it",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "undo_too_late",
+                "in the same code a sold card gets — one code, two remedies",
+            )
+            checks.ok(
+                "/inventory/3/1/retire" in str(caught),
+                "and the message names the RETIRE route, not the sale's — 'reverse the "
+                "sale' on a retired card sends the operator to a route that will refuse",
+                f"message was: {caught}",
+            )
+
+        # ------------------------------------------------------------------ the reversal
+        back = capture_server.do_retire(3, 1, {"undo": True})
+        checks.ok(back["undone"], "an undo reports itself as a reversal")
+        checks.equal(back["state"], master.IDENTIFIED, "and puts the card back where it was")
+        checks.equal(back["previous_state"], master.RETIRED, "from retired")
+        checks.equal(back["restores_to"], None, "with nothing left to reverse")
+        checks.equal(back["reason"], None, "and no reason on the response any more")
+
+        restored = Store().read()
+        checks.equal(
+            restored.inventory.get("3/1").state, master.IDENTIFIED, "the store agrees"
+        )
+        checks.equal(
+            restored.inventory.get("3/1").retire_reason,
+            None,
+            "THE REVERSAL CLEARS `retire_reason` — a captured or identified card carrying "
+            "one would read as a fifth state nothing defines",
+        )
+        history_reasons = [
+            e.get("reason") for e in events_for("3/1") if e.get("event") == master.RETIRED
+        ]
+        checks.equal(
+            history_reasons,
+            ["damaged"],
+            "WHILE THE HISTORY LINE KEEPS IT — that line is where a reversed "
+            "retirement's reason survives, exactly as `unanswered` leaves the "
+            "`answered` line standing",
+        )
+        checks.equal(
+            [e.get("event") for e in events_for("3/1")],
+            [master.CAPTURED, master.IDENTIFIED, master.RETIRED, master.IDENTIFIED],
+            "history reads `identified, retired, identified` — a reversal is two real "
+            "transitions and needs no event of its own, the same shape as the sale's",
+        )
+        checks.equal(
+            restored.inventory.listing_for("8608859").live,
+            1,
+            "and `live` still has not moved in either direction — the asymmetry holds "
+            "on the way back too",
+        )
+        checks.equal(
+            len(restored.inventory.copies_on_hand("8608859")),
+            1,
+            "while the copy is back on hand",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(3, 1, {"undo": True}),
+            "not_retired",
+            "and reversing a card that is not retired refuses in its own code",
+        )
+
+        # The pair's other direction: a sold card left by the other door.
+        capture_server.do_mark_sold(3, 2, {})
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_retire(3, 2, {"reason": "lost"}),
+            "RETIRING A SOLD CARD REFUSES the mirror way — it would overwrite the record "
+            "of a real sale",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "already_sold", "in its own code")
+            checks.ok(
+                "/inventory/3/2/sold" in str(caught),
+                "naming the SALE's reversal route — the pair is what keeps each terminal "
+                "state's history clean enough for the other's reversal to read",
+                f"message was: {caught}",
+            )
+
+        # ------------------------------------------------- the reader guard, both ways
+        # A card that was retired, un-retired, listed and sold. The `retired` line is in
+        # its history, and the sale's reversal must restore the true prior state — never
+        # `retired`: leaving `retired` logged the restored state on top, so the backwards
+        # scan meets that first.
+        capture_server.do_retire(3, 3, {"reason": "pulled"})
+        capture_server.do_retire(3, 3, {"undo": True})
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/3", master.IDENTIFIED)
+        sold = capture_server.do_mark_sold(3, 3, {})
+        checks.equal(
+            sold["restores_to"],
+            master.IDENTIFIED,
+            "a sale on a card whose history carries a `retired` line still restores to "
+            "IDENTIFIED — the reversed retirement logged the restored state on top, so "
+            "the scan never reaches the `retired` line",
+        )
+        checks.equal(
+            capture_server.do_mark_sold(3, 3, {"undo": True})["state"],
+            master.IDENTIFIED,
+            "and the reversal actually puts that state back — never `retired`",
+        )
+
+        # A HAND-BUILT HISTORY WHERE THE SCAN MEETS `retired` DIRECTLY UNDER `sold`.
+        # Unreachable through the routes — `card_retired` refuses the sale of a retired
+        # card — so it means the file was edited by hand, and the scan must refuse rather
+        # than choose either wrong answer: returning `retired` resurrects a departed card
+        # under a live listing, and scanning past it silently erases the retirement.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["7/1"] = master.Card(
+                box=7, index=1, state=master.SOLD
+            )
+        with open(Store().history_path, "a", encoding="utf-8") as handle:
+            for event, extra in (
+                (master.CAPTURED, {}),
+                (master.RETIRED, {"reason": "lost"}),
+                (master.SOLD, {}),
+            ):
+                handle.write(
+                    json.dumps(
+                        {"at": master.now(), "event": event, "position": "7/1", **extra}
+                    )
+                    + "\n"
+                )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_mark_sold(7, 1, {"undo": True}),
+            "a `retired` line directly under the `sold` line REFUSES the sale's reversal "
+            "— neither resurrected nor skipped",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "sold_origin_unknown",
+                "in the code that names a file to go and look at",
+            )
+        checks.equal(
+            Store().read().inventory.get("7/1").state,
+            master.SOLD,
+            "and the refusal changed nothing",
+        )
+
+        # The mirror: a `sold` line directly under a `retired` one is the same hand-edit
+        # seen from the other door, and restoring to it would fabricate a sale this store
+        # never recorded.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["7/2"] = master.Card(
+                box=7, index=2, state=master.RETIRED, retire_reason="lost"
+            )
+        with open(Store().history_path, "a", encoding="utf-8") as handle:
+            for event in (master.CAPTURED, master.SOLD, master.RETIRED):
+                handle.write(
+                    json.dumps({"at": master.now(), "event": event, "position": "7/2"})
+                    + "\n"
+                )
+        refusal(
+            checks,
+            lambda: capture_server.do_retire(7, 2, {"undo": True}),
+            "retired_origin_unknown",
+            "and a `sold` line directly under a `retired` one refuses the retirement's "
+            "reversal the mirror way — restoring to it would fabricate a sale",
+        )
+
+        # ------------------------------------- origin unknown: null means no undo offered
+        # A record the store holds with no history at all — a truncated or hand-edited
+        # log. The retirement itself is never blocked (the card really has left the box;
+        # unrecorded is worse than unreversible), but `restores_to` is null, and null is
+        # the app's signal not to offer undo. The reversal attempted anyway refuses.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["8/1"] = master.Card(
+                box=8, index=1, state=master.CAPTURED
+            )
+        orphan = capture_server.do_retire(8, 1, {"reason": "given_away"})
+        checks.equal(
+            orphan["restores_to"],
+            None,
+            "a retirement with no earlier state in history still records — degrading to "
+            "`origin unknown`, so what is lost is the undo control, never the record",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_retire(8, 1, {"undo": True}),
+            "and `restores_to: null` means exactly what it says: the reversal refuses "
+            "rather than guessing a state back",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "retired_origin_unknown",
+                "in its own code — `sold_origin_unknown`'s twin, for the twin operation",
+            )
+        checks.equal(
+            Store().read().inventory.get("8/1").retire_reason,
+            "given_away",
+            "and the failed reversal left the reason standing — nothing was half-cleared",
+        )
+
+    # Wiring, mirrored from the sale's block for the mirror route.
+    checks.equal(
+        capture_server.RETIRE_FIELDS,
+        ("reason", "undo"),
+        "the retirement's whole body is the reason and the undo flag — the position is "
+        "in the path and the state is a constant",
+    )
+    checks.equal(
+        master.RETIRE_REASONS,
+        ("pulled", "damaged", "lost", "given_away"),
+        "the reasons are a closed vocabulary, named as an allowlist so a fifth is "
+        "refused by default until it is argued for",
+    )
+    checks.equal(
+        master.TERMINAL_STATES,
+        (master.SOLD, master.RETIRED),
+        "and the two doors out are exactly the two terminal states — `copies_on_hand` "
+        "filters on this tuple, so a third door added without joining it would be "
+        "counted as still in the box",
+    )
+    checks.ok(
+        capture_server._RETIRE_RE.match("/inventory/3/17/retire") is not None
+        and capture_server._RETIRE_RE.match("/inventory/3/17") is None,
+        "the retirement matches /inventory/<box>/<index>/retire and nothing shorter",
+    )
+    checks.ok(
+        capture_server._INVENTORY_ITEM_RE.match("/inventory/3/17/retire") is None,
+        "and the PUT/DELETE path is anchored, so a retirement can never be read as a "
+        "correction or as an undo of the capture",
+    )
+
+
+# -------------------------------------------------------------------------------- re-shoot
+
+
+def check_reshoot(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/photo — D26's replace-in-place.
+
+    NOT A DELETE, NOT A CAPTURE. The photo and sidecar are replaced at an existing
+    position — record untouched, position label unchanged, allocator never involved — which
+    is the remedy D10's undo cannot be: undo reaches only the newest capture, and a bad
+    photograph is usually discovered later than that.
+
+    THE THREE RULES ASSERTED HARDEST: the old bytes are GONE, because D26 says replaced
+    rather than archived and an archived copy under the capture root is a paid Batch
+    request for a card that does not exist twice; the sidecar is rebuilt from the RECORD,
+    never from the request, so a drifted sidecar is repaired rather than trusted and a
+    re-shoot cannot smuggle in a correction; and the `reshot` history line carries BOTH
+    capture ids, because it is the only trace the first photograph ever existed.
+    """
+    checks.note("")
+    checks.note("RE-SHOOT — POST /inventory/<box>/<index>/photo")
+
+    reshoot_payload = {
+        "image": base64.b64encode(JPEG_RESHOT).decode("ascii"),
+        "capture_id": "t7-shot-three",
+    }
+
+    with isolated_home():
+        capture_server.do_capture(
+            capture_payload(3, set_hint="sv9", variant="holo", capture_id="t7-shot-one")
+        )
+        capture_server.do_capture(capture_payload(3, capture_id="t7-shot-two"))
+
+        # ----------------------------------------------------------------- the refusals
+        refusal(
+            checks,
+            lambda: capture_server.do_reshoot(9, 9, dict(reshoot_payload)),
+            "card_not_found",
+            "a re-shoot of a position that holds no card refuses — a new card is a "
+            "capture, POST /capture",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_reshoot(
+                3, 1, dict(reshoot_payload, variant="normal")
+            ),
+            "field_not_settable",
+            "a body smuggling a claim refuses — changing what the operator SAID is the "
+            "PUT route's job, with its `corrected` history line",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_reshoot(
+                3, 1, {"image": base64.b64encode(JPEG_RESHOT).decode("ascii")}
+            ),
+            "capture_id_required",
+            "a re-shoot with no capture_id refuses — one id per photograph, exactly as "
+            "at capture, and it is what makes the replay below detectable",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_reshoot(
+                3, 1, dict(reshoot_payload, capture_id="t7-shot-two")
+            ),
+            "an id another card already holds refuses — writing it would poison the "
+            "replay lookup with a DuplicateCaptureId for every later capture",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "capture_id_in_use", "in its own code"
+            )
+            checks.ok(
+                "3/2" in str(caught),
+                "and the refusal names the card holding it",
+                f"message was: {caught}",
+            )
+
+        # -------------------------------------------------------- the drift, then the fix
+        # A sidecar that disagrees with the record — the drift this route must repair
+        # rather than preserve. Written directly, because nothing in the product can
+        # produce it: the seed is the hazard, not a path.
+        photo = capture_server.photo_path(3, 1)
+        drifted = capture_server.sidecar_path(photo)
+        files.write_json(
+            drifted, {"box": 3, "index": 1, "variant": "normal", "set_hint": "swsh1"}
+        )
+        checks.equal(
+            sidecar.scan(capture_server.captures_root())[0].metadata_finish,
+            "normal",
+            "the seeded drift is REAL — the reader believes the drifted sidecar, which "
+            "is what makes the repair below a repair and not a restatement",
+        )
+
+        before = Store().read().inventory.get("3/1")
+        captured_at = before.captured_at
+        checks.equal(before.capture_id, "t7-shot-one", "and the record still names shot one")
+        checks.equal(photo.read_bytes(), JPEG, "and the first photograph is on disk")
+
+        body = capture_server.do_reshoot(3, 1, dict(reshoot_payload))
+
+        checks.equal(
+            photo.read_bytes(),
+            JPEG_RESHOT,
+            "THE BYTES ON DISK ARE THE NEW PHOTOGRAPH'S — same path, same position, "
+            "allocator never involved",
+        )
+        jpgs = sorted(
+            p.name for p in photo.parent.iterdir() if p.suffix == capture_server.PHOTO_SUFFIX
+        )
+        checks.equal(
+            jpgs,
+            sorted({photo.name, capture_server.photo_path(3, 2).name}),
+            "and the OLD PHOTO IS GONE — replaced, not archived (D26): an archived copy "
+            "under the capture root would be scanned as a third capture and billed as one",
+        )
+        checks.equal(
+            len(sidecar.scan(capture_server.captures_root())),
+            2,
+            "scan() still finds exactly two captures, so the re-shoot costs one "
+            "identification, not two",
+        )
+
+        repaired = sidecar.scan(capture_server.captures_root())[0]
+        checks.equal(
+            repaired.set_hint,
+            "sv9",
+            "THE SIDECAR IS REBUILT FROM THE RECORD: the drifted hint is repaired...",
+        )
+        checks.equal(
+            repaired.metadata_finish,
+            "holo",
+            "...and the drifted finish with it — a sidecar the reader cannot trust to "
+            "match the record would send D3 rung 1 a claim nobody made",
+        )
+        checks.equal(
+            body.get("sidecar"),
+            str(drifted),
+            "and the response names the sidecar it rebuilt",
+        )
+
+        after = Store().read().inventory.get("3/1")
+        checks.equal(
+            after.capture_id,
+            "t7-shot-three",
+            "the record's capture_id is the NEW photograph's — it names the photograph "
+            "stored at the position, and that is now this one",
+        )
+        checks.equal(body.get("capture_id"), "t7-shot-three", "and the response agrees")
+        checks.equal(
+            after.captured_at,
+            captured_at,
+            "while `captured_at` is UNTOUCHED — it describes the capture session, not "
+            "the picture, and Gate C's cadence measurements read it",
+        )
+        checks.equal(after.state, master.CAPTURED, "and the state has not moved")
+
+        reshot_line = last_event("3/1")
+        checks.equal(
+            reshot_line.get("event"),
+            capture_server.RESHOT,
+            "the history line is `reshot` — an event, never a state",
+        )
+        checks.equal(
+            reshot_line.get("capture_id"),
+            "t7-shot-three",
+            "carrying the new photograph's id...",
+        )
+        checks.equal(
+            reshot_line.get("replaced_capture_id"),
+            "t7-shot-one",
+            "...AND the id it replaced — this line is the only trace the first "
+            "photograph ever existed, the boundary between two pictures the way "
+            "`removed` is the boundary between two cards at one reused index",
+        )
+        checks.equal(
+            [e.get("event") for e in events_for("3/1")],
+            [master.CAPTURED, capture_server.RESHOT],
+            "and the card's history reads `captured, reshot` — the record was untouched, "
+            "so no state transition was logged",
+        )
+
+        # ------------------------------------------------------------------- the replay
+        # The lost-response retry: the same request re-sent finds its own id already on
+        # this card and rewrites the same bytes, burning nothing.
+        replay = answers(
+            checks,
+            lambda: capture_server.do_reshoot(3, 1, dict(reshoot_payload)),
+            "a replay of the same re-shoot, with its own id, ANSWERS rather than refusing",
+        )
+        if replay is not None:
+            checks.equal(
+                replay.get("capture_id"), "t7-shot-three", "with the same id on the record"
+            )
+        replayed = Store().read().inventory
+        checks.equal(
+            photo.read_bytes(), JPEG_RESHOT, "the same bytes are on disk"
+        )
+        checks.equal(
+            len(replayed.cards),
+            2,
+            "no record was created",
+        )
+        checks.equal(
+            replayed.next_index(3),
+            3,
+            "and no position was burned — the retry costs nothing, exactly as a "
+            "capture replay costs nothing",
+        )
+
+        # ------------------------------------------------------- the two closed doors
+        capture_server.do_mark_sold(3, 2, {})
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_reshoot(3, 2, dict(reshoot_payload, capture_id="t7-shot-four")),
+            "a SOLD card refuses — its stored photo is the record of what was sold, and "
+            "replacing it would swap the evidence a dispute is answered with",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "card_sold", "in its own code")
+            checks.ok(
+                "/inventory/3/2/sold" in str(caught),
+                "naming the sale's reversal as the way back",
+                f"message was: {caught}",
+            )
+        capture_server.do_mark_sold(3, 2, {"undo": True})
+        capture_server.do_retire(3, 2, {"reason": "damaged"})
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_reshoot(3, 2, dict(reshoot_payload, capture_id="t7-shot-four")),
+            "and a RETIRED card refuses — a photo of a card that left is a photo of "
+            "nothing",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "card_retired", "in its own code")
+            checks.ok(
+                "/inventory/3/2/retire" in str(caught),
+                "naming the retirement's reversal as its way back — two codes, because "
+                "the remedies differ",
+                f"message was: {caught}",
+            )
+        checks.equal(
+            capture_server.photo_path(3, 2).read_bytes(),
+            JPEG,
+            "and neither refusal touched the photograph",
+        )
+
+    # Wiring, mirrored from the sale's block.
+    checks.equal(
+        capture_server.RESHOOT_FIELDS,
+        ("image", "capture_id"),
+        "the re-shoot's whole body is the photograph and its id — no claims, so a "
+        "re-shoot cannot smuggle in a correction",
+    )
+    checks.ok(
+        capture_server._RESHOOT_RE.match("/inventory/3/17/photo") is not None
+        and capture_server._RESHOOT_RE.match("/inventory/3/17") is None,
+        "the re-shoot matches /inventory/<box>/<index>/photo and nothing shorter",
+    )
+    checks.ok(
+        capture_server._INVENTORY_ITEM_RE.match("/inventory/3/17/photo") is None,
+        "and the PUT/DELETE path is anchored, so a re-shoot can never be read as a "
+        "correction or an undo",
+    )
+    checks.ok(
+        capture_server._RESHOOT_RE.match("/photo/3/17") is None
+        and capture_server._PHOTO_RE.match("/inventory/3/17/photo") is None,
+        "and it shares no path with D6's GET /photo — a browser prefetch can never "
+        "become a write, nor a re-shoot a read",
+    )
 
 
 def check_history(checks: Checks) -> None:
@@ -2043,6 +3418,60 @@ def check_history(checks: Checks) -> None:
             "report and in review.json — docs/DESIGN.md keeps that one string greppable, "
             "and this is the fourth place it reads the same",
         )
+        checks.equal(
+            answered.get("restores_to"),
+            {"sku": None, "condition": None},
+            "and the pair the answer REPLACED — the blocker's regression (D28): this "
+            "line used to log only what was written, so the log held everything needed "
+            "to audit an answer and nothing needed to reverse one",
+        )
+
+        # ------------------------------------------------- the answer's reversal (D28)
+        # Wrapped for `answers`' reason: the reversal refusing IS a failure mode of the
+        # lines under test, and an escape here would hide the hazard walk at the end of
+        # this section — the one case in this file that guards a live-bug shape.
+        answers(
+            checks,
+            lambda: capture_server.do_review_answer(5, 1, {"undo": True}),
+            "the answer can be taken back",
+        )
+        unanswered = last_event("5/1")
+        checks.equal(
+            unanswered.get("event"),
+            capture_server.UNANSWERED,
+            "an undo of the answer appends `unanswered` — without it the log says a SKU "
+            "went onto this card and never says it came off",
+        )
+        checks.equal(
+            unanswered.get("withdrew"),
+            {"sku": reverse["sku"], "condition": reverse["condition"]},
+            "carrying what came OFF the card...",
+        )
+        checks.equal(
+            unanswered.get("restored"),
+            {"sku": None, "condition": None},
+            "...and what went back on — both pairs, because neither is derivable from "
+            "the other once the card has moved on again",
+        )
+        checks.equal(
+            unanswered.get("queues"),
+            queues.MAIN,
+            "and which files got their entries back",
+        )
+        before = len(Store().history())
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(5, 1, {"undo": True}),
+            "not_answered",
+            "a refused undo still refuses",
+        )
+        checks.equal(
+            len(Store().history()),
+            before,
+            "and appends nothing — the line rides the route's own Store.write(), so a "
+            "route that raises commits no history: nothing was withdrawn, and nothing "
+            "claims it was",
+        )
 
         # ----------------------------------------------- and none of them is a state
         checks.equal(
@@ -2052,27 +3481,66 @@ def check_history(checks: Checks) -> None:
             "this file for the last event naming a state, so a collision would restore a "
             "reversed sale to `corrected`",
         )
+        checks.ok(
+            capture_server.UNANSWERED in capture_server.SERVER_EVENTS,
+            "and `unanswered` is IN the tuple that check runs over — the disjointness "
+            "above covers it only for as long as it is a member",
+            f"SERVER_EVENTS: {capture_server.SERVER_EVENTS}",
+        )
+        checks.ok(
+            capture_server.RESHOT in capture_server.SERVER_EVENTS,
+            "and so is `reshot` — D26's fifth route-written event, an event and never a "
+            "state: the card is the same card in the same state, only its picture changed",
+            f"SERVER_EVENTS: {capture_server.SERVER_EVENTS}",
+        )
+        checks.ok(
+            master.RETIRED in master.STATES
+            and master.RETIRED not in capture_server.SERVER_EVENTS,
+            "while `retired` sits on the OTHER side of the line and only there — it IS a "
+            "state, logged by Inventory.retire through the store's own _log, and putting "
+            "it in SERVER_EVENTS too would be the exact name collision D26 renamed the "
+            "state (from `removed`) to avoid",
+            f"STATES: {master.STATES}; SERVER_EVENTS: {capture_server.SERVER_EVENTS}",
+        )
 
         # THE PATH THAT COLLISION WOULD BREAK, walked end to end rather than argued. A card
         # corrected after it went live has a `corrected` line sitting directly under its
         # `sold` line, which is exactly where the backwards scan starts looking.
         capture_server.do_capture(capture_payload(6))
         with Store().write() as snapshot:
-            for state in (master.PUSHED, master.STAGED, master.LIVE):
-                snapshot.inventory.set_state("6/1", state)
+            snapshot.inventory.set_state("6/1", master.IDENTIFIED)
         capture_server.do_put_card(6, 1, {"set_hint": "sv9"})
         sold = capture_server.do_mark_sold(6, 1, {})
         checks.equal(
             sold["restores_to"],
-            master.LIVE,
-            "a card corrected between going live and being sold still restores to LIVE — "
-            "the scan skips every non-state event, which is what makes the new lines safe "
-            "to add to a file another route reads",
+            master.IDENTIFIED,
+            "a card corrected between being identified and being sold still restores to "
+            "IDENTIFIED — the scan skips every non-state event, which is what makes the new "
+            "lines safe to add to a file another route reads",
         )
         checks.equal(
             capture_server.do_mark_sold(6, 1, {"undo": True})["state"],
-            master.LIVE,
+            master.IDENTIFIED,
             "and the reversal actually puts that state back, past the correction",
+        )
+
+        # THE SAME HAZARD, ONE EVENT NEWER (D28). 5/1's history now reads captured,
+        # identified, answered, unanswered — so the `unanswered` line sits directly under
+        # the `sold` line this sale appends, which is exactly where the backwards scan
+        # starts looking. A scan that did not skip it would either restore a reversed
+        # sale to `unanswered` or refuse a reversal it owes.
+        hazard = capture_server.do_mark_sold(5, 1, {})
+        checks.equal(
+            hazard["restores_to"],
+            master.IDENTIFIED,
+            "a card sold with an `unanswered` line under the sale still restores to "
+            "IDENTIFIED — _state_before_sale skips it the way it skips `corrected` and "
+            "`resectioned`, and never hands it to set_state as a state",
+        )
+        checks.equal(
+            capture_server.do_mark_sold(5, 1, {"undo": True})["state"],
+            master.IDENTIFIED,
+            "and the reversal actually puts that state back, past the withdrawn answer",
         )
 
 
@@ -2168,6 +3636,551 @@ def check_sidecar_seam(checks: Checks) -> None:
         )
 
 
+# ------------------------------------------------------------------ the capture-claim chain
+
+
+def check_capture_claim_chain(checks: Checks) -> None:
+    """`store/master.py:CAPTURE_CLAIM_FIELDS` — the tuple, and the two silences it closed.
+
+    `docs/DEBTS.md` names ten hops between the control on the capture screen and the
+    consumer that finally reads a claim, and says TWO OF THEM FAIL SILENTLY. Both are here,
+    because both are the same shape: the value is written, the response is correct, the file
+    on disk carries it, and something later hands back a card that never had it.
+
+      `Inventory.parse` filters on `Card.__annotations__`. A claim the dataclass does not
+      declare is dropped on reload. The filter is right — it is why `capture_id` could not
+      live in the sidecar alone — and the silence is the debt.
+
+      `record_capture` upserts the claim list onto an incumbent. It used to be a literal
+      three-name tuple, so a fourth claim would survive a first capture and be discarded by
+      every RE-RECORD, which is the harder failure to see: it works until the operator
+      corrects a card.
+
+    ASSERTED OVER THE TUPLE RATHER THAN OVER TODAY'S FOUR NAMES, which is the only version
+    of this test worth having. Naming `game` and `note` here would pass on the day a fifth
+    claim is added and dropped — the exact failure the tuple exists to stop. Every case below
+    iterates the tuple, so it grows with it.
+    """
+    checks.note("")
+    checks.note("CAPTURE CLAIM CHAIN — store/master.py:CAPTURE_CLAIM_FIELDS")
+
+    undeclared = [
+        name
+        for name in master.CAPTURE_CLAIM_FIELDS
+        if name not in master.Card.__annotations__
+    ]
+    checks.equal(
+        undeclared,
+        [],
+        "every capture claim is declared on `Card` — an undeclared one is written, "
+        "answered, stored, and dropped by the next reload with nothing said",
+    )
+
+    unbound = [
+        name
+        for name in master.CAPTURE_CLAIM_FIELDS
+        if name not in capture_server.CLAIM_WIRE_NAMES
+        and name not in capture_server.DERIVED_CLAIMS
+    ]
+    checks.equal(
+        unbound,
+        [],
+        "and every one has a wire name or is declared derived — a claim with neither "
+        "reaches inventory.json and never the sidecar, which is what identify reads",
+    )
+
+    # The behavioural half of the annotation filter. A tuple that agrees with the dataclass
+    # proves the two lists match; only a round trip proves the claim is still there.
+    marks = {name: f"mark-{name}" for name in master.CAPTURE_CLAIM_FIELDS}
+    inventory = master.Inventory()
+    inventory.record_capture(master.Card(box=7, index=1, **marks))
+    reloaded = master.Inventory.parse(inventory.to_payload())
+    checks.equal(
+        {name: getattr(reloaded.cards["7/1"], name) for name in marks},
+        marks,
+        "and every claim survives the JSON round trip `Inventory.parse` filters — the "
+        "first of the two silent hops, asserted as a value rather than as a name",
+    )
+
+    # THE RE-RECORD, which is the hop that worked until the operator corrected a card. A
+    # second `record_capture` at the same position takes the existing-record branch and
+    # copies the claims over the incumbent; a list of three would leave the fourth behind.
+    inventory.record_capture(
+        master.Card(box=7, index=1, **{name: f"re-{name}" for name in marks})
+    )
+    checks.equal(
+        {name: getattr(inventory.cards["7/1"], name) for name in marks},
+        {name: f"re-{name}" for name in marks},
+        "and a RE-RECORD carries every claim onto the incumbent, not the three the loop "
+        "used to name by hand",
+    )
+
+    # A misspelled claim refuses BY NAME and burns no index, which is what the tuple buys
+    # over four named keyword arguments — `TypeError` from a `Card` constructor two frames
+    # down would name neither the claim nor the position it cost.
+    with isolated_home():
+        with Store().write() as snapshot:
+            checks.raises(
+                master.UnknownClaim,
+                lambda: snapshot.inventory.allocate_capture(7, set_hnit="sv9"),
+                "an unrecognised claim refuses as UnknownClaim rather than raising from a "
+                "constructor two frames down",
+            )
+            checks.equal(
+                snapshot.inventory.next_index(7),
+                1,
+                "and the refusal burned no index — it is checked before one is allocated",
+            )
+
+
+# ----------------------------------------------------------------- game and note claims
+
+
+def check_game_and_note_seam(checks: Checks) -> None:
+    """D21's `game` and D23's `note`, from the request body to `identify.sidecar`.
+
+    THE SAME SEAM `check_sidecar_seam` GUARDS, FOR THE TWO CLAIMS THAT ARRIVE DIFFERENTLY.
+    `game` is set at capture and decides which export a card is ever joined against, so a
+    game that reaches `inventory.json` and not the sidecar is a Riftbound card identified by
+    the Pokemon prompt and priced off the Pokemon export. `note` is deliberately NOT a
+    capture field — the feeder emits a card every ~660 ms and free text before the shutter
+    would put a keyboard on the critical path — so it arrives only as a correction, and the
+    thing worth asserting about it is that a correction rewrites the sidecar WHOLE.
+
+    ABSENT IS NOT NULL, AND THAT IS D21's DISTINCTION RATHER THAN A FILE-FORMAT PREFERENCE.
+    A sidecar with no `game` key is one written before the field existed, and
+    `Capture.game_or_default` backfills it to Pokemon at the READ. A sidecar carrying
+    `"game": null` would be a write-side default wearing a claim's clothes: "the operator
+    said Pokemon" and "nobody was asked" become the same bytes on disk. Asserted on the raw
+    JSON, because the reader treats the two identically and cannot tell them apart.
+    """
+    checks.note("")
+    checks.note("GAME AND NOTE — server/capture_server.py, identify/sidecar.py")
+
+    def raw_sidecar(box: int, index: int) -> dict:
+        return json.loads(
+            capture_server.sidecar_path(capture_server.photo_path(box, index)).read_text(
+                "utf-8"
+            )
+        )
+
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6, game="riftbound", set_hint="ogn"))
+        capture_server.do_capture(capture_payload(6))
+
+        checks.equal(
+            raw_sidecar(6, 1).get("game"),
+            "riftbound",
+            "a captured game reaches the sidecar under its own key",
+        )
+        checks.ok(
+            "game" not in raw_sidecar(6, 2),
+            "and a capture sending NO game writes NO KEY AT ALL — absent, never null, so a "
+            "backfilled Pokemon can never be mistaken for a claimed one (D21)",
+        )
+        checks.ok(
+            "note" not in raw_sidecar(6, 1),
+            "a note is not a capture field: nothing about a capture waits for a keyboard",
+        )
+
+        claimed, unclaimed = sidecar.scan(capture_server.captures_root())[:2]
+        checks.equal(claimed.game, "riftbound", "the reader identify uses reads it back")
+        checks.ok(
+            unclaimed.game is None,
+            "and reads the raw claim as None when the file names none",
+        )
+        checks.equal(
+            unclaimed.game_or_default,
+            games.DEFAULT_GAME,
+            "with the substitution happening at the READ, where it is visible — D21's "
+            "read-side backfill, never a default written into the file",
+        )
+        checks.ok(
+            all(capture.problem is None for capture in (claimed, unclaimed)),
+            "and neither is a problem: a missing game is a file older than the field",
+        )
+
+        # THE CORRECTION ROUTE IS THE ONLY WAY A NOTE ARRIVES, and it rewrites the sidecar
+        # from the RECORD rather than from the request body — so a PUT naming one claim must
+        # leave the others standing. That is the failure `docs/DEBTS.md` calls the harder one
+        # to see: it works until the operator corrects a card.
+        capture_server.do_put_card(6, 1, {"note": "  bent corner, top left  "})
+        checks.equal(
+            raw_sidecar(6, 1).get("note"),
+            "bent corner, top left",
+            "a note reaches the sidecar by PUT, trimmed",
+        )
+        checks.equal(
+            raw_sidecar(6, 1).get("game"),
+            "riftbound",
+            "and the re-record leaves the game standing — the sidecar is composed from the "
+            "record, not from the body that touched one field",
+        )
+
+        capture_server.do_put_card(6, 1, {"game": "one_piece"})
+        after = raw_sidecar(6, 1)
+        checks.equal(
+            [after.get("game"), after.get("note"), after.get("set_hint")],
+            ["one_piece", "bent corner, top left", "ogn"],
+            "and a game correction preserves both of the others: every claim is rewritten "
+            "from the record, so nothing the body did not mention is dropped",
+        )
+        checks.equal(
+            sidecar.scan(capture_server.captures_root())[0].note,
+            "bent corner, top left",
+            "with the note readable by identify — a note is what a misc card is described "
+            "by, and nothing else in the pipeline will ever name it",
+        )
+
+        # --- the two refusals, which mean different things and have different remedies ---
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(capture_payload(6, game="pokemonn")),
+            "game_invalid",
+            "a game outside the registry refuses as game_invalid — a typo, or a client "
+            "written against a registry this server does not have",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(capture_payload(6, game="magic")),
+            "game_invalid",
+            "and so does a real trading card game nobody has registered here",
+        )
+
+        # `game_unverified` HAS NO ENTRY TO FIRE ON. Every registered game has an export as
+        # of 2026-08-23 — `riftbound` and `one_piece` carried the flag until theirs arrived
+        # — and the branch stays because the flag is what an entry is BORN with. Flipped
+        # here and restored in a `finally`, the same way T4 widens `variant.FINISHES`: a
+        # branch nothing can reach is a branch nothing is testing.
+        entry = games.get("riftbound")
+        try:
+            entry["unverified"] = True
+            refusal(
+                checks,
+                lambda: capture_server.do_capture(capture_payload(6, game="riftbound")),
+                "game_unverified",
+                "a REGISTERED game with no export yet refuses as game_unverified, in its "
+                "own code — capturing into one writes records no join could ever resolve",
+            )
+        finally:
+            entry["unverified"] = False
+        checks.ok(
+            not games.get("riftbound")["unverified"],
+            "and the registry is left exactly as it was found",
+        )
+
+        # `catalogued` IS DELIBERATELY NOT THE TEST, and getting it backwards would break
+        # the commoner case: `misc` is uncatalogued forever by the owner's ruling and is a
+        # perfectly good thing to photograph. A route refusing on `games.require` would make
+        # every misc capture fail, and the one settled, correct state in the registry would
+        # read as an error on screen for good.
+        status, body = capture_server.do_capture(capture_payload(6, game="misc"))
+        checks.equal(status, HTTPStatus.CREATED, "a `misc` capture is ACCEPTED")
+        checks.ok(
+            not games.is_catalogued("misc"),
+            "even though it is permanently uncatalogued — captured, located and noted is "
+            "the whole of what it asks for",
+        )
+        checks.equal(raw_sidecar(6, body["index"]).get("game"), "misc", "and it is recorded")
+
+    # --- GET /games: the app's only source for the vocabulary ---------------------------
+    # No `isolated_home` — this route reads no store at all, which is itself the property
+    # being asserted: the picker can be drawn before a single card exists.
+    served = capture_server.do_games()
+    checks.equal(
+        [entry["key"] for entry in served["games"]],
+        list(games.keys()),
+        "GET /games serves every registry entry, in registry order — which is the order a "
+        "picker renders, and the app's ONLY copy of the vocabulary",
+    )
+    checks.equal(
+        served["default"],
+        games.DEFAULT_GAME,
+        "with a `default` published rather than guessed at: the alternative is the app "
+        "hardcoding `pokemon` and silently disagreeing the day the registry is reordered",
+    )
+    checks.ok(
+        all(
+            set(served_entry) == set(authored)
+            for served_entry, authored in zip(served["games"], games.GAMES)
+        ),
+        "served as AUTHORED and not projected — every field goes out, including the ones "
+        "no screen reads today, so a new screen needs no route change to get one",
+    )
+    served["games"][0]["display"] = "mutated"
+    checks.ok(
+        games.GAMES[0]["display"] != "mutated",
+        "and the response is a copy: a caller editing what it was handed cannot reach the "
+        "registry every other consumer in this process reads",
+    )
+
+
+# ---------------------------------------------------------------- box routes and search
+
+
+def check_box_routes_and_search(checks: Checks) -> None:
+    """D20's four routes — the three that own a box, and the read that finds a card.
+
+    `check_boxes_and_listings` ABOVE ASSERTS THE STORE; THIS ASSERTS THE ROUTES. They are
+    different questions and the difference is T7's whole subject: `close_box` freezing
+    capacity is a rule, and `PUT /boxes/<box>` refusing to be handed one is wiring. A rule
+    that is right behind a route nobody can reach correctly is still a box counted against
+    the wrong denominator on the only screen that could repair it.
+
+    THE UNREGISTERED BOX IS THE CASE TO KEEP. Until D20 a box existed only because a card
+    named one, so every box captured before the registry has no entry — and a read that
+    listed the registry alone would hide exactly those, on the screen built to fix them.
+    """
+    checks.note("")
+    checks.note("BOX ROUTES AND SEARCH — server/capture_server.py")
+
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(8))
+        # A box that holds cards and has NO registry entry. `allocate_capture` calls
+        # `ensure_box`, so this shape cannot be reached through the front door any more —
+        # which is precisely why it is built by hand: every box filled before D20 is in it,
+        # and there is no other way left to produce one.
+        with Store().write() as snapshot:
+            del snapshot.inventory.boxes["8"]
+
+        listed = {row["box"]: row for row in capture_server.do_boxes()["boxes"]}
+        # Guarded, for the reason `Checks` collects failures instead of stopping at the
+        # first: a missing row here would take the twenty checks behind it down with a
+        # KeyError, and the state of everything behind a failure is what a harness is for.
+        if checks.ok(
+            8 in listed,
+            "GET /boxes lists a box that holds cards but has no registry entry — the union, "
+            "not the registry, so no box captured before D20 is invisible",
+        ):
+            checks.equal(
+                [listed[8]["state"], listed[8]["capacity"], listed[8]["sections"]],
+                [master.BOX_OPEN, None, []],
+                "and it renders as open, uncapped and undeclared, which is what it is",
+            )
+            checks.equal(
+                [listed[8]["cards"], listed[8]["fill"], listed[8]["next_index"]],
+                [3, 3, 4],
+                "with its fill and next index read the same way every other box's are",
+            )
+
+        # --- POST creates, and refuses to be an upsert -----------------------------------
+        status, created = capture_server.do_create_box(
+            {"box": 9, "name": "ME01 commons", "sections": [1, 31]}
+        )
+        checks.equal(status, HTTPStatus.CREATED, "POST /boxes answers 201")
+        checks.equal(
+            [created["box"], created["name"], created["cards"]],
+            [9, "ME01 commons", 0],
+            "and a box can be created EMPTY — D20's whole reason for existing, since a "
+            "mistyped box number was previously caught only by `new_box` after a photo "
+            "had already been written into it",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_create_box({"box": 9}),
+            "box_exists",
+            "and a second POST refuses as box_exists rather than upserting — a quiet "
+            "success here would rename box 9 while the operator believed they were adding one",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_create_box({"box": 10, "capacity": 250}),
+            "field_not_settable",
+            "capacity is not a creation field: nobody knows a box's capacity when they "
+            "start filling it, and a guess accepted here is inherited by every fraction "
+            "drawn from that box (D20)",
+        )
+
+        # --- PUT changes the three things a human decides, and nothing else --------------
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(9, {"capacity": 250}),
+            "field_not_settable",
+            "and PUT refuses `capacity` for the same reason — it is FROZEN at the seal, "
+            "never typed",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(9, {"box": 11}),
+            "field_not_settable",
+            "and refuses `box`: a body that could change a box NUMBER would be a renumber, "
+            "which D10 forbids outright",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(9, {"state": "sealed"}),
+            "box_state_invalid",
+            "a state outside open/closed refuses in its OWN code, not as field_not_settable "
+            "— the field is settable and the value is not one of the two",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(99, {"name": "nowhere"}),
+            "box_not_found",
+            "and a box number nothing in this store has ever seen refuses as box_not_found",
+        )
+        adopted = capture_server.do_put_box(8, {"name": "pre-registry"})
+        checks.equal(
+            adopted["name"],
+            "pre-registry",
+            "but the unregistered box is ADOPTED rather than refused: GET /boxes lists it, "
+            "so refusing here would put a dead rename control on a live row",
+        )
+
+        # --- sealing freezes capacity at the fill ---------------------------------------
+        sealed = capture_server.do_put_box(9, {"state": master.BOX_CLOSED})
+        checks.equal(
+            [sealed["capacity"], sealed["fill"], sealed["state"]],
+            [0, 0, master.BOX_CLOSED],
+            "sealing an empty box freezes capacity at its fill, which is zero",
+        )
+        reopened = capture_server.do_put_box(9, {"state": master.BOX_OPEN})
+        checks.equal(
+            reopened["capacity"],
+            None,
+            "and re-opening drops capacity rather than leaving a stale number standing",
+        )
+        filled = capture_server.do_put_box(8, {"state": master.BOX_CLOSED})
+        checks.equal(
+            [filled["capacity"], filled["fill"]],
+            [3, 3],
+            "sealing a filled box freezes capacity at the cards it holds — the difference "
+            "between D20's '#40 of 250 · 16% in' and a denominator that keeps growing",
+        )
+        # BOTH SEALED-BOX REFUSALS GO OVER A SOCKET, and they are the only cases in this
+        # section that have to. `store/master.py` raises `BoxClosed` and `_dispatch` is what
+        # turns it into a code, so an in-process call asserts the store's exception and
+        # proves nothing about what a client is told — which is the half that reaches a
+        # screen. Asserted here as well, since a route that stopped raising would answer 500.
+        checks.raises(
+            master.BoxClosed,
+            lambda: capture_server.do_put_box(8, {"state": master.BOX_CLOSED}),
+            "sealing a sealed box raises rather than restamping it — the alternative "
+            "reading is that the call re-froze capacity at a new fill",
+        )
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, body, _ = request(
+                port, "PUT", "/boxes/8", payload={"state": master.BOX_CLOSED}
+            )
+            checks.equal(status, 409, "and on the wire a second seal is a 409, not a 500")
+            checks.equal(
+                error_code(body),
+                "box_closed",
+                "answering in its own code: the request was well-formed and lost a race "
+                "with the lid",
+            )
+
+            status, body, _ = request(port, "POST", "/capture", payload=capture_payload(8))
+            checks.equal(status, 409, "a capture into a sealed box is refused the same way")
+            checks.equal(
+                error_code(body),
+                "box_closed",
+                "and in the same code — one more card would falsify every fraction already "
+                "printed off that box",
+            )
+            after = {row["box"]: row for row in capture_server.do_boxes()["boxes"]}
+            checks.equal(
+                [
+                    after.get(8, {}).get("capacity"),
+                    after.get(8, {}).get("fill"),
+                    after.get(9, {}).get("capacity", "missing"),
+                ],
+                [3, 3, None],
+                "AND NEITHER REFUSAL CHANGED ANYTHING: box 8 is still sealed at 3 with no "
+                "index burned, and box 9 is still uncapped",
+            )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    # --- GET /search: D7's SKU -> positions map, finally served to a screen -------------
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(8, set_hint="me01"))
+        capture_server.do_capture(capture_payload(8, game="misc"))
+        capture_server.do_put_card(8, 4, {"note": "blue-eyes, japanese"})
+        with Store().write() as snapshot:
+            for key in ("8/1", "8/2", "8/3"):
+                card = snapshot.inventory.cards[key]
+                card.sku = "555"
+                card.name = "Eiscue"
+                card.number = "044"
+                card.printed_total = "167"
+                card.condition = "Near Mint"
+            snapshot.inventory.listing("555", condition="Near Mint").live = 2
+            snapshot.inventory.set_state("8/3", master.SOLD)
+
+        for blank in ("", "   ", "\t\n"):
+            refusal(
+                checks,
+                lambda q=blank: capture_server.do_search(q),
+                "query_required",
+                f"a search for {blank!r} refuses as query_required — clearing the box is "
+                "not a request for every card in the store",
+            )
+
+        found = capture_server.do_search("eiscue")["groups"]
+        if checks.equal(
+            [group["sku"] for group in found],
+            ["555"],
+            "a name finds the SKU, and the answer is the SKU rather than the card — D7's "
+            "map, which has existed in the store since the store did and reached no screen",
+        ):
+            group = found[0]
+            checks.equal(
+                [copy["key"] for copy in group["copies"]],
+                ["8/1", "8/2", "8/3"],
+                "with every copy at its own position, in box-walk order, the sold one "
+                "included",
+            )
+            checks.equal(
+                group["on_hand"],
+                2,
+                "and `on_hand` EXCLUDES the sold copy while `copies` still lists it: a sale "
+                "leaves a permanent gap that the operator still needs to see (D10)",
+            )
+            checks.equal(
+                group["cap"],
+                join.LIVE_QUANTITY_CAP,
+                "and `cap` is pipeline/join.py's playset imported, never the literal 4 — "
+                "the screen's '2 of 4 live' moves the day D7's cap does",
+            )
+            checks.equal(
+                group["listed"],
+                {
+                    stage: (2 if stage == master.LIVE else 0)
+                    for stage in master.LISTING_STAGES
+                },
+                "listing counts come out as zeros rather than nulls for the stages nothing "
+                "has reached: 'nothing was emitted' is a fact, not an absence",
+            )
+
+        by_note = capture_server.do_search("japanese")["groups"]
+        checks.equal(
+            [copy["key"] for group in by_note for copy in group["copies"]],
+            ["8/4"],
+            "a card the pipeline never identified is found BY ITS NOTE — it has no name, "
+            "no number and no SKU, so the note is the only thing it can be found by, and "
+            "leaving it out of the search would make the field write-only",
+        )
+        checks.equal(
+            [group["sku"] for group in by_note],
+            [None],
+            "and it groups under a null SKU, which sorts last: a bag of cards, not a product",
+        )
+        checks.equal(
+            [group["sku"] for group in capture_server.do_search("044/167")["groups"]],
+            ["555"],
+            "and the join key itself is searchable — it is the string the run report and "
+            "the queue file both print, so it is what gets pasted into a search box",
+        )
+
+
 # -------------------------------------------------------------------------- concurrency
 
 
@@ -2229,6 +4242,351 @@ def check_concurrency(checks: Checks) -> None:
                 checks.equal(
                     len(photos), count, f"{count} simultaneous captures: one photo each"
                 )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=10)
+
+
+# ----------------------------------------------------------------------- the origin gate
+
+
+@contextmanager
+def allowed_origins_env(value):
+    """Set (or clear) `PKMNSCAN_ALLOWED_ORIGINS`, restoring it on the way out.
+
+    Restored rather than deleted for the reason `isolated_home` gives: six other tests share
+    this process, and an origin list leaking out of here would be invisible until one of them
+    made a request.
+    """
+    previous = os.environ.get(capture_server.ORIGINS_ENV)
+    if value is None:
+        os.environ.pop(capture_server.ORIGINS_ENV, None)
+    else:
+        os.environ[capture_server.ORIGINS_ENV] = value
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(capture_server.ORIGINS_ENV, None)
+        else:
+            os.environ[capture_server.ORIGINS_ENV] = previous
+
+
+def request(port, method, path, *, origin=None, payload=None):
+    """One request against the running server. Returns `(status, body, headers)`.
+
+    Both outcomes are collapsed here rather than one of them raising: an origin refusal is a
+    403 carrying a code and a message this test asserts on, which is a result and not an
+    accident. `Connection: close` because a refusal is answered BEFORE the body is read —
+    the point of putting the gate there — so the bytes this client already sent are still in
+    the socket, and reusing that connection would parse them as the next request line.
+    """
+    headers = {"Content-Type": "application/json", "Connection": "close"}
+    if origin is not None:
+        headers["Origin"] = origin
+    outgoing = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(outgoing, timeout=30) as response:
+            return int(response.status), response.read(), dict(response.headers)
+    except urllib.error.HTTPError as refused:
+        return int(refused.code), refused.read(), dict(refused.headers)
+
+
+def error_code(body):
+    try:
+        return (json.loads(body or b"{}").get("error") or {}).get("code")
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        return None
+
+
+def check_origin_gate(checks: Checks) -> None:
+    """The CSRF gate on the three mutating verbs, over real sockets.
+
+    THIS IS THE ONLY SECURITY CONTROL IN THE REPO, and it is the only thing between a page
+    the owner happens to have open in another tab and `DELETE /inventory/<box>/<index>` —
+    D10's hard delete of the record, the sidecar and the photo, with no backup. Until this
+    section existed it was a control nobody had watched fail.
+
+    SOCKETS, NOT THE `do_*` FUNCTIONS. Every other server case in this file calls the route
+    function directly, and not one of them can reach this: the gate lives in `_dispatch`,
+    ahead of the handler, and reads a request HEADER. An in-process call has no headers, so
+    the whole control is invisible from where the rest of this test stands.
+
+    THE THREE CASES IT WOULD BE EASIEST TO GET WRONG LATER, each asserted with its reason:
+
+      a refusal must change    the existing undo cases assert this about `undo_too_late` and
+      NOTHING                  it matters more here, because the request that is refused is
+                               the one a hostile page sent on purpose.
+      an ABSENT `Origin`       `curl`, `./pkmnscan` and this test send none, and a browser
+      must still write         page cannot omit one. Tightening this to require the header
+                               kills every command-line path in the project at once, and it
+                               is exactly the change that looks like hardening.
+      `GET` must stay open     `GET /photo` is D6's route and both the review queue and the
+                               pull preview load it as an `<img>`, which sends no `Origin`
+                               at all. Narrowing the read side breaks the two screens the
+                               photo service exists for and protects nothing: a read of a
+                               photo of a card is not a write.
+    """
+    checks.note("")
+    checks.note("ORIGIN GATE — CSRF allowlist on POST, PUT and DELETE")
+
+    unknown = "http://evil.example"
+    allowed = capture_server.DEFAULT_ALLOWED_ORIGINS[0]
+    second = capture_server.DEFAULT_ALLOWED_ORIGINS[1]
+
+    checks.equal(
+        capture_server.ORIGINS_ENV,
+        "PKMNSCAN_ALLOWED_ORIGINS",
+        "the env var is spelled PKMNSCAN_ALLOWED_ORIGINS — pinned here because the docs "
+        "audit reconciles documented environment variables against real ones, and a rename "
+        "would otherwise fail that check somewhere far from the code that caused it",
+    )
+    checks.equal(
+        sorted(capture_server.DEFAULT_ALLOWED_ORIGINS),
+        ["http://127.0.0.1:5173", "http://localhost:5173"],
+        "and BOTH spellings of this machine are allowed by default: a browser's Origin is "
+        "the literal string in the address bar, so localhost and 127.0.0.1 are the same "
+        "host and not the same origin, and the owner types both",
+    )
+
+    with isolated_home(), allowed_origins_env(None):
+        capture_server.captures_root().mkdir(parents=True, exist_ok=True)
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(3))
+
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            # --- a mutating verb from an origin this server does not know ---------------
+            status, body, _ = request(
+                port, "POST", "/capture", origin=unknown, payload=capture_payload(3)
+            )
+            checks.equal(status, 403, "POST from an unknown origin is refused")
+            checks.equal(
+                error_code(body),
+                "origin_not_allowed",
+                "and it refuses in its own code, not as a routing or validation failure",
+            )
+            checks.ok(
+                capture_server.ORIGINS_ENV in body.decode("utf-8", "replace"),
+                "and the refusal names the env var to add a real app to, which is this "
+                "server's copy rule reaching a message a person will read",
+                body.decode("utf-8", "replace"),
+            )
+            checks.equal(
+                Store().read().inventory.next_index(3),
+                4,
+                "AND THE REFUSAL CHANGED NOTHING: no index was burned",
+            )
+            checks.ok(
+                not capture_server.photo_path(3, 4).is_file(),
+                "and no photo was written — the gate runs before the body is read, so the "
+                "24 MB buffer for the image was never allocated either",
+            )
+
+            status, body, _ = request(
+                port,
+                "PUT",
+                "/inventory/3/1",
+                origin=unknown,
+                payload={"set_hint": "sv9"},
+            )
+            checks.equal(status, 403, "PUT from an unknown origin is refused")
+            checks.equal(error_code(body), "origin_not_allowed", "in the same code")
+            checks.ok(
+                Store().read().inventory.get("3/1").set_hint is None,
+                "and the recorded claim is untouched — a correction is a write, and this "
+                "one never happened",
+            )
+
+            status, body, _ = request(port, "DELETE", "/inventory/3/3", origin=unknown)
+            checks.equal(
+                status,
+                403,
+                "DELETE from an unknown origin is refused — THE ONE THIS CONTROL EXISTS "
+                "FOR, because the route behind it destroys a record, a sidecar and a "
+                "photograph with no backup (D10)",
+            )
+            checks.equal(error_code(body), "origin_not_allowed", "in the same code again")
+            checks.ok(
+                Store().read().inventory.get("3/3") is not None
+                and capture_server.photo_path(3, 3).is_file(),
+                "and the card, its position and its photograph are all still there",
+            )
+
+            # --- the same verb from the capture app ------------------------------------
+            status, _, _ = request(port, "DELETE", "/inventory/3/3", origin=allowed)
+            checks.equal(
+                status, 200, "the SAME DELETE from an allowed origin is served"
+            )
+            checks.ok(
+                Store().read().inventory.get("3/3") is None
+                and not capture_server.photo_path(3, 3).is_file(),
+                "and it really did the work — so the case above is the gate refusing, not "
+                "the route failing for some other reason",
+            )
+
+            # --- no `Origin` at all -----------------------------------------------------
+            status, body, _ = request(port, "POST", "/capture", payload=capture_payload(3))
+            checks.equal(
+                status,
+                201,
+                "A REQUEST WITH NO `Origin` STILL WRITES. `curl`, `./pkmnscan` and this "
+                "test send none, and a browser page cannot omit one — so requiring the "
+                "header would kill every command-line path in this project at once while "
+                "stopping nothing a page could do. Anything holding a shell here can open "
+                "inventory.json with an editor anyway",
+            )
+            # `.get`, so a refused write is REPORTED by the line above rather than raising a
+            # KeyError here that would hide every check behind it. Same rule as the label
+            # read in `check_server_routes`: `Checks` exists to report every failure.
+            checks.equal(
+                json.loads(body or b"{}").get("key"),
+                "3/3",
+                "and it took the index the undo above released, which is the ordinary "
+                "capture path running unchanged through the gate",
+            )
+
+            status, body, _ = request(
+                port, "POST", "/capture", origin=second, payload=capture_payload(3)
+            )
+            checks.equal(
+                status,
+                201,
+                "and the second spelling of this machine writes too — 127.0.0.1 and "
+                "localhost are both in the default list for that reason",
+            )
+
+            # --- reads stay open --------------------------------------------------------
+            status, _, headers = request(port, "GET", "/status", origin=unknown)
+            checks.equal(status, 200, "GET is served to ANY origin — a read is not a write")
+            status, _, headers = request(port, "GET", "/photo/3/1", origin=unknown)
+            checks.equal(
+                status,
+                200,
+                "including GET /photo, which D6's review queue and pull preview load as an "
+                "`<img>` — and an `<img>` sends no Origin at all",
+            )
+            checks.equal(
+                headers.get("Access-Control-Allow-Origin"),
+                "*",
+                "and it stays embeddable: an unknown origin is still answered `*` on the "
+                "read side",
+            )
+
+            # --- the preflight ----------------------------------------------------------
+            # The belt to the dispatcher's braces, and the half that produces a legible
+            # console error rather than a 403 nobody sees: a browser told GET and OPTIONS
+            # only never sends the DELETE at all.
+            status, _, headers = request(port, "OPTIONS", "/inventory/3/1", origin=unknown)
+            checks.equal(status, 204, "the preflight answers for any path, by design")
+            checks.equal(
+                headers.get("Access-Control-Allow-Methods"),
+                ", ".join(capture_server.SAFE_METHODS),
+                "and advertises GET and OPTIONS ONLY to an unknown origin, so the browser "
+                "refuses the request that would have followed rather than sending it",
+            )
+            checks.equal(
+                headers.get("Vary"),
+                "Origin",
+                "with Vary: Origin, because the answer now depends on a request header and "
+                "a cache that did not know would hand one origin's answer to another",
+            )
+
+            status, _, headers = request(port, "OPTIONS", "/inventory/3/1", origin=allowed)
+            checks.equal(
+                headers.get("Access-Control-Allow-Methods"),
+                ", ".join(capture_server.ALL_METHODS),
+                "an ALLOWED origin is told every verb, including the three that write",
+            )
+            checks.equal(
+                headers.get("Access-Control-Allow-Origin"),
+                allowed,
+                "and is ECHOED rather than answered `*` — `*` and credentials do not mix, "
+                "and echoing is what makes the browser's own check agree with this server's",
+            )
+            status, _, headers = request(port, "OPTIONS", "/inventory/3/1")
+            checks.equal(
+                headers.get("Access-Control-Allow-Methods"),
+                ", ".join(capture_server.ALL_METHODS),
+                "and a preflight with no Origin is told every verb too, for the same reason "
+                "the write above is served",
+            )
+
+            # --- the env var EXTENDS, and cannot re-open the door ------------------------
+            lan = "http://the-mac.local:5173"
+            with allowed_origins_env(f"  {lan.upper()}/  "):
+                checks.equal(
+                    sorted(capture_server.allowed_origins()),
+                    sorted(capture_server.DEFAULT_ALLOWED_ORIGINS + (lan,)),
+                    "PKMNSCAN_ALLOWED_ORIGINS EXTENDS the defaults rather than replacing "
+                    "them — rebuilding the whole list from an env var would let a typo "
+                    "switch the protection off while looking like configuration. Case and "
+                    "a trailing slash are folded, because that is what a human types",
+                )
+                status, _, _ = request(
+                    port, "DELETE", "/inventory/3/4", origin=lan.upper() + "/"
+                )
+                checks.equal(
+                    status,
+                    200,
+                    "the added origin can write, with no restart: the list is read on every "
+                    "request, and a `make server` the owner started once is the reason",
+                )
+                status, _, _ = request(
+                    port, "POST", "/capture", origin=allowed, payload=capture_payload(3)
+                )
+                checks.equal(
+                    status,
+                    201,
+                    "and the DEFAULTS still write while it is set — extended, never replaced",
+                )
+
+            with allowed_origins_env("*"):
+                checks.ok(
+                    unknown not in capture_server.allowed_origins(),
+                    "a `*` in the env var is one more literal string in an exact-match "
+                    "list, never a wildcard — nothing at all becomes allowed by it",
+                    f"allowed: {capture_server.allowed_origins()}",
+                )
+                status, body, _ = request(
+                    port, "POST", "/capture", origin=unknown, payload=capture_payload(3)
+                )
+                checks.equal(
+                    status,
+                    403,
+                    "AND `*` CANNOT RE-ENABLE THE HOLE. The list is compared by exact "
+                    "string, so a wildcard is one more origin nobody is ever called — a "
+                    "value that silently switched this control off is the one way the env "
+                    "var could undo everything above it",
+                )
+                checks.equal(
+                    error_code(body), "origin_not_allowed", "refused in the same code"
+                )
+
+            # THREE POSTs WERE SERVED AND TWO REFUSED, and two DELETEs were served against
+            # three attempted. Asserted as the positions themselves rather than as a count,
+            # because a count is the one shape that can come out right for the wrong reason.
+            checks.equal(
+                sorted(Store().read().inventory.cards),
+                ["3/1", "3/2", "3/3", "3/4"],
+                "and across the whole section the box holds exactly what the SERVED "
+                "requests put there — every refusal above reached neither the allocator "
+                "nor the disk",
+            )
+            checks.equal(
+                Store().read().inventory.next_index(3),
+                5,
+                "with the high-water mark to match: a refused capture burns no index (D10)",
+            )
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -2300,14 +4658,30 @@ def check_cli_seams(checks: Checks) -> None:
         candidate[0]["market"], "4.20", "and market comes from TCG Market Price"
     )
 
-    # `cli/resolve.py:load` whitelists the detected finish against a literal tuple rather
-    # than against the enum. If the two drift, a valid finish is dropped on the floor and
-    # D3 rung 3 never fires — the cross-check that catches a mis-sorted card.
+    # `cli/resolve.py:load` whitelists the detected finish before handing it to the ladder.
+    # If that whitelist and the enum drift, a valid finish is dropped on the floor and D3
+    # rung 3 never fires — the cross-check that catches a mis-sorted card.
+    #
+    # THE CHECK CHANGED SHAPE BECAUSE THE DEFECT DID. It used to look for each finish as a
+    # LITERAL in the source, which was the right check while `resolve.py` held its own copy
+    # of the tuple; that copy is gone and the test is now `finish in variant.FINISHES`, so
+    # the old grep would fail on the fix. What is asserted instead is the property that
+    # makes drift impossible — the enum is named, and no finish is spelled out beside it.
+    # T4 asserts the behaviour end to end, against a finish added to `variant.FINISHES` at
+    # runtime, which is the half a source scan can never reach.
     source = (Path(__file__).resolve().parents[2] / "cli" / "resolve.py").read_text("utf-8")
     checks.ok(
-        all(f'"{finish}"' in source for finish in variant.FINISHES),
-        "resolve.py's finish whitelist still covers every value in variant.FINISHES",
+        "finish in variant.FINISHES" in source,
+        "resolve.py tests the detected finish against variant.FINISHES itself, not against "
+        "a second copy of the enum that nothing keeps in step",
         f"FINISHES is {variant.FINISHES}",
+    )
+    hardcoded = sorted(f for f in variant.FINISHES if f'"{f}"' in source or f"'{f}'" in source)
+    checks.equal(
+        hardcoded,
+        [],
+        "and no finish is spelled out in it at all — a literal is how the two drifted apart "
+        "the first time",
     )
 
     # Which export a run joins against. The manifest remembers it so later commands do not
@@ -2403,12 +4777,611 @@ def check_cli_refusals(checks: Checks) -> None:
             checks.equal(caught.code, 2, f"{label} exits 2 (usage), not 1")
 
 
+# --------------------------------------------------- emit, reconcile and join as quantities
+
+
+def _stages(inventory) -> str:
+    """The `listings` line the three commands print, rebuilt from `listing_counts()`.
+
+    Built here rather than written out as a literal, so the assertion is that the commands
+    print THIS number — not that they print some number that happens to match today.
+    """
+    return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
+
+
+def check_listing_commands(checks: Checks) -> None:
+    """`emit`, `reconcile` and `join` moving SKU QUANTITIES rather than card states (D7).
+
+    THE WHOLE SECTION EXISTS BECAUSE THE FACT MOVED. `pushed`, `staged` and `live` used to be
+    states a card wore, so "has this copy been listed" was answerable from the card and every
+    command wrote it there. The owner's ruling is that copies of one SKU are fungible — "if i
+    have 15 of one copy and mark 3 as live, it's any 3 are live, not 3 specific locations are
+    live" — so the three are counts on the SKU's `Listing` now, and each command moves a
+    number instead of flagging a position.
+
+    What that makes newly breakable, and what is therefore asserted below: a count can be
+    double-added where a state could only be re-set, it can be moved by reading the wrong
+    column, and it can go negative. None of those three failures exists in a state machine.
+    Every case runs the real subcommand through `cli/__main__.py`, because the command is the
+    only place these three writes happen.
+    """
+    checks.note("")
+    checks.note("LISTING COMMANDS — emit, reconcile and join as quantities")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "normal"),
+        (3, 3, "Dunsparce", "120", "normal"),
+        (3, 4, "Articuno", "161", None),
+    ]
+
+    # --- emit: identity onto the card, count onto the SKU --------------------------------
+    with isolated_home():
+        run_dir, joined = seam_run(checks, cards)
+        checks.equal(
+            Store().read().inventory.listings,
+            {},
+            "JOIN CREATES NO LISTING for a matched SKU with no live quantity and no record "
+            "— `Inventory.listing` creates on read, and a run that merely matched a thousand "
+            "SKUs would otherwise leave a thousand empty records for `staged_stale` and "
+            "`listing_counts` to walk on every call",
+        )
+
+        emitted = command(checks, "emit", str(run_dir.directory))
+        inventory = Store().read().inventory
+
+        checks.equal(
+            [
+                (c.state, c.sku, c.condition, c.run)
+                for c in (inventory.get(f"3/{i}") for i in (1, 4))
+            ],
+            [
+                (master.IDENTIFIED, DUNSPARCE_SKU, "Near Mint", run_dir.name),
+                (master.IDENTIFIED, ARTICUNO_SKU, "Near Mint Holofoil", run_dir.name),
+            ],
+            "emit writes the IDENTITY onto each copy — sku, condition and the run that "
+            "decided them — and leaves the card at `identified`, which is where it stays: "
+            "the stage it reached is not a fact about this piece of cardboard",
+        )
+        listing = inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.pushed, listing.staged, listing.live, listing.condition),
+            (3, 0, 0, "Near Mint"),
+            "and the COUNT onto the SKU: three copies pushed, nothing further, at the "
+            "condition the ladder resolved",
+        )
+        checks.ok(listing.at, "stamped, so `join`'s stale warning has something to read")
+        checks.equal(
+            inventory.listing_counts(),
+            {master.PUSHED: 4, master.STAGED: 0, master.LIVE: 0},
+            "and listing_counts() sums the stages across every SKU",
+        )
+        checks.ok(
+            f"listings         {_stages(inventory)}" in emitted,
+            "which is exactly the line `emit` prints — the run report's listing totals are "
+            "that function and not a second count kept beside it",
+            emitted,
+        )
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED)).by_sku()
+        checks.equal(
+            [rows[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN], rows[ARTICUNO_SKU][tcgcsv.QUANTITY_COLUMN]],
+            ["3", "1"],
+            "and the file carries one row per SKU with the copy count, never one row per copy",
+        )
+
+        # --- the re-emit that produced the Gate B defect ---------------------------------
+        # A second `join` then `emit` over the same run, which is the ordinary thing to do
+        # after editing a review. `cli/resolve.py` reads the counts back as `committed`, so
+        # every copy is already spoken for and the file gets nothing.
+        command(checks, "join", str(run_dir.directory))
+        again = command(checks, "emit", str(run_dir.directory))
+        re_inventory = Store().read().inventory
+        checks.equal(
+            re_inventory.listing_counts(),
+            {master.PUSHED: 4, master.STAGED: 0, master.LIVE: 0},
+            "A RE-EMIT ADDS NOTHING TO `pushed`. The first real post-import re-emit "
+            "(2026-08-22) re-counted 37 copies into the files; a count that is incremented "
+            "rather than set is the one thing that can be double-added, so this is the case "
+            "that has to be re-asserted against every change to the push loop",
+        )
+        checks.equal(
+            [c.state for c in re_inventory.copies_on_hand(DUNSPARCE_SKU)],
+            [master.IDENTIFIED] * 3,
+            "and no copy is walked backwards to an earlier state — the other half of the "
+            "same defect, which regressed staged copies to `pushed`",
+        )
+        checks.ok(
+            "at cap           2 SKU(s)" in again,
+            "the SKUs are REPORTED as already at the cap, because they are real cards at "
+            "real positions and a run that silently omitted them would look identical to a "
+            "run that lost them",
+            again,
+        )
+        checks.equal(
+            len(tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED)).rows),
+            0,
+            "and the file holds no zero row: `Add to Quantity` of 0 is a row TCGplayer would "
+            "accept and act on, which is not what nothing-to-add means",
+        )
+
+    # --- emit against a position the store has never seen ---------------------------------
+    # A run joined from a recovered or hand-made identifications file. The push loop upserts
+    # before it writes, because `set_state` returns False for an unknown position and a
+    # transition reported as having happened that did not is v1 bug 5 exactly.
+    with isolated_home():
+        run_dir = runs.create("t7-unseen")
+        run_dir.write_identifications(identifications_for([(7, 1, "Articuno", "161", None)]))
+        export = write_export(run_dir.path("export.csv"))
+        command(checks, "join", str(run_dir.directory), "--export", str(export))
+        checks.ok(
+            Store().read().inventory.get("7/1") is None,
+            "the store has never seen this position, and `join` does not invent it",
+        )
+        said = command(checks, "emit", str(run_dir.directory))
+        landed = Store().read().inventory
+        checks.equal(
+            (landed.get("7/1").state, landed.get("7/1").sku),
+            (master.IDENTIFIED, ARTICUNO_SKU),
+            "emit UPSERTS the position first, so the identity write lands somewhere",
+        )
+        checks.equal(
+            landed.listing_for(ARTICUNO_SKU).pushed,
+            1,
+            "and the copy is counted exactly once against the SKU",
+        )
+        checks.ok(
+            "pushed           1 copy(ies) across 1 SKU(s)" in said,
+            "and what the command reports is what landed — nothing counted that did not",
+            said,
+        )
+
+    # --- reconcile: pushed -> staged, as counts -------------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        before = [c.state for c in Store().read().inventory.cards.values()]
+
+        staged_export = write_staged(
+            run_dir.path("staged.csv"), {DUNSPARCE_SKU: 3, ARTICUNO_SKU: 1}
+        )
+        moved = command(
+            checks, "reconcile", str(run_dir.directory), str(staged_export)
+        )
+        inventory = Store().read().inventory
+        listing = inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.pushed, listing.staged),
+            (0, 3),
+            "reconcile MOVES A COUNT: three copies leave `pushed` and arrive at `staged`, "
+            "and which physical copies they are is deliberately not recorded",
+        )
+        checks.ok(
+            listing.staged_at,
+            "and `staged_at` is stamped, which is the whole of what `staged_stale` reads — "
+            "an import that staged and never moved live is invisible without it",
+        )
+        checks.equal(
+            [c.state for c in inventory.cards.values()],
+            before,
+            "and NO CARD MOVED. A sale changes a card; a stage changes a quantity, and the "
+            "cards are exactly where emit left them",
+        )
+        checks.ok(
+            f"listings         {_stages(inventory)}" in moved,
+            "and `reconcile` prints listing_counts() too, so the same number reads the same "
+            "on all three commands",
+            moved,
+        )
+
+        # Re-running it moves nothing more. `pushed` is now zero, so there is no count left
+        # to take — the idempotence is the cap below doing its job at the boundary.
+        command(checks, "reconcile", str(run_dir.directory), str(staged_export))
+        checks.equal(
+            Store().read().inventory.listing_counts(),
+            {master.PUSHED: 0, master.STAGED: 4, master.LIVE: 0},
+            "and a second reconcile stages nothing twice — there is no pushed count left",
+        )
+
+    # --- reconcile reads `Add to Quantity`, never `Total Quantity` -------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+
+        # The two columns disagree on purpose: `write_staged` sets `Total Quantity` to 97 on
+        # every row. A command reading the live column would stage 97 copies of each.
+        disagreeing = write_staged(
+            run_dir.path("staged.csv"), {DUNSPARCE_SKU: 1, ARTICUNO_SKU: 9}
+        )
+        command(checks, "reconcile", str(run_dir.directory), str(disagreeing))
+        inventory = Store().read().inventory
+        dunsparce = inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (dunsparce.pushed, dunsparce.staged),
+            (2, 1),
+            "reconcile reads `Add to Quantity`, the column `emit` wrote — `Total Quantity` "
+            "is the LIVE number (D8, D11) and staging on it would move copies TCGplayer "
+            "never said it had staged",
+        )
+        articuno = inventory.listing_for(ARTICUNO_SKU)
+        checks.equal(
+            (articuno.pushed, articuno.staged),
+            (0, 1),
+            "and the move is CAPPED at what this pipeline pushed: a reported 9 against 1 "
+            "pushed stages 1 and floors `pushed` at zero rather than going negative",
+        )
+
+        # A blank cell is an UNKNOWN quantity, not a zero one — D9's reading of a blank
+        # market cell, applied to a quantity. The SKU is in the export, so TCGplayer has it.
+        # Both SKUs, because `reconcile` reports in both directions and an export missing
+        # one of them is a different finding from the one under test here.
+        blank = write_staged(
+            run_dir.path("blank.csv"), {DUNSPARCE_SKU: "", ARTICUNO_SKU: ""}
+        )
+        assumed = command(checks, "reconcile", str(run_dir.directory), str(blank))
+        dunsparce = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (dunsparce.pushed, dunsparce.staged),
+            (0, 3),
+            "a blank quantity falls back to this pipeline's own `pushed` count rather than "
+            "stranding every pushed copy at `pushed` forever and making `staged_stale` warn "
+            "about an import that in fact landed",
+        )
+        checks.ok(
+            DUNSPARCE_SKU in assumed and "reported no quantity" in assumed,
+            "and the assumption is NAMED with its SKU, never made silently",
+            assumed,
+        )
+
+    # --- reconcile on a landed SKU this pipeline never pushed ------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        with Store().write() as snapshot:
+            del snapshot.inventory.listings[ARTICUNO_SKU]
+
+        landed = write_staged(
+            run_dir.path("staged.csv"), {DUNSPARCE_SKU: 3, ARTICUNO_SKU: 4}
+        )
+        command(checks, "reconcile", str(run_dir.directory), str(landed))
+        checks.ok(
+            Store().read().inventory.listing_for(ARTICUNO_SKU) is None,
+            "a matched row whose SKU has no listing record CREATES NOTHING — the row is "
+            "reported either way, and inventing a count here would stage copies nothing "
+            "ever wrote into a file",
+        )
+
+    # --- join sets `live` from the export, absolutely ---------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+
+        # Hand-set, because what is under test is the direction of the write and not how the
+        # numbers got there. Dunsparce is the rise case, Articuno the no-change case.
+        with Store().write() as snapshot:
+            dunsparce = snapshot.inventory.listing(DUNSPARCE_SKU)
+            dunsparce.set(master.PUSHED, 0)
+            dunsparce.set(master.STAGED, 2)
+            dunsparce.set(master.LIVE, 0)
+            articuno = snapshot.inventory.listing(ARTICUNO_SKU)
+            articuno.set(master.PUSHED, 0)
+            articuno.set(master.STAGED, 2)
+            articuno.set(master.LIVE, 4)
+
+        rose = write_export(
+            run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
+        )
+        said = command(checks, "join", str(run_dir.directory), "--export", str(rose))
+        inventory = Store().read().inventory
+        checks.equal(
+            (inventory.listing_for(DUNSPARCE_SKU).live, inventory.listing_for(DUNSPARCE_SKU).staged),
+            (2, 0),
+            "join reads `live` off the export and DRAWS `staged` DOWN BY THE RISE: two "
+            "copies went live, so two stop being staged — otherwise the stale warning names "
+            "every SKU that has ever staged, forever",
+        )
+        checks.equal(
+            (inventory.listing_for(ARTICUNO_SKU).live, inventory.listing_for(ARTICUNO_SKU).staged),
+            (4, 2),
+            "and by the RISE and not the absolute reading: a SKU whose live quantity did not "
+            "move keeps its staged copies, which are exactly the ones the warning exists to "
+            "find",
+        )
+        checks.ok(
+            f"listings         {_stages(inventory)}" in said,
+            "and `join` prints listing_counts() as well — the third of the three commands",
+            said,
+        )
+
+        # DOWNWARD TOO. The export is the authority (D8, D11) and the stored number is an
+        # optimistic local estimate, so a join that only ever raised it would let a sale on
+        # TCGplayer leave this Mac permanently overstating what is for sale.
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(DUNSPARCE_SKU).set(master.LIVE, 9)
+        fell = write_export(run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2})
+        command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+            2,
+            "a stored 9 against an export that says 2 becomes 2 — set from the export, never "
+            "nudged toward it",
+        )
+
+    # --- the v1 -> v2 migration, through a real store session ------------------------------
+    # `check_boxes_and_listings` drives `Inventory.parse` directly. This is the other half:
+    # that the migration survives a read and a commit through `store/session.py`, which is
+    # the only path a running system ever takes.
+    with isolated_home():
+        files.write_json(
+            Store().inventory_path,
+            {
+                "version": 1,
+                "cards": {
+                    "4/1": {
+                        "box": 4, "index": 1, "sku": DUNSPARCE_SKU,
+                        "condition": "Near Mint", "state": "pushed",
+                        "state_at": "2026-08-01T00:00:00+00:00",
+                    },
+                    "4/2": {
+                        "box": 4, "index": 2, "sku": DUNSPARCE_SKU,
+                        "condition": "Near Mint", "state": "live",
+                        "state_at": "2026-08-01T00:00:00+00:00",
+                    },
+                },
+            },
+        )
+        with Store().write():
+            pass  # read, migrate, commit — the shape every request has
+
+        on_disk = json.loads(Store().inventory_path.read_text("utf-8"))
+        checks.equal(on_disk["version"], master.VERSION, "the committed file is v2")
+        checks.equal(
+            [record["state"] for record in on_disk["cards"].values()],
+            [master.IDENTIFIED, master.IDENTIFIED],
+            "and no card on disk wears a listing stage any more — a v2 file that did would "
+            "fail `check_state` loudly on the next write rather than being repaired forever",
+        )
+        checks.equal(
+            {
+                stage: on_disk["listings"][DUNSPARCE_SKU][stage]
+                for stage in master.LISTING_STAGES
+            },
+            {master.PUSHED: 1, master.STAGED: 0, master.LIVE: 1},
+            "and each stage arrived on the SKU as a count, through the session rather than "
+            "only through `Inventory.parse`",
+        )
+        checks.equal(
+            Store().read().inventory.listing_counts(),
+            {master.PUSHED: 1, master.STAGED: 0, master.LIVE: 1},
+            "which a second session reads back unchanged — a v2 payload is not re-migrated",
+        )
+
+
+# ------------------------------------------------------------- boxes, listings, migration
+
+
+def check_boxes_and_listings(checks: Checks) -> None:
+    """D20's box object, D7's fungible copies, and the v1 -> v2 migration between them.
+
+    THE MIGRATION CASE IS THE LOAD-BEARING ONE. Every label this repo has ever rendered was
+    computed from a global `CARDS_PER_SECTION`, and sections are per-box now. If the
+    migration gets that wrong, every position label in a real inventory shifts at once and
+    the only symptom is a person opening the wrong slot weeks later. So it is asserted
+    against the literal strings, not against the formula that produced them.
+    """
+    checks.note("")
+    checks.note("BOXES AND LISTINGS — store/master.py")
+
+    # --- the v1 -> v2 migration ------------------------------------------------------
+    legacy = {
+        "version": 1,
+        "cards": {
+            "1/1": {"box": 1, "index": 1, "sku": "888", "condition": "Near Mint",
+                    "state": "staged", "state_at": "2026-08-01T00:00:00+00:00"},
+            "1/26": {"box": 1, "index": 26, "sku": "888", "condition": "Near Mint",
+                     "state": "live", "state_at": "2026-08-01T00:00:00+00:00"},
+            "1/53": {"box": 1, "index": 53, "sku": "999", "condition": "Near Mint",
+                     "state": "sold", "state_at": "2026-08-01T00:00:00+00:00"},
+            "2/4": {"box": 2, "index": 4, "state": "captured"},
+        },
+    }
+    migrated = master.Inventory.parse(legacy)
+
+    checks.equal(
+        [migrated.cards[k].state for k in ("1/1", "1/26", "1/53", "2/4")],
+        ["identified", "identified", "sold", "captured"],
+        "a card wearing a listing stage migrates to `identified`; sold and captured stand",
+    )
+    checks.equal(
+        (migrated.listings["888"].staged, migrated.listings["888"].live),
+        (1, 1),
+        "and hands its stage to the SKU as a count (D7 amended)",
+    )
+    checks.ok(
+        "999" not in migrated.listings,
+        "a sold card starts no listing — it left inventory, it was never a quantity",
+    )
+    checks.equal(
+        sorted(migrated.boxes), ["1", "2"],
+        "every box a card names gets a registry entry",
+    )
+    checks.equal(
+        migrated.boxes["1"].sections, [],
+        "MIGRATED BOXES DECLARE NO LAYOUT — which is what preserves every existing label",
+    )
+    checks.equal(
+        migrated.boxes["1"].capacity, None,
+        "and no capacity: it is retroactive, and this box was never sealed (D20)",
+    )
+
+    # THE LABELS THEMSELVES. Literal strings, because a formula asserted against itself
+    # proves nothing about the cards already on a shelf.
+    checks.equal(
+        [join.Position(1, i, migrated.sections_for(1)).label for i in (1, 25, 26, 53)],
+        [
+            "Box 1 · Section 1 · Card 1",
+            "Box 1 · Section 1 · Card 25",
+            "Box 1 · Section 2 · Card 1",
+            "Box 1 · Section 3 · Card 3",
+        ],
+        "and a migrated box renders every label byte-identical to before the migration",
+    )
+
+    # --- declared layouts --------------------------------------------------------------
+    inventory = master.Inventory()
+    inventory.ensure_box(1, name="ME01 commons")
+    checks.equal(inventory.box(1).name, "ME01 commons", "a box can be created and named")
+    checks.equal(inventory.box(1).state, master.BOX_OPEN, "and starts open")
+
+    inventory.set_sections(1, [1, 31, 56])
+    checks.equal(
+        [join.Position(1, i, inventory.sections_for(1)).label for i in (30, 31, 55, 56)],
+        [
+            "Box 1 · Section 1 · Card 30",
+            "Box 1 · Section 2 · Card 1",
+            "Box 1 · Section 2 · Card 25",
+            "Box 1 · Section 3 · Card 1",
+        ],
+        "a declared layout puts the divider exactly where it was declared",
+    )
+    checks.equal(
+        join.Position(1, 90, inventory.sections_for(1)).section_end,
+        None,
+        "the FINAL section has no end until a capacity says where the box stops (D20)",
+    )
+
+    # A boundary edit relabels what is behind it and touches no index. D10 (amended)
+    # accepts this deliberately, so it is asserted rather than guarded against.
+    before = join.Position(1, 40, inventory.sections_for(1)).label
+    inventory.set_sections(1, [1, 41, 56])
+    after = join.Position(1, 40, inventory.sections_for(1)).label
+    checks.equal(
+        (before, after),
+        ("Box 1 · Section 2 · Card 10", "Box 1 · Section 1 · Card 40"),
+        "moving a divider RELABELS the cards behind it — the label is a view (D10 amended)",
+    )
+    checks.ok(
+        any(e.get("event") == "resectioned" for e in inventory.events),
+        "and it leaves a `resectioned` event, which is the whole mitigation",
+    )
+    checks.equal(
+        [e for e in inventory.events if e.get("event") == "resectioned"][-1]["sections_to"],
+        [1, 41, 56],
+        "carrying the layout it moved to, so the change is reconstructable",
+    )
+    checks.ok(
+        "position" not in [e for e in inventory.events if e.get("event") == "resectioned"][-1],
+        "and no position: a box is not at one, and a null would read as a lost card",
+    )
+
+    for bad, why in (
+        ([2, 30], "a layout not starting at index 1"),
+        ([1, 30, 20], "an unsorted layout"),
+        ([1, 30, 30], "two dividers in one slot"),
+        (["x"], "a layout that is not integers"),
+    ):
+        checks.raises(
+            master.BadSections,
+            lambda bad=bad: inventory.set_sections(1, bad),
+            f"{why} is REFUSED, never quietly repaired",
+        )
+
+    # --- the lifecycle -----------------------------------------------------------------
+    with isolated_home():
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(5))
+        with Store().write() as snapshot:
+            checks.equal(snapshot.inventory.box_fill(5), 4, "fill is the high-water mark")
+            snapshot.inventory.close_box(5)
+            box = snapshot.inventory.box(5)
+            checks.equal(box.capacity, 4, "SEALING FREEZES CAPACITY at the final fill (D20)")
+            checks.ok(box.closed, "and the box reads closed")
+            checks.raises(
+                master.BoxClosed,
+                lambda: snapshot.inventory.close_box(5),
+                "sealing a sealed box refuses rather than restamping it",
+            )
+            checks.raises(
+                master.BoxClosed,
+                lambda: snapshot.inventory.allocate_capture(5),
+                "A SEALED BOX TAKES NO MORE CARDS — one more would falsify every fraction",
+            )
+            checks.equal(
+                snapshot.inventory.next_index(5), 5,
+                "and the refusal burned no index: it is checked before one is computed",
+            )
+            snapshot.inventory.reopen_box(5)
+            checks.equal(
+                snapshot.inventory.box(5).capacity, None,
+                "re-opening drops capacity rather than leaving a stale number standing",
+            )
+            card, created = snapshot.inventory.allocate_capture(5)
+            checks.ok(created and card.index == 5, "and the box takes cards again")
+
+    # --- listings are quantities, never addresses --------------------------------------
+    inventory = master.Inventory()
+    for index in range(1, 8):
+        inventory.record_capture(master.Card(box=9, index=index, sku="777"))
+    listing = inventory.listing("777", condition="Near Mint")
+    listing.live = 4
+
+    checks.equal(
+        len(inventory.copies_on_hand("777")), 7,
+        "EVERY unsold copy is on hand — none is designated backstock (D7 amended)",
+    )
+    inventory.set_state("9/3", master.SOLD)
+    checks.equal(
+        len(inventory.copies_on_hand("777")), 6,
+        "and a sale takes exactly one copy out of the sellable set",
+    )
+    checks.equal(
+        [c.key for c in inventory.copies_on_hand("777")],
+        ["9/1", "9/2", "9/4", "9/5", "9/6", "9/7"],
+        "in box-walk order, with the sold position left as a permanent gap (D10)",
+    )
+    checks.equal(listing.bump(master.LIVE, -1), 3, "a sale decrements the SKU's live count")
+    checks.equal(
+        [listing.bump(master.LIVE, -9), listing.live], [0, 0],
+        "which floors at zero rather than going negative",
+    )
+    checks.raises(
+        master.UnknownState,
+        lambda: listing.bump("captured"),
+        "and a position state is not a listing stage — bump refuses it",
+    )
+    checks.raises(
+        master.UnknownState,
+        lambda: master.check_state(master.LIVE),
+        "`live` IS NOT A CARD STATE any more — check_state refuses it, which is the guard "
+        "that stops a caller reaching for the old per-position flag",
+    )
+
+    # --- the round trip ----------------------------------------------------------------
+    inventory.ensure_box(9, name="round trip")
+    inventory.set_sections(9, [1, 4])
+    reloaded = master.Inventory.parse(inventory.to_payload())
+    checks.equal(reloaded.to_payload()["version"], master.VERSION, "to_payload stamps v2")
+    checks.equal(
+        reloaded.boxes["9"].sections, [1, 4], "boxes survive a JSON round trip"
+    )
+    checks.equal(
+        (reloaded.listings["777"].sku, reloaded.listings["777"].live),
+        ("777", 0),
+        "and so do listings",
+    )
+    checks.equal(
+        [c.state for c in reloaded.copies_on_hand("777")],
+        ["captured"] * 6,
+        "and a v2 payload is NOT re-migrated on read — the stages stay where they are",
+    )
+
+
 # ------------------------------------------------------------------------------------ run
 
 
 def run() -> Result:
     checks = Checks()
     check_allocator(checks)
+    check_boxes_and_listings(checks)
     check_store(checks)
     check_server_routes(checks)
     check_undo(checks)
@@ -2416,11 +5389,18 @@ def run() -> Result:
     check_queue_supersede(checks)
     check_review_answer(checks)
     check_mark_sold(checks)
+    check_retire(checks)
+    check_reshoot(checks)
     check_history(checks)
     check_sidecar_seam(checks)
+    check_capture_claim_chain(checks)
+    check_game_and_note_seam(checks)
+    check_box_routes_and_search(checks)
     check_concurrency(checks)
+    check_origin_gate(checks)
     check_cli_seams(checks)
     check_cli_refusals(checks)
+    check_listing_commands(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

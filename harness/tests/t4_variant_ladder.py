@@ -57,13 +57,17 @@ holofoil || reverseHolofoil || normal.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
 
 from harness.tests import Checks, Result
+from cli import resolve, runs
 from identify import sidecar
 from pipeline import join, routing, tcgcsv, variant
+from store import files
 
 NAME = "T4"
 DESCRIPTION = "Variant ladder resolves all four stages, and the routing table"
@@ -105,6 +109,57 @@ def _check_stage(c, resolution, stage, sku, condition, price, label):
         (stage, sku, condition, price),
         label,
     )
+
+
+@contextmanager
+def _isolated_home():
+    """An empty store in a temporary directory. `cli/resolve.py` reads the live inventory."""
+    previous = os.environ.get(files.HOME_ENV)
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ[files.HOME_ENV] = tmp
+        try:
+            yield Path(tmp)
+        finally:
+            if previous is None:
+                os.environ.pop(files.HOME_ENV, None)
+            else:
+                os.environ[files.HOME_ENV] = previous
+
+
+def _detected_finishes(export_path, reads):
+    """`detected_finish` as `cli/resolve.py` hands it to the ladder, per model read.
+
+    `reads` is `{index: finish string the model returned}`. Every card names a collector
+    number no row in the fixture carries, so each queues as `no_catalog_row` — which is
+    deliberate and is the only way this is observable: `variant.resolve` checks the finish
+    BEFORE it checks for candidates, so the whitelist has already done its work by then, and
+    a fixture row for a finish this export has never heard of does not exist to resolve to.
+    """
+    with _isolated_home() as home:
+        run = runs.Run(directory=home, manifest={})
+        run.write_identifications(
+            {
+                "cards": {
+                    f"9/{index}": {
+                        "box": 9,
+                        "index": index,
+                        "photo": f"captures/box9/{index:04d}.jpg",
+                        "identification": {
+                            "name": "Ghost",
+                            "number": "999",
+                            "printed_total": "159",
+                            "confidence": "high",
+                            "finish": finish,
+                        },
+                    }
+                    for index, finish in reads.items()
+                }
+            }
+        )
+        resolved = resolve.load(run, Path(export_path))
+        return {
+            q.card.position.index: q.card.detected_finish for q in resolved.report.queued
+        }
 
 
 def _three_row_gap(export) -> str:
@@ -672,5 +727,49 @@ def run() -> Result:
             is None,
             "a finish outside the enum is not applied, even from the flag",
         )
+
+    # --- rung 3's whitelist is the enum itself, asserted by ADDING to it ------------------
+    # `cli/resolve.py` is the one seam where the model's `finish` crosses from the
+    # identification payload into an `IdentifiedCard`, and it is the only place the value can
+    # be dropped. It used to be whitelisted against a literal tuple written beside it, which
+    # is a second copy of this enum that nothing keeps in step: a finish added to
+    # `variant.FINISHES` would fall out of the literal, land as `None`, and route the card to
+    # review with nothing on screen saying why — a silent drop, which is the one thing this
+    # pipeline may never do.
+    #
+    # ASSERTED BY ADDING ONE, because that is the case a source scan cannot reach. A grep can
+    # say the two agree today; only this can say they cannot come apart. T7 keeps the source
+    # half — that no finish is spelled out in that file at all.
+    original = variant.FINISHES
+    try:
+        variant.FINISHES = original + ("foil_etch",)
+        widened = _detected_finishes(REPO_ROOT / SOURCE_FIXTURE, {1: "foil_etch"})
+    finally:
+        variant.FINISHES = original
+    c.equal(
+        widened.get(1),
+        "foil_etch",
+        "a finish ADDED to variant.FINISHES survives the trip through cli/resolve.py — the "
+        "whitelist is the enum itself, never a copy of it",
+    )
+    c.equal(
+        variant.FINISHES,
+        original,
+        "and the enum is left exactly as it was found, so the six tests after this one see "
+        "the real one",
+    )
+
+    # The negative, which is the reason the test exists at all rather than being deleted with
+    # the literal: an unknown string from the model is not a finish, and `variant.resolve`
+    # raises `UnknownFinish` rather than guessing, so it has to be dropped before it reaches
+    # the ladder.
+    c.equal(
+        _detected_finishes(
+            REPO_ROOT / SOURCE_FIXTURE, {1: "holographic", 2: "reverse_holo", 3: None}
+        ),
+        {1: None, 2: "reverse_holo", 3: None},
+        "a string OUTSIDE the enum still lands as None, and a real one still lands intact — "
+        "the whitelist did not simply stop whitelisting",
+    )
 
     return c.result()

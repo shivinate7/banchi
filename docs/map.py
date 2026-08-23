@@ -105,22 +105,55 @@ BUILD_ORDER = [
              "which no harness test reaches at all (this file's app/ entry says so in its own "
              "note). docs/GATES.md's Gate B section carries the run's measurements."},
     {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked",
-     "blocked_by": "Gate C",
-     "note": "unblocked 2026-08-22 when Gate B passed, and RE-SEQUENCED BEHIND GATE C the same "
-             "day by the owner: motion capture end to end before any other work. Nothing in "
-             "this step conflicts with that — it touches no app code — but one `next` is the "
-             "rule, and the owner chose which."},
-    {"step": 10, "title": "Feeder integration (Gate C)", "status": "next",
-     "note": "THIS STEP IS GATE C — its old `blocked_by: Gate C` named the gate that IS this "
-             "work, a circularity that was harmless while Gate B was open and stopped being "
-             "so when it passed. Moved to `next` 2026-08-22 at the owner's instruction. "
-             "Partly BUILT the same day: the motion trigger exists (app/src/motion.ts behind "
-             "trigger.ts's seam, a mode toggle and HUD on the capture screen, machine spec + "
-             "live browser spec in app/tests). What remains is physical and cannot be built: "
-             "tune the thresholds at the rig against the real feeder, the 50-card run, then "
-             "a full box. docs/specs/motion-trigger.md is the spec."},
+     "blocked_by": "step 13 (owner sequencing, not a technical dependency — nothing in step 13 needs the vendored catalog, and no production code reads it yet)",
+     "note": "THE GATE DEPENDENCY WAS RETIRED, NOT SATISFIED, and the difference matters to "
+             "anyone reading this row later. This step carried `blocked_by: Gate C` from "
+             "2026-08-22, when the owner re-sequenced it behind motion capture — not because "
+             "anything here conflicts with that work (it touches no app code) but because one "
+             "`next` is the rule and he chose which. On 2026-08-23 the owner retired the "
+             "gating system outright: A, B and C have all passed, docs/GATES.md is a record of "
+             "runs rather than a schedule, and no step may be blocked behind a gate any more "
+             "because none is open. So the blocker was removed by the gates ceasing to be a "
+             "schedule, NOT by Gate C being cleared out of this step's way. "
+             "There is deliberately no Gate D. Nothing waits on this but the doing of it: "
+             "snapshot the repo, build the SQLite index (cards join to sets by FILENAME — "
+             "printedTotal lives only in sets/en.json and is half the join key), then fill the "
+             "image mirror with the Content-Length dry run first. D15."},
+    {"step": 10, "title": "Feeder integration (Gate C)", "status": "done",
+     "note": "THIS STEP WAS GATE C — its original `blocked_by: Gate C` named the gate that IS "
+             "this work, a circularity that was harmless while Gate B was open and stopped "
+             "being so when it passed. BUILT 2026-08-22: the motion trigger at app/src/motion.ts "
+             "behind trigger.ts's seam, a mode toggle and HUD on the capture screen, and both "
+             "a machine spec and a live browser spec in app/tests. "
+             "TUNED AND RUN AT THE RIG, which is the half that could not be built and is why "
+             "this row is `done` rather than `done except the physical part`: Gate C passed and "
+             "docs/GATES.md carries what it measured. docs/specs/motion-trigger.md is the spec."},
     {"step": 11, "title": "pokemontcg.io API key", "status": "done", "note": "done 2026-08-03; step 9 removes the need for it."},
-    {"step": 12, "title": "Scale, polish, deferred list", "status": "blocked", "blocked_by": "all gates"},
+    {"step": 12, "title": "Scale, polish, deferred list", "status": "blocked", "blocked_by": "step 9",
+     "note": "ITS BLOCKER WAS `all gates` AND THE GATES ARE RETIRED (2026-08-23), so this row "
+             "had to name something real or stop claiming to be blocked. It is genuinely "
+             "behind step 9 — the deferred list is scale work, and scale work reads the "
+             "vendored catalog — so the blocker is re-pointed at the step rather than deleted. "
+             "What this row does NOT do is decide that docs/DECISIONS.md's Deferred list is "
+             "open: that list says 'do not build until all gates pass', all gates now have, "
+             "and whether that sentence is thereby spent is the owner's ruling to make in that "
+             "file rather than a consequence anybody may infer from this one."},
+    {"step": 13, "title": "Order flow, boxes, and search", "status": "next",
+     "note": "D7's fungible copies, D20's box object with its retroactive capacity, D10's "
+             "per-box sections, and the search-and-sell screens. Landed: schema v2 and its "
+             "migration, GET /search and the three box routes, PositionBar/CardLocations/"
+             "SearchField/useSearch, the owner's search-and-sell and Boxes screens, the "
+             "Fulfiller's search, and D28's layout half. Outstanding: D26 removed + re-shoot, "
+             "D27 sessionStorage, D28's undo half, D29 group answers, D30 the gap convention."},
+    {"step": 14, "title": "Multi-game: four capture choices plus misc", "status": "blocked",
+     "blocked_by": "step 13 (owner sequencing, not a technical dependency)",
+     "note": "D21-D25. Landed: pipeline/games.py behind three real TCGplayer exports, four "
+             "audit rows, per-game dispatch, and `game` through all ten capture hops with the "
+             "picker on the capture bar. Outstanding: the rarity claim end to end (the job "
+             "that pays — it catches confident-but-wrong reads no threshold fires on), the "
+             "multi-export join, pooled non-located inventory with both opsec discharges, the "
+             "rarity clause into the prompt behind its own A/B flag, and per-game finalisation."},
+
 ]
 
 # --------------------------------------------------------------------------------- gates
@@ -133,11 +166,23 @@ GATES = [
     {"gate": "B", "status": "passed", "on": "2026-08-22",
      "what": "53 real cards end to end — capture through staged listings and the pull preview, "
              "finish detection measured against the whole lot instead of ten staged photos"},
-    {"gate": "C", "status": "next",
+    {"gate": "C", "status": "passed", "on": "2026-08-22",
      "what": "feeder integration: motion state machine, 50-card run, then a full box",
      "why_it_matters": "the feeder already ran Gate B at manual-trigger pace, so this gate "
                        "tunes a trigger against a rhythm the run has now demonstrated."},
 ]
+
+# THE LIST ABOVE IS A RECORD AND NOT A SCHEDULE, as of 2026-08-23. All three gates have
+# passed, CLAUDE.md no longer names a current gate, and docs/GATES.md is what was measured
+# rather than what is owed. THERE IS NO GATE D, and its absence is the decision rather than
+# an omission — do not add one because this list looks unfinished without an open row.
+#
+# THE LIST IS KEPT, AND KEPT AUDITED, WHICH IS THE POINT. `check_map` still reconciles every
+# row here against the `### Gate X` headings in docs/GATES.md and against their PASSED
+# markers, so the history cannot quietly drift: a gate that never happened cannot appear
+# here, and one that did cannot be edited into having gone differently. Deleting the list
+# would retire the check along with the schedule, and only one of those two had stopped
+# earning its place.
 
 # ---------------------------------------------------------------------------- components
 #
@@ -162,30 +207,69 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9"], "tested_by": ["T7"]},
-            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2"]},
-            "cmd_join.py": {"does": "resolve identifications against the export", "governed_by": ["D7", "D11"], "tested_by": ["T7"]},
-            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D11"], "tested_by": ["T7"]},
-            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D10"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
+            "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
+            "cmd_join.py": {"does": "resolve identifications against the export", "governed_by": ["D7", "D8", "D11", "D25"], "tested_by": ["T7"]},
+            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9", "D25"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11"], "tested_by": ["T7"]},
+            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25"], "tested_by": ["T7"]},
         },
     },
     {
         "path": "pipeline/",
         "status": "built",
-        "does": "CSV, variant ladder, pricing, join, routing, run decisions",
-        "governed_by": ["D2", "D3", "D4", "D7", "D8", "D9", "D10", "D11", "D12"],
+        "does": "CSV, variant ladder, pricing, join, routing, run decisions, per-game taxonomy",
+        "governed_by": ["D2", "D3", "D4", "D7", "D8", "D9", "D10", "D11", "D12", "D22", "D25"],
         "modules": {
             "tcgcsv.py": {"does": "TCGplayer Filtered CSV read/write and byte-format inspection",
-                          "governed_by": ["D11"], "tested_by": ["T2"],
+                          # D25 arrived on this file as two column constants and no reader:
+                          # `Product Line` and `Rarity` have been declared in
+                          # CANONICAL_HEADER and read by nothing since the file was written,
+                          # which makes the join product-line BLIND rather than agnostic.
+                          # D22 is the registry that will read the pair.
+                          "governed_by": ["D11", "D22", "D25"], "tested_by": ["T2"],
                           "note": "real CSV library only — v1 bug 2 was a naive split(\",\")"},
+            # Pure literals, importing nothing from this repo, so scripts/docs-audit.py can
+            # read it with ast.literal_eval the way it reads this file. D21/D23/D24 are
+            # module-level rather than package-level for the reason D17 gives about merged
+            # lists: they decide what an ENTRY says — that the game is a per-card claim,
+            # that a rarity claim narrows the finish chips, that a code card is not located
+            # — and none of them governs pricing.py or routing.py. D14, D16 and D18 are
+            # cited in the file's own prose as arguments rather than as rulings about it
+            # (the seam list, the drift, the two tracks), and the superset rule reads a
+            # citation literally — the same trade scripts/docs-audit.py's entry records.
+            "games.py": {"does": "the per-game taxonomy: Product Line cell, ordered Rarity cells in "
+                                 "STACK order, finish enum, finish -> Condition map, and the "
+                                 "rarity -> finish matrix, plus join-key/prompt/crop-band/located "
+                                 "facts per game. Hand-authored, audited against the committed "
+                                 "exports, and it REFUSES on an empty vocabulary rather than "
+                                 "falling back to Pokemon's — riftbound and one_piece ship "
+                                 "unverified because no export for either has ever been seen.",
+                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18",
+                                         "D21", "D22", "D23", "D24", "D25"],
+                         "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
+                                 "is load-bearing rather than sloppy: D23's capture screen renders "
+                                 "a finish chip excluded by a rarity claim as unselectable, which "
+                                 "is safe only while the matrix exceeds reality. finish_by_rarity"
+                                 "[\"Rare\"] carries `normal`, which SV09 does not stock. The "
+                                 "audit's `matrix superset` row blocks on an observed pair the "
+                                 "matrix is missing and `game coverage` only ASKS about the "
+                                 "excess — narrow it and unselectable becomes a trap. "
+                                 "No harness test reaches this module directly; T3 and T4 reach "
+                                 "it through variant.py, which derives its finish enum and "
+                                 "condition map from the `pokemon` entry and is the proof the "
+                                 "entry is right — the values are byte-identical to the literals "
+                                 "it replaced."},
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D20", "D21", "D23", "D24", "D25"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
+            # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
+            # are read out of games.py's `pokemon` entry, byte-identically, which is what
+            # makes the registry believable before anything else is built on it.
             "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not",
-                           "governed_by": ["D3", "D12"], "tested_by": ["T3", "T4"]},
+                           "governed_by": ["D3", "D12", "D22", "D23"], "tested_by": ["T3", "T4"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
@@ -200,9 +284,9 @@ COMPONENTS = [
         "does": "prompt, Batch API transport, sidecars, image prep",
         "governed_by": ["D1", "D2", "D3", "D10"],
         "modules": {
-            "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3"], "tested_by": ["T1"]},
-            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2"], "tested_by": ["T1"]},
-            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10"]},
+            "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
+            "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
+            "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
             "images.py": {"does": "downscale, encode, hash a photograph for the API", "governed_by": ["D2"]},
         },
     },
@@ -223,9 +307,9 @@ COMPONENTS = [
                 "state, one day.",
         "modules": {
             "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses",
-                          "governed_by": ["D1"], "tested_by": ["T6"]},
+                          "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
-                        "governed_by": ["D1"], "tested_by": ["T6"]},
+                        "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
         },
     },
     {
@@ -242,11 +326,11 @@ COMPONENTS = [
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
-                          "governed_by": ["D7", "D10"], "tested_by": ["T7"]},
+                          "governed_by": ["D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
-                          "governed_by": ["D4", "D9"], "tested_by": ["T7"]},
-            "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2"]},
+                          "governed_by": ["D4", "D9", "D28"], "tested_by": ["T7"]},
+            "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
             "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
         },
@@ -341,7 +425,13 @@ COMPONENTS = [
                 # a variable name one day. The superset rule reads a citation literally and
                 # cannot tell an illustration from a ruling. The cost of that is a listed
                 # decision nobody needed; the cost of the alternative is the rule guessing.
-                "governed_by": ["D2", "D16", "D17", "D18"],
+                # D22 and D23 are rulings and not illustrations: the game-registry rows
+                # read pipeline/games.py with `ast` and check the authoring against the
+                # committed exports, and the `matrix superset` row is the mechanical half
+                # of D23's "if anyone ever narrows this matrix, unselectable becomes a
+                # trap". D12 is cited where a graded or vintage Condition cell is skipped
+                # rather than reported — out of scope is not evidence.
+                "governed_by": ["D2", "D12", "D16", "D17", "D18", "D22", "D23"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -354,7 +444,11 @@ COMPONENTS = [
                 # is inside the auditor's code haystack, so writing the identifier out
                 # would BE the reference that retires the entry, and the allowlist row
                 # duly failed on the first draft of this line.
-                "governed_by": ["D15", "D16"],
+                # D23 is its second live entry: the rarity-claim prompt injection is gated
+                # behind an env var that decision names and no code declares yet, because
+                # D23 ships that clause in its own step so the prompt fingerprint moves
+                # once, deliberately, with a re-measured T1.
+                "governed_by": ["D15", "D16", "D23"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -476,9 +570,17 @@ COMPONENTS = [
     {
         "path": "fixtures/",
         "status": "built",
-        "does": "real TCGplayer exports. Ground truth. Never modified — enforced by pre-commit.",
-        "governed_by": ["D11"],
+        "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
+                "and One Piece — plus the import file TCGplayer accepted verbatim. Ground "
+                "truth. Never modified, enforced by pre-commit.",
+        "governed_by": ["D11", "D22", "D25"],
         "tested_by": ["T2"],
+        "note": "The Riftbound and One Piece exports arrived 2026-08-23 and settled the "
+                "highest-risk assumption in D22: TCGplayer does carry both as Product Line "
+                "values, on the identical 16-column header. They also refuted three guesses "
+                "the registry had been written around — see D22. No per-file entries here "
+                "because this component declares no source_suffixes, so the orphan rule does "
+                "not scan it; the audit's game rows read the directory instead.",
     },
     {
         "path": "server/",
@@ -498,15 +600,27 @@ COMPONENTS = [
                 "captures/ui/ are never scanned as paid captures.",
         "modules": {
             "capture_server.py": {
-                # Nine since 2026-08-13, when 7b's queue read and its two writes landed on top
-                # of step 7a's undo. The count is written out rather than left as "the routes"
-                # because it is the one number here a reader checks against the handlers, and
-                # it was wrong for exactly one commit at six.
-                "does": "the nine routes, the sidecar identify reads back, the photo store, "
-                        "and SERVER_EVENTS — `corrected`, `removed`, `answered`, appended "
+                # THE COUNT USED TO BE PUBLISHED HERE AND IS NOT ANY MORE, and this comment
+                # is the argument against itself. It read "Nine since 2026-08-13" and defended
+                # the practice in its own words: "the count is written out rather than left as
+                # 'the routes' because it is the one number here a reader checks against the
+                # handlers, and it was wrong for exactly one commit at six." It was wrong at
+                # six, it was corrected to nine, and by 2026-08-23 it was wrong again at
+                # thirteen — restated in three files at once, none of which noticed.
+                #
+                # D18 decides it: a route count is verifiable and there is nothing in it a
+                # later session could reasonably disagree with, so it is not load-bearing
+                # prose and the honest fix is to stop publishing it. The handlers are the
+                # register. What a reader actually needs from this entry is which SHAPES of
+                # route exist, and that is what the line below now says.
+                "does": "the capture, status, photo, inventory, queue, review-answer, "
+                        "mark-sold, undo, search and box routes; the sidecar identify reads "
+                        "back; the photo store; the origin allowlist that stands between a "
+                        "stray browser tab and a hard delete; "
+                        "and SERVER_EVENTS — `corrected`, `removed`, `answered`, `unanswered`, `reshot`, appended "
                         "to history.jsonl through _history inside the route's own "
                         "Store.write(), so the line and the change it describes commit "
-                        "together or neither does. None of the three is a member of "
+                        "together or neither does. None of the five is a member of "
                         "master.STATES, which is what keeps _state_before_sale from "
                         "restoring a reversed sale to one of them.",
                 # D5 is here because the file cites it: the concurrency it is tested at is two
@@ -516,7 +630,7 @@ COMPONENTS = [
                 # D10 earned a second job with the history lines: index reuse after an undo is
                 # what decides that a removal must be logged at all, since without the line
                 # the log reads `captured 3/2` twice over two physical cards.
-                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28"],
                 "tested_by": ["T7"],
             },
         },
@@ -600,10 +714,11 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: six hash routes, one ROUTES table driving both the "
-                                    "nav and the render, and the persona field that decides the "
-                                    "Fulfiller's view gets no chrome at all",
-                            "governed_by": ["D5", "D10", "D13", "D16"]},
+            "src/App.tsx": {"does": "the shell: seven hash routes, one ROUTES table driving both "
+                                    "the nav and the render, and the persona field that decides "
+                                    "the Fulfiller's view gets no chrome at all. #/boxes is the "
+                                    "seventh, registered with D20's screen rather than after it.",
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
@@ -616,15 +731,21 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
-                                     "names — captures, inventory, and the standing queues. "
-                                     "Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D9", "D10"]},
-            "src/useCamera.ts": {"does": "the camera: deviceId selection, never facingMode (v1 bug "
-                                         "3), the native resolution requested explicitly, and a "
+                                     "names — captures, inventory, boxes, listings and the "
+                                     "standing queues. Types only, it emits no JavaScript.",
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26"]},
+            "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
+                                         "deviceId selection, never facingMode (v1 bug 3), the "
+                                         "native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
-                                 "governed_by": ["D13"]},
+                                 "governed_by": ["D13"],
+                                 "note": "`started`, `missing` and `error` are three different "
+                                         "facts and the screen draws them differently: not "
+                                         "asked for yet, not connected, and asked for and "
+                                         "failed. Collapsing them makes a working rig look "
+                                         "broken on its first paint."},
             "src/encode-worker.ts": {"does": "the capture JPEG encode, on a worker thread the "
                                              "main thread's idle scheduler cannot starve; one "
                                              "reused OffscreenCanvas, fed transferred "
@@ -654,34 +775,38 @@ COMPONENTS = [
                               "governed_by": ["D13", "D19"]},
 
             # ---- 7a's screens ----
-            "src/CaptureScreen.tsx": {"does": "the capture screen: live camera left, last capture "
-                                              "right, box list from /status, set hint and finish "
-                                              "always visible, undo that names what it would delete, "
-                                              "and since 2026-08-22 the trigger mode toggle, the "
-                                              "motion HUD, the swallowed-fire accounting and the "
-                                              "trace save — D19's screen-side obligations",
-                                      "governed_by": ["D3", "D10", "D13", "D19"]},
+            "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
+                    "every control one hairline row at rest (key chip, label, value), one "
+                    "field open at a time, claims panel (Box, Set hint, Rarity, Finish) over "
+                    "a quiet SESSION footer (Game, Camera, Rotation, Trigger). Rarity at rest "
+                    "is the bitfield — one 6px mark per rarity of the chosen game, filled = "
+                    "claimed; the box list is never rendered as a list (filter, re-indexed "
+                    "digits, Enter); small single-selects open as content-sized segmented "
+                    "tracks. Camera folded into the row grammar; the camera never opens on "
+                    "mount. Undo that names what it would delete.",
+            "governed_by": ["D3", "D10", "D13", "D19", "D21", "D22", "D23", "D27"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5"]},
-            "src/CameraPicker.tsx": {"does": "the device picker, the resolution the track "
-                                             "actually negotiated — shown so a short stream is "
-                                             "caught before a box is shot through it — and the "
-                                             "photo-rotation chips that turn the stored frame "
-                                             "upright under a side-mounted camera: Gate B misread "
-                                             "45 of 53 sideways cards and read 53/53 once they "
-                                             "were stored upright.",
-                                     "governed_by": ["D13"]},
-            "src/CameraPicker.css": {"does": "its layout. No panel and no header strip, per "
-                                             "docs/DESIGN.md.",
-                                     "governed_by": ["D5"]},
+                                      "governed_by": ["D3", "D5", "D27"]},
+            "src/CameraPicker.tsx": {"does": "UNREFERENCED since the Pass D rebuild (2026-08-23): the camera picker UI "
+                    "moved into CaptureScreen's Camera field, built from the same useCamera "
+                    "hook, and no screen renders this component now. Kept pending the "
+                    "owner's call to delete or keep; the map records the state so the orphan "
+                    "rule cannot be read as coverage of a live screen.",
+            "governed_by": ["D13"]},
+            "src/CameraPicker.css": {"does": "UNREFERENCED since the Pass D rebuild (2026-08-23): the camera its sheet "
+                    "moved into CaptureScreen's Camera field, built from the same useCamera "
+                    "hook, and no screen renders this component now. Kept pending the "
+                    "owner's call to delete or keep; the map records the state so the orphan "
+                    "rule cannot be read as coverage of a live screen.",
+            "governed_by": ["D5"]},
             "src/PullPreview.tsx": {"does": "look only: the card's own capture photo beside its "
                                             "position label, the last link in the Gate B chain",
-                                    "governed_by": ["D6", "D10"]},
+                                    "governed_by": ["D6", "D10", "D24"]},
             "src/PullPreview.css": {"does": "its layout, and why no accent appears anywhere in it",
                                     "governed_by": ["D5", "D6", "D13"]},
 
@@ -697,7 +822,7 @@ COMPONENTS = [
                         "priced from the export, and an answer that writes and advances with "
                         "no dialog. Reads GET /queues and writes one candidate row back "
                         "through src/server.ts like every other screen.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D23", "D28"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -710,26 +835,87 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13"],
+                "governed_by": ["D5", "D9", "D13", "D28"],
             },
             "src/Inventory.tsx": {
-                "does": "D7's SKU -> positions map made visible: one row per SKU carrying the "
-                        "copy count, expanding to the individual positions holding it. Reads "
-                        "GET /inventory, groups in the browser, keeps nothing — there is one "
-                        "place inventory lives and it is not here.",
-                "governed_by": ["D5", "D7", "D8", "D10", "D13"],
+                "does": "SEARCH AND SELL, over D7's SKU -> positions map. Type a card's name and "
+                        "GET /search answers with every physical copy, each carrying its "
+                        "position and a bar saying how far into the box it sits; empty the "
+                        "field and the browse beneath it is the original screen — one row per "
+                        "SKU with its copy count, expanding to the positions holding it. Two "
+                        "reads and no cache: the browse is GET /inventory grouped in the "
+                        "browser, the search is the server's own grouping, and neither is kept "
+                        "— there is one place inventory lives and it is not here.",
+                "note": "IT WRITES NOW, AND ITS HEADER OVERTURNS ITS OWN OBJECTION IN PLACE "
+                        "rather than deleting it. The file argued at length that a sold button "
+                        "here would be 'the same irreversible-looking write with neither guard, "
+                        "and a second place to perform one action'. Both halves are answered "
+                        "where they were made: the guards were never Fulfillment PROPERTIES, "
+                        "only asserted there, so this screen brings them — a photo-confirm "
+                        "panel showing the copy's own stored photo at its position before "
+                        "anything is written (D6), and a per-sale receipt with a twenty-second "
+                        "undo, offered only when markSold's `restores_to` says a reversal will "
+                        "work. The race is the server's to refuse and it does: `already_sold` "
+                        "is drawn as a receipt with no undo, the reading Fulfillment.tsx paid "
+                        "for with a data-integrity bug. The live cap it once declined to draw "
+                        "comes off the wire now (SearchGroup.cap), which is the condition its "
+                        "own comment named as what would settle it.",
+                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D26"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
-                        "densities — and why no accent appears anywhere in it",
-                "governed_by": ["D5", "D7", "D13"],
+                        "densities — the search field, the found groups, the receipts, and the "
+                        "confirm panel. Accent appears exactly once in it, in that panel, which "
+                        "is the one thing on the screen with exactly one thing to do; its "
+                        "header used to say no accent appeared at all and records why that "
+                        "stopped being true.",
+                "governed_by": ["D5", "D6", "D7", "D13", "D26"],
+            },
+            "src/Boxes.tsx": {
+                "does": "D20's box object, made visible and editable at #/boxes. One card per "
+                        "box from GET /boxes: its name, its fill or its frozen capacity, its "
+                        "lid, the section layout drawn from the server's own sections_detail "
+                        "through PositionBar's spansOf, and per-section counts. Four controls, "
+                        "which are the four things D20 says a box has that a person decides — "
+                        "register one before a card goes into it, rename it, re-divide it, seal "
+                        "or re-open it. Its NUMBER is not among them: that would be a renumber, "
+                        "which D10 forbids outright.",
+                "note": "TWO CONTROLS SAY WHAT THEY WILL DO BEFORE THEY DO IT, and both "
+                        "sentences are the decision rather than a nicety. Sealing reads 'Seal "
+                        "box — freezes capacity at 59', because from that press every fraction "
+                        "in the product divides by that number and a bare 'Seal box' would take "
+                        "a permanent decision against a denominator the owner would have to go "
+                        "and find; it is disabled outright when the fill could not be read. "
+                        "Editing dividers warns first, and says it is a RELABEL AND NOT A "
+                        "RENUMBER — D10 as amended: the index is the identity and Section · Card "
+                        "are a view of it, so no card and no index moves. That warning is the "
+                        "confirm D10 names as the fix to reach for first against its own "
+                        "recorded cost, 'a mis-tap relabels a filled box and nothing flags it'. "
+                        "It names the first index that moves and counts the cards in the "
+                        "sections the change reaches — off sections_detail's own counts, never "
+                        "off `fill - from + 1`, which would be exact only if every index up to "
+                        "the high-water mark is occupied. That is an assumption about the store "
+                        "rather than a fact from it, so the count rounds up to a section "
+                        "boundary and the sentence says so. "
+                        "NOTHING HERE COMPUTES A SECTION BOUNDARY. types.ts forbids it and "
+                        "pipeline/join.py:Position is the only label formula in the repo; the "
+                        "spans, the rendered divider list and the denominator are all read back "
+                        "off the wire.",
+                "governed_by": ["D5", "D10", "D13", "D20"],
+            },
+            "src/Boxes.css": {
+                "does": "the box panels, the section track and the editors, at the dense "
+                        "owner-side end. No accent anywhere in it and no exception — every box "
+                        "carries four controls, so a fill would have to pick one and would then "
+                        "mean 'important'. The seal's weight comes from the number on it.",
+                "governed_by": ["D5", "D20"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -751,13 +937,43 @@ COMPONENTS = [
             "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
                                 "governed_by": ["D5"]},
 
+            # ---- the search-and-sell core: one set of components, two densities ----
+            #
+            # D5 puts two audiences on one system, and these four are where that stops being a
+            # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
+            # ONE implementation. The alternative — a second component per screen — is what
+            # docs/DESIGN.md rejected when it declined two visual worlds.
+            "src/PositionBar.tsx": {"does": "D20's sentence drawn: the box as a track, a tick per "
+                                            "divider, a marker at this card. Says '#40 of 250 · 16% "
+                                            "in' for a sealed box and '#12 of 62 so far' for an open "
+                                            "one, because an open box's denominator still moves.",
+                                    "governed_by": ["D5", "D10", "D13", "D20"]},
+            "src/PositionBar.css": {"does": "the track at two densities, and the marker",
+                                    "governed_by": ["D5", "D20"]},
+            "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
+                                              "its sold action. D7's fungibility made visible — every "
+                                              "unsold copy is offered, and the listed quantity is read "
+                                              "off the SKU rather than counted from the copies.",
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26"]},
+            "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
+                                              "card with a photo; the owner's is a row.",
+                                      "governed_by": ["D5", "D7"]},
+            "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
+                                            "hint; the Fulfiller gets neither — his screens are touch "
+                                            "and show no keys.",
+                                    "governed_by": ["D5", "D13"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5"]},
+            "src/useSearch.ts": {"does": "GET /search behind a debounce, with an out-of-order guard so a "
+                                         "slow early answer cannot overwrite a fast later one",
+                                 "governed_by": ["D5", "D13"]},
+
             # ---- what checks the above ----
             "eslint.config.js": {
                 "does": "the two v1-bug rules docs/DECISIONS.md's table has named as guards since "
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18"],
+                "governed_by": ["D13", "D16", "D18", "D27"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -795,7 +1011,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colours "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13"],
+                "governed_by": ["D5", "D10", "D13", "D24"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

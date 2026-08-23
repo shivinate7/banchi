@@ -14,6 +14,15 @@ a named outcome that ends in the card being processed and recorded:
 A missing set hint or a missing variant toggle is not a problem at all. D3's rung 2 exists
 for exactly that card, and D2 calls the set hint an optional accelerator.
 
+A MISSING `game` IS NOT A PROBLEM EITHER, AND IT IS NOT THE SAME KIND OF ABSENCE. D21 is
+explicit that D3's null-means-no-claim does not transfer: a null finish is meaningful
+because a ladder infers a finish underneath it, and nothing infers a game. So an absent
+`game` is not "no claim" — it is a sidecar written before the field existed, every one of
+which is a Pokemon card, and `Capture.game_or_default` backfills it at the read. A game
+string the registry does not know is a different case and IS a problem: it is reported and
+carried forward unchanged, never dropped, because a dropped one would read as absent and
+backfill to Pokemon.
+
 `--variant` FILLS GAPS AND NEVER OVERRIDES (D3 rung 1). It supplies the finish for photos
 whose sidecar records none, and is ignored for photos that carry one. The toggle is a claim,
 and a flag that could replace it across a whole run is exactly what would stop it being one.
@@ -38,9 +47,9 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Tuple
 
-from pipeline import variant
+from pipeline import games, variant
 
 PHOTO_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 SIDECAR_SUFFIX = ".json"
@@ -59,6 +68,14 @@ _INDEX_KEYS = ("position", "index", "card")
 _BOX_KEYS = ("box",)
 _HINT_KEYS = ("set_hint", "set", "hint")
 _VARIANT_KEYS = ("variant", "metadata_finish", "finish")
+# One spelling and no aliases, unlike the two above. Those carry aliases because sidecars
+# written by hand and by older tools exist; nothing has ever written a `game` key under
+# another name, and inventing spellings for a field on its first day is how a vocabulary
+# nothing audits gets started.
+_GAME_KEYS = ("game",)
+# Same rule as `game`, first day, one spelling.
+_RARITY_CLAIM_KEYS = ("rarity_claim",)
+_NOTE_KEYS = ("note",)
 
 
 @dataclass(frozen=True)
@@ -71,6 +88,32 @@ class Capture:
     index: Optional[int] = None
     set_hint: Optional[str] = None
     metadata_finish: Optional[str] = None
+    # THE RAW CLAIM, NOT THE BACKFILLED ONE. `None` means the sidecar named no game, which
+    # is every file written before D21; `game_or_default` is where the substitution happens
+    # and it is a property so the substitution is visible at the point of the read.
+    #
+    # THE DISTINCTION IS NOT COSMETIC AND IT IS NOT D3's. A `metadata_finish` of None is
+    # meaningful because a ladder infers a finish underneath it; nothing infers a game. What
+    # this None is for is the other direction: `cli/cmd_identify.py` re-records the card from
+    # this object, and a backfilled `pokemon` written back through that path would be a
+    # write-side default — turning "nobody was asked" into "the operator said Pokemon" on
+    # disk, permanently, on the first identify run. D21 forbids exactly that.
+    #
+    # An unregistered string is kept here as-is rather than dropped, with a problem noted.
+    # Dropping it would fall back to `None`, which backfills to Pokemon — a Riftbound card
+    # priced off a Pokemon export, which is the one outcome `games.get`'s docstring is
+    # written to prevent.
+    game: Optional[str] = None
+    # D23's multi-select stack claim: the exact `Rarity` cells the operator said this
+    # card's stack holds, validated against the game's own vocabulary at the read — which
+    # is why `game` is read FIRST in `load`. None is no claim and narrows nothing; unlike
+    # `game`, dropping a bad member here is SAFE, because no claim is the compatibility
+    # default rather than a silent Pokemon. A tuple for the same reason the dataclass is
+    # frozen.
+    rarity_claim: Optional[Tuple[str, ...]] = None
+    # Free text the operator typed AFTER the capture, describing a card the pipeline will
+    # never identify. Read back only so a re-record carries it; nothing here parses it.
+    note: Optional[str] = None
     source: str = FROM_NOWHERE
     problem: Optional[str] = None
     # True when `metadata_finish` came from `--variant` rather than from the sidecar. The
@@ -81,6 +124,17 @@ class Capture:
     @property
     def has_position(self) -> bool:
         return self.box is not None and self.index is not None
+
+    @property
+    def game_or_default(self) -> str:
+        """The game to process this card as — D21's READ-SIDE BACKFILL, and nothing else.
+
+        A sidecar written before `game` existed names none, and every one of those is a
+        Pokemon card. The substitution is here, at the read, rather than in `load` or in the
+        dataclass default, so that a caller writing the claim back can still tell the two
+        apart — which is the whole reason `game` is Optional a few lines up.
+        """
+        return self.game or games.DEFAULT_GAME
 
     @property
     def key(self) -> str:
@@ -118,6 +172,82 @@ def _check_variant(value) -> Optional[str]:
         return None
     text = str(value).strip().lower()
     return text if text in variant.FINISHES else None
+
+
+def _check_rarity_claim(value, game: Optional[str]):
+    """(claim, problem) — the sidecar's `rarity_claim`, read defensively.
+
+    Modelled on `_check_variant`: an invalid member is DROPPED WITH A PROBLEM RECORDED,
+    never coerced to the nearest valid one. The shapes a hand-written sidecar produces are
+    handled ahead of the membership check, and the first one is the classic bug this
+    function exists to refuse: `"rarity_claim": "Common"` is ONE rarity, and iterating the
+    string would make it six letters, none of which is a rarity, all of which would be
+    dropped — a claim silently erased by its own reader.
+
+    `game` MUST ALREADY BE READ — the vocabulary is per-game, which is why `load` reads the
+    game key first. Three cases:
+
+      registered game     members are checked against its `rarities`; outsiders drop with a
+                          problem. `rarities_not_claimed` is deliberately not consulted —
+                          `Code Card` is a real cell and never a stack claim (D22).
+      unregistered game   membership cannot be checked, so members are kept verbatim with
+                          no further problem — the game's own problem is already recorded,
+                          and the join refuses the whole card by name before any claim is
+                          consulted.
+      no game (None)      D21's read-side backfill applies at the read, so members are
+                          checked against `games.DEFAULT_GAME`'s vocabulary — the same game
+                          the card will be processed as.
+
+    An empty claim — `[]`, or every member dropped — is None: no claim, narrows nothing.
+    """
+    if value is None:
+        return None, None
+    if isinstance(value, str):
+        members = [value]
+    elif isinstance(value, (list, tuple)):
+        members = list(value)
+    else:
+        return None, f"rarity_claim {value!r} is not a list of rarity strings"
+
+    cleaned = [str(item).strip() for item in members if str(item).strip()]
+    if not cleaned:
+        return None, None
+
+    try:
+        entry = games.get((game or games.DEFAULT_GAME).strip().lower())
+    except games.UnknownGame:
+        return tuple(cleaned), None
+
+    vocabulary = tuple(entry["rarities"])
+    kept = tuple(item for item in cleaned if item in vocabulary)
+    dropped = [item for item in cleaned if item not in vocabulary]
+    problem = None
+    if dropped:
+        problem = (
+            f"rarity_claim {', '.join(repr(d) for d in dropped)} not in "
+            f"{entry['key']}'s rarities"
+        )
+    return (kept or None), problem
+
+
+def _check_game(value) -> Optional[str]:
+    """A game outside the registry is a problem to report, never a value to coerce.
+
+    Modelled on `_check_variant` and tested against `pipeline/games.py` rather than a
+    literal tuple, for the reason `cli/resolve.py` gives about `variant.FINISHES`: the
+    registry has one home, and a copy of its keys written here could not be kept in step
+    with it. Registered but unverified games (`riftbound`, `one_piece`) pass — whether a
+    game can be PROCESSED is `games.require`'s question and belongs to the consumer, not to
+    a reader whose only job is to say what the file claims.
+    """
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    try:
+        games.get(text)
+    except games.UnknownGame:
+        return None
+    return text
 
 
 def position_from_path(path: Path, root: Optional[Path] = None):
@@ -178,7 +308,7 @@ def load(
         sidecar_path = None
 
     sidecar_box = sidecar_index = None
-    set_hint = metadata_finish = None
+    set_hint = metadata_finish = game = rarity_claim = note = None
     if payload is not None:
         sidecar_box = _as_int(_first(payload, _BOX_KEYS))
         sidecar_index = _as_int(_first(payload, _INDEX_KEYS))
@@ -188,6 +318,25 @@ def load(
         metadata_finish = _check_variant(raw_variant)
         if raw_variant is not None and metadata_finish is None:
             problems.append(f"variant {raw_variant!r} is outside {variant.FINISHES}")
+        raw_game = _first(payload, _GAME_KEYS)
+        game = _check_game(raw_game)
+        if raw_game is not None and game is None:
+            problems.append(f"game {raw_game!r} is not in {games.keys()}")
+            # KEPT, NOT DROPPED, and this is the one place in this module where a rejected
+            # value survives its own rejection. A dropped game reads as an ABSENT one, and
+            # an absent one backfills to Pokemon — so a typo'd or future game would be
+            # joined against a Pokemon export and priced off it. Carrying the string forward
+            # means the consumer's `games.get` refuses by name instead.
+            game = str(raw_game).strip().lower()
+        # AFTER `game`, NEVER BEFORE IT: the claim's vocabulary is the game's, so the order
+        # of these two reads is load-bearing. See `_check_rarity_claim`.
+        raw_claim = _first(payload, _RARITY_CLAIM_KEYS)
+        rarity_claim, claim_problem = _check_rarity_claim(raw_claim, game)
+        if claim_problem:
+            problems.append(claim_problem)
+        raw_note = _first(payload, _NOTE_KEYS)
+        # No enum to check it against — it is prose. Trimmed to nothing is nothing.
+        note = str(raw_note).strip() or None if raw_note is not None else None
 
     # `--variant` fills a gap; it never replaces a recorded toggle. The `is None` test is
     # the whole guarantee, so it is one line and it is here rather than at the call site.
@@ -220,6 +369,9 @@ def load(
         index=resolved_index,
         set_hint=set_hint,
         metadata_finish=metadata_finish,
+        game=game,
+        rarity_claim=rarity_claim,
+        note=note,
         source=source if resolved_box is not None else FROM_NOWHERE,
         problem="; ".join(problems) if problems else None,
         variant_from_flag=variant_from_flag,

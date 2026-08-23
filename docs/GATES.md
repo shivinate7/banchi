@@ -1,4 +1,21 @@
-# Gates, harness, build order
+# Runs, harness, build order
+
+**THE GATING SYSTEM IS RETIRED (2026-08-23, owner's decision). This file is a record of
+what was measured, not a schedule.** Gates A, B and C all passed; no gate is current; no
+step is blocked behind one; the deferred list is open. `CLAUDE.md` no longer declares a
+current gate and `scripts/docs-audit.py` no longer reconciles one.
+
+**Every number in the gate sections below is evidence about a run that happened on a date,
+and none of it is ever rewritten to match a later tree.** 53 cards end to end. Finish
+detection at a 30% false-positive rate under the rig's lighting. `detect_card` at 0 of 53,
+then 53 of 53 by a second method. A 623 ms feeder cadence over 84 intervals, twice. Those
+are the only facts this project has about cards rather than about itself, and renumbering
+one to agree with today's code would turn a measurement into a fiction — which is the one
+thing a record may never do.
+
+What was retired is the gate as a *control*: the blocking, the sequencing, and the
+"current gate" a session had to look up before it was allowed to build. The harness below
+is untouched and is still the contract.
 
 ## The harness is the contract
 
@@ -47,6 +64,18 @@ per set and overall.
   a real re-measurement stops being visible among the noise — which is the one thing the
   committed score exists to show. `batch_ids` and `usage` are part of the comparison, so a
   fresh submission always writes even if the accuracy lands on the same number.
+- **The rarity-clause A/B was run on 2026-08-23 and the clause lost.** `PKMNSCAN_T1_RARITY=1`
+  scores the eval with each card's TRUE rarity as a one-element stack claim — the best case
+  the feature could ever see — into its own results file, `harness/results/t1-rarity.json`
+  (one file per configuration, as above). Measured against baseline: holdout 0.9706 → 0.9559,
+  high-confidence misses 5 → 7, and the finish distribution hardened (`unknown` 27 → 5,
+  `normal` 66 → 111) despite the clause's own carve-out sentence — the exact both-directions
+  failure the Someday entry warned about, plus a third nobody predicted. The losses were name
+  misspellings, not rarity-adjacent; the join key improved by one; and the confident-digit
+  miss (`271/167`) survived, which is the class D23 says only the catalog cross-check catches.
+  **The production clause is therefore switched off** in `cli/cmd_identify.py` with the
+  measurement cited at the switch; the claim's other two jobs — the ladder cross-check and
+  the chip narrowing — are unaffected. Cost of knowing: $0.17.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
   `finish` field. Do not let a green T1 be read as variant detection working. **Gate B did
   that job on 2026-08-22 and the answer was bad**: 16 of 53 normals read as foil, a 30%
@@ -301,28 +330,35 @@ commands. Recorded in `docs/DECISIONS.md`'s Someday list with two more operation
 surfaced (late re-shoot of a bad photo; a `removed` state for cards that leave inventory
 without a sale).
 
-### Gate C — feeder integration
+### Gate C — feeder integration. PASSED 2026-08-22
 
 **The feeder exists and runs today** (confirmed 2026-08-13). Cards are fed onto a tray,
-landing in the same spot each time. This gate is therefore tuning against a rhythm that
-already exists, not building one — which is a smaller job than this section was written to
-describe.
+landing in the same spot each time. This gate therefore tuned against a rhythm that already
+existed rather than building one — a smaller job than this section was written to describe.
 
-It does not move auto-capture earlier. Gate B stays manual, on the original reasoning:
-auto-capture was scoped as an incremental addition after step 7 because of its own
-complexity, and a gate that tests the pipeline and an untuned trigger at once cannot say
-which one failed. `docs/specs/capture-app.md` builds the trigger as one replaceable piece
-so that this gate is an addition rather than a rewrite.
+It did not move auto-capture earlier. **Gate B ran manual**, on the original reasoning, and
+the reasoning is the part worth keeping: auto-capture was scoped as an incremental addition
+after step 7 because of its own complexity, and a run that tests the pipeline and an untuned
+trigger at once cannot say which one failed. `docs/specs/capture-app.md` built the trigger
+as one replaceable piece, and the seam held — the motion machine landed as an addition
+rather than a rewrite.
 
 The feeder pauses per card, so the method is a motion state machine — and **the machine
 is BUILT as of 2026-08-22** (`app/src/motion.ts` behind the trigger seam, a mode toggle
 and live HUD on the capture screen, two specs in `make design-check`; spec at
-`docs/specs/motion-trigger.md`, decision at D19). Built is not tuned: every threshold is
-derived from Gate B's frames and none has met the running feeder. Video frame extraction
-is no longer "the fallback if tuning misbehaves" — D19 rejects it as a capture path
-outright and keeps it only as a rig-session debugging instrument. What remains of this
-gate is physical: the ~30-minute tuning protocol in the spec, the 50-card run, then a
-full box.
+`docs/specs/motion-trigger.md`, decision at D19). **Every threshold was derived from Gate
+B's frames**, and that provenance is the finding the first live trace then convicted: live
+still-noise runs eleven times the stored-JPEG floor `tLo` was fitted to, which silently cost
+14 of 86 cards until it was retuned. Video frame extraction is no longer "the fallback if
+tuning misbehaves" — D19 rejects it as a capture path outright and keeps it only as a
+rig-session debugging instrument.
+
+**What this gate asked for, and what it got.** It asked for the ~30-minute tuning protocol,
+a 50-card run, then a full box. The protocol ran and produced the retune above; the 50-card
+bar was cleared twice over by two 85-card runs; **the full box has not happened, and neither
+has the pipeline half** — see the two paragraphs below, which say exactly what box 95 did
+and did not do. Recorded as owed rather than quietly dropped, even though nothing is gated
+on it any more.
 
 **The rhythm has a number now, and half of one.** Recorded here because Gate B measured it
 by accident and the next run should not have to.
@@ -344,11 +380,57 @@ by accident and the next run should not have to.
   86/86 with zero double-fires. `docs/specs/motion-trigger.md` carries the numbers; what
   remains live is the confirmation run.
 
-**None of the above came from anything the repo writes down.** `captured_at` was
-whole-second until 2026-08-22, which is coarser than the period it was timing; the real
-figures survived only as APFS `st_birthtime` on the photographs, which no clone or copy
-carries. `store/master.py`'s `now()` stamps milliseconds now, so the 50-card run measures
-its own cadence instead of depending on that accident a second time.
+**The confirmation run happened, and it passed: 85 cards, box 95, nothing dropped.**
+
+- **Nothing dropped, and that is checkable rather than remembered.** Box 95 holds 85
+  records at indices 1..85 with **zero gaps** and **85 distinct `capture_id`s**, so the
+  machine fired once per card and the replay guard caught no double-submission. All 85
+  carry a finish claim; all 85 have a photograph on disk.
+- **Cadence, measured over the run's 84 intervals**: median **623 ms**, mean 633 ms,
+  robust σ **43 ms** (67 ms by standard deviation), min 520 ms, max 878 ms, and **zero
+  intervals above 1.6× the median** — no stall, no double-fire, no recovery gap.
+- **The trace's prediction was exact.** The tuning trace above put the period at "623 ms
+  burst-to-burst over 86 cycles". The confirmation run's median is 623 ms. The retuned
+  `tLo` did what the replay said it would.
+- **A second run agrees independently.** Box 99, 85 cards, taken earlier the same evening:
+  median 618 ms, mean 631 ms, robust σ 47 ms, min 506 ms, max 903 ms, zero gaps, zero
+  outliers. **Two 85-card runs whose means differ by 2 ms.**
+- **The motion trigger is slightly faster than the hand it replaced**, at comparable
+  jitter: Gate B's manual loop averaged 661.9 ms over its last eight gaps at σ 34 ms;
+  this runs at 623 ms and σ 43 ms. The operator was the slower component.
+
+**WHAT THIS RUN DID NOT DO, and it is half of what this section used to ask for.** Box 95
+holds 85 records and **every one of them is still `captured`**: zero identified, zero
+carrying a SKU, and `runs/` holds no run directory for that box. The cards were photographed
+at feeder pace and the pipeline was never pointed at them.
+
+So the trigger half is confirmed and the pipeline half is not. `docs/specs/motion-trigger.md`
+said so on the day and was right: *"That clears the 50-card bar for the trigger half of Gate
+C; the gate still owes the pipeline half (identify → join → emit → reconcile on a
+feeder-paced box) and foil under this lamp."* Written down here rather than left to that
+spec, because this section is where a later reader looks for what a run proved, and "85
+cards, nothing dropped" reads as end-to-end when it was not. Gate B is still the only run
+that has been through identify, join, emit, Import to Staged and reconcile — and it was
+hand-triggered, 53 cards, one box.
+
+**Honest limit on the cadence figures.** They are photo **write** times, not shutter times —
+the same instrument Gate B used. The interval between consecutive writes measures the cadence
+only while encode-and-commit latency is roughly constant, which the zero-outlier count
+supports and does not prove.
+
+**`captured_at` is STILL whole-second, and the reason is worth more than the fix was.**
+The paragraph this replaces said the millisecond stamp meant the next run would "measure
+its own cadence instead of depending on that accident a second time". It depended on the
+accident a second time. Every one of box 95's 85 records reads `T03:08:22+00:00` with no
+fractional part, and the figures above came off APFS `st_birthtime` again.
+
+The cause is not the code. `store/master.py:now()` was changed to milliseconds at 20:16
+and the run was at 22:08 — **after** the fix. The server process serving it had been
+started before 20:16 and was holding the old code in memory, which no commit can reach.
+**A long-running `make server` outlives the fix that was written for it.** That is a
+restart discipline, not a bug, and it belongs beside the money rules: restart the capture
+server after any change under `store/` or `server/`, or the run you are about to do is
+served by whatever was true when you started it.
 
 ---
 
@@ -360,9 +442,15 @@ its own cadence instead of depending on that accident a second time.
 3. ~~Verification harness (T1–T4)~~ — done; T5 and T6 arrived with step 4.
 4. ~~Batch script v2: Batch API, variant ladder, catalog join, real CSV library~~ — code
    done 2026-08-03, spec at `docs/specs/batch-script.md`, harness green at T1–T6.
-   `./pkmnscan identify | join | emit | reconcile`. `./pkmnscan identify | join | emit | reconcile`. **This line read "not yet run against a real card" until 2026-08-22**, when Gate B put 53 through all four commands and reconciled back in two clean round trips with zero unmatched in either direction. The run found defects in this step's own code that no fixture could: the Batch API refusing the store's `box/index` as a `custom_id`, `cmd_join` leaving a re-routed position's stale entry in the queue it left, review answers nothing on the join path ever read back (now rung 0 of the ladder), and a post-import re-emit that double-counted staged copies. The harness still exercises this step against fixtures and synthetic images only; the run itself is in the Gate B section above.
-   that is Gate B, and until it passes this is verified against fixtures and synthetic
-   images only.
+   `./pkmnscan identify | join | emit | reconcile`. **This line read "not yet run against a
+   real card" until 2026-08-22**, when Gate B put 53 through all four commands and reconciled
+   back in two clean round trips with zero unmatched in either direction. The run found
+   defects in this step's own code that no fixture could: the Batch API refusing the store's
+   `box/index` as a `custom_id`, `cmd_join` leaving a re-routed position's stale entry in the
+   queue it left, review answers nothing on the join path ever read back (now rung 0 of the
+   ladder), and a post-import re-emit that double-counted staged copies. The harness still
+   exercises this step against fixtures and synthetic images only; the run itself is in the
+   Gate B section above.
 5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,
    box, set hint, variant), `/status`, `GET /photo/<box>/<position>`, `GET`/`PUT` inventory
    state shared across devices.~~ — done 2026-08-11, spec at `docs/specs/capture-server.md`.
@@ -372,10 +460,15 @@ its own cadence instead of depending on that accident a second time.
    with nothing under `harness/tests` importing `server`, `store` or `cli` — and the claim
    outlived the gap it described. What T7 still does not assert is in `docs/DEBTS.md`, and
    is now three named cases rather than a whole package.
-   The server carries nine routes now, not the five this line was written about: a sixth,
-   `DELETE /inventory/<box>/<index>`, arrived with step 7a's undo, and three more with 7b —
-   `GET /queues`, `POST /review/<box>/<index>/answer`, `POST /inventory/<box>/<index>/sold`.
-   All four came with their own T7 cases on the day they landed.
+   The server has grown well past the five routes this line was written about: `DELETE
+   /inventory/<box>/<index>` arrived with step 7a's undo; `GET /queues`, `POST
+   /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` with 7b; and
+   `GET /search`, `GET /boxes`, `POST /boxes` and `PUT /boxes/<box>` with the order flow.
+   Each came with its own T7 cases on the day it landed. **The count is deliberately not
+   published here.** It said "nine" while the server served thirteen, and it was restated in
+   three files at once — a verifiable fact with nothing in it a later session could disagree
+   with, which by D18's test means it is not load-bearing prose and should not be maintained.
+   `server/capture_server.py`'s own header is the register.
 6. ~~Design tokens locked and one component built against them~~ — done 2026-08-12.
    Tokens locked by interview against rendered alternatives rather than by inference; the
    pull-confirm built against them at `app/src/PullConfirm.tsx`, in all three states, on a
@@ -392,8 +485,10 @@ its own cadence instead of depending on that accident a second time.
    screens rather than a build system. `docs/DESIGN.md`'s Fulfillment table is now *written*
    as assertions in full: three of its rows against step 6's component in
    `app/tests/pull-confirm.spec.ts`, and all nine against the view in
-   `app/tests/fulfillment.spec.ts`. Both specs pass — 30 assertions, green since the routing
-   landed; see below for the several hours in which they did not.
+   `app/tests/fulfillment.spec.ts`. Both specs pass, green since the routing
+   landed; see below for the several hours in which they did not. (The assertion count used
+   to be published here too and no longer is — see `docs/DESIGN.md` for why. The "16 of 30"
+   and "30 of 30" further down are evidence about that day and stay as written.)
 
    **Split at Gate B — and then the split was not honoured.** 7a is the Gate B path: the
    shell, the capture screen, undo, the pull preview and the trigger seam, specified in
@@ -474,6 +569,30 @@ its own cadence instead of depending on that accident a second time.
     `.env` as `POKEMONTCG_API_KEY`; keyless limits covered the harness but not set-scale
     processing. Step 9 removes the need for it.
 12. Only then: scale, polish, deferred list.
+13. **Order flow, boxes, and search** — spec at `docs/specs/order-flow.md`. the store's fungible-copy model (D7 amended), the box
+    object and its retroactive capacity (D20), per-box section layouts (D10 amended), the
+    search-and-sell screens on both sides, and the operations D26-D30 ratify. Landed so far:
+    schema v2 with the migration, the four new server routes, the shared search components,
+    the owner's search-and-sell and Boxes screens, the Fulfiller's search, and D28's layout
+    half. **Outstanding: D26** (`removed` state, re-shoot in place), **D27** (session state in
+    `sessionStorage`), **D28's undo half** (`restores_to` on the answer route, `Queue.reopen`),
+    **D29** (group-answer a homogeneous queue), **D30** (the gap convention rendered as
+    neighbours and a gap count).
+14. **Multi-game** — spec at `docs/specs/multi-game.md`. four capture choices plus `misc`, per D21-D25. Landed: the vendored
+    registry with three real TCGplayer exports behind it, four audit rows, per-game dispatch,
+    and `game` through all ten capture hops with the picker on the capture bar. **Outstanding:
+    step 5** — the rarity claim end to end, which is the one that pays: it cross-checks the
+    identification, and T1's recorded misses are confident answers with the digits wrong that
+    no confidence threshold fires on. Then **step 6** (repeatable `--export`, per-game
+    catalogs, one import file per game), **step 7** (pooled non-located inventory and both
+    opsec discharges), **step 8** (the rarity clause into the prompt, behind its own A/B flag
+    so the fingerprint moves once and deliberately), and **step 9** per-game finalisation.
+
+**These two were appended rather than inserted, and that is forced rather than tidy.**
+`scripts/docs-audit.py`'s repo-map check compares the set of step numbers here against
+`docs/map.py` in BOTH directions, so renumbering 10-12 to make room would have to land in
+four files at once. Appending costs nothing and the ordering is carried by `status` and
+`blocked_by`, not by the integers.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed

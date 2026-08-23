@@ -183,6 +183,79 @@
   border-radius: var(--r);
 }
 
+/* ---- the search, and the copies it finds ---- */
+
+/* The results, and the way back out of them. A column at the same 24px rhythm as the view
+   itself, so a group of copies is spaced from the control above it exactly as a list row is
+   from the row above it. Nothing here restates a floor from the constraints table — see the
+   header. */
+.fulfillment-results {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* The groups stretch to the column and the quiet control does not, which is what `.fulfillment`
+   itself does with `align-items: flex-start`. It cannot be set on the parent here: the groups
+   are the thing that has to be full width, and stretching is the default that gives them that.
+   So the exception is written on the one child that wants it, and "Show every card" is the
+   same size as every other plain control on this view rather than a full-width bar. */
+.fulfillment-results > .fulfillment-plain {
+  align-self: flex-start;
+}
+
+/* The field is an <input>, which makes it a tap target and puts it under the same floor as
+   every button on this screen. `.search-field-fulfiller` gives the BOX it sits in a 56px
+   minimum and centres the input inside it, so the input's own height is its text plus its
+   padding — and the input is what the browser hit-tests. A floor on the thing that is
+   actually pressed rather than on the thing that is drawn around it. */
+.fulfillment .search-field-input {
+  min-height: 44px;
+}
+
+/* THE GROUP IS FLATTENED INSIDE THIS VIEW, AND IT IS A MEASUREMENT THAT DECIDED IT.
+ *
+ * `CardLocations`'s Fulfiller skin draws each group as a bordered surface with 24px of its
+ * own padding, and each copy inside it as a second bordered surface with 24px more. That is
+ * right for a screen where the group is the panel; here the view is already the panel and the
+ * COPY is what he taps, so the group's own box was a surface drawn on a surface — which the
+ * separation mechanism in docs/DESIGN.md, a single 1px hairline, does not ask for.
+ *
+ * The measurement is what makes it non-negotiable rather than a taste: at 375px the view
+ * keeps 24px either side, the group took 24 more and the copy 24 more again, leaving the
+ * photo 227px on its short edge against a 320px floor. Two nested boxes is 96px of padding on
+ * a 375px screen. The copy keeps its box because it is the thing being chosen between; the
+ * group gives its up, and the group's heading is spaced by the parent's own gap instead.
+ *
+ * A contextual rule rather than an edit to CardLocations.css — the same call `.pull-confirm`
+ * below is given, and for the same reason: that component owns its own look, this raises and
+ * lowers nothing about the copies inside it, and the owner's dense skin is untouched. */
+.fulfillment .card-locations-fulfiller {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* Beneath the one breakpoint this view already had, the photo takes the copy's padding as
+   well — because at 375px there is nothing else left to give it.
+   .fulfillment 24+24, the copy's border 1+1 and its padding 24+24 leave 277px of a 375px
+   screen, and the floor is 320. Bleeding to the copy's padding edges puts it back to 325.
+   The text inside the copy keeps its 24px inset; only the photograph reaches the edges, which
+   is the one element here whose size is a constraint rather than a choice.
+   The side borders and the radius go with it: a hairline down the edge of a full-bleed image
+   is a line with nothing on the other side of it. */
+@media (max-width: 480px) {
+  .fulfillment .card-locations-fulfiller .card-locations-photo {
+    width: calc(100% + 2 * var(--s5));
+    max-width: none;
+    margin-inline: calc(-1 * var(--s5));
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+  }
+}
+
 /* A column rather than a single slot, because the pull step and the sale step must not share
    one. See `.fulfillment-pulled` below for what shared it and what that cost. */
 .fulfillment-action {
@@ -265,6 +338,34 @@
 .fulfillment-plain:focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* "Pull", on a search result — the first of the two steps, and the reason the second one
+ * cannot be reached by overshooting the first.
+ *
+ * IT EXISTS TO MATCH `.fulfillment-pulled`'s BOX MODEL EXACTLY. Same font size, same line
+ * height, same padding, same width, same height floor. `.fulfillment-plain` above gives it
+ * everything else — the body face, the weight, the hairline, the radius, the hover and focus
+ * states — so all this rule says is "and it is the size of the sentence that replaces it".
+ * That is the whole mechanism: when it is pressed, "Pulled." takes its footprint and "Mark
+ * sold" begins below where this button ended, so the second tap of a double-tap lands on a
+ * sentence. `app/tests/fulfillment.spec.ts` measures both rectangles rather than trusting
+ * this comment; the numbers here only have to agree with `.fulfillment-pulled`.
+ *
+ * IT HAS TO SIT BELOW `.fulfillment-plain` IN THIS FILE and that is load-bearing, not tidy:
+ * both are one class deep, so the later rule wins the font size. Written above it, the
+ * 20px there would silently take the 24px here and the two boxes would stop matching — which
+ * is a hazard reopening itself as a cascade detail nobody would look for.
+ *
+ * NO FILL. The card panel's "Pull" is a `PullConfirm` because that screen holds one card and
+ * one action; a search can put four copies on screen at once, and four solid accent buttons
+ * would make the fill mean "press something" — exactly what docs/DESIGN.md's two-jobs rule is
+ * written against. The fill arrives on the second step, where there really is one thing to do. */
+.fulfillment-step {
+  width: 100%;
+  font-size: 24px;
+  line-height: 1.2;
+  text-align: center;
 }
 
 /* ---- the receipts, and the notice that the list may have moved ---- */

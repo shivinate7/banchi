@@ -1,0 +1,129 @@
+{
+  "accuracy_floor": 0.95,
+  "batch_ids": [
+    "msgbatch_01CJCheUnpsJ3knMo5uKCSBJ"
+  ],
+  "finish_distribution": {
+    "holo": 29,
+    "normal": 111,
+    "reverse_holo": 5,
+    "unknown": 5
+  },
+  "finish_note": "T1 cannot validate `finish` \u2014 official API images are flat renders with no foil texture. Gate B measured it on real photos 2026-08-22: 16 of 53 normals read as foil, a 30% false-positive rate under the rig's lighting. T1 stays green regardless. See docs/GATES.md.",
+  "fixture_fingerprint": "df21fd125854",
+  "gated_on": "holdout",
+  "generated_at": "2026-08-23T15:31:26+00:00",
+  "holdout_accuracy": 0.9559,
+  "holdout_misses": [
+    "sv1-234  name 'Oinkkologne ex' != 'Oinkologne ex'  (high)",
+    "sv8-234  name 'Lisias Appeal' != \"Lisia's Appeal\"  (high)",
+    "sv9-140  name 'Oinklogne' != 'Oinkologne'  (high)"
+  ],
+  "image_count": 150,
+  "join_key_correct": 149,
+  "miss_confidence": {
+    "holdout": {
+      "high": 3
+    },
+    "tune": {
+      "high": 4
+    }
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "name_correct": 144,
+  "overall_accuracy": 0.9533,
+  "passed": true,
+  "per_set": {
+    "sv1": {
+      "accuracy": 0.9333,
+      "correct": 14,
+      "set_name": "Scarlet & Violet",
+      "total": 15
+    },
+    "sv2": {
+      "accuracy": 1.0,
+      "correct": 15,
+      "set_name": "Paldea Evolved",
+      "total": 15
+    },
+    "sv3": {
+      "accuracy": 1.0,
+      "correct": 15,
+      "set_name": "Obsidian Flames",
+      "total": 15
+    },
+    "sv3pt5": {
+      "accuracy": 1.0,
+      "correct": 15,
+      "set_name": "151",
+      "total": 15
+    },
+    "sv4": {
+      "accuracy": 0.8667,
+      "correct": 13,
+      "set_name": "Paradox Rift",
+      "total": 15
+    },
+    "sv5": {
+      "accuracy": 1.0,
+      "correct": 15,
+      "set_name": "Temporal Forces",
+      "total": 15
+    },
+    "sv6": {
+      "accuracy": 0.9333,
+      "correct": 14,
+      "set_name": "Twilight Masquerade",
+      "total": 15
+    },
+    "sv7": {
+      "accuracy": 1.0,
+      "correct": 15,
+      "set_name": "Stellar Crown",
+      "total": 15
+    },
+    "sv8": {
+      "accuracy": 0.9333,
+      "correct": 14,
+      "set_name": "Surging Sparks",
+      "total": 15
+    },
+    "sv9": {
+      "accuracy": 0.8667,
+      "correct": 13,
+      "set_name": "Journey Together",
+      "total": 15
+    }
+  },
+  "prompt_fingerprint": "1ef974bf511d",
+  "rarity_claim_mode": "true_rarity",
+  "rarity_claimed": 150,
+  "rarity_fingerprint": "be63bf40c8c8",
+  "set_count": 10,
+  "set_hint_mode": "none",
+  "split_requested": "all",
+  "splits": {
+    "holdout": {
+      "accuracy": 0.9559,
+      "correct": 65,
+      "images": 68
+    },
+    "tune": {
+      "accuracy": 0.9512,
+      "correct": 78,
+      "images": 82
+    }
+  },
+  "test": "T1",
+  "transport": "anthropic.messages.batches",
+  "tune_misses": [
+    "sv4-1  name 'Surkit' != 'Surskit'  (high)",
+    "sv4-17  name 'Toedschruel' != 'Toedscruel'  (high)",
+    "sv6-211  key 271/167 != 211/167  (high)",
+    "sv9-89  name 'Toedsceruel' != 'Toedscruel'  (high)"
+  ],
+  "usage": {
+    "input_tokens": 303925,
+    "output_tokens": 5667
+  }
+}

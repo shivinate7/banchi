@@ -45,7 +45,7 @@ claude
 ```
 
 `make status` first, especially after time away: it prints the next build-order step, the
-open gate, the last T1 score and the branch — all read from the repo, none of it written
+last T1 score and the branch — all read from the repo, none of it written
 down anywhere a person has to remember to update. Stdlib only, so it works before
 `make venv` and without an API key.
 
@@ -57,7 +57,7 @@ Requires `ANTHROPIC_API_KEY`, either exported in your shell profile or set in `.
 
 Run `/context` first and confirm CLAUDE.md loaded. Then, in plan mode:
 
-> Read CLAUDE.md and docs/GATES.md. We are pre-Gate-B, at build-order step 2. Build only
+> Read CLAUDE.md and docs/GATES.md. We are at build-order step 2. Build only
 > the scaffolding: the Makefile with every command in CLAUDE.md wired up, the screenshot
 > script, and a harness skeleton where all four tests exist and exit 1. No feature code.
 > Show me the plan before writing anything.
