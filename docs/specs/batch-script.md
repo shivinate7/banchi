@@ -450,6 +450,24 @@ by stack is the one thing that defeats it. The case it exists for is the capture
 existing yet — a directory of photos with no sidecars at all, where without it every card
 stocked in more than one finish takes a review-queue tap.
 
+**Two things about the finish changed under this spec on 2026-08-23, and both are in
+`pipeline/variant.py` rather than here.**
+
+**The ladder's finish vocabulary is per game.** It read `variant.FINISHES` — Pokémon's
+three — for every game, and RAISED `UnknownFinish` rather than reviewing, so a Riftbound
+`foil` would have ended a join with a stack trace. `variant.resolve` now takes a `game` and
+reads that game's entry out of `pipeline/games.py` through `variant.vocabulary`;
+`cli/resolve.py`'s whitelist for the model's detected finish was the same defect one seam
+along and moved with it. `--variant`'s own `choices` are still Pokémon's, which is a smaller
+version of the same thing and is recorded rather than fixed: the flag fills gaps in a
+sidecar-less directory, and no such directory exists for any other game yet.
+
+**D3 rung 1's claim is a SET.** One member determines exactly as this table's behaviour
+always described; two or more filter the candidate rows and let rungs 2 and 3 choose within
+what survives. `--variant` is unchanged by that — it still fills a gap and still never
+overrides — but it fills it with a one-member claim, which is what every record written
+before the amendment reads as.
+
 ---
 
 ## 10. Failure modes
