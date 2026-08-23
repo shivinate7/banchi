@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { isEditableTarget } from './keys'
 import type { InventoryCard } from './types'
 import type { Failure } from './server'
@@ -11,6 +12,8 @@ import {
   reshootPhoto,
   newCaptureId,
 } from './server'
+import { SearchField } from './SearchField'
+import { useSearch } from './useSearch'
 import './PullPreview.css'
 
 /* The pull preview — docs/specs/capture-app.md §7, plus ONE WRITE it did not have then.
@@ -78,6 +81,80 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
     .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
 }
 
+/* The identity every control below preserves: `visible` is always a subsequence of
+ * `rowsOf`'s answer. The search narrows it, the sections partition it, the box strip
+ * indexes it, and every key walks it — one order, stated once, so no two controls on this
+ * screen can disagree about what comes next. The constant is module-level so an empty
+ * answer keeps one identity across renders and the effects hanging off `visible` do not
+ * re-arm while the inventory is still loading. */
+const NO_ROWS: Row[] = []
+
+// ------------------------------------------------------------------ the walk, in sections
+
+/* Which stretch of the walk a row belongs to, worded as its sticky header will say it.
+ * Composed from the server's own `box` and `section` decorations — the label rule at the
+ * top of this file forbids position ARITHMETIC here, and this does none: two numbers the
+ * server sent, joined with the words its own label uses. A pooled row groups under the
+ * pooled fact and a bare record under the fault, so a header never claims a location the
+ * rows beneath it do not have. */
+function sectionTitleOf(row: Row): string {
+  if (isPooled(row.card)) {
+    return `Pooled · ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
+  }
+  if (row.card.section !== undefined) return `Box ${row.card.box} · Section ${row.card.section}`
+  return 'No position label'
+}
+
+type Section = { key: string; title: string; first: Row; rows: Row[] }
+
+/* Run-length over the walk, deliberately not a Map keyed on title: the list's order is
+ * `rowsOf`'s and a grouper must not invent a second one. Whatever order the rows arrive in
+ * survives exactly — a keyed Map would quietly merge two stretches that something (a
+ * record whose box is a string, a future sort) had separated, and the merged header would
+ * lie about what sits under it. Keyed by the title plus the first row's key, so React
+ * identity holds even when two separated stretches share a title. */
+function sectionsOf(rows: Row[]): Section[] {
+  const out: Section[] = []
+  for (const row of rows) {
+    const open = out[out.length - 1]
+    const title = sectionTitleOf(row)
+    if (open !== undefined && open.title === title) open.rows.push(row)
+    else out.push({ key: `${title} @ ${row.key}`, title, first: row, rows: [row] })
+  }
+  return out
+}
+
+/* What a row's left cell says. Under a section header the answer is the slot alone — `17`
+ * beneath `BOX 1 · SECTION 2` — read off the server's `card` decoration, never parsed out
+ * of the label string: the header and the slot are two server facts drawn at two sizes,
+ * and D10's divider arithmetic keeps living in one language. The fallbacks are the old
+ * two-line row's, unchanged: a pooled card gets its pooled words, a bare record its store
+ * key with `no label` in front, and a row that somehow carries a label without a slot
+ * shows the label whole rather than a guess. */
+function rowSlot(row: Row): string {
+  if (row.card.card !== undefined) return String(row.card.card)
+  const label = positionLabel(row.card)
+  if (label !== null) return label
+  return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
+}
+
+/* Every box the current walk touches, in the walk's own order — built from `visible`, so
+ * under a filter the strip offers only boxes that still hold a match and a chip can never
+ * jump to a card the list does not show. Pooled rows are skipped: their box number is a
+ * store key, not a place, and a strip cell is a promise about a shelf. The typeof guard is
+ * for the record the types cannot see — a box off disk that is not a number sorts into the
+ * fault group above and earns no cell. */
+function boxesOf(rows: Row[]): number[] {
+  const out: number[] = []
+  for (const row of rows) {
+    if (isPooled(row.card)) continue
+    const box = row.card.box
+    if (typeof box !== 'number' || Number.isNaN(box)) continue
+    if (!out.includes(box)) out.push(box)
+  }
+  return out
+}
+
 // -------------------------------------------------------------- stepping through the list
 
 /* Left and Right move the selection one card, in the order `rowsOf` already put them in and
@@ -93,18 +170,43 @@ function rowsOf(cards: Record<string, InventoryCard>): Row[] {
  * the reason is worth repeating — a screen that can advertise a key nothing listens for will
  * eventually do it, and that failure is invisible until someone presses the key.
  *
- * HOME AND END WERE CONSIDERED AND DECLINED. First and last card is a real want in a box of
- * two hundred, but at window scope those two keys are the page's own — End is how you reach
- * the bottom of the facts panel — and a screen that takes them is a screen quietly
- * disagreeing with the browser. The other draft scoped them to "only while the list has
- * focus", which costs a rule you cannot see: one key doing two things depending on where
- * focus happens to be is exactly the kind of thing that gets diagnosed months later. If
- * walking a long box with a held key turns out to be too slow in practice, the fix to reach
- * for first is Home and End bound on the list with the chips moved onto it — never a wrap.
+ * HOME AND END WERE DECLINED AT WINDOW SCOPE, AND ARE NOW BOUND WHERE THE DECLINE SAID
+ * THEY BELONG. The paragraph this replaces refused them because at window scope those keys
+ * are the page's own — End is how you reach the bottom of the facts panel — and then named
+ * its own fix: "Home and End bound on the list with the chips moved onto it — never a
+ * wrap". That is what is built, for all four deep keys: PageUp, PageDown, Home and End are
+ * a React handler ON the list element, so holding focus IS the scope and there is no
+ * listener to tear down, and the chips advertising them sit under the list saying the
+ * condition out loud. The cost the old paragraph feared — one key doing two things
+ * depending on where focus happens to be — is conceded rather than argued away: it is paid
+ * where the browser itself set the precedent, since PageDown already scrolls whichever
+ * pane holds focus, and a chip that names the scope is what keeps the rule visible rather
+ * than diagnosed. Still never a wrap, and every end still stops.
  */
 const STEPS = [
   { key: 'ArrowLeft', label: '←', delta: -1 },
   { key: 'ArrowRight', label: '→', delta: 1 },
+] as const
+
+/* The deep keys, list-scoped — the ruling above. Same table shape as STEPS and for the
+ * same reason: the handler reads `key`, the chips under the list draw `label`, and a
+ * screen that can advertise a key nothing listens for will eventually do it.
+ *
+ * PageUp goes to the top of the CURRENT section first and to the previous one only from
+ * there. The pair moves by BOUNDARY — the same boundaries the sticky headers draw, so the
+ * key does what the picture says — and from the middle of a section the nearest boundary
+ * backwards is that section's own start; skipping it would overshoot the header on
+ * screen. */
+const SECTION_KEYS = [
+  { key: 'PageUp', label: 'PgUp', delta: -1 },
+  { key: 'PageDown', label: 'PgDn', delta: 1 },
+] as const
+
+/* First and last of the CURRENT filter, not of the whole store — Home under a query lands
+ * on the first MATCH, which is what "the beginning" means while a filter is on. */
+const EDGE_KEYS = [
+  { key: 'Home', label: 'Home', last: false },
+  { key: 'End', label: 'End', last: true },
 ] as const
 
 
@@ -197,6 +299,57 @@ export function PullPreview() {
     null,
   )
   const listRef = useRef<HTMLUListElement | null>(null)
+  /* The key a box-chip jump wants scrolled to the TOP of the scroller, or null for every
+   * ordinary selection change. One-shot; the scroll effect consumes it. `block: 'nearest'`
+   * is right for a step and wrong for a jump — after two hundred rows it parks the landing
+   * at the bottom edge, which shows the END of the box before the one just asked for. */
+  const jumpRef = useRef<string | null>(null)
+
+  /* THE SEARCH IS THE SERVER'S MATCHER FILTERING THIS SCREEN'S OWN LIST — neither of the
+   * two shapes already in the app, and argued against both. Inventory.tsx renders the
+   * search RESPONSE, because `GET /search` carries facts `GET /inventory` does not; this
+   * screen needs none of them — its rows are already here, labelled and ordered, and what
+   * it lacks is only WHICH of them the owner means. So the answer is read for its copy
+   * KEYS and nothing else, and the walk keeps its own order and its own rendering. The
+   * other obvious shape — a client-side substring over `name` — was declined harder:
+   * `do_search` matches six fields (name, number, the zfilled join key, SKU, set hint,
+   * note), and the note is the only handle a card the pipeline never identified has. A
+   * second, weaker matcher here would make `#/pull` and `#/inventory` answer the same
+   * query differently, and nothing anywhere would say so.
+   *
+   * NO `autoFocus`, WHERE Inventory PASSES IT — a screen's judgement, exactly as
+   * SearchField's prop says. That screen is opened to type; this one is opened to WALK,
+   * and a field holding focus on arrival is a field eating the arrow keys the header
+   * advertises (they guard on `isEditableTarget`). `/` reaches the field from anywhere. */
+  const { query, setQuery, results, loading, failure: searchFailure } = useSearch()
+  const searching = query.trim() !== ''
+
+  /* Every key the answer names, flattened — membership is the one thing this screen reads
+   * off it. Copies of sold and retired cards are in there too, which is right: the walk
+   * lists every card in every state, and a search that could not find a sold card would
+   * be a search that cannot answer "where was it". */
+  const matched = useMemo(() => {
+    if (results === null) return null
+    const keys = new Set<string>()
+    for (const group of results.groups) for (const copy of group.copies) keys.add(copy.key)
+    return keys
+  }, [results])
+
+  /* Filtered only when there is an answer to filter BY. While the first answer is still
+   * owed — debounce, flight — the walk stays whole rather than blanking on every
+   * keystroke: Inventory.tsx's rule ("a list that blanks is worse to type against than
+   * one that lags by 200ms and says so") applied to a list that exists before the query
+   * does; the `Looking.` line is what says so. A FAILED search also leaves the whole walk
+   * standing, under the failure panel: an empty list would claim "no card matches", which
+   * is an answer, and a failure is precisely not one. */
+  const visible = useMemo(() => {
+    if (rows === null) return NO_ROWS
+    if (!searching || matched === null) return rows
+    return rows.filter((row) => matched.has(row.key))
+  }, [rows, searching, matched])
+
+  const sections = useMemo(() => sectionsOf(visible), [visible])
+  const boxes = useMemo(() => boxesOf(visible), [visible])
 
   /* The re-shoot, from a picked file to the server. The base64 the wire wants is the
    * data-URL's payload — sliced at the first comma rather than split, and RAW, no
@@ -283,21 +436,39 @@ export function PullPreview() {
     }
   }, [reloads])
 
+  /* THE SELECTION FOLLOWS THE FILTER. A query that drops the selected card would otherwise
+   * leave the detail panel showing a card the list no longer contains — a photo beside a
+   * walk that cannot reach it. First match rather than nothing, because the filtered list
+   * is an answer and its first row is the walk's own order speaking. When NOTHING matches,
+   * the selection is deliberately left alone: the detail hides on its own (it renders off
+   * `visible`), and clearing the query then restores exactly the card that was open —
+   * nulling it would make one over-narrow keystroke cost the owner their place. */
+  useEffect(() => {
+    if (visible.length === 0) return
+    setSelected((prev) =>
+      prev !== null && visible.some((row) => row.key === prev) ? prev : (visible[0]?.key ?? null),
+    )
+  }, [visible])
+
   /* THE ARROW KEYS, armed on the window rather than on the list itself, so the owner does not
    * have to click a row before the keyboard does anything — a fast nav that needs a mouse
    * click to arm it is not one. `trigger.ts` and ReviewQueue.tsx both bind this way and both
    * arm it from an effect that exists only while their screen is mounted; this is that shape
    * a third time, teardown included, which is the half of it that keeps a second mount from
-   * leaving two listeners walking the list two cards at a time.
+   * leaving two listeners walking the list two cards at a time. The deep keys are the
+   * opposite ruling — list-scoped, a React handler on the element itself — and the split
+   * is argued at SECTION_KEYS above.
    *
    * `selected` is deliberately NOT a dependency. The move is a functional update, so the
-   * handler closes over `rows` alone and is registered once per inventory read instead of
-   * once per keystroke — at auto-repeat pace the second shape churns a window listener thirty
-   * times a second, and the stale closure it would otherwise need is a real bug rather than a
-   * style question.
+   * handler closes over `visible` alone and is registered once per change of the walk
+   * instead of once per keystroke — at auto-repeat pace the second shape churns a window
+   * listener thirty times a second, and the stale closure it would otherwise need is a real
+   * bug rather than a style question. `visible` and not `rows`, which is how the arrows
+   * compose with the search: a held Right walks the MATCHES, in walk order, and never steps
+   * onto a card the filter removed.
    */
   useEffect(() => {
-    if (rows === null || rows.length === 0) return
+    if (visible.length === 0) return
 
     const onKeyDown = (event: KeyboardEvent) => {
       /* Modifiers belong to the browser and the OS: Cmd-Left is Back and Alt-Left is a word
@@ -333,13 +504,13 @@ export function PullPreview() {
       event.preventDefault()
 
       setSelected((prev) => {
-        const at = rows.findIndex((row) => row.key === prev)
+        const at = visible.findIndex((row) => row.key === prev)
 
         /* Not in this list at all — hard to reach, since the loader plants the selection on
          * the first row and only drops it when there is nothing to select. Step in from the
          * end you are stepping from, so a first press does something rather than nothing. */
         if (at === -1) {
-          const landing = step.delta === 1 ? rows[0] : rows[rows.length - 1]
+          const landing = step.delta === 1 ? visible[0] : visible[visible.length - 1]
           return landing?.key ?? prev
         }
 
@@ -349,13 +520,13 @@ export function PullPreview() {
          * arriving back at card 1 after the last card of a two-hundred-card box loses your
          * place without saying so, and the list is then lying about where its end is. A list
          * that stops is telling the truth. */
-        return rows[at + step.delta]?.key ?? prev
+        return visible[at + step.delta]?.key ?? prev
       })
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [rows])
+  }, [visible])
 
   /* Keep the selected row where it can be seen. The failure this prevents is specific, and it
    * is the one that makes a keyboard list feel broken: the detail panel updates, the marked
@@ -363,18 +534,87 @@ export function PullPreview() {
    * on the other side of the page.
    *
    * `block: 'nearest'` so it scrolls only when it has to, which is what keeps it from
-   * fighting the mouse — a click on a row that was already visible moves nothing.
+   * fighting the mouse — a click on a row that was already visible moves nothing. A
+   * box-chip jump is the argued exception and lands `block: 'start'`, once, via jumpRef
+   * above: a jump is FOR seeing what follows the landing, and 'nearest' shows what
+   * precedes it. The rows' scroll-margin in the stylesheet is what keeps 'start' from
+   * parking the row under its own sticky section header.
    *
    * READ OFF `aria-current` rather than off a ref per row. That attribute is already this
    * screen's answer to "which row is current", so the row that scrolls is by construction the
    * row that is marked; a parallel map of refs is a second answer to the same question, and
-   * the day the two disagree nothing says so. */
+   * the day the two disagree nothing says so. (The box cells carry the attribute too, but
+   * they live outside `listRef`, so the query cannot land on one.) `visible` in the
+   * dependencies for the handler's own reason: when the filter redraws the list around an
+   * unchanged selection, the marked row should still be the one on screen. */
   useEffect(() => {
     const current = listRef.current?.querySelector('[aria-current="true"]')
-    if (current instanceof HTMLElement) current.scrollIntoView({ block: 'nearest' })
-  }, [selected, rows])
+    if (current instanceof HTMLElement) {
+      current.scrollIntoView({ block: jumpRef.current === selected ? 'start' : 'nearest' })
+    }
+    jumpRef.current = null
+  }, [selected, visible])
 
-  const selectedRow = rows?.find((row) => row.key === selected) ?? null
+  /* The deep keys. A React handler on the list rather than a window listener — focus
+   * within the list IS the scoping the ruling at SECTION_KEYS asks for, there is nothing
+   * to tear down, and a fresh closure per render means no dependency bookkeeping. The
+   * guards are the window handler's, in the same order and for the same reasons. */
+  const onListKeys = (event: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    if (isEditableTarget(event.target)) return
+
+    const edge = EDGE_KEYS.find((candidate) => candidate.key === event.key)
+    const jump = SECTION_KEYS.find((candidate) => candidate.key === event.key)
+    if (edge === undefined && jump === undefined) return
+
+    /* Prevented even when the move refuses, exactly as the arrows argue: a refusal at the
+     * end is still this handler answering for the key, and the default here — the scroller
+     * paging the ROWS out from under an unmoved selection — is precisely the disagreement
+     * between the mark and the viewport this screen exists to rule out. */
+    event.preventDefault()
+
+    if (edge !== undefined) {
+      const landing = edge.last ? visible[visible.length - 1] : visible[0]
+      if (landing !== undefined) setSelected(landing.key)
+      return
+    }
+    if (jump === undefined) return
+
+    setSelected((prev) => {
+      const at = sections.findIndex((section) => section.rows.some((row) => row.key === prev))
+
+      /* Not in any section — the same hard-to-reach case the arrows handle, answered the
+       * same way: step in from the end being stepped from. */
+      if (at === -1) return sections[0]?.first.key ?? prev
+
+      if (jump.delta === 1) return sections[at + 1]?.first.key ?? prev
+
+      /* Backwards: the nearest boundary first — this section's own start from its middle,
+       * the previous section's from its start. Both ends stop, by the arrows' own
+       * mechanism: one past either end is undefined under noUncheckedIndexedAccess and the
+       * selection stays put. */
+      const own = sections[at]
+      if (own !== undefined && own.first.key !== prev) return own.first.key
+      return sections[at - 1]?.first.key ?? prev
+    })
+  }
+
+  /* A chip press is a JUMP, so it does the two things a click on a row does not. It
+   * scrolls the landing to the top of the scroller — via jumpRef, argued at the scroll
+   * effect — and it hands focus to the list, arming the deep keys: the gesture after
+   * "take me to box 7" is walking box 7, and a jump that left the keys dead until a click
+   * would give back the mouse it just saved. */
+  const jumpToBox = (box: number) => {
+    const landing = visible.find((row) => !isPooled(row.card) && row.card.box === box)
+    if (landing === undefined) return
+    jumpRef.current = landing.key
+    setSelected(landing.key)
+    listRef.current?.focus()
+  }
+
+  /* Off `visible`, not off `rows`: a selection the filter removed renders NO detail rather
+   * than a card the list cannot reach — and comes back whole when the query clears. */
+  const selectedRow = visible.find((row) => row.key === selected) ?? null
 
   /* Read once for the selected card and passed down, rather than read again inside
    * PhotoPanel. Two reads of the same field cannot disagree today, but they are two places
@@ -422,7 +662,9 @@ export function PullPreview() {
 
               In the header rather than pinned to the list, because that is where the binding
               actually is: the keys are on the window and work wherever you are on this screen,
-              so a chip attached to the list would claim a smaller thing than the truth.
+              so a chip attached to the list would claim a smaller thing than the truth. The
+              deep keys are the same rule pointing the other way — bound on the list, so their
+              chips sit under it.
 
               Drawn only with two cards to step between. A hint offering to move you through a
               list of one is chrome that has stopped being true, and the empty and failed
@@ -465,60 +707,170 @@ export function PullPreview() {
 
       {rows !== null && rows.length > 0 ? (
         <div className="pull-preview-body">
-          {/* Focusable and labelled, so the interaction is reachable rather than folklore: a
-              keyboard user gets a tab stop that announces itself as the list of cards and says
-              which keys it answers to. `aria-keyshortcuts` is the machine-readable half of the
-              chips in the header — the same fact, said once to a person and once to a screen
-              reader, and neither of them by a comment in a file nobody reading the screen can
-              see. The keys are bound on the window and work whether or not this has focus, so
-              this attribute claims less than the binding delivers, which is the safe
-              direction for a claim to be wrong in. */}
-          <ul
-            className="pull-preview-list"
-            ref={listRef}
-            tabIndex={0}
-            aria-label="Captured cards, in box-walk order"
-            aria-keyshortcuts="ArrowLeft ArrowRight"
-          >
-            {rows.map((row) => (
-              <li key={row.key}>
-                {/* Plain buttons, and they stay plain buttons now that the arrow keys are
-                    bound. Tab reaches every one of them for free, the click path is untouched,
-                    and `aria-current` below is still the one mark of which row is current — a
-                    roving-focus listbox would trade all three for an activedescendant dance
-                    this screen does not need.
+          {/* The map column: search, box strip, status line, the list, then the keys that
+              walk it. One column because they are one instrument — everything in it narrows
+              or indexes the same walk, and the detail panel beside it is what the walk is
+              pointing at. */}
+          <div className="pull-preview-map">
+            {/* The shared field: owner persona, `/` from anywhere, Esc handing focus back
+                with the query intact — all SearchField's own rulings, not re-made here. The
+                search-shape argument and the deliberate absence of autoFocus are at the
+                useSearch call above. */}
+            <SearchField value={query} onChange={setQuery} persona="owner" />
 
-                    FOCUS DELIBERATELY DOES NOT FOLLOW THE SELECTION. It is the obvious next
-                    step and it is the wrong one: a held Right would fire a focus move per
-                    card, dragging focus out of wherever the owner left it and scrolling on its
-                    own account, thirty times a second. The row is marked, not focused, and the
-                    scroll effect above is what keeps it on screen.
+            {/* THE BOX STRIP — the capture screen's segmented-track idiom, not a row of
+                buttons and not a <select>. Thirty boxes must fit over a 240-320px column,
+                which rules out thirty padded chips by arithmetic; a native select fits any
+                count by hiding the map behind a click, and a map you have to open is not a
+                map — this strip doubles as "you are here", since the selected card's box
+                carries the rail. Hairline-divided 10px utility cells wrap to a second row
+                past roughly a dozen boxes, which costs 20px and hides nothing. Drawn only
+                with two boxes to move between: a strip of one is chrome, the same rule the
+                header chips follow. */}
+            {boxes.length < 2 ? null : (
+              <div className="pull-preview-boxline">
+                <span className="pull-preview-boxcap" aria-hidden="true">
+                  Box
+                </span>
+                <div className="pull-preview-boxes" role="group" aria-label="Jump to a box">
+                  {boxes.map((box) => (
+                    <button
+                      key={box}
+                      className="pull-preview-boxcell"
+                      type="button"
+                      aria-label={`Box ${box}, first card`}
+                      aria-current={
+                        selectedRow !== null &&
+                        !isPooled(selectedRow.card) &&
+                        selectedRow.card.box === box
+                          ? 'true'
+                          : undefined
+                      }
+                      onClick={() => jumpToBox(box)}
+                    >
+                      {box}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                    The sentence this replaces said a key map here would be "a vocabulary to
-                    learn for no decision". That was true of a screen driven with a mouse and
-                    stopped being true the moment the owner asked to walk a box from the
-                    keyboard — two keys, one meaning, and still nothing written. */}
-                <button
-                  className="pull-preview-row"
-                  type="button"
-                  aria-current={row.key === selected ? 'true' : undefined}
-                  onClick={() => setSelected(row.key)}
-                >
-                  {/* The store key when the server sent no label, so the rows stay
-                      distinguishable enough to pick one — with the word `no label` in
-                      front of it, because `3/30` alone reads like a position and is not
-                      one. The detail panel says the rest; a row has no room for it.
-                      A POOLED ROW IS THE DELIBERATE HALF OF THAT CASE and gets its own
-                      words: the pooled fact, never `no label`, which reads as a fault. */}
-                  <span className="pull-preview-row-position">
-                    {positionLabel(row.card) ??
-                      (isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`)}
-                  </span>
-                  <span className="pull-preview-row-name">{row.card.name ?? row.card.state}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+            {/* The search's own failure, in the owner idiom: the sentence, then the
+                greppable code. The walk below it is deliberately UNFILTERED while this
+                stands — see the `visible` memo. */}
+            {searchFailure === null ? null : (
+              <div className="pull-preview-note pull-preview-mapnote">
+                <p className="pull-preview-note-text">{searchFailure.message}</p>
+                <p className="pull-preview-machine">{searchFailure.code}</p>
+              </div>
+            )}
+
+            {/* `loading` is true through the debounce as well as the request — useSearch
+                says why — so this line is the honest answer to "is the list below an answer
+                to the box above", drawn beside the old list rather than instead of it. */}
+            {searching && loading ? <p className="pull-preview-match">Looking.</p> : null}
+            {searching && !loading && results !== null ? (
+              <p className="pull-preview-match">
+                {visible.length === 0
+                  ? `Nothing in the walk matches ${results.query}.`
+                  : `${visible.length} of ${rows.length} ${
+                      visible.length === 1 ? 'card matches' : 'cards match'
+                    }`}
+              </p>
+            ) : null}
+
+            {/* Focusable and labelled, so the interaction is reachable rather than
+                folklore: a keyboard user gets a tab stop that announces itself as the list
+                of cards and says which keys it answers to. `aria-keyshortcuts` is the
+                machine-readable half of the chips — the same facts, said once to a person
+                and once to a screen reader. The arrows are bound on the window and deliver
+                MORE than the attribute claims; the deep keys are bound on this element and
+                deliver exactly. Neither direction over-claims, which is the safe way for
+                the attribute to be imprecise. */}
+            {visible.length === 0 ? null : (
+              <ul
+                className="pull-preview-list"
+                ref={listRef}
+                tabIndex={0}
+                aria-label="Captured cards, in box-walk order"
+                aria-keyshortcuts="ArrowLeft ArrowRight PageUp PageDown Home End"
+                onKeyDown={onListKeys}
+              >
+                {sections.map((section) => (
+                  /* One li per stretch of the walk, its header sticky WITHIN it: the header
+                     holds the scroller's top edge while its own rows pass and is pushed off
+                     by the next one — so "where am I" is always on screen, which is the
+                     first thing a two-hundred-row scroller loses. */
+                  <li className="pull-preview-group" key={section.key}>
+                    <div className="pull-preview-secthead">{section.title}</div>
+                    <ul className="pull-preview-group-rows">
+                      {section.rows.map((row) => (
+                        <li key={row.key}>
+                          {/* Plain buttons, and they stay plain buttons now that the arrow
+                              keys are bound. Tab reaches every one of them for free, the
+                              click path is untouched, and `aria-current` below is still the
+                              one mark of which row is current — a roving-focus listbox
+                              would trade all three for an activedescendant dance this
+                              screen does not need.
+
+                              FOCUS DELIBERATELY DOES NOT FOLLOW THE SELECTION. It is the
+                              obvious next step and it is the wrong one: a held Right would
+                              fire a focus move per card, dragging focus out of wherever the
+                              owner left it and scrolling on its own account, thirty times a
+                              second. The row is marked, not focused, and the scroll effect
+                              above is what keeps it on screen.
+
+                              The sentence this replaces said a key map here would be "a
+                              vocabulary to learn for no decision". That was true of a
+                              screen driven with a mouse and stopped being true the moment
+                              the owner asked to walk a box from the keyboard — two keys,
+                              one meaning, and still nothing written.
+
+                              One line per card now — the slot under its section header,
+                              then the name. rowSlot above says what the left cell is
+                              allowed to claim, fallbacks included. */}
+                          <button
+                            className="pull-preview-row"
+                            type="button"
+                            aria-current={row.key === selected ? 'true' : undefined}
+                            onClick={() => setSelected(row.key)}
+                          >
+                            <span className="pull-preview-row-position">{rowSlot(row)}</span>
+                            <span className="pull-preview-row-name">
+                              {row.card.name ?? row.card.state}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* The deep keys' chips, ON the list rather than in the header — the ruling at
+                SECTION_KEYS: the header advertises window keys, this advertises list keys,
+                and each chip sits where its binding lives. The condition is said out loud
+                because it is the one fact about these keys nobody can guess from the
+                chrome. */}
+            {visible.length < 2 ? null : (
+              <p className="pull-preview-keys pull-preview-listkeys">
+                {SECTION_KEYS.map((step) => (
+                  <kbd className="pull-preview-key" key={step.key}>
+                    {step.label}
+                  </kbd>
+                ))}
+                a section
+                {' · '}
+                {EDGE_KEYS.map((step) => (
+                  <kbd className="pull-preview-key" key={step.key}>
+                    {step.label}
+                  </kbd>
+                ))}
+                the ends · when the list holds focus
+              </p>
+            )}
+          </div>
 
           {selectedRow === null ? null : (
             <section className="pull-preview-detail">

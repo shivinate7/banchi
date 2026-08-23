@@ -5,6 +5,8 @@
     GET    /photo/<box>/<index>            the stored JPEG bytes
     GET    /inventory                      the whole card map, each row carrying its label
     PUT    /inventory/<box>/<index>        correct one card's capture claims (PUT_FIELDS)
+    PUT    /inventory/<box>                apply capture-claim corrections to every
+                                           eligible card in a box, all-or-nothing
     DELETE /inventory/<box>/<index>        undo the newest capture: every trace of one position
     GET    /queues                         both standing queues, in the order they are worked
     POST   /review/<box>/<index>/answer    the human picks a candidate row, or takes it back
@@ -15,6 +17,10 @@
                                            or put its state back (D26)
     POST   /inventory/<box>/<index>/photo  re-shoot: replace the photo and sidecar in place,
                                            record untouched, allocator never involved (D26)
+    POST   /inventory/<box>/<index>/remove delete one capture mid-box and slide every higher
+                                           card down one index (D10, owner ruling 1)
+    DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
+                                           queue entries, cache, registry (D10, owner ruling 3)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /boxes                          every box: its dividers, its fill, its capacity
@@ -37,6 +43,18 @@ AFTER a photo had been written. `store/master.py:Box` is now an object with a li
 these three routes are its whole surface: create it before the first card, declare its
 dividers, seal it when the lid goes on. `GET /search` is the fourth and is a read: D7 maps a
 SKU to every position holding it, and until now nothing served that map to a screen.
+
+THE REMOVE AND BOX-DELETE ROUTES ARE D10's THREE OWNER RULINGS OF 2026-08-23, and they are
+the two most destructive things this server can be asked to do. Ruling 1 overrules "nothing
+that renumbers may exist" for exactly one case — a junk capture pulled out of a contiguous
+stack, where the cards behind it really do slide forward — and `do_remove_card` holds the
+boundary that keeps the old rule's reason alive: no sold or retired gap above, no listed
+SKU above, refused as `renumber_blocked` otherwise. Ruling 2 narrows the capture-undo to
+`captured` alone (`UNDOABLE_STATES` below has the argument). Ruling 3 lets a whole box go,
+refused as `box_not_empty_of_commitments` while anything in it is sold, retired or
+listing-held — those records are history and commitments, not clutter. The routes are the
+gate's mechanism; the typed confirmation `docs/DESIGN.md`'s destructive-action clause asks
+for is the app's, on top of these refusals, never instead of them.
 
 EVERY CARD ANSWER NOW CARRIES A `place` BLOCK, and it is D20's sentence rather than a
 convenience. A bare index tells you nothing about where to put your thumb; "#40 of 250, 16%
@@ -145,7 +163,7 @@ from urllib.parse import parse_qs, urlparse
 # not importable without this. Same idiom and same reason as harness/run.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline import games, join, variant  # noqa: E402
+from pipeline import games, join  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
 
 HOST = "0.0.0.0"
@@ -251,10 +269,25 @@ def allowed_origins() -> Tuple[str, ...]:
 
 _PHOTO_RE = re.compile(r"^/photo/(\d+)/(\d+)$")
 _INVENTORY_ITEM_RE = re.compile(r"^/inventory/(\d+)/(\d+)$")
+# The box-level claim apply: `PUT /inventory/<box>` is `PUT /inventory/<box>/<index>` one
+# path segment broader — same verb, same claim vocabulary, one level up. Matched AFTER the
+# item pattern in the PUT dispatch, though either order is correct: both are anchored, and
+# a path cannot carry one segment and two.
+_INVENTORY_BOX_RE = re.compile(r"^/inventory/(\d+)$")
 _REVIEW_ANSWER_RE = re.compile(r"^/review/(\d+)/(\d+)/answer$")
 _SOLD_RE = re.compile(r"^/inventory/(\d+)/(\d+)/sold$")
 _RETIRE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/retire$")
 _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
+# The mid-box delete (D10, owner ruling 1). A DISTINCT POST PATH, not a flag on the DELETE
+# route, and the shape is load-bearing twice over. First, the old newest-only undo must not
+# be one stray token away from an operation that renumbers a box: the capture screen's undo
+# sends `DELETE /inventory/<box>/<index>` and nothing that mangles, retries or replays that
+# request can ever reach this path. Second, the shift is NOT idempotent — after it runs, a
+# different physical card sits at the deleted index, so a replayed request would aim at the
+# neighbour that slid in — which both disqualifies the DELETE verb and requires a body:
+# `do_remove_card` demands the target's own `capture_id` and refuses a mismatch, so a
+# replay of a lost response refuses instead of deleting a second card.
+_REMOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/remove$")
 # Digits only, like every other position pattern here: `/boxes/3`, never `/boxes/three`.
 # A non-numeric box therefore falls through to `no_such_route` rather than reaching a
 # handler that would refuse it in `box_invalid` — the same trade the four patterns above
@@ -363,6 +396,16 @@ RETIRE_FIELDS = ("reason", "undo")
 # should have gone through the PUT route and its `corrected` history line.
 RESHOOT_FIELDS = ("image", "capture_id")
 
+# The mid-box delete's whole body (D10, ruling 1): the TARGET's `capture_id`, required as a
+# key and nullable as a value — send the id the inventory row carries, or null for a record
+# that predates ids. It is an aim check, not an idempotency token like capture's: the shift
+# moves a different physical card INTO the deleted index, so a replay of a lost response, or
+# a screen holding a stale read of the box, would otherwise delete the neighbour that slid
+# in. `capture_id_mismatch` refuses both with the same instruction — re-read, then aim
+# again. The one target this cannot protect is a record with no id at all whose upstairs
+# neighbour also has none; both are pre-server records, and the limit is named at the check.
+REMOVE_FIELDS = ("capture_id",)
+
 # What POST /boxes accepts. Only `box` is required: D20 makes capacity retroactive and a
 # name optional, so the minimum useful creation is a number and nothing else. `sections` is
 # here rather than PUT-only because a box whose dividers are already in the physical box has
@@ -375,28 +418,35 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # from it.
 BOX_PUT_FIELDS = ("name", "sections", "state")
 
-# States at which a card may still be undone. Now that `pushed`, `staged` and `live` have
-# moved off the card and onto the SKU (D7 amended, `store/master.py:Listing`), this tuple is
-# every state but the two terminal ones — and it is still written as the ALLOWED set rather
-# than the refused one, which is not a style choice: a state added to `store.master.STATES`
-# later is refused by default. The inverse would silently permit whatever comes next.
-# `retired` (D26) is the state that proved the point: it arrived, and undo refused it with
-# no edit here. It MUST NOT be added — undo is a hard delete that releases the index back to
-# the allocator, and a retired card's gap is permanent by definition; deleting the record
-# would erase the departure and hand its position to the next capture. The reversal of a
-# retirement is `{"undo": true}` on its own route, a state transition backwards like the
-# sale's, never a delete.
+# States at which a card may still be undone — `captured` ALONE, since the owner's ruling
+# of 2026-08-23 (D10, ruling 2). This tuple held `identified` from the day the route landed,
+# on the argument that the model had answered, the fee was already spent, and nothing
+# outside this Mac knew the card existed. The ruling reverses it: once a card has been
+# identified it has made it into inventory proper, and the capture screen's rapid-fire undo
+# may not reach it. An identified card's remedies are the ones built for it — re-shoot
+# (`POST .../photo`, D26) for a bad photograph, retire (`POST .../retire`, D26) for a card
+# that has left, and the mid-box delete (`POST .../remove`, D10 ruling 1) for a junk record,
+# where its bounds allow — and `undo_too_late` names all three, because a refusal that does
+# not say what would have worked costs a round trip.
 #
-# THIS TUPLE STOPPED CARRYING THE ARGUMENT IT USED TO CARRY, AND `_listing_hold` NOW CARRIES
-# IT. D10 draws the line at `emit`: up to that point nothing outside this Mac knows the card
-# exists, so removing it costs the identification fee and nothing else, while after it a file
-# on disk would disagree with the inventory. That test used to be `card.state == pushed`.
-# Under v2 a card whose row is sitting in an emitted import file reads `identified` — which
-# is on this list — so the state check alone would hard-delete the record, the sidecar and
-# the photo of a card TCGplayer has already been told about, and leave the SKU's listing
-# counts overstating what is physically here by one. The fact did not go away; it moved to
-# `inventory.listings`, and so did the guard.
-UNDOABLE_STATES = (master.CAPTURED, master.IDENTIFIED)
+# Still written as the ALLOWED set rather than the refused one, which is not a style choice:
+# a state added to `store.master.STATES` later is refused by default. The inverse would
+# silently permit whatever comes next. `retired` (D26) is the state that proved the point:
+# it arrived, and undo refused it with no edit here. It MUST NOT be added — undo is a hard
+# delete that releases the index back to the allocator, and a retired card's gap is
+# permanent by definition; deleting the record would erase the departure and hand its
+# position to the next capture. The reversal of a retirement is `{"undo": true}` on its own
+# route, a state transition backwards like the sale's, never a delete.
+#
+# `_listing_hold` STAYS ON THE UNDO ROUTE, AND RULING 2 MADE IT NEARLY UNREACHABLE THERE
+# RATHER THAN WRONG. It exists because D10 draws a second line at `emit`: after it, a file
+# on disk — and then TCGplayer — would disagree with the inventory. A card with a SKU to
+# hold is a card something identified, which this narrowed tuple now refuses one check
+# earlier — so the hold fires on the undo route only for a record whose `sku` arrived
+# outside the ordinary path. It is kept anyway: a guard on a destructive operation is
+# priced by what it prevents, not by how often it runs, and `do_remove_card` reaches the
+# same helper for the identified cards that route CAN delete.
+UNDOABLE_STATES = (master.CAPTURED,)
 
 # What this server appends to `history.jsonl` for a write that moves no card between states.
 # `store/master.py:_log` is reached from `record_capture` and `set_state` alone, and every
@@ -449,6 +499,30 @@ UNANSWERED = "unanswered"
 # collision D26 renamed the state to avoid.
 RESHOT = "reshot"
 
+# THE SIXTH AND SEVENTH ROUTE-WRITTEN EVENTS (D10's three owner rulings, 2026-08-23).
+#
+#   renumbered   a mid-box delete slid every higher card in one box down one index. Carries
+#                the deleted position, the box, `from` (the deleted index) and `count` —
+#                and that IS the whole old->new mapping, stated compactly: the shift is
+#                always minus-one for every index above `from`, `count` of them. This is
+#                the only event in this file that moves position KEYS, and it exists for
+#                `removed`'s argument read forward: without it the log says 3/9 was
+#                captured and never says the card now AT 3/9 arrived there from 3/10, so
+#                every earlier line about 3/9 silently changes subject. Appended only when
+#                at least one record actually moved — a remove at the top of a box deletes
+#                and shifts nothing, and an event describing zero renumbers would be a line
+#                that marks nothing among the lines that mark the change somebody is
+#                looking for. Not a state: nothing about any one card changed but its
+#                address, and the card that changed STATE got its own `removed` line in the
+#                same commit.
+#   box_deleted  a whole box left the store (D10, ruling 3): records, photos, sidecars,
+#                queue entries, cache entries and the registry entry, in one write.
+#                Carries the box and the card count. A box-level event like D20's four, so
+#                it is the first line `_history` writes with no `position` key — a box is
+#                not at a position, and `Inventory._log` draws the same line.
+RENUMBERED = "renumbered"
+BOX_DELETED = "box_deleted"
+
 # D20's four, and they differ from the three above in WHO APPENDS THEM. The three above are
 # written here, by `_history`, because the store has no opinion about them. These four are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
@@ -490,6 +564,8 @@ SERVER_EVENTS = (
     ANSWERED,
     UNANSWERED,
     RESHOT,
+    RENUMBERED,
+    BOX_DELETED,
     RESECTIONED,
     BOX_CREATED,
     BOX_CLOSED,
@@ -613,18 +689,62 @@ def _require_image(payload: dict) -> bytes:
     return blob
 
 
-def _optional_variant(payload: dict) -> Optional[str]:
+def _variant_shape(payload: dict) -> Optional[str]:
+    """The shape half of the finish claim: present, a string, non-empty. No vocabulary.
+
+    Split from the membership check below for the same reason `_rarity_claim_shape` is —
+    `do_put_card` can know the shape before it takes the lock and cannot know the game
+    until it is inside one. The split arrived late here, and the lateness IS the bug: a
+    finish has a per-game vocabulary and this file spent its whole life believing there
+    was one global one.
+    """
     raw = payload.get("variant")
     if raw is None or raw == "":
         return None
-    text = str(raw).strip()
-    if text not in variant.FINISHES:
+    return str(raw).strip()
+
+
+def _check_variant_member(finish: Optional[str], game: Optional[str]) -> Optional[str]:
+    """The membership half: the finish must be one THIS GAME stocks.
+
+    IT WAS CHECKED AGAINST `variant.FINISHES` FOR EVERY GAME, AND THAT REFUSED REAL
+    CAPTURES. `pipeline/variant.py` defines `FINISHES` as literally `_POKEMON["finishes"]`,
+    so every game's capture was gated through Pokemon's three. A Riftbound stack claimed
+    `foil` — the finish its own registry entry authors, the finish the capture screen had
+    just OFFERED because `finish_by_rarity["Rare"]` narrowed to it — was refused
+    `variant_invalid` at the lens, in a message naming three finishes that game does not
+    have. The claim could not be made from a control that was working correctly.
+
+    The claim's vocabulary is the game's, exactly as D23 makes the rarity claim's the
+    game's. That D21/D23 ordering rule — decode the game first, because the claim cannot
+    be judged until the game is known — always covered this claim too; only the rarity
+    claim was ever written to obey it.
+
+    A `game` of None is a client older than the field, validated against
+    `games.DEFAULT_GAME` — the game its record will be READ as (D21's read-side backfill).
+    Validation only: nothing here writes a default game anywhere.
+
+    `misc` authors no finishes at all, so any finish under it refuses. That is right rather
+    than harsh — the capture screen draws no Finish field for a game with an empty enum, so
+    a finish arriving under one did not come from the control.
+    """
+    if finish is None:
+        return None
+    entry = games.get(game if game else games.DEFAULT_GAME)
+    vocabulary = tuple(entry["finishes"])
+    if finish not in vocabulary:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "variant_invalid",
-            f"variant was {raw!r}; use one of {', '.join(sorted(variant.FINISHES))}.",
+            f"variant was {finish!r}; {entry['display']} stocks "
+            f"{', '.join(vocabulary) or '(no finishes)'}. GET /games serves the registry.",
         )
-    return text
+    return finish
+
+
+def _optional_variant(payload: dict, game: Optional[str]) -> Optional[str]:
+    """Shape and membership in one call, for the route that has the game in hand."""
+    return _check_variant_member(_variant_shape(payload), game)
 
 
 def _optional_game(payload: dict) -> Optional[str]:
@@ -912,8 +1032,13 @@ def _require_query(query: str) -> str:
 # ------------------------------------------------------------------------------- history
 
 
-def _history(inventory: master.Inventory, event: str, key: str, **extra) -> None:
+def _history(inventory: master.Inventory, event: str, key: Optional[str], **extra) -> None:
     """Append one event to `history.jsonl`. Call it inside the caller's `Store.write()`.
+
+    `key` MAY BE None FOR A BOX-LEVEL EVENT, and then `position` is dropped rather than
+    written null — a box is not at a position, and a null one would read as a card whose
+    position went missing. The rule and its wording are `Inventory._log`'s; `box_deleted`
+    is the first event this file writes that needs it.
 
     THE APPEND GOES ONTO `Inventory.events`, WHICH IS WHY THE CALL SITE MATTERS. `Store.write()`
     drains that list after it has replaced the four JSON files, so the line and the change it
@@ -937,7 +1062,9 @@ def _history(inventory: master.Inventory, event: str, key: str, **extra) -> None
     nothing. A before-value that IS None therefore travels nested inside a non-None mapping —
     see `do_put_card`, where the difference decides whether a cleared set hint is legible.
     """
-    record = {"at": master.now(), "event": event, "position": key}
+    record = {"at": master.now(), "event": event}
+    if key is not None:
+        record["position"] = key
     record.update({key_: value for key_, value in extra.items() if value is not None})
     inventory.events.append(record)
 
@@ -1281,14 +1408,21 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # through `PUT /inventory/<box>/<index>`, which corrects and never creates. Nothing about
     # a capture waits for it, and a card whose note is added a minute later — or never — is a
     # perfectly good record.
-    # `game` IS DECODED BEFORE `rarity_claim`, and the order is load-bearing rather than
-    # stylistic: the claim's vocabulary is the game's (D23), so the claim cannot be judged
-    # until the game is known. A body with no game validates against `games.DEFAULT_GAME`,
-    # which is the game its record will be READ as (D21) — validation only, never a write.
+    # `game` IS DECODED BEFORE BOTH CLAIMS THAT HAVE A VOCABULARY, and the order is
+    # load-bearing rather than stylistic: a claim's vocabulary is the game's (D21, D23), so
+    # neither the finish nor the rarity claim can be judged until the game is known.
+    #
+    # THE FINISH JOINED THIS SENTENCE LATE, WHICH IS WHY IT SAID `rarity_claim` ALONE. The
+    # finish was checked against Pokemon's three enum members whatever game was named, so a
+    # Riftbound `foil` — offered by the screen, authored by the registry — was refused at
+    # the lens. `_check_variant_member` carries the full account.
+    #
+    # A body with no game validates against `games.DEFAULT_GAME`, which is the game its
+    # record will be READ as (D21's read-side backfill) — validation only, never a write.
     game = _optional_game(payload)
     claims = {
         "set_hint": _optional_text(payload, "set_hint"),
-        "metadata_finish": _optional_variant(payload),
+        "metadata_finish": _optional_variant(payload, game),
         "game": game,
         "rarity_claim": _optional_rarity_claim(payload, game),
     }
@@ -1651,9 +1785,12 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
 
     # Decoded before the lock is taken, keyed by RECORD field name so the diff below and the
     # sidecar write share one mapping. Each claim has its own decoder and they are not
-    # interchangeable — `variant` is checked against an enum, `game` against the registry,
-    # and a note is prose with nothing to check it against — so this is a table of three
-    # calls rather than a loop over `CLAIM_WIRE_NAMES`.
+    # interchangeable — `game` is checked against the registry, `variant` and `rarity_claim`
+    # against THAT GAME's vocabularies, and a note is prose with nothing to check it against
+    # — so this is a table of calls rather than a loop over `CLAIM_WIRE_NAMES`.
+    #
+    # This comment used to say `variant` was checked "against an enum", singular, which is
+    # what the code did and what was wrong with it: the enum was Pokemon's under every game.
     #
     # A KEY ABSENT FROM THE BODY IS NOT A CLEARED CLAIM. Only fields actually present are
     # applied, which is what lets one screen correct the finish without also wiping a set
@@ -1661,10 +1798,13 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     incoming = {}
     if "set_hint" in payload:
         incoming["set_hint"] = _optional_text(payload, "set_hint")
-    if "variant" in payload:
-        incoming["metadata_finish"] = _optional_variant(payload)
     if "game" in payload:
         incoming["game"] = _optional_game(payload)
+    # SHAPE ONLY, FOR THE FINISH TOO — its vocabulary is the game's, and the game is either
+    # in this body or on the card inside the lock. Exactly the rarity claim's split, added
+    # when the finish turned out to have been judged against Pokemon's enum under every
+    # game; `_check_variant_member` carries that account.
+    variant_shape = _variant_shape(payload) if "variant" in payload else None
     # SHAPE ONLY, HERE — membership needs the card's game and the card lives inside the
     # lock. Kept out of `incoming` until it is checked, so the apply loop below never sees
     # an unvalidated claim.
@@ -1689,11 +1829,13 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # re-validated here: the stale members cost a recorded problem at the next sidecar
         # read (`identify/sidecar.py` drops them, loudly) rather than a refusal that would
         # force every game correction to restate a claim it never mentioned.
-        if "rarity_claim" in payload:
-            incoming["rarity_claim"] = _check_rarity_members(
-                claim_shape,
-                incoming["game"] if "game" in incoming else card.game,
+        judged_against = incoming["game"] if "game" in incoming else card.game
+        if "variant" in payload:
+            incoming["metadata_finish"] = _check_variant_member(
+                variant_shape, judged_against
             )
+        if "rarity_claim" in payload:
+            incoming["rarity_claim"] = _check_rarity_members(claim_shape, judged_against)
         # THE PRIOR VALUE IS READ BEFORE THE ASSIGNMENT, which is the whole of what the log
         # line is for, and it is why these are not two bare assignments any more.
         #
@@ -1743,6 +1885,184 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         body["sidecar"] = str(sidecar_path(photo)) if wrote_sidecar else None
 
     return body
+
+
+def do_put_box_claims(box: int, payload: dict) -> dict:
+    """Apply capture-claim corrections to every eligible card in one box, in one write.
+
+    THE OWNER'S ASK, 2026-08-23, verbatim: "if i accidentally didn't do it at the capture
+    level, i'd like to be able to do it retroactively" — at the card level AND the box
+    level. The card level already existed (`do_put_card` above); this is the box half, and
+    it is the same claim vocabulary applied to many positions rather than a new one:
+    `PUT_FIELDS`, decoded by the same decoders, judged by the same per-game validators,
+    written with the same `corrected` history line. A box captured under the wrong game,
+    or with the finish toggle forgotten for a whole stack, is corrected in one call.
+
+    VALIDATE EVERYTHING, THEN WRITE EVERYTHING, OR WRITE NOTHING — D29's group-answer
+    shape, borrowed because it exists for exactly this situation: a partial bulk write
+    over a box is the worst outcome available, a box in a state nobody asked for that no
+    single request describes. Every refusal below fires before any card is assigned to.
+
+    MIXED BOXES ARE LEGAL (D21), AND THE VOCABULARY IS PER-GAME (D21/D23), so a claim is
+    judged against the game THIS call sets when the body carries one, and against EACH
+    CARD's own game when it does not — `do_put_card`'s `judged_against` rule, per card.
+    When any card's vocabulary rejects the claim, the WHOLE call refuses naming up to
+    eight of them (`claim_not_stocked_by_game`), rather than applying to the cards that
+    fit: a sweep that silently corrected some of a box teaches the operator it corrected
+    the box. The remedy is in the refusal — set `game` in the same call, or correct the
+    odd cards through the card route.
+
+    SOLD AND RETIRED CARDS ARE SKIPPED AND COUNTED, NEVER TOUCHED. Their record is
+    history (D10, D26): nothing re-lists them, and a bulk sweep is exactly the
+    indiscriminate write a terminal record deserves protection from. The response names
+    up to eight skipped positions, and the card-level PUT remains the deliberate,
+    one-position door for the rare case a terminal record's claim genuinely needs
+    fixing.
+
+    CLAIMS ONLY. `state`, listing counts and positions all have their own routes and
+    their own rulings, and `_reject_unknown` over `PUT_FIELDS` is what keeps them out of
+    this body.
+
+    SIDECARS ARE REWRITTEN FOR CHANGED CARDS ONLY — unlike the card route, which rewrites
+    on every call. A no-op restatement over a 400-card box would otherwise churn 400
+    files to say nothing; the drift-repair the card route incidentally performs stays the
+    card route's, and `docs/DEBTS.md` already records that repair as unlogged there.
+
+    ONE `corrected` LINE PER CHANGED POSITION, carrying the same `changed` mapping the
+    card route logs, plus `bulk` — the number of cards this call changed — so a reader of
+    `history.jsonl` can tell one sweep from forty hand corrections, exactly as the group
+    answer's `group` tag tells one press from sixteen (D29). One event for the box was
+    considered and rejected: it would lose which cards moved, and the moved cards are
+    what the line exists to answer for.
+    """
+    _reject_unknown(payload, PUT_FIELDS)
+    if not any(field in payload for field in PUT_FIELDS):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "nothing_to_apply",
+            f"Send at least one claim to apply. Settable: {', '.join(PUT_FIELDS)}.",
+        )
+
+    # The same decode table as `do_put_card`, phase for phase: shapes before the lock,
+    # membership inside it where the game each claim is judged against is known.
+    incoming = {}
+    if "set_hint" in payload:
+        incoming["set_hint"] = _optional_text(payload, "set_hint")
+    if "game" in payload:
+        incoming["game"] = _optional_game(payload)
+    variant_shape = _variant_shape(payload) if "variant" in payload else None
+    claim_shape = _rarity_claim_shape(payload) if "rarity_claim" in payload else None
+    if "note" in payload:
+        incoming["note"] = _optional_text(payload, "note")
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "box_not_found",
+                f"No box {box}. Create it with POST /boxes, or capture into it — a box "
+                f"registers itself the first time a card lands in it.",
+            )
+
+        # Every record in the box, coerced the way every destructive walk here coerces —
+        # an unreadable record refuses (`BadPosition` -> `inventory_conflict`) rather
+        # than being skipped, since it cannot be proven to be outside the box.
+        targets: List[Tuple[int, str, master.Card]] = []
+        skipped: List[Tuple[int, str]] = []
+        for key, card in inventory.cards.items():
+            if _position_int(card.box, f"box of card {key}") != int(box):
+                continue
+            at = _position_int(card.index, f"index of card {key}")
+            if card.state in master.TERMINAL_STATES:
+                skipped.append((at, card.state))
+                continue
+            targets.append((at, key, card))
+        targets.sort()
+        skipped.sort()
+
+        # PHASE ONE — membership, against the game each card will be read as. A body that
+        # sets the game is judged once (one vocabulary, and the validator's own refusal is
+        # the right answer); a body that does not is judged per card, and any rejection
+        # refuses the whole call with the cards named.
+        if "game" in incoming:
+            if "variant" in payload:
+                _check_variant_member(variant_shape, incoming["game"])
+            if "rarity_claim" in payload:
+                _check_rarity_members(claim_shape, incoming["game"])
+        elif "variant" in payload or "rarity_claim" in payload:
+            rejected: List[Tuple[int, str]] = []
+            for at, key, card in targets:
+                try:
+                    if "variant" in payload:
+                        _check_variant_member(variant_shape, card.game)
+                    if "rarity_claim" in payload:
+                        _check_rarity_members(claim_shape, card.game)
+                except BadRequest as refused:
+                    rejected.append((at, str(refused)))
+            if rejected:
+                named = "; ".join(f"card {at}: {text}" for at, text in rejected[:8])
+                more = f"; and {len(rejected) - 8} more" if len(rejected) > 8 else ""
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "claim_not_stocked_by_game",
+                    f"Box {box} holds cards whose game does not stock this claim: "
+                    f"{named}{more}. Nothing was changed — a sweep that corrected only "
+                    f"the cards that fit would leave the box in a state nobody asked "
+                    f"for. Set `game` in this same call to judge every card against it, "
+                    f"or correct the odd cards one at a time through "
+                    f"PUT /inventory/{box}/<index>.",
+                )
+
+        # PHASE TWO — the card route's apply, per position: only fields present in the
+        # body, only values that actually moved, prior values into the log.
+        applied: List[Tuple[int, str, dict]] = []
+        unchanged = 0
+        sidecars = 0
+        for at, key, card in targets:
+            fields = dict(incoming)
+            if "variant" in payload:
+                fields["metadata_finish"] = variant_shape
+            if "rarity_claim" in payload:
+                fields["rarity_claim"] = claim_shape
+            changed = {}
+            for field, value in fields.items():
+                if getattr(card, field) != value:
+                    changed[field] = {"from": getattr(card, field), "to": value}
+                    setattr(card, field, value)
+            if not changed:
+                unchanged += 1
+                continue
+            applied.append((at, key, changed))
+            photo = photo_path(box, at)
+            if photo.is_file():
+                files.write_json(
+                    sidecar_path(photo),
+                    sidecar_payload(
+                        box,
+                        at,
+                        **{name: getattr(card, name) for name in CLAIM_WIRE_NAMES},
+                    ),
+                )
+                sidecars += 1
+
+        for at, key, changed in applied:
+            _history(inventory, CORRECTED, key, changed=changed, bulk=len(applied))
+
+    return {
+        "box": int(box),
+        # The receipt, counted per kind like every destructive response here: what was
+        # eligible, what moved, what already said this, and what was left alone because
+        # its record is history.
+        "eligible": len(targets),
+        "applied": len(applied),
+        "unchanged": unchanged,
+        "skipped_terminal": len(skipped),
+        "skipped": [
+            {"index": at, "state": state} for at, state in skipped[:8]
+        ],
+        "sidecars_rewritten": sidecars,
+    }
 
 
 def _listing_hold(
@@ -1811,6 +2131,57 @@ def _unlink(path: Path) -> bool:
     return True
 
 
+def _position_int(value, where: str) -> int:
+    """Coerce a stored box or index for the two destructive box walks, or refuse.
+
+    `store/master.py:_as_position_int` with the same message shape and the same public
+    exception, restated rather than imported because that name is private and `_history`'s
+    docstring already argues why this file does not reach across the package for privates.
+    The rule it enforces is `next_index`'s: an unreadable record REFUSES the scan rather
+    than being skipped past, because a walk that renumbers or deletes around a record it
+    could not read either strands it or collides with it, silently, later. `BadPosition`
+    reaches the dispatcher as `inventory_conflict`.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise master.BadPosition(f"{where} is {value!r}, which is not an integer") from None
+
+
+def _drop_from_stores(snapshot, key: str) -> Tuple[bool, bool, bool]:
+    """Pop one position's queue entries and its paid answer. `(review, parked, cache)`.
+
+    THE OTHER THREE STORES ARE KEYED BY POSITION TOO, and this is the whole of what made
+    the undo route leave wreckage before it existed. Measured before it was written: after
+    undoing 3/2 the record, the photo and the sidecar were gone, while `review.json` still
+    held an entry whose `photo` field named the file the route had just deleted,
+    `identifications.json` still held the paid answer, and `GET /status` went on counting
+    the phantom in `queues.review`. The orphan was PERMANENT rather than untidy: a
+    position with no photo is never scanned, so never processed, so never released by
+    `Queue.release`.
+
+    `entries.pop` RATHER THAN `Queue.release`, which is the method that already removes
+    queue entries, and the difference is deliberate. `release` preserves anything a human
+    cleared, on the stated grounds that the answer should outlive the question. Here the
+    question, the card and the photograph are all going together — every caller of this
+    helper is deleting the RECORD, after which the position is either released back to the
+    allocator (undo), occupied by a different physical card (the mid-box shift), or gone
+    with its whole box — so a preserved answer would be a human's ruling about card A
+    attached to physical card B. `Cache.put` refuses to overwrite a cleared answer for the
+    same reason and would be wrong here for the same reason. A stale answer on a new card
+    is worse than the orphan this replaces, so removal here is unconditional.
+
+    THREE CALLERS, ONE RULE: `do_delete_card`, `do_remove_card` and `do_delete_box`. Each
+    reports what this gave up in its own response, because a route that destroys something
+    says what it destroyed — and the paid answer going in the bin is the one destruction
+    here that money can measure.
+    """
+    review_deleted = snapshot.review.entries.pop(key, None) is not None
+    parked_deleted = snapshot.parked.entries.pop(key, None) is not None
+    cache_deleted = snapshot.cache.entries.pop(key, None) is not None
+    return review_deleted, parked_deleted, cache_deleted
+
+
 def do_delete_card(box: int, index: int) -> dict:
     """Undo one capture: the record, the queue entries and the paid answer, then the files.
 
@@ -1827,6 +2198,16 @@ def do_delete_card(box: int, index: int) -> dict:
     the newest releases its index instead, and that release is the allocator's own
     behaviour rather than anything arranged here: the high-water scan simply stops finding
     the record. T7 asserts it against `Inventory.next_index` directly for that reason.
+
+    ONLY A `captured` CARD, SINCE THE OWNER'S RULING OF 2026-08-23 (D10, ruling 2). This
+    route reached `identified` for as long as it existed — the fee was spent, nothing
+    outside this Mac knew the card — and the ruling reverses that: once a card has been
+    identified it has made it into inventory proper, and the capture screen's rapid-fire
+    undo may not reach it. The boundary is the state, not the money. An identified card's
+    remedies are the ones built for it, and the `undo_too_late` refusal names all three:
+    re-shoot in place (`POST .../photo`), retire (`POST .../retire`), or the mid-box
+    delete with its contiguous shift (`POST .../remove`), where that route's own bounds
+    allow. `UNDOABLE_STATES` carries the rest of the argument.
 
     REPEATED CALLS WALK BACKWARDS, one card each, and that costs no code — every call
     deletes whatever is newest by the time it runs.
@@ -1920,10 +2301,28 @@ def do_delete_card(box: int, index: int) -> dict:
         # undo that instead" — which invites the operator to delete good captures one at a
         # time on the way to one that could never have been removed at all.
         if card.state not in UNDOABLE_STATES:
-            # One code, two remedies: the departure this record holds is reversed on its
-            # own route — the sale's, or since D26 the retirement's — never by deleting the
-            # record of it. The message names the right one, because "reverse the sale" on
-            # a retired card sends the operator to a route that will refuse.
+            # ONE CODE, AND THE MESSAGE NAMES THE REMEDY THE STATE ACTUALLY HAS. For the two
+            # terminal states the departure this record holds is reversed on its own route —
+            # the sale's, or since D26 the retirement's — never by deleting the record of
+            # it; "reverse the sale" on a retired card would send the operator to a route
+            # that will refuse. For `identified` — refused here since 2026-08-23 (D10,
+            # ruling 2) — there are three remedies and the message names all of them,
+            # because which one is right depends on what is wrong with the card, and only
+            # the operator knows that.
+            if card.state == master.IDENTIFIED:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "undo_too_late",
+                    f"Box {box}, card {index} is identified — it has made it into "
+                    f"inventory proper, and undo stops at `captured` (D10, ruling 2, "
+                    f"2026-08-23). What is wrong with it decides the remedy: a bad photo "
+                    f"is re-shot in place (POST /inventory/{box}/{index}/photo), a card "
+                    f"that has left the box is retired "
+                    f"(POST /inventory/{box}/{index}/retire), and a junk record is "
+                    f"deleted with the cards behind it slid forward "
+                    f"(POST /inventory/{box}/{index}/remove) — allowed while every "
+                    f"higher card in box {box} is still unsold, unretired and unlisted.",
+                )
             departure, route = (
                 ("a retirement", "retire")
                 if card.state == master.RETIRED
@@ -1977,36 +2376,14 @@ def do_delete_card(box: int, index: int) -> dict:
         # this at a file that is not ours.
         del inventory.cards[key]
 
-        # THE OTHER THREE STORES ARE KEYED BY POSITION TOO, and this is the whole of what
-        # made undo leave wreckage. Measured before this was written: after undoing 3/2 the
-        # record, the photo and the sidecar were gone, while `review.json` still held an
-        # entry whose `photo` field named the file this route had just deleted,
-        # `identifications.json` still held the paid answer, and `GET /status` went on
-        # counting the phantom in `queues.review`.
-        #
-        # The orphan was PERMANENT rather than untidy. Nothing clears a queue entry before
-        # 7b's review screen — `store/queues.py` says so out loud — and the one removal that
-        # exists, `Queue.release` from `cli/cmd_join.py`, frees positions a later run
-        # PROCESSED. A position with no photo is never scanned, so never processed, so never
-        # released. It is also most reachable exactly where it costs most: a card sitting in
-        # a queue is by definition one `emit` could not match, so nothing was ever written
-        # for its SKU — which means neither the state check nor the listing check above holds
-        # it, and it is undoable. The undoable set and the queued set overlap by
-        # construction, and v2 widened the overlap rather than narrowing it: every state but
-        # `sold` is now undoable.
-        #
-        # `entries.pop` RATHER THAN `Queue.release`, which is the method that already removes
-        # queue entries, and the difference is deliberate. `release` preserves anything a
-        # human cleared, on the stated grounds that the answer should outlive the question.
-        # Here the question, the card and the photograph are all gone, and the index is
-        # released — so the next capture into this box takes this very position, and a
-        # preserved answer would be a human's ruling about card A attached to physical card
-        # B. `Cache.put` refuses to overwrite a cleared answer for the same reason and would
-        # be wrong here for the same reason. A stale answer on a new card is worse than the
-        # orphan this replaces, so removal here is unconditional.
-        review_deleted = snapshot.review.entries.pop(key, None) is not None
-        parked_deleted = snapshot.parked.entries.pop(key, None) is not None
-        cache_deleted = snapshot.cache.entries.pop(key, None) is not None
+        # `_drop_from_stores` has the argument in full — the wreckage undo used to leave in
+        # the queue files and the answer cache, and why the pops are unconditional where
+        # `Queue.release` would preserve a cleared entry. The overlap that makes it live on
+        # THIS route narrowed with ruling 2 but did not close: a queued card is usually
+        # `identified`, which now refuses above, but a card whose identification FAILED —
+        # `identification_failed`, `card_not_detected` — queues while still `captured`, and
+        # that is exactly the junk capture this route exists to walk back.
+        review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
 
         photo_deleted = _unlink(photo)
         sidecar_deleted = _unlink(sidecar)
@@ -2055,6 +2432,497 @@ def do_delete_card(box: int, index: int) -> dict:
         # position from this rather than decrementing its own counter, which would drift the
         # moment the other device (D13) captured into the same box.
         "next_index": released,
+    }
+
+
+def do_remove_card(box: int, index: int, payload: dict) -> dict:
+    """Delete one capture mid-box and slide every higher card down one index. D10, ruling 1.
+
+    THE ONE SANCTIONED RENUMBER. "Nothing that renumbers may exist" stood from the day D10
+    was written until 2026-08-23, and the owner's ruling overrules it for exactly one case:
+    a junk capture pulled out of a contiguous stack of uncommitted cards, where the cards
+    behind it really do slide forward — the digital operation is the physical truth of it.
+    The BOUNDARY is what keeps the old rule's reason alive, and it is checked before
+    anything is touched: every higher-index card in this box must be `captured` or
+    `identified` with no listing hold. A sold or retired gap above refuses
+    (`renumber_blocked`), because shifting across it would close a gap that means
+    something; a listed SKU above refuses the same way, because its row is already in a
+    file that names its position. Below the deleted index nothing moves, so gaps down
+    there keep meaning what they meant.
+
+    THE TARGET ITSELF answers by its own doors: a sold card refuses as `card_sold` and a
+    retired one as `card_retired` — deleting either would erase the record of a departure
+    (D10 makes those gaps permanent on purpose) — and a listing-held target refuses as
+    `card_listed`, `_listing_hold`'s argument verbatim. `captured` and `identified` both
+    pass, which is half of what ruling 2 means by pointing an identified card here.
+
+    THE BODY IS AN AIM CHECK. `capture_id` is required — the target's own id, or null for
+    a record that predates ids — and a mismatch refuses (`capture_id_mismatch`). The shift
+    is the reason: after it runs, a DIFFERENT physical card sits at the deleted index, so
+    a replayed request after a lost response, or a screen aiming off a stale read of the
+    box, would delete the neighbour that slid in. The undo route needs no such check
+    because its replay finds nothing at the deleted position and refuses on its own; this
+    route's replay would find a card. The one target this cannot protect is a pre-server
+    record with no id whose upstairs neighbour also has none — named here rather than
+    papered over, because both halves of that are records this server never wrote.
+
+    FILES MOVE FIRST, INSIDE THE BLOCK, ASCENDING — and the ordering argument is
+    `do_delete_card`'s money rule extended to a rename. The session commits records only
+    at block exit, so a crash mid-shift discards every record edit while leaving some
+    photos already at their new names. Three properties make that recoverable rather than
+    wrong:
+
+      the first rename CONSUMES the target's photo   `os.replace(N+1 -> N)` atomically
+                                                     overwrites the doomed file. Nothing
+                                                     ever unlinks the target's photo while
+                                                     there are cards to shift, so no retry
+                                                     can blindly unlink a slot that a
+                                                     partial shift has already refilled
+                                                     with a NEIGHBOUR's photo — the one
+                                                     ordering that destroys a photo of a
+                                                     card that still exists.
+      a rename RESUMES rather than repeating         source missing while the record says
+                                                     the card has a photo means an earlier
+                                                     attempt already moved it; the loop
+                                                     takes the destination as done and
+                                                     walks on. The RECORD is what breaks
+                                                     the tie — a card that never had a
+                                                     photo is distinguishable from one
+                                                     whose photo has already moved, which
+                                                     is what makes the retry safe where a
+                                                     bare `is_file()` probe would misread
+                                                     the target's leftovers as a moved
+                                                     photo.
+      sidecars are REGENERATED, not renamed          written whole from the record at the
+                                                     new index (`write_atomic`), old one
+                                                     unlinked after — idempotent on a
+                                                     retry, and the reader can never find
+                                                     a sidecar whose `index` disagrees
+                                                     with its filename.
+
+    What a crash between renames costs, stated exactly: until the operation is retried to
+    completion, records point at photo names a partial shift has already moved, so an
+    identify run in that window would attribute photos one position off. The window is
+    closed by retrying the remove, which the `capture_id` check permits precisely because
+    the store was never committed. Past the block, the commit is per file (capture-server
+    spec §6.5), exactly as every other route here — this one cannot promise more.
+
+    EVERYTHING KEYED BY A SHIFTED POSITION MOVES WITH IT: record key and its `box`/`index`
+    fields, photo, sidecar, queue entries (`position`, `box`, `index`, the rendered
+    `label`, and `photo` re-pointed), cache entries re-keyed. `capture_id`s ride along
+    untouched — they name photographs, and no photograph changed. A CLEARED queue entry
+    moves too, flag intact: the answer is about the physical card, and the physical card
+    is what slid down.
+
+    TWO HISTORY LINES, COMMITTED WITH THE CHANGE OR NOT AT ALL: `removed` for the target —
+    same shape as undo's, because the same thing happened to that record — and
+    `renumbered` carrying the whole mapping compactly (`from`, `count`: minus-one for
+    every index above `from`). Without the second line, every earlier `history.jsonl`
+    line about a shifted position silently changes subject.
+    """
+    _reject_unknown(payload, REMOVE_FIELDS)
+    if "capture_id" not in payload:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "capture_id_required",
+            "Send the target's own capture_id — the one its inventory row carries, or "
+            "null for a record that predates capture ids. It is what stops a stale or "
+            "replayed request from deleting the card that slid into this position.",
+        )
+    aimed_at = _optional_text(payload, "capture_id")
+
+    key = master.position_key(box, index)
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        card = inventory.cards.get(key)
+        if card is None:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "card_not_found",
+                f"No card at box {box}, card {index}. This route deletes a record that "
+                f"exists; there is nothing here to shift onto.",
+            )
+        if card.state == master.SOLD:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_sold",
+                f"Box {box}, card {index} is sold, and its gap is the permanent record of "
+                f"that sale (D10) — deleting it would erase a departure and renumber the "
+                f"cards behind a slot that must keep meaning what it means. If the sale "
+                f"was recorded in error, send {{\"undo\": true}} to "
+                f"`/inventory/{box}/{index}/sold` first.",
+            )
+        if card.state == master.RETIRED:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_retired",
+                f"Box {box}, card {index} is retired ({card.retire_reason}) — it left "
+                f"inventory by its own door, and that departure keeps its record and its "
+                f"permanent gap (D26). If it is back in the box, send "
+                f"{{\"undo\": true}} to `/inventory/{box}/{index}/retire` first.",
+            )
+        held = _listing_hold(inventory, card)
+        if held:
+            summary = ", ".join(f"{count} {stage}" for stage, count in held)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_listed",
+                f"Box {box}, card {index} is one copy of SKU {card.sku}, and that SKU is "
+                f"already out of this Mac: {summary}. Deleting this copy would leave an "
+                f"import file — and then TCGplayer — disagreeing with the inventory. Pull "
+                f"the listing on TCGplayer and reconcile, or mark this copy sold if it "
+                f"has left; either way, leave the position alone.",
+            )
+        if (card.capture_id or None) != aimed_at:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "capture_id_mismatch",
+                f"The card at box {box}, card {index} is not the one this request "
+                f"describes — its capture_id is {card.capture_id!r}, not {aimed_at!r}. "
+                f"The box has probably shifted since it was read. Re-read the inventory "
+                f"and aim again; nothing was deleted.",
+            )
+
+        # The layout, validated BEFORE any file is touched. Every re-keyed queue entry
+        # carries a rendered label, and a layout that will not validate means the labels
+        # this shift would write are unknowable — `BadSections` escapes as
+        # `sections_invalid`, and a refusal that early burns nothing.
+        layout = inventory.sections_for(box)
+
+        # EVERY RECORD IN THIS BOX ABOVE THE TARGET, coerced the way `next_index` coerces —
+        # and like that scan, an unparsable record REFUSES rather than being skipped
+        # (`BadPosition` escapes as `inventory_conflict`). Skipping one would renumber
+        # around a record that may well be in this box, and the collision lands later, on
+        # the allocator, against a printed label.
+        movers: List[Tuple[int, str, master.Card]] = []
+        blockers: List[Tuple[int, str]] = []
+        for other_key, other in inventory.cards.items():
+            if _position_int(other.box, f"box of card {other_key}") != int(box):
+                continue
+            at = _position_int(other.index, f"index of card {other_key}")
+            if at <= int(index):
+                continue
+            movers.append((at, other_key, other))
+            if other.state in master.TERMINAL_STATES:
+                gone = (
+                    f"retired: {other.retire_reason}"
+                    if other.state == master.RETIRED
+                    else "sold"
+                )
+                blockers.append((at, f"card {at} is {gone}"))
+            else:
+                other_held = _listing_hold(inventory, other)
+                if other_held:
+                    other_summary = ", ".join(
+                        f"{count} {stage}" for stage, count in other_held
+                    )
+                    blockers.append(
+                        (at, f"card {at} is one copy of SKU {other.sku} ({other_summary})")
+                    )
+        if blockers:
+            blockers.sort()
+            named = "; ".join(text for _, text in blockers[:8])
+            more = f"; and {len(blockers) - 8} more" if len(blockers) > 8 else ""
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "renumber_blocked",
+                f"Deleting box {box}, card {index} would renumber every higher card in "
+                f"the box, and that shift is blocked: {named}{more}. A sold or retired "
+                f"gap up there is a permanent record a shift would close, and a listed "
+                f"copy's position is already in a file (D10, ruling 1). Reverse a "
+                f"departure recorded in error on its own route, wait for held listings "
+                f"to reconcile away — or leave the gap, which is D10's default answer.",
+            )
+        movers.sort()
+
+        # ------------------------------------------------------------------- the files
+        target_photo = photo_path(box, index)
+        target_sidecar = sidecar_path(target_photo)
+        photo_deleted = target_photo.is_file()
+        sidecar_deleted = target_sidecar.is_file()
+
+        if not movers:
+            # The target is the top of its box: nothing shifts, and the files go the way
+            # undo's do — photo before sidecar, the money rule, so any partial failure
+            # left behind is a cheap one.
+            photo_deleted = _unlink(target_photo)
+            sidecar_deleted = _unlink(target_sidecar)
+        else:
+            for at, _, other in movers:
+                src = photo_path(box, at)
+                dst = photo_path(box, at - 1)
+                if src.is_file():
+                    # Atomic on one filesystem, and on the first pass `dst` is the
+                    # target's photo — consumed by overwrite, never unlinked ahead of
+                    # time. On later passes `dst` was vacated by the previous rename, so
+                    # the only thing this can ever clobber is a recordless orphan, which
+                    # was a billable hazard anyway.
+                    os.replace(src, dst)
+                    moved = True
+                elif other.photo:
+                    # The record says this card has a photograph and the file is not at
+                    # its old name: an interrupted earlier attempt already moved it, and
+                    # the destination is the photograph. If it is at NEITHER name the
+                    # file is genuinely gone from disk, and a renumber that cannot prove
+                    # where a photo is refuses rather than guessing.
+                    if not dst.is_file():
+                        raise BadRequest(
+                            HTTPStatus.CONFLICT,
+                            "photo_missing",
+                            f"Box {box}, card {at}'s record names a photo, and the file "
+                            f"is at neither {src.name} nor {dst.name}. A renumber moves "
+                            f"files it can prove exist — re-shoot that card "
+                            f"(POST /inventory/{box}/{at}/photo) or restore the file, "
+                            f"then retry. Nothing has been committed.",
+                        )
+                    moved = True
+                else:
+                    # A card that never had a photograph (recorded by `emit`, not
+                    # captured). Nothing to move — and whatever target leftovers sit at
+                    # `dst` still have to go, photo before sidecar as ever.
+                    _unlink(dst)
+                    moved = False
+                if moved:
+                    files.write_json(
+                        sidecar_path(dst),
+                        sidecar_payload(
+                            box,
+                            at - 1,
+                            **{name: getattr(other, name) for name in CLAIM_WIRE_NAMES},
+                        ),
+                    )
+                else:
+                    _unlink(sidecar_path(dst))
+                _unlink(sidecar_path(src))
+
+        # ----------------------------------------------------------------- the records
+        del inventory.cards[key]
+        review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
+
+        for at, old_key, other in movers:
+            new_index = at - 1
+            new_key = master.position_key(box, new_index)
+            del inventory.cards[old_key]
+            other.box = int(box)
+            other.index = new_index
+            dst = photo_path(box, new_index)
+            # Derived fresh rather than string-edited, for `do_delete_card`'s reason: the
+            # layout below `captures/cards/` is the one this server writes, and a stale
+            # absolute path from another machine's store must not survive a renumber.
+            other.photo = str(dst) if dst.is_file() else None
+            inventory.cards[new_key] = other
+
+            label = join.Position(int(box), new_index, layout).label
+            for queue in (snapshot.review, snapshot.parked):
+                entry = queue.entries.pop(old_key, None)
+                if entry is None:
+                    continue
+                entry.position = new_key
+                entry.box = int(box)
+                entry.index = new_index
+                entry.label = label
+                if entry.photo:
+                    entry.photo = str(dst)
+                # No collision possible: `new_key`'s entry, if there was one, belonged to
+                # the target (popped above) or to the previous mover (already re-keyed).
+                queue.entries[new_key] = entry
+            cached = snapshot.cache.entries.pop(old_key, None)
+            if cached is not None:
+                snapshot.cache.entries[new_key] = cached
+
+        # ----------------------------------------------------------------- the history
+        _history(
+            inventory,
+            REMOVED,
+            key,
+            state=card.state,
+            sku=card.sku,
+            run=card.run,
+            cache_deleted=cache_deleted,
+        )
+        if movers:
+            _history(
+                inventory,
+                RENUMBERED,
+                key,
+                box=int(box),
+                count=len(movers),
+                **{"from": int(index)},
+            )
+            # ONE STATE LINE PER SHIFTED CARD, AT ITS NEW POSITION — and this is what keeps
+            # `_state_before_sale` and `_state_before_retirement` true across a renumber.
+            # Both scan a POSITION's history backwards for the last state-named line, and
+            # after a shift the lines under a position belong to its previous occupant.
+            # Index reuse after undo never had this problem because the next occupant
+            # always logs its own `captured` line; a shifted card arrives at its key
+            # without one, so the roll call below is that line — the same fact
+            # `record_capture` logs for a new card, stamped for a moved one. Measured
+            # before this was written: a retire-then-reverse at a shifted position
+            # restored the PREVIOUS occupant's state. The event name is the card's own
+            # current state, which is exactly what those scans exist to find;
+            # `renumbered_from` says why the line exists.
+            for at, old_key, other in movers:
+                _history(
+                    inventory,
+                    str(other.state),
+                    master.position_key(box, at - 1),
+                    sku=other.sku,
+                    run=other.run,
+                    renumbered_from=old_key,
+                )
+        released = inventory.next_index(box)
+
+    return {
+        "deleted": key,
+        "box": int(box),
+        "index": int(index),
+        "photo_deleted": photo_deleted,
+        "sidecar_deleted": sidecar_deleted,
+        "review_deleted": review_deleted,
+        "parked_deleted": parked_deleted,
+        "cache_deleted": cache_deleted,
+        # How many records slid down one index — 0 when the target was the top of its
+        # box. The mapping is implied and total: every index above `index`, minus one.
+        "shifted": len(movers),
+        # The index this box hands out next. After a shift that is the old high-water
+        # mark: the top slot emptied, so the box got one position shorter.
+        "next_index": released,
+    }
+
+
+def do_delete_box(box: int) -> dict:
+    """Delete a whole box: records, photos, sidecars, queue entries, cache, registry.
+
+    D10, OWNER RULING 3 (2026-08-23), and the third door out of the store. Undo walks back
+    the newest capture, the remove route above excises one record and closes its gap, and
+    this deletes a box entire — the case both of those are too small for: a shakedown box
+    of junk frames, a box captured under a mistyped number, a test run that was never
+    real. Gated as the genuinely destructive action `docs/DESIGN.md`'s clause means: the
+    UI adds a typed confirmation on top, and this route is the refusal side it sits on.
+
+    `box_not_empty_of_commitments` IS THE WHOLE GATE, and it is checked before anything is
+    touched. A box may not go while ANY card in it is sold, retired, or listing-held —
+    those records are history and commitments, not clutter (the ruling's own words). A
+    sold or retired record is the permanent account of a departure; a held SKU has copies
+    in an import file, or on TCGplayer itself, and deleting the copy here would leave the
+    listing counts claiming a card that is no longer anywhere. The refusal names up to
+    eight of them, oldest position first, so the operator knows exactly what stands in
+    the way and which route reverses each.
+
+    AN UNREADABLE RECORD REFUSES THE WHOLE OPERATION, the same rule the remove route and
+    `next_index` follow: a record whose box will not coerce cannot be proven to be
+    OUTSIDE this box, and a whole-box delete that skipped it might strand it — or destroy
+    it — either way silently. `BadPosition` escapes as `inventory_conflict`.
+
+    FILES GO INSIDE THE BLOCK, PHOTO BEFORE SIDECAR PER CARD — `do_delete_card`'s money
+    rule at box scale. A failing unlink escapes and nothing commits; a crash after some
+    unlinks leaves records whose photos are gone, and retrying the delete finishes the
+    job, since `_unlink` treats absence as no failure. The box DIRECTORY is removed only
+    if the record-named files were all it held: a stray file this route never enumerated
+    is not silently destroyed, the `rmdir` quietly fails, and the response says so in
+    `directory_removed` — a leftover directory under `captures/cards/` is visible, and a
+    photo-suffixed stray in it is a paid Batch request waiting to happen, which is worth
+    a person looking at.
+
+    THE REGISTRY ENTRY GOES TOO, sections, capacity and name with it. A deleted box is
+    not a sealed box and not an empty box; it is a box the store has never heard of, and
+    recreating the number later starts from nothing — same as a number that was never
+    used. One `box_deleted` history line carries the box and the card count; the
+    per-card `removed` lines are deliberately NOT written, because a hundred lines
+    describing one decision would bury the decision, and the count is on the one line
+    that describes it.
+    """
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        registered = inventory.box(box)
+
+        holds: List[Tuple[int, str, master.Card]] = []
+        blockers: List[Tuple[int, str]] = []
+        for card_key, card in inventory.cards.items():
+            if _position_int(card.box, f"box of card {card_key}") != int(box):
+                continue
+            at = _position_int(card.index, f"index of card {card_key}")
+            holds.append((at, card_key, card))
+            if card.state == master.SOLD:
+                blockers.append((at, f"card {at} is sold"))
+            elif card.state == master.RETIRED:
+                blockers.append((at, f"card {at} is retired ({card.retire_reason})"))
+            else:
+                held = _listing_hold(inventory, card)
+                if held:
+                    summary = ", ".join(f"{count} {stage}" for stage, count in held)
+                    blockers.append(
+                        (at, f"card {at} is one copy of SKU {card.sku} ({summary})")
+                    )
+
+        if registered is None and not holds:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "box_not_found",
+                f"No box {box} — nothing registered under that number and no card names "
+                f"it. There is nothing here to delete.",
+            )
+        if blockers:
+            blockers.sort()
+            named = "; ".join(text for _, text in blockers[:8])
+            more = f"; and {len(blockers) - 8} more" if len(blockers) > 8 else ""
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "box_not_empty_of_commitments",
+                f"Box {box} cannot be deleted: {named}{more}. Sold and retired records "
+                f"are history and listed copies are commitments, not clutter (D10, "
+                f"ruling 3). Reverse a departure recorded in error on its own route "
+                f"(`/sold`, `/retire`), wait for held listings to reconcile away — or "
+                f"leave the box standing.",
+            )
+
+        holds.sort()
+        photos = 0
+        sidecars = 0
+        review_dropped = 0
+        parked_dropped = 0
+        cache_dropped = 0
+        for at, card_key, _ in holds:
+            photo = photo_path(box, at)
+            if _unlink(photo):
+                photos += 1
+            if _unlink(sidecar_path(photo)):
+                sidecars += 1
+            del inventory.cards[card_key]
+            review_gone, parked_gone, cache_gone = _drop_from_stores(snapshot, card_key)
+            review_dropped += review_gone
+            parked_dropped += parked_gone
+            cache_dropped += cache_gone
+
+        registry_deleted = inventory.boxes.pop(str(int(box)), None) is not None
+
+        directory_removed = False
+        folder = captures_root() / f"box{int(box)}"
+        try:
+            folder.rmdir()
+            directory_removed = True
+        except OSError:
+            # Not empty (a stray this route never enumerated), or never existed. Either
+            # way the honest answer is False, and a stray is left VISIBLE rather than
+            # swept — the docstring has why.
+            directory_removed = False
+
+        _history(inventory, BOX_DELETED, None, box=int(box), cards=len(holds))
+
+    return {
+        "deleted_box": int(box),
+        # What went, counted per kind the way `do_delete_card` reports booleans — these
+        # are counts because a box holds many of each, and the numbers are the receipt
+        # the confirmation screen shows.
+        "cards": len(holds),
+        "photos": photos,
+        "sidecars": sidecars,
+        "review_deleted": review_dropped,
+        "parked_deleted": parked_dropped,
+        "cache_deleted": cache_dropped,
+        "registry_deleted": registry_deleted,
+        "directory_removed": directory_removed,
     }
 
 
@@ -2161,8 +3029,29 @@ def _answer_before(events: Sequence[dict], key: str) -> Optional[dict]:
     there would write `{'sku': None}` onto a card as a catalog id. Both members are read as
     optional strings because `master.Card` declares them that way — a card queued for review
     has usually never carried a SKU at all, and None is that fact rather than a missing value.
+
+    A `renumbered` LINE THIS POSITION SITS ABOVE IS A HARD STOP (D10, ruling 1). The mid-box
+    delete slides a DIFFERENT physical card into every index above the deleted one, so an
+    `answered` line older than the shift belongs to the position's previous occupant, and
+    restoring its pair would write one card's history onto another. The two state scans
+    survive a shift because the re-key logs each mover's own state at its new position;
+    an answer has no equivalent line to refresh, so the honest reading here is None — the
+    reversal refuses, and the queue entry is re-answered instead. An `answered` line
+    written AFTER the shift is met before the boundary and restores normally.
     """
+    try:
+        at_box, at_index = (int(part) for part in str(key).split("/"))
+    except (TypeError, ValueError):
+        at_box = at_index = None
     for event in reversed(list(events)):
+        if (
+            at_box is not None
+            and event.get("event") == RENUMBERED
+            and event.get("box") == at_box
+            and isinstance(event.get("from"), int)
+            and at_index >= event["from"]
+        ):
+            return None
         if event.get("position") != key:
             continue
         if event.get("event") != ANSWERED:
@@ -4543,6 +5432,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_reshoot(int(match.group(1)), int(match.group(2)), self._body())
                 return self._json(HTTPStatus.OK, body)
+            # The mid-box delete (D10, ruling 1). A POST and not a mode of the DELETE verb:
+            # the regex comment at `_REMOVE_RE` has the argument — the shift is not
+            # idempotent and must be unreachable from the undo path by any accident.
+            match = _REMOVE_RE.match(path)
+            if match:
+                body = do_remove_card(
+                    int(match.group(1)), int(match.group(2)), self._body()
+                )
+                return self._json(HTTPStatus.OK, body)
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No POST route {path}.")
 
         self._dispatch(run)
@@ -4562,6 +5460,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_put_card(int(match.group(1)), int(match.group(2)), self._body())
                 return self._json(HTTPStatus.OK, body)
+            # The box-level claim apply (owner's ask of 2026-08-23): the card correction
+            # one path segment broader — same vocabulary, every eligible card in the box,
+            # all-or-nothing.
+            match = _INVENTORY_BOX_RE.match(path)
+            if match:
+                body = do_put_box_claims(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
             match = _BOXES_ITEM_RE.match(path)
             if match:
                 return self._json(
@@ -4572,12 +5477,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self._dispatch(run)
 
     def do_DELETE(self) -> None:  # noqa: N802
-        """Undo. No body is read: the position is the whole request.
+        """Undo, and the whole-box delete. No body is read: the path is the whole request.
 
-        Answers 200 with a body rather than 204, because the app names the position it just
+        Answers 200 with a body rather than 204, because the app names what it just
         removed and this response is where that name comes from. A 204 would make the app
-        compose it from what it believed it was deleting — and the two disagree exactly when
-        the other device (D13) has captured since.
+        compose it from what it believed it was deleting — and the two disagree exactly
+        when the other device (D13) has captured since.
+
+        THE MID-BOX DELETE IS DELIBERATELY NOT HERE. It is `POST .../remove`, because it
+        is not idempotent — the shift slides a different card into the deleted index, so a
+        replay needs the body's aim check — and because the renumbering operation must not
+        be one stray token away from this verb's newest-only undo. `_REMOVE_RE` has the
+        argument. Both routes that ARE here refuse a replay on their own: the undo finds
+        nothing at the position, the box delete finds no box.
         """
 
         def run():
@@ -4585,6 +5497,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _INVENTORY_ITEM_RE.match(path)
             if match:
                 body = do_delete_card(int(match.group(1)), int(match.group(2)))
+                return self._json(HTTPStatus.OK, body)
+            # D10, ruling 3: the whole-box delete, gated behind
+            # `box_not_empty_of_commitments` in the handler. Digits only, like every
+            # other box pattern — a non-numeric box falls through to `no_such_route`.
+            match = _BOXES_ITEM_RE.match(path)
+            if match:
+                body = do_delete_box(int(match.group(1)))
                 return self._json(HTTPStatus.OK, body)
             raise BadRequest(
                 HTTPStatus.NOT_FOUND, "no_such_route", f"No DELETE route {path}."

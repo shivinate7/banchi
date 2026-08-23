@@ -55,13 +55,24 @@ const UNDO_KEY_LABEL = 'U'
 // The list itself used to live here as `FINISHES`, Pokemon's three. It is per-game data now
 // and comes from `GET /games`; see `finishChips` below.
 
-/* The fourth state of the finish control, and THE DEFAULT: no claim at all.
+/* THE DEFAULT STATE OF THE FINISH CONTROL — no claim at all — and, since 2026-08-23, a
+ * LABEL RATHER THAN A CELL.
  *
- * It is not a fourth member of the enum — the server answers anything outside
- * `pipeline/variant.py:FINISHES` with `variant_invalid` — it is `null`, and it sends no
- * `variant` key at all, exactly as a blank set hint sends no `set_hint`. Both rules come
- * from the same sentence in `sidecar_payload`: the file stays a record of claims the
- * operator actually made (D3 rung 1).
+ * It used to be drawn as the track's first cell, which made "claim nothing" a thing to pick
+ * beside the things there are to claim. The owner's ruling: nothing selected already IS no
+ * claim, so the cell only restated the absence of the others. It went; this label stayed,
+ * because the state still has to be NAMED wherever it is read — the collapsed Row and the
+ * last-capture panel both still say it at full contrast. Clearing a claim is re-tapping the
+ * cell that is on, which is what the rarity claim beside it already did and what `Track`'s
+ * `aria-pressed` markup always described.
+ *
+ * It is not a member of any game's enum — the server answers anything outside THE CHOSEN
+ * GAME's finishes with `variant_invalid` (`_check_variant_member`; it was Pokemon's three
+ * under every game until the day this comment was rewritten, which is the bug that cost a
+ * Riftbound `foil` its capture) — it is `null`, and it sends no `variant` key at all,
+ * exactly as a blank set hint sends no `set_hint`. Both rules come from the same sentence
+ * in `sidecar_payload`: the file stays a record of claims the operator actually made
+ * (D3 rung 1).
  *
  * THE NEXT PERSON TO TIDY THIS WILL WANT TO DEFAULT IT TO 'normal'. What that costs is
  * structural rather than cosmetic. `pipeline/variant.py:resolve` reaches rung 2
@@ -602,7 +613,6 @@ export function CaptureScreen() {
   // The two filter drafts. Cleared whenever the open field changes: a filter is an aid to
   // one opening, and a remembered one would re-narrow a list the operator cannot see yet.
   const [boxFilter, setBoxFilter] = useState('')
-  const [rarityFilter, setRarityFilter] = useState('')
 
   /* WHICH GAME THE NEXT CARD IS. Null only until the registry arrives — it is then set to
    * the registry's own `default`, and nothing on this screen can put it back to null.
@@ -937,6 +947,17 @@ export function CaptureScreen() {
       setFinish(null)
       return
     }
+    /* A GAME THAT DRAWS NO FINISH FIELD MAY NOT CARRY A FINISH CLAIM, and this is the case
+     * the membership check above cannot see: `pokemon_code` stocks `normal`, so a `normal`
+     * claimed under Pokemon is a MEMBER of the new game's enum and survives the line above
+     * — while the control that could take it back has just stopped being drawn (the field
+     * renders only at two or more finishes, per the owner's 2026-08-23 ruling). The claim
+     * would then ride invisibly onto every capture of the run, which is worse than the
+     * auto-selection D23 refuses: at least an auto-selected claim is on screen. */
+    if (gameEntry.finishes.length < 2) {
+      setFinish(null)
+      return
+    }
     if (offeredFinishes !== null && !offeredFinishes.has(finish)) setFinish(null)
   }, [finish, gameEntry, offeredFinishes])
 
@@ -947,6 +968,14 @@ export function CaptureScreen() {
    * exists to head off. Mirrors `readSessionRarityClaim`'s member-wise salvage. */
   useEffect(() => {
     if (gameEntry === null || rarityClaim.length === 0) return
+    /* A GAME THAT DRAWS NO RARITY FIELD MAY NOT CARRY A RARITY CLAIM — the finish row's
+     * rule, for the finish row's reason. A one-rarity game passes the membership filter
+     * below whenever the claim happens to be that rarity, so without this the claim would
+     * survive onto a screen with no control to take it back. */
+    if (gameEntry.rarities.length < 2) {
+      setRarityClaim([])
+      return
+    }
     const kept = rarityClaim.filter((member) => gameEntry.rarities.includes(member))
     if (kept.length !== rarityClaim.length) setRarityClaim(kept)
   }, [rarityClaim, gameEntry])
@@ -997,7 +1026,6 @@ export function CaptureScreen() {
   // reason for. `boxNote` rides along: it explains one rejected draft, not a field.
   useEffect(() => {
     setBoxFilter('')
-    setRarityFilter('')
     setBoxNote(null)
   }, [openField])
 
@@ -1009,12 +1037,10 @@ export function CaptureScreen() {
    * inconsistent key. */
   const boxFilterRef = useRef<HTMLInputElement>(null)
   const newBoxRef = useRef<HTMLInputElement>(null)
-  const rarityFilterRef = useRef<HTMLInputElement>(null)
   const hintRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (openField === 'box') boxFilterRef.current?.focus()
-    else if (openField === 'rarity') rarityFilterRef.current?.focus()
     else if (openField === 'set') hintRef.current?.focus()
   }, [openField])
 
@@ -1054,11 +1080,7 @@ export function CaptureScreen() {
    * cells are Title Case and nobody narrows with a shift key. NOT capped at nine: the
    * vocabulary is fixed per game and all of it must stay claimable by mouse; what stops at
    * nine is the digit chips (see Opt), which one filter keystroke re-indexes. */
-  const visibleRarities = useMemo(() => {
-    const list = gameEntry?.rarities ?? []
-    const query = rarityFilter.trim().toLowerCase()
-    return query === '' ? list : list.filter((name) => name.toLowerCase().includes(query))
-  }, [gameEntry, rarityFilter])
+  const visibleRarities = useMemo(() => gameEntry?.rarities ?? [], [gameEntry])
 
   /* A DIGIT ACTS ONLY INSIDE AN OPEN FIELD, and always on what is currently VISIBLE — the
    * re-indexing rule. In the multi-select it toggles; in a single-select list or a track it
@@ -1087,16 +1109,20 @@ export function CaptureScreen() {
         const device = camera.devices[nth]
         if (device !== undefined) camera.selectDevice(device.deviceId)
       } else if (openField === 'finish') {
-        // Cell order is the track's: no claim first, then the game's own enum order.
-        if (nth === 0) {
-          setFinish(null)
-          closeField()
-          return
-        }
-        const member = (gameEntry?.finishes ?? [])[nth - 1]
+        /* CELL ORDER IS THE GAME'S ENUM ORDER, FLAT — the "no claim" cell that used to sit
+         * at position 1 is gone (owner's ruling, 2026-08-23), so digit N is the Nth finish
+         * rather than the Nth-minus-one. This branch is the reason that ruling could not be
+         * a render-only change: left as it was, `1` would have CLEARED the claim while
+         * every other digit picked one finish too far along — silently, on the control the
+         * operator uses at feeder pace, with the track drawing the right thing all the
+         * while. The digits are the keyboard path this screen is built around, so a
+         * one-cell change to the track is always a change here too. */
+        const member = (gameEntry?.finishes ?? [])[nth]
         if (member === undefined) return
         if (offeredFinishes !== null && !offeredFinishes.has(member)) return
-        setFinish(member)
+        // Re-picking the finish already claimed clears it, exactly as tapping its own cell
+        // does — the toggle rule the removed "no claim" cell handed over to every cell.
+        setFinish(finish === member ? null : member)
         closeField()
       } else if (openField === 'rotation') {
         const value = ROTATIONS[nth]
@@ -1123,6 +1149,7 @@ export function CaptureScreen() {
       camera,
       gameEntry,
       offeredFinishes,
+      finish,
       switchTrigger,
     ],
   )
@@ -1966,9 +1993,19 @@ export function CaptureScreen() {
                 width every time you look, because width moves only when the game does and
                 the game is a session setting. It says HOW MANY and AT WHICH POSITIONS,
                 never WHICH NAMES: names live one keypress away behind R, and that trade is
-                the mockup's, accepted with it. A game with no rarities (`misc`) draws no
-                field, the same rule the finish row has always had. */}
-            {gameEntry !== null && gameEntry.rarities.length > 0 ? (
+                the mockup's, accepted with it.
+
+                FEWER THAN TWO RARITIES DRAWS NO FIELD — the same threshold the finish row
+                takes, moved here on the owner's ruling of 2026-08-23 for the same reason
+                and in the same breath. `misc` authors none, and `pokemon_code` authors
+                exactly one (`Code Card`), which made a multi-select offering a single
+                option: a control whose only choice is whether to restate the one fact it
+                could possibly carry. Both of the claim's jobs (D23) are degenerate there —
+                a cross-check against one candidate rarity contradicts nothing, and
+                narrowing the finish chips is moot for a game with one finish that now
+                draws no chips either. Claiming nothing and letting the ladder read the
+                catalog is the same answer by the honest route. */}
+            {gameEntry !== null && gameEntry.rarities.length > 1 ? (
               openField === 'rarity' ? (
                 <OpenField
                   k="R"
@@ -1976,37 +2013,17 @@ export function CaptureScreen() {
                   meta={`Choose any · ${rarityClaim.length} of ${gameEntry.rarities.length}`}
                   onClose={closeField}
                 >
-                  <div className="capture-entry">
-                    <span />
-                    <div className="capture-entrybox">
-                      <input
-                        ref={rarityFilterRef}
-                        className="capture-filter"
-                        type="text"
-                        aria-label="Narrow the rarity list"
-                        placeholder="narrow, then 1–9"
-                        value={rarityFilter}
-                        onChange={(event) => setRarityFilter(event.target.value)}
-                        onKeyDown={(event) => {
-                          /* Digits toggle FROM INSIDE the filter — "narrow, then 1–9" as
-                             one motion, no refocus. Safe only because no rarity name
-                             contains a digit, so a digit typed here can never be search
-                             text; the box filter is the mirror case and keeps its digits.
-                             Enter closes: a multi-select has no lone match to take. */
-                          if (event.key >= '1' && event.key <= '9') {
-                            event.preventDefault()
-                            fieldDigit(Number(event.key))
-                            return
-                          }
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            closeField()
-                            blurActive()
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
+                  {/* NO FILTER BAR HERE, on the owner's ruling of 2026-08-23: "there's
+                      not that many that i have to search for them." The longest list any
+                      game authors is Pokemon's thirteen, and nine of those ride digits —
+                      so the box the filter saved was never more than a few taps, while it
+                      cost a focused input on every open of this field and a re-indexing
+                      rule the operator had to hold in their head to read the digit chips.
+
+                      The box filter is NOT the mirror case and deliberately keeps its own:
+                      boxes are unbounded and already number in the nineties, which is the
+                      condition this list can never reach — `rarities` is authored per game
+                      in `pipeline/games.py` and grows only when a real catalog does. */}
                   {/* ANY NUMBER of marks is a legal claim, including none: toggling the
                       last one off IS the clear, the empty claim narrows nothing (D23), and
                       no separate reset control exists to learn. */}
@@ -2024,9 +2041,6 @@ export function CaptureScreen() {
                         />
                       )
                     })}
-                    {visibleRarities.length === 0 ? (
-                      <p className="capture-quiet">Nothing matches. Clear the filter.</p>
-                    ) : null}
                   </div>
                 </OpenField>
               ) : (
@@ -2052,44 +2066,65 @@ export function CaptureScreen() {
               )
             ) : null}
 
-            {/* A GAME WITH NO FINISHES DRAWS NO FIELD. `misc` declares an empty vocabulary —
-                a Yu-Gi-Oh or Weiss card has no finish this pipeline knows how to claim — and
-                a Finish row offering only "no claim" would be a control with nothing to pick,
-                which reads as something failing to load rather than as nothing to say. */}
-            {gameEntry !== null && gameEntry.finishes.length > 0 ? (
+            {/* A GAME WITH FEWER THAN TWO FINISHES DRAWS NO FIELD, and the threshold moved
+                from zero to one on the owner's ruling of 2026-08-23. The zero case was
+                always here: `misc` declares an empty vocabulary — a Yu-Gi-Oh or Weiss card
+                has no finish this pipeline knows how to claim — and a Finish row offering
+                only "no claim" is a control with nothing to pick, which reads as something
+                failing to load rather than as nothing to say.
+
+                THE ONE-FINISH CASE IS THAT SAME SENTENCE ONE STEP ALONG. `pokemon_code`
+                stocks `normal` and nothing else, so its Finish row offered "no claim" beside
+                a single cell — two cells, one real choice, and the owner named it as making
+                no sense. It does not.
+
+                DRAWN AS ABSENT RATHER THAN AS AUTO-SELECTED, WHICH IS THE PART D23 DECIDES.
+                The owner's first instinct was that a lone finish "would always be selected",
+                and D23 refuses exactly that: an auto-selected claim is a MANUFACTURED one,
+                and D3 rung 1 outranks rung 2, so claiming `normal` on the operator's behalf
+                would make `CATALOG_FORCED` unreachable for every card of that game. Not
+                drawing the control claims nothing, leaves rung 2 to resolve the only finish
+                the catalog stocks, and reaches the same record by the honest route. Ruled
+                that way by the owner on 2026-08-23; D23 is not reopened.
+
+                A finish claimed under a game that DOES draw the field must not survive a
+                switch to one that does not — see the clearing effect above, which drops it
+                on this same threshold. Otherwise a claim would ride along on a control the
+                operator cannot see, let alone take back. */}
+            {gameEntry !== null && gameEntry.finishes.length > 1 ? (
               openField === 'finish' ? (
                 <OpenField
                   k="F"
                   label="Finish"
-                  meta={finish === null ? 'Choose one · default' : 'Choose one'}
+                  meta={finish === null ? 'Optional · none claimed' : 'Tap again to clear'}
                   onClose={closeField}
                 >
                   {/* The pipeline's own strings, verbatim, cell for cell — the same
                       no-second-vocabulary rule the chips followed (see NO_CLAIM_LABEL).
                       An excluded cell stays drawn and refuses, so the operator can see
                       what the rarity claim cost; the sentence below the track is where
-                      `not stocked` is said at full contrast. */}
+                      `not stocked` is said at full contrast.
+
+                      THERE IS NO "no claim" CELL, on the owner's ruling of the same day:
+                      nothing selected IS no claim, and a cell for it is a choice that only
+                      restates the absence of the others. Clearing is re-tapping the cell
+                      that is on — which is the idiom the rarity claim beside it already
+                      uses, and which `Track` was already marked up for: its cells carry
+                      `aria-pressed`, so they have always been toggles rather than radios.
+                      The collapsed Row below still SAYS `no claim` at full contrast, so the
+                      state stays named where it is read; what went is the cell that made
+                      naming it a thing to pick. */}
                   <Track
                     label="Finish"
-                    cells={[
-                      {
-                        text: NO_CLAIM_LABEL,
-                        on: finish === null,
-                        onPick: () => {
-                          setFinish(null)
-                          closeField()
-                        },
+                    cells={gameEntry.finishes.map((member) => ({
+                      text: member,
+                      on: finish === member,
+                      disabled: offeredFinishes !== null && !offeredFinishes.has(member),
+                      onPick: () => {
+                        setFinish(finish === member ? null : member)
+                        closeField()
                       },
-                      ...gameEntry.finishes.map((member) => ({
-                        text: member,
-                        on: finish === member,
-                        disabled: offeredFinishes !== null && !offeredFinishes.has(member),
-                        onPick: () => {
-                          setFinish(member)
-                          closeField()
-                        },
-                      })),
-                    ]}
+                    }))}
                   />
                   {offeredFinishes === null ||
                   gameEntry.finishes.every((member) => offeredFinishes.has(member)) ? null : (

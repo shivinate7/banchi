@@ -238,6 +238,14 @@ at a temporary directory, so nothing here touches the real inventory.
   second call walks back one more card, and that it refuses anything but the newest and
   anything already written into an import file. All D10, and all written the same day the
   route was, which is what this bullet promised when it said the cases were writable then.
+  **Narrowed 2026-08-23 by D10's ruling 2**: undo now stops at `captured`, and the case
+  that asserted "undo at `identified` is ALLOWED" asserts the refusal instead — and
+  exercises the three remedies it names (re-shoot, retire, the mid-box remove). The two
+  destructive operations the same rulings added are covered the same day they landed:
+  the mid-box delete with its contiguous shift (`renumber_blocked` and the aim check,
+  photos following their records byte-for-byte, the `renumbered` mapping and the
+  per-position roll-call lines that keep the state reversals reading the right card) and
+  the whole-box delete behind `box_not_empty_of_commitments`.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This

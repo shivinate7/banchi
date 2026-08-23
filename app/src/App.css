@@ -152,10 +152,26 @@
 
 /* Focus ring in --ink for the same reason. The conventional choice is the accent colour,
    but accent's outline weight already carries a meaning here, and a keyboard user tabbing
-   through the chrome is not being told the system is unsure about anything. */
+   through the chrome is not being told the system is unsure about anything.
+
+   IT DREW AS A SQUARE BLACK BOX CLAMPED TO THE TEXT, and the owner named it on 2026-08-23.
+   Two things did that, both of them local overrides of a rule `base.css` already gets
+   right. The offset was NEGATIVE, so the ring was painted 2px INSIDE the link — and this
+   link is `display: flex` with `padding: 12px 0`, no horizontal padding at all, so inside
+   means straight through the ends of the word. And there was no radius, against a token
+   block that publishes exactly one (4px, everywhere), so it met the text in four sharp
+   corners.
+
+   `base.css` states the fix in its own comment — "`outline-offset` is positive so the ring
+   clears the 4px radius instead of clipping the corners of the control it is announcing" —
+   and that sentence was true of everything except the two rules that overrode it. This is
+   now that rule, with the horizontal breathing room the ring needs to stand off a word
+   rather than box it in. The colour is unchanged: it was argued, and it was not the
+   problem. */
 .app-nav-link:focus-visible {
   outline: 2px solid var(--ink);
-  outline-offset: -2px;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ---- the key chips ----

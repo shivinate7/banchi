@@ -1,5 +1,8 @@
-/* The pull preview — docs/specs/capture-app.md §7. Look only, so nothing here draws a
- * control that looks pressable except the reload and the list rows.
+/* The pull preview — docs/specs/capture-app.md §7. Look only, plus one write and a map:
+ * the things that look pressable are the reload, the list rows, the box cells (jumps —
+ * they change the selection and nothing else), and the re-shoot button, which dresses as
+ * the reload on purpose. The search field ships its own sheet and its own rulings in
+ * SearchField.css.
  *
  * The key chips are the one thing in this file with a border and a radius that is not a
  * control, and they are drawn quiet enough — muted on surface, 10px, no fill — that the
@@ -121,35 +124,173 @@
   margin-top: var(--s5);
 }
 
-/* Sticky and independently scrolled. §10.1 records that a Gate B run may be two hundred
-   cards rather than twenty, and a list that long pushes the photo — the thing being
-   checked — off the screen. Rejected: paging the list, which adds a control to a screen
-   whose whole claim is that it has none. */
-.pull-preview-list {
-  list-style: none;
+/* Sticky and independently scrolled — the whole MAP column now, not the list alone.
+   §10.1 records that a Gate B run may be two hundred cards rather than twenty, and a list
+   that long pushes the photo — the thing being checked — off the screen; that argument
+   covers the search, the box strip and the key caption exactly as it covers the rows,
+   because a control that narrows the list and then scrolls away from it is a control you
+   scroll UP to reach. Rejected then and still: paging the list. */
+.pull-preview-map {
   position: sticky;
   top: var(--s6);
   max-height: calc(100vh - var(--s8) - var(--s6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-height: 0;
+}
+
+/* `flex: 0 1 auto`, never grow: a short list must end where its rows end. Grown, the
+   bordered scroller pads itself with empty surface — the looks-like-a-bug the review
+   screen's full-width photo panel was rejected for, drawn around a list instead. */
+.pull-preview-list {
+  list-style: none;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--surface);
 }
 
+/* ---- the box strip: the capture screen's segmented track, at this file's own names ----
+   One bordered box subdivided by hairlines (1px gaps over --line), cells content-sized,
+   selection as ink weight plus a 2px rail — .capture-track's grammar, copied rather than
+   imported, the same rule the key chips state below: several screens, one LOOK, separate
+   copies. It WRAPS past roughly a dozen boxes rather than scrolling: a second 20px row
+   costs almost nothing and a horizontal scroller hides the boxes it cannot show. The 1px
+   gaps stay line-coloured on both axes because the ground behind the cells is the line
+   token. No :hover — --hover's one job is row hover, and .capture-cell set the
+   precedent. */
+.pull-preview-boxline {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s2);
+  align-items: start;
+  justify-items: start;
+}
+
+.pull-preview-boxcap {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-top: var(--s1);
+}
+
+.pull-preview-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+/* aria-current and not aria-pressed, because a cell is a jump and not a toggle: the rail
+   marks where the selection IS, which is what lets the strip double as "you are here". */
+.pull-preview-boxcell {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: var(--s1) var(--s2);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 2px solid var(--surface);
+  border-radius: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+}
+
+.pull-preview-boxcell[aria-current='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
+/* The match line — a sentence a human reads, quiet: it reports on the list, it is not
+   the list. */
+.pull-preview-match {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The search's failure panel sits in the map column's own rhythm; the screen-wide note's
+   s5 gap is the page's, not the column's. */
+.pull-preview-mapnote {
+  margin-top: 0;
+}
+
+/* The deep keys' caption, under the list it is bound to — same chips as the header's, one
+   more job: naming the scope, because "when the list holds focus" is the one fact about
+   these keys nobody can guess from the chrome. flex over the header's inline-flex so a
+   narrow column wraps the sentence instead of clipping it. */
+.pull-preview-listkeys {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* The section headers — sticky WITHIN their own group li, so each holds the scroller's
+   top edge while its rows pass and is pushed off by the next. "Where am I in the walk"
+   stays answered without costing any row its width, which is what paid for the one-line
+   rows below. Opaque surface because rows pass beneath; z-index over the rows' inset
+   focus rings, which may vanish under it mid-scroll — a ring is about where focus is, and
+   focus is not the row being covered. The words are the server's own box and section
+   numbers — sectionTitleOf in the .tsx says what a header may claim. */
+.pull-preview-group,
+.pull-preview-group-rows {
+  list-style: none;
+}
+
+.pull-preview-secthead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: var(--s1) var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* One line per card, at the 4-16 end of the scale — the owner's density. The two-line
+   row predates the section headers: with `BOX 1 · SECTION 2` said once above a stretch,
+   repeating it per row was most of each row's width, and the walk showed a dozen cards
+   where the viewport had room for twice that. The detail panel is the star; this list is
+   the map, and a map is judged by how much territory one glance covers.
+
+   The scroll margins are the sticky header's shadow: without the top one, a key or a chip
+   scrolling a row to 'start' parks it exactly under the header that names its section. */
 .pull-preview-row {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(26px, max-content) minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: baseline;
   width: 100%;
   text-align: left;
-  padding: var(--s2) var(--s3);
+  padding: var(--s1) var(--s3);
   background: transparent;
   border: 0;
   /* The hairline is the only separation mechanism in the product, no exceptions. */
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   cursor: pointer;
+  scroll-margin-top: 28px;
+  scroll-margin-bottom: var(--s1);
 }
 
-.pull-preview-list li:last-child .pull-preview-row {
+.pull-preview-group:last-child .pull-preview-group-rows li:last-child .pull-preview-row {
   border-bottom: 0;
 }
 
@@ -159,21 +300,24 @@
 }
 
 .pull-preview-row-position {
-  display: block;
   font-family: var(--util);
-  font-size: 12px;
+  font-size: 11px;
   /* Unselected rows are metadata; the selected one is the card you are looking at. That
      step from muted to ink is the selection signal, and it survives a colour-blind eye and
      a bad monitor in a way a 1.5% ground change does not. */
   color: var(--muted);
+  /* Usually a bare slot number under its header; the pooled and no-label fallbacks are
+     whole phrases, and a fallback may squeeze the name but never wrap the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
 }
 
 .pull-preview-row-name {
-  display: block;
   font-family: var(--body);
   font-size: 13px;
   color: var(--muted);
-  margin-top: var(--s1);
   /* One line. A long card name that wraps makes rows different heights, and a list you
      scan for a position reads worse when the rhythm breaks. */
   overflow: hidden;

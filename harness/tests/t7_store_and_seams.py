@@ -113,6 +113,28 @@ asserts), the sidecar rebuilt from the RECORD so a drifted one is repaired rathe
 trusted, and the `reshot` line carrying both capture ids — the only trace the first
 photograph ever existed.
 
+TWO MORE SECTIONS LANDED ON 2026-08-23, the day after their routes and seams did, for
+D29's group answer and C8's code ledger:
+
+  `check_group_answer`   POST /review/group-answer. The case that matters is
+                         `group_entry_refused` writing NOTHING — validate everything,
+                         then write everything, because a partial group reports a state
+                         neither queue file matches. Plus the three `group_not_uniform`
+                         conditions, entry failures reported before uniformity, the
+                         review entry governing a both-queues member, the listing hold
+                         degrading `restores_to` per member rather than the write, and
+                         one member's undo through the single route leaving the rest
+                         answered.
+  `check_code_ledger`    `upsert_jsonl`'s replace-in-place, `_code_ledger_lines`'
+                         skip-by-name roster, the record seam writing the PARSER's
+                         fields (a transcribed code lands in `Card.number` unfolded,
+                         `?` marks intact), both ledger files written through a real
+                         `identify` run over a stub transport — the only fake in it —
+                         the cached-card heal of a deleted index, and the dispute
+                         lookup through `GET /search` answering a pooled place and a
+                         photo. Every code string in it is invented, in a scratch
+                         store; nothing code-shaped touches a tracked file.
+
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
 after. Every queue entry these cases assert against is still hand-built — by the harness
@@ -148,7 +170,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
-from identify import sidecar  # noqa: E402
+from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import games, join, tcgcsv, variant  # noqa: E402
 from server import capture_server  # noqa: E402
 from store import files, master, queues  # noqa: E402
@@ -834,9 +856,11 @@ def check_undo(checks: Checks) -> None:
     something wrong. A bug in this one deletes a photograph of a card that is back in the
     box by the time anybody notices.
 
-    The three rules are D10's and they are asserted as rules, not as one happy path: what
-    it deletes, that it deletes only the newest, and that it stops once `emit` has written
-    the card's row into an import file.
+    The rules are D10's and they are asserted as rules, not as one happy path: what it
+    deletes, that it deletes only the newest, that it stops at `captured` — ruling 2 of
+    2026-08-23 reversed the old undo-at-`identified` allowance, and the case that asserted
+    the allowance now asserts the refusal AND exercises the three remedies it names — and
+    that it stops once `emit` has written the card's row into an import file.
     """
     checks.note("")
     checks.note("UNDO — DELETE /inventory/<box>/<index>")
@@ -929,24 +953,76 @@ def check_undo(checks: Checks) -> None:
             "and the card it refused is still there: a refusal deletes nothing",
         )
 
-        # Allowed at `identified`: the model has answered, money is already spent, and
-        # nothing outside this Mac knows the card exists. Deleting it costs the fee, which
-        # is the trade D10 names.
+        # REFUSED at `identified`, since the owner's ruling of 2026-08-23 (D10, ruling 2).
+        # This case asserted the opposite for as long as the route existed — "the model has
+        # answered, money is already spent, and nothing outside this Mac knows the card" —
+        # and the ruling reverses it: once identified, a card has made it into inventory
+        # proper, and the capture screen's rapid-fire undo may not reach it. The refusal
+        # must name the three remedies built for an identified card, and each is then
+        # exercised here on this very card, so "the message points somewhere real" is a
+        # fact this file has checked rather than prose.
         with Store().write() as snapshot:
             snapshot.inventory.set_state("3/3", master.IDENTIFIED)
-        capture_server.do_delete_card(3, 3)
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_card(3, 3),
+            "undo at `identified` REFUSES — D10 ruling 2 reversed the old allowance",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "undo_too_late",
+                "in the same code the terminal states get — one code, remedy named per state",
+            )
+            checks.ok(
+                all(
+                    f"/inventory/3/3/{route}" in str(caught)
+                    for route in ("photo", "retire", "remove")
+                ),
+                "and the refusal names all three remedies: re-shoot, retire, and the "
+                "mid-box remove — which one is right depends on what is wrong with the "
+                "card, and only the operator knows that",
+                f"message was: {caught}",
+            )
         checks.ok(
-            Store().read().inventory.get("3/3") is None,
-            "undo at `identified` is ALLOWED — only the identification fee is lost",
+            Store().read().inventory.get("3/3") is not None
+            and capture_server.photo_path(3, 3).is_file(),
+            "and the refusal reached neither the record nor the photo",
         )
 
-        # Refused once `emit` has written the card's row into an import file, because a file
-        # on disk would now disagree with the inventory. THE FACT MOVED IN v2 AND THE GUARD
-        # HAD TO MOVE WITH IT: `pushed` is a count on the SKU's `Listing` and no longer a
-        # state a card wears, so this used to be `set_state("3/2", master.PUSHED)` and is a
-        # listing count now. The card itself reads `identified`, which is ON the undo
-        # allowlist — asserted below rather than assumed, because that is exactly what makes
-        # the state check alone insufficient and this case load-bearing.
+        # Remedy one, re-shoot: reaches an identified card, replaces the photo in place.
+        reshot = capture_server.do_reshoot(
+            3, 3, {"capture_id": "undo-remedy-reshoot", "image": base64.b64encode(JPEG_RESHOT).decode("ascii")}
+        )
+        checks.equal(
+            reshot["key"], "3/3", "remedy 1, re-shoot: an identified card's photo is replaceable in place"
+        )
+        # Remedy two, retire and reverse: reaches an identified card both ways.
+        capture_server.do_retire(3, 3, {"reason": "damaged"})
+        put_back = capture_server.do_retire(3, 3, {"undo": True})
+        checks.equal(
+            put_back["state"],
+            master.IDENTIFIED,
+            "remedy 2, retire: an identified card retires, and the reversal restores its own state",
+        )
+        # Remedy three, the mid-box remove: deletes the identified card undo may not touch.
+        # 3/3 is the top of its box, so the shift is empty — the remove route's floor case.
+        gone = capture_server.do_remove_card(3, 3, {"capture_id": "undo-remedy-reshoot"})
+        checks.ok(
+            gone["deleted"] == "3/3"
+            and gone["shifted"] == 0
+            and Store().read().inventory.get("3/3") is None,
+            "remedy 3, remove: deletes the identified card, zero cards shifted at the top "
+            "of the box, and the index is released exactly as undo releases one",
+        )
+
+        # An emitted card refuses on TWO grounds now, and this block asserts both. `pushed`
+        # is a count on the SKU's `Listing` and no longer a state a card wears (D7 amended),
+        # and under D10 ruling 2 the card's `identified` state alone already stops the undo
+        # — so `_listing_hold` is the guard BEHIND the state check there, nearly
+        # unreachable, and the place where the hold does its visible work is the REMOVE
+        # route, which identified cards CAN reach. The SKU-naming refusal is asserted
+        # there, where the operator will actually read it.
         checks.raises(
             master.UnknownState,
             lambda: Store().read().inventory.set_state("3/2", master.PUSHED),
@@ -961,38 +1037,42 @@ def check_undo(checks: Checks) -> None:
                 master.PUSHED, 1
             )
         checks.ok(
-            Store().read().inventory.get("3/2").state in capture_server.UNDOABLE_STATES,
-            "the card's own state is UNDOABLE — after v2 a pushed copy reads `identified`, "
-            "so a state check on its own would hard-delete a card TCGplayer has been told "
-            "about",
+            Store().read().inventory.get("3/2").state
+            not in capture_server.UNDOABLE_STATES,
+            "a pushed copy reads `identified`, which ruling 2 took OFF the undo allowlist — "
+            "the state check now stops it one guard earlier than the listing hold",
         )
         refusal(
             checks,
             lambda: capture_server.do_delete_card(3, 2),
             "undo_too_late",
-            "and undo still refuses: its SKU's row is already in an import file (D7 amended "
-            "— the fact lives on the listing, not on the card)",
+            "and undo refuses it: identified, and its SKU's row is in an import file — "
+            "either fact alone is enough (D10 ruling 2; D7 amended)",
         )
         checks.ok(
             Store().read().inventory.get("3/2") is not None
             and capture_server.photo_path(3, 2).is_file(),
             "and the refusal reached neither the record nor the photo",
         )
+        # The hold's own refusal, on the route that reaches identified cards: the remove
+        # route names the SKU and the count, because a refusal that does not say what is
+        # holding the card costs a round trip.
         caught = checks.raises(
             capture_server.BadRequest,
-            lambda: capture_server.do_delete_card(3, 2),
-            "the refusal is a BadRequest the dispatcher can answer with",
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": None}),
+            "the mid-box remove refuses a listing-held TARGET in its own code",
         )
         if caught is not None:
+            checks.equal(getattr(caught, "code", None), "card_listed", "card_listed")
             checks.ok(
                 "8608859" in str(caught) and "1 pushed" in str(caught),
-                "and it names the SKU and how many copies are out of this Mac — a refusal "
-                "that does not say what is holding the card costs a round trip",
+                "and it names the SKU and how many copies are out of this Mac",
                 f"message was: {caught}",
             )
 
-        # The other two stages hold it just as hard: `pushed` is where D10 draws the line,
-        # and everything past it is further out of reach, not less.
+        # The other two stages hold just as hard: `pushed` is where D10 draws the line,
+        # and everything past it is further out of reach, not less. Asserted on both
+        # doors: the undo refuses (state, since ruling 2), and the remove names the stage.
         for stage in (master.STAGED, master.LIVE):
             with Store().write() as snapshot:
                 entry = snapshot.inventory.listing("8608859")
@@ -1002,8 +1082,14 @@ def check_undo(checks: Checks) -> None:
                 checks,
                 lambda: capture_server.do_delete_card(3, 2),
                 "undo_too_late",
-                f"a SKU sitting at `{stage}` refuses the undo too — D10's line is `emit`, "
-                f"and every stage past it is further out of reach",
+                f"a SKU sitting at `{stage}` still cannot be undone away",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_remove_card(3, 2, {"capture_id": None}),
+                "card_listed",
+                f"and the remove route refuses it too, at `{stage}` — D10's line is "
+                f"`emit`, and every stage past it is further out of reach",
             )
         with Store().write() as snapshot:
             snapshot.inventory.listing("8608859").set(master.LIVE, 0)
@@ -1030,9 +1116,9 @@ def check_undo(checks: Checks) -> None:
 
         checks.equal(
             capture_server.UNDOABLE_STATES,
-            (master.CAPTURED, master.IDENTIFIED),
-            "undo is allowed at exactly captured and identified, named as an allowlist so a "
-            "new state is refused by default",
+            (master.CAPTURED,),
+            "undo is allowed at exactly `captured` (D10 ruling 2, 2026-08-23), named as an "
+            "allowlist so a new state is refused by default",
         )
 
         # EVERYTHING KEYED BY THE POSITION GOES, not the card record alone. The snapshot
@@ -1042,14 +1128,18 @@ def check_undo(checks: Checks) -> None:
         # around a position that no longer exists.
         #
         # This is not a corner case, which is why it is set up in full rather than asserted
-        # on a bare card. `cli/cmd_emit.py` marks only MATCHED positions `pushed`, so a card
-        # that went to a queue stays `identified` — and `identified` is inside
-        # UNDOABLE_STATES. The undoable set and the queued set overlap by construction, and
-        # a queued card is precisely the one carrying a paid answer and a photo path.
+        # on a bare card. Ruling 2 NARROWED the overlap between the undoable set and the
+        # queued set without closing it: a queued card is usually `identified` (out of
+        # undo's reach now, and the remove route's problem), but a card whose
+        # identification FAILED — `identification_failed`, `card_not_detected` — queues
+        # while still `captured`, and that junk capture is exactly what undo exists to
+        # walk back. The card here stays `captured` for that reason; the cache entry
+        # beside it is legal store state all the same (the commit is per file, and the
+        # route must clear whatever is keyed by the position, not what a tidy history
+        # would predict).
         _, queued = capture_server.do_capture(capture_payload(3))
         queued_key = queued["key"]
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(queued_key, master.IDENTIFIED)
             snapshot.review.upsert(
                 queues.QueueEntry(
                     position=queued_key,
@@ -1057,7 +1147,7 @@ def check_undo(checks: Checks) -> None:
                     index=queued["index"],
                     label=queued["label"],
                     photo=str(capture_server.photo_path(queued["box"], queued["index"])),
-                    reason="low_confidence",
+                    reason="identification_failed",
                     market="12.00",
                 )
             )
@@ -1067,7 +1157,7 @@ def check_undo(checks: Checks) -> None:
                     box=queued["box"],
                     index=queued["index"],
                     label=queued["label"],
-                    reason="no_market_data",
+                    reason="card_not_detected",
                     # Cleared by a human, which is the one case `Queue.release` refuses to
                     # drop — on the grounds that an answer should outlive its question. Undo
                     # must drop it anyway, and that is asserted below rather than assumed:
@@ -1199,6 +1289,298 @@ def check_queue_supersede(checks: Checks) -> None:
             "5/2" in after.review.entries and after.review.entries["5/2"].cleared_by_human,
             "and the human-cleared entry survives its own re-route: Queue.release protects "
             "cleared_by_human, so the answer outlives the question across queues too",
+        )
+
+
+def check_remove_and_box_delete(checks: Checks) -> None:
+    """POST /inventory/<box>/<index>/remove and DELETE /boxes/<box> — D10's rulings 1 and 3.
+
+    THE TWO OPERATIONS THAT DID NOT EXIST BEFORE 2026-08-23, and the two most destructive
+    things the server can be asked to do. Ruling 1 overrules "nothing that renumbers may
+    exist" for exactly one bounded case, so the boundary is what this section works
+    hardest: every refusal in its own code, nothing changed by a refused call, and the
+    successful shift moving EVERYTHING keyed by a position — record, photo, sidecar, queue
+    entry, cache entry, and the history lines that keep the log true across the move.
+
+    THE PHOTOS CARRY DISTINGUISHABLE BYTES, one byte per card, because "the photo was
+    renamed" is only worth asserting if the test can catch the failure that matters: a
+    photograph attributed to the wrong record. A shared JPEG blob would pass that by
+    construction.
+    """
+    checks.note("")
+    checks.note("MID-BOX REMOVE AND BOX DELETE — D10's owner rulings 1 and 3")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        for i in range(1, 6):
+            capture_server.do_capture(
+                {"box": 3, "capture_id": f"r{i}", "image": blob(i), "set_hint": "sv9"}
+            )
+        with Store().write() as snapshot:
+            for i in range(2, 6):
+                snapshot.inventory.record_identification(
+                    f"3/{i}", name=f"N{i}", number=f"{i:03d}", printed_total="102",
+                    confidence="high",
+                )
+            snapshot.cache.put("3/5", {"name": "N5"}, "sha-5", "p1")
+            snapshot.review.upsert(
+                queues.QueueEntry(
+                    position="3/5", box=3, index=5, label=join.Position(3, 5).label,
+                    photo=str(capture_server.photo_path(3, 5)),
+                    reason="metadata_detection_disagreement", market="2.00",
+                )
+            )
+
+        # ------------------------------------------------------------- the refusals
+        refusal(
+            checks,
+            lambda: capture_server.do_remove_card(3, 2, {}),
+            "capture_id_required",
+            "a remove without the target's capture_id refuses — the aim check is what "
+            "stops a replay from deleting the card that slid in",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2", "shift": 1}),
+            "field_not_settable",
+            "and an unknown field refuses before anything is looked up",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_remove_card(3, 9, {"capture_id": "r9"}),
+            "card_not_found",
+            "a position holding no card refuses — there is nothing to shift onto",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r3"}),
+            "a WRONG capture_id refuses — a stale read of the box must not delete the "
+            "card that now sits at this index",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "capture_id_mismatch", "in its own code")
+        checks.equal(
+            len(Store().read().inventory.cards), 5, "and a refused aim deleted nothing"
+        )
+
+        # A sold or retired gap ABOVE the target blocks the shift, by name; the target
+        # itself being terminal refuses by its own door.
+        with Store().write() as snapshot:
+            snapshot.inventory.retire("3/4", "damaged")
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2"}),
+            "a retired gap above the target refuses the shift — closing it would erase "
+            "what the gap means (D10, ruling 1)",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
+            checks.ok(
+                "card 4 is retired: damaged" in str(caught),
+                "and the refusal NAMES the blocker with its reason",
+                f"message was: {caught}",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_remove_card(3, 4, {"capture_id": "r4"}),
+            "card_retired",
+            "and the retired card itself refuses removal — departures keep their records",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/4", master.IDENTIFIED)
+
+        # A listed SKU above blocks it too — its row is already in a file.
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/3", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.listing("8608859").bump(master.PUSHED, 1)
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2"}),
+            "a listed SKU above the target refuses the shift",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "renumber_blocked", "renumber_blocked")
+            checks.ok(
+                "8608859" in str(caught) and "1 pushed" in str(caught),
+                "naming the SKU and the stage that holds it",
+                f"message was: {caught}",
+            )
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("8608859").set(master.PUSHED, 0)
+
+        # ------------------------------------------------------- the successful shift
+        body = capture_server.do_remove_card(3, 2, {"capture_id": "r2"})
+        checks.equal(body["deleted"], "3/2", "the remove answers with the position it deleted")
+        checks.equal(body["shifted"], 3, "and how many records slid down one index")
+        checks.equal(body["next_index"], 5, "and the released high-water mark")
+
+        after = Store().read()
+        checks.equal(
+            {k: after.inventory.cards[k].name for k in sorted(after.inventory.cards)},
+            {"3/1": None, "3/2": "N3", "3/3": "N4", "3/4": "N5"},
+            "every higher record slid down one index, names intact",
+        )
+        checks.equal(
+            [after.inventory.cards[f"3/{i}"].capture_id for i in (2, 3, 4)],
+            ["r3", "r4", "r5"],
+            "capture_ids ride along untouched — they name photographs, and no photograph changed",
+        )
+        photos = sorted(
+            p.name for p in capture_server.photo_path(3, 1).parent.glob("*.jpg")
+        )
+        checks.equal(
+            photos,
+            ["0001.jpg", "0002.jpg", "0003.jpg", "0004.jpg"],
+            "the photos were renamed down with their records — no file left at the top slot",
+        )
+        checks.ok(
+            all(
+                capture_server.photo_path(3, idx).read_bytes()[3:4] == bytes([byte])
+                for idx, byte in ((2, 3), (3, 4), (4, 5))
+            ),
+            "and each renamed photo still holds ITS OWN card's bytes — a photograph "
+            "attributed to the wrong record is the failure a position label may never cause",
+        )
+        sidecar_now = json.loads(
+            capture_server.sidecar_path(capture_server.photo_path(3, 4)).read_text("utf-8")
+        )
+        checks.equal(
+            sidecar_now.get("index"), 4,
+            "the sidecar is regenerated at the new index — the reader can never find one "
+            "whose `index` disagrees with its filename",
+        )
+        moved_entry = after.review.entries.get("3/4")
+        checks.ok(
+            moved_entry is not None
+            and after.review.entries.get("3/5") is None
+            and moved_entry.index == 4
+            and moved_entry.label == join.Position(3, 4).label
+            and moved_entry.photo == str(capture_server.photo_path(3, 4)),
+            "the queue entry is re-keyed whole: position, box, index, rendered label, and "
+            "the photo path it names",
+            f"entry was: {moved_entry!r}",
+        )
+        checks.ok(
+            after.cache.get("3/4") is not None and after.cache.get("3/5") is None,
+            "and the paid answer moves with its card",
+        )
+
+        events = Store().history()
+        renumbered = [e for e in events if e.get("event") == "renumbered"]
+        checks.ok(
+            len(renumbered) == 1
+            and renumbered[0].get("from") == 2
+            and renumbered[0].get("count") == 3
+            and renumbered[0].get("box") == 3,
+            "one `renumbered` line carries the whole mapping — minus-one for every index "
+            "above `from`, `count` of them",
+            f"events were: {renumbered!r}",
+        )
+        roll_call = [e for e in events if "renumbered_from" in e]
+        checks.equal(
+            [(e.get("position"), e.get("event"), e.get("renumbered_from")) for e in roll_call],
+            [
+                ("3/2", master.IDENTIFIED, "3/3"),
+                ("3/3", master.IDENTIFIED, "3/4"),
+                ("3/4", master.IDENTIFIED, "3/5"),
+            ],
+            "and one state line per shifted card at its NEW position — what keeps "
+            "_state_before_sale and _state_before_retirement reading the right card's "
+            "history after the move",
+        )
+
+        # The regression the first HTTP run of this route caught, asserted so it cannot
+        # come back: a departure at a SHIFTED position must restore the card's OWN state,
+        # not the previous occupant's.
+        capture_server.do_retire(3, 2, {"reason": "damaged"})
+        put_back = capture_server.do_retire(3, 2, {"undo": True})
+        checks.equal(
+            put_back["state"],
+            master.IDENTIFIED,
+            "a retirement reversed at a shifted position restores the card that is THERE "
+            "— without the roll-call line it restored the previous occupant's state",
+        )
+
+        # The replay of the successful remove: a different card sits at 3/2 now, and the
+        # aim check is what notices.
+        refusal(
+            checks,
+            lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2"}),
+            "capture_id_mismatch",
+            "replaying the remove refuses — the neighbour that slid in is not the card "
+            "the request describes",
+        )
+
+        # -------------------------------------------------------- the whole-box delete
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_box(9),
+            "box_not_found",
+            "deleting a box nothing has heard of refuses",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/3", master.SOLD)
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_box(3),
+            "a box holding a sold card refuses deletion — those records are history and "
+            "commitments, not clutter (D10, ruling 3)",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "box_not_empty_of_commitments",
+                "in its own code",
+            )
+            checks.ok(
+                "card 3 is sold" in str(caught),
+                "and the refusal names what stands in the way",
+                f"message was: {caught}",
+            )
+        checks.equal(
+            len(Store().read().inventory.cards), 4, "and the refusal deleted nothing"
+        )
+        capture_server.do_mark_sold(3, 3, {"undo": True})
+
+        body = capture_server.do_delete_box(3)
+        checks.equal(
+            (body["cards"], body["photos"], body["sidecars"]),
+            (4, 4, 4),
+            "the delete reports what it removed, counted per kind",
+        )
+        checks.ok(
+            body["review_deleted"] == 1 and body["cache_deleted"] == 1,
+            "including the queue entry and the paid answer",
+            f"body was: {body}",
+        )
+        checks.ok(
+            body["registry_deleted"] and body["directory_removed"],
+            "and the registry entry and the emptied photo directory went with it",
+        )
+        after = Store().read()
+        checks.ok(
+            not after.inventory.cards
+            and after.inventory.boxes.get("3") is None
+            and not capture_server.photo_path(3, 1).parent.exists(),
+            "a deleted box is a box the store has never heard of",
+        )
+        checks.ok(
+            any(
+                e.get("event") == "box_deleted" and e.get("cards") == 4
+                and "position" not in e
+                for e in Store().history()
+            ),
+            "one `box_deleted` line carries the box and the card count, with no "
+            "`position` key — a box is not at a position",
+        )
+        _, fresh = capture_server.do_capture(
+            {"box": 3, "capture_id": "fresh", "image": blob(9)}
+        )
+        checks.equal(
+            fresh["index"], 1,
+            "and recreating the number starts from nothing, like a box never used",
         )
 
 
@@ -2117,6 +2499,427 @@ def check_review_answer(checks: Checks) -> None:
             Store().read().inventory.get("3/1").sku,
             STALE_CANDIDATE["sku"],
             "and the failed reversal changed nothing",
+        )
+
+
+# ------------------------------------------------------------------------ the group answer
+
+
+def check_group_answer(checks: Checks) -> None:
+    """POST /review/group-answer — D29's one press over a homogeneous queue.
+
+    THE ROUTE ENFORCES THE RULING'S NARROWNESS, AND THAT IS WHAT THIS SECTION HOLDS IT TO.
+    Without `group_not_uniform` this is a general bulk write any client can reach with a
+    loop — the exact thing D4 exists to prevent and D29 reopens only under two conditions:
+    one shared reason code, and every entry offering exactly ONE candidate — its own —
+    under one condition string. A shared SKU is deliberately NOT required and could not
+    be: sixteen cards are sixteen catalog rows, and card A answered with card B's SKU is
+    corruption wearing a reading.
+
+    THE CASE THAT MATTERS IS `group_entry_refused` WRITING NOTHING. Validate everything,
+    then write everything: a partial group reports a state neither queue file matches, and
+    "eleven of sixteen landed" hands the operator a question — which eleven? — that
+    nothing on his screen can answer. So one refused member must leave the PASSING members
+    untouched: no sku on any card, no cleared flag, no `answered` history line.
+
+    EVERY ENTRY HERE IS HAND-BUILT, the standing limit of all the queue sections, worth
+    restating because this one leans hardest on it: Gate B's sixteen-identical-taps queue
+    is the evidence D29 stands on, and no run has yet produced a queue this route answered.
+    """
+    checks.note("")
+    checks.note("GROUP ANSWER — POST /review/group-answer")
+
+    cond = CANDIDATES[0]["condition"]
+
+    def own_row(sku: str) -> dict:
+        # ONE candidate per entry — its own row, never a shared one. D29's reading is that
+        # the SHAPE of each answer is identical, not its row, so every entry below offers
+        # a different SKU under the one shared condition.
+        return dict(CANDIDATES[0], sku=sku)
+
+    def member(index: int, sku: str, condition: str = cond) -> dict:
+        return {"box": 4, "index": index, "sku": sku, "condition": condition}
+
+    with isolated_home():
+        for _ in range(11):
+            capture_server.do_capture(capture_payload(4))
+        with Store().write() as snapshot:
+            for i in range(1, 12):
+                snapshot.inventory.set_state(f"4/{i}", master.IDENTIFIED)
+            # The happy group: one shared reason, one row each, one condition.
+            for i, sku in ((1, "9101"), (2, "9102"), (3, "9103")):
+                snapshot.review.upsert(entry(4, i, candidates=[own_row(sku)]))
+            # In BOTH files, with the parked entry DISAGREEING on reason and rows — if the
+            # parked entry governed, this member would fail twice over (a sku it never
+            # offered, a reason outside the group's). Review governing is what makes it
+            # answerable at all, exactly as the single route rules it.
+            snapshot.review.upsert(entry(4, 4, candidates=[own_row("9104")]))
+            snapshot.parked.upsert(
+                entry(4, 4, reason="low_confidence", candidates=[dict(STALE_CANDIDATE)])
+            )
+            snapshot.review.upsert(entry(4, 5, candidates=[own_row("9105")]))
+            # 4/6 is captured, identified, and in NO queue — the entry failure.
+            # The three uniformity violations, one condition each:
+            snapshot.review.upsert(
+                entry(4, 7, reason="low_confidence", candidates=[own_row("9107")])
+            )
+            snapshot.review.upsert(
+                entry(4, 8, candidates=[own_row("9108"), dict(CANDIDATES[1], sku="9218")])
+            )
+            snapshot.review.upsert(
+                entry(4, 9, candidates=[dict(STALE_CANDIDATE, sku="9109")])
+            )
+            # The listing-hold pair.
+            snapshot.review.upsert(entry(4, 10, candidates=[own_row("9110")]))
+            snapshot.review.upsert(entry(4, 11, candidates=[own_row("9111")]))
+
+        # ------------------------------------------------------------- the body's shape
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101")], "undo": True}
+            ),
+            "field_not_settable",
+            "a top-level `undo` refuses as field_not_settable — this route has no reverse "
+            "gear, by design: the write is all-or-nothing and the reversal is per card",
+        )
+        for empty, label in (
+            ({}, "a body with no `answers` at all"),
+            ({"answers": []}, "an empty answers list"),
+            ({"answers": "4/1"}, "a non-list answers"),
+        ):
+            refusal(
+                checks,
+                lambda payload=empty: capture_server.do_review_group_answer(payload),
+                "answers_required",
+                f"{label} refuses as answers_required",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer({"answers": ["4/1"]}),
+            "answer_invalid",
+            "an element that is not an object refuses as answer_invalid",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [dict(member(1, "9101"), undo=True)]}
+            ),
+            "an `undo` INSIDE an element is refused — a flag that could reverse one "
+            "member mid-write would put both directions in one body",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "answer_invalid", "in answer_invalid"
+            )
+            checks.ok(
+                "undo" in str(caught) and "per card" in str(caught),
+                "and the message names the per-card route the undo lives on instead",
+                f"message was: {caught}",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [{"box": True, "index": 1, "sku": "9101", "condition": cond}]}
+            ),
+            "answer_invalid",
+            "a boolean box is refused BY NAME — positions come from the body here rather "
+            "than from a digits-only path regex, and True is an int to isinstance",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [{"box": 4, "index": 1, "condition": cond}]}
+            ),
+            "answer_invalid",
+            "and an element with no sku refuses the same way",
+        )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(1, "9101")]}
+            ),
+            "a duplicate position is REFUSED, never deduplicated — the second write's "
+            "restores_to would record the FIRST answer as what it replaced, and an undo "
+            "would put back a sku the operator never meant the card to keep",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "duplicate_position", "in its own code"
+            )
+            checks.ok(
+                "4/1" in str(caught),
+                "and the message names the repeated position",
+                f"message was: {caught}",
+            )
+
+        # ------------------------------------- one refused member refuses the group whole
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(2, "9102"), member(6, "9106")]}
+            ),
+            "one member that fails the single answer's own checks refuses the WHOLE group",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None),
+                "group_entry_refused",
+                "as group_entry_refused",
+            )
+            checks.ok(
+                "4/6" in str(caught) and "not_in_queue" in str(caught),
+                "and the failing position is named WITH ITS OWN CODE, so one 409 still "
+                "reports per position",
+                f"message was: {caught}",
+            )
+        untouched = Store().read()
+        checks.equal(
+            [untouched.inventory.get(k).sku for k in ("4/1", "4/2")],
+            [None, None],
+            "AND THE PASSING MEMBERS ARE UNTOUCHED — no sku reached either card",
+        )
+        checks.ok(
+            not untouched.review.entries["4/1"].cleared_by_human
+            and not untouched.review.entries["4/2"].cleared_by_human,
+            "no entry was cleared",
+        )
+        checks.equal(
+            [e for e in events_for("4/1") if e.get("event") == "answered"],
+            [],
+            "and no `answered` history line exists: validate everything, then write "
+            "everything — a refused group leaves the store as if the call never arrived",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(7, "9107"), member(6, "9106")]}
+            ),
+            "group_entry_refused",
+            "entry failures are reported BEFORE uniformity: a group that is both non-"
+            "uniform and stale refuses on the stale member — its remedy is a reload, and "
+            "`not uniform` would send the operator to un-filter a queue that simply "
+            "needs re-reading",
+        )
+
+        # -------------------------------------------------- the three uniformity refusals
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(7, "9107")]}
+            ),
+            "two reason codes in one group refuse — those cards are answered one at a "
+            "time, each beside its own photograph, which is D4 unchanged",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "group_not_uniform", "as group_not_uniform"
+            )
+            checks.ok(
+                "reasons" in str(caught)
+                and "low_confidence" in str(caught)
+                and "metadata_detection_disagreement" in str(caught),
+                "naming both reasons, so the screen re-filters rather than guesses",
+                f"message was: {caught}",
+            )
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(8, "9108")]}
+            ),
+            "an entry offering MORE than one row refuses — that card has a real choice, "
+            "which is exactly the card the review screen exists for",
+        )
+        if caught is not None:
+            checks.equal(getattr(caught, "code", None), "group_not_uniform", "same code")
+            checks.ok(
+                "4/8" in str(caught) and "2 rows" in str(caught),
+                "and the entry is named with its row count",
+                f"message was: {caught}",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {
+                    "answers": [
+                        member(1, "9101"),
+                        member(9, "9109", STALE_CANDIDATE["condition"]),
+                    ]
+                }
+            ),
+            "group_not_uniform",
+            "and two condition strings across the group refuse the same way",
+        )
+        checks.ok(
+            Store().read().inventory.get("4/1").sku is None,
+            "and not one of those refusals wrote anything onto the member that was valid "
+            "in all of them",
+        )
+
+        # --------------------------------------------------------------- the happy path
+        body = answers(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(2, "9102"), member(3, "9103")]}
+            ),
+            "a homogeneous group ANSWERS — one shared reason, one row per entry, one "
+            "condition",
+        )
+        if body is not None:
+            checks.equal(
+                body["answered"],
+                ["4/1", "4/2", "4/3"],
+                "every position is written in the one call, in request order",
+            )
+            checks.equal(body["count"], 3, "and counted")
+            checks.equal(
+                [body["reason"], body["condition"]],
+                ["metadata_detection_disagreement", cond],
+                "the shared facts are stated once at the top — the route just proved "
+                "they are shared",
+            )
+            checks.equal(
+                [(r["position"], r["sku"]) for r in body["results"]],
+                [("4/1", "9101"), ("4/2", "9102"), ("4/3", "9103")],
+                "and each card is answered with ITS OWN lone candidate — never a shared "
+                "sku, which is not a reading of D29 but corruption wearing one",
+            )
+            checks.ok(
+                all(
+                    r["review_cleared"] and not r["parked_cleared"]
+                    for r in body["results"]
+                ),
+                "each result carries both cleared flags, per position",
+            )
+            checks.equal(
+                [r["restores_to"] for r in body["results"]],
+                [{"sku": None, "condition": None}] * 3,
+                "and its own restores_to — the pair of nulls a never-identified card "
+                "held, per member, under the single answer's contract",
+            )
+        after = Store().read()
+        checks.equal(
+            [after.inventory.get(k).sku for k in ("4/1", "4/2", "4/3")],
+            ["9101", "9102", "9103"],
+            "the skus reach the cards",
+        )
+        answered_lines = [last_event(k) for k in ("4/1", "4/2", "4/3")]
+        checks.ok(
+            all(line.get("event") == "answered" for line in answered_lines),
+            "each position gets its own `answered` history line",
+        )
+        checks.equal(
+            [line.get("group") for line in answered_lines],
+            [3, 3, 3],
+            "tagged `group: N`, so a reader of history.jsonl can tell one press from "
+            "sixteen — the lines are identical in every other respect, which is exactly "
+            "why the log has to say so",
+        )
+        checks.equal(
+            [line.get("restores_to") for line in answered_lines],
+            [{"sku": None, "condition": None}] * 3,
+            "and each line carries its own restores_to, exactly as a single answer "
+            "writes it — which is what makes the per-card undo below possible at all",
+        )
+
+        # -------------------------------------------- one member undone, per D29's shape
+        undone = answers(
+            checks,
+            lambda: capture_server.do_review_answer(4, 2, {"undo": True}),
+            "ONE group member reverses through the single route, as if it had been "
+            "answered alone — the write is all-or-nothing, the reversal is per card",
+        )
+        if undone is not None:
+            checks.ok(undone.get("undone") is True, "and says so")
+        walked_back = Store().read()
+        checks.ok(
+            walked_back.inventory.get("4/2").sku is None
+            and not walked_back.review.entries["4/2"].cleared_by_human,
+            "the undone member is waiting again with no sku",
+        )
+        checks.equal(
+            [walked_back.inventory.get(k).sku for k in ("4/1", "4/3")],
+            ["9101", "9103"],
+            "AND THE OTHERS STAY ANSWERED — one card's reversal is not the group's",
+        )
+        checks.ok(
+            walked_back.review.entries["4/1"].cleared_by_human
+            and walked_back.review.entries["4/3"].cleared_by_human,
+            "their entries still cleared",
+        )
+
+        # -------------------------------------------------- both queues, review governs
+        body = answers(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(4, "9104"), member(5, "9105")]}
+            ),
+            "a member sitting in BOTH queues is governed by its REVIEW entry: the parked "
+            "entry here disagrees on reason and rows, and if it governed, this group "
+            "would be refused twice over",
+        )
+        if body is not None:
+            checks.ok(
+                body["results"][0]["review_cleared"]
+                and body["results"][0]["parked_cleared"],
+                "and the member clears BOTH flags — one answer, or the screen goes on "
+                "showing a card whose answer is already written",
+            )
+            checks.ok(
+                body["results"][1]["review_cleared"]
+                and not body["results"][1]["parked_cleared"],
+                "while its review-only partner clears one",
+            )
+        both_read = Store().read()
+        checks.ok(
+            both_read.review.entries["4/4"].cleared_by_human
+            and both_read.parked.entries["4/4"].cleared_by_human,
+            "and both entries carry the flag in their files",
+        )
+
+        # ----------------------------------------------- the hold degrades a FIELD only
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9110", condition=cond).set(master.STAGED, 1)
+        body = answers(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(10, "9110"), member(11, "9111")]}
+            ),
+            "a listing hold on one member's sku does not refuse the group — the FIELD "
+            "degrades, not the write",
+        )
+        if body is not None:
+            checks.equal(
+                [r["restores_to"] for r in body["results"]],
+                [None, {"sku": None, "condition": None}],
+                "the held member answers restores_to NULL while its partner keeps the "
+                "pair — per position, because a group control that reverses eleven of "
+                "sixteen on its best day is SaleResult's recorded defect at scale",
+            )
+        held_lines = [last_event("4/10"), last_event("4/11")]
+        checks.equal(
+            [line.get("restores_to") for line in held_lines],
+            [{"sku": None, "condition": None}] * 2,
+            "while BOTH history lines still record the pair — the log states what is "
+            "true, the field answers whether to draw a button, and the two deliberately "
+            "disagree",
+        )
+        checks.equal(
+            [line.get("group") for line in held_lines],
+            [2, 2],
+            "both tagged with this group's own size",
+        )
+        checks.equal(
+            Store().read().inventory.get("4/10").sku,
+            "9110",
+            "and the held member's write landed like any other",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(4, 10, {"undo": True}),
+            "undo_too_late",
+            "and the null kept its promise: that member's undo is refused",
         )
 
 
@@ -3329,20 +4132,33 @@ def check_history(checks: Checks) -> None:
             "that slot now",
         )
 
+        # Through the REMOVE route, because ruling 2 (2026-08-23) took `identified` off
+        # the undo allowlist — the mid-box remove is the door that still deletes one, and
+        # it appends the same `removed` line for the same reason. 4/2 is the top of its
+        # box, so this is the empty-shift case and no `renumbered` line accompanies it.
         with Store().write() as snapshot:
             snapshot.inventory.set_state("4/2", master.IDENTIFIED, sku="8608860")
             snapshot.cache.put("4/2", {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
-        capture_server.do_delete_card(4, 2)
+        capture_server.do_remove_card(4, 2, {"capture_id": None})
         paid = last_event("4/2")
         checks.equal(
             paid.get("state"),
             master.IDENTIFIED,
-            "undoing an IDENTIFIED card records that state, which is the one that cost money",
+            "removing an IDENTIFIED card records that state, which is the one that cost "
+            "money — the same `removed` line undo writes, from the route that may still "
+            "delete one (D10 ruling 2)",
         )
         checks.ok(
             paid.get("cache_deleted") is True and paid.get("sku") == "8608860",
             "and records that the paid answer went with it, and what it had said",
             f"event was: {paid!r}",
+        )
+        checks.ok(
+            not any(
+                e.get("event") == capture_server.RENUMBERED for e in events_for("4/2")
+            ),
+            "and a remove at the top of a box appends NO `renumbered` line — an event "
+            "describing zero renumbers would mark nothing",
         )
 
         # A third capture into box 4, so that 4/1 is not the newest — the two undos above
@@ -4184,6 +5000,163 @@ def check_box_routes_and_search(checks: Checks) -> None:
 # -------------------------------------------------------------------------- place block
 
 
+def check_box_claims(checks: Checks) -> None:
+    """PUT /inventory/<box> — the box-level claim apply, the owner's ask of 2026-08-23.
+
+    THE CARD ROUTE ONE SEGMENT BROADER: same `PUT_FIELDS` vocabulary, same decoders, same
+    per-game validators, same `corrected` line — applied to every eligible card in a box,
+    all-or-nothing (D29's group shape). What this section works hardest is the boundary:
+    a refused call changes NOTHING, terminal records are skipped and named, and a mixed
+    box (legal, D21) is judged per card against each card's own game unless this call
+    sets one.
+    """
+    checks.note("")
+    checks.note("BOX-LEVEL CLAIMS — PUT /inventory/<box>")
+
+    with isolated_home():
+        for i in range(1, 6):
+            capture_server.do_capture(capture_payload(6))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("6/2", master.IDENTIFIED)
+            snapshot.inventory.set_state("6/4", master.SOLD)
+            snapshot.inventory.retire("6/5", "damaged")
+            # A mixed box, which D21 makes legal — the case the per-game judging exists for.
+            snapshot.inventory.cards["6/3"].game = "riftbound"
+
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(6, {}),
+            "nothing_to_apply",
+            "a bulk apply carrying no claim refuses — an empty sweep over a box is a "
+            "client error, not a no-op success",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(6, {"state": "sold"}),
+            "field_not_settable",
+            "claims ONLY: state has its own routes and its own rulings, and the "
+            "vocabulary check keeps it out of this body",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(99, {"set_hint": "sv9"}),
+            "box_not_found",
+            "an unknown box refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(6, {"game": "yugioh"}),
+            "game_invalid",
+            "and an unregistered game refuses through the same decoder the card route uses",
+        )
+
+        # The mixed-box refusal: `reverse_holo` is Pokemon's cell and not Riftbound's, the
+        # body names no game, so the claim is judged against EACH card's own game — and
+        # one rejection refuses the WHOLE call, naming the card.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_put_box_claims(6, {"variant": "reverse_holo"}),
+            "a claim one card's game does not stock refuses the whole call — a sweep that "
+            "corrected only the cards that fit leaves a box nobody asked for",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "claim_not_stocked_by_game", "in its own code"
+            )
+            checks.ok(
+                "card 3" in str(caught),
+                "naming the card whose game rejected it",
+                f"message was: {caught}",
+            )
+        checks.ok(
+            all(
+                c.metadata_finish is None
+                for c in Store().read().inventory.cards.values()
+            ),
+            "and the refusal changed nothing on any card",
+        )
+
+        # The same claim WITH the game set: judged once against the game THIS call sets
+        # (`do_put_card`'s judged_against rule at box scale), applied to every eligible
+        # card, terminal records skipped and named.
+        body = capture_server.do_put_box_claims(
+            6, {"game": "pokemon", "variant": "reverse_holo", "set_hint": "sv9"}
+        )
+        checks.equal(
+            (body["eligible"], body["applied"], body["skipped_terminal"]),
+            (3, 3, 2),
+            "the receipt counts what was eligible, what moved, and what was left alone",
+        )
+        checks.equal(
+            body["skipped"],
+            [{"index": 4, "state": "sold"}, {"index": 5, "state": "retired"}],
+            "and NAMES the skipped terminal records — their record is history (D10, D26), "
+            "and a bulk sweep is exactly the indiscriminate write they deserve protection "
+            "from; the card route stays the deliberate one-position door",
+        )
+        after = Store().read().inventory
+        checks.ok(
+            all(
+                (after.cards[f"6/{i}"].game, after.cards[f"6/{i}"].metadata_finish)
+                == ("pokemon", "reverse_holo")
+                for i in (1, 2, 3)
+            ),
+            "every eligible card carries the claims now — including the one whose game "
+            "this same call corrected, judged against the game as set",
+        )
+        checks.ok(
+            after.cards["6/4"].metadata_finish is None
+            and after.cards["6/5"].metadata_finish is None,
+            "and the sold and retired records are untouched",
+        )
+        sidecar_now = json.loads(
+            capture_server.sidecar_path(capture_server.photo_path(6, 1)).read_text("utf-8")
+        )
+        checks.ok(
+            sidecar_now.get("variant") == "reverse_holo"
+            and sidecar_now.get("game") == "pokemon",
+            "the sidecar is rewritten for a changed card — the correction has to reach "
+            "the file `identify` actually reads, or D3 rung 1 never hears it",
+            f"sidecar was: {sidecar_now}",
+        )
+        bulk_lines = [
+            e
+            for e in Store().history()
+            if e.get("event") == capture_server.CORRECTED and "bulk" in e
+        ]
+        checks.ok(
+            len(bulk_lines) == 3
+            and all(e.get("bulk") == 3 and "changed" in e for e in bulk_lines),
+            "one `corrected` line per changed position, tagged `bulk` with the sweep's "
+            "size — D29's group tag, so the log tells one sweep from three hand edits",
+            f"lines were: {bulk_lines!r}",
+        )
+        second = capture_server.do_put_box_claims(
+            6, {"game": "pokemon", "variant": "reverse_holo", "set_hint": "sv9"}
+        )
+        checks.ok(
+            second["applied"] == 0 and second["unchanged"] == 3,
+            "restating the same claims applies nothing — a no-op writes no history and "
+            "churns no sidecars",
+        )
+        checks.equal(
+            len(
+                [
+                    e
+                    for e in Store().history()
+                    if e.get("event") == capture_server.CORRECTED and "bulk" in e
+                ]
+            ),
+            3,
+            "and the log gained no new lines for it",
+        )
+        checks.ok(
+            after.cards["6/2"].state == master.IDENTIFIED
+            and after.cards["6/4"].state == master.SOLD,
+            "no card moved state — this route corrects claims and nothing else",
+        )
+
+
 def check_place_neighbors(checks: Checks) -> None:
     """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.
 
@@ -4904,6 +5877,372 @@ def check_cli_seams(checks: Checks) -> None:
             )
 
 
+# ------------------------------------------------------------------- the code ledger (C8)
+
+
+def check_code_ledger(checks: Checks) -> None:
+    """C8's dispute flow: the transcribed code beside the photograph it was read from.
+
+    A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS, and every string below is
+    an INVENTED code shape in a scratch store — nothing here touches a real card, a real
+    ledger, or a tracked file. Three seams, each asserted where it lives:
+    `store/files.py:upsert_jsonl`, which keeps "one line per code card" literally true
+    across re-identifications; `cli/cmd_identify.py:_code_ledger_lines`, which decides what
+    earns a line and what is skipped BY NAME; and the record seam in `run`, which writes
+    the PARSER's fields onto the card rather than the raw payload's keys — for a code card
+    that is C8's whole mechanism, because the code lands in `number`, `number` is a column
+    `GET /search` matches, and the dispute lookup is therefore the existing search.
+
+    THE TRANSPORT IS A FAKE AND IT IS THE ONLY FAKE. `identify` is the one command that
+    costs money, so `batch.run_batch` is swapped for a stub that answers each request under
+    its own strategy — everything on either side of that seam is the real code: the sidecar
+    scan, the cache, the record write, the ledger upsert. Nothing here submits anything.
+    """
+    checks.note("")
+    checks.note("CODE LEDGER — store/files.py, cli/cmd_identify.py, GET /search")
+
+    from cli import __main__ as cli_entry
+    from cli import cmd_identify
+    from identify import images as identify_images
+
+    # 3-4-3-3, with a `?` for a character the model could not read and a lowercase letter
+    # that `normalize_number` would have folded — the two properties the parser must keep.
+    code = "GXR-7Q?d-K3M-9TT"
+
+    # ------------------------------------------------------ upsert_jsonl, the index shape
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "codes.jsonl"
+        first = [
+            {"box": 9, "index": 1, "code": "AAA-1111-AAA-111"},
+            {"box": 9, "index": 2, "code": "BBB-2222-BBB-222"},
+            {"box": 10, "index": 1, "code": "CCC-3333-CCC-333"},
+        ]
+        files.upsert_jsonl(path, first, ("box", "index"))
+        checks.equal(
+            files.read_jsonl(path),
+            first,
+            "upsert_jsonl writes new keys in the order given",
+        )
+        corrected = {"box": 9, "index": 2, "code": "BBB-2222-BBB-999", "run": "second"}
+        appended = {"box": 11, "index": 1, "code": "DDD-4444-DDD-444"}
+        files.upsert_jsonl(path, [corrected, appended], ("box", "index"))
+        checks.equal(
+            files.read_jsonl(path),
+            [first[0], corrected, first[2], appended],
+            "a re-identified card REPLACES its own line IN PLACE — order kept, new keys "
+            "appended — so `one line per code card` stays literally true and a lookup "
+            "needs no last-line-wins rule",
+        )
+        checks.equal(
+            len(path.read_text("utf-8").splitlines()),
+            4,
+            "four keys, four lines: the file is an INDEX, not a log",
+        )
+        before = path.read_bytes()
+        files.upsert_jsonl(path, [corrected], ("box", "index"))
+        checks.equal(
+            path.read_bytes(), before, "and re-upserting the same line is idempotent"
+        )
+
+    # ------------------------------------------- _code_ledger_lines: what earns a line
+    def code_item(photo: str, box, index, raw, *, parsed: bool) -> cmd_identify.Item:
+        capture = sidecar.Capture(
+            photo=Path(photo), box=box, index=index, set_hint="JTG", game="pokemon_code"
+        )
+        item = cmd_identify.Item(capture=capture, identification=raw)
+        cmd_identify._attach_registry(item)
+        if parsed and raw is not None:
+            item.parsed = prompt.parse(dict(raw), item.strategy)
+        return item
+
+    fresh = code_item(
+        "/caps/5-001.jpg",
+        5,
+        1,
+        {"code": code, "name": "Journey Together", "confidence": "high"},
+        parsed=True,
+    )
+    # `parsed` stays None on a cache hit — the payload was parsed on the run that paid for
+    # it — so the cached card is the branch that re-parses under the card's own strategy.
+    cached = code_item(
+        "/caps/5-002.jpg",
+        5,
+        2,
+        {"code": "MMM-5555-MMM-555", "name": "Surging Sparks", "confidence": "medium"},
+        parsed=False,
+    )
+    broken = code_item(
+        "/caps/5-003.jpg", 5, 3, {"code": "NNN-6666-NNN-666"}, parsed=False
+    )
+    blank = code_item(
+        "/caps/5-004.jpg",
+        5,
+        4,
+        {"code": "", "name": "Journey Together", "confidence": "low"},
+        parsed=True,
+    )
+    homeless = code_item(
+        "/caps/loose.jpg",
+        None,
+        None,
+        {"code": "PPP-7777-PPP-777", "name": "", "confidence": "high"},
+        parsed=True,
+    )
+    pokemon_item = cmd_identify.Item(
+        capture=sidecar.Capture(photo=Path("/caps/5-006.jpg"), box=5, index=6),
+        identification={"name": "Eiscue", "number": "044", "printed_total": "167"},
+    )
+    cmd_identify._attach_registry(pokemon_item)
+
+    stamps = {"5/1": "2026-08-23T10:00:00.000Z", "5/2": "2026-08-23T10:00:01.000Z"}
+    lines, skipped = cmd_identify._code_ledger_lines(
+        [fresh, cached, broken, blank, homeless, pokemon_item],
+        "run-t7",
+        lambda key: stamps.get(key),
+    )
+    checks.equal(
+        [(line["box"], line["index"], line["code"]) for line in lines],
+        [(5, 1, code), (5, 2, "MMM-5555-MMM-555")],
+        "a line per code the run holds: the fresh read AND the cached one — a cached "
+        "card's answer was already paid for, and re-upserting its line is what heals a "
+        "ledger file that was lost, since inventory/ is never in git and nothing else "
+        "would re-create it",
+    )
+    if lines:
+        checks.equal(
+            lines[0],
+            {
+                "box": 5,
+                "index": 1,
+                "code": code,
+                "name": "Journey Together",
+                "photo": "/caps/5-001.jpg",
+                "set_hint": "JTG",
+                "captured_at": "2026-08-23T10:00:00.000Z",
+                "confidence": "high",
+                "run": "run-t7",
+            },
+            "and the line is the dispute flow's whole index entry — code text beside the "
+            "position its photograph is keyed by, the `?` the model wrote for a doubtful "
+            "character SURVIVING to the ledger, where it says exactly which character the "
+            "owner's re-read should doubt",
+        )
+    checks.equal(len(skipped), 3, "three cards earn no line, each skipped BY NAME")
+    for needle, why in (
+        (
+            "loose.jpg: no position",
+            "a positionless card has no key to file a line under — and it is not "
+            "silently dropped: it is already loudly queued as no_position, the stronger "
+            "guarantee",
+        ),
+        (
+            "5/4: the model read no code",
+            "an empty transcription has nothing to look a dispute up by",
+        ),
+        (
+            "5/3: cached answer does not parse",
+            "a cached payload the profile's schema has moved under is named, never "
+            "guessed at — re-identifying it is the remedy",
+        ),
+    ):
+        checks.ok(any(needle in line for line in skipped), why, f"skipped: {skipped!r}")
+    checks.ok(
+        all("5/6" not in line for line in skipped),
+        "and the Pokemon card is in NEITHER list — the ledger is pokemon_code's alone",
+        f"skipped: {skipped!r}",
+    )
+
+    # --------------------------- the record seam and both ledger files, through `run`
+    with isolated_home() as home:
+        caps = Path(home) / "code-caps"
+        caps.mkdir()
+        for name in ("6-001.jpg", "6-002.jpg"):
+            identify_images.Image.new("RGB", (64, 89), (200, 40, 40)).save(
+                caps / name, "JPEG"
+            )
+        (caps / "6-001.json").write_text(
+            json.dumps(
+                {"box": 6, "position": 1, "game": "pokemon_code", "set_hint": "JTG"}
+            ),
+            "utf-8",
+        )
+        (caps / "6-002.json").write_text(
+            json.dumps({"box": 6, "position": 2, "game": "misc"}), "utf-8"
+        )
+
+        payload_by_strategy = {
+            "pokemon_code_v1": {
+                "code": code,
+                "name": "Journey Together",
+                "confidence": "high",
+            },
+            "misc_card_v1": {
+                "name": "Dark Magician",
+                "printed_id": "sdy-006",
+                "detected_game": "yugioh",
+                "language": "English",
+                "confidence": "high",
+            },
+        }
+        transported: list = []
+
+        def fake_run_batch(requests, log=None, on_submit=None):
+            outcomes = {}
+            for request in requests:
+                transported.append(request.custom_id)
+                raw = dict(payload_by_strategy[request.strategy])
+                outcomes[request.custom_id] = batch.Outcome(
+                    request.custom_id,
+                    batch.SUCCEEDED,
+                    identification=prompt.parse(raw, request.strategy),
+                )
+            return batch.BatchRun(outcomes=outcomes)
+
+        real_run_batch = cmd_identify.batch.run_batch
+        cmd_identify.batch.run_batch = fake_run_batch
+        try:
+            with quiet():
+                exit_code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(["identify", str(caps)]),
+                    lambda *a: None,
+                )
+            checks.equal(exit_code, 0, "`pkmnscan identify` exits 0 over the stub transport")
+            checks.equal(
+                len(transported), 2, "which was asked for exactly the two photographs"
+            )
+
+            recorded = Store().read().inventory
+            checks.equal(
+                recorded.get("6/1").number,
+                code,
+                "THE RECORD SEAM WRITES THE PARSER'S FIELDS: a pokemon_code payload has "
+                "no `number` key at all, and the transcribed `code` lands in Card.number "
+                "with its `?` and its case exactly as transcribed — never "
+                "normalize_number-folded, because there is no catalog key here and "
+                "`exactly as printed` is the whole instruction the field was authored "
+                "under",
+            )
+            checks.equal(
+                recorded.get("6/1").printed_total,
+                "",
+                "and printed_total stays empty: no join key CAN be built from a "
+                "redemption code, so has_number stays honestly False",
+            )
+            checks.equal(
+                recorded.get("6/2").number,
+                "sdy-006",
+                "a misc payload lands its `printed_id` through the same seam, case kept "
+                "— reading .get('number') off the raw payload instead would write a "
+                "record only Pokemon's profile could ever fill",
+            )
+
+            standing = files.read_jsonl(files.codes_ledger_path())
+            checks.equal(
+                [(line["box"], line["index"], line["code"]) for line in standing],
+                [(6, 1, code)],
+                "the standing index holds ONE line — the code card's; the misc card is "
+                "not the ledger's business",
+            )
+            run_dirs = [d for d in sorted(files.runs_dir().iterdir()) if d.is_dir()]
+            run_copy = (
+                files.read_jsonl(run_dirs[0] / files.CODES_LEDGER_NAME) if run_dirs else []
+            )
+            checks.equal(
+                [(line["box"], line["index"], line["code"]) for line in run_copy],
+                [(6, 1, code)],
+                "and the run directory carries its own deletable copy — runs/ is "
+                "derived, inventory/ is the master",
+            )
+
+            # The heal: C8's argument for including a cached card, run for real.
+            files.codes_ledger_path().unlink()
+            sent_before = len(transported)
+            with quiet():
+                exit_code = cmd_identify.run(
+                    cli_entry.build_parser().parse_args(["identify", str(caps)]),
+                    lambda *a: None,
+                )
+            checks.equal(exit_code, 0, "a second identify over the same directory exits 0")
+            checks.equal(
+                len(transported),
+                sent_before,
+                "and pays for NOTHING — every answer is a cache hit, so the transport is "
+                "never called again",
+            )
+            healed = files.read_jsonl(files.codes_ledger_path())
+            checks.equal(
+                [(line["box"], line["index"], line["code"]) for line in healed],
+                [(6, 1, code)],
+                "yet the DELETED standing index is re-created whole from the cached "
+                "answer, parsed again under the card's own strategy — the heal is why a "
+                "cached code card is included at all",
+            )
+        finally:
+            cmd_identify.batch.run_batch = real_run_batch
+
+    # ------------------------------------------- the dispute lookup is GET /search
+    with isolated_home():
+        capture_server.do_capture(
+            capture_payload(7, game="pokemon_code", set_hint="JTG")
+        )
+        capture_server.do_capture(capture_payload(7))
+        with Store().write() as snapshot:
+            pooled = snapshot.inventory.cards["7/1"]
+            pooled.name = "Journey Together"
+            pooled.number = code
+            pooled.sku = "424242"
+            # The recorded field nulled while the FILE stays on disk — the shape a record
+            # written by `emit` rather than a capture has, and the case that tells the
+            # stat apart from `bool(card.photo)`. With both set, a field-reading mutant
+            # answers True for the wrong reason and the assertion below proves nothing.
+            pooled.photo = None
+            decoy = snapshot.inventory.cards["7/2"]
+            decoy.sku = "555"
+            decoy.name = "Eiscue"
+            decoy.note = f"traded beside {code}"
+
+        found = capture_server.do_search(code)["groups"]
+        checks.equal(
+            [group["sku"] for group in found],
+            ["424242", "555"],
+            "the exact code string RANKS ITS CARD FIRST — C8's lookup is the existing "
+            "search with zero new UI, and exact-on-number outranks the substring match a "
+            "chatty note also earns",
+        )
+        if len(found) == 2:
+            group = found[0]
+            checks.equal(
+                group["number"],
+                code,
+                "the group answers the code as its number, `?` and case intact",
+            )
+            copy = group["copies"][0] if group["copies"] else {}
+            checks.equal(copy.get("key"), "7/1", "with the code card as its one copy")
+            checks.ok(
+                copy.get("has_photo") is True,
+                "which answers has_photo — the STAT, against a record whose photo field "
+                "is null while the file is on disk, so the screen requests GET /photo "
+                "and the owner is two taps from the re-read C8 exists for",
+            )
+            place = copy.get("place") or {}
+            checks.ok(
+                place.get("located") is False
+                and place.get("label") is None
+                and place.get("neighbors") is None
+                and place.get("section_gaps") is None,
+                "and a POOLED place — D24's ruling: a code card is a count, not a slot, "
+                "so no label, no neighbours, no gaps, and null rather than zero for the "
+                "gap count because `no section at all` is a different fact from `a "
+                "countable section with no holes`",
+                f"place: {place!r}",
+            )
+            checks.equal(
+                place.get("game"),
+                "pokemon_code",
+                "stamped with its game, so the screen knows why there is no label",
+            )
+
+
 # ---------------------------------------------------------------------- command refusals
 
 
@@ -5576,9 +6915,11 @@ def run() -> Result:
     check_store(checks)
     check_server_routes(checks)
     check_undo(checks)
+    check_remove_and_box_delete(checks)
     check_queues(checks)
     check_queue_supersede(checks)
     check_review_answer(checks)
+    check_group_answer(checks)
     check_mark_sold(checks)
     check_retire(checks)
     check_reshoot(checks)
@@ -5587,10 +6928,12 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_box_routes_and_search(checks)
+    check_box_claims(checks)
     check_place_neighbors(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_cli_seams(checks)
+    check_code_ledger(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
     return checks.result(
