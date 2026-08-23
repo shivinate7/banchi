@@ -635,6 +635,15 @@ COMPONENTS = [
                                        "src/motion.ts — and the screen still cannot tell "
                                        "which is armed except by the name it renders.",
                                "governed_by": ["D13"]},
+            "src/trace.ts": {"does": "D19's Tier-1 tuning instrument: records every frame's "
+                                     "(t, d, luma) plus the watch-region pixels at each gate "
+                                     "verdict and once a second, and downloads the armed "
+                                     "session as one self-describing JSON from the HUD. The "
+                                     "trigger records nothing itself — this hangs off "
+                                     "motion.ts's optional onFrame callback. Built 2026-08-22 "
+                                     "when the rig session asked for speed data, the exact "
+                                     "condition D19 reserved it for.",
+                             "governed_by": ["D19"]},
             "src/motion.ts": {"does": "Gate C's auto-capture: a pure MotionMachine (settle, "
                                       "novelty, card-present luma, deferring refractory) under "
                                       "a thin DOM sampler that feeds it one 64x36 luma grid per "
@@ -647,8 +656,11 @@ COMPONENTS = [
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen: live camera left, last capture "
                                               "right, box list from /status, set hint and finish "
-                                              "always visible, undo that names what it would delete",
-                                      "governed_by": ["D3", "D10", "D13"]},
+                                              "always visible, undo that names what it would delete, "
+                                              "and since 2026-08-22 the trigger mode toggle, the "
+                                              "motion HUD, the swallowed-fire accounting and the "
+                                              "trace save — D19's screen-side obligations",
+                                      "governed_by": ["D3", "D10", "D13", "D19"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.

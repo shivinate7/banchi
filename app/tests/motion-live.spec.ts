@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
@@ -109,6 +111,47 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await swapTo(page, 110)
   await expect(hud(page)).toContainText('same 1', { timeout: 5_000 })
   await expect(hud(page)).toContainText('fires 2')
+
+  // The trace: one press hands over the whole session as a self-describing file. This
+  // is D19's Tier-1 instrument and the rig's tuning data, so the assertion is not "a
+  // download happened" but that the file really carries the signal — frames with time
+  // moving forward, the fires and the suppression this test just caused, and the pixels
+  // each verdict was reached on.
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Save trace/ }).click()
+  const download = await downloadPromise
+  const savedTo = await download.path()
+  const trace = JSON.parse(readFileSync(savedTo, 'utf8')) as {
+    kind: string
+    params: { tHi: number }
+    grid: { w: number; h: number; roi: number[] }
+    truncated: boolean
+    frames: Array<[number, number, number]>
+    events: Array<{ t: number; event: string; frame: string }>
+    keyframes: Array<{ t: number; frame: string }>
+  }
+  expect(trace.kind).toBe('pkmnscan-motion-trace')
+  expect(trace.truncated).toBe(false)
+  expect(trace.params.tHi).toBeGreaterThan(0)
+  /* No frame-RATE assertion on purpose: headless frame delivery swings from ~10 to 60
+   * fps with CPU load, and a bound tuned to one machine's idle speed flakes on the next.
+   * What must hold at any rate: the trace saw at least every frame a verdict was reached
+   * on, plus the settle run before the first one. */
+  expect(trace.frames.length).toBeGreaterThanOrEqual(trace.events.length + 3)
+  // time strictly non-decreasing, starting at 0
+  expect(trace.frames[0]?.[0]).toBe(0)
+  for (let i = 1; i < trace.frames.length; i += 1) {
+    expect(trace.frames[i]![0]).toBeGreaterThanOrEqual(trace.frames[i - 1]![0])
+  }
+  const kinds = trace.events.map((e) => e.event)
+  expect(kinds.filter((k) => k === 'fire')).toHaveLength(2)
+  expect(kinds).toContain('suppressed:unchanged')
+  // every event carries the watch-region pixels its verdict was reached on
+  const roiCells = (trace.grid.roi[2]! - trace.grid.roi[0]!) * (trace.grid.roi[3]! - trace.grid.roi[1]!)
+  for (const event of trace.events) {
+    expect(Buffer.from(event.frame, 'base64')).toHaveLength(roiCells)
+  }
+  expect(trace.keyframes.length).toBeGreaterThan(0)
 
   // Disarm: the key trigger is back, the HUD is gone, the chip released.
   await page.getByRole('button', { name: /press C/ }).click()

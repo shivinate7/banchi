@@ -113,7 +113,17 @@ confirmation run. Order matters; each step isolates one parameter family.
    Agreement within one or two over a hopper is the pass. Watch `stall`: the feeder's own
    motion profile has never been measured, and if its advance reads as continuous motion
    longer than 1250 ms, `maxMoveMs` is the constant to raise.
-5. **The 50-card run** (Gate C's own bar), box selected, milliseconds now on every
+5. **Save the trace before disarming — every step above, and this one, is in the file.**
+   The `Save trace` button under the HUD downloads the whole armed session: every frame's
+   `(t, d, luma)`, plus the exact watch-region pixels each fire/suppression/stall was
+   decided on, plus once-a-second keyframes. It is self-describing (the thresholds travel
+   with the evidence) and lands in the browser's Downloads folder as
+   `motion-trace-<timestamp>.json`. Hand that file to a session and the tuning happens
+   offline: period, jitter, t_move/t_still measured rather than derived, and the gates
+   re-scorable against different thresholds without another rig trip. A trace survives
+   disarming — it resets only when motion is armed again — so save late rather than early.
+
+6. **The 50-card run** (Gate C's own bar), box selected, milliseconds now on every
    `captured_at`: reconcile `fires` against records, `dropped` against the halt story, and
    the cadence against the trace. Then a full box.
 
@@ -141,7 +151,12 @@ armed, the sampling moves to a worker on an OffscreenCanvas, the same shape as t
 fix. Not built pre-emptively, because the encode worker was built on a measurement and
 this would be built on a guess.
 
-No recording of any kind ships with the trigger: the 64×36 trace (Tier 1 reconciliation)
-and any debugging video (Tier 2) are D19's tuning instruments, to be added if the rig
-session needs them and deleted after. No auto-advance of boxes, no feeder control, no
-second store. And no persistence of the mode — see D19's "arming is an act".
+The Tier-1 trace shipped after all — added 2026-08-22, hours after this section said it
+would be "added if the rig session needs them", because the rig session arrived and asked.
+That is the sentence working as written, not being overruled: `src/trace.ts` records the
+signal and the gate-verdict frames, never continuous video, and nothing about it touches
+the capture server or the store — the file goes to the browser's Downloads folder and
+nowhere else. Whether it stays past Gate C or is deleted once the thresholds sit on a
+plateau is decided when they do. Tier-2 video remains unbuilt and a rig-day debugging
+instrument at most. No auto-advance of boxes, no feeder control, no second store. And no
+persistence of the mode — see D19's "arming is an act".

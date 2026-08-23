@@ -6,6 +6,8 @@ import { ServerError, capture, getStatus, newCaptureId, photoUrl, undoCapture } 
 import { manualTrigger } from './trigger'
 import { motionTrigger } from './motion'
 import type { MotionDiagnostics } from './motion'
+import { MotionTrace } from './trace'
+import { DEFAULT_PARAMS } from './motion'
 import { useCamera } from './useCamera'
 import { CameraPicker } from './CameraPicker'
 import { PullConfirm } from './PullConfirm'
@@ -229,7 +231,16 @@ export function CaptureScreen() {
     setTriggerMode(mode)
     setMotionDiag(null)
     setSwallowed({ busy: 0, halted: 0, noBox: 0, notReady: 0, held: 0 })
+    // The trace belongs to one armed session, exactly like the machine's own counters:
+    // arming starts a fresh recording, disarming keeps the old one around so it can
+    // still be saved after the run stops.
+    if (mode === 'motion') traceRef.current = new MotionTrace(DEFAULT_PARAMS)
   }, [])
+
+  /* D19's Tier-1 tuning instrument. A ref, not state: it takes ~30 writes a second and
+   * nothing re-renders on its account — the HUD's frame counter already moves via the
+   * throttled diagnostics. */
+  const traceRef = useRef<MotionTrace | null>(null)
 
   // Read synchronously inside the capture path. React state cannot serve here: two fires in
   // one tick — a key repeat, or a focused button activated by the same press — would both
@@ -456,8 +467,12 @@ export function CaptureScreen() {
   const machineTrigger = useMemo(
     // `camera.videoRef` is a stable ref object, so this is built once; each arm builds a
     // fresh machine, so counters restart when the mode is toggled — which reads correctly,
-    // because toggling into motion is starting a run.
-    () => motionTrigger(camera.videoRef, setMotionDiag),
+    // because toggling into motion is starting a run. The onFrame lambda reads the trace
+    // through the ref, so a fresh recording per arm needs no re-memoisation.
+    () =>
+      motionTrigger(camera.videoRef, setMotionDiag, DEFAULT_PARAMS, (t, d, luma, event, cells) =>
+        traceRef.current?.record(t, d, luma, event, cells),
+      ),
     [camera.videoRef],
   )
   const captureTrigger = triggerMode === 'motion' ? machineTrigger : keyTrigger
@@ -866,6 +881,22 @@ export function CaptureScreen() {
                 )}
               </p>
             )}
+            {/* D19's Tier-1 instrument, one press: the whole armed session's timing signal
+                plus the exact watch-region pixels each gate decided on, as a JSON download.
+                One feeder pass with this file is the tuning data — period, jitter, how
+                long a card is moving versus still — measured instead of derived, and
+                re-scorable offline against different thresholds without another rig trip.
+                Rendered only when there is something to save; the recording itself costs
+                nothing the HUD was not already paying. */}
+            {triggerMode === 'motion' && motionDiag !== null && motionDiag.frames > 0 ? (
+              <button
+                type="button"
+                className="capture-go"
+                onClick={() => traceRef.current?.download()}
+              >
+                Save trace · {motionDiag.frames} frames
+              </button>
+            ) : null}
             {blocked === null ? null : <p className="capture-quiet">{blocked}</p>}
             {/* The one thing the retry guard is for, said out loud. It appears only after a
                 resume, and it is the answer to the question the halt could not settle: the
