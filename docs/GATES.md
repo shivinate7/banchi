@@ -293,6 +293,29 @@ The feeder pauses per card, so the favored method is v1's motion state machine
 rhythm. Video frame extraction (ffmpeg) is the fallback if tuning misbehaves. Confirm with
 a 50-card run, then scale to a full box.
 
+**The rhythm has a number now, and half of one.** Recorded here because Gate B measured it
+by accident and the next run should not have to.
+
+- **The feeder emits roughly every 660 ms**, per the owner. Gate B's run independently
+  agrees: the operator's press loop started ~64 ms/card ahead of the machine, banked a peak
+  lead of 2.2 s by card 47 on cards the feeder had already dropped, then had to slow to the
+  supply — and its **last eight gaps average 661.9 ms**. Two estimates, 2 ms apart.
+- **Jitter across the whole run was 34 ms** (robust σ; 57 ms by standard deviation), min
+  458 ms, max 796 ms, over 52 intervals. Unimodal and peaked, not piled at a floor.
+- **The capture path is not the constraint.** An earlier burst the same evening did 25
+  consecutive captures in ≤6 s, bounding press-to-commit at 250 ms, so Gate B ran with
+  2.5–3.7× headroom.
+- **The half that is missing is the one the design turns on**: how much of each 660 ms the
+  card is *moving* versus sitting still. Nobody has measured it, §10.2 did not ask for it,
+  and a settle-based trigger is only feasible if the moving part is under ~358 ms at the
+  worst observed cycle.
+
+**None of the above came from anything the repo writes down.** `captured_at` was
+whole-second until 2026-08-22, which is coarser than the period it was timing; the real
+figures survived only as APFS `st_birthtime` on the photographs, which no clone or copy
+carries. `store/master.py`'s `now()` stamps milliseconds now, so the 50-card run measures
+its own cadence instead of depending on that accident a second time.
+
 ---
 
 ## Build order
