@@ -4,7 +4,7 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — TUNED OFFLINE AGAINST THE FIRST FEEDER TRACE, NOT YET CONFIRMED LIVE
+## STATUS — CONFIRMED LIVE: 85/85 ON THE SECOND FEEDER RUN
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
 mode toggle on the capture screen, with a live HUD and a swallowed-fire counter. Two specs
@@ -22,8 +22,15 @@ through a JPEG encode — so the first `tLo` of 3.0 sat inside the noise and 14 
 (16%) passed without reaching a verdict, silently, exactly as the owner reported. The
 offline replay reproduced the live run frame-perfectly (72 fires, zero suppressions),
 and the swept retune (`tLo` 3.0 → 4.5, `tHi` 6.0 → 8.0) scores **86/86 with zero
-double-fires** across the whole tLo 4.0–5.0 plateau. Still open: a live confirmation run
-at the rig, foil under this lamp, and the 50-card bar.
+double-fires** across the whole tLo 4.0–5.0 plateau.
+
+**The second feeder run confirmed it live, same day: 85 of 85 cycles fired, zero doubles,
+zero misses** — 72.5 s at the same 620 ms period, one designed `no-card` suppression at arm
+time, captured into a real box (95) through the full path. That clears the 50-card bar for
+the trigger half of Gate C; the gate still owes the pipeline half (identify → join → emit →
+reconcile on a feeder-paced box) and foil under this lamp. The thinnest margin in the
+system is the noise floor — still-noise p99 measured 4.07 and 4.13 across the two runs
+against tLo 4.5 — and §6 names its watchdog.
 
 ## 1. The two halves
 
@@ -167,3 +174,29 @@ nowhere else. Whether it stays past Gate C or is deleted once the thresholds sit
 plateau is decided when they do. Tier-2 video remains unbuilt and a rig-day debugging
 instrument at most. No auto-advance of boxes, no feeder control, no second store. And no
 persistence of the mode — see D19's "arming is an act".
+
+## 6. When does this need recalibrating?
+
+Asked by the owner after the confirmation run, and worth a section because the answer is
+structural: **speed does not move these constants — light does.**
+
+Nothing in the machine encodes the feeder's 623 ms. The predictive, clock-locked design
+was rejected on day one (D19); this one fires on *settle*, so the pause between cards can
+stretch arbitrarily — hand-placement is just the slow limiting case — and can shrink until
+one of two physical walls, both of which announce themselves:
+
+- **Faster**: the still window (measured 312–400 ms) must keep room for the ~120 ms settle
+  read, so somewhere past roughly twice today's speed, verdicts start arriving late or
+  never — and past ~3 cards/s the <250 ms capture round trip becomes the bottleneck and
+  the `dropped` counter climbs on screen. Neither is silent.
+- **Slower**: nothing, ever — unless the advance *motion itself* (measured ~217 ms)
+  stretches past `maxMoveMs` 1250, which is a jam or a dying mechanism, and it surfaces as
+  `stall` on the HUD rather than firing.
+
+What DOES need a re-trace is anything that changes the **picture**: a new lamp, a nudged
+camera, changed exposure or ISO, a different backdrop, sleeved cards. Those move the noise
+floor and the luma levels — and the noise floor is the thinnest margin in the system
+(still-noise p99 measured 4.07/4.13 against tLo 4.5). The watchdog is free and always on
+screen: the HUD's `d` idling near 2.5 with nothing moving is healthy; creeping toward 4 is
+the cue to run one 60-second trace *before* it costs cards, exactly the ritual that caught
+and fixed the first miscalibration.
