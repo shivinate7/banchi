@@ -425,3 +425,151 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 }
+
+/* ---- retroactive claims, and the one destructive control in the app ---- */
+
+/* The scope sentence over the fields — what an apply will reach, said before the fields that
+   decide what it writes. Body face because it is a sentence a human reads. */
+.boxops-claim-scope {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: var(--s2);
+}
+
+/* ONE TRI-STATE ROW: tick, label, control, and the sentence saying what the empty form of that
+   control means. Four columns on a wide panel, wrapping to two on a narrow one — the control
+   is the part that must not be squeezed, so it takes the fraction. */
+.boxops-claim-row {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, max-content) minmax(0, 1fr);
+  gap: 2px var(--s2);
+  align-items: center;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.boxops-claim-row:last-of-type {
+  border-bottom: 0;
+}
+
+/* The armed row steps from muted to ink, which is how selection is carried everywhere else in
+   this app — no ground change, because --bg and --surface are 1.5% apart and neither can mark
+   anything against the other. An unarmed row is not disabled: its control still takes a value,
+   and the tick decides only whether that value is SENT. */
+.boxops-claim-label {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.boxops-claim-armed .boxops-claim-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.boxops-claim-control {
+  display: flex;
+  min-width: 0;
+}
+
+.boxops-claim-control > .boxops-field-input {
+  flex: 1 1 auto;
+}
+
+/* What the empty form of this control means, in the metadata register: it is a rule about the
+   field, not a sentence about the card.
+
+   UNDER THE CONTROL, NOT BESIDE IT. As a fourth column it was the part that got clipped — the
+   rarity row is thirteen wrapping chips wide and there is no width left beside them, so the one
+   sentence explaining what an empty rarity claim DOES was the sentence nobody could read. */
+.boxops-claim-says {
+  grid-column: 3;
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The arming tick. Sized to the row rather than to a finger — this is the owner's screen and
+   the 44px floor is the Fulfillment view's. `accent-color` is the one property that colours a
+   native checkbox without rebuilding it, and --ink is the right answer for the same reason the
+   selected row is ink: accent has exactly two jobs and "this one is ticked" is neither. */
+.boxops-check {
+  accent-color: var(--ink);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* The rarity chips — the game's exact Rarity cells, verbatim (D22). Same 10px bordered cell the
+   key chips and the box strip draw, with aria-pressed carrying the state as ink and weight. */
+.boxops-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.boxops-chip {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s1) var(--s2);
+  cursor: pointer;
+}
+
+.boxops-chip:hover {
+  background: var(--hover);
+}
+
+.boxops-chip[aria-pressed='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  border-color: var(--ink);
+}
+
+/* A receipt: what a write actually did, kept after its editor closed. Panelled like a note
+   because it is one — the difference is that a note says why nothing happened and this says
+   what did. */
+.boxops-receipt {
+  max-width: 560px;
+  margin-top: var(--s3);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The delete panel. NO RED, AND THAT IS NOT AN OVERSIGHT — docs/DESIGN.md's palette has no
+   destructive colour, and inventing one is a change to that file's token block rather than a
+   judgement call made while building a button. The weight comes from where this app always
+   takes it: a heavier hairline, ink instead of muted, and a sentence that says exactly what
+   will be destroyed. */
+.boxops-danger {
+  max-width: 560px;
+  margin-top: var(--s3);
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+}
+
+/* The one button in this app whose press cannot be taken back. Ink border rather than the
+   hairline every other control wears — one step of emphasis inside the system, no new token.
+   Disabled until the box number has been typed, so its ordinary state is unpressable. */
+.boxops-plain-danger {
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.boxops-plain-danger:disabled {
+  border-color: var(--line);
+}

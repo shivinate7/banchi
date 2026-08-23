@@ -87,14 +87,45 @@
    `min-height` rather than `height`: the budget is about 56px, and a box with a name draws a
    second line in the first cell. Growing is the right failure, because the alternatives are
    truncating a position label or a box name, and both are things somebody carries to a shelf. */
+/* A WRAPPING FLEX ROW, NOT A FOUR-COLUMN GRID, and the change is measured rather than tidy.
+   The grid put the place cell in `minmax(0, 17rem)` and gave every spare pixel to the bar, so
+   in the 460px column D31's merge draws this list in, the position label was squeezed to 72px
+   and wrapped onto three lines — a 117px row against a ~56px budget, with the one thing
+   somebody carries to a shelf as the part that got broken.
+
+   Flex fixes the priority as well as the width. The label takes the growth and the bar is
+   capped, which is the right order: the label is the payload and the bar is a picture of it.
+   When the four parts no longer fit, the row wraps to two lines instead of shredding the label
+   — so the same component is honest in the owner's 500px detail column and in the full-width
+   panel it used to have, with no breakpoint to keep in step.
+
+   `state` takes a fixed basis rather than its content width so the words still line up as a
+   column across rows, which is most of what the grid was buying. */
 .card-locations-owner .card-locations-row {
-  display: grid;
-  grid-template-columns: minmax(0, 17rem) minmax(5rem, 1fr) minmax(0, auto) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
   min-height: 56px;
   padding: var(--s2) var(--s2);
   border-bottom: 1px solid var(--line);
+}
+
+.card-locations-owner .card-locations-row > .position-bar {
+  /* 6rem, measured: at 8rem the bar took the width the position label needed and the label
+     wrapped mid-sentence. The bar is a picture of the number beside it and stays legible
+     small; the label is the string somebody carries to a shelf and must not break. */
+  flex: 0 1 6rem;
+}
+
+.card-locations-owner .card-locations-row > .card-locations-state,
+.card-locations-owner .card-locations-row > .card-locations-gone {
+  flex: 0 0 4.5rem;
+}
+
+.card-locations-owner .card-locations-row > .card-locations-action {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .card-locations-owner .card-locations-row:last-child {
@@ -111,6 +142,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Takes the growth: see the row above. 12rem is the basis at which a full position label
+     ("Box 1 · Section 1 · Card 1") sits on one line in the utility face. */
+  flex: 1 1 14rem;
   min-width: 0;
 }
 
@@ -286,4 +320,24 @@
    view's does. */
 .card-locations-fulfiller .pull-confirm {
   width: 100%;
+}
+
+/* THE COPY THE WALK IS POINTING AT (D31's merge). One row of this list is the card whose
+   photograph is on screen beside it, and a group of four identical copies is unreadable without
+   that mark: "which of these am I looking at" decides which slot a hand goes to.
+
+   Ink against muted plus weight, never a ground — tokens.css says why in one line: --bg and
+   --surface are 1.5% apart, so neither can mark anything against the other, and a selected row
+   that is only a shade lighter is a selected row nobody can find. The left rail is the same
+   2px ink rail the box strip and the capture track already draw, so this is one idiom.
+
+   Owner skin only: the Fulfiller's view has no walk and no cursor, and `currentKey` never
+   reaches it. */
+.card-locations-owner .card-locations-row[aria-current='true'] {
+  box-shadow: inset 2px 0 0 0 var(--ink);
+}
+
+.card-locations-owner .card-locations-row[aria-current='true'] .card-locations-label {
+  color: var(--ink);
+  font-weight: 600;
 }

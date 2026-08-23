@@ -33,21 +33,32 @@
  */
 
 /* A block inside `#/inventory`, not a page: no padding and no measure of its own. The screen
-   above it sets both, and a second max-width here would draw the walk narrower than the list
-   the switch above it toggles with, which reads as the page moving when you press a button. */
+   above it sets both, and a second max-width here would draw the walk narrower than the panels
+   beside it, which reads as the page moving when you press something.
+
+   NO TOP MARGIN. It used to carry --s5 under a title, a lede and a mode switch; there is no
+   mode switch any more and the title sits inside this block's own header row. */
 .browse {
   display: block;
-  margin-top: var(--s5);
 }
 
-/* ---- head ---- */
+/* ---- head: one row for the whole screen ----
 
+   THE MEASUREMENT THIS ROW EXISTS TO FIX. At 1440x900 the screen above drew a 48px title at
+   32px, a 68px lede, a 52px mode switch and then this row at 49px — 240px, 27% of the viewport,
+   before the walk started, with the first card row at y=475. The switch went with the modes,
+   the lede went because a box strip over a list of cards beside a photograph is not a screen
+   that needs explaining to its only user, and the title moved in here. What is left is one row
+   carrying the title, the reload, the count and the step keys.
+
+   `s2` under it rather than `s4`, and no margin over it: the hairline is what separates this
+   from the body, and 16px of air on both sides of a hairline is 32px spent on a rule. */
 .browse-controls {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--s3);
-  margin-top: var(--s4);
-  padding-bottom: var(--s4);
+  padding-bottom: var(--s2);
   border-bottom: 1px solid var(--line);
 }
 
@@ -115,12 +126,18 @@
 
 /* ---- body: the picker beside the card ---- */
 
+/* THE MAP COLUMN WAS TOO NARROW AND THE DETAIL COLUMN TOO EMPTY, both measured at 1440x900:
+   the list was drawn at 320px inside a 1240px page while ~856px sat beside it holding a 420px
+   stack. The map now takes up to 380px — enough that a card name stops being clipped at the
+   third word — and the detail column splits into two beneath the box panel, so the width it
+   was already given gets used. `s5` between them rather than `s6`, which is 8px given back to
+   both. */
 .browse-body {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: var(--s6);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: var(--s5);
   align-items: start;
-  margin-top: var(--s5);
+  margin-top: var(--s3);
 }
 
 /* Sticky and independently scrolled — the whole MAP column now, not the list alone.
@@ -131,11 +148,14 @@
    scroll UP to reach. Rejected then and still: paging the list. */
 .browse-map {
   position: sticky;
-  top: var(--s6);
-  max-height: calc(100vh - var(--s8) - var(--s6));
+  top: var(--s4);
+  max-height: calc(100vh - var(--s5));
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
+  /* s2, not s3. This column is sticky and its height is the viewport, so every gap above the
+     rows is a row the walk does not get: four gaps at 12px cost 48px of list, and at 8px they
+     cost 32px. */
+  gap: var(--s2);
   min-height: 0;
 }
 
@@ -213,12 +233,56 @@
   border-bottom-color: var(--ink);
 }
 
-/* The match line — a sentence a human reads, quiet: it reports on the list, it is not
-   the list. */
-.browse-match {
+/* THE STATUS LINE — one line carrying three facts about the list: how it is folded, what the
+   query matched, and how many cards are ticked. It replaced a match line that appeared only
+   while searching, and it is one line rather than three because this column's height is the
+   list's height (see .browse-map): a line each would have cost 40px of walk permanently.
+
+   Quiet, because it reports on the list and is not the list. Wrapping rather than clipping —
+   with a query and a selection both live it is genuinely long, and the count of ticked cards
+   is the one thing on this screen that must never be the part that gets cut off. */
+.browse-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1);
   font-family: var(--body);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
+  min-height: 16px;
+}
+
+.browse-status-sep {
+  color: var(--line);
+}
+
+/* The one number on this line that arms a write. Ink and the utility face, which is how every
+   other count in this app is drawn — it is a quantity, and the rest of the line is prose. */
+.browse-status-picked {
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* A control that reads as part of a sentence. No border, no fill, no min-height — the bordered
+   .browse-reload is the idiom for a control that stands alone, and four of those on a status
+   line would out-weigh the list they describe. Underlined on hover so it is discoverable as a
+   control rather than only by trying it. */
+.browse-quiet {
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r);
+  padding: 0;
+  cursor: pointer;
+}
+
+.browse-quiet:hover {
+  text-decoration: underline;
 }
 
 /* The search's failure panel sits in the map column's own rhythm; the screen-wide note's
@@ -248,19 +312,103 @@
   list-style: none;
 }
 
+/* THE HEADER IS TWO CONTROLS NOW: a tick that arms every card in the section, and a fold that
+   opens it. Both were asked for by name — "in inventory i need the sections to be collapsible",
+   and a mass-select needs a unit bigger than one row to be worth having. They sit on one line
+   at the same height the header already was, so collapsibility cost the walk nothing. */
 .browse-secthead {
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   background: var(--surface);
+  padding: var(--s1) var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* `accent-color` is the one property that colours a native checkbox without rebuilding it, and
+   --ink is the right answer for the same reason a selected row is ink: docs/DESIGN.md gives
+   accent exactly two jobs and "this one is ticked" is neither. Sized to the row, not to a
+   finger — the 44px floor is the Fulfillment view's and this is the owner's. */
+.browse-secttick,
+.browse-rowtick {
+  accent-color: var(--ink);
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.browse-sectfold {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.browse-sectfold:hover {
+  background: var(--hover);
+}
+
+/* Drawn rather than left to a browser disclosure marker, the rule Inventory.tsx and BoxOps.tsx
+   both follow: the native one is sized and coloured by the browser and differs between the one
+   the owner works in and the Chromium `make screenshot` renders, which is the comparison
+   docs/DESIGN.md calls mandatory. */
+.browse-sectmark {
+  font-family: var(--util);
+  font-size: 9px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  min-width: 1ch;
+}
+
+.browse-sectmark::before {
+  content: '\25B8'; /* ▸ */
+}
+
+.browse-sectfold[aria-expanded='true'] .browse-sectmark::before {
+  content: '\25BE'; /* ▾ */
+}
+
+.browse-secttitle {
   font-family: var(--util);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: var(--s1) var(--s3);
-  border-bottom: 1px solid var(--line);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How many cards are in the section, and — once anything in it is ticked — how many of them
+   are. A collapsed section must not be able to hide a tick, which is the whole reason this
+   cell carries two numbers instead of one. */
+.browse-sectcount {
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.browse-rowline {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding-left: var(--s2);
 }
 
 /* One line per card, at the 4-16 end of the scale — the owner's density. The two-line
@@ -278,7 +426,9 @@
   align-items: baseline;
   width: 100%;
   text-align: left;
-  padding: var(--s1) var(--s3);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--s1) var(--s2);
   background: transparent;
   border: 0;
   /* The hairline is the only separation mechanism in the product, no exceptions. */
@@ -291,6 +441,12 @@
 
 .browse-group:last-child .browse-group-rows li:last-child .browse-row {
   border-bottom: 0;
+}
+
+/* Hovering the row lights the whole line, tick included, so the target reads as one thing even
+   though it is two controls. */
+.browse-rowline:hover .browse-row {
+  background: var(--hover);
 }
 
 /* Row hover, which is the only thing --hover is for. */
@@ -364,11 +520,42 @@
 
 /* ---- the card ---- */
 
+/* TWO COLUMNS, MEASURED. This was a single 420px-wide stack inside an 824px column: the photo,
+   then the facts under it, then everything else below the fold. The photograph and the things
+   read ABOUT the card are two jobs, so they sit side by side and the headline spans both —
+   a position label is what the whole panel is for.
+
+   It collapses to one column under 900px, where two columns would leave neither wide enough to
+   be worth having. Owner-side and desktop by D13, so this is the only breakpoint in the file. */
 .browse-detail {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: var(--s4) var(--s5);
+  align-items: start;
+  min-width: 0;
+}
+
+.browse-headline {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.browse-shot,
+.browse-about {
   display: flex;
   flex-direction: column;
-  gap: var(--s4);
+  gap: var(--s3);
   min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .browse-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .browse-headline {
+    grid-column: auto;
+  }
 }
 
 /* The payload of the screen: where this card physically is. Utility face because it is a
@@ -400,10 +587,11 @@
 /* Sized to show a blur or a finger on the card, which is what a photo on this screen is
    for. No 320px floor asserted: that is the Fulfillment pull modal's constraint and 7b's
    to meet. */
+/* Fills its own column now rather than carrying a 420px cap of its own — the grid decides how
+   wide the photo column is, and a second cap here would leave air inside it. */
 .browse-photo {
   display: block;
   width: 100%;
-  max-width: 420px;
   height: auto;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -419,7 +607,7 @@
 .browse-absent,
 .browse-gap,
 .browse-note {
-  max-width: 420px;
+  max-width: 560px;
   padding: var(--s4);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -435,8 +623,7 @@
    header has the no-fill argument. The margin is the block's own so a refusal panel
    rendered inside it hangs together with the button that earned it. */
 .browse-reshoot {
-  margin-top: var(--s4);
-  max-width: 420px;
+  max-width: 100%;
 }
 
 .browse-reshoot .browse-note {
@@ -476,12 +663,12 @@
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--line);
-  max-width: 520px;
+  min-width: 0;
 }
 
 .browse-fact {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 84px minmax(0, 1fr);
   gap: var(--s3);
   align-items: baseline;
   padding: var(--s2) 0;
@@ -510,4 +697,46 @@
 .browse-fact dd.is-util {
   font-family: var(--util);
   font-size: 13px;
+}
+
+/* ---- the card's own operations: correct its claims, or remove it from the box ---- */
+
+.browse-cardops {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.browse-cardops-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* A receipt: what a write actually did, kept after the panel that did it closed. Panelled
+   because the alternative is a sentence floating under a list of facts, and the one thing a
+   receipt for a renumber must not look like is another fact about the card. */
+.browse-receipt {
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The one control on this panel that cannot be taken back. NO RED — docs/DESIGN.md's palette
+   has no destructive colour, and inventing one is a change to that file's token block rather
+   than a decision made while building a button. Emphasis comes from where this app always
+   takes it: a heavier hairline, and a sentence that says exactly what will happen. */
+.browse-danger {
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+}
+
+.browse-reload-danger {
+  border-color: var(--ink);
 }

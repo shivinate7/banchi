@@ -1,8 +1,15 @@
-import { useCallback, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
 
-import type { BoxRecord, Place, SectionDetail } from './types'
+import type { BoxClaimResult, BoxDeleteResult, BoxRecord, GameEntry, Place, SectionDetail } from './types'
 import type { Failure } from './server'
-import { createBox, describeFailure, updateBox } from './server'
+import {
+  applyBoxClaims,
+  createBox,
+  deleteBox,
+  describeFailure,
+  getGames,
+  updateBox,
+} from './server'
 import { spansOf } from './PositionBar'
 import './BoxOps.css'
 
@@ -56,12 +63,24 @@ import './BoxOps.css'
  * makes Section and Card a VIEW of an index, so moving a divider changes every card
  * decoration in the box as well as the box row.
  *
- * ONE OPERATION D31 NAMES IS NOT HERE, AND ITS ABSENCE IS A SERVER GAP RATHER THAN A CHOICE.
- * D31 lists "name, sections, seal, delete" as the four that move onto the box header; D10's
- * third 2026-08-23 ruling specifies whole-box delete. There is no `DELETE /boxes/<box>` route
- * and no client function for one, so there is nothing to move. When the route lands, its
- * control belongs in this file, under the same gate D10 puts on it — refused while the box
- * holds any sold, retired or listing-held card.
+ * THE DELETE ARRIVED, AND SO DID A FIFTH CONTROL THE FOUR-CONTROL PARAGRAPH ABOVE DID NOT
+ * ANTICIPATE. This file used to end by saying whole-box delete was "a server gap rather than a
+ * choice" — no route, no client function, nothing to move — and naming the gate it would need
+ * when it landed. It landed. `DeleteBox` below is that control under exactly that gate, which
+ * the server keeps itself (`box_not_empty_of_commitments`, naming the cards), and it is the one
+ * place in this app that gates: see its own header for why typing the box number beats an "are
+ * you sure".
+ *
+ * The fifth control is `ClaimEditor` — retroactive capture claims over a whole box or over a
+ * selection of it, `PUT /inventory/<box>`. It is not one of D20's four because it is not about
+ * the box at all: it is about the cards in it, reached through the box because that is the unit
+ * the route takes. It sits here because the SCOPE is a box, and because the same editor is what
+ * `BoxBrowse.tsx` draws to correct one card — one form, two scopes, one enumeration of the
+ * store's `CAPTURE_CLAIM_FIELDS` on this side.
+ *
+ * BOTH EXISTED AS ROUTES WITH NO CONTROL, WHICH IS THE FAILURE `CLAUDE.md` NOW HAS A HARD RULE
+ * ABOUT: a route is not a feature, and nothing is built until it is reachable from a screen.
+ * They shipped with full T7 coverage and zero client functions, `make check` green throughout.
  */
 
 /** The word `state` carries when the lid is on. `types.ts:BoxState` is the union the wire
@@ -93,27 +112,33 @@ type Busy = boolean
 function useBoxWrite(onChanged: () => void): {
   busy: Busy
   trouble: Failure | null
-  write: (run: () => Promise<BoxRecord>) => Promise<boolean>
+  write: <T>(run: () => Promise<T>) => Promise<T | null>
 } {
   const [busy, setBusy] = useState<Busy>(false)
   const [trouble, setTrouble] = useState<Failure | null>(null)
 
+  /* GENERIC IN THE ANSWER, NOT JUST IN THE CALL. It was `Promise<BoxRecord> -> Promise<boolean>`
+   * while the three routes it wrapped all answered a box row; the box-wide claim answers a
+   * `BoxClaimResult`, whose numbers ARE the receipt, and a wrapper that threw that away would
+   * have forced a fourth hand-rolled copy of the lock-and-refusal discipline beside it. `null`
+   * for a refusal keeps the existing `if (await onWrite(...))` call sites reading exactly as
+   * they did — a written row is truthy, a refusal is not. */
   const write = useCallback(
-    async (run: () => Promise<BoxRecord>): Promise<boolean> => {
-      if (busy) return false
+    async <T,>(run: () => Promise<T>): Promise<T | null> => {
+      if (busy) return null
       setBusy(true)
       setTrouble(null)
       try {
-        await run()
+        const answer = await run()
         onChanged()
-        return true
+        return answer
       } catch (err) {
         /* The server's own message, verbatim, with its code beneath. `_fail` already says what
          * happened and what to do next — `box_exists`, `sections_invalid`, `box_closed` all
          * name the remedy — and paraphrasing them here would be a second vocabulary nothing
          * audits. */
         setTrouble(describeFailure(err))
-        return false
+        return null
       } finally {
         setBusy(false)
       }
@@ -405,15 +430,58 @@ export function RegisterBox({ onChanged }: { onChanged: () => void }) {
  * is NOT behind the disclosure is the seal's own sentence when it is pressed: D20 requires the
  * number on the button, and it is still on it.
  */
-export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: () => void }) {
+export function BoxOps({
+  record,
+  onChanged,
+  selection = [],
+}: {
+  record: BoxRecord
+  onChanged: () => void
+
+  /** The indices the walk currently has ticked, in this box. THE MASS-SELECT, arriving from the
+   *  list that owns it: `BoxBrowse.tsx` draws the checkboxes because they belong on the rows,
+   *  and this panel spends them because `PUT /inventory/<box>` is the write they are for.
+   *
+   *  EMPTY MEANS THE WHOLE BOX, and that is safe here in a way it is NOT on the wire.
+   *  `server.ts:applyBoxClaims` omits `indices` entirely for a whole-box apply and the server
+   *  refuses `[]` on purpose — an emptied selection widening to every card in the box is the
+   *  accident that refusal exists to stop. So the widening happens once, here, where the scope
+   *  sentence on the button says which of the two is about to happen. */
+  selection?: readonly number[]
+}) {
   const { busy, trouble, write } = useBoxWrite(onChanged)
   const onWrite = (patch: { name?: string; sections?: number[]; state?: 'open' | 'closed' }) =>
     write(() => updateBox(record.box, patch))
   /* Which editor is open, or null. One at a time per box: two open fields over one record is
    * two half-finished edits racing for the same lock. */
-  const [editing, setEditing] = useState<'name' | 'sections' | null>(null)
+  const [editing, setEditing] = useState<'name' | 'sections' | 'claims' | null>(null)
   const [draft, setDraft] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
+  /* The last box-wide apply's receipt, or null. Held past the editor closing because the
+   * numbers are the only evidence of what a write over eighty-five records actually did. */
+  const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
+
+  /* What an apply will reach, said the same way on the heading and on the button. The
+     selection when there is one, the whole box when there is not — the widening argued at
+     `selection` above, in words rather than in a silent `?? all`. */
+  const scope =
+    selection.length > 0
+      ? `the ${count(selection.length, 'selected card', 'selected cards')}`
+      : `all ${count(record.cards, 'card', 'cards')} in box ${record.box}`
+
+  const applyClaims = async (patch: ClaimPatch) => {
+    const result = await write(() =>
+      applyBoxClaims(
+        record.box,
+        patch,
+        selection.length > 0 ? [...selection] : undefined,
+      ),
+    )
+    if (result !== null) {
+      setClaimed(result)
+      setEditing(null)
+    }
+  }
 
   /* The parsed layout waiting on the owner's answer to the relabel warning, or null. A separate
    * state from the draft because the warning is a statement about a PARSED layout — it names
@@ -427,9 +495,10 @@ export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: ()
   const total = denominator(record)
   const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
-  const startEdit = (which: 'name' | 'sections') => {
+  const startEdit = (which: 'name' | 'sections' | 'claims') => {
     setRefused(null)
     setProposed(null)
+    setClaimed(null)
     setEditing(which)
     setDraft(which === 'name' ? (record.name ?? '') : writeIndices(record))
   }
@@ -536,10 +605,13 @@ export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: ()
         <summary className="boxops-more-head">
           <span className="boxops-marker" aria-hidden="true" />
           <span className="boxops-more-label">Layout and controls</span>
+          {/* The hint names every control behind the fold, because a disclosure that under-sold
+              its contents is exactly how three routes came to have no reachable control. Claims
+              and delete are in there now and they say so. */}
           <span className="boxops-more-hint">
             {record.sections_detail.length === 0
-              ? 'rename · dividers · seal'
-              : `${count(record.sections_detail.length, 'section', 'sections')} · rename · dividers · seal`}
+              ? 'rename · dividers · seal · claims · delete'
+              : `${count(record.sections_detail.length, 'section', 'sections')} · rename · dividers · seal · claims · delete`}
           </span>
         </summary>
 
@@ -597,6 +669,18 @@ export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: ()
           >
             Edit dividers
           </button>
+          {/* THE ONE CONTROL HERE THAT WRITES CARDS RATHER THAN THE BOX, and its label says so
+              before it is pressed — the same rule the seal follows. A selection narrows it; no
+              selection means the box. `record.cards` counts records naming this box, which is
+              what the route walks. */}
+          <button
+            className="boxops-plain"
+            type="button"
+            disabled={busy}
+            onClick={() => startEdit('claims')}
+          >
+            Set claims on {scope}
+          </button>
           {sealed ? (
             <button
               className="boxops-plain"
@@ -625,6 +709,17 @@ export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: ()
             </button>
           )}
         </div>
+      ) : editing === 'claims' ? (
+        <ClaimEditor
+          scope={scope}
+          /* The vocabulary the chips are drawn from. A box has no game of its own — D21 makes
+             `game` a per-card claim and mixed boxes legal — so there is nothing to hand down
+             and the editor falls back to the registry's published default. */
+          game={null}
+          busy={busy}
+          onApply={(patch) => void applyClaims(patch)}
+          onCancel={closeEdit}
+        />
       ) : editing === 'name' ? (
         <div className="boxops-editor">
           <Field label="Name" value={draft} onChange={setDraft} placeholder="SV commons" />
@@ -681,7 +776,15 @@ export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: ()
         </div>
       )}
 
+        {claimed === null ? null : <ClaimReceipt result={claimed} />}
+
         <Trouble failure={trouble} />
+
+        {/* LAST IN THE DISCLOSURE, AND THAT IS THE ONLY PLACEMENT ARGUMENT IT NEEDS. Every
+            other control here is reversible or is a reading; this one destroys a box. Nothing
+            below it, nothing beside it, and two presses plus a typed number away from a screen
+            that is otherwise for looking at cards. */}
+        <DeleteBox record={record} onChanged={onChanged} />
       </details>
     </section>
   )
@@ -800,6 +903,512 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- retroactive capture claims
+
+/* THE CLAIM EDITOR — one body, two scopes: every card in a box (or a selection of them), and
+ * one card on the detail panel. It is the client half of `PUT /inventory/<box>` and
+ * `PUT /inventory/<box>/<index>`, and it exists because those routes did not have one.
+ *
+ * A ROUTE IS NOT A FEATURE (CLAUDE.md, 2026-08-23). `applyBoxClaims` was built and covered by
+ * T7 with no client function and no control on any screen, which is the repo's own recorded
+ * failure — `docs/GATES.md` step 7 tells the same story about three screens missing from the
+ * routes table while every check was green. `updateCard` had the same hole in a smaller shape:
+ * it accepted four claims and not `rarity_claim`, which the route had always taken, so the one
+ * claim a correction is most likely to be ABOUT was the one no screen could correct.
+ *
+ * IT LIVES IN THIS FILE BECAUSE THE BOX-WIDE APPLY IS A BOX OPERATION, and the per-card
+ * correction is the same form with one card in its scope sentence. Two copies of a five-field
+ * tri-state form is two things to keep in step, and the fields are the store's own
+ * `CAPTURE_CLAIM_FIELDS` — one editor is one place they are enumerated on this side.
+ *
+ * EVERY FIELD IS TRI-STATE, WHICH IS THE WHOLE OF THE DESIGN. The routes distinguish three
+ * requests and a form with only inputs can express two of them:
+ *
+ *   unticked          the field is omitted — leave whatever the card says alone
+ *   ticked, filled    set it to this
+ *   ticked, empty     send `null` — clear the claim back to none
+ *
+ * `server.ts:updateCard` keeps those apart with `in` rather than a truthiness test, and this
+ * is the control surface that makes the distinction reachable. A form that sent every field on
+ * every save would flatten a whole box's set hints the first time somebody fixed one note.
+ *
+ * `game` HAS NO CLEARED FORM and its row has no empty option. D21: the field is required and
+ * its default is a read-side backfill for records written before it existed, never a
+ * write-side default — so there is nothing to clear it to.
+ *
+ * THE GAME SELECT DRIVES THE VOCABULARY WHETHER OR NOT IT IS SENT. Finishes and rarities are
+ * per-game (D22), so the chips have to come from somewhere even when the game is not being
+ * changed; they come from whatever this select says, which starts on the card's own game (or
+ * the registry default for a box-wide apply). On a MIXED box that is a guess about which
+ * vocabulary the operator means, and it is deliberately not resolved here — the server
+ * validates every card against its own game and refuses the whole call with the offenders
+ * named, which is a better answer than a screen that quietly narrows the offer.
+ *
+ * NOTHING IS PRE-TICKED. An editor that opened with a field armed would apply it to eighty-five
+ * cards on the first press of Apply.
+ */
+
+/** The five claims, in the order the capture screen asks for them. */
+type ClaimField = 'game' | 'setHint' | 'variant' | 'rarityClaim' | 'note'
+
+export type ClaimPatch = {
+  setHint?: string | null
+  variant?: string | null
+  game?: string
+  rarityClaim?: string[] | null
+  note?: string | null
+}
+
+export function ClaimEditor({
+  scope,
+  game,
+  busy,
+  onApply,
+  onCancel,
+}: {
+  /** What the apply will reach, as a sentence — "all 85 cards in box 95", "the 12 selected
+   *  cards", "this card". Written by the caller because only the caller knows the scope, and
+   *  drawn on the button as well as above the fields: the seal control's rule (D20 — the
+   *  number is ON the button) applied to the other write in this file that reaches many
+   *  records at once. */
+  scope: string
+
+  /** The game whose finish and rarity vocabulary the chips are drawn from, before the operator
+   *  changes it. Null falls back to the registry's own default (D21), never to a hardcoded
+   *  `pokemon` — that would be a second decision that has to agree with `games.DEFAULT_GAME`. */
+  game: string | null
+
+  busy: boolean
+  onApply: (patch: ClaimPatch) => void
+  onCancel: () => void
+}) {
+  const [entries, setEntries] = useState<readonly GameEntry[] | null>(null)
+  const [fallback, setFallback] = useState<string | null>(null)
+  const [armed, setArmed] = useState<readonly ClaimField[]>([])
+  const [pickedGame, setPickedGame] = useState<string | null>(game)
+  const [setHint, setSetHint] = useState('')
+  const [variant, setVariant] = useState('')
+  const [rarity, setRarity] = useState<readonly string[]>([])
+  const [note, setNote] = useState('')
+  const [refused, setRefused] = useState<string | null>(null)
+
+  /* THE REGISTRY, ONCE, AND ALLOWED TO FAIL QUIETLY IN ONE DIRECTION ONLY. `GET /games` is the
+   * one home for the vocabulary (D22) and nothing here invents a fallback list — a guessed
+   * rarity becomes a price, which is what that entry refuses. If the read fails the two chip
+   * rows say they have no vocabulary and offer nothing; the set hint and the note are plain
+   * text and keep working, because neither is drawn from the registry.
+   *
+   * `.then(ok).catch(fail)` and never `.then(ok, fail)` — `app/eslint.config.js` bans the
+   * two-argument form outright, and the success handler here walks a body off the wire. */
+  useEffect(() => {
+    let live = true
+    getGames()
+      .then((registry) => {
+        if (!live) return
+        setEntries(registry.games)
+        setFallback(registry.default)
+      })
+      .catch(() => {
+        if (!live) return
+        setEntries([])
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const key = pickedGame ?? fallback
+  const entry = entries?.find((candidate) => candidate.key === key) ?? null
+  const isArmed = (field: ClaimField) => armed.includes(field)
+  const arm = (field: ClaimField, on: boolean) =>
+    setArmed((held) => (on ? [...held.filter((f) => f !== field), field] : held.filter((f) => f !== field)))
+
+  const submit = () => {
+    if (armed.length === 0) {
+      /* Refused here rather than sent. An empty patch is a well-formed request that writes
+       * nothing, so the server would answer success and the screen would print a receipt for
+       * an operation that did not happen — which is worse than a sentence saying so. */
+      setRefused('Tick a field before applying. Nothing was sent.')
+      return
+    }
+    setRefused(null)
+
+    const patch: ClaimPatch = {}
+    /* Built key by key with `if`, never spread from a record of undefineds: `'setHint' in
+     * fields` is what `server.ts` tests, and a key present with an undefined value would read
+     * as a clear rather than as an omission. */
+    if (isArmed('game') && key !== null) patch.game = key
+    if (isArmed('setHint')) patch.setHint = setHint.trim() === '' ? null : setHint.trim()
+    if (isArmed('variant')) patch.variant = variant === '' ? null : variant
+    if (isArmed('rarityClaim')) patch.rarityClaim = rarity.length === 0 ? null : [...rarity]
+    if (isArmed('note')) patch.note = note.trim() === '' ? null : note.trim()
+    onApply(patch)
+  }
+
+  return (
+    <div className="boxops-editor">
+      <p className="boxops-claim-scope">Change claims on {scope}</p>
+
+      <ClaimRow
+        field="game"
+        label="Game"
+        armed={isArmed('game')}
+        onArm={arm}
+        says="required — there is nothing to clear it to"
+      >
+        <select
+          className="boxops-field-input"
+          value={key ?? ''}
+          disabled={entries === null}
+          onChange={(event) => setPickedGame(event.target.value)}
+          aria-label="Game"
+        >
+          {entries === null ? <option value="">reading the registry…</option> : null}
+          {(entries ?? []).map((candidate) => (
+            <option key={candidate.key} value={candidate.key}>
+              {candidate.display}
+            </option>
+          ))}
+        </select>
+      </ClaimRow>
+
+      <ClaimRow
+        field="setHint"
+        label="Set hint"
+        armed={isArmed('setHint')}
+        onArm={arm}
+        says="leave empty to clear it"
+      >
+        <PlainInput value={setHint} onChange={setSetHint} placeholder="ME01" label="Set hint" />
+      </ClaimRow>
+
+      <ClaimRow
+        field="variant"
+        label="Finish"
+        armed={isArmed('variant')}
+        onArm={arm}
+        says="no claim clears it, and the ladder infers the finish instead"
+      >
+        <select
+          className="boxops-field-input"
+          value={variant}
+          onChange={(event) => setVariant(event.target.value)}
+          aria-label="Finish"
+        >
+          <option value="">no claim</option>
+          {(entry?.finishes ?? []).map((finish) => (
+            <option key={finish} value={finish}>
+              {finish}
+            </option>
+          ))}
+        </select>
+      </ClaimRow>
+
+      <ClaimRow
+        field="rarityClaim"
+        label="Rarity"
+        armed={isArmed('rarityClaim')}
+        onArm={arm}
+        says="none ticked clears it"
+      >
+        {/* The game's exact `Rarity` cells, verbatim and in stack order — D22's rule that a
+            second friendly vocabulary is a thing nothing audits. A game with no ladder
+            (`misc`) offers none and says so rather than drawing an empty box. */}
+        {(entry?.rarities ?? []).length === 0 ? (
+          <p className="boxops-machine">
+            {entry === null ? 'rarities: unread' : `rarities: none for ${entry.display}`}
+          </p>
+        ) : (
+          <div className="boxops-chips">
+            {(entry?.rarities ?? []).map((name) => {
+              const on = rarity.includes(name)
+              return (
+                <button
+                  key={name}
+                  className="boxops-chip"
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setRarity((held) =>
+                      held.includes(name) ? held.filter((r) => r !== name) : [...held, name],
+                    )
+                  }
+                >
+                  {name}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </ClaimRow>
+
+      <ClaimRow
+        field="note"
+        label="Note"
+        armed={isArmed('note')}
+        onArm={arm}
+        says="free text — the only handle an unidentified card has"
+      >
+        <PlainInput value={note} onChange={setNote} placeholder="blue-eyes, japanese" label="Note" />
+      </ClaimRow>
+
+      <p className="boxops-hint">
+        A ticked field is written; an unticked one is left exactly as it is. A ticked field left
+        empty clears the claim. Finish and rarity are per-game, so the vocabulary above comes
+        from the game selected here — the server checks every card against its OWN game and
+        refuses the whole apply, naming the cards, rather than writing some of them.
+      </p>
+      {refused === null ? null : <p className="boxops-machine">{refused}</p>}
+
+      <div className="boxops-actions">
+        <button className="boxops-plain" type="button" disabled={busy} onClick={submit}>
+          {busy ? 'Applying…' : `Apply to ${scope}`}
+        </button>
+        <button className="boxops-plain" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** One tri-state row: the arming checkbox, the label it names, and the control it governs.
+ *
+ *  THE CONTROL IS NOT DISABLED WHEN THE ROW IS UNARMED, deliberately. Filling a field and then
+ *  ticking it is the order half the people will use, and a disabled input that has to be
+ *  unlocked first turns one gesture into two on the screen the owner spends hours in. What the
+ *  tick decides is whether the value is SENT, and the row says so in its own words. */
+function ClaimRow({
+  field,
+  label,
+  says,
+  armed,
+  onArm,
+  children,
+}: {
+  field: ClaimField
+  label: string
+  says: string
+  armed: boolean
+  onArm: (field: ClaimField, on: boolean) => void
+  children: ReactNode
+}) {
+  const id = useId()
+  return (
+    <div className={armed ? 'boxops-claim-row boxops-claim-armed' : 'boxops-claim-row'}>
+      <input
+        className="boxops-check"
+        id={id}
+        type="checkbox"
+        checked={armed}
+        onChange={(event) => onArm(field, event.target.checked)}
+      />
+      <label className="boxops-claim-label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="boxops-claim-control">{children}</div>
+      <span className="boxops-claim-says">{says}</span>
+    </div>
+  )
+}
+
+/** A text input with no `<label>` of its own — `ClaimRow` above owns the label and binds it to
+ *  the checkbox, which is the control that decides whether this value is written at all. The
+ *  `aria-label` is what keeps the input itself named for a screen reader without a second
+ *  visible label beside the row's. */
+function PlainInput({
+  value,
+  onChange,
+  placeholder,
+  label,
+}: {
+  value: string
+  onChange: (next: string) => void
+  placeholder?: string
+  label: string
+}) {
+  return (
+    <input
+      className="boxops-field-input"
+      type="text"
+      aria-label={label}
+      autoComplete="off"
+      autoCorrect="off"
+      autoCapitalize="off"
+      spellCheck={false}
+      placeholder={placeholder}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  )
+}
+
+/** The receipt a box-wide apply leaves. Four numbers that are not the same number, drawn apart
+ *  for the reason `Inventory.tsx` draws its two tallies apart: `eligible` is what the scope
+ *  reached, `applied` is what actually changed, and `unchanged` is the difference — cards that
+ *  already said what was asked for, which is a success and not a failure. `skipped` names the
+ *  sold and retired cards the route stepped over, because D10 and D26 make those records
+ *  history and a count alone would not say which ones. */
+function ClaimReceipt({ result }: { result: BoxClaimResult }) {
+  return (
+    <div className="boxops-receipt">
+      <p className="boxops-note-text">
+        {result.applied === 0
+          ? 'Nothing changed — every card in scope already said this.'
+          : `${count(result.applied, 'card', 'cards')} changed.`}
+      </p>
+      <p className="boxops-machine">
+        box {result.box} · eligible {result.eligible} · applied {result.applied} · unchanged{' '}
+        {result.unchanged} · sidecars {result.sidecars_rewritten} · skipped{' '}
+        {result.skipped_terminal}
+      </p>
+      {result.skipped.length === 0 ? null : (
+        <p className="boxops-machine">
+          stepped over: {result.skipped.map((row) => `#${row.index} ${row.state}`).join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/* THE WHOLE-BOX DELETE — D10's third 2026-08-23 ruling, and the most destructive action in the
+ * product.
+ *
+ * THIS FILE SAID IN WRITING THAT THE CONTROL BELONGED HERE "when the route lands", and named
+ * the gate: refused while the box holds any sold, retired or listing-held card. The route has
+ * landed and the server keeps that gate itself — `box_not_empty_of_commitments`, naming up to
+ * eight of them — so what this control owes is the other half: a confirmation worth the act,
+ * and a receipt worth reading afterwards.
+ *
+ * IT GATES, AND IT IS THE ONE PLACE IN THIS APP THAT DOES. docs/DESIGN.md bans the confirm
+ * dialog on a reversible action and then carves out "genuinely destructive actions may still
+ * gate". Every other write on these screens sits inside that ban with an undo behind it: a
+ * sale reverses, a retirement reverses, a divider edit is a relabel you can save back, a
+ * re-shoot leaves the card in its box. This one has NO undo — the records, the photographs and
+ * the sidecars are gone, and unlike capture-undo the cards are not in your hand.
+ *
+ * TYPING THE NUMBER IS THE GATE, and it is chosen over an "are you sure" for the reason that
+ * makes the ban worth having: a yes/no dialog is answered by the same reflex that pressed the
+ * button, and this control's whole risk is deleting box 9 while looking at box 95. Typing the
+ * box number is a gesture that cannot be performed by momentum, and it names the exact thing
+ * being destroyed.
+ *
+ * THE REFUSAL IS SHOWN WHOLE. `box_not_empty_of_commitments` names which cards hold the box
+ * open; reducing it to "cannot delete" would leave the owner with no way to find them.
+ */
+function DeleteBox({
+  record,
+  onChanged,
+}: {
+  record: BoxRecord
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [trouble, setTrouble] = useState<Failure | null>(null)
+  const [receipt, setReceipt] = useState<BoxDeleteResult | null>(null)
+
+  const aimed = typed.trim() === String(record.box)
+
+  const run = async () => {
+    if (busy || !aimed) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      const result = await deleteBox(record.box)
+      setReceipt(result)
+      setOpen(false)
+      setTyped('')
+      /* The re-read is the caller's, as every write in this file leaves it: the box is gone
+       * from `GET /boxes` and its cards are gone from `GET /inventory`, and the walk's own
+       * shelf effect falls to the first shelf that still exists. Nothing here patches a
+       * held copy of either. */
+      onChanged()
+    } catch (err) {
+      setTrouble(describeFailure(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* The receipt outlives the panel and the box. It is drawn from the server's own per-kind
+     counts because they are the only evidence the operation did what it said — there is
+     nothing left to go and check. */
+  if (receipt !== null) {
+    return (
+      <div className="boxops-receipt">
+        <p className="boxops-note-text">Box {receipt.deleted_box} is gone. There is no undo.</p>
+        <p className="boxops-machine">
+          cards {receipt.cards} · photos {receipt.photos} · sidecars {receipt.sidecars} · review{' '}
+          {receipt.review_deleted} · parked {receipt.parked_deleted} · cache{' '}
+          {receipt.cache_deleted} · registry {String(receipt.registry_deleted)} · directory{' '}
+          {String(receipt.directory_removed)}
+        </p>
+        {receipt.directory_removed ? null : (
+          <p className="boxops-note-text">
+            The photo directory was left in place because it still holds a file this delete did
+            not account for. Nothing was removed that was not listed above.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  if (!open) {
+    return (
+      <div className="boxops-actions">
+        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
+          Delete box {record.box}…
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="boxops-danger">
+      <p className="boxops-note-text">
+        This deletes <strong>every record, photograph and sidecar</strong> in box {record.box} —{' '}
+        {count(record.cards, 'card', 'cards')} — along with its queue entries, its identification
+        cache and the box itself. <strong>There is no undo.</strong> Unlike an undone capture,
+        these cards are not in your hand.
+      </p>
+      <p className="boxops-hint">
+        A box holding a sold, retired or listed card is refused: those records are history and
+        commitments, not clutter.
+      </p>
+      <div className="boxops-fields">
+        {/* NO PLACEHOLDER. The label already says which number to type, and a placeholder
+            holding the same digits renders greyed inside the box — the field then LOOKS filled
+            beside a button that is still disabled, which is a gate that reads as a bug. */}
+        <Field label={`Type ${record.box} to confirm`} value={typed} onChange={setTyped} />
+      </div>
+      <Trouble failure={trouble} />
+      <div className="boxops-actions">
+        <button
+          className="boxops-plain boxops-plain-danger"
+          type="button"
+          disabled={busy || !aimed}
+          onClick={() => void run()}
+        >
+          {busy ? 'Deleting…' : `Delete box ${record.box} permanently`}
+        </button>
+        <button
+          className="boxops-plain"
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            setTyped('')
+            setTrouble(null)
+          }}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

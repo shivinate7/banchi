@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
-/* `Inventory` is aliased because this file's own component is called that. The alias names the
- * thing rather than dodging the clash — the type is one `GET /inventory` response, and the
- * component is a screen built out of many readings of it. */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  BoxSummary,
+  BoxRecord,
   InventoryCard,
-  Inventory as InventoryResponse,
   RetireReason,
   RetireResult,
   SaleResult,
@@ -16,72 +12,67 @@ import type { Failure } from './server'
 import {
   ServerError,
   describeFailure,
-  positionLabel,
-  getBoxes,
-  getInventory,
   markSold,
   photoUrl,
   retireCard,
   undoRetire,
   undoSale,
 } from './server'
-import { BoxBrowse } from './BoxBrowse'
+import { BoxBrowse, type Row } from './BoxBrowse'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PullConfirm } from './PullConfirm'
-import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
 import './Inventory.css'
 
-/* THE INVENTORY — the owner's one view of stored cards, with two ways in (D31).
+/* THE INVENTORY — one owner-side view of stored cards, and there is only one way through it.
  *
- * THREE ROUTES BECAME THIS ONE ON 2026-08-23, and the owner's sentence is the reason: `#/boxes`,
- * `#/pull` and this screen rendered the same 767 records and "read as separate instances of one
- * thing". `#/boxes` held the box registry and the layout editor with no way into a box's
- * contents at all; `#/pull` walked a box's cards with photographs and could say nothing about
- * the box; this screen answered "where are my copies of THIS card" and could not be browsed.
- * So the question a person actually arrives with — what is in this box, and can I click it —
- * was answerable on the screen named after a fulfilment errand and nowhere else.
+ * THREE ROUTES BECAME THIS ONE ON 2026-08-23 (D31), AND THEN THE TWO MODES BECAME ONE SCREEN
+ * THE SAME DAY. The first half is D31's: `#/boxes`, `#/pull` and this screen rendered the same
+ * 767 records and "read as separate instances of one thing", so they merged. The second half is
+ * the owner's correction on seeing what that merge shipped — a segmented switch offering
+ * "Browse the boxes" or "Find a card":
  *
- * TWO MODES, BECAUSE THERE ARE EXACTLY TWO QUESTIONS, and D31 names them:
+ *     "i imagined moreso in this merge that these wouldn't be two tabs, instead it's
+ *      basically find a card in a box-based system if anything.."
  *
- *   Find a card    a card sold, somebody types its name, and every physical copy answers with
- *                  where it is — D7's SKU -> positions map, and the sale and retirement that
- *                  go with it. Everything below this header belongs to it.
- *   Browse         box -> section -> card, with the photograph. `BoxBrowse.tsx`, which is
- *                  `#/pull`'s walk taken forward rather than rewritten, carrying the box
- *                  operations on the header of the box it is walking (`BoxOps.tsx`).
+ * So the switch is gone. THE BOX-BASED STRUCTURE IS THE SPINE — box strip, then sections, then
+ * cards — and finding a card is a SEARCH OVER THAT SPINE rather than a second place to stand.
+ * Typing narrows the walk and the box strip together (`BoxBrowse.tsx` owns both), and what the
+ * old Find mode uniquely had now lands where the walk points: select a card and its copies, its
+ * listing quantities and its two writes are in the detail panel beside its photograph.
  *
- * WHY A SWITCH RATHER THAN ONE LIST THAT DOES BOTH. The two are not narrower and wider views
- * of one thing: one is keyed by SKU and fungible across copies (D7), the other is keyed by
- * position and is about one physical card in one slot. A single list would have to pick a key
- * and lie about the other. The switch costs one press and keeps both honest.
+ * WHAT THE SWITCH COST, AND WHY DELETING IT IS NOT A LOSS. The argument that stood here was
+ * that the two halves key differently — one by SKU and fungible across copies (D7), one by
+ * position and about one physical card — so "a single list would have to pick a key and lie
+ * about the other". That was true of a single LIST and it is not true of this screen: the list
+ * is keyed by position, and the SKU-keyed view is drawn for the ONE card the list is pointing
+ * at, where there is no ambiguity about which key is which. Nothing was folded together; one
+ * thing was made a view of the other.
  *
- * BROWSE IS THE DEFAULT, and that is a change from what this screen used to do — it opened
- * with the search field focused, because a sale had just happened. The merge moves the weight:
- * browsing is the thing that was impossible and is the reason D31 exists, and Find is one
- * press away with `autoFocus` still on its field when it gets there. If watching the owner
- * shows the sale flow is what this screen is opened for, this is a one-word change and the
- * argument to overturn is in this paragraph.
+ * NOTHING FROM THE FIND HALF WAS DROPPED, and each piece is named so a later reader can check:
+ * D7's SKU -> positions map is `CopiesPanel` below; the sale keeps its photo-confirm, its
+ * receipt and its twenty-second undo; D26's retirement keeps all three; `already_sold` is still
+ * drawn as a receipt rather than as an error; a pooled copy (D24) still renders no position
+ * label; and the per-SKU listing quantities the old group rows carried are now read off
+ * `SearchGroup.listed`, which is the same three numbers from the route that also reports the
+ * cap this screen used to refuse to compute.
+ *
+ * WHAT THIS FILE IS NOW: the route, the title, and the one flow that writes a card. The walk,
+ * the box operations, the photograph, the re-shoot and the card-level corrections all belong to
+ * `BoxBrowse.tsx`; it hands this file the selected card and the box registry, and this file
+ * hands it back a node to draw beside the photo. Four things across the seam and nothing else.
  *
  * WHAT DID NOT MERGE: `#/fulfillment`. D31 is explicit — a different persona at a different
  * posture, and the one screen in the product whose whole design is a floor. Nothing here
  * reaches it and `app/tests/fulfillment.spec.ts` is unchanged by any of this.
  *
- * ---- the original header follows, and every word of it is about the Find half ----
+ * ---- the sale's own argument, unchanged, because the write did not move ----
  *
- * The inventory view — build-order step 7b. D7's SKU -> positions map, made visible.
- *
- * D7 collapses copies to ONE import row with a copy count and keeps EVERY copy as its own
- * position with its own photo, "because that is what makes an order pull addressable: the
- * app maps SKU -> all positions holding it, and the pull marks one of them sold". That
- * sentence names an app that did not exist when it was written. This is it: one row per
- * SKU carrying the count, expanding to the individual positions holding it.
- *
- * THIS SCREEN WRITES NOW, AND THE PARAGRAPH THAT SAID IT NEVER WOULD IS KEPT BELOW RATHER
- * THAN DELETED. Overturning an argument by erasing it leaves the next session with a screen
- * that does the thing and no record that anybody thought about it — so the objection stands,
- * quoted, and each half is answered where it was made.
+ * THIS SCREEN WRITES, AND THE PARAGRAPH THAT SAID IT NEVER WOULD IS KEPT BELOW RATHER THAN
+ * DELETED. Overturning an argument by erasing it leaves the next session with a screen that
+ * does the thing and no record that anybody thought about it — so the objection stands, quoted,
+ * and each half is answered where it was made.
  *
  *   WHAT IT SAID. "`POST /inventory/<box>/<index>/sold` shipped in the same commit as this
  *   file, and `server.ts:markSold` calls it — from Fulfillment.tsx, which is where D5 puts a
@@ -109,419 +100,42 @@ import './Inventory.css'
  *   the undo would reverse the OTHER device's real sale. This screen reads the same code the
  *   same way, for the same reason, in `doSell` below.
  *
- *   WHY THE WRITE IS WORTH HAVING AT ALL. The flow it completes is the one D7 exists for: a
- *   card sells, somebody types its name, and every physical copy answers with where it is.
- *   Ending that flow at a lookup and sending the owner to the Fulfiller's screen to finish it
- *   is the other half of what the paragraph above rejected — "making these rows link into his
- *   view" — and it is rejected still. What is left, once both are declined, is finishing the
- *   job here.
+ * OWNER-SIDE, so this is the dense end of docs/DESIGN.md's one system, two densities, and the
+ * Fulfillment floors do not bind. It speaks the pipeline's vocabulary — `sku`, `pushed`,
+ * `staged` — which the Fulfillment banned-word list forbids outright; borrowing his floors here
+ * would make it look like his screen and set the expectation that it is safe for him to read,
+ * which it is not (D5).
  *
- * STILL TRUE, AND NOT WHAT THIS OVERTURNS: the Fulfillment view keeps its own constraints
- * table and this screen is not measured against it. The floors below are the owner's.
+ * NOTHING IS KEPT. `BoxBrowse` reads `GET /inventory` and `GET /boxes` once each and throws
+ * them away on the way out; the copies panel re-asks `GET /search` per card. D13 has exactly
+ * one place inventory lives, and the failure a browser-side copy produces is two answers to
+ * "where is this card" with one of them stale and neither labelled.
  *
- * OWNER-SIDE, so this is the dense end of docs/DESIGN.md's one system, two densities, and
- * the Fulfillment floors do not bind. It speaks the pipeline's vocabulary — `sku`, `pushed`,
- * `staged` — which the Fulfillment banned-word list forbids outright; borrowing his floors
- * here would make it look like his screen and set the expectation that it is safe for him
- * to read, which it is not (D5).
- *
- * ONE GET, GROUPED IN THE BROWSER, KEPT NOWHERE. `GET /inventory` answers with the whole
- * card map and the grouping below is a view of it — not a second store. There is no
- * module-level cache and no state above this component on purpose: leaving the screen
- * throws the response away and coming back re-reads it. D13 has exactly one place inventory
- * lives, and the failure a browser-side copy produces is the same one spec 5.5 rejected
- * queue-and-continue over — two answers to "where is this card", one of them stale and
- * neither of them labelled.
- *
- * A SECOND GET NOW, AND THE PARAGRAPH ABOVE STILL HOLDS — because what it forbids is a second
- * copy of the inventory, and a divider layout is not a card. `GET /boxes` is read once beside
- * the read above for one reason: the position bar on every copy row draws the box's real
- * dividers only if it is handed them. A `Place` states this card's own section and cannot say
- * where the OTHER dividers in its box are, and deriving them from one section's width is the
- * arithmetic types.ts forbids on `Place` and D10 makes wrong — dividers go where the operator
- * physically put them, so a uniform width is an assumption about a box nobody made. So the
- * layouts come off the one route that renders them, `sections_detail`, and are held here in
- * component state exactly as the groups are: thrown away on the way out of the screen,
- * re-read on the way back in.
- *
- * AND IT IS DECORATION, SO IT IS ALLOWED TO FAIL SILENTLY AND COMPLETELY. Nothing waits for
- * it, nothing reports it, and no sale is ever blocked on it. Without it every bar draws the
- * coarser three-run picture `PositionBar:spansOf` documents — the part of the box before this
- * card's section, the section, the part after — which is true and merely less detailed. A
- * failure panel would trade a working lookup for a message about an ornament, and the panels
- * on this screen belong to the two reads somebody actually opened it for.
- *
- * TWO NUMBERS ON THIS SCREEN, AND THEY ARE NOT IN THE SAME UNIT. That was true from the day
- * D7 was amended (2026-08-23) and this file did not say so for the ten days after it, which
- * is why it is the first thing in this header now.
- *
- *   a card's state    `captured`, `identified`, `sold` — or `retired`, D26's way out of
- *                     inventory without a sale. One physical card at one position.
- *                     Counted by `tally`.
- *   a SKU's listing   `pushed`, `staged` and `live`, as QUANTITIES on
- *                     `store/master.py:Listing`. Which physical copies back them is
- *                     deliberately not recorded, because copies are fungible — the owner's
- *                     ruling that marking three of fifteen live means any three. Read by
- *                     `listingsOf`.
- *
- * The three listing words used to be card states and were tallied as such by this file. They
- * stopped being states and the tally went on offering them: three counts that could only ever
- * read zero, drawn from a field that no longer holds them, beside no sign that the numbers
- * had moved. Nothing was wrong on screen — the rows simply stopped mentioning listings at
- * all. `STATE_ORDER` and `LISTED_ORDER` below are the two halves of the fix.
- *
- * TWO THINGS THIS SCREEN STILL DELIBERATELY DOES NOT COMPUTE, because the numbers they need
- * are not on this wire and approximating them is worse than omitting them:
- *
- *   the live cap      `pipeline/join.py:LIVE_QUANTITY_CAP` is 4 and D7 calls it
- *                     configurable. Writing `2 of 4 live` here would put a configurable
- *                     Python constant into TypeScript with nothing keeping the two in step
- *                     — the mistake PullPreview.tsx records having made with D10's divider
- *                     size and undone. `GET /search` HAS SINCE STARTED REPORTING IT
- *                     (`types.ts:SearchGroup.cap`), which is what this entry named as the
- *                     thing that would settle it; `GET /inventory` does not, and this screen
- *                     reads that one. Settled here the day `Listing` carries it, or the day
- *                     this screen has a reason to ask the search route instead.
- *   the price         D8 routes every price through the export and the inventory record
- *                     carries none, so there is no money on this screen at all. Settled by
- *                     a price reaching the wire.
- *
- * The refill maths was the third entry and it is not one any more. It read that
- * `Add to Quantity = min(cap - live, backstock)` takes `live` from the export's
- * `Total Quantity` while "the store's own `live` state is the nearest thing and it is what
- * the tally counts" — half of which was made false by the amendment and the other half by
- * where the number now comes from. `Listing.live` is the store's estimate of exactly that
- * quantity, drawn as itself in the listing cluster, so there is no approximation left to
- * decline. D7 is explicit that it is an estimate a join corrects and never a second source
- * of truth, and this screen shows it under a caption that says which side it came from.
+ * TWO THINGS THIS SCREEN USED TO REFUSE TO COMPUTE, AND ONE OF THEM IS SETTLED. The live cap
+ * (`pipeline/join.py:LIVE_QUANTITY_CAP`) was refused because writing `2 of 4 live` in TypeScript
+ * is a copy of a configurable Python constant that nothing keeps in step — and `GET /search`
+ * now reports it (`types.ts:SearchGroup.cap`), which is the exact condition that entry named,
+ * so `CardLocations` draws the denominator off the wire. The price is still absent and still
+ * for the same reason: D8 routes every price through the export and no inventory record carries
+ * one, so there is no money on this screen at all.
  */
 
-/** One physical card at one position, exactly as `GET /inventory` sent it. `key` is the
- *  store's own `"<box>/<index>"` — identity for React, and the string a `curl /inventory`
- *  is grepped with. Never parsed into a position: a store key and a physical location agree
- *  for the first 25 cards in a box and diverge from card 26 on. */
-type Copy = { key: string; card: InventoryCard }
-
-/** One card state and how many of a group's copies are in it. A count of PHYSICAL CARDS. */
-type Tally = { state: string; count: number }
-
-/** One SKU's three listing quantities — `store/master.py:Listing`, as `GET /inventory` sends
- *  it under `listings`.
+/** How long a receipt's undo stays. Twenty seconds, which is Fulfillment.tsx's number and not a
+ *  second opinion about the same question.
  *
- *  A COUNT OF COPIES AT A TCGPLAYER STAGE, WHICH IS NOT THE SAME UNIT AS `Tally` ABOVE even
- *  though both are integers about the same group. A `Tally` counts records this app can point
- *  at a box for; these three count quantity against a SKU, and D7 says in as many words which
- *  physical copies back them is "deliberately not recorded". Two shapes rather than one so
- *  that nothing in this file can merge them by accident — they were one list until the store
- *  refactor, and merging them now would put a number on screen that names no card.
+ *  docs/DESIGN.md's floor is ">= 10s" and it is written as a Fulfillment row, so nothing binds
+ *  this screen to any particular length — which is precisely the argument for not inventing
+ *  one. Two undo windows of different lengths in one product is a thing to learn for no gain,
+ *  and the owner is not the person the shorter number would be for. If the length is ever
+ *  measured it should move in both files together.
  *
- *  THIS TYPE BELONGS IN types.ts AND IS HERE BECAUSE OF FILE OWNERSHIP, NOT DESIGN. Precedent
- *  and precedent's own words: the queue types were written in ReviewQueue.tsx for exactly this
- *  reason and moved the moment both files were writable together. `types.ts:Inventory` today
- *  declares `{ version, cards }` and stops, while `store/master.py:Inventory.to_payload` has
- *  sent `boxes` and `listings` beside them since v2 — so this is a field the wire really
- *  carries and the type has not caught up with, never a field invented here. Move it, and
- *  delete `listedFor`'s cast with it. */
-type Listed = { pushed: number; staged: number; live: number }
+ *  WHAT WOULD SETTLE IT: watching a sale get taken back. Nothing in this repo has yet. */
+const UNDO_WINDOW_MS = 20_000
 
-/** One SKU and every copy holding it — one row of D7's map.
- *
- *  `sku` is null for the one group that is not a SKU. Every other field is the DISTINCT set
- *  of what the copies say, in the order the copies say it, rather than one value lifted off
- *  the first copy — see `distinct` for why that matters.
- *
- *  `listed` IS NULL RATHER THAN THREE ZEROS when this SKU has no listing record, and the
- *  difference is the one this screen exists to show. Three zeros say a SKU that has been
- *  through `emit` and come back empty; null says nothing has ever written a row for it. The
- *  no-SKU group is always null, because a listing is keyed by SKU and that group has none. */
-type Group = {
-  sku: string | null
-  copies: Copy[]
-  names: string[]
-  conditions: string[]
-  numbers: string[]
-  states: Tally[]
-  listed: Listed | null
-}
-
-/* The lifecycle order the states are DISPLAYED in, and deliberately not an enumeration of
- * the enum. `store/master.py:STATES` owns that list, and types.ts already argues that an app
- * enumerating pipeline states needs editing every time one is added.
- *
- * So this is a display order with a guard: a state not named here still renders, after these
- * and in the order it was met. A new state in `store/master.py` therefore shows up unsorted
- * rather than disappearing, which is CLAUDE.md's never-silently-drop-a-card rule applied to
- * a tally instead of to a row.
- *
- * `pushed`, `staged` AND `live` WERE THE LAST THREE ENTRIES HERE AND ARE NOT STATES ANY MORE
- * (D7, amended 2026-08-23). They were never wrong to keep apart — the paragraph that stood
- * here argued that merging `staged` and `live` breaks D7's refill maths, and it still does —
- * but they were the wrong SHAPE: a stage was worn by a position, so `cli/cmd_join.py` had to
- * choose which four of seven identical copies were sellable. The owner's ruling is that
- * copies are fungible, so the three moved onto the SKU as counts, `master.STATES` is now
- * `captured | identified | sold | retired` (the last is D26's), and `check_state` refuses
- * the three listing words outright.
- *
- * THE GUARD ABOVE IS EXACTLY WHY THIS WAS SILENT. Three names that can no longer occur went
- * on being valid display order, tallied zero copies each, and rendered nothing at all — so
- * the screen looked correct while the whole listing half of it had gone dark. `LISTED_ORDER`
- * below is where those three live now, read from a different field, in a different unit, and
- * drawn as a separate cluster so the two can never be read as one number again. */
-const STATE_ORDER: readonly string[] = ['captured', 'identified', 'sold', 'retired']
-
-/* The three listing stages, in the order a SKU passes through them —
- * `store/master.py:LISTING_STAGES`, same strings, same order.
- *
- * FIXED RATHER THAN GUARDED, which is the opposite of `STATE_ORDER` above and is deliberate.
- * That one renders an unrecognised state because a card wearing one is a real card that must
- * not vanish from a count; this one reads three named fields off a record, so a fourth stage
- * added in `store/master.py` is a field this screen would not know how to fetch either way.
- * The failure is a missing column rather than a missing card, and it shows up the first time
- * anyone compares this screen against a run report. */
-const LISTED_ORDER = ['pushed', 'staged', 'live'] as const
-
-/* A record that reached the store with no state, said in a shape no state can be confused
- * with: lower case with a space, which no member of `STATES` contains. Same trick as the
- * capture screen's `no claim` and the pull preview's `no label · 3/30` — a stand-in for a
- * machine string must never be readable as one.
- *
- * The type says `state: string` and `store/master.py` defaults the field, so this should be
- * unreachable. It exists because the alternative is a copy that counts toward the group total
- * and appears in no tally, which is a card going quietly missing from a number the screen is
- * read for. */
-const NO_STATE = 'no state'
-
-/* This file's copy of `describeFailure` said "worth sharing when a third screen needs it, not
- * before". A third screen needed it in the same session, so it is in server.ts now, beside
- * the `ServerError` it destructures — which is where all three copies' comments pointed. */
-
-/* The position label is READ off the wire and never composed here — `server.ts:positionLabel`
- * holds the rule and the argument for it, since this file and the pull preview carried
- * identical copies. What is still this screen's is the fallback at the call site: a row with
- * no label shows the store key with the words `no label` in front of it, because `3/30` bare
- * reads like a position and is not one. */
-
-/* The collector number as the model returned it, unpadded, or null when there is none to
- * show. `pipeline/join.py:join_key` zero-fills to three digits to match the export's
- * `Number` column; doing that here would put a string on screen that nothing in the run ever
- * said. Same rule and the same shape as the pull preview's, which is the third small reader
- * of this record — a shared module is the fix if a fourth arrives. */
-function collectorNumber(card: InventoryCard): string | null {
-  if (card.number === null || card.number.trim() === '') return null
-  return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
-}
-
-/* Every distinct value the copies carry, in the order they carry it, blanks dropped.
- *
- * THE POINT IS THAT IT DOES NOT PICK. Two copies of one SKU that were read as `Rhyhorn` and
- * `Rhydhorn` are one identification that went wrong — a T1 recorded miss, name misread with
- * the number right — and taking the first copy's name would put the wrong one on screen half
- * the time and hide the disagreement the other half. Showing both is not a judgement about
- * which is correct, which is a thing this screen has no business making. */
-function distinct(values: readonly (string | null)[]): string[] {
-  const seen: string[] = []
-  for (const value of values) {
-    if (value === null) continue
-    const trimmed = value.trim()
-    if (trimmed !== '' && !seen.includes(trimmed)) seen.push(trimmed)
-  }
-  return seen
-}
-
-/* One stage's quantity, coerced, floored at zero — `Listing.set` and `Listing.bump` floor on
- * the store side and this is the same rule read back. Anything that is not a finite number
- * reads as zero rather than as `NaN` on screen: this comes off disk through a route that
- * coerces nothing, exactly like `InventoryCard.metadata_finish`, and a stage the store has
- * never written is absent rather than null. */
-function quantity(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
-}
-
-/* Every SKU's listing quantities, out of the `listings` map `GET /inventory` answers with.
- *
- * THE CAST IS THE WHOLE OF THIS FUNCTION AND IT IS NOT A SHORTCUT. `types.ts:Inventory`
- * declares `{ version, cards }`; `store/master.py:Inventory.to_payload` has answered with
- * `boxes` and `listings` beside them since schema v2. The field is really on the wire — the
- * type is behind it — and that file belongs to another session today. Intersecting rather
- * than casting through `unknown` so the assertion stays legal to the compiler and legible to
- * a reader: this is `Inventory` PLUS a key the type has not declared, not a claim that some
- * unrelated shape is an `Inventory`.
- *
- * EVERY VALUE PAST THE CAST IS TREATED AS `unknown` AND COERCED, which is what makes the cast
- * safe rather than merely quiet. A cast the compiler is told to believe and the code then
- * trusts is how a missing field becomes `undefined` rendered as a quantity. Nothing here
- * believes anything: a missing map, a map of the wrong shape, and a record with no numbers on
- * it all produce no listing rather than a wrong one.
- *
- * DELETE THIS THE DAY `types.ts:Inventory` GAINS `listings`, and read the field directly. */
-function listingsOf(inventory: InventoryResponse): Map<string, Listed> {
-  const out = new Map<string, Listed>()
-  const carried = (inventory as InventoryResponse & { listings?: unknown }).listings
-  if (carried === null || typeof carried !== 'object') return out
-
-  for (const [sku, record] of Object.entries(carried as Record<string, unknown>)) {
-    if (record === null || typeof record !== 'object') continue
-    const held = record as Record<string, unknown>
-    out.set(sku, {
-      pushed: quantity(held['pushed']),
-      staged: quantity(held['staged']),
-      live: quantity(held['live']),
-    })
-  }
-  return out
-}
-
-/** No box layouts, as one shared empty map.
- *
- *  A CONSTANT RATHER THAN `useState(new Map())`, so that the "we have not been told" case has
- *  exactly one identity and re-rendering cannot mint a second empty map for React to compare
- *  against. It is also the reason no null is needed here: for every other read on this screen
- *  "not answered yet" and "answered with nothing" are different facts and the header insists
- *  on the difference, but a bar draws the same honest three-run picture either way — so a
- *  distinction nothing on screen can act on would be a state to explain and never to use. */
-const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
-
-/* Each box's divider layout, keyed by box number, out of one `GET /boxes`.
- *
- * THE KEY IS THE POINT OF THE FUNCTION. `sections_detail` is `pipeline/join.py`'s own
- * rendering of one box's layout, and D10 as amended 2026-08-23 puts the dividers wherever the
- * operator physically put them — box 1 declares none and is drawn by the 25-rule, box 95
- * declares `[1, 24, 74, 84]`, and neither tells you anything about the other. A search group
- * is a SKU and not a box (D7 keeps every copy at its own position), so one result can hold
- * copies in three boxes; flattening this to a single list would hand one box's dividers to
- * another box's card. Keyed by `box`, that mistake has nowhere to happen.
- *
- * GUARDED AT THE EDGES AND NOWHERE ELSE, which is a smaller job than `listingsOf` above and
- * deliberately so. `server.ts:request` casts rather than validates, so the array and the box
- * number are checked here — an older capture server can answer a shape this type says is
- * impossible. Every field INSIDE a `SectionDetail` is left alone on purpose: `spansOf` reads
- * them one at a time and clamps each into the box, and a second copy of that reading here
- * would be a second place to keep the same rule. A box that sends no detail is skipped rather
- * than stored empty, so `Map.get` answers undefined and the bar takes the fallback path.
- *
- * There is no coercion of `end` either, for the same reason: `spansOf` already treats a
- * section whose end did not arrive as one running to the end of the box, which is what an
- * open last section is. */
-function layoutsOf(summary: BoxSummary): ReadonlyMap<number, readonly SectionDetail[]> {
-  const out = new Map<number, readonly SectionDetail[]>()
-  const carried: unknown = summary.boxes
-  if (!Array.isArray(carried)) return out
-
-  for (const record of carried as BoxSummary['boxes']) {
-    if (record === null || typeof record !== 'object') continue
-    if (typeof record.box !== 'number' || !Number.isFinite(record.box)) continue
-    const detail: unknown = record.sections_detail
-    if (!Array.isArray(detail) || detail.length === 0) continue
-    out.set(record.box, detail as readonly SectionDetail[])
-  }
-  return out
-}
-
-function tally(copies: readonly Copy[]): Tally[] {
-  const counts = new Map<string, number>()
-  for (const copy of copies) {
-    const state =
-      typeof copy.card.state === 'string' && copy.card.state.trim() !== ''
-        ? copy.card.state
-        : NO_STATE
-    counts.set(state, (counts.get(state) ?? 0) + 1)
-  }
-  const known = STATE_ORDER.filter((state) => counts.has(state))
-  const rest = [...counts.keys()].filter((state) => !STATE_ORDER.includes(state))
-  return [...known, ...rest].map((state) => ({ state, count: counts.get(state) ?? 0 }))
-}
-
-/* The whole card map, grouped into D7's rows.
- *
- * BOX-WALK ORDER THROUGHOUT — box, then index. Inside a group it is the order
- * `store/master.py:positions_for_sku` returns, which is the order a pull walks the boxes in;
- * between groups it orders by each group's earliest copy, because a `Map` keeps insertion
- * order and the copies are sorted before they are bucketed.
- *
- * Rejected for the group order: copy count descending, which puts D7's multi-copy cases —
- * the ones this screen exists for — at the top. It loses because the order would reshuffle
- * every time a copy sells, and a row you looked at yesterday would be somewhere else today;
- * the count is on every row anyway. ASSUMPTION, and the doc does not settle it: docs/DESIGN.md
- * argues a sort order for the review queue only, where price decides. Watching the owner look
- * something up here settles it.
- *
- * The arithmetic matches PullPreview.tsx's. A record whose box will not coerce to a number
- * sorts wherever `Object.entries` put it rather than being dropped — it is the same record
- * `do_inventory` leaves without a label and `GET /status` reports, and it stays on screen. */
-function groupBySku(
-  cards: Record<string, InventoryCard>,
-  listings: Map<string, Listed>,
-): Group[] {
-  const copies: Copy[] = Object.entries(cards)
-    .map(([key, card]) => ({ key, card }))
-    .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
-
-  /* Keyed by `string | null` with no sentinel string, because a sentinel would have to be a
-   * value no TCGplayer Id can take and nothing here can promise that. `null` is a key a Map
-   * holds natively. */
-  const buckets = new Map<string | null, Copy[]>()
-  for (const copy of copies) {
-    // An empty string is not a SKU. Treated as none rather than as a group of its own, which
-    // would be a row nothing can ever be listed under.
-    const raw = copy.card.sku
-    const sku = raw === null || raw.trim() === '' ? null : raw.trim()
-    const held = buckets.get(sku)
-    if (held === undefined) buckets.set(sku, [copy])
-    else held.push(copy)
-  }
-
-  const groups = [...buckets.entries()].map(([sku, held]) => ({
-    sku,
-    copies: held,
-    names: distinct(held.map((copy) => copy.card.name)),
-    conditions: distinct(held.map((copy) => copy.card.condition)),
-    numbers: distinct(held.map((copy) => collectorNumber(copy.card))),
-    states: tally(held),
-    /* Looked up, never derived. The copies cannot tell you what is listed any more — that is
-     * the whole of D7's amendment — so a group whose SKU has no record answers null, and
-     * `null ?? undefined` is not reached because `Map.get` already returns undefined. */
-    listed: sku === null ? null : (listings.get(sku) ?? null),
-  }))
-
-  // The no-SKU group last, wherever its earliest copy landed. It is the one group that is not
-  // a row of D7's map, and reading down a list of SKUs should not run through it.
-  return [...groups.filter((g) => g.sku !== null), ...groups.filter((g) => g.sku === null)]
-}
-
-/** `1 copy`, `4 copies`. */
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`
-}
-
-/* The date a copy entered its current state, without the time.
- *
- * A day is the granularity anything here is acted on — `store/master.py` measures a stale
- * staged import in days, and D7's refill is a decision made per import rather than per
- * minute. The full stamp is in `inventory.json` for anyone who needs the seconds.
- *
- * A stamp that does not split is shown whole rather than blanked: it is what the store
- * actually holds, and the screen's job is to say so. */
-function sinceDay(stamp: string | null): string {
-  if (stamp === null || stamp.trim() === '') return 'unknown'
-  const day = stamp.split('T')[0]
-  return day === undefined || day === '' ? stamp : day
-}
-
-// ------------------------------------------------------------------- search, and the sale
-
-/* NO STATE CONSTANT LIVES IN THIS HALF OF THE FILE, and that is worth one line rather than
- * being noticed as an absence. Which copies may be sold is `CardLocations`'s test and not this
- * screen's: D7's 2026-08-23 amendment moved the three listing stages off the card and onto the
- * SKU, so every unsold copy is sellable and `sold` is the only word there is to compare
- * against. A second copy of that comparison here would be a second place to keep it in step
- * with the decision. What this file owns is the write, the guards around it, and the two
- * refusal codes below.
- */
-
-/* THE TWO REFUSAL CODES THIS SCREEN BRANCHES ON, and the rulings are Fulfillment.tsx's,
- * adopted here rather than re-derived. That file paid for them with a data-integrity bug and
- * wrote up why; a second reading of the same two codes on a second screen is exactly the drift
- * a shared vocabulary exists to stop.
+/* THE TWO REFUSAL CODES THIS SCREEN BRANCHES ON, and the rulings are Fulfillment.tsx's, adopted
+ * here rather than re-derived. That file paid for them with a data-integrity bug and wrote up
+ * why; a second reading of the same two codes on a second screen is exactly the drift a shared
+ * vocabulary exists to stop.
  *
  * `already_sold` ON A SALE IS NOT THIS DEVICE'S SALE. Somebody else sold that copy (D13: two
  * devices, one store). Answered as success it would print a receipt and offer an Undo, and
@@ -535,30 +149,64 @@ function sinceDay(stamp: string | null): string {
  * The CODES and never the messages. Codes are a stable vocabulary worth branching on.
  *
  * THE RETIREMENT PAIR BELOW APPLIES THE SAME TWO RULINGS TO THE SIBLING WRITE (D26), rather
- * than deriving new ones. `already_retired` on a retirement is the other device's
- * retirement: a receipt with no undo, because the undo would reverse a departure this
- * device never recorded. `not_retired` on a reversal is success — the card is not retired,
- * which is what the tap asked for. The CROSS-refusals (`card_retired` on a sale,
- * `already_sold` on a retirement) are deliberately not branched on: each is a real refusal
- * whose server message names the other route's undo as the way through, and the trouble
- * panel shows it verbatim — which is this screen's ordinary treatment of a refusal it did
- * not expect. */
+ * than deriving new ones. `already_retired` on a retirement is the other device's retirement:
+ * a receipt with no undo, because the undo would reverse a departure this device never
+ * recorded. `not_retired` on a reversal is success. The CROSS-refusals (`card_retired` on a
+ * sale, `already_sold` on a retirement) are deliberately not branched on: each is a real
+ * refusal whose server message names the other route's undo as the way through, and the
+ * trouble panel shows it verbatim. */
 const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
 
-/* HOW LONG THE UNDO STAYS. Twenty seconds, which is Fulfillment.tsx's number and not a second
- * opinion about the same question.
+/** The four reasons a card leaves without a sale, in the store's own vocabulary
+ *  (`store/master.py:RETIRE_REASONS`, D26). Human label beside the machine word, drawn at two
+ *  sizes per docs/DESIGN.md's owner-side rule: the label is read, the word is what greps to the
+ *  history line the choice lands in. The order is the enum's, not a ranking. */
+const REASONS: readonly { reason: RetireReason; label: string }[] = [
+  { reason: 'pulled', label: 'Pulled out' },
+  { reason: 'damaged', label: 'Damaged' },
+  { reason: 'lost', label: 'Lost' },
+  { reason: 'given_away', label: 'Given away' },
+]
+
+/** No box layouts, as one shared empty map.
  *
- * docs/DESIGN.md's floor is ">= 10s" and it is written as a Fulfillment row, so nothing binds
- * this screen to any particular length — which is precisely the argument for not inventing
- * one. Two undo windows of different lengths in one product is a thing to learn for no gain,
- * and the owner is not the person the shorter number would be for. If the length is ever
- * measured it should move in both files together.
+ *  A CONSTANT RATHER THAN `new Map()` AT THE CALL SITE, so that "we have not been told" has
+ *  exactly one identity and re-rendering cannot mint a second empty map for React to compare
+ *  against. No null is needed: for every other read on this screen "not answered yet" and
+ *  "answered with nothing" are different facts, but a position bar draws the same honest
+ *  three-run picture either way — so a distinction nothing on screen can act on would be a
+ *  state to explain and never to use. */
+const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
+
+/* Each box's divider layout, keyed by box number, out of the registry `BoxBrowse` already read.
  *
- * WHAT WOULD SETTLE IT: watching a sale get taken back. Nothing in this repo has yet. */
-const UNDO_WINDOW_MS = 20_000
+ * THE KEY IS THE POINT OF THE FUNCTION. `sections_detail` is `pipeline/join.py`'s own rendering
+ * of one box's layout, and D10 as amended 2026-08-23 puts the dividers wherever the operator
+ * physically put them — box 1 declares none and is drawn by the 25-rule, box 95 declares
+ * `[1, 24, 74, 84]`, and neither tells you anything about the other. A search group is a SKU
+ * and not a box (D7 keeps every copy at its own position), so one card can hold copies in three
+ * boxes; flattening this to a single list would hand one box's dividers to another box's card.
+ * Keyed by `box`, that mistake has nowhere to happen.
+ *
+ * GUARDED AT THE EDGES AND NOWHERE ELSE. `server.ts:request` casts rather than validates, so
+ * the array and the box number are checked here — an older capture server can answer a shape
+ * the type says is impossible. Every field INSIDE a `SectionDetail` is left alone on purpose:
+ * `spansOf` reads them one at a time and clamps each into the box, and a second copy of that
+ * reading here would be a second place to keep the same rule. */
+function layoutsOf(records: readonly BoxRecord[]): ReadonlyMap<number, readonly SectionDetail[]> {
+  const out = new Map<number, readonly SectionDetail[]>()
+  for (const record of records) {
+    if (record === null || typeof record !== 'object') continue
+    if (typeof record.box !== 'number' || !Number.isFinite(record.box)) continue
+    const detail: unknown = record.sections_detail
+    if (!Array.isArray(detail) || detail.length === 0) continue
+    out.set(record.box, detail as readonly SectionDetail[])
+  }
+  return out
+}
 
 /** The server's code for a thrown thing, or `''` for anything that is not a refusal — a dead
  *  network, a body that did not parse, a bug in this app. Empty rather than null so every
@@ -567,31 +215,62 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
-/** Whether the sale just recorded can be taken back, out of the server's own answer.
+/** Whether the write just recorded can be taken back, out of the server's own answer.
  *
  *  ABSENT IS READ AS NULL and the direction is the safe one — the same guard Fulfillment.tsx
- *  keeps, for the same reason. `server.ts` casts rather than validates, so a capture server
- *  old enough to answer this route without the field hands back `undefined` under a type that
- *  says `string | null`. Suppressing an undo that would have worked costs a question;
- *  offering one that cannot work is the defect the field was added to remove. */
+ *  keeps, for the same reason. `server.ts` casts rather than validates, so a capture server old
+ *  enough to answer this route without the field hands back `undefined` under a type that says
+ *  `string | null`. Suppressing an undo that would have worked costs a question; offering one
+ *  that cannot work is the defect the field was added to remove. */
 function canTakeBack(result: SaleResult | RetireResult): boolean {
   const origin: unknown = result.restores_to
   return typeof origin === 'string' && origin.trim() !== ''
 }
 
+/** One physical copy, built out of an inventory row, for the one card the search cannot reach.
+ *
+ *  WHY THIS EXISTS AT ALL. The copies panel finds a card's group by asking `GET /search` for its
+ *  SKU or its name — six fields, the server's own matcher, never a second one in the browser.
+ *  A card the pipeline has never identified has neither: box 95 and box 99 are 170 records that
+ *  are all `captured`, with no name and no SKU, and that is 22% of the store today. Without this
+ *  they would be the cards on which D26's retirement — the remedy for a damaged card — is
+ *  unreachable, which is precisely backwards.
+ *
+ *  IT IS NOT A `SearchGroup` AND MUST NOT BECOME ONE. A group carries `on_hand`, `listed` and
+ *  `cap`, and there is no honest local value for any of them; inventing three would put numbers
+ *  on screen that name nothing. So the fallback draws ONE copy with its two controls and no
+ *  group header at all — the group facts are absent because there is no group.
+ *
+ *  Null when the record arrived with no `place` block: that is the row whose box or index will
+ *  not coerce, which the server deliberately leaves undecorated, and a sale needs a position. */
+function loneCopy(row: Row): SearchCopy | null {
+  const place = row.card.place
+  if (place === undefined) return null
+  return {
+    key: row.key,
+    state: row.card.state,
+    state_at: row.card.state_at,
+    /* `has_photo` off the record's own `photo` field rather than off a second read: the confirm
+       panel treats it as a hint and still handles the image failing to load, which is what
+       makes this coercion safe. */
+    has_photo: row.card.photo !== null,
+    place,
+  }
+}
+
 /** One write that has just been recorded — a sale, or since D26 a retirement — and what can
  *  still be done about it.
  *
- *  A LIST OF THESE AND NOT ONE SLOT. Fulfillment.tsx shipped the single-slot version and
- *  found what it costs: the second sale in a row silently discards the first card's undo and
- *  re-arms the clock for the new one, so "undo on every mark-sold" quietly becomes "on the
- *  most recent". An owner working a search result has exactly that shape — several copies of
- *  one card, sold one after another — so each sale carries its own deadline.
+ *  A LIST OF THESE AND NOT ONE SLOT. Fulfillment.tsx shipped the single-slot version and found
+ *  what it costs: the second sale in a row silently discards the first card's undo and re-arms
+ *  the clock for the new one, so "undo on every mark-sold" quietly becomes "on the most recent".
+ *  An owner working through the copies of one card has exactly that shape — several copies sold
+ *  one after another — so each sale carries its own deadline.
  *
- *  IT HOLDS ITS OWN COPY OF THE POSITION rather than a pointer into the search results,
- *  because the results are allowed to move underneath it. Typing a new query replaces them,
- *  and the undo window has to outlive that: a receipt that vanished when the owner searched
- *  for the next card would be a ten-second promise kept for two.
+ *  IT HOLDS ITS OWN COPY OF THE POSITION rather than a pointer into the results, because the
+ *  results are allowed to move underneath it. Stepping to the next card in the walk replaces
+ *  them, and the undo window has to outlive that: a receipt that vanished when the owner
+ *  pressed Right would be a twenty-second promise kept for two.
  *
  *  ONE TYPE FOR BOTH WRITES, because a receipt is a receipt: the same panel, the same clock,
  *  the same rules about when Undo may be drawn. `kind` exists for exactly one branch — which
@@ -601,7 +280,7 @@ type Receipt = {
   kind: 'sale' | 'retirement'
 
   /** `SearchCopy.key`, the store's own `"<box>/<index>"`. Identity for React and for the
-   *  optimistic overlays `soldKeys` and `retiredKeys` hand back to the list. */
+   *  optimistic overlays `soldKeys` and `retiredKeys` hand back to the rows. */
   key: string
   box: number
   index: number
@@ -610,77 +289,58 @@ type Receipt = {
    *  `Place.label`, and D10 is why it has teeth. */
   place: string
 
-  /** The sentence at the top of the receipt. Two exist per write: this device's, and the
-   *  other device's, which is a receipt for a card leaving the boxes rather than for
-   *  anything the owner did. Both are receipts, so both are drawn the same way. */
+  /** The sentence at the top of the receipt. Two exist per write: this device's, and the other
+   *  device's, which is a receipt for a card leaving the boxes rather than for anything the
+   *  owner did. Both are receipts, so both are drawn the same way. */
   said: string
 
-  /** False when there is nothing to offer — the server said the write cannot be reversed, or
-   *  it was never this device's write. `note` then says why, because a control that quietly
-   *  is not there is indistinguishable from one that was not found. */
+  /** False when there is nothing to offer — the server said the write cannot be reversed, or it
+   *  was never this device's write. `note` then says why, because a control that quietly is not
+   *  there is indistinguishable from one that was not found. */
   canUndo: boolean
 
   note: string | null
 
-  /** Wall-clock deadline, fixed when the write is recorded and never touched again. A
-   *  duration held here instead would have to be restarted on every re-render. */
+  /** Wall-clock deadline, fixed when the write is recorded and never touched again. A duration
+   *  held here instead would have to be restarted on every re-render. */
   until: number
 }
 
-/** Which of D31's two questions this screen is answering. Session-lived and held in this
- *  component alone: leaving the screen forgets it, which is right — a mode is not a preference
- *  and D27's carve-out is for the capture screen's claims about a run in progress. */
-type Mode = 'browse' | 'find'
-
-/** The switch's two cells, as a table rather than as two hand-written buttons. One consumer
- *  today and the same reason `STEPS` in `BoxBrowse.tsx` is a table: a label and a behaviour
- *  that live in two places drift, and a switch is exactly the control where a stale label is
- *  invisible until somebody presses it. */
-const MODES: readonly { mode: Mode; label: string; says: string }[] = [
-  { mode: 'browse', label: 'Browse the boxes', says: 'box, then section, then card' },
-  { mode: 'find', label: 'Find a card', says: 'every copy of one card, and where it is' },
-]
-
 export function Inventory() {
-  /* Browse first — the header argues why, and names the one-word change if it is wrong. */
-  const [mode, setMode] = useState<Mode>('browse')
+  /* WHICH CARD THE WALK IS POINTING AT, reported up by `BoxBrowse`. This screen owns the writes
+   * and therefore has to know which card they are about; the walk owns the selection because it
+   * owns the list, the keys and the filter that decide it. One direction, one owner each. */
+  const [selected, setSelected] = useState<Row | null>(null)
 
-  /* Null means "not read yet", which is a different thing from an empty array, and the two
-   * render differently below — a store with no cards in it is a fact, and a store that has
-   * not answered is not. */
-  const [groups, setGroups] = useState<Group[] | null>(null)
-  const [failure, setFailure] = useState<Failure | null>(null)
-  const [reloads, setReloads] = useState(0)
-
-  /* Each box's divider layout, for the bars on the copy rows. Empty until `GET /boxes`
-   * answers, and empty forever if it never does — see the effect below and the header. */
-  const [layouts, setLayouts] = useState<ReadonlyMap<number, readonly SectionDetail[]>>(
-    NO_LAYOUTS,
+  /* The box registry, handed up by the same component out of the read it already makes. This
+   * file used to fetch `GET /boxes` for itself, which was one route read twice on one screen —
+   * harmless and still two places for the same answer to arrive at different times. */
+  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  const layouts = useMemo(
+    () => (boxRecords.length === 0 ? NO_LAYOUTS : layoutsOf(boxRecords)),
+    [boxRecords],
   )
 
-  /* THE SEARCH IS A SECOND READ AND NOT A FILTER OVER THE FIRST. `GET /search` groups on the
-   * server and hands back two numbers this app is forbidden from computing — D7's live cap and
-   * each copy's place in its box (D10) — neither of which is on `GET /inventory`. Filtering the
-   * browse groups in the browser would draw a list that looks the same and cannot answer the
-   * question the screen was opened for. See `server.ts:search`. */
-  const { query, setQuery, results, loading, failure: searchFailure, reload } = useSearch()
+  /* Bumped after every write, and read by the walk as a re-read trigger and by the copies panel
+   * as a re-search trigger. The walk holds no copy of the inventory to patch and this file holds
+   * no copy of anything, so a write's only honest follow-up is to ask again. */
+  const [reloads, setReloads] = useState(0)
 
-  /* The copy waiting on a photo-confirm, or null. THE PHOTO IS THE GUARD — see the header:
-   * this is half of what the objection asked for, and it is why pressing Mark sold on a row
-   * writes nothing on its own. */
+  /* The copy waiting on a photo-confirm, or null. THE PHOTO IS THE GUARD — see the header: this
+   * is half of what the objection asked for, and it is why pressing Mark sold on a row writes
+   * nothing on its own. */
   const [pending, setPending] = useState<SearchCopy | null>(null)
 
-  /* The copy waiting on a retire panel, or null. The same guard for the sibling write
-   * (D26): pressing Retire on a row writes nothing on its own — the panel shows the copy's
-   * stored photo at its position, and the write happens only when a REASON is chosen, since
-   * a retirement without one is refused (`retire_reason_invalid`) and the choice is the
-   * confirm. At most one of `pending` and this is non-null: opening either closes the
-   * other at the call sites, because two stacked scrims is two answers to "what am I about
-   * to do". */
+  /* The copy waiting on a retire panel, or null. The same guard for the sibling write (D26):
+   * pressing Retire writes nothing on its own — the panel shows the copy's stored photo at its
+   * position, and the write happens only when a REASON is chosen, since a retirement without
+   * one is refused (`retire_reason_invalid`) and the choice is the confirm. At most one of
+   * `pending` and this is non-null: opening either closes the other at the call sites, because
+   * two stacked scrims is two answers to "what am I about to do". */
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
 
-  /* One sale in flight at a time, by copy key. `Store.write()` takes the file lock per call,
-   * so several at once stack against a lock and return their failures out of order — the same
+  /* One write in flight at a time, by copy key. `Store.write()` takes the file lock per call, so
+   * several at once stack against a lock and return their failures out of order — the same
    * reason the review screen serialises. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
 
@@ -690,115 +350,24 @@ export function Inventory() {
   /* Copies this screen has sold and the wire has not caught up with yet. An optimistic overlay
    * and nothing more — `CardLocations.soldKeys` is documented as exactly that. It outlives the
    * receipt on purpose: the undo window closes after twenty seconds, and the row must not go
-   * back to offering to sell a card that is already gone.
-   *
-   * THE HEADER USED TO GO STALE AND NO LONGER DOES. `on hand` and `listed N of 4` come off the
-   * SKU rather than off the copy rows, so nothing in the response this screen already holds
-   * could be patched to show a sale — the overlay covered the ROW and the header sat one copy
-   * behind until the query changed. `useSearch` now exposes `reload`, which re-asks the
-   * CURRENT query and leaves the field alone; the sale handler calls it beside its browse
-   * re-read. Nudging the query string to force the same refetch was the tempting workaround
-   * and stays refused: it would put text in a box the owner did not type, while they are
-   * mid-sentence in it. */
+   * back to offering to sell a card that is already gone. */
   const [sold, setSold] = useState<string[]>([])
 
-  /* The same optimistic overlay for the sibling write: copies this screen has retired and
-   * the wire has not caught up with yet. Two lists rather than one because the row draws a
-   * different word for each — `sold` and `retired` are two different doors out, and a
-   * combined "gone" list would erase which one the copy left by until the next read. */
+  /* The same overlay for the sibling write. Two lists rather than one because the row draws a
+   * different word for each — `sold` and `retired` are two different doors out, and a combined
+   * "gone" list would erase which one the copy left by until the next read. */
   const [retired, setRetired] = useState<string[]>([])
 
-  /* A refusal from a sale or an undo, as an owner-side screen draws it. Screen-wide rather
-   * than per-sale because it belongs to a write that produced no receipt to hang it on; the
-   * `note` field carries the per-sale case, which is the split Fulfillment.tsx arrived at
-   * after a failed-undo message outlived the button it told you to press. */
+  /* A refusal from a write or an undo, as an owner-side screen draws it. Screen-wide rather than
+   * per-write because it belongs to something that produced no receipt to hang it on; the `note`
+   * field carries the per-write case, which is the split Fulfillment.tsx arrived at after a
+   * failed-undo message outlived the button it told you to press. */
   const [trouble, setTrouble] = useState<Failure | null>(null)
 
-  useEffect(() => {
-    // StrictMode runs effects twice in dev and a slow first response can land after the
-    // second one; the flag makes the late arrival a no-op rather than a flicker. Same shape
-    // as the pull preview's.
-    let live = true
-    /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`. The two-argument form does not cover
-     * its own success handler: anything thrown while walking the answer lands as an unhandled
-     * rejection instead of a failure panel, and the screen sits on "Reading the inventory."
-     * forever with nothing to press. Fulfillment.tsx recorded that symptom in those words
-     * after a morning of it, and this file kept the two-argument form for another ten days —
-     * which is the argument for the eslint rule in `app/eslint.config.js` rather than for a
-     * fourth comment saying the same thing. The walk below is `Object.entries` over two maps
-     * off the wire, so it is exactly the shape that throws on a body this screen cannot read.
-     */
-    getInventory()
-      .then((inventory) => {
-        if (!live) return
-        // Grouped once, here, rather than memoised at render: the response is the only input
-        // and it changes exactly when this runs.
-        setGroups(groupBySku(inventory.cards, listingsOf(inventory)))
-        setFailure(null)
-      })
-      .catch((err: unknown) => {
-        if (!live) return
-        setGroups(null)
-        setFailure(describeFailure(err))
-      })
-    return () => {
-      live = false
-    }
-    /* `mode` IS A DEPENDENCY AND THE GUARD ABOVE IS WHY. `BoxBrowse` reads the same route for
-     * its walk, so running this one in browse mode would fetch 767 records twice to render one
-     * of them. Guarding without the dependency would be the bug: the effect would skip on a
-     * mount in browse mode and never re-arm, and Find would open on a list that is permanently
-     * "Reading the inventory." Switching modes therefore re-reads, which is this file's
-     * standing rule anyway — one GET, kept nowhere, thrown away on the way out. */
-  }, [reloads, mode])
-
-  /* THE BOX LAYOUTS. One read, on the same counter as the inventory read above, and allowed
-   * to fail without anybody hearing about it.
-   *
-   * NOT ON THE SEARCH. A query does not move a divider — the layouts change when the owner
-   * edits one on `#/boxes`, which is rare and is not something typing a card's name can do —
-   * so hanging this off `query` would ask the server for the same records on every keystroke
-   * to draw a picture that had not changed. `reloads` is the right counter because
-   * it is the one the screen's own Reload bumps, and a control that plainly means "read it
-   * all again" should cover the bars as well as the rows. A recorded sale bumps it too and so
-   * re-reads a layout that has almost certainly not moved; that is one small GET after a write
-   * that has already returned, which is cheaper than a second counter and a second Reload.
-   *
-   * THE `.catch` IS EMPTY ON PURPOSE AND THAT IS THE WHOLE DESIGN. No failure state, no
-   * message, no clearing of what is already held — a `/boxes` that is dead, slow, or answering
-   * nonsense leaves every bar drawing the honest three-run picture and leaves the search
-   * results, the browse, and the sale button exactly as they were. A refresh that fails after
-   * a good read keeps the good read rather than coarsening the bars mid-session, which would
-   * look like a defect and would be one less true thing on screen for no gain.
-   *
-   * `.then(ok).catch(fail)` AND NOT `.then(ok, fail)` — the rule the inventory read above
-   * argues at length and `app/eslint.config.js` enforces. It binds here even though the
-   * failure path does nothing: `layoutsOf` walks a body off the wire, so it is exactly the
-   * shape that throws inside the success handler, and the two-argument form would turn that
-   * into an unhandled rejection instead of the silence this effect intends. */
-  useEffect(() => {
-    if (mode !== 'find') return
-    let live = true
-    getBoxes()
-      .then((summary) => {
-        if (!live) return
-        setLayouts(layoutsOf(summary))
-      })
-      .catch(() => {
-        // Deliberately nothing. See above: the bars are honest without this.
-      })
-    return () => {
-      live = false
-    }
-    // Same guard and the same dependency as the inventory read above, for the same reason:
-    // `BoxBrowse` reads `GET /boxes` for its own box header.
-  }, [reloads, mode])
-
-  /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per sale.
-   * Fulfillment.tsx's shape, and the slack at the end is its finding too: a timer that fires a
-   * hair early would drop nothing, return an array of the same length, and React would bail
-   * out on the identical reference — leaving the receipt up forever with nothing to re-arm
-   * the timer. */
+  /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per write.
+   * Fulfillment.tsx's shape, and the slack at the end is its finding too: a timer that fired a
+   * hair early would drop nothing, return an array of the same length, and React would bail out
+   * on the identical reference — leaving the receipt up forever with nothing to re-arm it. */
   useEffect(() => {
     if (receipts.length === 0) return
     const soonest = Math.min(...receipts.map((receipt) => receipt.until))
@@ -813,11 +382,10 @@ export function Inventory() {
     return () => window.clearTimeout(timer)
   }, [receipts])
 
-  /* Escape closes whichever panel is up — the photo-confirm, or the retire panel, which is
-   * the same decision point for the sibling write. A panel is a decision point and not a
-   * destination, so the key that means "I did not mean this" has to work — and
-   * docs/DESIGN.md's no-dialog rule is about REVERSIBLE actions, which is what makes a
-   * confirm legal here at all. */
+  /* Escape closes whichever panel is up — the photo-confirm, or the retire panel, which is the
+   * same decision point for the sibling write. A panel is a decision point and not a
+   * destination, so the key that means "I did not mean this" has to work — and docs/DESIGN.md's
+   * no-dialog rule is about REVERSIBLE actions, which is what makes a confirm legal here. */
   useEffect(() => {
     if (pending === null && retiring === null) return
     const onKey = (event: KeyboardEvent) => {
@@ -848,8 +416,8 @@ export function Inventory() {
       setPending(null)
       setRetiring(null)
 
-      /* The label, or the pooled fact — `Place.label` is null for a pooled copy (types.ts,
-       * on the field), and a receipt still needs a line the owner can grep. */
+      /* The label, or the pooled fact — `Place.label` is null for a pooled copy (types.ts, on
+       * the field), and a receipt still needs a line the owner can grep. */
       const seat = {
         key: copy.key,
         box: copy.place.box,
@@ -859,8 +427,8 @@ export function Inventory() {
       try {
         const reversible = canTakeBack(await markSold(copy.place.box, copy.place.index))
         setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
-        // "Mark sold" produced "Marked sold." — docs/DESIGN.md's copy rule that an action
-        // keeps its name through the whole flow.
+        // "Mark sold" produced "Marked sold." — docs/DESIGN.md's copy rule that an action keeps
+        // its name through the whole flow.
         remember({
           ...seat,
           kind: 'sale',
@@ -871,16 +439,15 @@ export function Inventory() {
             : 'The store cannot say what state this copy was in before the sale, so it ' +
               'cannot be put back from here (sold_origin_unknown).',
         })
-        // Both views behind the sale are now one copy stale. Re-read rather than patch: D13
-        // has one place inventory lives, and this screen's whole rule is that it holds no
-        // second copy of it. `reload` re-asks the current query without touching the field.
+        // Both the walk and the copies panel are now one copy stale. Re-read rather than patch:
+        // D13 has one place inventory lives, and this screen's whole rule is that it holds no
+        // second copy of it.
         setReloads((n) => n + 1)
-        reload()
       } catch (err) {
         if (refusalCode(err) === ALREADY_SOLD) {
           /* Not this device's sale — see the ruling at ALREADY_SOLD. A receipt rather than a
-           * failure, because that is what it is: a copy left the boxes and the owner did not
-           * do it. No undo, deliberately; it would reverse the other device's real sale. */
+           * failure, because that is what it is: a copy left the boxes and the owner did not do
+           * it. No undo, deliberately; it would reverse the other device's real sale. */
           setSold((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
           remember({
             ...seat,
@@ -912,7 +479,6 @@ export function Inventory() {
       setPending(null)
       setRetiring(null)
 
-      /* As at `doSell`: the label, or the pooled fact, never null on a receipt. */
       const seat = {
         key: copy.key,
         box: copy.place.box,
@@ -924,8 +490,8 @@ export function Inventory() {
           await retireCard(copy.place.box, copy.place.index, reason),
         )
         setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
-        // "Retire" produced "Retired." — the same copy rule the sale follows. The machine
-        // word for WHY sits in the note, greppable against the history line it landed in.
+        // "Retire" produced "Retired." — the same copy rule the sale follows. The machine word
+        // for WHY sits in the note, greppable against the history line it landed in.
         remember({
           ...seat,
           kind: 'retirement',
@@ -938,12 +504,11 @@ export function Inventory() {
               '(retired_origin_unknown).',
         })
         setReloads((n) => n + 1)
-        reload()
       } catch (err) {
         if (refusalCode(err) === ALREADY_RETIRED) {
-          /* The other device's retirement — the sibling of ALREADY_SOLD's ruling, adopted
-           * whole: a receipt with no undo, because the undo would reverse a departure this
-           * device never recorded. */
+          /* The other device's retirement — the sibling of ALREADY_SOLD's ruling, adopted whole:
+           * a receipt with no undo, because the undo would reverse a departure this device
+           * never recorded. */
           setRetired((held) => (held.includes(copy.key) ? held : [...held, copy.key]))
           remember({
             ...seat,
@@ -972,11 +537,11 @@ export function Inventory() {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
         else await undoRetire(receipt.box, receipt.index)
       } catch (err) {
-        /* `not_sold` / `not_retired` is success — the copy is not in the state the press
-         * asked to leave, which is what it asked for. Each is read only against its own
-         * route: `not_retired` from the sale route would be a bug worth seeing, not a
-         * success to swallow. Anything else keeps the receipt standing so the control is
-         * still there to press. */
+        /* `not_sold` / `not_retired` is success — the copy is not in the state the press asked
+         * to leave, which is what it asked for. Each is read only against its own route:
+         * `not_retired` from the sale route would be a bug worth seeing, not a success to
+         * swallow. Anything else keeps the receipt standing so the control is still there to
+         * press. */
         const settled = receipt.kind === 'sale' ? NOT_SOLD : NOT_RETIRED
         if (refusalCode(err) !== settled) {
           setTrouble(describeFailure(err))
@@ -987,57 +552,51 @@ export function Inventory() {
       setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
       if (receipt.kind === 'sale') setSold((held) => held.filter((key) => key !== receipt.key))
       else setRetired((held) => held.filter((key) => key !== receipt.key))
-      // Both views behind the reversal are now one copy stale — the same sentence the
-      // write handlers say, now true in the other direction. The search re-read was
-      // missing here while the write path had it, so an undone copy's row went on wearing
-      // `sold` until the next keystroke; observed on the retirement's first walk-through
-      // and fixed for both kinds, since the gap was never about which door.
       setReloads((n) => n + 1)
-      reload()
       setBusyKey(null)
     },
     [busyKey],
   )
 
-  /* Three counts, and the third is the one worth publishing beside the other two: copies the
-     pipeline has written no import row for. It is the gap between what is in the boxes and
-     what is for sale, and a screen that reported only SKUs and copies would let that number
-     grow without ever naming it. */
-  const skus = groups === null ? 0 : groups.filter((group) => group.sku !== null).length
-  const copies = groups === null ? 0 : groups.reduce((n, group) => n + group.copies.length, 0)
-  const withoutSku =
-    groups === null ? 0 : (groups.find((group) => group.sku === null)?.copies.length ?? 0)
+  const soldKeys = useMemo(() => new Set(sold), [sold])
+  const retiredKeys = useMemo(() => new Set(retired), [retired])
 
-  /* Trimmed, matching `useSearch`'s own rule: a field holding one space is empty, and the hook
-   * asks the server nothing for it. One test rather than two so the screen and the hook cannot
-   * disagree about which body is on show. */
-  const searching = query.trim() !== ''
-  const soldKeys = new Set(sold)
-  const retiredKeys = new Set(retired)
+  const openSell = useCallback((copy: SearchCopy) => {
+    setTrouble(null)
+    setRetiring(null)
+    setPending(copy)
+  }, [])
 
-  /* THE RECEIPTS SIT ABOVE BOTH BODIES, which is Fulfillment.tsx's finding rather than a
-   * layout preference. They were rendered inside one branch there, so walking away hid the
-   * Undo while its clock kept running — a twenty-second promise on screen for two. Here the
-   * equivalent is typing the next card's name: the results are replaced, the row is gone, and
-   * the window is still open. Above the branch, it survives.
+  const openRetire = useCallback((copy: SearchCopy) => {
+    setTrouble(null)
+    setPending(null)
+    setRetiring(copy)
+  }, [])
+
+  /* THE RECEIPTS SIT ABOVE THE COPIES AND INSIDE THE SAME NODE, which is Fulfillment.tsx's
+   * finding rather than a layout preference. They were rendered inside one branch there, so
+   * walking away hid the Undo while its clock kept running — a twenty-second promise on screen
+   * for two. Here the equivalent is stepping to the next card: the copy rows are replaced and
+   * the window is still open. Held in this component's state and drawn above the rows, the
+   * receipt survives the rows moving under it.
    *
    * ONE PANEL SHAPE FOR BOTH KINDS. A sale's receipt and a retirement's differ only in their
-   * sentence and their note; `kind` is `doUndo`'s to branch on and nothing rendered here
-   * reads it.
+   * sentence and their note; `kind` is `doUndo`'s to branch on and nothing rendered here reads
+   * it.
    *
    * NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly one thing to
-   * do, and a receipt is the way back from something already done. The confirm panel below is
-   * the one place on this screen that qualifies, and it keeps the only fill. */
+   * do, and a receipt is the way back from something already done. The confirm panel is the one
+   * place on this screen that qualifies, and it keeps the only fill. */
   const receiptPanels = receipts.map((receipt) => (
     <div className="inventory-receipt" key={receipt.key}>
       <p className="inventory-receipt-said">{receipt.said}</p>
       <p className="inventory-receipt-place">{receipt.place}</p>
       {receipt.note === null ? null : <p className="inventory-machine">{receipt.note}</p>}
       {!receipt.canUndo ? null : (
-        /* The position is in the accessible name and not on the button. Two receipts standing
-           at once make two controls that both read "Undo" to anything that cannot see the
-           panel they sit in; the visible word stays one word, which is what the copy rules ask
-           of a control. */
+        /* The position is in the accessible name and not on the button. Two receipts standing at
+           once make two controls that both read "Undo" to anything that cannot see the panel
+           they sit in; the visible word stays one word, which is what the copy rules ask of a
+           control. */
         <button
           className="inventory-plain"
           type="button"
@@ -1051,106 +610,54 @@ export function Inventory() {
     </div>
   ))
 
-  return (
-    <main className="inventory">
-      <header className="inventory-head">
-        <h1 className="inventory-title">Inventory</h1>
-        <p className="inventory-lede">
-          Every card in the boxes, two ways: walk a box section by section and look at the
-          photograph of any card in it, or name a card and see every copy of it, where each one
-          sits, and record a sale against the copy your hand reached.
-        </p>
-
-        {/* THE SWITCH BETWEEN D31'S TWO QUESTIONS, and the first control on the screen because
-            it decides what the rest of it is.
-
-            PLAIN BUTTONS WITH `aria-pressed`, NOT `role="tab"`. Tabs are the closer semantic
-            and they come with an expectation this control does not meet: a screen reader user
-            told these are tabs will reach for the arrow keys, and the arrow keys on this screen
-            belong to the walk. A pressed toggle promises nothing it does not do. The look is
-            the segmented strip the browse's box cells and the capture screen's track already
-            draw, so it is one idiom rather than a third.
-
-            No accent fill on the pressed cell — docs/DESIGN.md reserves the solid fill for a
-            screen with exactly one thing to do, and a switch is by construction two. The mark
-            is the step from muted to ink plus the rail, which is how selection is carried
-            everywhere else in this app. */}
-        <div className="inventory-modes" role="group" aria-label="How to look at the inventory">
-          {MODES.map((choice) => (
-            <button
-              key={choice.mode}
-              className="inventory-mode"
-              type="button"
-              aria-pressed={mode === choice.mode}
-              onClick={() => setMode(choice.mode)}
-            >
-              <span className="inventory-mode-label">{choice.label}</span>
-              <span className="inventory-mode-says">{choice.says}</span>
-            </button>
-          ))}
+  const detail = (
+    <div className="inventory-detail">
+      {trouble === null ? null : (
+        <div className="inventory-note">
+          <p className="inventory-note-text">{trouble.message}</p>
+          {/* The code beneath the sentence, never the sentence again — docs/DESIGN.md's
+              human-label-large, machine-string-small rule. What goes here is the greppable
+              token, which is the only way from what is on screen to what the server said. */}
+          <p className="inventory-machine">{trouble.code}</p>
         </div>
-      </header>
-
-      {/* BROWSE IS A COMPONENT AND FIND IS INLINE, which is an honest asymmetry rather than
-          an unfinished extraction. `BoxBrowse` owns its own reads, its own selection, its own
-          search and its own keys, and needs nothing from this file — it arrived as a whole
-          screen and stayed one. The Find half is the opposite: the sale, the retirement, the
-          receipts and their undo windows are twenty pieces of state that all belong to one
-          flow, and lifting them into a component would mean passing every one of them back
-          out, or moving the flow and leaving this file a shell. Extract it the day something
-          else needs it — that is the same threshold `describeFailure` was held to. */}
-      {mode === 'browse' ? (
-        <BoxBrowse />
-      ) : (
-        <>
-        {/* THE SEARCH IS THE FIRST CONTROL IN THIS MODE, above the list it does not
-            replace. `/` focuses it from anywhere — SearchField owns the hotkey and the chip,
-            and both are owner-side by its own rule. `autoFocus` because this mode is opened
-            for one reason: a card just sold and its copies need finding. */}
-        <div className="inventory-search">
-          <SearchField value={query} onChange={setQuery} persona="owner" autoFocus />
-        </div>
-
-        <div className="inventory-controls">
-          {/* A reload is a GET, and re-reading the store is not acting on it. It earns its
-              place for the reason the pull preview's does: the alternative is teaching the
-              owner to reload the browser. No accent fill — docs/DESIGN.md reserves the solid
-              fill for a screen with exactly one thing to do, and this screen's one thing is
-              to be read. */}
-          <button
-            className="inventory-reload"
-            type="button"
-            onClick={() => setReloads((n) => n + 1)}
-          >
-            Reload
-          </button>
-          {groups === null ? null : (
-            <span className="inventory-count">
-              {count(skus, 'sku', 'skus')} · {count(copies, 'copy', 'copies')}
-              {withoutSku === 0 ? null : ` · ${withoutSku} without a sku`}
-            </span>
-          )}
-        </div>
+      )}
 
       {receiptPanels.length === 0 ? null : (
         <div className="inventory-receipts">{receiptPanels}</div>
       )}
 
-      {trouble === null ? null : (
-        <div className="inventory-note">
-          <p className="inventory-note-text">{trouble.message}</p>
-          <p className="inventory-machine">{trouble.code}</p>
-        </div>
+      {selected === null ? null : (
+        <CopiesPanel
+          row={selected}
+          layouts={layouts}
+          reloadToken={reloads}
+          busyKey={busyKey}
+          soldKeys={soldKeys}
+          retiredKeys={retiredKeys}
+          onSell={openSell}
+          onRetire={openRetire}
+        />
       )}
+    </div>
+  )
+
+  return (
+    <main className="inventory">
+      <BoxBrowse
+        head={<h1 className="inventory-title">Inventory</h1>}
+        detail={detail}
+        onSelect={setSelected}
+        onBoxes={setBoxRecords}
+        reloadToken={reloads}
+      />
 
       {pending === null ? null : (
         <Confirm
           copy={pending}
-          /* THE PANEL GETS ONE BOX'S LAYOUT AND THE ROWS GET THE MAP, because the panel holds
-             exactly one copy and the box it is in is already known here. Looking it up at the
-             call site rather than handing a whole map to a component with one place to draw is
-             the same reason `CardLocations` takes the map: each is given the shape its own job
-             needs, and neither has to pick. */
+          /* THE PANEL GETS ONE BOX'S LAYOUT, because the panel holds exactly one copy and the
+             box it is in is already known here. Looking it up at the call site rather than
+             handing a whole map to a component with one place to draw is the same reason
+             `CardLocations` takes the map: each is given the shape its own job needs. */
           sections={layouts.get(pending.place.box)}
           busy={busyKey !== null}
           onConfirm={() => void doSell(pending)}
@@ -1161,147 +668,250 @@ export function Inventory() {
       {retiring === null ? null : (
         <RetirePanel
           copy={retiring}
-          /* One box's layout, exactly as the sale's panel above takes it. */
           sections={layouts.get(retiring.place.box)}
           busy={busyKey !== null}
           onRetire={(reason) => void doRetire(retiring, reason)}
           onCancel={() => setRetiring(null)}
         />
       )}
-
-      {searching ? (
-        <>
-          {searchFailure === null ? null : (
-            <div className="inventory-note">
-              <p className="inventory-note-text">{searchFailure.message}</p>
-              <p className="inventory-machine">{searchFailure.code}</p>
-            </div>
-          )}
-
-          {/* `loading` is true through the debounce as well as the request — `useSearch` says
-              why — so this is the honest answer to "is what is on screen an answer to what is
-              in the box". Drawn beside the previous results rather than instead of them: a
-              list that blanks on every keystroke is worse to type against than one that lags
-              by 200ms and says so. */}
-          {loading ? <p className="inventory-note-text">Looking.</p> : null}
-
-          {results !== null && !loading && results.groups.length === 0 ? (
-            <p className="inventory-note-text">
-              Nothing in the boxes matches <span className="inventory-inline">{results.query}</span>.
-            </p>
-          ) : null}
-
-          {results === null ? null : (
-            <div className="inventory-found">
-              {results.groups.map((group) => (
-                /* THE POSITION BAR DRAWS ON EVERY COPY ROW, and that is the owner's ruling
-                   rather than a default. `CardLocations`'s owner skin puts one on each row for
-                   the reason its own header gives: how far into the box a copy sits is what
-                   the screen was opened to learn, and a fact you have to hover to see is a
-                   fact you compare one at a time. Four copies in four boxes is exactly the
-                   case that makes that impossible.
-
-                   `renderAction` NOW, AND THE PARAGRAPH THAT DECLINED IT IS OVERTAKEN RATHER
-                   THAN ERASED. It said the default slot was what this screen wants — "Mark
-                   sold, or the word `sold`" — which was true while the screen had one write.
-                   D26 gave it a second, and the default slot draws exactly one control, so
-                   the slot is replaced with the same rules it applied plus the sibling: a
-                   copy that left draws the word for WHICH door (`sold` or `retired`,
-                   verbatim, the pipeline's own vocabulary), and a copy still here draws both
-                   quiet buttons. What that paragraph defended still stands: the guard is not
-                   in the slot — each press opens its panel over the copy's own photo, and
-                   the receipt above carries the undo.
-
-                   `sections` IS THE WHOLE MAP AND NOT THIS GROUP'S SLICE, because a group is a
-                   SKU and not a box. D7 keeps every copy at its own position, so the rows of
-                   one group can run across boxes that are divided differently — picking a
-                   layout out here would mean picking one for a set of copies that do not share
-                   one. `CardLocations` looks it up per copy off `place.box`, which is the only
-                   place the right answer is known. */
-                <CardLocations
-                  key={group.sku ?? `without-a-sku-${group.names.join('/')}`}
-                  group={group}
-                  persona="owner"
-                  sections={layouts}
-                  onSell={(copy) => {
-                    setTrouble(null)
-                    setRetiring(null)
-                    setPending(copy)
-                  }}
-                  busyKey={busyKey}
-                  soldKeys={soldKeys}
-                  renderAction={(copy) =>
-                    copy.state === 'sold' || soldKeys.has(copy.key) ? (
-                      <span className="card-locations-gone">sold</span>
-                    ) : copy.state === 'retired' || retiredKeys.has(copy.key) ? (
-                      <span className="card-locations-gone">retired</span>
-                    ) : (
-                      <span className="inventory-copy-actions">
-                        <button
-                          className="card-locations-sell"
-                          type="button"
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            setTrouble(null)
-                            setRetiring(null)
-                            setPending(copy)
-                          }}
-                        >
-                          Mark sold
-                        </button>
-                        <button
-                          className="card-locations-sell"
-                          type="button"
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            setTrouble(null)
-                            setPending(null)
-                            setRetiring(copy)
-                          }}
-                        >
-                          Retire
-                        </button>
-                      </span>
-                    )
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {failure === null ? null : (
-            <div className="inventory-note">
-              <p className="inventory-note-text">{failure.message}</p>
-              {/* The code beneath the sentence, never the sentence again — docs/DESIGN.md's
-                  human-label-large, machine-string-small rule. What goes here is the greppable
-                  token, which is the only way from what is on screen to what the server
-                  said. */}
-              <p className="inventory-machine">{failure.code}</p>
-            </div>
-          )}
-
-          {groups === null && failure === null ? (
-            <p className="inventory-note-text">Reading the inventory.</p>
-          ) : null}
-
-          {groups !== null && groups.length === 0 ? (
-            <p className="inventory-note-text">No cards captured yet.</p>
-          ) : null}
-
-          {groups !== null && groups.length > 0 ? (
-            <div className="inventory-groups">
-              {groups.map((group) => (
-                <GroupRow key={group.sku ?? 'without-a-sku'} group={group} />
-              ))}
-            </div>
-          ) : null}
-        </>
-      )}
-        </>
-      )}
     </main>
+  )
+}
+
+/* EVERY COPY OF THE SELECTED CARD, AND WHERE EACH ONE SITS — D7's SKU -> positions map, drawn
+ * for the one card the walk is pointing at.
+ *
+ * THIS IS WHERE THE FIND MODE WENT, and the owner's sentence is the whole design brief: "it's
+ * basically find a card in a box-based system if anything". You search, the walk narrows, you
+ * pick a card, and its copies are right here — with the sale, the retirement, the listing
+ * quantities and the live cap that used to live on a separate mode.
+ *
+ * `GET /search` STAYS THE MATCHER AND NOTHING HERE FILTERS THE INVENTORY LOCALLY. The handle
+ * this panel asks with is the card's own SKU, or its name when it has no SKU — and the group it
+ * keeps is the one whose copies CONTAIN this row's store key, which is an exact test rather than
+ * a guess about which of several groups was meant. That matters: `do_search` matches on six
+ * fields, so a SKU that happens to be a substring of another card's note comes back as a second
+ * group, and picking by key cannot be fooled by it.
+ *
+ * WHY THE SEARCH ROUTE RATHER THAN THE INVENTORY THIS SCREEN ALREADY HAS. Three numbers, none of
+ * which `GET /inventory` carries: `on_hand` (D7's count of unsold positions, which is not
+ * `copies.length`), `listed` (per-SKU quantities since D7's amendment moved them off the card),
+ * and `cap` — the live quantity cap, which `Inventory.tsx` refused for years to write in
+ * TypeScript because it is a configurable Python constant. The search route reports all three,
+ * which is exactly the condition that refusal named as settling it.
+ *
+ * IT DEBOUNCES, WHICH IS WHY HOLDING AN ARROW KEY DOES NOT SPAM THE STORE. `useSearch`'s timer
+ * restarts on every query change, so walking a box at auto-repeat pace issues one request when
+ * the hand stops. That is the same property the typed search relies on, reused rather than
+ * re-derived.
+ */
+function CopiesPanel({
+  row,
+  layouts,
+  reloadToken,
+  busyKey,
+  soldKeys,
+  retiredKeys,
+  onSell,
+  onRetire,
+}: {
+  row: Row
+  layouts: ReadonlyMap<number, readonly SectionDetail[]>
+
+  /** Bumped by the screen after a write. The panel's own query has not changed — it is still
+   *  the same card — so nothing would re-ask without this, and the header's `on hand` and
+   *  `listed N of 4` would sit one copy stale behind a row that had already updated. */
+  reloadToken: number
+
+  busyKey: string | null
+  soldKeys: ReadonlySet<string>
+  retiredKeys: ReadonlySet<string>
+  onSell: (copy: SearchCopy) => void
+  onRetire: (copy: SearchCopy) => void
+}) {
+  const { query, setQuery, results, loading, failure, reload } = useSearch()
+
+  /* The handle the server is asked with: the SKU if the card has one, else its name. Null for a
+   * card the pipeline has never identified, which is the case `loneCopy` exists for. */
+  const handle = skuOrName(row.card)
+
+  useEffect(() => {
+    setQuery(handle ?? '')
+  }, [handle, setQuery])
+
+  /* Re-ask on a write, and NEVER on the first render. A ref rather than a boolean state because
+   * this is bookkeeping about renders and not a fact the screen draws — and because a state
+   * would re-render to record that it had not needed to. */
+  const seen = useRef(reloadToken)
+  useEffect(() => {
+    if (seen.current === reloadToken) return
+    seen.current = reloadToken
+    reload()
+  }, [reloadToken, reload])
+
+  /* MATCHED BY KEY, NOT BY SKU. This row's own store key is in exactly one group, whichever way
+   * the query matched — so a name search that returns four cards, or a SKU that is a substring
+   * of somebody's note, both resolve to the right group without a second rule. */
+  const group =
+    results === null
+      ? null
+      : (results.groups.find((candidate) =>
+          candidate.copies.some((copy) => copy.key === row.key),
+        ) ?? null)
+
+  /* The answer is for the card being asked about only when the query the server echoed is the
+     one this panel asked. Otherwise it is the previous card's answer still on screen, and the
+     honest thing is to say we are looking rather than to draw somebody else's copies. */
+  const settled = results !== null && results.query === (handle ?? '')
+
+  if (handle === null) {
+    /* No SKU and no name, so there is no card group to fetch and none is invented. 22% of the
+       store is in this state today — box 95 and box 99 are 170 captured-and-never-identified
+       records — and it is exactly the state in which D26's retirement matters most. */
+    const lone = loneCopy(row)
+    return (
+      <section className="inventory-copies">
+        <p className="inventory-note-text">
+          This card has no name and no SKU yet, so there is no card group to show — it is one
+          copy at one position. A SKU is written when <code className="inventory-inline">emit</code>{' '}
+          writes the card&rsquo;s row into an import file, and never before.
+        </p>
+        {lone === null ? (
+          <p className="inventory-machine">place: absent · key {row.key}</p>
+        ) : (
+          <div className="inventory-lone">
+            <span className="inventory-lone-place">{lone.place.label ?? `pooled · ${row.key}`}</span>
+            <Action
+              copy={lone}
+              busyKey={busyKey}
+              soldKeys={soldKeys}
+              retiredKeys={retiredKeys}
+              onSell={onSell}
+              onRetire={onRetire}
+            />
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  return (
+    <section className="inventory-copies">
+      {failure === null ? null : (
+        <div className="inventory-note">
+          <p className="inventory-note-text">{failure.message}</p>
+          <p className="inventory-machine">{failure.code}</p>
+        </div>
+      )}
+
+      {/* `loading` is true through the debounce as well as the request, so this is the honest
+          answer to "are the copies below this card's copies". Drawn beside the previous answer
+          rather than instead of it — a panel that blanked on every arrow keypress would flicker
+          the length of a box walk. */}
+      {loading || !settled ? <p className="inventory-note-text">Looking for the copies.</p> : null}
+
+      {group === null && settled && !loading ? (
+        <p className="inventory-note-text">
+          The search did not return this card&rsquo;s own row, which should not happen — its key
+          is <span className="inventory-inline">{row.key}</span> and the query was{' '}
+          <span className="inventory-inline">{query}</span>.
+        </p>
+      ) : null}
+
+      {group === null ? null : (
+        /* `sections` IS THE WHOLE MAP AND NOT THIS BOX'S SLICE, because a group is a SKU and not
+           a box. D7 keeps every copy at its own position, so the rows of one group can run
+           across boxes that are divided differently — picking a layout out here would mean
+           picking one for a set of copies that do not share one. `CardLocations` looks it up per
+           copy off `place.box`, which is the only place the right answer is known. */
+        <CardLocations
+          group={group}
+          persona="owner"
+          sections={layouts}
+          currentKey={row.key}
+          onSell={onSell}
+          busyKey={busyKey}
+          soldKeys={soldKeys}
+          renderAction={(copy) => (
+            <Action
+              copy={copy}
+              busyKey={busyKey}
+              soldKeys={soldKeys}
+              retiredKeys={retiredKeys}
+              onSell={onSell}
+              onRetire={onRetire}
+            />
+          )}
+        />
+      )}
+    </section>
+  )
+}
+
+/** The handle the copies search asks with. SKU first because it is exact and a card has at most
+ *  one; the name second because a card that has been identified but never emitted has no SKU and
+ *  its name still finds every copy of it. Null when the record carries neither. */
+function skuOrName(card: InventoryCard): string | null {
+  const sku = card.sku
+  if (sku !== null && sku.trim() !== '') return sku.trim()
+  const name = card.name
+  if (name !== null && name.trim() !== '') return name.trim()
+  return null
+}
+
+/** What one copy row offers: the word for the door it left by, or the two writes.
+ *
+ *  ONE COMPONENT FOR BOTH CALL SITES — the group's rows and the lone copy above — so the rule
+ *  about which copies may be sold is written once. D7 as amended: every copy that has not left
+ *  is sellable, and `sold` and `retired` are the only two words there are to compare against,
+ *  because `pushed`/`staged`/`live` stopped being card states.
+ *
+ *  THE OPTIMISTIC OVERLAYS ARE READ HERE and not only on the wire's `state`, so a row stops
+ *  offering to sell a card in the seconds between the write returning and the re-read landing. */
+function Action({
+  copy,
+  busyKey,
+  soldKeys,
+  retiredKeys,
+  onSell,
+  onRetire,
+}: {
+  copy: SearchCopy
+  busyKey: string | null
+  soldKeys: ReadonlySet<string>
+  retiredKeys: ReadonlySet<string>
+  onSell: (copy: SearchCopy) => void
+  onRetire: (copy: SearchCopy) => void
+}) {
+  if (copy.state === 'sold' || soldKeys.has(copy.key)) {
+    return <span className="card-locations-gone">sold</span>
+  }
+  if (copy.state === 'retired' || retiredKeys.has(copy.key)) {
+    return <span className="card-locations-gone">retired</span>
+  }
+  return (
+    <span className="inventory-copy-actions">
+      {/* No accent fill on either. docs/DESIGN.md reserves the solid fill for a screen with
+          exactly one thing to do, and a copy row with two doors out of inventory is not that —
+          the confirm panel each of them opens is. The guard is not in the slot: each press opens
+          a panel over the copy's own photograph, and the receipt above carries the undo. */}
+      <button
+        className="card-locations-sell"
+        type="button"
+        disabled={busyKey !== null}
+        onClick={() => onSell(copy)}
+      >
+        Mark sold
+      </button>
+      <button
+        className="card-locations-sell"
+        type="button"
+        disabled={busyKey !== null}
+        onClick={() => onRetire(copy)}
+      >
+        Retire
+      </button>
+    </span>
   )
 }
 
@@ -1309,23 +919,23 @@ export function Inventory() {
  *
  * D6 PUTS THE PHOTO SERVICE HERE FOR EXACTLY THIS: "the review queue requires it; the pull
  * modal reuses it, showing the card's own capture photo beside its location before pulling."
- * The pull modal is the Fulfiller's; this is the owner's, and the entry describes the
- * operation rather than the persona. What is being confirmed is not "did you mean to press
- * that" — docs/DESIGN.md bans that dialog outright — but "is the card in your hand the card at
- * this position", which is a question only a photograph can answer.
+ * The pull modal is the Fulfiller's; this is the owner's, and the entry describes the operation
+ * rather than the persona. What is being confirmed is not "did you mean to press that" —
+ * docs/DESIGN.md bans that dialog outright — but "is the card in your hand the card at this
+ * position", which is a question only a photograph can answer.
  *
  * ONE THING TO DO, SO IT GETS THE FILL. The rule is docs/DESIGN.md's: solid accent where there
- * is exactly one action, outline where the system is unsure. A confirm panel is the one shape
- * on this screen that qualifies, which is why `PullConfirm` is reused here rather than copied
- * — the same component step 6 built and the same fill it was measured in. Cancel is not a
- * second action in that sense; it is the way out, and it is drawn as the quiet control every
- * other owner-side screen uses.
+ * is exactly one action, outline where the system is unsure. A confirm panel is the one shape on
+ * this screen that qualifies, which is why `PullConfirm` is reused here rather than copied — the
+ * same component step 6 built and the same fill it was measured in. Cancel is not a second
+ * action in that sense; it is the way out, and it is drawn as the quiet control every other
+ * owner-side screen uses.
  *
  * A MISSING PHOTO DOES NOT BLOCK THE SALE. `has_photo` says the server had bytes when it
  * answered, and undo deletes a photo — so the load can still fail between the search and this
- * panel. A card with no photograph is still a real card at a real position, and refusing to
- * let the owner sell it would make a display failure into an inventory one. The panel says
- * plainly that there is nothing to confirm against and leaves the decision where it was.
+ * panel. A card with no photograph is still a real card at a real position, and refusing to let
+ * the owner sell it would make a display failure into an inventory one. The panel says plainly
+ * that there is nothing to confirm against and leaves the decision where it was.
  */
 function Confirm({
   copy,
@@ -1347,15 +957,15 @@ function Confirm({
   const [broken, setBroken] = useState(false)
   const [panel, setPanel] = useState<HTMLDivElement | null>(null)
 
-  /* Focus lands on the confirm button. A callback ref rather than `useRef` + an effect on
-   * mount, because the node is what the effect is waiting for and a callback ref already fires
-   * when it arrives.
+  /* Focus lands on the confirm button. A callback ref rather than `useRef` + an effect on mount,
+   * because the node is what the effect is waiting for and a callback ref already fires when it
+   * arrives.
    *
-   * NO KEY CHIP, and its absence is the honest half of "every choice shows its key". The
-   * focused button already takes Enter and Escape already cancels — both true without a
-   * listener of this file's own. A chip saying so would be a hint about the browser's
-   * behaviour rather than about a binding this screen owns, and a second Enter handler beside
-   * the focused button is how one press fires twice. */
+   * NO KEY CHIP, and its absence is the honest half of "every choice shows its key". The focused
+   * button already takes Enter and Escape already cancels — both true without a listener of this
+   * file's own. A chip saying so would be a hint about the browser's behaviour rather than about
+   * a binding this screen owns, and a second Enter handler beside the focused button is how one
+   * press fires twice. */
   useEffect(() => {
     panel?.querySelector<HTMLButtonElement>('.pull-confirm')?.focus()
   }, [panel])
@@ -1379,8 +989,8 @@ function Confirm({
 
         {gone ? (
           <p className="inventory-note-text">
-            No photo is stored for this position, so there is nothing to check the card
-            against. The copy is still recorded at the position below.
+            No photo is stored for this position, so there is nothing to check the card against.
+            The copy is still recorded at the position below.
           </p>
         ) : (
           <img
@@ -1396,15 +1006,8 @@ function Confirm({
           <p className="inventory-confirm-boxname">{copy.place.box_name}</p>
         )}
 
-        {/* The same bar the row carries, so what the owner confirms against is what he chose
-            the copy by. Nothing here is computed: `spansOf` draws the server's own numbers.
-
-            THAT SENTENCE IS WHY `sections` IS PASSED HERE TOO. The rows draw the box's real
-            dividers now; a panel left without the layout would draw the coarser three-run
-            picture, and the bar in front of the owner at the moment he confirms would not be
-            the bar he picked the copy by. Both true, differently shaped, one of them arriving
-            only at the decision point — which is the one place on this screen where a changed
-            picture could make somebody hesitate over the right card. */}
+        {/* The same bar the row carries, so what the owner confirms against is what he chose the
+            copy by. Nothing here is computed: `spansOf` draws the server's own numbers. */}
         <PositionBar place={copy.place} persona="owner" sections={sections} />
 
         <div className="inventory-confirm-actions">
@@ -1418,32 +1021,20 @@ function Confirm({
   )
 }
 
-/* The four reasons a card leaves without a sale, in the store's own vocabulary
- * (`store/master.py:RETIRE_REASONS`, D26). Human label beside the machine word, drawn at
- * two sizes per docs/DESIGN.md's owner-side rule: the label is read, the word is what greps
- * to the history line the choice lands in. The order is the enum's, not a ranking. */
-const REASONS: readonly { reason: RetireReason; label: string }[] = [
-  { reason: 'pulled', label: 'Pulled out' },
-  { reason: 'damaged', label: 'Damaged' },
-  { reason: 'lost', label: 'Lost' },
-  { reason: 'given_away', label: 'Given away' },
-]
-
-/* The retire panel — `Confirm`'s sibling for D26's write, sharing its scrim, its photo and
- * its bar so what the owner confirms against is the same picture on both writes.
+/* The retire panel — `Confirm`'s sibling for D26's write, sharing its scrim, its photo and its
+ * bar so what the owner confirms against is the same picture on both writes.
  *
- * FOUR ANSWERS, SO NO FILL. docs/DESIGN.md gives the solid accent to a screen with exactly
- * one thing to do, and this panel is a choice — filling one reason would teach the queue's
- * "a screen with two answers gets no fill" rule a counterexample on the next screen over.
- * The reason buttons are the confirm: pressing one writes the retirement, pressing nothing
- * writes nothing, and Escape or the scrim leaves the way `Confirm` does. There is no
- * separate "Retire" button to press after the reason, because the reason IS the decision —
- * a second press would be the acknowledgement dialog the design bans.
+ * FOUR ANSWERS, SO NO FILL. docs/DESIGN.md gives the solid accent to a screen with exactly one
+ * thing to do, and this panel is a choice — filling one reason would teach the queue's "a screen
+ * with two answers gets no fill" rule a counterexample on the next screen over. The reason
+ * buttons are the confirm: pressing one writes the retirement, pressing nothing writes nothing,
+ * and Escape or the scrim leaves the way `Confirm` does. There is no separate "Retire" button to
+ * press after the reason, because the reason IS the decision — a second press would be the
+ * acknowledgement dialog the design bans.
  *
- * FOCUS LANDS ON CANCEL, not on a reason. `Confirm` focuses its one action because it has
- * one; focusing any reason here would make Enter answer a question the owner has not read
- * yet, and the four are not ranked. Cancel is the one control whose accidental press costs
- * nothing. */
+ * FOCUS LANDS ON CANCEL, not on a reason. `Confirm` focuses its one action because it has one;
+ * focusing any reason here would make Enter answer a question the owner has not read yet, and
+ * the four are not ranked. Cancel is the one control whose accidental press costs nothing. */
 function RetirePanel({
   copy,
   sections,
@@ -1480,8 +1071,8 @@ function RetirePanel({
 
         {gone ? (
           <p className="inventory-note-text">
-            No photo is stored for this position, so there is nothing to check the card
-            against. The copy is still recorded at the position below.
+            No photo is stored for this position, so there is nothing to check the card against.
+            The copy is still recorded at the position below.
           </p>
         ) : (
           <img
@@ -1499,8 +1090,8 @@ function RetirePanel({
 
         <PositionBar place={copy.place} persona="owner" sections={sections} />
 
-        {/* What the choice does, before the choices: the record stays, the gap stays. Kept
-            to one sentence — the panel is a decision point, not documentation. */}
+        {/* What the choice does, before the choices: the record stays, the gap stays. Kept to one
+            sentence — the panel is a decision point, not documentation. */}
         <p className="inventory-note-text">
           The card leaves the inventory without a sale. Its record and photo stay, and the
           position is never reused.
@@ -1528,176 +1119,5 @@ function RetirePanel({
         </div>
       </div>
     </div>
-  )
-}
-
-/* One group: the summary that is always visible, and the copies underneath it.
- *
- * `<details>` rather than a button and a `useState` set of open keys, for the reason App.tsx
- * gives for using plain anchors and no click handler: the browser already does this, and
- * reproducing it in React would be code to keep working — keyboard, focus and the open state
- * itself — in exchange for nothing this screen needs.
- *
- * COLLAPSED BY DEFAULT, and this one is an ASSUMPTION the doc does not settle. A Gate B run
- * may be two hundred cards (capture-app spec §10.1), and open by default is a two-hundred-row
- * wall on a screen whose first job is to say how many copies of what exist. The summary
- * carries the count and the state tally, which is most of what a lookup wants; the positions
- * are one click away. Watching a real run settles it — if every group gets opened, they
- * should start open. */
-function GroupRow({ group }: { group: Group }) {
-  const loose = group.sku === null
-
-  /* The copy rows carry a card name only where the summary above cannot say it for them:
-   * the no-SKU group, whose copies are DIFFERENT cards, and a SKU whose copies were read as
-   * more than one name. A SKU group is by definition one card, and repeating its name down
-   * forty rows is the dense-grey-table failure docs/DESIGN.md names by the front door. */
-  const showNames = loose || group.names.length > 1
-
-  /* The machine line under the name. `sku: null` rather than a friendlier phrase for the
-   * group that has none — the field and its state, in the shape the pull preview's
-   * `photo: null` panel established, so the screen and a `curl /inventory` use one vocabulary.
-   *
-   * Distinct values are joined rather than reduced to one. For `sku` there is only ever the
-   * one; for condition and number there should be, and a group showing two is a run worth
-   * looking at rather than a display to tidy. */
-  const meta = loose
-    ? ['sku: null']
-    : [
-        `sku ${group.sku ?? ''}`,
-        ...(group.conditions.length > 0 ? [group.conditions.join(' / ')] : []),
-        ...(group.numbers.length > 0 ? [group.numbers.join(' / ')] : []),
-      ]
-
-  return (
-    <details className="inventory-group">
-      <summary className="inventory-summary">
-        {/* Drawn rather than left to the browser's own disclosure triangle. The native marker
-            is sized and coloured by the browser and differs between the one the owner works
-            in and the Chromium `make screenshot` renders — and comparing that render against
-            the reference is the loop docs/DESIGN.md calls mandatory. A glyph in the utility
-            face is one system in both. */}
-        <span className="inventory-marker" aria-hidden="true" />
-
-        {/* The copy count is the number D7 is about, so it is the utility face and the
-            heaviest thing in the row. */}
-        <span className="inventory-copies-count">{count(group.copies.length, 'copy', 'copies')}</span>
-
-        <span className="inventory-main">
-          <span className="inventory-name">
-            {loose
-              ? 'No SKU yet'
-              : group.names.length === 0
-                ? 'Not identified yet'
-                : group.names.join(' / ')}
-          </span>
-          <span className="inventory-meta">{meta.join(' · ')}</span>
-        </span>
-
-        {/* TWO CLUSTERS IN ONE COLUMN, CAPTIONED, BECAUSE THEY ARE COUNTS OF DIFFERENT THINGS.
-            The left one counts card records, each of which is a position somebody can walk to
-            a box for. The right one is quantity against a SKU, and D7 says which physical
-            copies back it is "deliberately not recorded" — so `live 3` names no card, and a
-            reader who takes it for three positions has been told a thing that is not true.
-
-            Before the store refactor all six words were one list, correctly: every one of them
-            was a state a position wore. Rendering them that way now would be the old fiction
-            redrawn — the exact reading that made `cli/cmd_join.py` pick which four of seven
-            identical copies were sellable.
-
-            `positions` and `listed` rather than a heavier separator, because the captions carry
-            the one fact the words alone cannot: `pushed` and `identified` are both plainly
-            pipeline vocabulary, and nothing in either word says which unit it is counted in.
-            Muted with no number beside them, so they read as labels and not as data.
-
-            The captions appear only when the second cluster does. A group with no listing
-            record draws exactly what this row drew before, uncaptioned — there is nothing to
-            disambiguate, and a lone caption over a lone cluster is chrome.
-
-            Every state present, none of them merged, and the same on the listing side:
-            `staged` and `live` are two facts about two different things. `store/master.py`
-            says why in as many words — D7's refill maths reads the LIVE number, and an import
-            that was staged and never moved live has no live quantity at all. A display that
-            merged them would hide exactly the box that is not earning, which is why the zeros
-            are drawn rather than dropped once a record exists at all. */}
-        <span className="inventory-tally">
-          {group.listed === null ? null : (
-            <span className="inventory-tally-item">
-              <span className="inventory-tally-state">positions</span>
-            </span>
-          )}
-          {group.states.map((entry) => (
-            <span className="inventory-tally-item" key={entry.state}>
-              <span className="inventory-tally-state">{entry.state}</span>
-              <span className="inventory-tally-count">{entry.count}</span>
-            </span>
-          ))}
-          {group.listed === null ? null : (
-            <>
-              <span className="inventory-tally-item">
-                <span className="inventory-tally-state">listed</span>
-              </span>
-              {LISTED_ORDER.map((stage) => (
-                <span className="inventory-tally-item" key={stage}>
-                  <span className="inventory-tally-state">{stage}</span>
-                  <span className="inventory-tally-count">{group.listed?.[stage] ?? 0}</span>
-                </span>
-              ))}
-            </>
-          )}
-        </span>
-      </summary>
-
-      <div className="inventory-body">
-        {loose ? (
-          <p className="inventory-note-text">
-            A card is given a SKU when <code className="inventory-inline">emit</code> writes its
-            row into an import file, and never before — so this group holds every copy the
-            pipeline has not pushed yet. Cards still to be identified or joined are here, and so
-            are the backstock copies past the live cap, which{' '}
-            <code className="inventory-inline">emit</code> leaves unpushed by design (D7). None
-            of them is lost: each one sits at a position in a box, and stays visible here until a
-            run writes a row for it.
-          </p>
-        ) : null}
-
-        {/* A table because this is one: four fields repeated per copy, read down a column.
-            docs/DESIGN.md's warning about the cataloguing tools that became spreadsheets is
-            about hierarchy and weight rather than about the element — and the hierarchy here
-            is between the group above and its copies, which are deliberately quieter. */}
-        {/* Bounded, and the stylesheet says why: the no-SKU group is 714 copies today, and an
-            unbounded table turned one press into twenty-seven screens of page. */}
-        <div className="inventory-copies">
-        <table className={showNames ? 'inventory-table inventory-table-named' : 'inventory-table'}>
-          <thead>
-            <tr>
-              <th className="inventory-cell-position">Position</th>
-              {showNames ? <th className="inventory-cell-name">Card</th> : null}
-              <th className="inventory-cell-state">State</th>
-              <th className="inventory-cell-since">Since</th>
-            </tr>
-          </thead>
-          <tbody>
-            {group.copies.map((copy) => (
-              <tr key={copy.key}>
-                <td className="inventory-cell-position">
-                  {positionLabel(copy.card) ?? `no label · ${copy.key}`}
-                </td>
-                {showNames ? (
-                  <td className="inventory-cell-name">
-                    {copy.card.name ?? 'not identified yet'}
-                  </td>
-                ) : null}
-                {/* The pipeline's own word, verbatim. A friendly label would be a second
-                    vocabulary nothing audits, which is the drift docs/DESIGN.md shows reason
-                    codes as machine strings to avoid. */}
-                <td className="inventory-cell-state">{copy.card.state}</td>
-                <td className="inventory-cell-since">{sinceDay(copy.card.state_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </div>
-    </details>
   )
 }

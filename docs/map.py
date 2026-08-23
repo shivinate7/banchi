@@ -831,14 +831,16 @@ COMPONENTS = [
                 "governed_by": ["D5", "D9", "D13", "D28", "D29"],
             },
             "src/Inventory.tsx": {
-                "does": "SEARCH AND SELL, over D7's SKU -> positions map. Type a card's name and "
-                        "GET /search answers with every physical copy, each carrying its "
-                        "position and a bar saying how far into the box it sits; empty the "
-                        "field and the browse beneath it is the original screen — one row per "
-                        "SKU with its copy count, expanding to the positions holding it. Two "
-                        "reads and no cache: the browse is GET /inventory grouped in the "
-                        "browser, the search is the server's own grouping, and neither is kept "
-                        "— there is one place inventory lives and it is not here.",
+                "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
+                        "correction on 2026-08-23 was that this is \"find a card in a box-based "
+                        "system\", so the box walk is the spine and search narrows it. This file "
+                        "is the route, the title, and the sale/retire flow; BoxBrowse owns the "
+                        "walk and hands back the selected card, and CopiesPanel draws D7's "
+                        "SKU -> positions map for whichever card the walk points at. It also "
+                        "carries the four writes that had no client half at all until the same "
+                        "day: box-wide and per-card claim corrections, the mid-box delete, and "
+                        "the whole-box delete. No cache: there is one place inventory lives and "
+                        "it is not here.",
                 "note": "IT WRITES NOW, AND ITS HEADER OVERTURNS ITS OWN OBJECTION IN PLACE "
                         "rather than deleting it. The file argued at length that a sold button "
                         "here would be 'the same irreversible-looking write with neither guard, "
@@ -948,10 +950,10 @@ COMPONENTS = [
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
                                               "off the SKU rather than counted from the copies.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
-                                      "governed_by": ["D5", "D7"]},
+                                      "governed_by": ["D5", "D7", "D31"]},
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
@@ -1004,6 +1006,22 @@ COMPONENTS = [
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
+            },
+            "tests/inventory.spec.ts": {
+                "does": "the owner's inventory screen in a browser: the unified box walk, the "
+                        "folding sections, mass-select, and the FOUR WRITES — box-wide claims, "
+                        "per-card claims, the mid-box delete and the whole-box delete — "
+                        "asserted at the request boundary against a stubbed server, so a "
+                        "control that draws but sends the wrong body fails here.",
+                "governed_by": ["D5", "D7", "D10", "D13", "D24", "D26", "D31"],
+                "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
+                        "EXIST. That rule was written on 2026-08-23 after three routes shipped "
+                        "with full T7 coverage and no client function and no control — green "
+                        "harness, green docs-audit, unusable product. T7 proves the server "
+                        "honours a request; this proves a human pressing a control produces "
+                        "that request. Neither can see the other's half. Like its siblings it "
+                        "is NOT a harness test: it starts a browser, so it runs under "
+                        "`make design-check` and is deliberately off the commit path.",
             },
             "tests/fulfillment.spec.ts": {
                 "does": "all nine rows of the Fulfillment constraints table against the "

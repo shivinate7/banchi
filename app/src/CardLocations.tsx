@@ -134,6 +134,19 @@ export type CardLocationsProps = {
    *  precisely the drift one component with two skins exists to prevent. */
   sections?: ReadonlyMap<number, readonly SectionDetail[]>
 
+  /** Which copy the caller is currently pointing at, or undefined. OWNER SKIN ONLY, and the
+   *  Fulfiller's ignores it by construction rather than by care: his view has no walk and no
+   *  cursor, so "the current one" is not a fact that exists on his screen. `Fulfillment.tsx`
+   *  passes nothing and gets exactly what it got before.
+   *
+   *  WHY IT IS NEEDED AT ALL. Since D31's merge the owner reaches this list by selecting a card
+   *  in the box walk, so one of these rows IS the card whose photograph is on screen beside it.
+   *  Unmarked, a group of four identical copies gives no answer to "which of these am I looking
+   *  at" — and the answer decides which slot a hand goes to. Carried as `aria-current` and drawn
+   *  as ink against muted, the same mark the walk's own rows use, so it is one idiom rather than
+   *  a second. */
+  currentKey?: string
+
   /** Replaces the action slot for EVERY copy, sold ones included.
    *
    *  THE SOLD ONES ARE THE POINT OF THE PROP, not an edge case it happens to cover.
@@ -199,6 +212,7 @@ function OwnerRows({
   busyKey,
   soldKeys,
   sections,
+  currentKey,
   renderAction,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* The machine line, in the shape `Inventory.tsx` established so that this screen and a
@@ -249,7 +263,13 @@ function OwnerRows({
              per row so the presence test and the rendering cannot disagree. */
           const between = placeSentence(copy.place)
           return (
-            <li className="card-locations-row" key={copy.key}>
+            <li
+              className="card-locations-row"
+              key={copy.key}
+              /* On the row and not on a control, because it marks WHICH COPY rather than which
+                 thing is pressable — the row is not a button here, unlike the walk's. */
+              aria-current={copy.key === currentKey ? 'true' : undefined}
+            >
               <span className="card-locations-place">
                 {pooled ? (
                   /* The pooled fact where the label would have gone — see `isPooled`. The

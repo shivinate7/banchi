@@ -1163,12 +1163,50 @@ and `#/pull` walked a box with photographs. Same store, same records, three look
 one question a person actually arrives with — *what is in this box, and can I click it* —
 was answerable on the screen named after a fulfilment errand and nowhere else.
 
-**All three collapse into `#/inventory`.** Two ways in, because there are exactly two
-questions: **search by card** (which is the SKU→positions map D7 already built, and the
-sell action that goes with it) and **browse by box → section → card**, which is the walk
-`#/pull` already implemented and tuned. Box operations — name, sections, seal, delete —
-live on the box header inside the browse, beside the box they operate on, rather than on a
-route of their own. `#/boxes` and `#/pull` cease to exist as routes.
+**All three collapse into `#/inventory`.** `#/boxes` and `#/pull` cease to exist as routes.
+Box operations — name, sections, seal, delete — live on the box header inside the browse,
+beside the box they operate on.
+
+**IT SHIPPED AS TWO MODES BEHIND A SWITCH, AND THAT WAS WRONG.** This entry first read "two
+ways in, because there are exactly two questions", and it was built that way: a segmented
+control offering *Browse the boxes* or *Find a card*. The owner, on seeing it:
+
+> *"i imagined moreso in this merge that these wouldn't be two tabs, instead it's basically
+> find a card in a box-based system if anything.."*
+
+That is a better reading of the same merge and it is the one that shipped on 2026-08-23.
+**The box walk is the SPINE — box → section → card — and finding a card is search over it,
+not a mode beside it.** The switch is gone. D7's SKU→positions map did not go with it: it is
+drawn for whichever card the walk currently points at, so "every copy of this card and where
+each one sits" is a property of the selected card rather than a different screen. Searching
+narrows the walk and the box strip together; picking a result puts you in the box, at the
+card, with its copies beneath it.
+
+**Two tabs was the wrong answer for a reason worth keeping**: it preserved the old screens'
+boundary inside the new route, which is the shape a merge takes when it is performed on the
+routing table instead of on the question the screens answer. There was only ever one
+question — *where is this card* — asked from two directions.
+
+**THE FOLD IS PRESENTATION AND NEVER A FILTER.** Sections collapse (box 2 holds 22 of them
+over 544 cards), and the collapsed set does not touch what the keyboard walks: arrows,
+PageUp/PageDown, Home/End and the box strip all still traverse the whole box, and stepping
+into a shut section opens it. A fold that also filtered would make the arrow keys and the
+scrollbar disagree about what the box contains, and the operator would have no way to tell
+which one was lying. Not persisted, for the reason D19 gives about arming: state that acts
+on its own must be re-established deliberately.
+
+**MASS-SELECT IS BOX-SCOPED AND IS NOT PERSISTED.** The selection clears on a box change
+because the write it feeds is box-scoped, and a selection surviving into a box it cannot
+apply to is a loaded gun. It survives a FOLD — the count is carried on the status line and on
+every section header — because a fold that could hide what a write would reach is the one
+combination of these two features that is genuinely dangerous.
+
+**The three routes that had no client half at all landed here, on this screen** — the
+whole-box delete, the mid-box delete with its contiguous shift, and the retroactive claim
+corrections at both the card and the selection level. They existed with full T7 coverage and
+no control anywhere, which is what produced `CLAUDE.md`'s route-is-not-a-feature rule; this
+is where they became reachable, and `app/tests/inventory.spec.ts` is what asserts they stay
+that way.
 
 **The re-shoot control comes with it and may not be dropped in the move.** D26 put it on the
 pull preview deliberately — *"the screen whose whole job is looking at one stored photo
