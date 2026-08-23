@@ -96,9 +96,11 @@ export function CameraPicker({ camera }: { camera: Camera }) {
           mounted on its side so a portrait card fills the field — D13's frame-tight rule
           done properly — and the Cam Link reports the sensor's landscape frame regardless,
           so without this every stored photo holds a sideways card, which is what sent 45
-          of the first real run's 53 cards to the review queue misread. The live preview is
-          deliberately left as the camera sends it; the Last-capture panel shows the stored
-          photo, so one capture confirms the choice. Chips rather than a second select:
+          of the first real run's 53 cards to the review queue misread. The capture
+          screen's previews turn with this setting (display only — the stored bytes and
+          the motion sampler read the untransformed frames), and the Last-capture panel
+          shows the stored photo, so one capture still confirms the choice end to end.
+          Chips rather than a second select:
           four values, one glance, and the active one reads without opening anything. */}
       <p className="camera-picker-label" id="camera-picker-rotation-label">
         Photo rotation

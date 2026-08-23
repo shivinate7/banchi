@@ -61,10 +61,13 @@ const REMEMBERED_DEVICE_KEY = 'pkmnscan.capture.deviceId'
 /* Same store and same justification as the device id above: which way the camera is
  * mounted is a fact about THIS rig, wrong on any other machine, and nothing about a card
  * lives in it. The value is degrees clockwise that a captured frame is turned before it
- * is stored, so the card in the photo comes out upright. The live preview is deliberately
- * untouched — it shows what the camera sends, and the stored photo is the record that has
- * to be right; the Last-capture panel shows the stored photo, so one capture confirms the
- * choice.
+ * is stored, so the card in the photo comes out upright. The live preview turned with it
+ * from 2026-08-23 — CSS only, on the capture screen — after the first feeder session
+ * showed a landscape frame spending two thirds of itself on letterbox around an upright
+ * card. What stays true is the part that matters: THE PIXELS ARE UNTOUCHED. drawImage
+ * reads the element's intrinsic frames, which no CSS transform reaches, so the encode
+ * worker's input and the motion sampler's grid are exactly what they were when the
+ * preview drew sideways.
  *
  * Why this exists, measured 2026-08-22 on the first real identification run this repo
  * ever made: the rig's camera is mounted on its side so a portrait card fills the
@@ -133,8 +136,9 @@ export type Camera = {
    *  last decoded frame, so nothing about the `<video>` says the picture is stale. */
   ready: boolean
 
-  /** Degrees clockwise a captured frame is turned before it is stored. The preview is
-   *  never rotated — see ROTATION_KEY. */
+  /** Degrees clockwise a captured frame is turned before it is stored. The capture
+   *  screen turns its previews to match; the frames themselves are never touched — see
+   *  ROTATION_KEY. */
   rotation: Rotation
 
   setRotation(value: Rotation): void

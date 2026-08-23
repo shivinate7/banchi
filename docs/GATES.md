@@ -336,10 +336,13 @@ by accident and the next run should not have to.
 - **The capture path is not the constraint.** An earlier burst the same evening did 25
   consecutive captures in ≤6 s, bounding press-to-commit at 250 ms, so Gate B ran with
   2.5–3.7× headroom.
-- **The half that is missing is the one the design turns on**: how much of each 660 ms the
-  card is *moving* versus sitting still. Nobody has measured it, §10.2 did not ask for it,
-  and a settle-based trigger is only feasible if the moving part is under ~358 ms at the
-  worst observed cycle.
+- **The half that was missing arrived 2026-08-23, off the first motion trace**: each cycle
+  is ~217 ms moving and ~400 ms still (min still gap 132 ms), period 623 ms burst-to-burst
+  over 86 cycles — comfortably inside the settle design's feasibility bound. The same trace
+  convicted the first `tLo`: live still-noise runs eleven times the stored-JPEG floor it
+  was derived from, which silently cost 14 of 86 cards; retuned, the offline replay scores
+  86/86 with zero double-fires. `docs/specs/motion-trigger.md` carries the numbers; what
+  remains live is the confirmation run.
 
 **None of the above came from anything the repo writes down.** `captured_at` was
 whole-second until 2026-08-22, which is coarser than the period it was timing; the real

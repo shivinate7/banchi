@@ -560,6 +560,16 @@ export function CaptureScreen() {
 
   const canCapture = halt === null && !busy && box !== null && camera.ready
 
+  /* A side-mounted camera stores portrait photos, and as of 2026-08-23 the previews turn
+   * with it: the frames go portrait and the live video is rotated by CSS so the operator
+   * sees the card the way the pipeline will. Display only — the encode worker and the
+   * motion sampler both read the element's intrinsic frames, which a CSS transform never
+   * touches. */
+  const turned = camera.rotation === 90 || camera.rotation === 270
+  const frameClass = turned ? 'capture-frame capture-frame-portrait' : 'capture-frame'
+  const liveMediaClass =
+    camera.rotation === 0 ? 'capture-media' : `capture-media capture-media-turn${camera.rotation}`
+
   /* Why the capture control is unavailable — first match wins, in the order the operator
    * can act on them.
    *
@@ -792,12 +802,12 @@ export function CaptureScreen() {
       <div className="capture-stage">
         <section className="capture-panel">
           <p className="capture-panel-name">Live</p>
-          <div className="capture-frame">
+          <div className={frameClass}>
             {/* muted and playsInline are required for autoplay to start at all; neither is a
                 preference. No facingMode anywhere — v1 bug 3, and D13 records why: the Cam
                 Link presents the rig camera as a plain UVC webcam, indistinguishable by kind
                 from the laptop's own. */}
-            <video className="capture-media" ref={camera.videoRef} autoPlay playsInline muted />
+            <video className={liveMediaClass} ref={camera.videoRef} autoPlay playsInline muted />
             {/* The state of the frame, not an explanation of it — the picker below carries
                 the explanation. `deviceId` is null when nothing is open at all, which
                 `useCamera` guarantees is never a silent stand-in for another camera. */}
@@ -916,7 +926,7 @@ export function CaptureScreen() {
 
         <section className="capture-panel">
           <p className="capture-panel-name">Last capture</p>
-          <div className="capture-frame">
+          <div className={frameClass}>
             {last === undefined ? (
               <p className="capture-frame-note">
                 Nothing captured in this session yet. The photo of each card lands here, big
@@ -969,7 +979,9 @@ export function CaptureScreen() {
                   fact in words, and what the thumbnail adds — whether this is the card you
                   meant — is not a thing alt text can carry. */}
               <img
-                className="capture-undo-thumb"
+                className={
+                  turned ? 'capture-undo-thumb capture-undo-thumb-portrait' : 'capture-undo-thumb'
+                }
                 src={photoSrc(undoTarget.box, undoTarget.index, revision)}
                 alt=""
               />
