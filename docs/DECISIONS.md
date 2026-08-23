@@ -247,6 +247,28 @@ makes a printed position label worth trusting, and nothing that renumbers may ex
 A sale is the opposite case and is unchanged. `sold` is a state, the record stays, and the
 gap is permanent.
 
+**THREE OWNER RULINGS, 2026-08-23 (evening), each narrowing or overruling a line above:**
+
+1. **Mid-box delete WITH contiguous shift exists now, bounded.** "Nothing that renumbers may
+   exist" is overruled for exactly one case: deleting a junk capture mid-box when **every
+   higher-index card in that box is still `captured` or `identified`, with no listing hold**
+   — the physical truth of pulling a card out of a contiguous stack, where the cards behind
+   it really do slide forward. The boundary is what keeps the old rule's reason alive: a
+   sold or retired gap above the deleted index refuses (`renumber_blocked`), because
+   shifting across it would close a gap that means something, and a listed card's row is
+   already in a file that names its position. Photos and sidecars are renamed inside the
+   same locked operation; a `renumbered` history event maps every old index to its new one,
+   so the log stays true across the shift.
+2. **Capture-undo narrows to `captured` alone.** "Undo at `identified` is ALLOWED — only the
+   identification fee is lost" is reversed: once a card has been identified it has made it
+   into inventory proper, and the capture screen's undo may not reach it. The remedies for
+   an identified card are the ones built for it — re-shoot, retire, or the mid-box delete
+   above where its bounds allow.
+3. **A whole box may be deleted** — records, photos, sidecars, queue entries, cache — gated
+   as the genuinely destructive action it is (docs/DESIGN.md's clause), and refused while
+   the box holds any sold, retired, or listing-held card: those records are history and
+   commitments, not clutter.
+
 ## D11 — Listing path is a catalog join, never a from-scratch CSV
 
 TCGplayer flow: Pricing tab → Export Filtered CSV (All Printings, so one file covers every
