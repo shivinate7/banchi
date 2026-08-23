@@ -809,16 +809,24 @@
 
 /* A focused row's ring hugs the row inside the panel: negative offset rather than the
    default 2px out, which would clip on the panel's own edge for a full-width control. */
-/* THE INSET RING STAYS HERE, AND THE RADIUS IS WHAT WAS ACTUALLY MISSING. A row runs the
-   full width of the sidebar, so a ring standing 2px OUTSIDE it is clipped by the panel edge
-   on both sides — which is the reason this override exists and it is still a good one. What
-   made it read as an ugly box, per the owner on 2026-08-23, was the square corners: the
-   token block publishes one radius and this ring did not take it, so a 2px black rectangle
-   met the hairline separators at four hard points. Rounded, an inset ring reads as the row
-   being picked out rather than as a box drawn over it. */
+/* THE RING STANDS OUTSIDE THE ROW, AND THIS RULE NOW ONLY EXISTS FOR THE RADIUS. Two owner
+   reports on 2026-08-23 took it here. The first was that focus drew as an ugly box: the
+   token block publishes one radius and this ring took none, so a 2px black rectangle met
+   the hairline separators at four hard corners. The second, looking at the rounded result,
+   was that it wanted to be "a little larger" — and it did, because the offset was NEGATIVE
+   and the ring was painted inside the row, clamped against its own text.
+
+   The inset was there against a clipping risk that MEASURED AS NOT REAL: `.capture-row`
+   fills `.capture-side-fields` exactly, and that parent carries no padding and
+   `overflow: visible`, so nothing on this screen crops a ring standing proud of a row.
+   Checked in the browser rather than reasoned about, because the whole reason the inset
+   was written was a guess about clipping that nobody had looked at.
+
+   So this matches `base.css` on the offset and adds only the radius, which is the one
+   thing this rule was ever needed for. */
 .capture-row:focus-visible,
 .capture-opt:focus-visible {
-  outline-offset: -2px;
+  outline-offset: 2px;
   border-radius: 4px;
 }
 

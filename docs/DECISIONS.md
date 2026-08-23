@@ -54,7 +54,7 @@ Resolve normal / reverse holo / holo per card, in order:
    disagreement on every join and re-parked forever. An answer that does not outlive the
    question is not an answer. Tested by T3, not T4 — it is a join behaviour, not a ladder
    behaviour, which is the same distinction this entry draws.
-1. **Capture-time metadata** — variant toggle in the capture app, stored in the card's JSON
+1. **Capture-time metadata** — finish claim in the capture app, stored in the card's JSON
    sidecar. Primary path. `--variant` on the batch script **fills the finish in where a
    sidecar records none, and never overrides one** (clarified 2026-08-03; this entry
    previously read "only an override", which the implementation would have had to read as
@@ -67,7 +67,45 @@ Resolve normal / reverse holo / holo per card, in order:
    sidecars at all, where every card stocked in more than one finish would otherwise cost a
    review-queue tap. Overriding a recorded toggle buys nothing there, since there is
    nothing recorded to override.
-2. **Catalog-forced** — no capture-time metadata, and one condition row for that number
+
+   **THE CLAIM IS A SET, NOT A SINGLE FINISH** (amended 2026-08-23, by the owner). It was
+   one string, and one string can only describe a stack that is uniform. A stack that
+   genuinely holds two finishes had no honest claim available: the operator could name one
+   finish and be wrong about half the cards, or claim nothing and throw away the half of
+   the truth they did know. Both are worse than saying what is actually true, which is
+   *"this stack is normals and reverse holos"*.
+
+   **How many members it has decides what it DOES, and this is the whole of the amendment:**
+
+   - **One member behaves exactly as this rung always has.** It determines. It outranks the
+     catalog at rung 2 and it is what detection is cross-checked against at rung 3. Nothing
+     about the single-claim path changes, which is what makes this amendment additive
+     rather than a rewrite of the ladder — every card captured before today reads as a
+     one-member claim and resolves down the identical path.
+   - **Two or more members FILTER rather than determine.** The candidate rows are narrowed
+     to the claimed finishes, and the rungs below choose within what survives — the catalog
+     at rung 2 if exactly one row is left, detection at rung 3 otherwise. The claim is still
+     trusted; it is simply less specific, and a less specific claim can only ever narrow.
+   - **A filter that empties reviews as `metadata_not_stocked`**, the reason code that
+     already means "the operator claimed a finish this number is not stocked in". No new
+     reason code, because no new situation: claiming `{holo, reverse_holo}` against a number
+     that stocks only `normal` is the same fact as claiming `holo` against it, and the
+     triage a human does is the same.
+   - **An empty set is no claim at all**, identical to the null this field has always
+     allowed, and it is what leaves rungs 2 and 3 fully live.
+
+   **This is deliberately the shape D23 gave the rarity claim** — filter the candidates,
+   contradict if nothing survives — and the two now behave the same way for the same
+   reason. That is worth more than the feature: a capture screen whose claims all work one
+   way is one rule to hold, and the alternative was a finish that determines beside a rarity
+   that filters, with nothing but history to explain the difference.
+
+   **A BARE STRING READS AS A ONE-MEMBER SET, AND NOTHING EVER WRITES ONE.** The same
+   read-side backfill D21 uses for `game`, chosen for the same reason and with the same
+   boundary: 767 live records and every sidecar ever written carry a string, and a
+   migration that rewrote them would be a write across the whole store to change nothing
+   any reader could not do for itself. Read-side, never write-side — a new capture always
+   writes a list, so the file converges without a migration and without a version bump.2. **Catalog-forced** — no capture-time metadata, and one condition row for that number
    (most SV-era rares are holofoil-only), so the row decides.
 3. **Haiku `finish` field** (`normal | holo | reverse_holo`), returned in every
    identification call at no extra cost. Runs as a cross-check even when metadata exists:
