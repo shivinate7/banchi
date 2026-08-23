@@ -595,6 +595,55 @@ export type AnswerResult = {
   restores_to: AnswerOrigin | null
 }
 
+/** One member of a group answer, as `POST /review/group-answer` reports it back.
+ *
+ *  THE CLEARED FLAGS ARE TYPED BOOLEANS HERE AND DELIBERATELY ABSENT FROM `AnswerResult`,
+ *  and the difference is the route's age, not a change of mind. The single answer predates
+ *  its flags, so a screen there has to tell "the server said false" from "an older server
+ *  said nothing" and reads them off an `unknown`; this route was born carrying them, an
+ *  older server answers it `no_such_route` outright, and a type that hedged against a
+ *  server shape that has never existed would be caution about nothing.
+ *
+ *  `restores_to` KEEPS THE SINGLE ANSWER'S CONTRACT PER MEMBER: null means an undo of that
+ *  member would be refused, decided at the write rather than at the press that fails. The
+ *  screen offers the group's undo only when EVERY member can come back — a control that
+ *  reverses eleven of sixteen on its best day is the defect `SaleResult` records, at
+ *  scale. */
+export type GroupAnswerRow = {
+  /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
+  position: string
+  box: number
+  index: number
+  sku: string
+  condition: string
+  restores_to: AnswerOrigin | null
+  review_cleared: boolean
+  parked_cleared: boolean
+}
+
+/** What `POST /review/group-answer` answers. One direction only — the reversal is the
+ *  single answer's `{"undo": true}`, looped per position by the screen holding the group
+ *  receipt, so a partial reversal reports per position instead of pretending a group has
+ *  one outcome.
+ *
+ *  ALL OR NOTHING, WHICH IS WHY THIS SHAPE ONLY DESCRIBES SUCCESS. The route validates
+ *  every position before writing any (docs/DECISIONS.md, "A homogeneous queue may be
+ *  answered as a group" — the entry that reopens D4, narrowly), and a group with one
+ *  refused member refuses whole in `group_entry_refused` or `group_not_uniform` with
+ *  nothing written — so a body of this type means every named position was answered.
+ *
+ *  `reason` AND `condition` ARE THE GROUP'S SHARED FACTS, stated once because the route
+ *  just proved they are shared: one reason code across the group, one condition string
+ *  across every member's lone candidate row. The receipt line is built from them. */
+export type GroupAnswerResult = {
+  /** Every answered position, in request order. */
+  answered: string[]
+  count: number
+  reason: string
+  condition: string
+  results: GroupAnswerRow[]
+}
+
 // --------------------------------------------------------- where a card sits inside its box
 
 /** Where one card is, and how far into its box that is.

@@ -12,7 +12,7 @@ import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 # The store's root. Defaults to the repo, overridable so the inventory and its photos can
 # live on a different disk from the code — the same knob D15 gives the image mirror, for
@@ -22,6 +22,16 @@ HOME_ENV = "PKMNSCAN_HOME"
 INVENTORY_DIRNAME = "inventory"
 RUNS_DIRNAME = "runs"
 LOCK_NAME = ".lock"
+
+# The code ledger (docs/CODES-DECISIONS.md C8): one line per code card, the transcribed
+# code beside the position its photograph is keyed by, so a disputed code is looked up and
+# its photo re-read by eye. A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS —
+# C8's own sentence — which is why it lives under `inventory/` beside the master store:
+# that directory is gitignored whole, never committed, and already holds the one other
+# file that must not leave this machine. The runtime writing codes into this gitignored
+# file is the sanctioned path; the commit-time opsec rules exist so nothing here ever
+# crosses into a tracked one.
+CODES_LEDGER_NAME = "codes.jsonl"
 
 LOCK_TIMEOUT_SECONDS = 30
 LOCK_POLL_SECONDS = 0.05
@@ -48,6 +58,10 @@ def inventory_dir() -> Path:
 
 def runs_dir() -> Path:
     return home() / RUNS_DIRNAME
+
+
+def codes_ledger_path() -> Path:
+    return inventory_dir() / CODES_LEDGER_NAME
 
 
 @contextmanager
@@ -131,6 +145,36 @@ def append_jsonl(path: Path, record: Any) -> None:
         handle.write(json.dumps(record, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def upsert_jsonl(path: Path, records: Sequence, key_fields: Sequence[str]) -> None:
+    """Replace-or-append by key, rewriting the file whole through the atomic replace.
+
+    For a JSONL that is an INDEX rather than a log — one line per key, latest write wins —
+    where `append_jsonl` would accumulate a history nothing reads and every consumer would
+    have to learn "last line per key is the truth". The code ledger is the first consumer:
+    a re-identified code card replaces its own line, so "one line per code card" stays
+    literally true and a lookup needs no dedup rule.
+
+    Existing lines keep their order; replaced lines keep their place; genuinely new keys
+    append in the order given. Callers hold the store lock exactly as they would for any
+    other write under `inventory/` — this function does not take it for them, because the
+    callers that exist are already inside a locked session.
+    """
+
+    def key_of(record: Any):
+        return tuple(record.get(field) for field in key_fields)
+
+    fresh = {key_of(record): record for record in records}
+    out = []
+    for record in read_jsonl(path):
+        replacement = fresh.pop(key_of(record), None)
+        out.append(record if replacement is None else replacement)
+    out.extend(fresh.values())
+    write_atomic(
+        Path(path),
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in out).encode("utf-8"),
+    )
 
 
 def read_jsonl(path: Path):

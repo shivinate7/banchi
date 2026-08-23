@@ -25,6 +25,7 @@ identification, a cache hit, or a named failure. That is v1 bug #5 stated as a p
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +35,7 @@ import geometry
 from cli import runs
 from identify import batch, images, prompt, sidecar
 from pipeline import games
+from store import files as store_files
 from store import master
 from store.session import Store
 
@@ -85,6 +87,16 @@ class Item:
     cached: bool = False
     stale_prompt: bool = False
     identification: Optional[dict] = None
+    # THE SAME ANSWER TWICE, AND BOTH ARE NEEDED. `identification` is the model's RAW
+    # payload — what the cache stores, what the run's identifications.json records, and
+    # therefore per-profile in shape (`number` for Pokemon, `printed_id` for misc, `code`
+    # for a code card). `parsed` is that payload already read through the profile's own
+    # parser by `identify/batch.py`, which is the ONE place the per-profile key mapping
+    # lives — so everything downstream of collection that wants "the fields the record
+    # carries" reads this and never re-implements a mapping per strategy. None whenever
+    # `identification` is None, and ALSO for a cache hit, whose payload was parsed on the
+    # run that paid for it and is not re-parsed on a run that did not.
+    parsed: Optional[prompt.Identification] = None
     status: str = "pending"
     detection: str = NOT_ATTEMPTED
     retries: int = 0
@@ -318,6 +330,7 @@ def _apply(items_by_key: Dict[str, Item], run_result: batch.BatchRun) -> None:
         item.status = outcome.status
         if outcome.identification is not None:
             item.identification = dict(outcome.identification.raw)
+            item.parsed = outcome.identification
         else:
             item.error = outcome.error
 
@@ -331,6 +344,74 @@ def _needs_retry(item: Item):
     if item.identification is not None and item.weak:
         return True, True, "low_confidence"
     return False, False, ""
+
+
+# ---------------------------------------------------------------- the code ledger (C8)
+
+# The registry key for the one game whose identifications are transcribed codes. A
+# LITERAL, not read off some entry attribute, because "which game feeds the code ledger"
+# is C8's own ruling rather than a property any registry field carries — the same way
+# `pipeline/games.DEFAULT_GAME` names Pokemon by its key.
+CODE_GAME = "pokemon_code"
+
+
+def _code_ledger_lines(items: List[Item], run_name: str, captured_at_of):
+    """(lines, skipped): one C8 ledger line per code card this run holds a code for.
+
+    THE LINE IS THE DISPUTE FLOW'S INDEX ENTRY — code text beside the position its
+    photograph is keyed by — so a line is written exactly when there is a code to look up:
+
+      - a code card with no position is already a named failure (`no_position`, main
+        queue); there is no key to file its line under, and it is not silently dropped —
+        it is loudly queued, which is the stronger guarantee.
+      - an empty transcription is a card the model saw no code on. Nothing to look a
+        dispute up by, so no index entry; the empty read still stands in the run payload
+        and on the record like any other, and `skipped` names the position.
+      - a CACHED code card is included: its answer was paid for on an earlier run, and
+        re-upserting the same line is idempotent while also healing a ledger file that
+        was lost — `inventory/` is never in git, so nothing else would re-create it. The
+        cached payload is parsed here under the card's own strategy; one that no longer
+        parses (a profile's schema moved under it) is skipped BY NAME rather than
+        guessed at, and re-identifying it is the remedy.
+
+    `captured_at` comes off the store record rather than the sidecar, because the record
+    is where capture time has lived since the server first stamped it and this function
+    runs inside the same locked session that just upserted the record.
+    """
+    lines: List[dict] = []
+    skipped: List[str] = []
+    for item in items:
+        if item.game != CODE_GAME or item.identification is None:
+            continue
+        if not item.capture.has_position:
+            skipped.append(f"{item.capture.photo.name}: no position to key the line by")
+            continue
+        parsed = item.parsed
+        if parsed is None:
+            try:
+                parsed = prompt.parse(
+                    item.identification, item.strategy or prompt.DEFAULT_PROFILE
+                )
+            except (prompt.MalformedIdentification, LookupError) as exc:
+                skipped.append(f"{item.key}: cached answer does not parse — {exc}")
+                continue
+        if not parsed.number:
+            skipped.append(f"{item.key}: the model read no code off this card")
+            continue
+        lines.append(
+            {
+                "box": item.capture.box,
+                "index": item.capture.index,
+                "code": parsed.number,
+                "name": parsed.name or None,
+                "photo": str(item.capture.photo),
+                "set_hint": item.capture.set_hint,
+                "captured_at": captured_at_of(item.key),
+                "confidence": parsed.confidence,
+                "run": run_name,
+            }
+        )
+    return lines, skipped
 
 
 def run(args, say) -> int:
@@ -690,15 +771,51 @@ def run(args, say) -> int:
                 )
                 if clash:
                     disagreements.append(clash)
-            if item.capture.has_position:
+            if item.capture.has_position and item.parsed is not None:
+                # THE PARSED FIELDS, NOT THE RAW PAYLOAD'S KEYS. The raw payload is
+                # per-profile in shape — a misc card answers `printed_id`, a code card
+                # answers `code` — and reading `.get("number")` off it wrote a record
+                # only Pokemon's profile could ever fill. The parser is where each
+                # profile already says which of its fields is the name and which is the
+                # identifier, so the record reads the parser's answer: for a code card
+                # that is C8's whole mechanism — the transcribed code lands in `number`,
+                # which is the column `GET /search` matches, and the dispute lookup is
+                # the existing search. For a Pokemon card the values differ from the raw
+                # keys only by the parser's own hygiene (strip, `#`-removal, case fold
+                # on confidence), which is what the join reads anyway.
                 writable.inventory.record_identification(
                     item.key,
-                    name=item.identification.get("name"),
-                    number=item.identification.get("number"),
-                    printed_total=item.identification.get("printed_total"),
-                    confidence=item.identification.get("confidence"),
+                    name=item.parsed.name,
+                    number=item.parsed.number,
+                    printed_total=item.parsed.printed_total,
+                    confidence=item.parsed.confidence,
                     run=run_dir.name,
                 )
+
+        # C8's ledger, in the same locked session that recorded the cards it indexes.
+        # TWO COPIES WITH TWO JOBS: `inventory/codes.jsonl` is the standing index the
+        # dispute lookup reads — upserted by position, so "one line per code card" stays
+        # literally true across re-identifications — and the run directory's copy is this
+        # run's export, written whole beside identifications.json, deletable with the run
+        # (runs/ is derived; inventory/ is the master). BOTH live under paths .gitignore
+        # already covers, which was verified before a byte was written: a ledger of
+        # unredeemed codes never reaches a commit.
+        ledger_lines, ledger_skipped = _code_ledger_lines(
+            items,
+            run_dir.name,
+            lambda key: getattr(writable.inventory.cards.get(key), "captured_at", None),
+        )
+        if ledger_lines:
+            store_files.upsert_jsonl(
+                store_files.codes_ledger_path(), ledger_lines, ("box", "index")
+            )
+        if ledger_lines or ledger_skipped:
+            store_files.write_atomic(
+                Path(run_dir.directory) / store_files.CODES_LEDGER_NAME,
+                "".join(
+                    json.dumps(line, sort_keys=True) + "\n" for line in ledger_lines
+                ).encode("utf-8"),
+            )
 
     # --------------------------------------------------------------------------- report
     answered = [i for i in items if i.identification is not None]
@@ -709,6 +826,14 @@ def run(args, say) -> int:
     say("")
     say(f"identified      {len(answered)}/{len(items)}")
     say(f"tokens          in {usage_in}, out {usage_out}")
+    if ledger_lines:
+        say(
+            f"code ledger     {len(ledger_lines)} line(s) -> "
+            f"{store_files.codes_ledger_path()} (standing index, upserted by position) "
+            f"and {Path(run_dir.directory) / store_files.CODES_LEDGER_NAME}"
+        )
+    for reason in ledger_skipped:
+        say(f"                  no ledger line: {reason}")
     if stale:
         say(f"older prompt    {len(stale)} answer(s) reused from a previous prompt "
             f"(recorded, not re-read — see v2 §4.6)")

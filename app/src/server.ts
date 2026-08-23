@@ -6,6 +6,7 @@ import type {
   CardSummary,
   Finish,
   GameRegistry,
+  GroupAnswerResult,
   Inventory,
   Place,
   PlaceNeighbor,
@@ -640,6 +641,46 @@ async function answerCall(
  */
 export function undoAnswer(box: number, index: number): Promise<AnswerResult> {
   return answerCall(box, index, { undo: true })
+}
+
+/**
+ * Answer a homogeneous group of queued cards in one write — `POST /review/group-answer`,
+ * docs/DECISIONS.md's "A homogeneous queue may be answered as a group" (the entry that
+ * reopens D4's one-card-at-a-time, narrowly).
+ *
+ * EACH CARD IS ANSWERED WITH ITS OWN SINGLE CANDIDATE, and every element's pair is copied
+ * off that card's own lone row exactly as `answerReview` copies a single one — the route
+ * re-validates each against its own queue entry with the single answer's own refusals, so
+ * a group drawn from a queue file a later join has rewritten is caught rather than obeyed.
+ *
+ * ALL OR NOTHING, WHICH IS THE PART A CALLER MUST NOT PAPER OVER. A group with one refused
+ * member refuses whole with nothing written: `group_entry_refused` when the store has moved
+ * past the screen (reload and re-filter — every failing position is named with its own code
+ * in the message), `group_not_uniform` when the group never qualified (mixed reasons, an
+ * entry with more than one row, mixed conditions — those cards are answered one at a time).
+ * So a resolved promise means every position landed, and a rejected one means none did;
+ * there is no partial state for a screen to reconcile.
+ *
+ * THE REVERSAL IS NOT ON THIS ROUTE. Every member gets its own `answered` history line, so
+ * `undoAnswer` above reverses any of them exactly as if it had been answered alone — the
+ * screen holding the group receipt loops it per position, which is what lets a partial
+ * REVERSAL report per position instead of pretending a group has one outcome. Read each
+ * member's `restores_to` before drawing that receipt: the contract is `answerReview`'s,
+ * per member.
+ */
+export async function answerReviewGroup(
+  answers: readonly ReviewAnswer[],
+): Promise<GroupAnswerResult> {
+  return (await request('/review/group-answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      /* Rebuilt field by field rather than passed through, so a caller's wider object —
+       * a row with its label, say — cannot leak extra keys onto the wire, where the route
+       * refuses them as `answer_invalid` and the whole group with them. */
+      answers: answers.map(({ box, index, sku, condition }) => ({ box, index, sku, condition })),
+    }),
+  })) as GroupAnswerResult
 }
 
 // ------------------------------------------------------------------------------ mark sold

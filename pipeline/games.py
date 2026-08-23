@@ -157,6 +157,12 @@ JOIN_KEY_STRATEGIES = (
 PROMPT_STRATEGIES = (
     "pokemon_card_v1",
     "misc_card_v1",
+    # C8's transcription contract: the printed redemption code EXACTLY as printed, plus
+    # the set line the owner sorts code boxes by. NOT the fork's identification
+    # architecture — C2's QR/OCR path answers "which product is this", and this profile
+    # answers "what code is printed here", which is the image-to-text step the dispute
+    # flow re-checks by eye when a buyer says a code did not work (C6 rules the remedy).
+    "pokemon_code_v1",
     "unwritten",
 )
 
@@ -356,8 +362,12 @@ GAMES = (
         # Code cards are the blank-`Number` rows. The name fallback is not a degraded path
         # here, it is the only key there is.
         "join_key": "name_only",
-        # No prompt reads a code card on this track yet; `code-card-fork/` owns that.
-        "prompt": "unwritten",
+        # C8's ledger starts here: this profile transcribes the printed redemption code
+        # exactly as printed, and the extracted code lands on the card record so the
+        # dispute lookup is the existing search — type the code, get the card, tap the
+        # photo. The fork's QR/OCR path (C2) still owns product identification; this
+        # prompt owns the image-to-text step that path does not cover.
+        "prompt": "pokemon_code_v1",
         # `geometry/crop.py`'s bands are cut for a collector number and a title. A code
         # card has neither in those places, so it claims none rather than claiming a band
         # that would be cut over the wrong pixels.

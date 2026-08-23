@@ -12,6 +12,7 @@ import type { Failure } from './server'
 import {
   ServerError,
   answerReview,
+  answerReviewGroup,
   describeFailure,
   getQueues,
   photoUrl,
@@ -516,6 +517,21 @@ const UNDO_KEY_LABEL = 'U'
  */
 const UNDO_WINDOW_MS = 20_000
 
+/* Enter the group state: the whole eligible worklist drawn as photographs over one confirm
+ * (docs/DECISIONS.md, "A homogeneous queue may be answered as a group" — the entry that
+ * reopens D4's one-card-at-a-time, narrowly). Offered only while `groupOffer` says the
+ * worklist qualifies, so the key is bound for exactly as long as the control is drawn —
+ * the same rule CLEAR_KEY states for the skip note.
+ *
+ * INSIDE THE STATE THE KEYS ARE Enter AND Escape, NOT A DIGIT, and that is deliberate on
+ * both sides. The digits are the one-card answering vocabulary and a group press must not
+ * sit on a key the finger already drums; Enter is free precisely because D28 declined it as
+ * a per-card confirm, and here it confirms a state the operator chose to enter rather than
+ * doubling a keystroke. Escape leaves without writing, which is what Escape means.
+ */
+const GROUP_KEY = 'g'
+const GROUP_KEY_LABEL = 'G'
+
 
 // ------------------------------------------------------------------------------ the screen
 
@@ -660,11 +676,22 @@ function clearedQueues(result: unknown): ReadonlySet<QueueName> | null {
  * card being dropped and the remedy being left to a control the operator has to go and find,
  * which is why RELOAD_KEY exists and why the refusal panel draws its own Reload button.
  */
+/* THE GROUP ROUTE'S TWO REFUSALS ARE IN THE SET TOO, and they arrive only from
+ * `answerReviewGroup` — the single route never speaks them. Both mean the same thing the
+ * four above mean, at group scale: `group_entry_refused` is the store having moved past the
+ * screen that drew the group, with every failing position named by its own code inside the
+ * message; `group_not_uniform` is a group the server will not accept as one, which a screen
+ * computing eligibility from live rows should never send and a reload re-derives either
+ * way. Neither restores anything, because the group write drops nothing until the server
+ * says it landed — the set's no-restore half is vacuous for them and its draw-the-Reload
+ * half is the point. */
 const STALE_CODES: ReadonlySet<string> = new Set([
   'already_answered',
   'not_in_queue',
   'sku_not_a_candidate',
   'condition_mismatch',
+  'group_entry_refused',
+  'group_not_uniform',
 ])
 
 function isStale(err: unknown): boolean {

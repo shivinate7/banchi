@@ -5,15 +5,18 @@ Everything the model is told and everything we accept back lives here, so
 word of the prompt or a key of the schema and the fingerprint changes, which is what
 makes "rerun after any prompt change" (docs/GATES.md) enforceable rather than a habit.
 
-TWO PROFILES, AND THE SECOND ONE IS NOT THE FIRST ONE WITH FIELDS BLANKED OUT.
+THREE PROFILES, AND NONE OF THEM IS ANOTHER ONE WITH FIELDS BLANKED OUT.
 `pokemon_card_v1` is the contract T1 scores and the one everything below describes.
 `misc_card_v1` reads the ~1% of the shelf that is a Magic, Yu-Gi-Oh, Weiss Schwarz or
 foreign-language card: its own system prompt, its own schema, its own parser, because those
 cards do not print a `number/total` pair, do not carry the finishes `pipeline/variant.py`
-knows about, and do not share a rarity vocabulary. `pipeline/games.py` says which profile
-reads which game; this module holds the profiles and never guesses between them. **A misc
-card IS identified and IS submitted to the Batch API** — the owner's correction of
-2026-08-23 — and what it never does is join a catalog.
+knows about, and do not share a rarity vocabulary. `pokemon_code_v1` is C8's image-to-text
+step: it TRANSCRIBES a code card's printed redemption code rather than identifying a
+catalog entry, because the ledger the fork exports is only worth keeping if the string
+beside each photograph is what a model actually read off it. `pipeline/games.py` says
+which profile reads which game; this module holds the profiles and never guesses between
+them. **A misc card IS identified and IS submitted to the Batch API** — the owner's
+correction of 2026-08-23 — and what it never does is join a catalog.
 
 The rest of this header is about `pokemon_card_v1`. Two of its shapes deserve a note:
 
@@ -318,6 +321,128 @@ _MISC_USER_TEXT_WITH_CROPS = (
 )
 
 
+# ------------------------------------------------------------------ the code contract
+#
+# C8'S IMAGE-TO-TEXT STEP, RATIFIED BY THE OWNER 2026-08-23. A buyer says a code did not
+# work; the owner looks the code up, opens the photograph it was read from, and re-reads it
+# by eye — because the likeliest failure is this very step, and C6 already rules the remedy
+# (replace, don't refund). This profile is the step that flow re-checks, so its one job is
+# a transcription honest enough to be worth re-checking: the printed code, exactly as
+# printed, with every uncertainty MARKED rather than papered over.
+#
+# TRANSCRIPTION, NOT IDENTIFICATION, and the schema is built for the difference:
+#
+#   `code`      one string, verbatim. The card prints four hyphen-separated groups of
+#               uppercase letters and digits (lengths 3, 4, 3, 3 — C1), and the layout is
+#               told to the model as an ANCHOR, never as a correction: a printed string
+#               that does not fit the shape is reported as printed, because "fixing" a
+#               code to fit is inventing a bearer instrument. An illegible character
+#               comes back as `?` — outside the code alphabet, so unambiguous, and
+#               per-character, so the owner re-reading by eye knows WHICH character was
+#               doubtful instead of just that one was. A guessed character is the exact
+#               failure the dispute flow exists to catch, so the schema gives the model a
+#               way to not guess.
+#   `name`      the plain-English set/product line printed at the bottom (C1 calls it the
+#               secondary cross-check, and that is all it is asked to be) — wanted because
+#               the owner sorts code boxes by set, and legible often enough to be worth a
+#               field. It maps onto `Identification.name`, which is also the field the
+#               `name_only` join strategy reads — where it matches no export row and
+#               surfaces through T3's bidirectional reporting rather than joining wrong,
+#               since `pipeline/join.py`'s blank-number lookup is exact-name.
+#   no finish   same argument as misc's, one line shorter: the registry's `pokemon_code`
+#               entry stocks `normal` alone, so there is no question to ask.
+#
+# THE QR CODE IS DELIBERATELY NOT ASKED ABOUT. The fork's C2 architecture decodes it
+# locally and deterministically; asking a vision model to read a QR is asking it to guess
+# at a job a library does exactly. This profile reads the HUMAN-readable printing, which
+# is what the QR-less dispute lookup and the printed-code re-read both need.
+
+# The placeholder the model writes for a character it cannot read. Outside the printed
+# code's own alphabet (uppercase letters, digits, hyphens), so a transcription carrying
+# one can never be mistaken for a clean read — and `?` survives verbatim through the
+# record and the search, where a partial code still narrows a dispute lookup.
+CODE_UNREADABLE_CHAR = "?"
+
+CODE_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "code": {
+            "type": "string",
+            "description": (
+                "The redemption code exactly as printed, hyphens included. Write ? in "
+                "place of each character you cannot read. Empty if no code is visible."
+            ),
+        },
+        "name": {
+            "type": "string",
+            "description": (
+                "The set or product name printed in plain English at the bottom of the "
+                "card, exactly as printed. Empty if not legible."
+            ),
+        },
+        "confidence": {
+            "type": "string",
+            "enum": list(CONFIDENCE_LEVELS),
+            "description": "How legible the printed code was.",
+        },
+    },
+    "required": ["code", "name", "confidence"],
+    "additionalProperties": False,
+}
+
+CODE_SYSTEM_PROMPT = """\
+You transcribe Pokemon Trading Card Game code cards from a photograph of the card front.
+
+A code card carries a QR code and, printed near it, a redemption code: four groups of
+uppercase letters and digits separated by hyphens - three characters, then four, then
+three, then three. Your job is the printed text. Ignore the QR code itself; it is decoded
+by other means. One card per image.
+
+Nothing downstream corrects your transcription. It is next read by a human only when a
+buyer disputes the code, so an invented character is worse than an admitted gap: a
+plausible wrong character is exactly the failure that human is looking for.
+
+code
+  The redemption code, exactly as printed - every character in its printed case, hyphens
+  where the card prints them. Do not add, drop or reorder characters, and do not adjust
+  what you see to fit the shape described above: if the printing does not fit it, report
+  what is printed. For each character you cannot read with certainty, write ? in its
+  place instead of choosing the likeliest character. If no code is visible at all,
+  return "".
+
+name
+  The set or product name printed in plain English at the bottom of the card, exactly as
+  printed, punctuation and dashes included. If it is not legible, return "".
+
+confidence
+  high    Every character of the code was clearly legible.
+  medium  You read the whole code, but some characters were hard to make out.
+  low     You could not read parts of the code, or you are unsure of several characters.
+
+Report only what is printed. Never invent a character you cannot read.\
+"""
+
+_CODE_USER_TEXT = "Transcribe this code card."
+_CODE_USER_TEXT_WITH_HINT = (
+    "Transcribe this code card. The box it came from is labelled {hint}, which is a hint "
+    "about the set and may be wrong - trust the card over the label."
+)
+_CODE_HINT_CLAUSE = (
+    " The box it came from is labelled {hint}, which is a hint about the set and may be "
+    "wrong - trust the card over the label."
+)
+# REACHABLE, unlike misc's: the registry's `pokemon_code` entry carries a real
+# `card_aspect` (a code card is standard card stock), so `geometry.detect_card` can find
+# it and a weak read gets a crop retry. The entry claims NO bands — nobody has measured
+# where the code is printed relative to the frame — so the retry carries the registered,
+# deskewed card alone, and this turn describes exactly that.
+_CODE_USER_TEXT_WITH_CROPS = (
+    "Transcribe this code card. The first image is the whole card. The images after it "
+    "are enlarged views of the SAME card, not different cards. Read the code from "
+    "whichever image shows it most clearly."
+)
+
+
 # ------------------------------------------------------------------ per-game dispatch
 #
 # `pipeline/games.py` says WHICH prompt reads a card, by name — `pokemon_card_v1` on the
@@ -391,6 +516,21 @@ MISC_CARD_V1 = Profile(
     schema=MISC_SCHEMA,
 )
 
+POKEMON_CODE_V1 = Profile(
+    model=MODEL,
+    max_tokens=MAX_TOKENS,
+    system=CODE_SYSTEM_PROMPT,
+    user=_CODE_USER_TEXT,
+    user_with_hint=_CODE_USER_TEXT_WITH_HINT,
+    user_with_crops=_CODE_USER_TEXT_WITH_CROPS,
+    hint_clause=_CODE_HINT_CLAUSE,
+    # One rarity in the whole game (`Code Card` — the registry entry's entire vocabulary),
+    # so a stack claim can disambiguate nothing: there is nothing else the card could be.
+    # No clause, however loudly a claim is supplied; same posture as misc's.
+    rarity_clause="",
+    schema=CODE_SCHEMA,
+)
+
 # ONE STRATEGY NAME NOW NAMES NO PROFILE, WHERE THERE USED TO BE TWO.
 #
 #   unwritten       nobody has written this game's prompt YET. A gap with a fix — `riftbound`
@@ -421,6 +561,7 @@ UNWRITTEN = "unwritten"
 PROFILES: Dict[str, Optional[Profile]] = {
     "pokemon_card_v1": POKEMON_CARD_V1,
     "misc_card_v1": MISC_CARD_V1,
+    "pokemon_code_v1": POKEMON_CODE_V1,
     UNWRITTEN: None,
 }
 
@@ -693,6 +834,43 @@ def _parse_misc(payload: Dict[str, Any]) -> Identification:
     )
 
 
+def _parse_code(payload: Dict[str, Any]) -> Identification:
+    """`pokemon_code_v1`'s answer: the transcribed code, carried in `number`.
+
+    `number` IS THE DECISION, AND HERE IS THE ARGUMENT FOR IT. The code has to land on the
+    card record for C8's lookup to be two taps, and `record_identification` writes exactly
+    four columns: `name`, `number`, `printed_total`, `confidence`. Of those, `number` is
+    the one `GET /search` both substring-matches and ranks EXACT on — so the code landing
+    there makes the dispute lookup the existing search with zero new UI: type the code,
+    get the card, tap its photo. And it is free for this game: `pokemon_code`'s join
+    strategy is `name_only`, so nothing ever composes a `number/printed_total` key from
+    these fields — `printed_total` stays "" and `has_number` stays False, which is
+    correct, because no join key CAN be built from a redemption code. A new column on the
+    record was the alternative, and it would fork every reader of the record to serve a
+    string that fits an existing column's contract ("the identifier printed on the card")
+    exactly.
+
+    NOT `normalize_number`-FOLDED, for misc's reason verbatim: upper-casing and
+    `#`-stripping are decoration-removal against a catalog key, there is no catalog key
+    here, and "exactly as printed" is the whole instruction this field was authored
+    under. Surrounding whitespace is as far as it goes — a `?` written for an illegible
+    character survives to the record, where a partial code still narrows a lookup.
+
+    `name` is the printed set line, same field on the card the owner sorts code boxes
+    by. It reaches the record and the search like any identification's name; if a join
+    ever runs over a code card it matches no export row exactly and surfaces through the
+    unmatched report rather than joining wrong.
+    """
+    return Identification(
+        name=str(payload["name"]).strip(),
+        number=str(payload["code"]).strip(),
+        printed_total="",
+        detected_finish=None,
+        confidence=_confidence_of(payload),
+        raw=payload,
+    )
+
+
 # WHICH PARSER READS WHICH PROFILE'S ANSWER. A third dispatch table beside `PROFILES` and
 # `BAND_PROFILES`, and it earns its place: the two schemas do not share a required key list,
 # so one parser cannot serve both without asking "is this field present?" of every field —
@@ -705,6 +883,7 @@ def _parse_misc(payload: Dict[str, Any]) -> Identification:
 _PARSERS = {
     "pokemon_card_v1": _parse_pokemon,
     "misc_card_v1": _parse_misc,
+    "pokemon_code_v1": _parse_code,
 }
 
 # Every strategy that HAS a profile must have a parser, checked at import for the reason the

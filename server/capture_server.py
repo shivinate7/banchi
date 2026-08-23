@@ -8,6 +8,8 @@
     DELETE /inventory/<box>/<index>        undo the newest capture: every trace of one position
     GET    /queues                         both standing queues, in the order they are worked
     POST   /review/<box>/<index>/answer    the human picks a candidate row, or takes it back
+    POST   /review/group-answer            answer a homogeneous group in one write — one
+                                           shared reason, one candidate row per card
     POST   /inventory/<box>/<index>/sold   mark one copy sold, or put its state back
     POST   /inventory/<box>/<index>/retire mark one copy retired — it left without a sale —
                                            or put its state back (D26)
@@ -326,6 +328,20 @@ ANSWER_FIELDS = ("sku", "condition", "undo")
 # writing an answer. `_reject_unknown` names what is settable, so the refusal reads as an
 # instruction rather than as a rejection of a field this route has obviously heard of.
 UNDO_FIELDS = ("undo",)
+
+# What the group answer carries: the list, alone (docs/DECISIONS.md, "A homogeneous queue
+# may be answered as a group" — the entry that reopens D4's one-card-at-a-time, narrowly).
+# `undo` is deliberately NOT here. The group's reversal is the single undo looped over its
+# positions by the screen holding the receipt, so a partial reversal reports per position
+# rather than pretending a group has one outcome — see `do_review_group_answer` for why the
+# write is all-or-nothing while the reversal is per-card.
+GROUP_ANSWER_FIELDS = ("answers",)
+
+# ...and what each of its elements may carry: the single route's own pair, plus the position
+# it is for. The pair is copied off that entry's ONE offered row and re-validated against it,
+# never trusted — `_answer_target` runs the same checks for both routes, so the group cannot
+# accept a pair the single route would refuse.
+GROUP_ANSWER_ENTRY_FIELDS = ("box", "index", "sku", "condition")
 
 # Mark-sold's whole body. The sale itself needs nothing: the position is in the path and the
 # state is a constant, so `{}` sells and `{"undo": true}` reverses. One route rather than a
@@ -2191,6 +2207,144 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
     return previous, None
 
 
+def _answer_target(
+    snapshot, box: int, index: int, sku: str, condition: str
+) -> Tuple[
+    master.Card,
+    List[Tuple[queues.Queue, queues.QueueEntry]],
+    queues.Queue,
+    queues.QueueEntry,
+    dict,
+    str,
+]:
+    """One answer's validation — the whole of it, shared verbatim by the single route and
+    the group route, and IT WRITES NOTHING. Returns (card, holders, offering queue,
+    governing entry, chosen row, offered condition) or raises the refusal the single route
+    has always raised, in the same code with the same message. One implementation rather
+    than two, because the group route's promise is that it re-validates each card "exactly
+    as the single answer does" — and a second copy of these checks is the copy that stops
+    being exact the first time one of them changes.
+
+    THE CARD IS CHECKED BEFORE THE QUEUE, deliberately, and the other order was
+    considered. The answer is written onto the card record, so a position with no
+    record has nothing to answer onto — and telling the operator "that card is not in
+    a queue" about a position that holds no card at all sends him to read the wrong
+    file. This is reachable rather than theoretical: `cli/resolve.py` queues a card
+    from a run's identifications, and a run recovered without its captures has entries
+    whose positions the store never recorded.
+    """
+    key = master.position_key(box, index)
+
+    card = snapshot.inventory.cards.get(key)
+    if card is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "card_not_found",
+            f"No card at box {box}, card {index}. This route answers a card that "
+            f"exists; it never creates one.",
+        )
+
+    holders: List[Tuple[queues.Queue, queues.QueueEntry]] = []
+    already: List[str] = []
+    for queue in (snapshot.review, snapshot.parked):
+        entry = queue.entries.get(key)
+        if entry is None:
+            continue
+        if entry.cleared_by_human:
+            already.append(queue.name)
+        else:
+            holders.append((queue, entry))
+
+    if not holders:
+        # TWO CODES, NOT ONE, because the remedies are opposite. An already-answered card
+        # is the two-device case D5 and D13 describe — the Fulfiller or the other browser
+        # tab got there first — and the operator should reload, not retry. A position
+        # that was never queued is a client asking about the wrong card.
+        if already:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "already_answered",
+                f"Box {box}, card {index} has already been answered and is no longer "
+                f"in a queue. Reload the queue — the answer may have come from the "
+                f"other device.",
+            )
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "not_in_queue",
+            f"Box {box}, card {index} is not waiting in the review or parked queue, so "
+            f"there is nothing to answer. Reload the queue.",
+        )
+
+    # ONE ENTRY GOVERNS THE OFFER, and it is the main-queue one whenever the position is
+    # in both. `holders` is built review-first above, so this is `holders[0]` and not a
+    # search. Every alternative was worse:
+    #
+    #   the union of both    what this did, and the bug. A stale parked entry launders a
+    #                        SKU the review entry never offered, and the laundering is
+    #                        invisible afterwards — the card carries a real SKU from a
+    #                        real catalog row, just not one that was ever proposed for it.
+    #   the intersection     safe and unanswerable. `cli/resolve.py:failure_entry` records
+    #                        no candidates at all, so a position sitting in both files
+    #                        with one of them a failure entry would refuse every answer
+    #                        forever, including the correct one.
+    #   naming the queue     the client would send which file its row came from. That is a
+    #   in the request       field the screen has no reason to know (it taps a position),
+    #                        and it puts the choice of what may be answered on the wire,
+    #                        where a stale client picks it.
+    #
+    # Main wins because main is the queue that is worked — `store/queues.py` splits them
+    # exactly so: work versus the low-value queue a card may never be worth a tap on. A
+    # card in both is a card the owner answers from the review screen.
+    offering, governing = holders[0]
+    candidates: List[dict] = list(governing.candidates)
+    if not candidates:
+        # `cli/resolve.py:failure_entry` records no candidates at all — an identification
+        # that failed, or a card with no position, has no rows for a human to choose
+        # between. `docs/DESIGN.md` describes a screen of candidate rows and says nothing
+        # about what to do when there are none, so this refuses rather than inventing a
+        # free-text path into the one field the hard rule protects. Gate B fired the
+        # trigger, and the answer is not a flat zero. Its accepted run queued 16
+        # entries, every one with candidate rows; the same cards joined against a
+        # commons-only export produced 23 `no_catalog_row` cards, which are
+        # candidate-less by construction — `pipeline/variant.py` returns that reason
+        # only when `found.rows` is empty, and `pipeline/join.py` copies that same
+        # empty tuple into the entry. Every one of them wanted a re-export or a
+        # re-shoot, never a typed SKU, so the refusal stands on the evidence it asked
+        # for.
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "no_candidates",
+            f"Box {box}, card {index} is queued in {offering.name} as "
+            f"`{governing.reason}` and records no candidate rows, so there is nothing to "
+            f"choose. It needs a re-shoot or a re-identify, not an answer.",
+        )
+
+    chosen = _candidate_with_sku(candidates, sku)
+    if chosen is None:
+        offered = ", ".join(sorted(str(c.get("sku") or "") for c in candidates))
+        # The queue is NAMED, because the case this refusal now catches is a card sitting
+        # in both files whose two entries disagree — and "that is not one of the rows
+        # offered" reads as a bug to anyone looking at the other row on screen.
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "sku_not_a_candidate",
+            f"{sku} is not one of the rows offered for box {box}, card {index}. "
+            f"Offered in {offering.name}: {offered}. Answer with one of those, or reload "
+            f"the queue if it has been re-joined since this screen was drawn.",
+        )
+
+    offered_condition = str(chosen.get("condition") or "")
+    if condition != offered_condition:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "condition_mismatch",
+            f"{sku} is offered as {offered_condition!r}, not {condition!r}. The screen "
+            f"was drawn from an older queue file — reload it and choose again.",
+        )
+
+    return card, holders, offering, governing, chosen, offered_condition
+
+
 def do_review_answer(box: int, index: int, payload: dict) -> dict:
     """D4's one-tap choice: the human picks one candidate row and the card takes it.
 
@@ -2327,119 +2481,13 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     key = master.position_key(box, index)
 
     with Store().write() as snapshot:
-        # THE CARD IS CHECKED BEFORE THE QUEUE, deliberately, and the other order was
-        # considered. The answer is written onto the card record, so a position with no
-        # record has nothing to answer onto — and telling the operator "that card is not in
-        # a queue" about a position that holds no card at all sends him to read the wrong
-        # file. This is reachable rather than theoretical: `cli/resolve.py` queues a card
-        # from a run's identifications, and a run recovered without its captures has entries
-        # whose positions the store never recorded.
-        card = snapshot.inventory.cards.get(key)
-        if card is None:
-            raise BadRequest(
-                HTTPStatus.NOT_FOUND,
-                "card_not_found",
-                f"No card at box {box}, card {index}. This route answers a card that "
-                f"exists; it never creates one.",
-            )
-
-        holders: List[Tuple[queues.Queue, queues.QueueEntry]] = []
-        already: List[str] = []
-        for queue in (snapshot.review, snapshot.parked):
-            entry = queue.entries.get(key)
-            if entry is None:
-                continue
-            if entry.cleared_by_human:
-                already.append(queue.name)
-            else:
-                holders.append((queue, entry))
-
-        if not holders:
-            # TWO CODES, NOT ONE, because the remedies are opposite. An already-answered card
-            # is the two-device case D5 and D13 describe — the Fulfiller or the other browser
-            # tab got there first — and the operator should reload, not retry. A position
-            # that was never queued is a client asking about the wrong card.
-            if already:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "already_answered",
-                    f"Box {box}, card {index} has already been answered and is no longer "
-                    f"in a queue. Reload the queue — the answer may have come from the "
-                    f"other device.",
-                )
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "not_in_queue",
-                f"Box {box}, card {index} is not waiting in the review or parked queue, so "
-                f"there is nothing to answer. Reload the queue.",
-            )
-
-        # ONE ENTRY GOVERNS THE OFFER, and it is the main-queue one whenever the position is
-        # in both. `holders` is built review-first above, so this is `holders[0]` and not a
-        # search. Every alternative was worse:
-        #
-        #   the union of both    what this did, and the bug. A stale parked entry launders a
-        #                        SKU the review entry never offered, and the laundering is
-        #                        invisible afterwards — the card carries a real SKU from a
-        #                        real catalog row, just not one that was ever proposed for it.
-        #   the intersection     safe and unanswerable. `cli/resolve.py:failure_entry` records
-        #                        no candidates at all, so a position sitting in both files
-        #                        with one of them a failure entry would refuse every answer
-        #                        forever, including the correct one.
-        #   naming the queue     the client would send which file its row came from. That is a
-        #   in the request       field the screen has no reason to know (it taps a position),
-        #                        and it puts the choice of what may be answered on the wire,
-        #                        where a stale client picks it.
-        #
-        # Main wins because main is the queue that is worked — `store/queues.py` splits them
-        # exactly so: work versus the low-value queue a card may never be worth a tap on. A
-        # card in both is a card the owner answers from the review screen.
-        offering, governing = holders[0]
-        candidates: List[dict] = list(governing.candidates)
-        if not candidates:
-            # `cli/resolve.py:failure_entry` records no candidates at all — an identification
-            # that failed, or a card with no position, has no rows for a human to choose
-            # between. `docs/DESIGN.md` describes a screen of candidate rows and says nothing
-            # about what to do when there are none, so this refuses rather than inventing a
-            # free-text path into the one field the hard rule protects. Gate B fired the
-            # trigger, and the answer is not a flat zero. Its accepted run queued 16
-            # entries, every one with candidate rows; the same cards joined against a
-            # commons-only export produced 23 `no_catalog_row` cards, which are
-            # candidate-less by construction — `pipeline/variant.py` returns that reason
-            # only when `found.rows` is empty, and `pipeline/join.py` copies that same
-            # empty tuple into the entry. Every one of them wanted a re-export or a
-            # re-shoot, never a typed SKU, so the refusal stands on the evidence it asked
-            # for.
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "no_candidates",
-                f"Box {box}, card {index} is queued in {offering.name} as "
-                f"`{governing.reason}` and records no candidate rows, so there is nothing to "
-                f"choose. It needs a re-shoot or a re-identify, not an answer.",
-            )
-
-        chosen = _candidate_with_sku(candidates, sku)
-        if chosen is None:
-            offered = ", ".join(sorted(str(c.get("sku") or "") for c in candidates))
-            # The queue is NAMED, because the case this refusal now catches is a card sitting
-            # in both files whose two entries disagree — and "that is not one of the rows
-            # offered" reads as a bug to anyone looking at the other row on screen.
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "sku_not_a_candidate",
-                f"{sku} is not one of the rows offered for box {box}, card {index}. "
-                f"Offered in {offering.name}: {offered}. Answer with one of those, or reload "
-                f"the queue if it has been re-joined since this screen was drawn.",
-            )
-
-        offered_condition = str(chosen.get("condition") or "")
-        if condition != offered_condition:
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "condition_mismatch",
-                f"{sku} is offered as {offered_condition!r}, not {condition!r}. The screen "
-                f"was drawn from an older queue file — reload it and choose again.",
-            )
+        # EVERY REFUSAL LIVES IN `_answer_target`, which is this route's validation moved
+        # whole so the group route can run the identical checks — card before queue, one
+        # governing entry, the pair checked against the offered row. Nothing is written
+        # until it returns.
+        card, holders, offering, governing, _, offered_condition = _answer_target(
+            snapshot, box, index, sku, condition
+        )
 
         # READ BEFORE THE WRITE, WHICH IS THE ENTIRE REASON THE UNDO IS POSSIBLE (D28). This is
         # the pair the reversal puts back, and this lock is the last moment anything knows it —
@@ -2734,6 +2782,293 @@ def _reverse_answer(box: int, index: int) -> dict:
             "review_reopened": reopened[queues.MAIN],
             "parked_reopened": reopened[queues.PARKED],
             "card": _card_row(snapshot.inventory, box, index, card),
+        }
+
+    return body
+
+
+# ------------------------------------------------------------------------ the group answer
+
+
+def _require_group_answers(payload: dict) -> List[Tuple[int, int, str, str, str]]:
+    """The group body's shape, checked field by field. Returns (box, index, sku, condition,
+    key) per element, in request order, or refuses — shape only, nothing about the store.
+
+    POSITIONS COME FROM THE BODY HERE AND FROM THE PATH EVERYWHERE ELSE, which is why this
+    route has shape refusals no other write needs. The path regexes admit digits or nothing,
+    so `do_review_answer` never sees a boolean box; this one can, and `True` is an `int` to
+    `isinstance`, so booleans are refused by name before the int check passes them.
+
+    A DUPLICATE POSITION IS REFUSED, NOT DEDUPLICATED. Both elements would validate against
+    the same open entry and both would then write, and the second write's `restores_to`
+    would record the FIRST answer as what it replaced — an undo that puts back a SKU the
+    operator never meant the card to keep. A body that names one card twice is a client bug,
+    and deduplicating it here would be this server guessing which of two answers was meant.
+    """
+    _reject_unknown(payload, GROUP_ANSWER_FIELDS)
+    answers = payload.get("answers")
+    if not isinstance(answers, list) or not answers:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "answers_required",
+            "Send `answers` — a non-empty list with one element per card, each carrying "
+            "`box`, `index`, `sku` and `condition` copied off that card's own single "
+            "candidate row.",
+        )
+
+    parsed: List[Tuple[int, int, str, str, str]] = []
+    seen: set = set()
+    for at, element in enumerate(answers):
+        where = f"answers[{at}]"
+        if not isinstance(element, dict):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "answer_invalid",
+                f"{where} is not an object. Each element carries "
+                f"{', '.join(GROUP_ANSWER_ENTRY_FIELDS)} and nothing else.",
+            )
+        unknown = sorted(k for k in element if k not in GROUP_ANSWER_ENTRY_FIELDS)
+        if unknown:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "answer_invalid",
+                f"{where} names {', '.join(unknown)}, which this route does not read. "
+                f"Each element carries {', '.join(GROUP_ANSWER_ENTRY_FIELDS)} and nothing "
+                f"else — in particular no `undo`: a group is taken back per card through "
+                f"POST /review/<box>/<index>/answer.",
+            )
+        box = element.get("box")
+        index = element.get("index")
+        if isinstance(box, bool) or isinstance(index, bool) or not isinstance(box, int) or not isinstance(index, int):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "answer_invalid",
+                f"{where} needs integer `box` and `index` — the position being answered, "
+                f"as GET /queues reported it.",
+            )
+        sku = element.get("sku")
+        condition = element.get("condition")
+        if not isinstance(sku, str) or not sku.strip():
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "answer_invalid",
+                f"{where} needs `sku` — the TCGplayer Id of that card's own candidate row.",
+            )
+        if not isinstance(condition, str) or not condition.strip():
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "answer_invalid",
+                f"{where} needs `condition` — the condition string of that row, copied "
+                f"from it.",
+            )
+        key = master.position_key(box, index)
+        if key in seen:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "duplicate_position",
+                f"{where} repeats {key}, which an earlier element already answers. One "
+                f"element per card — remove the duplicate and send the group again.",
+            )
+        seen.add(key)
+        parsed.append((box, index, sku.strip(), condition.strip(), key))
+    return parsed
+
+
+def do_review_group_answer(payload: dict) -> dict:
+    """Answer a homogeneous group of queued cards in one write.
+
+    THE RULING IS docs/DECISIONS.md's "A homogeneous queue may be answered as a group" —
+    the entry that reopens D4's one-card-at-a-time, narrowly, on Gate B's evidence: 16 of
+    53 queued, every one the same reason code, detection agreeing with itself across every
+    duplicate pair. One systematic fact about the rig's lighting, sixteen identical taps.
+    Its narrowness IS the spec, and this route ENFORCES it rather than trusting the screen
+    with it: without the uniformity refusal below, this route is a general bulk write any
+    client can reach with a loop, which is exactly what that entry says may not exist.
+
+    "EVERY ENTRY OFFERS THE SAME SINGLE CANDIDATE" IS READ AS: EACH ENTRY OFFERS EXACTLY
+    ONE ROW — ITS OWN — AND THAT ROW SAYS THE SAME THING ON EVERY CARD. Three checks:
+    one shared reason code across the group, exactly one candidate row per entry, and one
+    condition string across those rows. What is deliberately NOT required is a shared SKU,
+    and could not be: sixteen different physical cards are sixteen different catalog rows,
+    and the entry cannot mean "answer card A with card B's SKU" — that is not a reading of
+    it, it is data corruption wearing one, and it would put a real SKU from a real catalog
+    row onto a card it was never proposed for, invisibly. What makes the sixteen taps
+    identical is the SHAPE of each answer, not its row: the same question (the shared
+    reason), one possible reply each (the lone row), every reply of one kind (the shared
+    condition). Gate B's queue is the picture — 16 metadata_detection_disagreements, each
+    offering only its own card's Near Mint row. The group write answers each card with its
+    own lone candidate and nothing else.
+
+    VALIDATE EVERYTHING, THEN WRITE EVERYTHING, INSIDE ONE `Store.write()`. The shape is
+    `emit`'s — report and route before anything is written — applied at route scale. Phase
+    one walks every position through `_answer_target`, which IS the single route's
+    validation, and touches nothing; any refusal abandons the block, and `Store.write()`
+    commits only on a clean exit, so a refused group changes NOTHING — not the cards that
+    would have passed, not a queue flag, not a history line. A partial group must not
+    report success: a body saying "eleven of sixteen landed" hands the screen a state
+    neither queue file matches and the operator a question — which eleven? — that nothing
+    on his screen can answer.
+
+    TWO GROUP REFUSALS ON TOP OF THE SHAPE ERRORS, and they send the operator two
+    different ways:
+
+      group_entry_refused   one or more positions fail the single answer's own checks —
+                            `already_answered`, `sku_not_a_candidate`,
+                            `condition_mismatch` and the rest. The group may well have
+                            qualified when the screen drew it; the store has moved past
+                            that screen. Every failing position is named WITH ITS OWN CODE
+                            in the message, so one 409 still reports per position. Reload
+                            and re-filter.
+      group_not_uniform     the group never qualified: more than one reason code, an entry
+                            offering more than one row, or two condition strings across
+                            the group. Those cards are answered one at a time, each beside
+                            its own photograph — which is D4 unchanged, and the reason
+                            this refusal exists at all.
+
+    Entry failures are checked before uniformity, deliberately: a stale screen's remedy is
+    a reload, and telling it "not uniform" about a group whose real problem is that half
+    of it is already answered would send the operator to un-filter a queue that simply
+    needs re-reading.
+
+    THE REVERSAL IS NOT ON THIS ROUTE, AND THAT IS THE UNDO'S SHAPE RATHER THAN A GAP.
+    Each position gets its own `answered` history line with its own `restores_to`, exactly
+    as a single answer writes it — so `{"undo": true}` on POST /review/<box>/<index>/answer
+    reverses any member of the group as if it had been answered alone, and the screen
+    holding the group receipt loops that route per position. The write is all-or-nothing
+    because a partial write reports a state no file matches; the reversal is per-card
+    because a partial REVERSAL is real and must be reportable per position — one card's
+    SKU already out in an emitted file (`undo_too_late`) must not hold fifteen reversible
+    answers hostage, and must not be silently skipped either.
+
+    `restores_to` COMES BACK PER POSITION, under the single answer's contract: null means
+    an undo of that answer would be refused, and a screen offers the group's undo only
+    when every member can come back — a group control that reverses eleven of sixteen on
+    its best day is the defect `SaleResult` records, at scale.
+    """
+    parsed = _require_group_answers(payload)
+
+    with Store().write() as snapshot:
+        # PHASE ONE — every position validated, nothing touched. `_answer_target` writes
+        # nothing, so a group refused here leaves the block having made no edit for
+        # `Store.write()` to commit.
+        targets: List[dict] = []
+        refused: List[Tuple[str, BadRequest]] = []
+        for box, index, sku, condition, key in parsed:
+            try:
+                card, holders, offering, governing, _chosen, offered = _answer_target(
+                    snapshot, box, index, sku, condition
+                )
+            except BadRequest as exc:
+                refused.append((key, exc))
+                continue
+            targets.append(
+                {
+                    "box": box,
+                    "index": index,
+                    "sku": sku,
+                    "key": key,
+                    "card": card,
+                    "holders": holders,
+                    "offering": offering,
+                    "governing": governing,
+                    "offered": offered,
+                }
+            )
+
+        if refused:
+            named = "; ".join(f"{key}: {exc.code} — {exc}" for key, exc in refused)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "group_entry_refused",
+                f"{len(refused)} of {len(parsed)} cards refused, so the whole group is "
+                f"refused and nothing was written. Reload the queue and filter again — "
+                f"the store has moved past the screen that drew this group. {named}",
+            )
+
+        # ELIGIBILITY — the ruling's two conditions, checked here and not only on the
+        # screen. `governing` is the entry the single route would validate against, so a
+        # position in both queue files is judged by its review entry exactly as a single
+        # answer is.
+        reasons = sorted({target["governing"].reason for target in targets})
+        many_rows = [
+            f"{target['key']} offers {len(target['governing'].candidates)} rows"
+            for target in targets
+            if len(target["governing"].candidates) != 1
+        ]
+        conditions = sorted({target["offered"] for target in targets})
+        if len(reasons) > 1 or many_rows or len(conditions) > 1:
+            findings = []
+            if len(reasons) > 1:
+                findings.append(f"reasons {', '.join(reasons)} are mixed")
+            findings.extend(many_rows)
+            if len(conditions) > 1:
+                findings.append(f"conditions {', '.join(conditions)} are mixed")
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "group_not_uniform",
+                f"This group may not be answered as one: {'; '.join(findings)}. A group "
+                f"write needs one shared reason code, exactly one candidate row per card, "
+                f"and one condition across the group — anything looser is answered one "
+                f"card at a time, each beside its own photograph (D4). Nothing was "
+                f"written.",
+            )
+
+        # PHASE TWO — the single route's write, per position, in request order. Same
+        # fields, same history line, same read-before-write for the undo; the one addition
+        # is `group` on the line, so a reader of history.jsonl can tell one press from
+        # sixteen — the answers are identical in every other respect, which is exactly why
+        # the log has to say so.
+        results = []
+        cleared_positions = []
+        for target in targets:
+            card = target["card"]
+            restores_to = {"sku": card.sku, "condition": card.condition}
+            card.sku = target["sku"]
+            card.condition = target["offered"]
+
+            cleared = {queues.MAIN: False, queues.PARKED: False}
+            for queue, held_entry in target["holders"]:
+                held_entry.cleared_by_human = True
+                cleared[queue.name] = True
+
+            _history(
+                snapshot.inventory,
+                ANSWERED,
+                target["key"],
+                sku=target["sku"],
+                condition=target["offered"],
+                queue=target["offering"].name,
+                reason=target["governing"].reason,
+                restores_to=restores_to,
+                group=len(targets),
+            )
+
+            held = _listing_hold(snapshot.inventory, card)
+            cleared_positions.append(target["key"])
+            results.append(
+                {
+                    "position": target["key"],
+                    "box": int(target["box"]),
+                    "index": int(target["index"]),
+                    "sku": target["sku"],
+                    "condition": target["offered"],
+                    # The single answer's contract, per member: null means the undo of
+                    # THIS answer would be refused, decided now rather than at the press
+                    # that fails.
+                    "restores_to": None if held else restores_to,
+                    "review_cleared": cleared[queues.MAIN],
+                    "parked_cleared": cleared[queues.PARKED],
+                }
+            )
+
+        body = {
+            "answered": cleared_positions,
+            "count": len(results),
+            # The shared facts, stated once at the top because the whole route just
+            # proved they are shared — the screen's receipt line is built from them.
+            "reason": reasons[0],
+            "condition": conditions[0],
+            "results": results,
         }
 
     return body
@@ -4178,6 +4513,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/boxes":
                 status, body = do_create_box(self._body())
                 return self._json(status, body)
+            # An exact string, matched before the position regex it shares a prefix with —
+            # for the reader, not for correctness: `_REVIEW_ANSWER_RE` admits digits only,
+            # so `group-answer` could never reach it.
+            if path == "/review/group-answer":
+                body = do_review_group_answer(self._body())
+                return self._json(HTTPStatus.OK, body)
             match = _REVIEW_ANSWER_RE.match(path)
             if match:
                 body = do_review_answer(

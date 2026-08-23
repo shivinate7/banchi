@@ -119,6 +119,19 @@ guard both fire on a code literal precisely because a file like this must never 
 The runtime writing codes into a gitignored file is the sanctioned path; an agent pasting one
 into a tracked file is what the guards exist to stop.
 
+**BUILT 2026-08-23, the same day it was ratified.** The profile is `pokemon_code_v1`:
+`{code, name, confidence}`, uncertainty per character (`?` outside the printed alphabet, so
+the owner's re-read knows exactly which character was doubtful), the 3-4-3-3 layout described
+in words because a literal example would trip the commit guard on the prompt's own source.
+The code lands in the record's `number` — free because this game joins by name — which makes
+the existing search the dispute lookup with zero new UI: type the code, get the card, tap the
+photo (demonstrated over real HTTP against a scratch store). The ledger is two files with two
+jobs: `inventory/codes.jsonl`, a standing index upserted by position so one-line-per-card
+stays literally true across re-identifications, and `runs/<run>/codes.jsonl`, the run's
+deletable export — both verified gitignored (`git check-ignore -v`) before a byte was
+written. Transcription accuracy is unmeasured and cannot be measured without paid runs; the
+dispute flow is the corrective loop by design, which is what this entry says it is for.
+
 **Sorted by set is a capture convention, not a schema**: the set hint field already carries
 it, and the code-card box is its own box by the same owner ruling (recorded in D24 — a
 pooled card in a located box knowingly consumes a slot number, so the convention is what
