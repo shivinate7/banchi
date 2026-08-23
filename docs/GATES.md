@@ -276,6 +276,19 @@ at a temporary directory, so nothing here touches the real inventory.
   photos following their records byte-for-byte, the `renumbered` mapping and the
   per-position roll-call lines that keep the state reversals reading the right card) and
   the whole-box delete behind `box_not_empty_of_commitments`.
+- **The mass-select on `PUT /inventory/<box>` is covered, in its own isolated home.** The
+  owner's `indices` selection narrows the box-wide claim sweep, and it is checked on the
+  route rather than as a client loop for the reason the case states: N card calls are N
+  chances to half-apply, which is the partial sweep that route's all-or-nothing exists to
+  prevent. Both refusals were observed failing under mutation before the cases were kept —
+  an empty array quietly meaning the whole box, and a selection naming a card the box does
+  not hold being ignored instead of refusing the call.
+
+  **The separate home is itself a finding worth keeping.** These cases first ran inside the
+  block above, which counts history lines over a box it builds card by card — so the sweep
+  moved numbers that block asserts, and the section failed on its own fixture rather than on
+  the code. A test that writes to a shared fixture is a test that will eventually be blamed
+  for someone else's assertion.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This
