@@ -166,12 +166,76 @@ def _as_int(value) -> Optional[int]:
         return None
 
 
-def _check_variant(value) -> Optional[str]:
-    """A finish outside the enum is a problem to report, never a value to coerce."""
+def _check_variant(value, game: Optional[str]):
+    """(claim, problem) — the sidecar's finish claim, read defensively and PER GAME.
+
+    IT READ `variant.FINISHES` — POKEMON'S THREE — FOR EVERY GAME, and it was read BEFORE
+    the game key, while `_check_rarity_claim` directly below it carries a comment saying
+    that exact order is load-bearing. The finish has the same per-game vocabulary and obeyed
+    neither rule: a Riftbound sidecar recording `foil` had its claim silently dropped and
+    reported as "outside ('normal', 'holo', 'reverse_holo')" — an enum belonging to another
+    game. D3 rung 1's whole argument is that the toggle is a CLAIM the ladder trusts; a
+    reader that discards it for the wrong game's vocabulary defeats the rung entirely.
+
+    IT IS STILL SINGLE-VALUED HERE, DELIBERATELY, and that is a split rather than an
+    oversight. D3 rung 1 was amended the same day to make the claim a SET, and this reader
+    is one of five places that has to move for that — with `store/master.py`, the capture
+    route, the capture screen's Finish track and the tests that assert a bare `"holo"`. They
+    move together or the record and the sidecar disagree about the shape of a claim, which
+    is the one disagreement `record_capture` cannot survive. A list is already accepted and
+    reduced to its first member below, so a sidecar written by a newer client is not
+    misread in the meantime.
+
+    The three game cases are `_check_rarity_claim`'s, for its reasons: a registered game
+    checks membership, an unregistered one keeps members verbatim (its own problem is
+    already recorded and the join refuses the card by name), and no game at all checks
+    against `games.DEFAULT_GAME` — D21's read-side backfill, the game the card will be
+    processed as.
+
+    An empty claim, or one whose every member dropped, is None: no claim, and rungs 2 and 3
+    stay live.
+    """
     if value is None:
-        return None
-    text = str(value).strip().lower()
-    return text if text in variant.FINISHES else None
+        return None, None
+    if isinstance(value, str):
+        members = [value]
+    elif isinstance(value, (list, tuple)):
+        members = list(value)
+    else:
+        return None, f"variant {value!r} is not a finish or a list of finishes"
+
+    cleaned = [str(item).strip().lower() for item in members if str(item).strip()]
+    if not cleaned:
+        return None, None
+
+    # `games.get`, NOT `variant.vocabulary`. The latter goes through `games.require`, which
+    # refuses a game whose vocabulary is empty (D22) — and that refusal is right for a
+    # pipeline consumer and wrong for this reader, which cannot tell an UNREGISTERED game
+    # from a registered one with no finishes. Reaching the same `except` for both made
+    # `misc` return a tuple where every other path returns a string, which is a type leak a
+    # caller finds later and at a distance. Split here: unregistered keeps its member
+    # verbatim, and `misc` — registered, authoring no finishes — drops with a problem, which
+    # is what the capture route already answers for a finish sent under it.
+    try:
+        entry = games.get((game or games.DEFAULT_GAME).strip().lower())
+    except games.UnknownGame:
+        return cleaned[0], None
+    stocked = tuple(entry["finishes"])
+
+    kept = [item for item in stocked if item in cleaned]
+    dropped = [item for item in cleaned if item not in stocked]
+    problem = None
+    if dropped:
+        problem = (
+            f"variant {', '.join(repr(d) for d in dropped)} is outside "
+            + (f"{entry['display']}'s finishes {stocked}" if stocked
+               else f"{entry['display']}, which stocks no finishes at all")
+        )
+    # FIRST MEMBER IN THE GAME'S OWN ENUM ORDER, not the file's — see the docstring for why
+    # this is not a tuple yet. Enum order rather than file order so the reduction is stable:
+    # a two-member claim reduced by the order somebody happened to type it would resolve
+    # differently for the same claim written twice.
+    return (kept[0] if kept else None), problem
 
 
 def _check_rarity_claim(value, game: Optional[str]):
@@ -314,10 +378,6 @@ def load(
         sidecar_index = _as_int(_first(payload, _INDEX_KEYS))
         raw_hint = _first(payload, _HINT_KEYS)
         set_hint = str(raw_hint).strip() if raw_hint is not None else None
-        raw_variant = _first(payload, _VARIANT_KEYS)
-        metadata_finish = _check_variant(raw_variant)
-        if raw_variant is not None and metadata_finish is None:
-            problems.append(f"variant {raw_variant!r} is outside {variant.FINISHES}")
         raw_game = _first(payload, _GAME_KEYS)
         game = _check_game(raw_game)
         if raw_game is not None and game is None:
@@ -328,8 +388,14 @@ def load(
             # joined against a Pokemon export and priced off it. Carrying the string forward
             # means the consumer's `games.get` refuses by name instead.
             game = str(raw_game).strip().lower()
-        # AFTER `game`, NEVER BEFORE IT: the claim's vocabulary is the game's, so the order
-        # of these two reads is load-bearing. See `_check_rarity_claim`.
+        # AFTER `game`, NEVER BEFORE IT: a claim's vocabulary is the game's, so the order
+        # of these reads is load-bearing. BOTH claims obey it now — the finish was read
+        # three lines above the game key until 2026-08-23 and was checked against Pokemon's
+        # enum whatever game the sidecar named. See `_check_variant`.
+        raw_variant = _first(payload, _VARIANT_KEYS)
+        metadata_finish, variant_problem = _check_variant(raw_variant, game)
+        if variant_problem:
+            problems.append(variant_problem)
         raw_claim = _first(payload, _RARITY_CLAIM_KEYS)
         rarity_claim, claim_problem = _check_rarity_claim(raw_claim, game)
         if claim_problem:
@@ -342,8 +408,10 @@ def load(
     # the whole guarantee, so it is one line and it is here rather than at the call site.
     variant_from_flag = False
     if metadata_finish is None and variant_default is not None:
-        metadata_finish = _check_variant(variant_default)
+        metadata_finish, flag_problem = _check_variant(variant_default, game)
         variant_from_flag = metadata_finish is not None
+        if flag_problem:
+            problems.append(flag_problem)
 
     file_box, file_index = position_from_path(photo, root=root)
 
