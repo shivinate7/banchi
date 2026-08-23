@@ -284,6 +284,17 @@ export function motionTrigger(
   video: RefObject<HTMLVideoElement | null>,
   onDiagnostics?: (diag: MotionDiagnostics) => void,
   params: MotionParams = DEFAULT_PARAMS,
+  /** Every frame the machine sees, verbatim: the clock, the signal, the verdict, and the
+   *  sampler's REUSED watch-region buffer — a receiver that keeps anything must copy it,
+   *  the same rule the machine lives by. This is the whole seam the trace logger hangs
+   *  from (src/trace.ts); the trigger itself records nothing. */
+  onFrame?: (
+    tMs: number,
+    d: number,
+    luma: number,
+    event: MotionEvent | null,
+    cells: Float32Array,
+  ) => void,
 ): Trigger {
   return {
     /* The machine string the screen renders — docs/DESIGN.md's idiom, and the one line of
@@ -346,6 +357,9 @@ export function motionTrigger(
 
         const event = machine.step(nowMs, roi)
         if (event === 'fire') onFire()
+        if (onFrame !== undefined) {
+          onFrame(nowMs, machine.diag.d, machine.diag.luma, event, roi)
+        }
         report(nowMs, event !== null)
       }
 
