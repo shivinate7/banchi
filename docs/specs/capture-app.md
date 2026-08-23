@@ -199,7 +199,7 @@ the review that followed** — see below.
 | 2 | ~~server-client~~ | ~120 lines, new | — | **done 2026-08-13**, `app/src/server.ts` |
 | 3 | ~~capture-screen~~ | ~350 lines, the bulk of it | 1, 2 | **done 2026-08-13**, `app/src/CaptureScreen.tsx` |
 | 4 | ~~trigger-seam~~ | ~60 lines, folded into 3 | 3 | **done 2026-08-13**, `app/src/trigger.ts` — its own module, not folded |
-| 5 | ~~pull-preview~~ | ~120 lines | 2 | **done 2026-08-13**, `app/src/PullPreview.tsx` |
+| 5 | ~~pull-preview~~ | ~120 lines | 2 | **done 2026-08-13** as `PullPreview.tsx`; renamed `app/src/BoxBrowse.tsx` 2026-08-23 when D31 merged its route into `#/inventory` |
 | 6 | ~~eslint~~ | config + 2 rules | 3 | **done 2026-08-13**, `app/eslint.config.js`; `make lint` stopped being a stub |
 | 7 | ~~map-flip~~ | ~20 lines | all, same commit | **missed in that commit**; done in the review that followed, and it took more than 20 lines |
 

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 from pipeline import games, tcgcsv
 
@@ -138,12 +138,50 @@ class Resolution:
         return self.row[tcgcsv.SKU_COLUMN] if self.row else None
 
 
-def _check(finish: Optional[str]) -> Optional[str]:
+def vocabulary(game: Optional[str] = None) -> Tuple[Tuple[str, ...], Dict[str, str]]:
+    """This game's finishes and its finish->Condition map.
+
+    THE LADDER READ POKEMON'S THREE FOR EVERY GAME UNTIL 2026-08-23, and it did not refuse
+    politely — `_check` RAISED `UnknownFinish`, so a Riftbound card claiming `foil` (a
+    finish its own registry entry authors, and which the capture screen offers) crashed the
+    join outright rather than resolving or reviewing. It was the same Pokemon-enum leak the
+    capture route had at `_optional_variant`, one layer down and with a worse failure mode:
+    a refusal names itself and an exception takes the run with it.
+
+    `require` rather than `get`, exactly as the module-level Pokemon lookup does: a game
+    with no authored vocabulary refuses here rather than borrowing another game's (D22).
+    """
+    entry = games.require(game if game else games.DEFAULT_GAME)
+    return tuple(entry["finishes"]), dict(entry["condition_by_finish"])
+
+
+def _check(finish: Optional[str], stocked: Tuple[str, ...] = FINISHES) -> Optional[str]:
     if finish is None:
         return None
-    if finish not in FINISHES:
-        raise UnknownFinish(f"{finish!r} not in {FINISHES}")
+    if finish not in stocked:
+        raise UnknownFinish(f"{finish!r} not in {stocked}")
     return finish
+
+
+def _check_claim(
+    claim: Union[str, Sequence[str], None], stocked: Tuple[str, ...]
+) -> Tuple[str, ...]:
+    """The finish claim as a SET (D3 rung 1, amended 2026-08-23).
+
+    A BARE STRING READS AS A ONE-MEMBER SET AND NOTHING HERE EVER WRITES ONE — D21's
+    read-side backfill, for D21's reason: every record and every sidecar written before the
+    amendment carries a string, and rewriting 767 of them to say what this function can work
+    out is a migration that buys nothing.
+
+    Deduped, and ordered by the game's own enum rather than by the order the operator
+    tapped, so two identical claims are one value however they were made.
+    """
+    if claim is None:
+        return ()
+    members = (claim,) if isinstance(claim, str) else tuple(claim)
+    for member in members:
+        _check(member, stocked)
+    return tuple(finish for finish in stocked if finish in members)
 
 
 def _resolved(stage: str, row: tcgcsv.Row) -> Resolution:
@@ -169,17 +207,24 @@ def answered(row: tcgcsv.Row) -> Resolution:
 
 def resolve(
     candidates: Sequence[tcgcsv.Row],
-    metadata_finish: Optional[str] = None,
+    metadata_finish: Union[str, Sequence[str], None] = None,
     detected_finish: Optional[str] = None,
     rarity_claim: Optional[Sequence[str]] = None,
+    game: Optional[str] = None,
 ) -> Resolution:
     """Walk the ladder for one card. `candidates` are the catalog rows for its number.
 
     `rarity_claim` is D23's multi-select stack claim: the exact `Rarity` cells the operator
     says this stack holds. None or empty narrows nothing — the compatibility guarantee that
-    makes the claim strictly additive."""
-    metadata_finish = _check(metadata_finish)
-    detected_finish = _check(detected_finish)
+    makes the claim strictly additive.
+
+    `metadata_finish` is D3 rung 1's claim and is a SET: a string, a sequence, or None. See
+    `_check_claim` for why a string still works and `game` for why the vocabulary is not
+    Pokemon's any more. Omitting `game` reads as `games.DEFAULT_GAME`, which is what every
+    caller written before games existed meant."""
+    stocked, condition_by_finish = vocabulary(game)
+    claimed = _check_claim(metadata_finish, stocked)
+    detected_finish = _check(detected_finish, stocked)
 
     if not candidates:
         return Resolution(stage=REVIEW, reason=NO_CATALOG_ROW)
@@ -228,28 +273,48 @@ def resolve(
             return Resolution(stage=REVIEW, reason=DUPLICATE_CONDITION)
         by_condition[condition] = row
 
-    # Rung 1 — capture-time metadata, trusted.
-    if metadata_finish is not None:
-        wanted = CONDITION_BY_FINISH[metadata_finish]
-        if wanted not in by_condition:
-            # The toggle claims a variant this card does not come in. Reported before the
+    # Rung 1 — capture-time metadata, trusted. D3's amendment of 2026-08-23 makes the claim
+    # a SET, and the member count decides what it does: ONE determines, exactly as this rung
+    # always has; TWO OR MORE narrow the rows and let the rungs below choose within what
+    # survives. A less specific claim can only ever narrow, which is what keeps it a claim
+    # rather than a hint.
+    if claimed:
+        wanted = {condition_by_finish[finish] for finish in claimed}
+        kept = {c: row for c, row in by_condition.items() if c in wanted}
+        if not kept:
+            # The claim names finishes this card does not come in. Reported before the
             # detection cross-check because it is the more specific finding: it points at
             # a misfiled stack or a wrong identification, not at one mis-sorted card.
+            # A SET empties only when NONE of its members is stocked — claiming
+            # {holo, reverse_holo} against a normal-only number is the same fact as
+            # claiming `holo` against it, which is why this needs no reason code of its own.
             return Resolution(stage=REVIEW, reason=METADATA_NOT_STOCKED)
-        # Rung 3 as a cross-check, before trusting rung 1.
-        if detected_finish is not None and detected_finish != metadata_finish:
+        # Rung 3 as a cross-check, before trusting rung 1. Detection outside the claimed set
+        # is the disagreement whatever the set's size — with one member this is the identity
+        # test it has always been.
+        if detected_finish is not None and detected_finish not in claimed:
             return Resolution(stage=REVIEW, reason=METADATA_DETECTION_DISAGREEMENT)
-        return _resolved(METADATA, by_condition[wanted])
+        if len(claimed) == 1:
+            return _resolved(METADATA, next(iter(kept.values())))
+        # TWO OR MORE: narrow and FALL THROUGH. Deliberately the same move D23's rarity
+        # filter makes a few lines above — narrow the rows, then let every rung below run on
+        # what is left. Rung 2 fires when the claim leaves exactly one row, rung 3 picks
+        # within the claimed set, and rung 4 reviews. Re-implementing those three rungs
+        # inside this branch was the alternative and would have been three more places for
+        # the ladder to disagree with itself.
+        candidates = list(kept.values())
+        by_condition = kept
 
-    # Rung 2 — catalog-forced. Reached only with no metadata to contradict.
+    # Rung 2 — catalog-forced. Reached with no metadata to contradict, or with a set-valued
+    # claim that narrowed to one row.
     if len(candidates) == 1:
         return _resolved(CATALOG_FORCED, candidates[0])
 
     # Rung 3 — detection.
     if detected_finish is not None:
-        wanted = CONDITION_BY_FINISH[detected_finish]
-        if wanted in by_condition:
-            return _resolved(DETECTION, by_condition[wanted])
+        wanted_row = condition_by_finish[detected_finish]
+        if wanted_row in by_condition:
+            return _resolved(DETECTION, by_condition[wanted_row])
         return Resolution(stage=REVIEW, reason=DETECTED_FINISH_NOT_STOCKED)
 
     # Rung 4 — review.

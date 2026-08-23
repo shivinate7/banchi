@@ -21,12 +21,15 @@
 # docs/DESIGN.md calls mandatory is a human comparing this render against the reference.
 pull-confirm  http://localhost:5173/#/gallery
 
-# Step 7a's two screens. The capture screen renders without a camera in a headless render —
-# that is not a defect to work around, it is the first thing a person sees before granting
-# permission, and it is worth looking at deliberately rather than only ever seeing the happy
-# path. The layout underneath it renders either way.
+# Step 7a's two screens — now one. The capture screen renders without a camera in a headless
+# render — that is not a defect to work around, it is the first thing a person sees before
+# granting permission, and it is worth looking at deliberately rather than only ever seeing
+# the happy path. The layout underneath it renders either way.
+#
+# `pull-preview http://localhost:5173/#/pull` stood here until D31 merged that route into
+# #/inventory. The walk it rendered did not go anywhere — it is the browse mode of the
+# `inventory` line below, which is why this list lost a view without losing a render.
 capture       http://localhost:5173/#/
-pull-preview  http://localhost:5173/#/pull
 
 # 7b's three screens, routed 2026-08-13. The review queue is the one to actually look at:
 # docs/DESIGN.md specifies its shape in more detail than any other screen in the product and

@@ -268,8 +268,9 @@ COMPONENTS = [
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
             # makes the registry believable before anything else is built on it.
-            "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not",
-                           "governed_by": ["D3", "D12", "D22", "D23"], "tested_by": ["T3", "T4"]},
+            "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not, "
+                                   "over a per-game finish vocabulary and a set-valued rung 1 claim",
+                           "governed_by": ["D3", "D12", "D21", "D22", "D23"], "tested_by": ["T3", "T4"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
@@ -559,7 +560,7 @@ COMPONENTS = [
                 # is the one render where the absence of the nav strip is the point. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another.
-                "governed_by": ["D5", "D13"],
+                "governed_by": ["D5", "D13", "D31"],
             },
         },
     },
@@ -710,11 +711,12 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: seven hash routes, one ROUTES table driving both "
+            "src/App.tsx": {"does": "the shell: five hash routes since D31 merged #/boxes and #/pull "
+                                    "into #/inventory, one ROUTES table driving both "
                                     "the nav and the render, and the persona field that decides "
                                     "the Fulfiller's view gets no chrome at all. #/boxes is the "
                                     "seventh, registered with D20's screen rather than after it.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
@@ -788,14 +790,18 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5", "D27"]},
-            "src/PullPreview.tsx": {"does": "the card's own capture photo beside its position label and, since D30, "
+            "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
+                    "three routes merged. The card's own capture photo beside its position label "
+                    "and, since D30, "
                     "its neighbours and the section's gap count. ONE WRITE since 2026-08-23 "
                     "— the re-shoot control (D26, owner's placement ruling): replace a bad "
                     "stored photo from a file, record untouched, allocator never involved. "
                     "Everything else stays look-only, and the header argues the exception.",
-            "governed_by": ["D6", "D10", "D24", "D26", "D30"]},
-            "src/PullPreview.css": {"does": "its layout, and why no accent appears anywhere in it",
-                                    "governed_by": ["D5", "D6", "D13", "D30"]},
+            "governed_by": ["D6", "D10", "D20", "D24", "D26", "D27", "D30", "D31"]},
+            "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
+                                  "INSET focus ring and says so — it clips its own overflow, which is the "
+                                  "case base.css's standing ring cannot serve",
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -847,7 +853,7 @@ COMPONENTS = [
                         "for with a data-integrity bug. The live cap it once declined to draw "
                         "comes off the wire now (SearchGroup.cap), which is the condition its "
                         "own comment named as what would settle it.",
-                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D26"],
+                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D26", "D27", "D31"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -856,10 +862,11 @@ COMPONENTS = [
                         "is the one thing on the screen with exactly one thing to do; its "
                         "header used to say no accent appeared at all and records why that "
                         "stopped being true.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26"],
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31"],
             },
-            "src/Boxes.tsx": {
-                "does": "D20's box object, made visible and editable at #/boxes. One card per "
+            "src/BoxOps.tsx": {
+                "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
+                        "since D31 merged #/boxes away. One header per "
                         "box from GET /boxes: its name, its fill or its frozen capacity, its "
                         "lid, the section layout drawn from the server's own sections_detail "
                         "through PositionBar's spansOf, and per-section counts. Four controls, "
@@ -888,14 +895,14 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D27", "D31"],
             },
-            "src/Boxes.css": {
-                "does": "the box panels, the section track and the editors, at the dense "
+            "src/BoxOps.css": {
+                "does": "the box header, the section track and the editors, at the dense "
                         "owner-side end. No accent anywhere in it and no exception — every box "
                         "carries four controls, so a fill would have to pick one and would then "
                         "mean 'important'. The seal's weight comes from the number on it.",
-                "governed_by": ["D5", "D20"],
+                "governed_by": ["D5", "D20", "D31"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "

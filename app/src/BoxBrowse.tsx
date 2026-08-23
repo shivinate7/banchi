@@ -1,48 +1,66 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { isEditableTarget } from './keys'
-import type { InventoryCard } from './types'
+import type { BoxRecord, InventoryCard } from './types'
 import type { Failure } from './server'
 import {
   describeFailure,
   positionLabel,
   placeSentence,
+  getBoxes,
   getInventory,
   photoUrl,
   reshootPhoto,
   newCaptureId,
 } from './server'
+import { BoxOps, RegisterBox } from './BoxOps'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
-import './PullPreview.css'
+import './BoxBrowse.css'
 
-/* The pull preview — docs/specs/capture-app.md §7, plus ONE WRITE it did not have then.
+/* THE BROWSE — box, then section, then card. One of `#/inventory`'s two ways in (D31).
  *
- * This is the last link in the Gate B chain: a card photographed at the start of a run
- * shows up here with the right photo at the right box, section and card. That single
- * claim is still the whole screen, and this header said LOOK ONLY for as long as it was
- * the whole truth. It stopped being that when the re-shoot control landed, and the header
- * changes with the screen rather than surviving it — the drift docs/DESIGN.md's review
- * queue header is a worked example of, pointing the other way.
+ * THIS FILE WAS `PullPreview.tsx` AT `#/pull` AND IS THE SAME WALK, taken forward rather than
+ * rewritten. The owner's words are in D31: three routes rendered the same 767 records and
+ * "read as separate instances of one thing", and the one question a person actually arrives
+ * with — what is in this box, and can I click it — was answerable on the screen named after a
+ * fulfilment errand and nowhere else. So the route is gone and the walk is now what the
+ * inventory's Browse mode renders. Everything the walk had been tuned into keeping — sticky
+ * section headers, the segmented strip, one-line rows, the deep keys scoped to the list, the
+ * detail panel with the photograph — is unchanged, because it was the best-tested navigation
+ * in the app and rewriting it would have thrown that away to arrive back at it.
  *
- * THE ONE WRITE, AND ITS WHOLE EXTENT: replacing a photograph. D26's re-shoot half —
- * new bytes and a rebuilt sidecar at the same position, record untouched, label
- * unchanged, allocator never involved. D26 recorded the placement as an open question in
- * as many words — "where the control lives (pull preview, or a per-card view) is a design
- * question still open" — and the owner's ruling is the pull preview: this is the screen
- * where a bad photo is DISCOVERED, because checking photos against positions is the thing
- * it is for, and a remedy that lives anywhere else costs a navigation with the defect
- * still on screen. Nothing else here writes; mark-sold remains another screen's.
+ * WHAT ACTUALLY CHANGED, and it is one idea: THE STRIP SELECTS RATHER THAN JUMPS. It used to
+ * scroll one continuous walk of every card in the store to the first row of a box; it now
+ * chooses which box the walk is OF. The reason is the browse's own shape — D31 puts the box
+ * operations on the box header, and a header that names one box cannot sit over a list holding
+ * four. It is also the density answer: box 2 alone is 544 cards, so a walk of all 767 is a
+ * scroller whose position tells you nothing, which is the complaint that started this work.
+ * The section headers lost their `Box N ·` prefix in the same move — the box is named once,
+ * above the list, by the panel that can also rename and seal it.
  *
- * NO CONFIRM DIALOG, AND THE ACTION IS IRREVERSIBLE — both at once, deliberately, and the
+ * THE RE-SHOOT CONTROL CAME WITH IT AND MAY NOT BE DROPPED. D26 put it on the pull preview
+ * deliberately — "the screen whose whole job is looking at one stored photo beside its
+ * position, so the moment a bad photo is discovered is the moment the remedy is already on
+ * screen" — and D31 is explicit that the argument is about a detail panel showing one card's
+ * photograph rather than about a URL, so it transfers intact and a merge that lost it would
+ * have broken D26. It is below, unchanged, at `ReshootControl`.
+ *
+ * THE ONE WRITE THIS FILE MAKES ABOUT A CARD, AND ITS WHOLE EXTENT: replacing a photograph.
+ * D26's re-shoot half — new bytes and a rebuilt sidecar at the same position, record
+ * untouched, label unchanged, allocator never involved. Nothing else here writes a card;
+ * mark-sold and retire belong to the search half of this screen. `BoxOps` writes the BOX,
+ * which is a different object and says so.
+ *
+ * NO CONFIRM DIALOG, AND THE RE-SHOOT IS IRREVERSIBLE — both at once, deliberately, and the
  * reasoning is capture-undo's (docs/DESIGN.md) transposed: the old bytes are gone, not
- * archived, but the CARD is still in its slot, so the remedy for a wrong re-shoot is
- * another re-shoot. What bounds the loss on undo — the card still in your hand — is here
- * the card still in its box. A dialog would tax every correct replacement to soften a
- * mistake that has a two-tap repair.
+ * archived, but the CARD is still in its slot, so the remedy for a wrong re-shoot is another
+ * re-shoot. What bounds the loss on undo — the card still in your hand — is here the card
+ * still in its box. A dialog would tax every correct replacement to soften a mistake that has
+ * a two-tap repair.
  *
- * The photo comes from `GET /photo/<box>/<index>`, which is D6's route and the reason
- * that route exists at all: the review queue requires it and the pull modal reuses it.
+ * The photo comes from `GET /photo/<box>/<index>`, which is D6's route and the reason that
+ * route exists at all: the review queue requires it and the pull modal reuses it.
  *
  * Owner-side, so density is fine and docs/DESIGN.md's Fulfillment floors do not bind.
  * They bind on 7b's pull modal, which is a different screen for a different person;
@@ -91,18 +109,82 @@ const NO_ROWS: Row[] = []
 
 // ------------------------------------------------------------------ the walk, in sections
 
-/* Which stretch of the walk a row belongs to, worded as its sticky header will say it.
- * Composed from the server's own `box` and `section` decorations — the label rule at the
- * top of this file forbids position ARITHMETIC here, and this does none: two numbers the
- * server sent, joined with the words its own label uses. A pooled row groups under the
- * pooled fact and a bare record under the fault, so a header never claims a location the
- * rows beneath it do not have. */
+/* WHICH SHELF A ROW IS ON — the thing the strip selects, and the scope of one walk.
+ *
+ * A box number for an ordinary card; `pooled` for a card whose game says `located: false`
+ * (D24 — a count, not a location, so its `box` is a store key and putting it under a box
+ * number would make the strip promise a shelf); `unplaced` for the record whose box will not
+ * coerce, which `do_inventory` leaves undecorated and `GET /status` reports. Three shelves and
+ * not two, because a design fact and a fault must never share a cell.
+ */
+type Shelf = number | 'pooled' | 'unplaced'
+
+function shelfOf(row: Row): Shelf {
+  if (isPooled(row.card)) return 'pooled'
+  const box = row.card.box
+  if (typeof box !== 'number' || Number.isNaN(box)) return 'unplaced'
+  return box
+}
+
+/** What a shelf's cell says on the strip, and what the box header says above the walk. */
+function shelfLabel(shelf: Shelf): string {
+  if (shelf === 'pooled') return 'pooled'
+  if (shelf === 'unplaced') return 'no box'
+  return String(shelf)
+}
+
+/* Every shelf the current walk touches, boxes first and in the walk's own order.
+ *
+ * BUILT FROM THE SEARCH-FILTERED ROWS rather than from the whole store, which is the rule the
+ * jump strip already followed: under a query the strip offers only shelves that still hold a
+ * match, so a cell can never lead to an empty list. The two non-numeric shelves go last and
+ * only when something is actually on them — a cell for a condition nothing is in is chrome
+ * that has stopped being true, the same rule the key chips follow.
+ */
+function shelvesOf(rows: Row[]): Shelf[] {
+  const out: Shelf[] = []
+  let pooled = false
+  let unplaced = false
+  for (const row of rows) {
+    const shelf = shelfOf(row)
+    if (shelf === 'pooled') pooled = true
+    else if (shelf === 'unplaced') unplaced = true
+    else if (!out.includes(shelf)) out.push(shelf)
+  }
+  if (pooled) out.push('pooled')
+  if (unplaced) out.push('unplaced')
+  return out
+}
+
+/* Which stretch of one shelf's walk a row belongs to, worded as its sticky header will say it.
+ *
+ * NO `Box N ·` PREFIX ANY MORE, and that is the merge's doing rather than a trim: the walk is
+ * scoped to one shelf now and the box is named once above it, by a panel that can also rename
+ * and seal it. Repeating the box number down every header would spend most of a narrow
+ * column's width restating the one fact that cannot change while you are reading.
+ *
+ * Composed from the server's own decorations — the label rule at the top of this file forbids
+ * position ARITHMETIC here, and this does none: `section` is a number the server sent, and the
+ * span is `Place.section_start`/`section_end`, which is the store's own answer to where this
+ * section begins and ends. A section with no end is drawn as open rather than filled in with
+ * the box total, exactly as the layout table draws it: the two mean different things, and the
+ * second is a claim about where a divider is.
+ *
+ * A pooled row groups under the pooled fact and a bare record under the fault, so a header
+ * never claims a location the rows beneath it do not have.
+ */
 function sectionTitleOf(row: Row): string {
   if (isPooled(row.card)) {
     return `Pooled · ${row.card.place?.game_display ?? row.card.game ?? 'cards'}`
   }
-  if (row.card.section !== undefined) return `Box ${row.card.box} · Section ${row.card.section}`
-  return 'No position label'
+  if (row.card.section === undefined) return 'No position label'
+
+  const start = row.card.place?.section_start
+  const end = row.card.place?.section_end
+  if (typeof start !== 'number') return `Section ${row.card.section}`
+  return typeof end === 'number'
+    ? `Section ${row.card.section} · #${start}–#${end}`
+    : `Section ${row.card.section} · #${start} onward`
 }
 
 type Section = { key: string; title: string; first: Row; rows: Row[] }
@@ -138,22 +220,6 @@ function rowSlot(row: Row): string {
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
 }
 
-/* Every box the current walk touches, in the walk's own order — built from `visible`, so
- * under a filter the strip offers only boxes that still hold a match and a chip can never
- * jump to a card the list does not show. Pooled rows are skipped: their box number is a
- * store key, not a place, and a strip cell is a promise about a shelf. The typeof guard is
- * for the record the types cannot see — a box off disk that is not a number sorts into the
- * fault group above and earns no cell. */
-function boxesOf(rows: Row[]): number[] {
-  const out: number[] = []
-  for (const row of rows) {
-    if (isPooled(row.card)) continue
-    const box = row.card.box
-    if (typeof box !== 'number' || Number.isNaN(box)) continue
-    if (!out.includes(box)) out.push(box)
-  }
-  return out
-}
 
 // -------------------------------------------------------------- stepping through the list
 
@@ -275,10 +341,28 @@ function collectorNumber(card: InventoryCard): string {
   return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
 }
 
-export function PullPreview() {
+export function BoxBrowse() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+
+  /* WHICH SHELF THE WALK IS OF, or null before the first read has said which shelves exist.
+   * The strip writes it and the effect below keeps it honest against the current filter.
+   *
+   * NOT PERSISTED, and worth one line because two neighbours in this app are. `useCamera.ts`
+   * remembers a device and a rotation and D27 lets the capture screen remember its claims —
+   * both because they describe THIS RIG and would be wrong shared. Which box you were last
+   * looking at describes a minute of reading, not the rig, and a browse that reopened on box
+   * 95 because that is where a different question ended would be a screen arguing with the
+   * person who just opened it. */
+  const [shelf, setShelf] = useState<Shelf | null>(null)
+
+  /* The box registry, for the panel above the walk — `GET /boxes`, the one route that renders
+   * a box's own layout. Empty until it answers and empty forever if it never does: the walk
+   * does not depend on it, so a dead `/boxes` costs the header and nothing else. Kept as the
+   * raw list rather than a map because it is four rows today and thirty at worst, and a
+   * `.find` over thirty is not a data structure worth having. */
+  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
   /* The key whose photo 404'd, not a boolean: an `onError` from the previously selected
    * card can land after the selection has moved, and a boolean would blame the wrong
    * card for a missing file. */
@@ -342,14 +426,34 @@ export function PullPreview() {
    * does; the `Looking.` line is what says so. A FAILED search also leaves the whole walk
    * standing, under the failure panel: an empty list would claim "no card matches", which
    * is an answer, and a failure is precisely not one. */
-  const visible = useMemo(() => {
+  const inQuery = useMemo(() => {
     if (rows === null) return NO_ROWS
     if (!searching || matched === null) return rows
     return rows.filter((row) => matched.has(row.key))
   }, [rows, searching, matched])
 
+  /* The shelves the query still reaches, and then the one shelf being walked. TWO STAGES AND
+   * NOT ONE, because they answer different questions: the strip has to offer every shelf the
+   * query matches (or a match in another box would be invisible with nothing saying so), and
+   * the list has to show one shelf's worth (or the header above it would name a box the rows
+   * do not all belong to). `visible` stays the name every control below already walks. */
+  const shelves = useMemo(() => shelvesOf(inQuery), [inQuery])
+
+  const visible = useMemo(() => {
+    if (shelf === null) return NO_ROWS
+    return inQuery.filter((row) => shelfOf(row) === shelf)
+  }, [inQuery, shelf])
+
   const sections = useMemo(() => sectionsOf(visible), [visible])
-  const boxes = useMemo(() => boxesOf(visible), [visible])
+
+  /* The box row for the shelf being walked, or null — the header draws `BoxOps` only for a
+   * NUMBERED shelf that the registry actually knows. A box a card names but `GET /boxes` has
+   * not answered for gets no panel rather than an invented one: the operations it would offer
+   * write to a record that is not there. */
+  const shelfBox = useMemo(() => {
+    if (typeof shelf !== 'number') return null
+    return boxRecords.find((record) => record.box === shelf) ?? null
+  }, [boxRecords, shelf])
 
   /* The re-shoot, from a picked file to the server. The base64 the wire wants is the
    * data-URL's payload — sliced at the first comma rather than split, and RAW, no
@@ -435,6 +539,51 @@ export function PullPreview() {
       live = false
     }
   }, [reloads])
+
+  /* THE BOX REGISTRY, on the same counter as the inventory read and allowed to fail without
+   * anybody hearing about it — `Inventory.tsx` argues the shape at length for its own layout
+   * read and every word of it holds here. The walk, the strip, the rows and the photograph all
+   * come off `GET /inventory`; this read only decides whether the box header can be drawn. A
+   * failure panel would trade a working walk for a message about a panel.
+   *
+   * ON `reloads` RATHER THAN ON THE SHELF, because a box edit is what changes these rows and
+   * `BoxOps` bumps that counter when it makes one. It must: D10 as amended makes Section and
+   * Card a VIEW of an index, so a divider edit changes every card decoration in the box as
+   * well as the box row — which is why the inventory read is on the same counter and why they
+   * are refreshed together rather than separately.
+   *
+   * `.then(ok).catch(fail)` AND NOT `.then(ok, fail)` — the rule `app/eslint.config.js`
+   * enforces. It binds here even though the failure path does nothing: the success handler
+   * walks a body off the wire, and the two-argument form would turn a throw in it into an
+   * unhandled rejection rather than the silence this effect intends. */
+  useEffect(() => {
+    let live = true
+    getBoxes()
+      .then((summary) => {
+        if (!live) return
+        setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
+      })
+      .catch(() => {
+        // Deliberately nothing. See above: the walk is whole without this.
+      })
+    return () => {
+      live = false
+    }
+  }, [reloads])
+
+  /* THE SHELF FOLLOWS THE FILTER, which is the selection rule one level up and it exists for
+   * the same failure: a query matching only box 95 while box 1 is selected would draw an empty
+   * list under a header naming a box that does have cards, and nothing on screen would say the
+   * match was somewhere else. So an unreachable shelf falls to the first one the query does
+   * reach. When NOTHING matches, the shelf is deliberately left alone — clearing the query
+   * then puts the owner back exactly where they were, and one over-narrow keystroke does not
+   * cost them their place. */
+  useEffect(() => {
+    if (shelves.length === 0) return
+    setShelf((prev) =>
+      prev !== null && shelves.includes(prev) ? prev : (shelves[0] ?? null),
+    )
+  }, [shelves])
 
   /* THE SELECTION FOLLOWS THE FILTER. A query that drops the selected card would otherwise
    * leave the detail panel showing a card the list no longer contains — a photo beside a
@@ -599,16 +748,23 @@ export function PullPreview() {
     })
   }
 
-  /* A chip press is a JUMP, so it does the two things a click on a row does not. It
-   * scrolls the landing to the top of the scroller — via jumpRef, argued at the scroll
-   * effect — and it hands focus to the list, arming the deep keys: the gesture after
-   * "take me to box 7" is walking box 7, and a jump that left the keys dead until a click
-   * would give back the mouse it just saved. */
-  const jumpToBox = (box: number) => {
-    const landing = visible.find((row) => !isPooled(row.card) && row.card.box === box)
-    if (landing === undefined) return
-    jumpRef.current = landing.key
-    setSelected(landing.key)
+  /* A CELL PRESS CHANGES WHAT THE WALK IS OF, and then does the two things a click on a row
+   * does not. It scrolls the landing to the top of the scroller — via jumpRef, argued at the
+   * scroll effect — and it hands focus to the list, arming the deep keys: the gesture after
+   * "show me box 7" is walking box 7, and a selection that left the keys dead until a click
+   * would give back the mouse it just saved.
+   *
+   * The landing is computed off `inQuery` rather than `visible` for a reason that is easy to
+   * get wrong: `visible` is the shelf you are LEAVING at the moment this runs, so it holds no
+   * row of the shelf being asked for. `inQuery` is every row the current query reaches, on any
+   * shelf, which is where the landing has to come from. */
+  const selectShelf = (next: Shelf) => {
+    setShelf(next)
+    const landing = inQuery.find((row) => shelfOf(row) === next)
+    if (landing !== undefined) {
+      jumpRef.current = landing.key
+      setSelected(landing.key)
+    }
     listRef.current?.focus()
   }
 
@@ -627,19 +783,13 @@ export function PullPreview() {
   const selectedSentence = selectedRow === null ? null : placeSentence(selectedRow.card.place)
 
   return (
-    <main className="pull-preview">
-      <header className="pull-preview-head">
-        <h1 className="pull-preview-title">Pull preview</h1>
-        {/* This lede said "Nothing on this screen changes anything" for as long as that was
-            true. The re-shoot ended it, and the copy rule is active voice about what
-            actually happens — a lede quietly overclaiming safety on the screen with the
-            one photograph-destroying control would be the worst place in the app to keep
-            a stale sentence. */}
-        <p className="pull-preview-lede">
-          Every captured card, where it sits, and the photo taken of it. The one thing this
-          screen changes is a photograph: Re-shoot replaces a bad one, and nothing else moves.
-        </p>
-        <div className="pull-preview-controls">
+    <section className="browse">
+      {/* NO <h1> AND NO LEDE HERE ANY MORE. This is a mode of `#/inventory`, not a page, and
+          that screen's header carries the title, the sentence and the two-way switch. A second
+          heading under the first would put two titles on one screen — and the one this file
+          used to draw named a route that no longer exists. */}
+      <div className="browse-head">
+        <div className="browse-controls">
           {/* A reload is a GET. The ban in §7 is on acting — writing a state, marking a
               sale, pulling a card — and re-reading the inventory is none of those. It
               earns its place because Gate B alternates between capturing on one screen and
@@ -647,11 +797,11 @@ export function PullPreview() {
               browser, which also throws away the selection. No accent fill: docs/DESIGN.md
               reserves the solid fill for a screen with exactly one thing to do, and this
               screen's one thing is to be looked at. */}
-          <button className="pull-preview-reload" type="button" onClick={() => setReloads((n) => n + 1)}>
+          <button className="browse-reload" type="button" onClick={() => setReloads((n) => n + 1)}>
             Reload
           </button>
           {rows === null ? null : (
-            <span className="pull-preview-count">
+            <span className="browse-count">
               {rows.length} {rows.length === 1 ? 'card' : 'cards'}
             </span>
           )}
@@ -670,9 +820,9 @@ export function PullPreview() {
               list of one is chrome that has stopped being true, and the empty and failed
               states have no list under it at all. */}
           {rows === null || rows.length < 2 ? null : (
-            <span className="pull-preview-keys">
+            <span className="browse-keys">
               {STEPS.map((step) => (
-                <kbd className="pull-preview-key" key={step.key}>
+                <kbd className="browse-key" key={step.key}>
                   {step.label}
                 </kbd>
               ))}
@@ -680,11 +830,11 @@ export function PullPreview() {
             </span>
           )}
         </div>
-      </header>
+      </div>
 
       {failure === null ? null : (
-        <div className="pull-preview-note">
-          <p className="pull-preview-note-text">{failure.message}</p>
+        <div className="browse-note">
+          <p className="browse-note-text">{failure.message}</p>
           {/* The CODE beneath the sentence, and never the sentence again.
               docs/DESIGN.md's rule is "human label large, machine string small beneath
               it", and the machine string it means is a greppable token — `store_busy`,
@@ -693,25 +843,25 @@ export function PullPreview() {
               but a stutter, and it cost the small line the only job it has: getting from
               what is on screen to what the server said, with `git grep`. Owner-side only,
               and this screen is owner-side. */}
-          <p className="pull-preview-machine">{failure.code}</p>
+          <p className="browse-machine">{failure.code}</p>
         </div>
       )}
 
       {rows === null && failure === null ? (
-        <p className="pull-preview-note-text">Reading the inventory.</p>
+        <p className="browse-note-text">Reading the inventory.</p>
       ) : null}
 
       {rows !== null && rows.length === 0 ? (
-        <p className="pull-preview-note-text">No cards captured yet.</p>
+        <p className="browse-note-text">No cards captured yet.</p>
       ) : null}
 
       {rows !== null && rows.length > 0 ? (
-        <div className="pull-preview-body">
+        <div className="browse-body">
           {/* The map column: search, box strip, status line, the list, then the keys that
               walk it. One column because they are one instrument — everything in it narrows
               or indexes the same walk, and the detail panel beside it is what the walk is
               pointing at. */}
-          <div className="pull-preview-map">
+          <div className="browse-map">
             {/* The shared field: owner persona, `/` from anywhere, Esc handing focus back
                 with the query intact — all SearchField's own rulings, not re-made here. The
                 search-shape argument and the deliberate absence of autoFocus are at the
@@ -722,59 +872,68 @@ export function PullPreview() {
                 buttons and not a <select>. Thirty boxes must fit over a 240-320px column,
                 which rules out thirty padded chips by arithmetic; a native select fits any
                 count by hiding the map behind a click, and a map you have to open is not a
-                map — this strip doubles as "you are here", since the selected card's box
-                carries the rail. Hairline-divided 10px utility cells wrap to a second row
-                past roughly a dozen boxes, which costs 20px and hides nothing. Drawn only
-                with two boxes to move between: a strip of one is chrome, the same rule the
-                header chips follow. */}
-            {boxes.length < 2 ? null : (
-              <div className="pull-preview-boxline">
-                <span className="pull-preview-boxcap" aria-hidden="true">
+                map. Hairline-divided 10px utility cells wrap to a second row past roughly a
+                dozen boxes, which costs 20px and hides nothing.
+
+                IT SELECTS RATHER THAN JUMPS NOW (D31) — the header at the top of this file
+                argues the change. `aria-current` still marks where you are, so the strip still
+                doubles as "you are here"; what moved is that the rail follows the SHELF rather
+                than the selected card's box, and those were the same fact only while one walk
+                held every box.
+
+                DRAWN EVEN WITH ONE SHELF, which reverses the old rule and does not contradict
+                it. A strip of one chip that jumps you to a row you can already see is chrome;
+                a strip of one cell that NAMES the box the list below is of is the only place
+                that fact appears when the box registry has not answered. */}
+            {shelves.length === 0 ? null : (
+              <div className="browse-boxline">
+                <span className="browse-boxcap" aria-hidden="true">
                   Box
                 </span>
-                <div className="pull-preview-boxes" role="group" aria-label="Jump to a box">
-                  {boxes.map((box) => (
+                <div className="browse-boxes" role="group" aria-label="Choose a box to walk">
+                  {shelves.map((cell) => (
                     <button
-                      key={box}
-                      className="pull-preview-boxcell"
+                      key={String(cell)}
+                      className="browse-boxcell"
                       type="button"
-                      aria-label={`Box ${box}, first card`}
-                      aria-current={
-                        selectedRow !== null &&
-                        !isPooled(selectedRow.card) &&
-                        selectedRow.card.box === box
-                          ? 'true'
-                          : undefined
+                      aria-label={
+                        cell === 'pooled'
+                          ? 'Pooled cards, which have no box'
+                          : cell === 'unplaced'
+                            ? 'Records with no readable box'
+                            : `Box ${cell}`
                       }
-                      onClick={() => jumpToBox(box)}
+                      aria-current={cell === shelf ? 'true' : undefined}
+                      onClick={() => selectShelf(cell)}
                     >
-                      {box}
+                      {shelfLabel(cell)}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
+
             {/* The search's own failure, in the owner idiom: the sentence, then the
                 greppable code. The walk below it is deliberately UNFILTERED while this
                 stands — see the `visible` memo. */}
             {searchFailure === null ? null : (
-              <div className="pull-preview-note pull-preview-mapnote">
-                <p className="pull-preview-note-text">{searchFailure.message}</p>
-                <p className="pull-preview-machine">{searchFailure.code}</p>
+              <div className="browse-note browse-mapnote">
+                <p className="browse-note-text">{searchFailure.message}</p>
+                <p className="browse-machine">{searchFailure.code}</p>
               </div>
             )}
 
             {/* `loading` is true through the debounce as well as the request — useSearch
                 says why — so this line is the honest answer to "is the list below an answer
                 to the box above", drawn beside the old list rather than instead of it. */}
-            {searching && loading ? <p className="pull-preview-match">Looking.</p> : null}
+            {searching && loading ? <p className="browse-match">Looking.</p> : null}
             {searching && !loading && results !== null ? (
-              <p className="pull-preview-match">
-                {visible.length === 0
-                  ? `Nothing in the walk matches ${results.query}.`
-                  : `${visible.length} of ${rows.length} ${
-                      visible.length === 1 ? 'card matches' : 'cards match'
+              <p className="browse-match">
+                {inQuery.length === 0
+                  ? `Nothing in the boxes matches ${results.query}.`
+                  : `${visible.length} on this box · ${inQuery.length} of ${rows.length} ${
+                      inQuery.length === 1 ? 'card matches' : 'cards match'
                     }`}
               </p>
             ) : null}
@@ -789,7 +948,7 @@ export function PullPreview() {
                 the attribute to be imprecise. */}
             {visible.length === 0 ? null : (
               <ul
-                className="pull-preview-list"
+                className="browse-list"
                 ref={listRef}
                 tabIndex={0}
                 aria-label="Captured cards, in box-walk order"
@@ -801,9 +960,9 @@ export function PullPreview() {
                      holds the scroller's top edge while its own rows pass and is pushed off
                      by the next one — so "where am I" is always on screen, which is the
                      first thing a two-hundred-row scroller loses. */
-                  <li className="pull-preview-group" key={section.key}>
-                    <div className="pull-preview-secthead">{section.title}</div>
-                    <ul className="pull-preview-group-rows">
+                  <li className="browse-group" key={section.key}>
+                    <div className="browse-secthead">{section.title}</div>
+                    <ul className="browse-group-rows">
                       {section.rows.map((row) => (
                         <li key={row.key}>
                           {/* Plain buttons, and they stay plain buttons now that the arrow
@@ -830,13 +989,13 @@ export function PullPreview() {
                               then the name. rowSlot above says what the left cell is
                               allowed to claim, fallbacks included. */}
                           <button
-                            className="pull-preview-row"
+                            className="browse-row"
                             type="button"
                             aria-current={row.key === selected ? 'true' : undefined}
                             onClick={() => setSelected(row.key)}
                           >
-                            <span className="pull-preview-row-position">{rowSlot(row)}</span>
-                            <span className="pull-preview-row-name">
+                            <span className="browse-row-position">{rowSlot(row)}</span>
+                            <span className="browse-row-name">
                               {row.card.name ?? row.card.state}
                             </span>
                           </button>
@@ -854,37 +1013,89 @@ export function PullPreview() {
                 because it is the one fact about these keys nobody can guess from the
                 chrome. */}
             {visible.length < 2 ? null : (
-              <p className="pull-preview-keys pull-preview-listkeys">
+              <p className="browse-keys browse-listkeys">
                 {SECTION_KEYS.map((step) => (
-                  <kbd className="pull-preview-key" key={step.key}>
+                  <kbd className="browse-key" key={step.key}>
                     {step.label}
                   </kbd>
                 ))}
                 a section
                 {' · '}
                 {EDGE_KEYS.map((step) => (
-                  <kbd className="pull-preview-key" key={step.key}>
+                  <kbd className="browse-key" key={step.key}>
                     {step.label}
                   </kbd>
                 ))}
                 the ends · when the list holds focus
               </p>
             )}
+
+            {/* Register a box before a card goes into it — D20's control, in the column that
+                lists every box it would join, at the bottom of it.
+
+                UNDER THE WALK RATHER THAN OVER IT, and the reason is measured. This column is
+                sticky and its height is the viewport, so everything above the list is height
+                the list does not get: drawn between the strip and the walk this control cost
+                44px of rows, permanently, to offer an action taken a handful of times a year.
+                Below, it costs nothing until the list is short enough to leave room. It is
+                still beside the strip in the sense D20's own argument needs — every existing
+                box is listed in the same column, which is what makes a mistyped number
+                visible. */}
+            <RegisterBox onChanged={() => setReloads((n) => n + 1)} />
           </div>
 
+          <div className="browse-side">
+            {/* THE BOX HEADER — D31's "box operations live on the box header inside the
+                browse, beside the box they operate on". It is the first thing in the detail
+                column rather than a strip across the top of the walk, and that is a measured
+                choice: `#/boxes` drew this panel for every box at once and cost 1744px of
+                scroll to say four things, so the panel is drawn once, for the box being
+                walked, with its layout table and its four controls folded (see BoxOps).
+
+                DRAWN ONLY FOR A NUMBERED SHELF THE REGISTRY KNOWS. The pooled and no-box
+                shelves are not boxes and have nothing to rename or seal; a box a card names
+                that `GET /boxes` has not answered for gets no panel rather than an invented
+                one. `onChanged` bumps the same counter the Reload does, which re-reads the
+                registry AND the inventory — a divider edit relabels every card in the box
+                (D10 as amended), so the walk has to be re-read with the panel. */}
+            {shelfBox === null ? null : (
+              <BoxOps record={shelfBox} onChanged={() => setReloads((n) => n + 1)} />
+            )}
+
+            {shelf === 'pooled' ? (
+              <div className="browse-gap">
+                <p className="browse-note-text">
+                  These cards are pooled — a count, not a location (D24). They have no box,
+                  section or card position, so there is no box to name, divide or seal.
+                </p>
+                <p className="browse-machine">located: false</p>
+              </div>
+            ) : null}
+
+            {shelf === 'unplaced' ? (
+              <div className="browse-gap">
+                <p className="browse-note-text">
+                  These records reached the store with a box or an index that is not a number,
+                  so the capture server sent them with no position at all. `GET /status`
+                  reports them; nothing here can name a box for them.
+                </p>
+                <p className="browse-machine">place: absent</p>
+              </div>
+            ) : null}
+
           {selectedRow === null ? null : (
-            <section className="pull-preview-detail">
+            <section className="browse-detail">
               {selectedLabel === null && isPooled(selectedRow.card) ? (
                 /* Pooled, not missing — the deliberate case, before the fault below can
                    claim it. The sentence says what the card IS so the absent label stops
                    looking like something to go and fix. */
-                <div className="pull-preview-gap">
-                  <p className="pull-preview-note-text">
+                <div className="browse-gap">
+                  <p className="browse-note-text">
                     This card is pooled — a count, not a location. It has no box, section or
                     card position to show; the key below names its photo and sidecar on
                     disk, and nothing else.
                   </p>
-                  <p className="pull-preview-machine">
+                  <p className="browse-machine">
                     located: false · {pooledText(selectedRow.card, selectedRow.key)}
                   </p>
                 </div>
@@ -893,12 +1104,12 @@ export function PullPreview() {
                    Loud rather than blank: this screen's whole claim is that it says where
                    a card is, and a screen that has quietly stopped making that claim
                    should not look like one that is still making it. */
-                <div className="pull-preview-gap">
+                <div className="browse-gap">
                   {/* Both causes, because the sentence has to survive being read on the
                       wrong one: a restart fixes an old server and does nothing at all for a
                       record whose box will not coerce. Naming only the likelier one would
                       send the operator round a loop that cannot work. */}
-                  <p className="pull-preview-note-text">
+                  <p className="browse-note-text">
                     The capture server sent no position label for this card, and this screen
                     does not work one out for itself. Either an older server is running —
                     restart it with `make server` and reload — or this record's box or index
@@ -907,14 +1118,14 @@ export function PullPreview() {
                   {/* The field and its state, in the shape the missing-photo panel below
                       uses — `photo: null` there, `label: absent` here — plus the store key,
                       which is what a `curl /inventory | grep` needs to see it for itself. */}
-                  <p className="pull-preview-machine">label: absent · key {selectedRow.key}</p>
+                  <p className="browse-machine">label: absent · key {selectedRow.key}</p>
                 </div>
               ) : (
                 /* The payload of the whole screen. Utility face because it is a position,
                    and sized up because it is the one thing being checked against a physical
                    box across the desk. */
                 <>
-                  <p className="pull-preview-position">{selectedLabel}</p>
+                  <p className="browse-position">{selectedLabel}</p>
                   {/* D30's sentence, quiet, directly under the label it makes countable:
                       "between Mantine and Thievul · 2 slots in this section are empty".
                       `Card 17` is the seventeenth SLOT, and once the section has permanent
@@ -924,7 +1135,7 @@ export function PullPreview() {
                       which answers null — and this renders nothing, never a guess — for a
                       pooled card, an older server, or a decoration the server degraded. */}
                   {selectedSentence === null ? null : (
-                    <p className="pull-preview-between">{selectedSentence}</p>
+                    <p className="browse-between">{selectedSentence}</p>
                   )}
                 </>
               )}
@@ -948,9 +1159,9 @@ export function PullPreview() {
                 onPick={(file) => beginReshoot(selectedRow, file)}
               />
 
-              <dl className="pull-preview-facts">
+              <dl className="browse-facts">
                 {detailsOf(selectedRow.card).map((detail) => (
-                  <div className="pull-preview-fact" key={detail.label}>
+                  <div className="browse-fact" key={detail.label}>
                     <dt>{detail.label}</dt>
                     <dd className={detail.mono ? 'is-util' : undefined}>{detail.value}</dd>
                   </div>
@@ -958,9 +1169,10 @@ export function PullPreview() {
               </dl>
             </section>
           )}
+          </div>
         </div>
       ) : null}
-    </main>
+    </section>
   )
 }
 
@@ -999,9 +1211,9 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
 
   if (row.card.photo === null) {
     return (
-      <div className="pull-preview-absent">
-        <p className="pull-preview-note-text">No photo was stored for this card.</p>
-        <p className="pull-preview-machine">photo: null</p>
+      <div className="browse-absent">
+        <p className="browse-note-text">No photo was stored for this card.</p>
+        <p className="browse-machine">photo: null</p>
       </div>
     )
   }
@@ -1035,13 +1247,13 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
 
   if (absent) {
     return (
-      <div className="pull-preview-absent">
-        <p className="pull-preview-note-text">
+      <div className="browse-absent">
+        <p className="browse-note-text">
           The record has a photo but the file is not on disk. The card is still at {where} —
           and a photo added below replaces nothing, it is the first one this position would
           have again.
         </p>
-        <p className="pull-preview-machine">{src}</p>
+        <p className="browse-machine">{src}</p>
       </div>
     )
   }
@@ -1052,7 +1264,7 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
          the element rather than mutating it, so a failed load cannot leave the previous
          photograph's broken state attached to the new one. */
       key={`${row.key}:${src}`}
-      className="pull-preview-photo"
+      className="browse-photo"
       src={src}
       alt={`The card photographed at ${where}`}
       onError={onAbsent}
@@ -1096,7 +1308,7 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
   if (row.card.state === 'sold' || row.card.state === 'retired') return null
 
   return (
-    <div className="pull-preview-reshoot">
+    <div className="browse-reshoot">
       <input
         ref={inputRef}
         type="file"
@@ -1116,7 +1328,7 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
           to re-shoot, and the route's own comment calls that case the first photograph
           the position has, so the button says so rather than claiming a replacement. */}
       <button
-        className="pull-preview-reload"
+        className="browse-reload"
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
@@ -1128,9 +1340,9 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
             : 'Re-shoot this photo'}
       </button>
       {failure === null ? null : (
-        <div className="pull-preview-note">
-          <p className="pull-preview-note-text">{failure.message}</p>
-          <p className="pull-preview-machine">{failure.code}</p>
+        <div className="browse-note">
+          <p className="browse-note-text">{failure.message}</p>
+          <p className="browse-machine">{failure.code}</p>
         </div>
       )}
     </div>

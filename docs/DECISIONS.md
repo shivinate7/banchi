@@ -1154,6 +1154,56 @@ and D20's `box_fill` and `sections_for` are what make it computable.
 
 ---
 
+## D31 — One owner-side view of stored cards, and the Fulfiller does not get a vote on it
+
+**Three routes rendered the same 767 records and the owner named it: they read as separate
+instances of one thing** (2026-08-23). `#/inventory` searched by SKU and sold a copy,
+`#/boxes` held the registry and the layout editor with no way into a box's contents at all,
+and `#/pull` walked a box with photographs. Same store, same records, three looks, and the
+one question a person actually arrives with — *what is in this box, and can I click it* —
+was answerable on the screen named after a fulfilment errand and nowhere else.
+
+**All three collapse into `#/inventory`.** Two ways in, because there are exactly two
+questions: **search by card** (which is the SKU→positions map D7 already built, and the
+sell action that goes with it) and **browse by box → section → card**, which is the walk
+`#/pull` already implemented and tuned. Box operations — name, sections, seal, delete —
+live on the box header inside the browse, beside the box they operate on, rather than on a
+route of their own. `#/boxes` and `#/pull` cease to exist as routes.
+
+**The re-shoot control comes with it and may not be dropped in the move.** D26 put it on the
+pull preview deliberately — *"the screen whose whole job is looking at one stored photo
+beside its position, so the moment a bad photo is discovered is the moment the remedy is
+already on screen"*. That argument is about a detail panel showing one card's photograph,
+not about a URL, so it transfers intact to the browse's card detail. A merge that loses it
+has broken D26.
+
+**`CLAUDE.md`'s "six screens and six routes" was already wrong before this entry and is
+rewritten by it.** The table in `app/src/App.tsx` carried SEVEN — the gallery makes the
+seventh, and that file's own comment says "it matters more at seven routes than it did at
+three" while `CLAUDE.md` still said six. Five remain: capture, review, inventory,
+fulfillment, gallery. The count is restated in `CLAUDE.md`, `docs/map.py` and
+`scripts/views.txt`, and the not-rendered-rather-than-hidden rule for the Fulfiller's nav is
+untouched — it was never about how many owner routes there are.
+
+**THE FULFILLER'S SURFACE IS DOWNSTREAM AND IS NOT A COUNTERPOINT.** Recorded because it was
+argued the wrong way round and the owner corrected it: *"do not concern yourself with
+fulfiller concerns, fulfiller concerns/settings are downstream of build work and should not
+be a counterpoint to any build work."* The case was real — `#/pull` was offered as a screen
+the fulfilment flow leans on, as a reason to merge less — and it is exactly the inversion
+this rule forbids. D5 makes the Fulfiller's screens a *skin* over what the owner's build
+produces and D13 puts one truth behind both; a skin settles after the thing it presents
+exists. Letting it veto upstream structure lets a consumer decide the shape of what it
+consumes.
+
+**What this does NOT license, stated because the sentence above is the kind that gets
+overread**: `app/tests/fulfillment.spec.ts` and `docs/DESIGN.md`'s nine hard constraints
+still pass, unchanged and unweakened. `#/fulfillment` is not merged into anything and keeps
+its own route — it is a different persona at a different posture, and it is the one screen
+in the product whose whole design is a floor. The ruling is about which arguments may
+decide architecture, not about which tests may go red.
+
+---
+
 ## Deferred — do not build until all gates pass
 
 - PKMNVAULT and anything Supabase/eBay related, **except** the PKMNCODES track, whose

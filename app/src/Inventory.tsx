@@ -25,6 +25,7 @@ import {
   undoRetire,
   undoSale,
 } from './server'
+import { BoxBrowse } from './BoxBrowse'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PullConfirm } from './PullConfirm'
@@ -32,7 +33,44 @@ import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
 import './Inventory.css'
 
-/* The inventory view — build-order step 7b. D7's SKU -> positions map, made visible.
+/* THE INVENTORY — the owner's one view of stored cards, with two ways in (D31).
+ *
+ * THREE ROUTES BECAME THIS ONE ON 2026-08-23, and the owner's sentence is the reason: `#/boxes`,
+ * `#/pull` and this screen rendered the same 767 records and "read as separate instances of one
+ * thing". `#/boxes` held the box registry and the layout editor with no way into a box's
+ * contents at all; `#/pull` walked a box's cards with photographs and could say nothing about
+ * the box; this screen answered "where are my copies of THIS card" and could not be browsed.
+ * So the question a person actually arrives with — what is in this box, and can I click it —
+ * was answerable on the screen named after a fulfilment errand and nowhere else.
+ *
+ * TWO MODES, BECAUSE THERE ARE EXACTLY TWO QUESTIONS, and D31 names them:
+ *
+ *   Find a card    a card sold, somebody types its name, and every physical copy answers with
+ *                  where it is — D7's SKU -> positions map, and the sale and retirement that
+ *                  go with it. Everything below this header belongs to it.
+ *   Browse         box -> section -> card, with the photograph. `BoxBrowse.tsx`, which is
+ *                  `#/pull`'s walk taken forward rather than rewritten, carrying the box
+ *                  operations on the header of the box it is walking (`BoxOps.tsx`).
+ *
+ * WHY A SWITCH RATHER THAN ONE LIST THAT DOES BOTH. The two are not narrower and wider views
+ * of one thing: one is keyed by SKU and fungible across copies (D7), the other is keyed by
+ * position and is about one physical card in one slot. A single list would have to pick a key
+ * and lie about the other. The switch costs one press and keeps both honest.
+ *
+ * BROWSE IS THE DEFAULT, and that is a change from what this screen used to do — it opened
+ * with the search field focused, because a sale had just happened. The merge moves the weight:
+ * browsing is the thing that was impossible and is the reason D31 exists, and Find is one
+ * press away with `autoFocus` still on its field when it gets there. If watching the owner
+ * shows the sale flow is what this screen is opened for, this is a one-word change and the
+ * argument to overturn is in this paragraph.
+ *
+ * WHAT DID NOT MERGE: `#/fulfillment`. D31 is explicit — a different persona at a different
+ * posture, and the one screen in the product whose whole design is a floor. Nothing here
+ * reaches it and `app/tests/fulfillment.spec.ts` is unchanged by any of this.
+ *
+ * ---- the original header follows, and every word of it is about the Find half ----
+ *
+ * The inventory view — build-order step 7b. D7's SKU -> positions map, made visible.
  *
  * D7 collapses copies to ONE import row with a copy count and keeps EVERY copy as its own
  * position with its own photo, "because that is what makes an order pull addressable: the
@@ -589,7 +627,24 @@ type Receipt = {
   until: number
 }
 
+/** Which of D31's two questions this screen is answering. Session-lived and held in this
+ *  component alone: leaving the screen forgets it, which is right — a mode is not a preference
+ *  and D27's carve-out is for the capture screen's claims about a run in progress. */
+type Mode = 'browse' | 'find'
+
+/** The switch's two cells, as a table rather than as two hand-written buttons. One consumer
+ *  today and the same reason `STEPS` in `BoxBrowse.tsx` is a table: a label and a behaviour
+ *  that live in two places drift, and a switch is exactly the control where a stale label is
+ *  invisible until somebody presses it. */
+const MODES: readonly { mode: Mode; label: string; says: string }[] = [
+  { mode: 'browse', label: 'Browse the boxes', says: 'box, then section, then card' },
+  { mode: 'find', label: 'Find a card', says: 'every copy of one card, and where it is' },
+]
+
 export function Inventory() {
+  /* Browse first — the header argues why, and names the one-word change if it is wrong. */
+  const [mode, setMode] = useState<Mode>('browse')
+
   /* Null means "not read yet", which is a different thing from an empty array, and the two
    * render differently below — a store with no cards in it is a fact, and a store that has
    * not answered is not. */
@@ -689,7 +744,13 @@ export function Inventory() {
     return () => {
       live = false
     }
-  }, [reloads])
+    /* `mode` IS A DEPENDENCY AND THE GUARD ABOVE IS WHY. `BoxBrowse` reads the same route for
+     * its walk, so running this one in browse mode would fetch 767 records twice to render one
+     * of them. Guarding without the dependency would be the bug: the effect would skip on a
+     * mount in browse mode and never re-arm, and Find would open on a list that is permanently
+     * "Reading the inventory." Switching modes therefore re-reads, which is this file's
+     * standing rule anyway — one GET, kept nowhere, thrown away on the way out. */
+  }, [reloads, mode])
 
   /* THE BOX LAYOUTS. One read, on the same counter as the inventory read above, and allowed
    * to fail without anybody hearing about it.
@@ -716,6 +777,7 @@ export function Inventory() {
    * shape that throws inside the success handler, and the two-argument form would turn that
    * into an unhandled rejection instead of the silence this effect intends. */
   useEffect(() => {
+    if (mode !== 'find') return
     let live = true
     getBoxes()
       .then((summary) => {
@@ -728,7 +790,9 @@ export function Inventory() {
     return () => {
       live = false
     }
-  }, [reloads])
+    // Same guard and the same dependency as the inventory read above, for the same reason:
+    // `BoxBrowse` reads `GET /boxes` for its own box header.
+  }, [reloads, mode])
 
   /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per sale.
    * Fulfillment.tsx's shape, and the slack at the end is its finding too: a timer that fires a
@@ -992,15 +1056,56 @@ export function Inventory() {
       <header className="inventory-head">
         <h1 className="inventory-title">Inventory</h1>
         <p className="inventory-lede">
-          Every copy of every card, grouped by the SKU it was listed under. One SKU is one row
-          in an import file; each copy beneath it is a physical card at its own position. Type a
-          card&rsquo;s name to see every copy of it, how far into its box each one sits, and to
-          record a sale against the copy your hand reached.
+          Every card in the boxes, two ways: walk a box section by section and look at the
+          photograph of any card in it, or name a card and see every copy of it, where each one
+          sits, and record a sale against the copy your hand reached.
         </p>
 
-        {/* THE SEARCH IS THE FIRST CONTROL ON THE SCREEN, above the browse it does not
+        {/* THE SWITCH BETWEEN D31'S TWO QUESTIONS, and the first control on the screen because
+            it decides what the rest of it is.
+
+            PLAIN BUTTONS WITH `aria-pressed`, NOT `role="tab"`. Tabs are the closer semantic
+            and they come with an expectation this control does not meet: a screen reader user
+            told these are tabs will reach for the arrow keys, and the arrow keys on this screen
+            belong to the walk. A pressed toggle promises nothing it does not do. The look is
+            the segmented strip the browse's box cells and the capture screen's track already
+            draw, so it is one idiom rather than a third.
+
+            No accent fill on the pressed cell — docs/DESIGN.md reserves the solid fill for a
+            screen with exactly one thing to do, and a switch is by construction two. The mark
+            is the step from muted to ink plus the rail, which is how selection is carried
+            everywhere else in this app. */}
+        <div className="inventory-modes" role="group" aria-label="How to look at the inventory">
+          {MODES.map((choice) => (
+            <button
+              key={choice.mode}
+              className="inventory-mode"
+              type="button"
+              aria-pressed={mode === choice.mode}
+              onClick={() => setMode(choice.mode)}
+            >
+              <span className="inventory-mode-label">{choice.label}</span>
+              <span className="inventory-mode-says">{choice.says}</span>
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* BROWSE IS A COMPONENT AND FIND IS INLINE, which is an honest asymmetry rather than
+          an unfinished extraction. `BoxBrowse` owns its own reads, its own selection, its own
+          search and its own keys, and needs nothing from this file — it arrived as a whole
+          screen and stayed one. The Find half is the opposite: the sale, the retirement, the
+          receipts and their undo windows are twenty pieces of state that all belong to one
+          flow, and lifting them into a component would mean passing every one of them back
+          out, or moving the flow and leaving this file a shell. Extract it the day something
+          else needs it — that is the same threshold `describeFailure` was held to. */}
+      {mode === 'browse' ? (
+        <BoxBrowse />
+      ) : (
+        <>
+        {/* THE SEARCH IS THE FIRST CONTROL IN THIS MODE, above the list it does not
             replace. `/` focuses it from anywhere — SearchField owns the hotkey and the chip,
-            and both are owner-side by its own rule. `autoFocus` because this screen is opened
+            and both are owner-side by its own rule. `autoFocus` because this mode is opened
             for one reason: a card just sold and its copies need finding. */}
         <div className="inventory-search">
           <SearchField value={query} onChange={setQuery} persona="owner" autoFocus />
@@ -1026,7 +1131,6 @@ export function Inventory() {
             </span>
           )}
         </div>
-      </header>
 
       {receiptPanels.length === 0 ? null : (
         <div className="inventory-receipts">{receiptPanels}</div>
@@ -1193,6 +1297,8 @@ export function Inventory() {
               ))}
             </div>
           ) : null}
+        </>
+      )}
         </>
       )}
     </main>
@@ -1558,6 +1664,9 @@ function GroupRow({ group }: { group: Group }) {
             docs/DESIGN.md's warning about the cataloguing tools that became spreadsheets is
             about hierarchy and weight rather than about the element — and the hierarchy here
             is between the group above and its copies, which are deliberately quieter. */}
+        {/* Bounded, and the stylesheet says why: the no-SKU group is 714 copies today, and an
+            unbounded table turned one press into twenty-seven screens of page. */}
+        <div className="inventory-copies">
         <table className={showNames ? 'inventory-table inventory-table-named' : 'inventory-table'}>
           <thead>
             <tr>
@@ -1587,6 +1696,7 @@ function GroupRow({ group }: { group: Group }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </details>
   )

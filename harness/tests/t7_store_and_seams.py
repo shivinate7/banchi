@@ -5826,19 +5826,35 @@ def check_cli_seams(checks: Checks) -> None:
     # If that whitelist and the enum drift, a valid finish is dropped on the floor and D3
     # rung 3 never fires — the cross-check that catches a mis-sorted card.
     #
-    # THE CHECK CHANGED SHAPE BECAUSE THE DEFECT DID. It used to look for each finish as a
-    # LITERAL in the source, which was the right check while `resolve.py` held its own copy
-    # of the tuple; that copy is gone and the test is now `finish in variant.FINISHES`, so
-    # the old grep would fail on the fix. What is asserted instead is the property that
-    # makes drift impossible — the enum is named, and no finish is spelled out beside it.
-    # T4 asserts the behaviour end to end, against a finish added to `variant.FINISHES` at
-    # runtime, which is the half a source scan can never reach.
+    # THE CHECK HAS CHANGED SHAPE TWICE, BECAUSE THE DEFECT DID. It first looked for each
+    # finish as a LITERAL in the source, which was right while `resolve.py` held its own copy
+    # of the tuple. That copy went and the check became `finish in variant.FINISHES`.
+    #
+    # THEN THE ENUM STOPPED HAVING ONE HOME AND STARTED HAVING ONE PER GAME (2026-08-23), and
+    # `variant.FINISHES` — Pokemon's three — became the WRONG thing for this seam to consult:
+    # the model's `foil` on a Riftbound card fell out of a whitelist belonging to another
+    # game and landed as `None`, losing rung 3's cross-check for every non-Pokemon card. The
+    # silent drop this case exists to prevent, committed by the expression this case was
+    # asserting. So the named single source is now `variant.vocabulary`, which reads the
+    # game's own entry out of `pipeline/games.py`.
+    #
+    # What is asserted is unchanged in substance: the enum is NAMED rather than copied, and
+    # no finish is spelled out beside it. T4 asserts the behaviour end to end against a
+    # finish added to the registry at runtime, which is the half a source scan can never
+    # reach.
     source = (Path(__file__).resolve().parents[2] / "cli" / "resolve.py").read_text("utf-8")
     checks.ok(
-        "finish in variant.FINISHES" in source,
-        "resolve.py tests the detected finish against variant.FINISHES itself, not against "
-        "a second copy of the enum that nothing keeps in step",
-        f"FINISHES is {variant.FINISHES}",
+        "variant.vocabulary(game)" in source,
+        "resolve.py tests the detected finish against THIS GAME's vocabulary, read from the "
+        "registry, not against a second copy of the enum that nothing keeps in step",
+        f"pokemon finishes are {variant.FINISHES}",
+    )
+    checks.ok(
+        "finish in variant.FINISHES" not in source,
+        "and the defective EXPRESSION is gone — it consulted Pokemon's enum for every game, "
+        "which is the bug that lost rung 3 for Riftbound and One Piece. The token itself is "
+        "allowed to survive in prose: the comment at that seam names the old test to explain "
+        "what went wrong, and a check that forbade the words would forbid the explanation",
     )
     hardcoded = sorted(f for f in variant.FINISHES if f'"{f}"' in source or f"'{f}'" in source)
     checks.equal(

@@ -3,15 +3,26 @@ import { isEditableTarget } from './keys'
 import type { ComponentType } from 'react'
 
 import { CaptureScreen } from './CaptureScreen'
-import { PullPreview } from './PullPreview'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
-import { Boxes } from './Boxes'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
 
-/* The app shell: seven routes across two personas, and the chrome that moves between them.
+/* The app shell: five routes across two personas, and the chrome that moves between them.
+ *
+ * IT WAS SEVEN UNTIL 2026-08-23 AND D31 TOOK TWO. `#/boxes` and `#/pull` rendered the same 767
+ * records `#/inventory` renders, and the owner named the result: they "read as separate
+ * instances of one thing". Both collapsed into `#/inventory`, which now has two ways in —
+ * search by card, and browse by box → section → card — and box operations sit on the box
+ * header inside the browse. Their components did not die with their routes: `BoxBrowse.tsx` is
+ * the old pull walk and `BoxOps.tsx` is the old boxes screen's panel, both rendered by
+ * `Inventory.tsx`.
+ *
+ * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
+ * fixes: the gallery was the seventh and nothing was counting. Five now — capture, review,
+ * inventory, fulfillment, gallery — and the not-rendered-rather-than-hidden rule for the
+ * Fulfiller's nav is untouched, because it was never about how many owner routes there are.
  *
  * Hash routing, hand-written. A router library was the alternative and it loses on every
  * axis that matters here: a flat list of routes, no path parameters, no nested layouts, no
@@ -32,7 +43,7 @@ type Persona = 'owner' | 'fulfiller'
 
 /* HOW OFTEN THE OWNER IS IN A SCREEN, which is the only thing the nav's shape encodes.
  *
- * The nav was a flat row of links when there were three routes and it stayed one at seven, so
+ * The nav was a flat row of links when there were three routes and stayed one at seven, so
  * `Gallery` — a component sheet that exists to keep step 6's button from going stale — was
  * drawn exactly as loudly as the screen the owner spends an hour a day in. A row where
  * everything is equally important has thrown away the only thing it knows.
@@ -66,13 +77,13 @@ type Route = {
 /* One table drives both the nav and the render. The alternative — a `ROUTES` array for the
  * chrome and a `switch` for the render — is more greppable and keeps two lists of the same
  * path strings that nothing checks agree. That is the drift D16 exists to catch, in
- * miniature, so the table wins and the switch is gone. It matters more at seven routes than it
- * did at three, and it will matter more again at nine.
+ * miniature, so the table wins and the switch is gone. It mattered more at seven routes than at
+ * three, and it is what made removing two of them a two-line edit rather than a hunt.
  *
  * ORDERED THE WAY THE OWNER WORKS, which is what a nav built from this table is read as: shoot
- * a box, answer what the run could not, look up what is in the boxes — and sell a copy out of
- * them — then see how a box is laid out, then check a position against its photo. The
- * Fulfiller's view and the component sheet sit after that run of five because neither is a
+ * a box, answer what the run could not, then look up what is in the boxes — walk one, check a
+ * position against its photo, and sell a copy out of it, all three now being one screen. The
+ * Fulfiller's view and the component sheet sit after that run of three because neither is a
  * step in it. `group` now says that out loud rather than leaving it to the order alone, which
  * is a fact the reader had to already know to see.
  *
@@ -102,21 +113,19 @@ const ROUTES: readonly Route[] = [
     group: 'look',
     hotkey: 'i',
   },
-  /* The boxes, after the inventory rather than before it, because that is the order the
-   * questions arrive in: what is in the boxes, and then how this box is laid out. D20 makes a
-   * box an object with a name, a divider layout and a lid — this is the only screen where any
-   * of the four can be set, and the only one that can register a box before a card lands in
-   * it. Owner-side without a second thought: sealing a box freezes a number every fraction in
-   * the product then divides by. */
-  { path: '/boxes', label: 'Boxes', view: Boxes, persona: 'owner', group: 'look', hotkey: 'b' },
-  {
-    path: '/pull',
-    label: 'Pull preview',
-    view: PullPreview,
-    persona: 'owner',
-    group: 'look',
-    hotkey: 'p',
-  },
+  /* `/boxes` AND `/pull` STOOD HERE AND ARE GONE (D31, 2026-08-23), with their `b` and `p`
+   * chords. Recorded rather than deleted silently, because the obvious repair when somebody
+   * finds a dead `#/pull` bookmark is to add the row back — and the row is not what was
+   * wrong. The screens are inside `/inventory`: `BoxOps` draws what `/boxes` drew, on the
+   * header of the box being walked, and `BoxBrowse` is `/pull`'s walk with its strip choosing
+   * the box instead of scrolling to it. A dead hash lands on `NoSuchView`, which names the
+   * routes that exist.
+   *
+   * `i` reaches both halves now, and neither `b` nor `p` was reassigned to the mode switch
+   * inside it. The chord is a ROUTE table (`ROUTES.find` on `hotkey`), and a second key space
+   * layered over it — some chords go to routes, some to modes within one route — is a rule
+   * with an exception, which is the thing the leader's one-rule-no-exceptions comment above is
+   * written to protect. */
   /* D5's second persona, and the one route here that is somebody else's whole product. It is
    * listed all the same: his device opens this hash and stays on it, but the owner needs a way
    * in to see what he sees, and a screen reachable only by typing a URL is a screen that gets
@@ -229,7 +238,7 @@ function hasChrome(route: Route | undefined): boolean {
  * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
  *
  * MODIFIERS ARE NEVER PART OF IT. A held Cmd, Ctrl or Alt returns before anything else
- * happens, exactly as trigger.ts, ReviewQueue.tsx and PullPreview.tsx all do: Cmd-comma is
+ * happens, exactly as trigger.ts, ReviewQueue.tsx and BoxBrowse.tsx all do: Cmd-comma is
  * the browser's and the OS's, and a shell that eats it has broken something it does not own.
  * Shift is left off that list for trigger.ts's reason — it does not change which key was
  * pressed, and a held Shift silently killing the nav is the worse of the two failures.
@@ -298,7 +307,7 @@ function useLeader(enabled: boolean): number | null {
      *
      * It assumes no other listener in the app registers in the capture phase, where order
      * would fall back to registration order. Nothing does today — trigger.ts, ReviewQueue.tsx,
-     * PullPreview.tsx, Inventory.tsx and SearchField.tsx all bubble — and this comment is
+     * BoxBrowse.tsx, Inventory.tsx and SearchField.tsx all bubble — and this comment is
      * where a future capture-phase listener will find out that it has a conflict.
      *
      * The bluntness is bounded by the arming, which is the reason this is safe to do at all:
@@ -376,7 +385,7 @@ function useLeader(enabled: boolean): number | null {
  *
  * IT NOW DRAWS ITS OWN WAY OUT, because as of `hasChrome` there is no nav above it to be the
  * way out. That is not a consolation prize for losing the nav — it is the better answer, and
- * the nav was only ever standing in for it. The nav is seven links at a density docs/DESIGN.md
+ * the nav was only ever standing in for it. The nav is five links at a density docs/DESIGN.md
  * says one of this app's two users cannot read; this is two doors, one per persona, and the
  * page can hand them over without having to decide which of the two people is holding it.
  *
@@ -407,7 +416,17 @@ function NoSuchView({ path }: { path: string }) {
       {/* Named exactly as their own screens name them. docs/DESIGN.md's copy rules: an action
           keeps its name through the whole flow, and "Cards to pull" is the heading of the view
           this door opens. A door labelled with a description of a screen is a door you have to
-          read twice. */}
+          read twice.
+
+          INVENTORY IS FIRST SINCE D31, and it is the door this screen most often needs to
+          offer. `#/boxes` and `#/pull` were real addresses until 2026-08-23 and both are now
+          bookmarks, links in old notes, and whatever a browser autocompletes — so the two most
+          likely ways to arrive here both end at the screen those two became. A door that
+          answered a dead `#/pull` with "Capture" would send somebody to the one screen that
+          takes photographs when what they wanted was to look at one. */}
+      <a className="no-such-view-door" href="#/inventory">
+        Inventory
+      </a>
       <a className="no-such-view-door" href="#/fulfillment">
         Cards to pull
       </a>

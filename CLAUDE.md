@@ -65,8 +65,11 @@ make check          # harness + docs-audit + lint + typecheck — no stubs left 
   in the comments beside the two keys.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
-- **The app has six screens and six routes** — five the owner's, one the Fulfiller's. The
-  shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
+- **The app has five screens and five routes** — four the owner's, one the Fulfiller's. It
+  said six and six while `app/src/App.tsx` carried seven, and D31 then merged two away:
+  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — browse the boxes,
+  or find a card. The components survive as `BoxOps` and `BoxBrowse`; only the routes went.
+  The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
   forbids any route *out* of it, and the owner's nav would fail four other rows of the same
   table on its own. Not-rendered rather than hidden: not focusable, not reachable by a screen
   reader, not one specificity change from coming back.

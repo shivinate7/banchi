@@ -1,8 +1,14 @@
-/* The boxes screen — D20's object, drawn.
+/* The box operations — D20's object, drawn onto the header of that box's own walk.
  *
- * NO ACCENT ANYWHERE IN THIS FILE, and unlike Inventory.css there is no exception. This screen
- * is sure about everything it shows, and it never has exactly one thing to do: every box on it
- * carries four controls, so a fill would have to pick one of them and would then mean
+ * THIS WAS A SCREEN'S STYLESHEET AND IS NOW A COMPONENT'S (D31, 2026-08-23). What went with
+ * the route: the page padding, the 900px measure, the title, the lede, the controls row and
+ * the vertical list of box panels — every rule that positioned this content ON A PAGE. What
+ * stayed is every rule that draws a BOX, unchanged, because nothing about what a box is
+ * moved. `BoxBrowse.css` owns the space these now sit in.
+ *
+ * NO ACCENT ANYWHERE IN THIS FILE, and unlike Inventory.css there is no exception. This
+ * component is sure about everything it shows, and it never has exactly one thing to do: every
+ * box carries four controls, so a fill would have to pick one of them and would then mean
  * "important" — the third meaning docs/DESIGN.md's two-jobs rule exists to prevent. That
  * includes the seal, which is the most consequential control in the app and is still one of
  * four. Its weight comes from the sentence on it — the number it will freeze — rather than
@@ -10,61 +16,21 @@
  *
  * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header strip
  * — docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it, and
- * rejected it by name, and a screen made of stacked box panels is exactly where one creeps
- * back in.
+ * rejected it by name, and a box panel sitting at the top of a list is exactly where one
+ * creeps back in.
  *
  * Owner-side: the 4-16 end of the spacing scale. The Fulfillment floors (20px body, 32px
  * position labels, 44px tap targets) govern a different view and none is asserted here.
  *
  * Mono carries every number — box numbers, fills, capacities, spans, counts and the store's
- * own field names. The body face carries the sentences a person reads, which on this screen
- * are the hints under the fields and the relabel warning. That split is the one rule doing the
- * most work in this file.
+ * own field names. The body face carries the sentences a person reads, which are the hints
+ * under the fields and the relabel warning. That split is the one rule doing the most work in
+ * this file.
  */
-
-.boxes {
-  padding: var(--s6);
-  /* Narrower than the inventory's 1240px: a box panel is a stack of short rows rather than a
-     wide table, and stretching one across a 27-inch display puts its controls a hand's width
-     from the numbers they act on. */
-  max-width: 900px;
-}
-
-/* ---- head ---- */
-
-.boxes-title {
-  font-family: var(--display);
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.boxes-lede {
-  color: var(--muted);
-  max-width: 76ch;
-  margin-top: var(--s2);
-  font-size: 15px;
-}
-
-.boxes-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s4);
-  padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--line);
-}
-
-.boxes-count {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
 
 /* ---- the quiet control, which is every control on this screen ---- */
 
-.boxes-plain {
+.boxops-plain {
   font-family: var(--body);
   font-size: 14px;
   font-weight: 700;
@@ -78,23 +44,24 @@
   text-align: left;
 }
 
-.boxes-plain:hover:not(:disabled) {
+.boxops-plain:hover:not(:disabled) {
   background: var(--hover);
 }
 
-.boxes-plain:disabled {
+.boxops-plain:disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
 
-.boxes-plain:focus-visible {
-  /* Ink, not accent: accent's two jobs are taken, and a keyboard user tabbing this screen is
-     not being told the system is unsure about anything. */
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
+/* NO :focus-visible RULE HERE, DELIBERATELY. `base.css` draws one ring for the whole app —
+   2px ink, offset +2px so it clears the 4px radius instead of clipping it — and this file used
+   to override it with `outline-offset: -2px`, which draws the ring INSIDE the button's own
+   border and reads as a second border rather than as focus. The owner called the inset rings
+   ugly and they were removed repo-wide; nothing here clips its own overflow, so there is no
+   reason for this file to be an exception. The exception that survives is `BoxBrowse.css`'s
+   list, which does clip. */
 
-.boxes-actions {
+.boxops-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -104,7 +71,7 @@
 
 /* ---- notes, and the machine register ---- */
 
-.boxes-note {
+.boxops-note {
   max-width: 560px;
   margin-top: var(--s5);
   padding: var(--s4);
@@ -113,7 +80,7 @@
   border-radius: var(--r);
 }
 
-.boxes-note-text {
+.boxops-note-text {
   font-family: var(--body);
   font-size: 15px;
   line-height: 1.5;
@@ -125,7 +92,7 @@
 /* The machine string beneath the human sentence: the greppable token, and never the sentence
    again. Owner-side only — the Fulfillment banned-word list forbids this register outright and
    no Fulfillment route renders this class. */
-.boxes-machine {
+.boxops-machine {
   font-family: var(--util);
   font-size: 11px;
   color: var(--muted);
@@ -135,7 +102,7 @@
 
 /* A hint under a field. Prose, so the body face, and muted because it is read once and then
    never again. */
-.boxes-hint {
+.boxops-hint {
   font-family: var(--body);
   font-size: 13px;
   line-height: 1.5;
@@ -146,18 +113,18 @@
 
 /* ---- register a box ---- */
 
-.boxes-new {
+.boxops-new {
   margin-top: var(--s5);
 }
 
-.boxes-new-open {
+.boxops-new-open {
   padding: var(--s4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
 
-.boxes-new-head {
+.boxops-new-head {
   font-family: var(--display);
   font-size: 20px;
   font-weight: 700;
@@ -165,7 +132,7 @@
   color: var(--ink);
 }
 
-.boxes-fields {
+.boxops-fields {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
@@ -174,7 +141,7 @@
 
 /* ---- a field ---- */
 
-.boxes-field {
+.boxops-field {
   display: flex;
   flex-direction: column;
   gap: var(--s1);
@@ -184,7 +151,7 @@
 
 /* The field's name, in the utility face like every other field name in this app — from the
    capture screen's labels to the pull preview's facts. */
-.boxes-field-label {
+.boxops-field-label {
   font-family: var(--util);
   font-size: 10px;
   font-weight: 500;
@@ -195,7 +162,7 @@
 
 /* Mono, because everything typed into one of these fields is either a number or a name that
    sits beside numbers, and a divider list has to line up digit under digit to be read at all. */
-.boxes-field-input {
+.boxops-field-input {
   font-family: var(--util);
   font-size: 13px;
   color: var(--ink);
@@ -207,36 +174,20 @@
   min-width: 0;
 }
 
-.boxes-field-input::placeholder {
+.boxops-field-input::placeholder {
   color: var(--muted);
 }
 
-.boxes-field-input:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
-}
+/* ---- one box ---- */
 
-/* ---- the list of boxes ---- */
-
-/* Air between the panels rather than hairlines, which is the opposite of the inventory's group
-   list and the difference is what is being separated: those are rows of one list, and these are
-   whole objects, each already bordered. Stacking bordered panels flush draws a 2px rule, which
-   is the second separation weight this system does not have. */
-.boxes-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-  margin-top: var(--s5);
-}
-
-.boxes-box {
+.boxops-box {
   padding: var(--s4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
 
-.boxes-box-head {
+.boxops-box-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -247,7 +198,7 @@
 
 /* The box number is the identifier — the one thing on this panel nothing can change — so it is
    the heaviest thing on it, and mono because it is a number. */
-.boxes-box-number {
+.boxops-box-number {
   font-family: var(--util);
   font-size: 18px;
   font-weight: 600;
@@ -256,7 +207,7 @@
 
 /* What the owner calls it. A label for people, never an identifier, so it is the body face and
    it sits second. */
-.boxes-box-name {
+.boxops-box-name {
   font-family: var(--body);
   font-size: 15px;
   color: var(--ink);
@@ -265,7 +216,7 @@
 
 /* The lid. A reading rather than a control, so no border weight beyond the hairline and no
    fill — see the file header for why the accent stays out of this. */
-.boxes-state {
+.boxops-state {
   font-family: var(--util);
   font-size: 10px;
   font-weight: 500;
@@ -281,20 +232,20 @@
 /* Sealed is the state that means something is final, so it is drawn at full ink against the
    same hairline. The step from muted to ink is the same one that carries selection everywhere
    else in this app. */
-.boxes-state-sealed {
+.boxops-state-sealed {
   color: var(--ink);
 }
 
 /* The fill or the capacity: the number this box is drawn against, and the largest number on
    the panel because every fraction in the product divides by it. */
-.boxes-fill {
+.boxops-fill {
   display: flex;
   align-items: baseline;
   gap: var(--s2);
   margin-top: var(--s3);
 }
 
-.boxes-fill-number {
+.boxops-fill-number {
   font-family: var(--util);
   font-size: 24px;
   font-weight: 600;
@@ -303,7 +254,7 @@
 
 /* `cards so far` versus `cards, sealed` — the sentence is the whole of D20's distinction, so
    it is body face and full ink rather than a muted caption. `so far` is doing real work. */
-.boxes-fill-word {
+.boxops-fill-word {
   font-family: var(--body);
   font-size: 15px;
   color: var(--ink);
@@ -315,7 +266,7 @@
    PositionBar.css's track and deliberately not the same class: that component draws one card's
    place in a box and this draws the box, and sharing a selector would make one of them
    impossible to restyle without the other. */
-.boxes-track {
+.boxops-track {
   display: flex;
   gap: 2px;
   height: 10px;
@@ -326,7 +277,7 @@
    quietest token that is still visible on --surface, and the alternative — a tint that is not
    in the palette — is the literal docs/DESIGN.md's --on-accent lesson forbids painting here.
    The 2px gap between segments is what draws the dividers: they are the absence of the bar. */
-.boxes-span {
+.boxops-span {
   background: var(--line);
   border-radius: 2px;
   min-width: 2px;
@@ -334,12 +285,12 @@
 
 /* ---- the sections ---- */
 
-.boxes-sections {
+.boxops-sections {
   list-style: none;
   margin-top: var(--s3);
 }
 
-.boxes-section {
+.boxops-section {
   display: grid;
   grid-template-columns: minmax(0, 8rem) minmax(0, 10rem) minmax(0, 1fr);
   gap: var(--s3);
@@ -348,36 +299,36 @@
   border-bottom: 1px solid var(--line);
 }
 
-.boxes-section:last-child {
+.boxops-section:last-child {
   border-bottom: 0;
 }
 
 /* Every one of the three is a number or a range of numbers, so all three are mono. Martian Mono
    is tabular by construction, so no font-variant-numeric — docs/DESIGN.md picked the face
    precisely so a column of spans cannot shift width between rows. */
-.boxes-section-name,
-.boxes-section-span,
-.boxes-section-count {
+.boxops-section-name,
+.boxops-section-span,
+.boxops-section-count {
   font-family: var(--util);
   font-size: 11px;
 }
 
-.boxes-section-name {
+.boxops-section-name {
   color: var(--ink);
   font-weight: 500;
 }
 
-.boxes-section-span {
+.boxops-section-span {
   color: var(--ink);
 }
 
-.boxes-section-count {
+.boxops-section-count {
   color: var(--muted);
 }
 
 /* The store's own field names, verbatim, so what is on screen greps to what is in
    inventory.json. Metadata, so mono and muted. */
-.boxes-meta {
+.boxops-meta {
   font-family: var(--util);
   font-size: 11px;
   color: var(--muted);
@@ -385,9 +336,72 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- the disclosure that holds the layout and the four controls ---- */
+
+/* D31 put this panel on the header of the box's own walk, which makes vertical space
+   expensive in a way it was not on a page of its own: everything drawn here pushes the cards
+   down. So the reading stays open and the operations fold. */
+.boxops-more {
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.boxops-more-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  cursor: pointer;
+
+  /* The browser's own disclosure triangle, removed in both spellings — the marker below is
+     drawn instead, for Inventory.css's reason: the native one is sized and coloured by the
+     browser, and differs between the one the owner works in and the Chromium
+     `make screenshot` renders. Comparing that render against the reference is the loop
+     docs/DESIGN.md calls mandatory. */
+  list-style: none;
+}
+
+.boxops-more-head::-webkit-details-marker {
+  display: none;
+}
+
+/* 12px, not the 10px every other utility caption takes — Inventory.css measured that at 10 a
+   marker reads as a speck rather than as the one thing on the row saying the row opens. */
+.boxops-marker {
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 2ch;
+}
+
+.boxops-marker::before {
+  content: '\25B8'; /* the triangle */
+}
+
+.boxops-more[open] .boxops-marker::before {
+  content: '\25BE';
+}
+
+/* A phrase a person reads, so the body face. */
+.boxops-more-label {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* What is inside, named so the disclosure does not have to be opened to find out. Metadata,
+   so mono and muted. */
+.boxops-more-hint {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
 /* ---- the editors ---- */
 
-.boxes-editor {
+.boxops-editor {
   margin-top: var(--s3);
   padding-top: var(--s3);
   border-top: 1px solid var(--line);
@@ -397,14 +411,14 @@
    as everything else — no tint and no warning colour, because there is no token for one and a
    relabel is a correction rather than an alarm. What makes it read as consequential is that it
    names the cards it reaches. */
-.boxes-relabel {
+.boxops-relabel {
   margin-top: var(--s3);
   padding: var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
 
-.boxes-relabel-head {
+.boxops-relabel-head {
   font-family: var(--util);
   font-size: 12px;
   font-weight: 600;

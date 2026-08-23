@@ -1,14 +1,28 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useId, useState } from 'react'
 
 import type { BoxRecord, Place, SectionDetail } from './types'
 import type { Failure } from './server'
-import { createBox, describeFailure, getBoxes, updateBox } from './server'
+import { createBox, describeFailure, updateBox } from './server'
 import { spansOf } from './PositionBar'
-import './Boxes.css'
+import './BoxOps.css'
 
-/* The boxes — D20's object, made visible and editable.
+/* The box operations — D20's object, made visible and editable, BESIDE THE BOX THEY ACT ON.
  *
- * WHY THIS SCREEN EXISTS AT ALL. Before D20 there was no box object anywhere in the repo: a
+ * THIS WAS A SCREEN AND IS NOW A COMPONENT (D31, 2026-08-23), and the entry is worth reading
+ * before this file is changed. `#/boxes` held the registry and the layout editor with no way
+ * into a box's contents at all, while `#/pull` walked a box's cards with photographs and could
+ * say nothing about the box itself. The owner named it: three routes over one set of 767
+ * records that "read as separate instances of one thing". So the route is gone, `BoxOps` below
+ * draws onto the box header inside `BoxBrowse.tsx`'s walk, and `RegisterBox` sits beside the
+ * strip that selects a box. Nothing about what a box IS changed — every paragraph below is
+ * D20's argument unaltered, and the only thing this file lost is a `<main>`.
+ *
+ * WHY THAT MOVE IS THE RIGHT ONE AND NOT MERELY SMALLER: every control here names one box, and
+ * on the old screen the box it named was a heading four hundred pixels above a divider field.
+ * Rendered onto the header of the walk you are reading, `Seal box — freezes capacity at 85` is
+ * a sentence about the cards immediately under it.
+ *
+ * WHY THIS SCREEN EXISTED AT ALL. Before D20 there was no box object anywhere in the repo: a
  * box existed because a card named one, so it could not be created empty, could not be named,
  * could not be listed anywhere but the capture screen's picker, and a mistyped number was
  * caught only by the `new_box` flag AFTER a photo had been written — which catches the first
@@ -28,17 +42,26 @@ import './Boxes.css'
  * pressed. A button reading "Seal box" alone would be a permanent decision taken against a
  * denominator the owner would have to go and find.
  *
- * OWNER-SIDE, and the Fulfillment floors do not bind — this screen speaks the store's own
+ * OWNER-SIDE, and the Fulfillment floors do not bind — this component speaks the store's own
  * vocabulary (`fill`, `capacity`, `next index`, `sections`) on purpose, because the person
  * reading it is the person who will compare it against `inventory.json` when something is
  * wrong. D5 puts the plain register on the other persona's screens.
  *
- * ONE GET, KEPT NOWHERE, RE-READ AFTER EVERY WRITE. `Inventory.tsx` states the rule and it
- * applies unchanged: D13 has exactly one place inventory lives, and a browser-side copy
- * produces two answers to "how is this box laid out" with one of them stale. Every write route
- * answers with the box row it wrote, and this screen deliberately does NOT patch that answer
- * into a local list — boxes are counted in handfuls, `GET /boxes` is cheap, and a screen that
- * merges a response into held state is a screen holding a second copy.
+ * NOTHING IS READ HERE AND NOTHING IS KEPT. `Inventory.tsx` states the rule and it applies
+ * unchanged: D13 has exactly one place inventory lives, and a browser-side copy produces two
+ * answers to "how is this box laid out" with one of them stale. Every write route answers with
+ * the box row it wrote, and this component deliberately does NOT patch that answer into
+ * anything — it calls `onChanged`, and the owner of the read (`BoxBrowse.tsx`) re-reads
+ * `GET /boxes` and `GET /inventory` together. Both matter after a divider edit: D10 as amended
+ * makes Section and Card a VIEW of an index, so moving a divider changes every card
+ * decoration in the box as well as the box row.
+ *
+ * ONE OPERATION D31 NAMES IS NOT HERE, AND ITS ABSENCE IS A SERVER GAP RATHER THAN A CHOICE.
+ * D31 lists "name, sections, seal, delete" as the four that move onto the box header; D10's
+ * third 2026-08-23 ruling specifies whole-box delete. There is no `DELETE /boxes/<box>` route
+ * and no client function for one, so there is nothing to move. When the route lands, its
+ * control belongs in this file, under the same gate D10 puts on it — refused while the box
+ * holds any sold, retired or listing-held card.
  */
 
 /** The word `state` carries when the lid is on. `types.ts:BoxState` is the union the wire
@@ -50,6 +73,70 @@ const CLOSED = 'closed'
  *  per call and waits up to thirty seconds for it, so two edits issued together stack against
  *  a lock and return out of order — and one of them may be a seal, which is permanent. */
 type Busy = boolean
+
+/**
+ * Every write in this file, with its lock discipline, its refusal handling and its re-read in
+ * one place rather than in five.
+ *
+ * THE RE-READ IS THE POINT, and it belongs to the caller. All three routes answer with the box
+ * row they wrote, and merging that answer into held state is the tempting shortcut — it is also
+ * how a screen comes to hold a second copy of the store. So this hook calls `onChanged` and
+ * says nothing about what that re-reads; `BoxBrowse.tsx` re-reads the boxes AND the inventory,
+ * because a divider edit relabels every card in the box (D10 as amended: the label is a view of
+ * the index) and a box panel that refreshed alone would sit above a walk still drawing the old
+ * sections.
+ *
+ * `write` RETURNS WHETHER IT SUCCEEDED so a caller can close its own editor on success and
+ * leave it open on a refusal — the field still holding what was typed, beside the message
+ * saying why it was refused.
+ */
+function useBoxWrite(onChanged: () => void): {
+  busy: Busy
+  trouble: Failure | null
+  write: (run: () => Promise<BoxRecord>) => Promise<boolean>
+} {
+  const [busy, setBusy] = useState<Busy>(false)
+  const [trouble, setTrouble] = useState<Failure | null>(null)
+
+  const write = useCallback(
+    async (run: () => Promise<BoxRecord>): Promise<boolean> => {
+      if (busy) return false
+      setBusy(true)
+      setTrouble(null)
+      try {
+        await run()
+        onChanged()
+        return true
+      } catch (err) {
+        /* The server's own message, verbatim, with its code beneath. `_fail` already says what
+         * happened and what to do next — `box_exists`, `sections_invalid`, `box_closed` all
+         * name the remedy — and paraphrasing them here would be a second vocabulary nothing
+         * audits. */
+        setTrouble(describeFailure(err))
+        return false
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, onChanged],
+  )
+
+  return { busy, trouble, write }
+}
+
+/** The refusal panel both components draw, in the owner idiom: the server's sentence, then the
+ *  greppable code beneath it and never the sentence again — docs/DESIGN.md's human-label-large,
+ *  machine-string-small rule. Owner-side only; the Fulfillment banned-word list forbids this
+ *  register entirely and no Fulfillment route renders these classes. */
+function Trouble({ failure }: { failure: Failure | null }) {
+  if (failure === null) return null
+  return (
+    <div className="boxops-note">
+      <p className="boxops-note-text">{failure.message}</p>
+      <p className="boxops-machine">{failure.code}</p>
+    </div>
+  )
+}
 
 /** `1 card` / `4 cards`. A fourth small copy of this in the app; `Inventory.tsx` has two and
  *  `CardLocations.tsx` the third, and each was written on a day the others were not writable.
@@ -199,137 +286,6 @@ function reached(record: BoxRecord, from: number): { sections: number[]; cards: 
   }
 }
 
-export function Boxes() {
-  /* Null means "not read yet", which is a different thing from an empty list: a store with no
-   * boxes is a fact and a store that has not answered is not. Same rule as Inventory.tsx. */
-  const [boxes, setBoxes] = useState<BoxRecord[] | null>(null)
-  const [failure, setFailure] = useState<Failure | null>(null)
-  const [reloads, setReloads] = useState(0)
-  const [busy, setBusy] = useState<Busy>(false)
-  const [trouble, setTrouble] = useState<Failure | null>(null)
-
-  useEffect(() => {
-    // StrictMode runs effects twice in dev and a slow first response can land after the second
-    // one; the flag makes the late arrival a no-op rather than a flicker.
-    let live = true
-    /* `.then(ok).catch(fail)` and never `.then(ok, fail)` — the two-argument form does not
-     * cover its own success handler, so anything thrown while walking the answer becomes an
-     * unhandled rejection and the screen sits on "Reading the boxes." forever with nothing to
-     * press. Banned outright in `app/eslint.config.js`. */
-    getBoxes()
-      .then((answer) => {
-        if (!live) return
-        setBoxes(answer.boxes)
-        setFailure(null)
-      })
-      .catch((err: unknown) => {
-        if (!live) return
-        setBoxes(null)
-        setFailure(describeFailure(err))
-      })
-    return () => {
-      live = false
-    }
-  }, [reloads])
-
-  /* Every write on this screen goes through here, so the lock discipline, the refusal handling
-   * and the re-read are one decision rather than five.
-   *
-   * THE RE-READ IS THE POINT. All three routes answer with the box row they wrote, and merging
-   * that into held state is the tempting shortcut — it is also how this screen would come to
-   * hold a second copy of the store. A GET after a write costs one request over a handful of
-   * boxes and keeps the rule Inventory.tsx states: there is one place this lives.
-   *
-   * Returns whether it succeeded, so a caller can close its own editor on success and leave it
-   * open on a refusal — the field still holding what was typed, beside the message saying why
-   * it was refused. */
-  const write = useCallback(async (run: () => Promise<BoxRecord>): Promise<boolean> => {
-    if (busy) return false
-    setBusy(true)
-    setTrouble(null)
-    try {
-      await run()
-      setReloads((n) => n + 1)
-      return true
-    } catch (err) {
-      /* The server's own message, verbatim, with its code beneath. `_fail` already says what
-       * happened and what to do next — `box_exists`, `sections_invalid`, `box_closed` all name
-       * the remedy — and paraphrasing them here would be a second vocabulary nothing audits. */
-      setTrouble(describeFailure(err))
-      return false
-    } finally {
-      setBusy(false)
-    }
-  }, [busy])
-
-  return (
-    <main className="boxes">
-      <header className="boxes-head">
-        <h1 className="boxes-title">Boxes</h1>
-        <p className="boxes-lede">
-          Every box this store knows about: the ones registered here and the ones a card named
-          on its way in. A box has no capacity while it is open — the honest denominator is the
-          fill so far — and sealing it freezes that number for good, which is what turns a bare
-          position into &ldquo;a fifth of the way in&rdquo;.
-        </p>
-        <div className="boxes-controls">
-          <button className="boxes-plain" type="button" onClick={() => setReloads((n) => n + 1)}>
-            Reload
-          </button>
-          {boxes === null ? null : (
-            <span className="boxes-count">{count(boxes.length, 'box', 'boxes')}</span>
-          )}
-        </div>
-      </header>
-
-      {failure === null ? null : (
-        <div className="boxes-note">
-          <p className="boxes-note-text">{failure.message}</p>
-          {/* The code beneath the sentence and never the sentence again — docs/DESIGN.md's
-              human-label-large, machine-string-small rule. Owner-side only. */}
-          <p className="boxes-machine">{failure.code}</p>
-        </div>
-      )}
-
-      {trouble === null ? null : (
-        <div className="boxes-note">
-          <p className="boxes-note-text">{trouble.message}</p>
-          <p className="boxes-machine">{trouble.code}</p>
-        </div>
-      )}
-
-      <NewBox
-        busy={busy}
-        onCreate={(input) => write(() => createBox(input))}
-      />
-
-      {boxes === null && failure === null ? (
-        <p className="boxes-note-text">Reading the boxes.</p>
-      ) : null}
-
-      {boxes !== null && boxes.length === 0 ? (
-        <p className="boxes-note-text">
-          No boxes yet. Register one above, or capture a card into one — a box registers itself
-          the first time a card lands in it.
-        </p>
-      ) : null}
-
-      {boxes === null ? null : (
-        <div className="boxes-list">
-          {boxes.map((record) => (
-            <BoxCard
-              key={record.box}
-              record={record}
-              busy={busy}
-              onWrite={(patch) => write(() => updateBox(record.box, patch))}
-            />
-          ))}
-        </div>
-      )}
-    </main>
-  )
-}
-
 /* Register a box before a card goes into it — D20's whole reason for existing.
  *
  * THE BOX THAT HOLDS NOTHING IS THE POINT. Before this route the first thing that declared box
@@ -340,14 +296,15 @@ export function Boxes() {
  * NO CAPACITY FIELD, EVER. D20: nobody knows a box's capacity when they start filling it, and
  * a number accepted here would be a guess that every fraction later drawn from the box
  * inherits. It is not omitted for brevity; the route does not accept one.
+ *
+ * IT SITS BESIDE THE STRIP THAT SELECTS A BOX (D31), which is where "with every existing box
+ * listed underneath it" now literally holds: the strip IS that list, one cell per box, and the
+ * typo this control exists to prevent is visible as a cell that is not there.
  */
-function NewBox({
-  busy,
-  onCreate,
-}: {
-  busy: Busy
-  onCreate: (input: { box: number; name?: string; sections?: number[] }) => Promise<boolean>
-}) {
+export function RegisterBox({ onChanged }: { onChanged: () => void }) {
+  const { busy, trouble, write } = useBoxWrite(onChanged)
+  const onCreate = (input: { box: number; name?: string; sections?: number[] }) =>
+    write(() => createBox(input))
   const [open, setOpen] = useState(false)
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
@@ -389,8 +346,8 @@ function NewBox({
 
   if (!open) {
     return (
-      <div className="boxes-new">
-        <button className="boxes-plain" type="button" onClick={() => setOpen(true)}>
+      <div className="boxops-new">
+        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
           Register a box
         </button>
       </div>
@@ -398,9 +355,9 @@ function NewBox({
   }
 
   return (
-    <div className="boxes-new boxes-new-open">
-      <p className="boxes-new-head">Register a box</p>
-      <div className="boxes-fields">
+    <div className="boxops-new boxops-new-open">
+      <p className="boxops-new-head">Register a box</p>
+      <div className="boxops-fields">
         <Field label="Box number" value={number} onChange={setNumber} placeholder="3" />
         <Field label="Name (optional)" value={name} onChange={setName} placeholder="SV commons" />
         <Field
@@ -410,22 +367,23 @@ function NewBox({
           placeholder="1, 31, 56"
         />
       </div>
-      <p className="boxes-hint">
+      <p className="boxops-hint">
         Dividers are the card number each section starts at, so the first is always 1. Leave it
         blank and the box uses the default divider size until you say otherwise. Capacity is not
         asked for here and never will be — it is frozen when the box is sealed.
       </p>
-      {refused === null ? null : <p className="boxes-machine">{refused}</p>}
-      <div className="boxes-actions">
+      {refused === null ? null : <p className="boxops-machine">{refused}</p>}
+      <Trouble failure={trouble} />
+      <div className="boxops-actions">
         <button
-          className="boxes-plain"
+          className="boxops-plain"
           type="button"
           disabled={busy}
           onClick={() => void submit()}
         >
           Register
         </button>
-        <button className="boxes-plain" type="button" onClick={() => setOpen(false)}>
+        <button className="boxops-plain" type="button" onClick={() => setOpen(false)}>
           Cancel
         </button>
       </div>
@@ -433,16 +391,24 @@ function NewBox({
   )
 }
 
-/* One box: what it holds, how it is divided, and the four things that can be done to it. */
-function BoxCard({
-  record,
-  busy,
-  onWrite,
-}: {
-  record: BoxRecord
-  busy: Busy
-  onWrite: (patch: { name?: string; sections?: number[]; state?: 'open' | 'closed' }) => Promise<boolean>
-}) {
+/* One box: what it holds, how it is divided, and the four things that can be done to it.
+ *
+ * DRAWN ONTO THE HEADER OF THAT BOX'S OWN WALK (D31). What is always visible is the reading —
+ * number, name, lid, the fill or the frozen capacity, and the track — because those are what a
+ * person glancing at the top of a list of cards wants to know. The layout table, the store's
+ * own field names and all four controls sit inside one disclosure beneath it.
+ *
+ * THE DISCLOSURE IS A DENSITY DECISION AND IT HAS A MEASUREMENT BEHIND IT. On `#/boxes` this
+ * panel drew every box at once, 304-355px each, so four boxes made 1744px of scroll — 1.9
+ * screens at 1440x900 to read four rows of information. Here exactly one box is drawn, and its
+ * editors are one press away rather than permanently occupying the space above the cards. What
+ * is NOT behind the disclosure is the seal's own sentence when it is pressed: D20 requires the
+ * number on the button, and it is still on it.
+ */
+export function BoxOps({ record, onChanged }: { record: BoxRecord; onChanged: () => void }) {
+  const { busy, trouble, write } = useBoxWrite(onChanged)
+  const onWrite = (patch: { name?: string; sections?: number[]; state?: 'open' | 'closed' }) =>
+    write(() => updateBox(record.box, patch))
   /* Which editor is open, or null. One at a time per box: two open fields over one record is
    * two half-finished edits racing for the same lock. */
   const [editing, setEditing] = useState<'name' | 'sections' | null>(null)
@@ -498,15 +464,15 @@ function BoxCard({
   }
 
   return (
-    <section className="boxes-box">
-      <header className="boxes-box-head">
-        <h2 className="boxes-box-number">Box {record.box}</h2>
-        <span className="boxes-box-name">{record.name ?? 'unnamed'}</span>
+    <section className="boxops-box">
+      <header className="boxops-box-head">
+        <h2 className="boxops-box-number">Box {record.box}</h2>
+        <span className="boxops-box-name">{record.name ?? 'unnamed'}</span>
         {/* The lid, said in the store's own word. Outlined rather than filled: docs/DESIGN.md
             gives the solid accent to a screen with exactly one thing to do, and a state chip is
             a reading rather than a control. No accent at all here — sealed and open are both
             ordinary conditions of a box, and neither is the system being unsure. */}
-        <span className={sealed ? 'boxes-state boxes-state-sealed' : 'boxes-state'}>
+        <span className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}>
           {sealed ? 'sealed' : 'open'}
         </span>
       </header>
@@ -516,20 +482,20 @@ function BoxCard({
           that is final; an open one divides by how many cards are in it SO FAR, and the same
           card reads 30% today and 12% next week without having moved. `so far` is doing real
           work in that sentence and is not filler. */}
-      <p className="boxes-fill">
+      <p className="boxops-fill">
         {sealed && capacity !== null ? (
           <>
-            <span className="boxes-fill-number">{capacity}</span>
-            <span className="boxes-fill-word">cards, sealed</span>
+            <span className="boxops-fill-number">{capacity}</span>
+            <span className="boxops-fill-word">cards, sealed</span>
           </>
         ) : fill === null ? (
           <>
-            <span className="boxes-fill-word">how full this box is could not be read</span>
+            <span className="boxops-fill-word">how full this box is could not be read</span>
           </>
         ) : (
           <>
-            <span className="boxes-fill-number">{fill}</span>
-            <span className="boxes-fill-word">cards so far</span>
+            <span className="boxops-fill-number">{fill}</span>
+            <span className="boxops-fill-word">cards so far</span>
           </>
         )}
       </p>
@@ -539,12 +505,12 @@ function BoxCard({
           for why nothing here computes a boundary. No marker: a marker means "this card is
           here" and there is no card on this screen. */}
       {spans.length === 0 ? (
-        <p className="boxes-machine">This box holds nothing to draw yet.</p>
+        <p className="boxops-machine">This box holds nothing to draw yet.</p>
       ) : (
-        <div className="boxes-track" role="img" aria-label={`Box ${record.box}, ${spans.length} sections`}>
+        <div className="boxops-track" role="img" aria-label={`Box ${record.box}, ${spans.length} sections`}>
           {spans.map((span) => (
             <span
-              className="boxes-span"
+              className="boxops-span"
               key={`${span.start}-${span.end}`}
               /* flex-grow rather than a width percentage: the segments are siblings in a flex
                  row, so their proportions are exactly the spans and no rounding has to be
@@ -555,12 +521,34 @@ function BoxCard({
         </div>
       )}
 
+      {/* THE LAYOUT AND THE FOUR CONTROLS, ONE PRESS DOWN. Everything above this line is a
+          reading of the box a person wants at a glance over its cards; everything inside it is
+          an operation on the box or the raw fields an operation is checked against. Closed by
+          default and remembered by nothing — a disclosure is not session state (D27 is about
+          the capture screen's claims, and this is a panel that redraws per box anyway).
+
+          `<details>` rather than a button and a boolean, for `Inventory.tsx`'s reason: the
+          element already owns the open/closed semantics a screen reader announces, and a
+          hand-rolled toggle is a second implementation of a thing the platform ships. The
+          marker is drawn rather than left to the browser, same as that file's, so the render
+          `make screenshot` takes matches the browser the owner works in. */}
+      <details className="boxops-more">
+        <summary className="boxops-more-head">
+          <span className="boxops-marker" aria-hidden="true" />
+          <span className="boxops-more-label">Layout and controls</span>
+          <span className="boxops-more-hint">
+            {record.sections_detail.length === 0
+              ? 'rename · dividers · seal'
+              : `${count(record.sections_detail.length, 'section', 'sections')} · rename · dividers · seal`}
+          </span>
+        </summary>
+
       {record.sections_detail.length === 0 ? null : (
-        <ul className="boxes-sections">
+        <ul className="boxops-sections">
           {record.sections_detail.map((detail) => (
-            <li className="boxes-section" key={detail.section}>
-              <span className="boxes-section-name">Section {detail.section}</span>
-              <span className="boxes-section-span">
+            <li className="boxops-section" key={detail.section}>
+              <span className="boxops-section-name">Section {detail.section}</span>
+              <span className="boxops-section-span">
                 {/* An open last section has no end, and it is drawn as open rather than filled
                     in with the box total: the two mean different things, and the second is a
                     claim about where a divider is. */}
@@ -568,7 +556,7 @@ function BoxCard({
                   ? `#${detail.start} onward`
                   : `#${detail.start}–#${detail.end}`}
               </span>
-              <span className="boxes-section-count">{count(known(detail.count) ?? 0, 'card', 'cards')}</span>
+              <span className="boxops-section-count">{count(known(detail.count) ?? 0, 'card', 'cards')}</span>
             </li>
           ))}
         </ul>
@@ -578,23 +566,23 @@ function BoxCard({
           `inventory.json`. `cards` counts records naming this box and `fill` is the high-water
           mark — they are different numbers and both are wanted, because the gap between them is
           exactly how many holes the box has. */}
-      <p className="boxes-meta">
+      <p className="boxops-meta">
         cards {record.cards} · sold {record.sold} · fill {fill ?? 'unknown'} · next index{' '}
         {known(record.next_index) ?? 'unknown'} · sections{' '}
         {record.sections.length === 0 ? 'undeclared' : record.sections.join(' ')}
       </p>
 
       {record.sections.length > 0 && record.sections_detail.length === 0 ? (
-        <p className="boxes-machine">
+        <p className="boxops-machine">
           This box has a declared layout that will not validate, so its sections could not be
           drawn. The raw list is above; save a corrected one below.
         </p>
       ) : null}
 
       {editing === null ? (
-        <div className="boxes-actions">
+        <div className="boxops-actions">
           <button
-            className="boxes-plain"
+            className="boxops-plain"
             type="button"
             disabled={busy}
             onClick={() => startEdit('name')}
@@ -602,7 +590,7 @@ function BoxCard({
             Rename
           </button>
           <button
-            className="boxes-plain"
+            className="boxops-plain"
             type="button"
             disabled={busy}
             onClick={() => startEdit('sections')}
@@ -611,7 +599,7 @@ function BoxCard({
           </button>
           {sealed ? (
             <button
-              className="boxes-plain"
+              className="boxops-plain"
               type="button"
               disabled={busy}
               onClick={() => void onWrite({ state: 'open' })}
@@ -626,7 +614,7 @@ function BoxCard({
                the fill could not be read, because the honest label cannot be written and a seal
                against an unknown number is exactly what this rule exists to prevent. */
             <button
-              className="boxes-plain"
+              className="boxops-plain"
               type="button"
               disabled={busy || fill === null}
               onClick={() => void onWrite({ state: 'closed' })}
@@ -638,46 +626,46 @@ function BoxCard({
           )}
         </div>
       ) : editing === 'name' ? (
-        <div className="boxes-editor">
+        <div className="boxops-editor">
           <Field label="Name" value={draft} onChange={setDraft} placeholder="SV commons" />
-          <p className="boxes-hint">
+          <p className="boxops-hint">
             A name is a label for people. The box number is the identifier and nothing here can
             change it. Clear the field to put the box back to unnamed.
           </p>
-          <div className="boxes-actions">
+          <div className="boxops-actions">
             <button
-              className="boxes-plain"
+              className="boxops-plain"
               type="button"
               disabled={busy}
               onClick={() => void saveName()}
             >
               Save name
             </button>
-            <button className="boxes-plain" type="button" onClick={closeEdit}>
+            <button className="boxops-plain" type="button" onClick={closeEdit}>
               Cancel
             </button>
           </div>
         </div>
       ) : (
-        <div className="boxes-editor">
+        <div className="boxops-editor">
           <Field label="Dividers" value={draft} onChange={setDraft} placeholder="1, 31, 56" />
-          <p className="boxes-hint">
+          <p className="boxops-hint">
             The card number each section starts at, so the first is always 1. Leave it blank to
             go back to the default divider size.
           </p>
-          {refused === null ? null : <p className="boxes-machine">{refused}</p>}
+          {refused === null ? null : <p className="boxops-machine">{refused}</p>}
 
           {proposed === null ? (
-            <div className="boxes-actions">
+            <div className="boxops-actions">
               <button
-                className="boxes-plain"
+                className="boxops-plain"
                 type="button"
                 disabled={busy}
                 onClick={proposeSections}
               >
                 Check this layout
               </button>
-              <button className="boxes-plain" type="button" onClick={closeEdit}>
+              <button className="boxops-plain" type="button" onClick={closeEdit}>
                 Cancel
               </button>
             </div>
@@ -692,6 +680,9 @@ function BoxCard({
           )}
         </div>
       )}
+
+        <Trouble failure={trouble} />
+      </details>
     </section>
   )
 }
@@ -733,26 +724,26 @@ function Relabel({
   const hit = from === null ? null : reached(record, from)
 
   return (
-    <div className="boxes-relabel">
-      <p className="boxes-relabel-head">
+    <div className="boxops-relabel">
+      <p className="boxops-relabel-head">
         {proposed.length === 0
           ? 'Going back to the default divider size'
           : `New dividers: ${proposed.join(', ')}`}
       </p>
 
       {from === null ? (
-        <p className="boxes-note-text">
+        <p className="boxops-note-text">
           This is the layout the box already renders with, so nothing will be relabelled.
         </p>
       ) : (
         <>
-          <p className="boxes-note-text">
+          <p className="boxops-note-text">
             This is a <strong>relabel, not a renumber</strong>. No card moves and no index
             changes — Section and Card are a view of a card&rsquo;s index against the box&rsquo;s
             dividers, so every card from #{from} on will simply be called something different
             from now on.
           </p>
-          <p className="boxes-note-text">
+          <p className="boxops-note-text">
             {hit === null || hit.sections.length === 0
               ? 'How many cards that reaches could not be read from this box.'
               : `That reaches ${hit.sections.length === 1 ? 'section' : 'sections'} ` +
@@ -763,11 +754,11 @@ function Relabel({
         </>
       )}
 
-      <div className="boxes-actions">
-        <button className="boxes-plain" type="button" disabled={busy} onClick={onSave}>
+      <div className="boxops-actions">
+        <button className="boxops-plain" type="button" disabled={busy} onClick={onSave}>
           Save dividers
         </button>
-        <button className="boxes-plain" type="button" onClick={onCancel}>
+        <button className="boxops-plain" type="button" onClick={onCancel}>
           Back
         </button>
       </div>
@@ -791,12 +782,12 @@ function Field({
 }) {
   const id = useId()
   return (
-    <div className="boxes-field">
-      <label className="boxes-field-label" htmlFor={id}>
+    <div className="boxops-field">
+      <label className="boxops-field-label" htmlFor={id}>
         {label}
       </label>
       <input
-        className="boxes-field-input"
+        className="boxops-field-input"
         id={id}
         type="text"
         /* Off on all four: a box name is not a word, an address or a sentence, and a browser

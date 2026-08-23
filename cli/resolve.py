@@ -261,6 +261,27 @@ def _key(position: join.Position) -> str:
     return f"{position.box}/{position.index}"
 
 
+def _detected(finish, game: str):
+    """The model's `finish`, kept only if THIS GAME stocks it (D3 rung 3's whitelist).
+
+    `variant.vocabulary` is the single home — see the call site for the bug that made this a
+    function rather than a membership test written inline.
+
+    AN UNREGISTERED GAME DROPS THE FINISH RATHER THAN RAISING, and that is deliberate: the
+    caller carries an unknown game string through UNCHANGED so `join.lookup_for` can refuse
+    it by name, and a crash here would pre-empt that named refusal with a stack trace. The
+    card is refused either way; the difference is whether the operator is told which game
+    nobody registered.
+    """
+    if not finish:
+        return None
+    try:
+        stocked, _ = variant.vocabulary(game)
+    except (games.UnknownGame, join.EmptyCatalog, KeyError, ValueError):
+        return None
+    return finish if finish in stocked else None
+
+
 def _rarity_claim(raw) -> Optional[Tuple[str, ...]]:
     """The run record's `rarity_claim`, shaped for `IdentifiedCard` — defensively.
 
@@ -667,14 +688,21 @@ def load(
                 number=number,
                 printed_total=total if number else None,
                 metadata_finish=record.get("metadata_finish"),
-                # Tested against `variant.FINISHES`, never against a literal tuple. The
+                # Tested against THIS GAME's finishes, never against a literal tuple. The
                 # enum has one home and a copy of it here cannot be kept in step with it:
                 # a finish added there would fall out of a literal written here, land as
                 # `None`, and route the card to review with nothing on screen saying why —
                 # a silent drop, which is the one thing this pipeline may never do. The
                 # test is still needed: an unknown string from the model is not a finish,
                 # and `variant` raises `UnknownFinish` rather than guessing at one.
-                detected_finish=finish if finish in variant.FINISHES else None,
+                #
+                # THE HOME MOVED ON 2026-08-23 AND THIS LINE READ THE WRONG ONE. It tested
+                # `variant.FINISHES`, which is Pokemon's three — so the model's `foil` on a
+                # Riftbound card fell out of a whitelist that had nothing to do with that
+                # game and landed as `None`, losing rung 3's cross-check for every card of
+                # every non-Pokemon game. Exactly the silent drop the paragraph above
+                # forbids, committed by the line the paragraph is attached to.
+                detected_finish=_detected(finish, game),
                 photo=record.get("photo"),
                 set_hint=record.get("set_hint"),
                 # Backfilled above, where the catalog partition needed it first. A GAME

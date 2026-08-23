@@ -51,6 +51,76 @@
   font-size: 15px;
 }
 
+/* ---- the switch between D31's two questions ---- */
+
+/* The segmented strip the browse's box cells and the capture screen's track already draw: one
+   bordered box subdivided by hairlines, cells content-sized, the chosen one carried by ink
+   weight plus a 2px rail. Copied rather than imported, which is the rule those files state —
+   several screens, one LOOK, separate copies — and the thing worth protecting is that there
+   are not three looks for one idiom.
+
+   NO ACCENT FILL. docs/DESIGN.md gives the solid fill to a screen with exactly one thing to
+   do, and a switch is by construction two; filling the chosen cell would make the colour mean
+   "here", which is the third meaning that ends with it meaning nothing. */
+.inventory-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-top: var(--s4);
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.inventory-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 2px solid var(--surface);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* No :hover. --hover's one job is row hover, and .browse-boxcell set the precedent for a
+   segmented cell. */
+.inventory-mode[aria-pressed='true'] {
+  border-bottom-color: var(--ink);
+}
+
+/* A phrase a person reads, so the body face. Muted until chosen, which is the same step from
+   muted to ink that carries selection everywhere else in this app. */
+.inventory-mode-label {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.inventory-mode[aria-pressed='true'] .inventory-mode-label {
+  color: var(--ink);
+}
+
+/* What the mode actually shows, said in the metadata register so it reads as a caption on the
+   control rather than as a second label competing with it. It exists because "Browse the
+   boxes" and "Find a card" are close enough in shape that a person arriving for the first time
+   has to press one to learn the difference, and one press on this control changes the whole
+   screen. */
+.inventory-mode-says {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
 /* The search field. Capped rather than full width: it is one line of text and a 1200px input
    puts the caret a screen away from the results it produces. 30rem holds the longest card name
    this catalogue has with room to spare. */
@@ -88,13 +158,14 @@
   background: var(--hover);
 }
 
-.inventory-reload:focus-visible,
-.inventory-summary:focus-visible {
-  /* Ink, not accent: accent's two jobs are taken, and a keyboard user tabbing through this
-     screen is not being told the system is unsure about anything. */
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
+/* NO :focus-visible RULES IN THIS FILE ANY MORE, on the reload, the summary, the quiet
+   control or the retire reasons. `base.css` draws one ring for the whole app — 2px ink, offset
+   +2px so it clears the 4px radius instead of clipping it — and these four overrode it with
+   `outline-offset: -2px`, which draws the ring INSIDE the element's own border and reads as a
+   second border rather than as focus. The owner called the inset rings ugly and they came out
+   repo-wide; nothing on this screen clips its own overflow, so there is no reason for it to be
+   the exception. The one exception that survives is `BoxBrowse.css`'s list, which does clip and
+   says so. */
 
 /* Three counts, so the utility face — docs/DESIGN.md gives mono every number in the product. */
 .inventory-count {
@@ -215,10 +286,35 @@
 }
 
 .inventory-main {
+  /* ONE LINE, NOT TWO, AND IT IS A MEASURED CHANGE. Stacked, each group row drew 68px and
+     forty-six of them made 3.9 screens of scroll before a single group was opened — which is
+     the complaint that started this work. Side by side the row is 34px and the same forty-six
+     fit in half the distance. Nothing is dropped: the name still leads in the body face and
+     the machine line still trails in the utility face at the same 11px, which is the
+     hierarchy that mattered. Each is allowed to ellipsis rather than wrap, because a row that
+     wraps makes the rhythm of a long list uneven, and an even rhythm is most of what makes a
+     list scannable. */
   display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+  align-items: baseline;
+  gap: var(--s3);
   min-width: 0;
+}
+
+.inventory-name,
+.inventory-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The name gets the space it needs and the machine line gets what is left: a card is looked up
+   by its name, and `sku 8937370` truncated is still greppable from the first digits. */
+.inventory-name {
+  flex: 0 1 auto;
+}
+
+.inventory-meta {
+  flex: 1 1 auto;
 }
 
 /* A card's name is a thing a human reads, so the body face — the one place on this row that
@@ -269,6 +365,31 @@
 }
 
 /* ---- the copies ---- */
+
+/* THE COPIES SCROLL INSIDE THE GROUP, AND THAT IS THE ONE RULE THIS BLOCK EXISTS FOR. The
+   no-SKU group holds every card `emit` has not pushed — 714 of the 767 in the store today —
+   and opening it stretched the page to 24009px, twenty-seven screens, from one press on a row
+   the size of a line of text. A control whose cost is unbounded and invisible until it is
+   pressed is the thing a dense list must not have.
+
+   60vh so a full group still fills most of the screen while leaving its own summary row and
+   the next group visible above and below it — which is what says the list continues, and is
+   the fact a page-length table destroys. */
+.inventory-copies {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The column names hold the top of that scroller. Opaque surface because rows pass beneath —
+   the same construction and the same reason as `BoxBrowse.css`'s section headers. */
+.inventory-copies thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
 
 /* Indented to the depth of the summary's third column, so the copy table starts under the
    card name rather than under the marker. Reading down the open group is then reading down
@@ -464,11 +585,6 @@ td.inventory-cell-since {
   cursor: not-allowed;
 }
 
-.inventory-plain:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
-
 /* THE SCRIM IS THE PAGE GROUND AT PARTIAL ALPHA, not a black wash. There is no token for a
    shadow or an overlay tint, and docs/DESIGN.md's lesson from --on-accent is that the answer
    to "no token means what I mean" is a token argued for in that file, never a literal painted
@@ -624,11 +740,6 @@ td.inventory-cell-since {
 .inventory-retire-reason:disabled {
   color: var(--muted);
   cursor: not-allowed;
-}
-
-.inventory-retire-reason:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
 }
 
 .inventory-retire-label {

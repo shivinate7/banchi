@@ -66,7 +66,7 @@ from pathlib import Path
 from harness.tests import Checks, Result
 from cli import resolve, runs
 from identify import sidecar
-from pipeline import join, routing, tcgcsv, variant
+from pipeline import games, join, routing, tcgcsv, variant
 from store import files
 
 NAME = "T4"
@@ -361,6 +361,115 @@ def run() -> Result:
         set(variant.CONDITION_BY_FINISH),
         set(FINISHES),
         "the finish enum is exactly normal | holo | reverse_holo",
+    )
+
+    # --- the ladder's vocabulary is PER GAME, and it used to raise ------------------------
+    # `variant.FINISHES` is `_POKEMON["finishes"]`, and `resolve` checked every game against
+    # it — so a Riftbound card claiming `foil`, the finish its own registry entry authors and
+    # the capture screen offers, did not review and did not resolve: it raised
+    # `UnknownFinish` and took the join down with it. A refusal names itself; an exception
+    # does not. Asserted in both directions, because the fix must not have widened Pokemon's
+    # enum to make the crash go away.
+    def _row(condition, price="1.00", rarity="Rare", sku="1"):
+        return {
+            tcgcsv.CONDITION_COLUMN: condition,
+            tcgcsv.MARKET_PRICE_COLUMN: price,
+            tcgcsv.RARITY_COLUMN: rarity,
+            tcgcsv.SKU_COLUMN: sku,
+        }
+
+    riftbound = variant.resolve(
+        [_row("Near Mint Foil", price="2.00")], metadata_finish="foil", game="riftbound"
+    )
+    c.equal(
+        [riftbound.stage, riftbound.condition],
+        [variant.METADATA, "Near Mint Foil"],
+        "a Riftbound `foil` claim resolves at rung 1 against Riftbound's own vocabulary — "
+        "it raised UnknownFinish against Pokemon's three until 2026-08-23",
+    )
+    c.raises(
+        variant.UnknownFinish,
+        lambda: variant.resolve(both, metadata_finish="foil", game="pokemon"),
+        "and `foil` is still unknown to POKEMON — the per-game fix widened nothing",
+    )
+
+    # --- D3 rung 1's claim is a SET (amended 2026-08-23) -----------------------------------
+    # One member determines, exactly as this rung always has. Two or more FILTER: the rows
+    # narrow to the claimed finishes and the rungs BELOW choose within what survives, which
+    # is deliberately the move D23's rarity claim already makes. The cases below walk every
+    # exit from that branch, because a filter that falls through has more of them than a
+    # rung that returns.
+    NM, NMH, NMR = (
+        variant.CONDITION_BY_FINISH["normal"],
+        variant.CONDITION_BY_FINISH["holo"],
+        variant.CONDITION_BY_FINISH["reverse_holo"],
+    )
+    three = [_row(NM), _row(NMH), _row(NMR)]
+
+    c.equal(
+        variant.resolve(three, metadata_finish=["holo"]).condition,
+        variant.resolve(three, metadata_finish="holo").condition,
+        "a ONE-MEMBER set resolves identically to the bare string it replaces — the "
+        "compatibility guarantee that makes the amendment additive, and what lets every "
+        "record written before it read as a one-member claim",
+    )
+
+    two = variant.resolve(three, metadata_finish=["normal", "reverse_holo"])
+    c.equal(
+        [two.stage, two.reason],
+        [variant.REVIEW, variant.AMBIGUOUS_NO_SIGNAL],
+        "a TWO-MEMBER set with two rows surviving and no detection falls all the way to "
+        "rung 4 — the claim narrowed and then had nothing left to decide with, which is a "
+        "review rather than a guess between the two the operator named",
+    )
+
+    inside = variant.resolve(
+        three, metadata_finish=["normal", "reverse_holo"], detected_finish="reverse_holo"
+    )
+    c.equal(
+        [inside.stage, inside.condition],
+        [variant.DETECTION, NMR],
+        "detection INSIDE the claimed set decides at rung 3 — the set said which two are "
+        "possible and detection said which of them it is",
+    )
+
+    outside = variant.resolve(
+        three, metadata_finish=["normal", "reverse_holo"], detected_finish="holo"
+    )
+    c.equal(
+        [outside.stage, outside.reason],
+        [variant.REVIEW, variant.METADATA_DETECTION_DISAGREEMENT],
+        "detection OUTSIDE the claimed set is the same disagreement it always was — with "
+        "one member this is the identity test, so the reason code needed no sibling",
+    )
+
+    forced = variant.resolve([_row(NM), _row(NMH)], metadata_finish=["normal", "reverse_holo"])
+    c.equal(
+        [forced.stage, forced.condition],
+        [variant.CATALOG_FORCED, NM],
+        "a set that narrows to ONE row resolves at rung 2 — the fall-through is what makes "
+        "this reachable, and re-implementing rung 2 inside rung 1 is what it avoids",
+    )
+
+    empty = variant.resolve([_row(NMH)], metadata_finish=["normal", "reverse_holo"])
+    c.equal(
+        [empty.stage, empty.reason],
+        [variant.REVIEW, variant.METADATA_NOT_STOCKED],
+        "a set NONE of whose members is stocked reviews as metadata_not_stocked — the same "
+        "fact as a single claim the number does not come in, so it earns no new reason code",
+    )
+
+    c.equal(
+        variant._check_claim(["reverse_holo", "normal", "normal"], FINISHES),
+        ("normal", "reverse_holo"),
+        "a claim is deduped and ordered by the game's own enum, never by the order the "
+        "operator tapped — two identical claims are one value however they were made",
+    )
+    c.raises(
+        variant.UnknownFinish,
+        lambda: variant.resolve(three, metadata_finish=["normal", "holographic"]),
+        "and ONE bad member refuses the whole claim rather than being dropped from it — a "
+        "silently shortened claim is a claim the operator did not make",
     )
 
     # --- three condition strings, one number: SYNTHETIC (see the fixture gap above) --------
@@ -740,22 +849,31 @@ def run() -> Result:
     # ASSERTED BY ADDING ONE, because that is the case a source scan cannot reach. A grep can
     # say the two agree today; only this can say they cannot come apart. T7 keeps the source
     # half — that no finish is spelled out in that file at all.
-    original = variant.FINISHES
+    #
+    # THE ENUM'S HOME MOVED ON 2026-08-23 AND SO DID THIS WIDENING. It used to assign to
+    # `variant.FINISHES`, which was the home while the ladder was Pokemon-only. The ladder
+    # now reads each game's finishes from `pipeline/games.py` through `variant.vocabulary`,
+    # so `variant.FINISHES` is a Pokemon-shaped alias that `cli/resolve.py` no longer
+    # consults — and patching it proved nothing about the seam this case exists to guard.
+    # Widening the REGISTRY entry keeps the assertion pointed at the real single source, and
+    # it now exercises the whole chain: resolve.py -> variant.vocabulary -> games registry.
+    pokemon = games.get(games.DEFAULT_GAME)
+    original = tuple(pokemon["finishes"])
     try:
-        variant.FINISHES = original + ("foil_etch",)
+        pokemon["finishes"] = original + ("foil_etch",)
         widened = _detected_finishes(REPO_ROOT / SOURCE_FIXTURE, {1: "foil_etch"})
     finally:
-        variant.FINISHES = original
+        pokemon["finishes"] = original
     c.equal(
         widened.get(1),
         "foil_etch",
-        "a finish ADDED to variant.FINISHES survives the trip through cli/resolve.py — the "
-        "whitelist is the enum itself, never a copy of it",
+        "a finish ADDED to the game's registry entry survives the trip through "
+        "cli/resolve.py — the whitelist is the enum itself, never a copy of it",
     )
     c.equal(
-        variant.FINISHES,
+        tuple(games.get(games.DEFAULT_GAME)["finishes"]),
         original,
-        "and the enum is left exactly as it was found, so the six tests after this one see "
+        "and the registry is left exactly as it was found, so the tests after this one see "
         "the real one",
     )
 
