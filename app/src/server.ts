@@ -7,6 +7,8 @@ import type {
   Finish,
   GameRegistry,
   Inventory,
+  Place,
+  PlaceNeighbor,
   QueueSnapshot,
   RetireReason,
   RetireResult,
@@ -137,6 +139,13 @@ export function describeFailure(err: unknown): Failure {
  * validators, so if a browser ever does hold one of these, the fix is a cache header on
  * the server — not a cache-busting query parameter minted here, which would have to be
  * threaded through every caller and would defeat caching for the pull preview too.
+ *
+ * ONE EXCEPTION STANDS, AND IT IS NOT THIS FUNCTION'S: after `reshootPhoto` below succeeds,
+ * the screen that sent the new bytes appends a nonce to its own `<img>`'s src. That is a
+ * different case from the one this paragraph rejects — not a nonce minted here for every
+ * caller on every load, but one screen, at the one moment it KNOWS the bytes behind the
+ * stable URL changed, refusing to show the photograph it just replaced. PullPreview.tsx
+ * argues it where it happens; the general repair stays a response header on the server.
  */
 export function photoUrl(box: number, index: number): string {
   return `${base}/photo/${box}/${index}`
@@ -171,6 +180,58 @@ export function photoUrl(box: number, index: number): string {
 export function positionLabel(card: { label?: string }): string | null {
   const { label } = card
   return typeof label === 'string' && label.trim() !== '' ? label : null
+}
+
+/**
+ * D30's sentence, or null when there is nothing true to say — never a guess.
+ *
+ * "between Mantine and Thievul · 2 slots in this section are empty". `Card 17` is the
+ * seventeenth SLOT, not the seventeenth card you can count, and once a section has permanent
+ * gaps (every sale and retirement makes one — D10) the two stop being the same number. The
+ * neighbours make the label countable by hand again without anyone learning that rule; the
+ * gap count says why a hand-count came out short.
+ *
+ * ONE COMPOSER, BESIDE `positionLabel` AND FOR ITS REASON: two screens draw this sentence
+ * (the pull preview's detail panel and `CardLocations`' copy rows), and two compositions of
+ * one wire fact are the drift this module's one-owner rule exists to prevent. It lives here
+ * rather than in either screen because the third screen is predictable, and the threshold
+ * `describeFailure` was held to was met by the second copy never being written.
+ *
+ * WHAT IT REFUSES TO SAY, in order: nothing for a pooled card (no slot, no neighbours);
+ * nothing when the server sent no decoration (an older server) or nulled it (a record in the
+ * store whose position will not read — the same event that nulls the denominator, and a
+ * sentence naming a possibly-wrong neighbour would send a hand to the wrong slot, the one
+ * thing a position claim may never do); no gap phrase at zero, because a countable section
+ * needs no explaining and the sentence is meant to be quiet. A neighbour nothing has
+ * identified degrades to its index — `#41`, a slot a hand can count to — never to a blank.
+ *
+ * At the box's ends there is one neighbour, and the sentence says which side it is on
+ * (`after Mantine` / `before Thievul`) rather than pretending a between. The one card whose
+ * box holds nothing else says nothing at all — a sentence with no neighbours and no gaps has
+ * no content, and null lets the screen render nothing rather than chrome.
+ */
+export function placeSentence(place: Place | undefined): string | null {
+  if (place === undefined || place.located === false) return null
+
+  const said: string[] = []
+  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.index}`
+
+  const neighbors = place.neighbors
+  if (neighbors !== undefined && neighbors !== null) {
+    const { prev, next } = neighbors
+    if (prev !== null && next !== null) said.push(`between ${name(prev)} and ${name(next)}`)
+    else if (prev !== null) said.push(`after ${name(prev)}`)
+    else if (next !== null) said.push(`before ${name(next)}`)
+  }
+
+  const gaps = place.section_gaps
+  if (typeof gaps === 'number' && gaps > 0) {
+    said.push(
+      gaps === 1 ? '1 slot in this section is empty' : `${gaps} slots in this section are empty`,
+    )
+  }
+
+  return said.length === 0 ? null : said.join(' · ')
 }
 
 // ------------------------------------------------------------------------------ the wire
@@ -432,6 +493,48 @@ export async function undoCapture(box: number, index: number): Promise<{ deleted
   return (await request(`/inventory/${box}/${index}`, { method: 'DELETE' })) as {
     deleted: string
   }
+}
+
+/**
+ * Replace the photo and sidecar at an existing position. The record is untouched.
+ *
+ * D26's re-shoot in place: a bad photograph discovered later than D10's undo can reach —
+ * undo walks back only the newest capture — gets new bytes at the SAME position, position
+ * label unchanged, allocator never involved. NOT A DELETE, NOT A CAPTURE, and irreversible
+ * in one specific way: the old bytes are replaced, not archived (an archived copy under the
+ * capture root would be scanned as a capture and billed as one), so the remedy for a wrong
+ * re-shoot is another re-shoot.
+ *
+ * IT CANNOT CARRY A CORRECTION, by the server's own refusal (`field_not_settable`): the
+ * sidecar is rebuilt from the RECORD, never from the request, so changing what the operator
+ * said about the card stays `updateCard`'s job with its `corrected` history line. This call
+ * changes the picture and nothing else.
+ *
+ * `imageBase64` is RAW base64 with no `data:` prefix, exactly as `capture` takes it and for
+ * its reason: the server refuses a prefixed blob as `image_invalid`, loudly, rather than
+ * letting two shapes spread. `captureId` is REQUIRED and is the NEW photograph's — one id
+ * per photograph, minted fresh (`newCaptureId`) and held by the caller across any retry of
+ * the SAME bytes, which is what makes a lost response a recognisable replay instead of a
+ * second write.
+ *
+ * The refusals worth branching on are `card_sold` and `card_retired` — a photo of a card
+ * that left is a photo of nothing, and for a sold card the stored photo is the dispute
+ * record — but the screen that offers this control should not draw it for either state in
+ * the first place, for the reason `restores_to` taught twice: a control whose only
+ * behaviour is a refusal. `capture_id_in_use` means the id names another card's photograph;
+ * mint a new one rather than retrying with it.
+ */
+export async function reshootPhoto(
+  box: number,
+  index: number,
+  imageBase64: string,
+  captureId: string,
+): Promise<CardSummary> {
+  return (await request(`/inventory/${box}/${index}/photo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageBase64, capture_id: captureId }),
+  })) as CardSummary
 }
 
 // --------------------------------------------------------- the standing queues, and D4's answer

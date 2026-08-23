@@ -687,6 +687,15 @@ write still shows the photographs it is about to answer for.
 
 ### 10.4 — D30's gap convention
 
+**THE DIGITAL HALF IS BUILT (2026-08-23, later the same day):** every located `place` block
+carries `neighbors` (nearest non-terminal records, so a sold card is never named as a
+landmark) and `section_gaps` (terminal records inside the section — counting records, not
+indices, is what makes an unallocated tail not a gap by construction). Rendered as "between
+Mantine and Thievul · 2 slots in this section are empty" on the pull preview and both
+CardLocations skins. One corrupt record nulls the sentence store-wide rather than naming a
+possibly-wrong neighbour. **The physical half — which marker the Fulfiller leaves in an
+emptied slot — remains the owner's open item**, and it is the retroactive one.
+
 D10 makes a sold position a permanent gap and the Fulfiller creates one per order. Nothing has
 ever told him to leave anything behind in the slot, and nothing teaches anyone to read a position
 label: `Card 17` is the **seventeenth slot**, not the seventeenth card you can count. Once a

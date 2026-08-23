@@ -946,9 +946,12 @@ joins is narrower than the one it was proposed against.
 (`POST /inventory/<box>/<index>/retire`, mark-sold's mirror, reversible with `restores_to`),
 its four reasons, and an owner-side control on the Inventory screen with a receipt and undo.
 Re-shoot has its route (`POST /inventory/<box>/<index>/photo` — bytes replaced, sidecar
-rebuilt from the record, a `reshot` history line carrying both capture ids) **but no screen
-affordance and no client function yet** — where the control lives (pull preview, or a
-per-card view) is a design question still open, recorded here rather than guessed at. A sale
+rebuilt from the record, a `reshot` history line carrying both capture ids) **and, since
+later the same day, its control: on the pull preview, by the owner's ruling** — the screen
+whose whole job is looking at one stored photo beside its position, so the moment a bad
+photo is discovered is the moment the remedy is already on screen. A file input rather than
+a camera (that screen has none; the rig screen is for live shooting), and the screen's
+look-only header now argues its one write honestly. A sale
 now refuses a retired card (`card_retired`): the old permissive rule's own justification —
 "the only way to record a departed card" — is what this entry retired.
 

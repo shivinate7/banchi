@@ -227,6 +227,20 @@
   letter-spacing: -0.01em;
 }
 
+/* D30's sentence, directly under the position label it makes countable — "between Mantine
+   and Thievul · 2 slots in this section are empty". Quiet by ruling: the label is the
+   payload and this is its footnote, so it takes the metadata register (muted, small)
+   rather than a size that competes. Body face, though, not the utility face — it is a
+   sentence a human reads, and docs/DESIGN.md's mono-carries-metadata rule cuts on exactly
+   that line. */
+.pull-preview-between {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: var(--s1);
+  max-width: 420px;
+}
+
 /* Sized to show a blur or a finger on the card, which is what a photo on this screen is
    for. No 320px floor asserted: that is the Fulfillment pull modal's constraint and 7b's
    to meet. */
@@ -258,6 +272,19 @@
 
 .pull-preview-note {
   margin-top: var(--s5);
+}
+
+/* The one write on the screen, dressed like the Reload it sits under rather than like an
+   action that wants pressing — the button itself reuses .pull-preview-reload, and the file
+   header has the no-fill argument. The margin is the block's own so a refusal panel
+   rendered inside it hangs together with the button that earned it. */
+.pull-preview-reshoot {
+  margin-top: var(--s4);
+  max-width: 420px;
+}
+
+.pull-preview-reshoot .pull-preview-note {
+  margin-top: var(--s3);
 }
 
 /* A sentence a human reads, so the body face. */

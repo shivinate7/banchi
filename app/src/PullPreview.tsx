@@ -2,25 +2,50 @@ import { useEffect, useRef, useState } from 'react'
 import { isEditableTarget } from './keys'
 import type { InventoryCard } from './types'
 import type { Failure } from './server'
-import { describeFailure, positionLabel, getInventory, photoUrl } from './server'
+import {
+  describeFailure,
+  positionLabel,
+  placeSentence,
+  getInventory,
+  photoUrl,
+  reshootPhoto,
+  newCaptureId,
+} from './server'
 import './PullPreview.css'
 
-/* The pull preview — docs/specs/capture-app.md §7. LOOK ONLY.
+/* The pull preview — docs/specs/capture-app.md §7, plus ONE WRITE it did not have then.
  *
  * This is the last link in the Gate B chain: a card photographed at the start of a run
  * shows up here with the right photo at the right box, section and card. That single
- * claim is the whole screen, which is why nothing on it writes. Mark-sold was offered to
- * the owner and declined for this pass — it needs a route that does not exist and pulls
- * 7b work into the gate.
+ * claim is still the whole screen, and this header said LOOK ONLY for as long as it was
+ * the whole truth. It stopped being that when the re-shoot control landed, and the header
+ * changes with the screen rather than surviving it — the drift docs/DESIGN.md's review
+ * queue header is a worked example of, pointing the other way.
+ *
+ * THE ONE WRITE, AND ITS WHOLE EXTENT: replacing a photograph. D26's re-shoot half —
+ * new bytes and a rebuilt sidecar at the same position, record untouched, label
+ * unchanged, allocator never involved. D26 recorded the placement as an open question in
+ * as many words — "where the control lives (pull preview, or a per-card view) is a design
+ * question still open" — and the owner's ruling is the pull preview: this is the screen
+ * where a bad photo is DISCOVERED, because checking photos against positions is the thing
+ * it is for, and a remedy that lives anywhere else costs a navigation with the defect
+ * still on screen. Nothing else here writes; mark-sold remains another screen's.
+ *
+ * NO CONFIRM DIALOG, AND THE ACTION IS IRREVERSIBLE — both at once, deliberately, and the
+ * reasoning is capture-undo's (docs/DESIGN.md) transposed: the old bytes are gone, not
+ * archived, but the CARD is still in its slot, so the remedy for a wrong re-shoot is
+ * another re-shoot. What bounds the loss on undo — the card still in your hand — is here
+ * the card still in its box. A dialog would tax every correct replacement to soften a
+ * mistake that has a two-tap repair.
  *
  * The photo comes from `GET /photo/<box>/<index>`, which is D6's route and the reason
  * that route exists at all: the review queue requires it and the pull modal reuses it.
  *
- * Owner-side for Gate B, so density is fine and docs/DESIGN.md's Fulfillment floors do
- * not bind. They bind on 7b's pull modal, which is a different screen for a different
- * person; borrowing them here would make this screen look like his and set the
- * expectation that it is safe for him to use, which it is not — it lists every card in
- * every state and speaks the pipeline's vocabulary.
+ * Owner-side, so density is fine and docs/DESIGN.md's Fulfillment floors do not bind.
+ * They bind on 7b's pull modal, which is a different screen for a different person;
+ * borrowing them here would make this screen look like his and set the expectation that
+ * it is safe for him to use, which it is not — it lists every card in every state, speaks
+ * the pipeline's vocabulary, and now carries a control that destroys a photograph.
  */
 
 /* The position label is READ off the wire and never composed here, and the rule now lives in
@@ -157,7 +182,69 @@ export function PullPreview() {
    * card for a missing file. */
   const [photoAbsent, setPhotoAbsent] = useState<string | null>(null)
   const [reloads, setReloads] = useState(0)
+  /* Each re-shot card's NEW capture id, by row key — the cache nonce PhotoPanel appends
+   * after a replacement, and nothing else. The id rather than a counter because it
+   * already names the exact photograph the screen expects, so a `?reshot=<id>` in a
+   * network log is self-explaining. Kept across reloads deliberately: the URL is the
+   * same stable one, and the bytes behind it are still the ones this id names. */
+  const [reshot, setReshot] = useState<Record<string, string>>({})
+  /* The key of the replacement in flight, or null — one at a time, the same rule every
+   * write in this app follows: `Store.write()` takes the file lock per call. */
+  const [reshootBusy, setReshootBusy] = useState<string | null>(null)
+  /* A refusal PAIRED WITH ITS CARD, not floated loose: stepping to the next card must
+   * not carry the previous card's refusal under a photo it says nothing about. */
+  const [reshootFailure, setReshootFailure] = useState<{ key: string; failure: Failure } | null>(
+    null,
+  )
   const listRef = useRef<HTMLUListElement | null>(null)
+
+  /* The re-shoot, from a picked file to the server. The base64 the wire wants is the
+   * data-URL's payload — sliced at the first comma rather than split, and RAW, no
+   * `data:` prefix, exactly as `capture()` documents: the server refuses the prefixed
+   * shape loudly rather than letting two spellings spread.
+   *
+   * A FRESH CAPTURE ID PER PICK, and that is safe HERE in a way it is not on the capture
+   * screen. There the id must survive a retry because a replay with a new id burns an
+   * index; a re-shoot allocates nothing, so the lost-response worst case is the same
+   * bytes written to the same position twice with one extra history line. Holding the id
+   * across a retry would buy machinery, not safety.
+   *
+   * On success: remember the id as this card's cache nonce, then re-read the inventory —
+   * the record's `photo` and `capture_id` changed server-side, the loader keeps the
+   * selection, and it also resets `photoAbsent`, which is how a card whose photo file
+   * was LOST comes back to life when a re-shoot gives the route bytes to serve again. */
+  const beginReshoot = (row: Row, file: File) => {
+    setReshootBusy(row.key)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = String(reader.result)
+      const imageBase64 = url.slice(url.indexOf(',') + 1)
+      const captureId = newCaptureId()
+      reshootPhoto(row.card.box, row.card.index, imageBase64, captureId)
+        .then(() => {
+          setReshot((held) => ({ ...held, [row.key]: captureId }))
+          setReshootBusy(null)
+          setReshootFailure(null)
+          setReloads((n) => n + 1)
+        })
+        .catch((err: unknown) => {
+          setReshootBusy(null)
+          /* Verbatim, owner screen: `card_sold` and `card_retired` should be unreachable
+           * (the control is not drawn for either state), but a second device can move a
+           * card between this screen's read and the press, and the server's message
+           * names the way back better than anything composed here could. */
+          setReshootFailure({ key: row.key, failure: describeFailure(err) })
+        })
+    }
+    reader.onerror = () => {
+      setReshootBusy(null)
+      setReshootFailure({
+        key: row.key,
+        failure: describeFailure(reader.error ?? new Error('the picked file could not be read')),
+      })
+    }
+    reader.readAsDataURL(file)
+  }
 
   useEffect(() => {
     // StrictMode runs effects twice in dev, and a slow first response can land after the
@@ -295,13 +382,22 @@ export function PullPreview() {
    * is a photo captioned with a position beside a panel saying there is none. */
   const selectedLabel = selectedRow === null ? null : positionLabel(selectedRow.card)
 
+  /* Read once beside the label it sits under, for the label's own reason: one read, one
+   * value, and no way for the sentence's presence test and its rendering to disagree. */
+  const selectedSentence = selectedRow === null ? null : placeSentence(selectedRow.card.place)
+
   return (
     <main className="pull-preview">
       <header className="pull-preview-head">
         <h1 className="pull-preview-title">Pull preview</h1>
+        {/* This lede said "Nothing on this screen changes anything" for as long as that was
+            true. The re-shoot ended it, and the copy rule is active voice about what
+            actually happens — a lede quietly overclaiming safety on the screen with the
+            one photograph-destroying control would be the worst place in the app to keep
+            a stale sentence. */}
         <p className="pull-preview-lede">
-          Every captured card, where it sits, and the photo taken of it. Nothing on this screen
-          changes anything.
+          Every captured card, where it sits, and the photo taken of it. The one thing this
+          screen changes is a photograph: Re-shoot replaces a bad one, and nothing else moves.
         </p>
         <div className="pull-preview-controls">
           {/* A reload is a GET. The ban in §7 is on acting — writing a state, marking a
@@ -465,7 +561,20 @@ export function PullPreview() {
                 /* The payload of the whole screen. Utility face because it is a position,
                    and sized up because it is the one thing being checked against a physical
                    box across the desk. */
-                <p className="pull-preview-position">{selectedLabel}</p>
+                <>
+                  <p className="pull-preview-position">{selectedLabel}</p>
+                  {/* D30's sentence, quiet, directly under the label it makes countable:
+                      "between Mantine and Thievul · 2 slots in this section are empty".
+                      `Card 17` is the seventeenth SLOT, and once the section has permanent
+                      gaps that is no longer the seventeenth card a hand can count to —
+                      the neighbours restore the count and the gap tally says why it came
+                      out short. Composed by `server.ts:placeSentence`, the one composer,
+                      which answers null — and this renders nothing, never a guess — for a
+                      pooled card, an older server, or a decoration the server degraded. */}
+                  {selectedSentence === null ? null : (
+                    <p className="pull-preview-between">{selectedSentence}</p>
+                  )}
+                </>
               )}
 
               <PhotoPanel
@@ -473,6 +582,18 @@ export function PullPreview() {
                 label={selectedLabel}
                 absent={photoAbsent === selectedRow.key}
                 onAbsent={() => setPhotoAbsent(selectedRow.key)}
+                nonce={reshot[selectedRow.key] ?? null}
+              />
+
+              <ReshootControl
+                row={selectedRow}
+                busy={reshootBusy === selectedRow.key}
+                failure={
+                  reshootFailure !== null && reshootFailure.key === selectedRow.key
+                    ? reshootFailure.failure
+                    : null
+                }
+                onPick={(file) => beginReshoot(selectedRow, file)}
               />
 
               <dl className="pull-preview-facts">
@@ -500,6 +621,11 @@ type PhotoPanelProps = {
 
   absent: boolean
   onAbsent: () => void
+
+  /** The capture id of a photo THIS SESSION replaced at this position, or null for the
+   *  ordinary card. Non-null appends `?reshot=<id>` to the img src — see the comment at
+   *  `base` below for why that is the one legitimate query parameter on this URL. */
+  nonce: string | null
 }
 
 /* Two ways a photo can be missing, and they are different facts, so they get different
@@ -512,7 +638,7 @@ type PhotoPanelProps = {
  *
  * Both print the URL that was asked for, so the next move is a curl rather than a guess.
  */
-function PhotoPanel({ row, label, absent, onAbsent }: PhotoPanelProps) {
+function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
   /* One phrasing, used by both the sentence beside a missing photo and the alt text on a
    * present one, so those two cannot end up disagreeing about where the card is. The
    * fallback says `store key` out loud rather than printing `3/30` bare: bare, it reads
@@ -528,7 +654,7 @@ function PhotoPanel({ row, label, absent, onAbsent }: PhotoPanelProps) {
     )
   }
 
-  /* The URL as `server.ts` mints it, with nothing appended.
+  /* The URL as `server.ts` mints it — with nothing appended, EXCEPT after a re-shoot.
    *
    * There is a real hazard here and it is worth naming rather than inheriting silently:
    * undo deletes a photo and releases its index, so the next capture reuses this exact URL
@@ -537,37 +663,124 @@ function PhotoPanel({ row, label, absent, onAbsent }: PhotoPanelProps) {
    * position — precisely the failure this screen exists to catch, and invisible when it
    * happens.
    *
-   * A cache-busting query parameter minted here was written and then removed. `server.ts`
-   * owns this URL and its own comment rejects that fix by name, on the grounds that the
-   * repair belongs in a response header on the server. That is right, and two files in one
-   * commit arguing opposite sides of the same hazard is worse than the hazard: the next
-   * session would have to work out which one was thinking. The practical exposure is small
-   * — with no validator and no freshness header there is nothing for a browser to compute a
-   * heuristic lifetime from — and it goes to zero the moment the server sends
-   * `Cache-Control: no-store`, which is one line in `server/capture_server.py:_send`. */
+   * A LOAD-TIME cache-busting parameter minted here was written and then removed, and it
+   * stays removed. `server.ts:photoUrl`'s comment rejects that fix by name — the general
+   * repair belongs in a response header on the server, one line in
+   * `server/capture_server.py:_send` — and a nonce on every render would defeat what
+   * caching this screen benefits from while papering over the missing header.
+   *
+   * THE RE-SHOOT NONCE IS THE ONE EXCEPTION, ARGUED AGAINST THAT COMMENT RATHER THAN
+   * AROUND IT. What that comment refuses is a guess: a parameter added on every load
+   * because the bytes MIGHT have changed. After `reshootPhoto` succeeds there is no might
+   * — THIS screen sent the new bytes to this exact URL, so rendering the src that a
+   * moment ago showed the photograph it just destroyed is showing a picture the store no
+   * longer holds, the stale-photo failure above realised by our own hand. One screen, at
+   * the one moment it knows, appending the id of the photograph it expects: that is
+   * cache-busting as a statement of fact, not as a workaround, and photoUrl's comment now
+   * names it as the standing exception. */
   const base = photoUrl(row.card.box, row.card.index)
+  const src = nonce === null ? base : `${base}?reshot=${nonce}`
 
   if (absent) {
     return (
       <div className="pull-preview-absent">
         <p className="pull-preview-note-text">
-          The record has a photo but the file is not on disk. Nothing here can restore it — the
-          card is still at {where}.
+          The record has a photo but the file is not on disk. The card is still at {where} —
+          and a photo added below replaces nothing, it is the first one this position would
+          have again.
         </p>
-        <p className="pull-preview-machine">{base}</p>
+        <p className="pull-preview-machine">{src}</p>
       </div>
     )
   }
 
   return (
     <img
-      /* Remounted per card so a failed load cannot leave the previous card's broken state
-         attached to the next one's element. */
-      key={row.key}
+      /* Remounted per card AND per replacement: `src` in the key means a re-shoot swaps
+         the element rather than mutating it, so a failed load cannot leave the previous
+         photograph's broken state attached to the new one. */
+      key={`${row.key}:${src}`}
       className="pull-preview-photo"
-      src={base}
+      src={src}
       alt={`The card photographed at ${where}`}
       onError={onAbsent}
     />
+  )
+}
+
+/* The re-shoot control — the pull preview's one write. The header at the top of this file
+ * carries the ruling (D26's second half, placed here by the owner) and the no-dialog
+ * argument; what this component decides is the MECHANISM, and the honest one on this
+ * screen is a file.
+ *
+ * NOT A CAMERA, ON PURPOSE. This screen has none, and wiring one in would duplicate the
+ * capture screen's whole device-picker apparatus (D13: no facingMode, UVC labels, a
+ * rotation chip) for a control used once in a while. The rig capture screen is for live
+ * shooting; this control replaces a bad STORED photo with a better frame from wherever
+ * the owner has one — a re-shot rig frame saved to disk, a phone photo airdropped over.
+ * `accept="image/jpeg"` because the server stores what it is given and never converts
+ * (`image_not_jpeg` is its word on anything else, rendered verbatim below).
+ *
+ * NOT DRAWN AT ALL FOR A SOLD OR RETIRED CARD — the `restores_to` lesson, learned twice:
+ * never offer a control whose only behaviour is a refusal. The server would refuse both
+ * (`card_sold`: the stored photo is the dispute record; `card_retired`: a photo of a card
+ * that left is a photo of nothing), and this screen reads the same state field the server
+ * checks. Not-rendered rather than disabled, the same ruling the shell applies to nav.
+ */
+type ReshootControlProps = {
+  row: Row
+  busy: boolean
+
+  /** This card's own refusal or null — the caller keys failures by row so another card's
+   *  refusal cannot render under this card's photo. */
+  failure: Failure | null
+
+  onPick: (file: File) => void
+}
+
+function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  if (row.card.state === 'sold' || row.card.state === 'retired') return null
+
+  return (
+    <div className="pull-preview-reshoot">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          /* Cleared before use, so picking the SAME file again fires onChange again —
+           * which is exactly what a retry after a refusal is. */
+          event.target.value = ''
+          if (file !== undefined) onPick(file)
+        }}
+      />
+      {/* No accent fill: docs/DESIGN.md reserves the solid fill for a screen with exactly
+          one thing to do, and this screen's one thing is still to be looked at. The label
+          changes with the fact — a card `emit` recorded without a photograph has nothing
+          to re-shoot, and the route's own comment calls that case the first photograph
+          the position has, so the button says so rather than claiming a replacement. */}
+      <button
+        className="pull-preview-reload"
+        type="button"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+      >
+        {busy
+          ? 'Replacing the photo…'
+          : row.card.photo === null
+            ? 'Add a photo'
+            : 'Re-shoot this photo'}
+      </button>
+      {failure === null ? null : (
+        <div className="pull-preview-note">
+          <p className="pull-preview-note-text">{failure.message}</p>
+          <p className="pull-preview-machine">{failure.code}</p>
+        </div>
+      )}
+    </div>
   )
 }

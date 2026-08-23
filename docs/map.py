@@ -630,7 +630,7 @@ COMPONENTS = [
                 # D10 earned a second job with the history lines: index reuse after an undo is
                 # what decides that a removal must be logged at all, since without the line
                 # the log reads `captured 3/2` twice over two physical cards.
-                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D30"],
                 "tested_by": ["T7"],
             },
         },
@@ -731,11 +731,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D30"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26", "D30"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -792,11 +792,14 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5", "D27"]},
-            "src/PullPreview.tsx": {"does": "look only: the card's own capture photo beside its "
-                                            "position label, the last link in the Gate B chain",
-                                    "governed_by": ["D6", "D10", "D24"]},
+            "src/PullPreview.tsx": {"does": "the card's own capture photo beside its position label and, since D30, "
+                    "its neighbours and the section's gap count. ONE WRITE since 2026-08-23 "
+                    "— the re-shoot control (D26, owner's placement ruling): replace a bad "
+                    "stored photo from a file, record untouched, allocator never involved. "
+                    "Everything else stays look-only, and the header argues the exception.",
+            "governed_by": ["D6", "D10", "D24", "D26", "D30"]},
             "src/PullPreview.css": {"does": "its layout, and why no accent appears anywhere in it",
-                                    "governed_by": ["D5", "D6", "D13"]},
+                                    "governed_by": ["D5", "D6", "D13", "D30"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -942,7 +945,7 @@ COMPONENTS = [
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
                                               "off the SKU rather than counted from the copies.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
                                       "governed_by": ["D5", "D7"]},

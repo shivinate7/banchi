@@ -131,6 +131,7 @@ import json
 import os
 import re
 import sys
+from bisect import bisect_left, bisect_right
 from dataclasses import asdict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -975,11 +976,46 @@ class _Places:
     the count and the map, so nothing is filtered on this side — which view may show a
     pooled card is each view's own ruling, and the Fulfillment view's is asserted in
     `app/tests/fulfillment.spec.ts`.
+
+    NEIGHBOURS AND THE SECTION'S GAP COUNT — D30's digital half. `Card 17` is the
+    seventeenth SLOT, not the seventeenth card you can count, and once a section has holes
+    (every sale and every retirement makes one, permanently — D10) the two stop being the
+    same number and every label in the section becomes uncountable by hand. So a located
+    block also says what makes the label countable again: `neighbors` — the nearest
+    NON-TERMINAL records on either side in the same box, each as `{index, name}` with
+    `name` null for a card nothing has identified, null at the box's ends — and
+    `section_gaps`, how many indices inside this card's own section bounds hold a record
+    that is sold or retired. Permanent gaps only: an unallocated tail index has no record
+    and is not a gap, and counting terminal RECORDS is what makes that true by
+    construction rather than by a bounds check.
+
+    THE DECORATION DEGRADES WHOLE, AND IT NEVER GUESSES. The walk that finds a neighbour
+    is a scan over every record's own `box` and `index` — the same fields `box_fill`'s
+    scan coerces, with the same failure mode: one record whose position will not read.
+    Skipping such a record would keep the sentence rendering while possibly naming the
+    wrong neighbour, and "between X and Y" is a claim somebody counts slots against, so a
+    wrong one sends a hand to the wrong slot — the exact failure a position label may
+    never cause. So one unreadable record costs every card in the store its `neighbors`
+    and `section_gaps` (both null, the shape the app draws as no sentence) and costs
+    nobody their label or their block — the same split the denominator comment below
+    argues, applied to the decoration this class gained after it.
     """
 
     def __init__(self, inventory: master.Inventory):
         self._inventory = inventory
         self._cache: Dict[int, Tuple[Optional[master.Box], Tuple[int, ...], int]] = {}
+        # D30's walk, one scan per instance, lazily: box -> (occupants, gaps), where
+        # `occupants` is every located, non-terminal record as (index, name) sorted by
+        # index, and `gaps` is the sorted indices of the located TERMINAL records — the
+        # permanent holes. `_boxmates` is None after the scan has met a record it cannot
+        # read (the whole-store degrade the docstring argues); `_walked` says whether it
+        # has run at all. Cached for the same reason `_cache` above is: this class is
+        # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
+        # rather than 5,000.
+        self._walked = False
+        self._boxmates: Optional[
+            Dict[int, Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]]
+        ] = None
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int]:
         """`(registry entry or None, validated layout, denominator)` for one box."""
@@ -1025,12 +1061,95 @@ class _Places:
         treats that as located — the loud stop for a typo'd game belongs to the pipeline
         (`join.lookup_for` refuses it by name), never to the route the app polls.
         """
-        card = self._inventory.cards.get(master.position_key(int(box), int(index)))
+        return self._game_of(self._inventory.cards.get(master.position_key(int(box), int(index))))
+
+    def _game_of(self, card: Optional[master.Card]) -> Optional[dict]:
+        """`game_entry`'s lookup for a record already in hand — one rule, two doors in."""
         claimed = getattr(card, "game", None) if card is not None else None
         try:
             return games.get(str(claimed) if claimed else games.DEFAULT_GAME)
         except games.UnknownGame:
             return None
+
+    def _walk(
+        self, box: int
+    ) -> Optional[Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]]:
+        """One box's `(occupants, gaps)` for D30's decoration, or None — degraded, whole.
+
+        The scan reads every record's own `box` and `index`, coerced the way the rest of
+        this file coerces them (`int()` — a string-typed "3" counts, the regression T7
+        keeps). A record either of whose positions will not read degrades the WHOLE
+        decoration to None, for every box: the class docstring has the argument, and the
+        precedent is `next_index`'s own rule that an unparsable record stops the scan
+        rather than being skipped past. A pooled record is skipped by ruling, not by
+        failure — it has no slot, so it is nobody's neighbour and no section's gap (D24).
+        """
+        if not self._walked:
+            self._walked = True
+            grouped: Dict[int, List[Tuple[int, Optional[str], bool]]] = {}
+            try:
+                for card in self._inventory.cards.values():
+                    entry = self._game_of(card)
+                    if entry is not None and not entry["located"]:
+                        continue
+                    at = (int(card.box), int(card.index))
+                    name = card.name if isinstance(card.name, str) and card.name else None
+                    grouped.setdefault(at[0], []).append(
+                        (at[1], name, card.state in master.TERMINAL_STATES)
+                    )
+            except (TypeError, ValueError):
+                self._boxmates = None
+            else:
+                self._boxmates = {
+                    number: (
+                        tuple((i, name) for i, name, gone in sorted(rows) if not gone),
+                        tuple(i for i, _, gone in sorted(rows) if gone),
+                    )
+                    for number, rows in grouped.items()
+                }
+        if self._boxmates is None:
+            return None
+        return self._boxmates.get(box, ((), ()))
+
+    def _company(
+        self, box: int, at: int, start: int, end: Optional[int]
+    ) -> Tuple[Optional[dict], Optional[int]]:
+        """`(neighbors, section_gaps)` for one located card, both None when degraded.
+
+        `neighbors` walks OUTWARD from `at` over the box's non-terminal records: the
+        nearest on each side, `{index, name}` with `name` null for a card nothing has
+        identified, null past either end of the box. A sold or retired record is passed
+        over rather than named — a departed card cannot be the thing you count from,
+        which is the whole reason D30 wants the sentence.
+
+        `section_gaps` counts the terminal records inside `[start, end]` — this card's
+        own section bounds, exactly as the block states them. `end` is None only for a
+        section with no end (the block's own fallback found no fill), and then the count
+        runs to the top of the box, which is the same claim the block makes by answering
+        `section_end: null`.
+        """
+        mates = self._walk(box)
+        if mates is None:
+            return None, None
+        occupants, gaps = mates
+
+        indices = [i for i, _ in occupants]
+        before = bisect_left(indices, at) - 1
+        after = bisect_right(indices, at)
+        prev_of = (
+            None
+            if before < 0
+            else {"index": occupants[before][0], "name": occupants[before][1]}
+        )
+        next_of = (
+            None
+            if after >= len(occupants)
+            else {"index": occupants[after][0], "name": occupants[after][1]}
+        )
+
+        low = bisect_left(gaps, start)
+        high = len(gaps) if end is None else bisect_right(gaps, end)
+        return {"prev": prev_of, "next": next_of}, max(0, high - low)
 
     def of(self, box, index) -> dict:
         """The `place` block for one position."""
@@ -1058,6 +1177,12 @@ class _Places:
                 "box_total": 0,
                 "box_closed": False,
                 "fraction": None,
+                # D30's decoration answers null with the rest of the place: a pooled card
+                # has no slot to count from and no section to have gaps in. Null and not
+                # zero for `section_gaps`, because zero would claim a countable section
+                # with no holes, which is a different fact from "no section at all".
+                "neighbors": None,
+                "section_gaps": None,
                 "game": str(game["key"]),
                 "game_display": str(game["display"]),
             }
@@ -1079,6 +1204,8 @@ class _Places:
         if end is None:
             end = total or None
 
+        neighbors, section_gaps = self._company(number, at, position.section_start, end)
+
         return {
             # True by construction on this path: the pooled branch above already answered
             # for every game whose flag says otherwise. Stamped so every client reads the
@@ -1094,6 +1221,11 @@ class _Places:
             "section_end": end,
             "box_total": total,
             "box_closed": bool(entry.closed) if entry is not None else False,
+            # D30's digital half: what makes `Card 17` countable by hand again once the
+            # section has holes. Both null together when the walk degraded — the app
+            # draws no sentence, which is the honest rendering of "cannot say".
+            "neighbors": neighbors,
+            "section_gaps": section_gaps,
             # 0-BASED: card 1 of 250 is 0.0 of the way in, not 0.004. The number answers
             # "how much of the box do I pass before I reach this card", which is the
             # question a thumb asks — the first card needs no travel at all. Null rather

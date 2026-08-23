@@ -676,6 +676,37 @@ export type Place = {
    *  must never be coerced to it: zero is the front of the box, which is a specific and wrong
    *  place to send somebody. The same rule `ServerStatus.queues` states for its own nulls. */
   fraction: number | null
+
+  /** The nearest records that are still physically in the box on either side of this one —
+   *  D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you can
+   *  count, and once a section has holes those two stop being the same number; the neighbours
+   *  are what make the label countable by hand again. Sold and retired records are passed
+   *  over, never named — a departed card cannot be the thing you count from. `prev`/`next`
+   *  are null past the box's ends; a neighbour's `name` is null when nothing has identified
+   *  it yet, and the screen degrades to its index (`#41`), never to a blank.
+   *
+   *  THE WHOLE FIELD IS NULL WHEN THE SERVER DEGRADED IT — a record in the store whose
+   *  position will not read, the same event that nulls the denominator — and ABSENT on an
+   *  older server. Both render as no sentence: `server.ts:placeSentence` is the one composer,
+   *  and it refuses to guess for the same reason `positionLabel` does. Optional for the
+   *  reason every late decoration in this file is. */
+  neighbors?: { prev: PlaceNeighbor | null; next: PlaceNeighbor | null } | null
+
+  /** How many indices inside this card's own section bounds hold a sold or retired record —
+   *  the permanent gaps (D10), and the other half of D30's sentence: the count says why a
+   *  hand-count of the section comes out short. An unallocated tail index is not a gap; the
+   *  server counts terminal RECORDS, so that is true by construction. Null when the walk
+   *  degraded (see `neighbors` — the two null together), absent on an older server, and NULL
+   *  IS NOT ZERO: zero says "this section is countable", null says "cannot say". */
+  section_gaps?: number | null
+}
+
+/** One side of `Place.neighbors`: the record's index in the box, and its identified name or
+ *  null. The index is D10's allocator number — the same space as `Place.index` — so `#41`
+ *  drawn from it is a slot a hand can count to, not a store key. */
+export type PlaceNeighbor = {
+  index: number
+  name: string | null
 }
 
 // ------------------------------------------------------------------------------- the search

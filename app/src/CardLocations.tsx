@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 
 import type { SearchCopy, SearchGroup, SectionDetail } from './types'
-import { photoUrl } from './server'
+import { photoUrl, placeSentence } from './server'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
 import './CardLocations.css'
@@ -245,6 +245,9 @@ function OwnerRows({
         {group.copies.map((copy) => {
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
+          /* D30's sentence for this copy, or null — see the render note below. Read once
+             per row so the presence test and the rendering cannot disagree. */
+          const between = placeSentence(copy.place)
           return (
             <li className="card-locations-row" key={copy.key}>
               <span className="card-locations-place">
@@ -269,6 +272,18 @@ function OwnerRows({
                     <span className="card-locations-label">{copy.place.label}</span>
                     {copy.place.box_name === null ? null : (
                       <span className="card-locations-boxname">{copy.place.box_name}</span>
+                    )}
+                    {/* D30's digital half, quiet under the label: "between Mantine and
+                        Thievul · 2 slots in this section are empty". This row's label names
+                        the SLOT, and once the section holds permanent gaps a hand-count
+                        stops reaching it; the neighbours restore the count, the gap tally
+                        says why it came out short. `server.ts:placeSentence` is the one
+                        composer and answers null — rendering nothing here — when there is
+                        nothing true to say. The boxname class rather than a new one: it is
+                        the same quiet sub-line register, and this file's stylesheet is not
+                        this change's to grow. */}
+                    {between === null ? null : (
+                      <span className="card-locations-boxname">{between}</span>
                     )}
                   </>
                 )}
@@ -389,6 +404,16 @@ function FulfillerCard({
            * word "null" — never a second copy of the view's filter. */
           const where = copy.place.label
 
+          /* D30's sentence, and HE is who the decision is really for: the Fulfiller
+           * creates a permanent gap with every order he pulls, walks to boxes he did not
+           * fill, and has nobody to ask why section 2 counts short. The composer is the
+           * owner's same one — same data, same order, same sentence, the header's
+           * two-skins rule — and its words pass his register: card names, plain "slots"
+           * and "empty", nothing off the banned list. Its one degraded form, `#41` for a
+           * neighbour nothing has named, is a slot number he can count to, not a machine
+           * string. */
+          const between = placeSentence(copy.place)
+
           return (
             <li key={copy.key}>
               {/* An article and not a button. Fulfillment.tsx makes the whole row the target so
@@ -421,6 +446,10 @@ function FulfillerCard({
                 {copy.place.box_name === null ? null : (
                   <p className="card-locations-say">{copy.place.box_name}</p>
                 )}
+                {/* Quiet, under the position label — see `between` above. The say class
+                    because it is a sentence he reads, which also keeps it over the 20px
+                    floor his whole view is asserted against. */}
+                {between === null ? null : <p className="card-locations-say">{between}</p>}
 
                 {/* The same lookup the owner's row makes, for the same reason. He is the one
                     walking to a box he did not fill, so the difference between the box's real
