@@ -406,6 +406,17 @@ RESHOOT_FIELDS = ("image", "capture_id")
 # neighbour also has none; both are pre-server records, and the limit is named at the check.
 REMOVE_FIELDS = ("capture_id",)
 
+# `PUT /inventory/<box>` accepts the claims plus ONE non-claim field. `indices` narrows the
+# sweep from "every eligible card in the box" to the ones the operator actually selected —
+# the owner's mass-select, 2026-08-23.
+#
+# ON THE ROUTE RATHER THAN AS N CARD CALLS, and that is the whole argument for it. A client
+# loop over `PUT /inventory/<box>/<index>` would be N requests with N chances to half-apply:
+# the seventh refuses on a per-game vocabulary and the first six are already written, which
+# is the partial bulk correction this route's all-or-nothing exists to prevent (D29's shape).
+# One call keeps one validate-everything-then-write-everything block and one lock.
+BOX_CLAIM_FIELDS = PUT_FIELDS + ("indices",)
+
 # What POST /boxes accepts. Only `box` is required: D20 makes capacity retroactive and a
 # name optional, so the minimum useful creation is a number and nothing else. `sections` is
 # here rather than PUT-only because a box whose dividers are already in the physical box has
@@ -745,6 +756,48 @@ def _check_variant_member(finish: Optional[str], game: Optional[str]) -> Optiona
 def _optional_variant(payload: dict, game: Optional[str]) -> Optional[str]:
     """Shape and membership in one call, for the route that has the game in hand."""
     return _check_variant_member(_variant_shape(payload), game)
+
+
+def _optional_indices(payload: dict) -> Optional[set]:
+    """`indices` on the box-claims route: which cards the sweep is narrowed to.
+
+    ABSENT MEANS THE WHOLE BOX, and an EMPTY LIST REFUSES rather than meaning the same
+    thing. They read alike and they are opposite intents: absent is "I did not select", and
+    empty is "I selected and the selection is gone" — which under a whole-box default would
+    silently sweep every card the operator had just narrowed away from. That is the shape of
+    a real accident, so it gets its own refusal.
+
+    Membership against the box's actual contents is NOT checked here; it is checked inside
+    the lock with the records in hand, where an index naming no card can be reported by
+    number alongside everything else the call refuses for.
+    """
+    if "indices" not in payload:
+        return None
+    raw = payload.get("indices")
+    if not isinstance(raw, list):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "indices_invalid",
+            f"indices was {type(raw).__name__}; send a JSON list of card numbers, or omit "
+            "it to apply to every eligible card in the box.",
+        )
+    if not raw:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "indices_invalid",
+            "indices was an empty list. Omit it to mean the whole box; an empty selection "
+            "is not the same request and is refused rather than widened.",
+        )
+    chosen = set()
+    for item in raw:
+        if isinstance(item, bool) or not isinstance(item, int) or item < 1:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "indices_invalid",
+                f"indices member {item!r} is not a card number.",
+            )
+        chosen.add(int(item))
+    return chosen
 
 
 def _optional_game(payload: dict) -> Optional[str]:
@@ -1935,13 +1988,14 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
     considered and rejected: it would lose which cards moved, and the moved cards are
     what the line exists to answer for.
     """
-    _reject_unknown(payload, PUT_FIELDS)
+    _reject_unknown(payload, BOX_CLAIM_FIELDS)
     if not any(field in payload for field in PUT_FIELDS):
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "nothing_to_apply",
             f"Send at least one claim to apply. Settable: {', '.join(PUT_FIELDS)}.",
         )
+    selected = _optional_indices(payload)
 
     # The same decode table as `do_put_card`, phase for phase: shapes before the lock,
     # membership inside it where the game each claim is judged against is known.
@@ -1974,12 +2028,33 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             if _position_int(card.box, f"box of card {key}") != int(box):
                 continue
             at = _position_int(card.index, f"index of card {key}")
+            if selected is not None and at not in selected:
+                continue
             if card.state in master.TERMINAL_STATES:
                 skipped.append((at, card.state))
                 continue
             targets.append((at, key, card))
         targets.sort()
         skipped.sort()
+
+        # A SELECTION THAT NAMES A CARD THIS BOX DOES NOT HOLD REFUSES THE WHOLE CALL, with
+        # every missing number listed. Applying to the ones that do exist would be the
+        # partial sweep this route refuses everywhere else, and a selection is a statement
+        # about a set: if the operator is wrong about one member they may be wrong about
+        # which box they are looking at. Terminal cards are NOT counted missing — they are
+        # in the box and they are reported as skipped, which is a different sentence.
+        if selected is not None:
+            present = {at for at, _, _ in targets} | {at for at, _ in skipped}
+            missing = sorted(selected - present)
+            if missing:
+                raise BadRequest(
+                    HTTPStatus.NOT_FOUND,
+                    "card_not_found",
+                    f"Box {box} holds no card at "
+                    + ", ".join(str(at) for at in missing[:8])
+                    + (f" (+{len(missing) - 8} more)" if len(missing) > 8 else "")
+                    + ". Nothing was changed.",
+                )
 
         # PHASE ONE — membership, against the game each card will be read as. A body that
         # sets the game is judged once (one vocabulary, and the validator's own refusal is

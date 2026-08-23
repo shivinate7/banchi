@@ -17,6 +17,9 @@ import type {
   SaleResult,
   SearchResult,
   ServerStatus,
+  BoxClaimResult,
+  RemoveResult,
+  BoxDeleteResult,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -458,13 +461,19 @@ export async function updateCard(
     setHint?: string | null
     variant?: Finish | null
     game?: string
+    /** D23's stack claim. IT WAS MISSING HERE while the route had always accepted it —
+     *  `PUT_FIELDS` is built from `master.CAPTURE_CLAIM_FIELDS`, which has carried
+     *  `rarity_claim` since the claim shipped, so the one claim a correction is most likely
+     *  to be ABOUT was the one no screen could correct. */
+    rarityClaim?: string[] | null
     note?: string | null
   },
 ): Promise<CardSummary> {
-  const payload: Record<string, string | null> = {}
+  const payload: Record<string, string | string[] | null> = {}
   if ('setHint' in fields) payload.set_hint = fields.setHint ?? null
   if ('variant' in fields) payload.variant = fields.variant ?? null
   if ('game' in fields && fields.game !== undefined) payload.game = fields.game
+  if ('rarityClaim' in fields) payload.rarity_claim = fields.rarityClaim ?? null
   if ('note' in fields) payload.note = fields.note ?? null
 
   return (await request(`/inventory/${box}/${index}`, {
@@ -1020,4 +1029,98 @@ export function newCaptureId(): string {
     hex.slice(16, 20),
     hex.slice(20),
   ].join('-')
+}
+
+/**
+ * Apply capture claims to many cards in one box, in ONE write.
+ *
+ * THE ROUTE EXISTED WITH NO CLIENT FUNCTION AND NO CONTROL, which is the failure
+ * `CLAUDE.md` now has a hard rule about: a route is not a feature. It was built and covered
+ * by T7 on 2026-08-23 and could not be reached from any screen.
+ *
+ * `indices` is the mass-select. OMIT IT for the whole box; pass the selection to narrow it.
+ * An EMPTY array is refused server-side rather than treated as the whole box — the two read
+ * alike and mean opposite things, and widening an emptied selection to every card in the
+ * box is the accident that refusal exists to stop. Never send `[]`; send nothing.
+ *
+ * All-or-nothing, like D29's group answer: every card is validated before any is written,
+ * and a claim outside one card's game (D21/D23 make the vocabulary per-game) refuses the
+ * whole call with the offenders named. Sold and retired cards are skipped and reported, not
+ * silently passed over — their records are history (D10, D26).
+ */
+export async function applyBoxClaims(
+  box: number,
+  fields: {
+    setHint?: string | null
+    variant?: Finish | null
+    game?: string
+    rarityClaim?: string[] | null
+    note?: string | null
+  },
+  indices?: number[],
+): Promise<BoxClaimResult> {
+  const payload: Record<string, string | string[] | number[] | null> = {}
+  if ('setHint' in fields) payload.set_hint = fields.setHint ?? null
+  if ('variant' in fields) payload.variant = fields.variant ?? null
+  if ('game' in fields && fields.game !== undefined) payload.game = fields.game
+  if ('rarityClaim' in fields) payload.rarity_claim = fields.rarityClaim ?? null
+  if ('note' in fields) payload.note = fields.note ?? null
+  if (indices !== undefined) payload.indices = indices
+
+  return (await request(`/inventory/${box}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as BoxClaimResult
+}
+
+/**
+ * Delete one capture mid-box and slide every higher card down one index (D10 ruling 1).
+ *
+ * NOT `undoCapture`, and the difference is the whole reason this is a separate call. Undo
+ * reaches only the newest card in a box and only while it is still `captured`; this reaches
+ * a junk capture anywhere in the stack, and it RENUMBERS — which D10 otherwise forbids
+ * outright. It is permitted here because it is the physical truth: pull a card out of a
+ * contiguous stack and the ones behind it really do slide forward.
+ *
+ * `captureId` IS THE AIM, and it is required rather than optional. The operation is not
+ * idempotent — after the shift a DIFFERENT physical card sits at that index — so a replayed
+ * or stale request must refuse (`capture_id_mismatch`) instead of deleting the neighbour
+ * that slid in. Pass the target's own `capture_id`, or `null` for a record written before
+ * capture ids existed.
+ *
+ * It refuses `renumber_blocked` when any higher card in the box is sold, retired or
+ * listing-held: shifting across a permanent gap would close a gap that means something, and
+ * a listed card's position is already written into a file somebody will read.
+ */
+export async function removeCardInPlace(
+  box: number,
+  index: number,
+  captureId: string | null,
+): Promise<RemoveResult> {
+  return (await request(`/inventory/${box}/${index}/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ capture_id: captureId }),
+  })) as RemoveResult
+}
+
+/**
+ * Delete a whole box — records, photos, sidecars, queue entries, cache, registry entry
+ * (D10 ruling 3).
+ *
+ * THE MOST DESTRUCTIVE ACTION IN THE PRODUCT, and the one place `docs/DESIGN.md`'s
+ * "genuinely destructive actions may still gate" clause is meant to bite. There is no undo:
+ * unlike capture-undo, the cards are not in your hand.
+ *
+ * It refuses `box_not_empty_of_commitments` while the box holds anything sold, retired or
+ * listing-held, naming up to eight of them. That refusal is the guard rail — those records
+ * are history and commitments, not clutter — so a screen should show what it says rather
+ * than reducing it to "cannot delete".
+ *
+ * The result is a per-kind receipt and should be drawn as one. `directory_removed: false`
+ * is not a failure; see `BoxDeleteResult`.
+ */
+export async function deleteBox(box: number): Promise<BoxDeleteResult> {
+  return (await request(`/boxes/${box}`, { method: 'DELETE' })) as BoxDeleteResult
 }

@@ -5156,6 +5156,88 @@ def check_box_claims(checks: Checks) -> None:
             "no card moved state — this route corrects claims and nothing else",
         )
 
+    # --- `indices`: the owner's mass-select, 2026-08-23 ------------------------------------
+    # ITS OWN HOME, deliberately. The block above counts history lines over a box it built
+    # card by card, so a sweep run against that same fixture moves numbers it asserts —
+    # which is how this section first failed. A selection test needs its own box more than
+    # it needs the mixed-game one above.
+    #
+    # ON THE ROUTE RATHER THAN AS N CARD CALLS. A client loop over `PUT /inventory/<box>/
+    # <index>` would be N requests with N chances to half-apply — the seventh refusing on a
+    # per-game vocabulary while the first six are already written, which is exactly the
+    # partial sweep this route's all-or-nothing exists to prevent.
+    with isolated_home():
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(8))
+
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(8, {"indices": [], "set_hint": "x"}),
+            "indices_invalid",
+            "AN EMPTY SELECTION REFUSES RATHER THAN MEANING THE WHOLE BOX — the two read "
+            "alike and are opposite intents, and an emptied selection widening to every "
+            "card in the box is the accident worth a refusal of its own",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(8, {"indices": 3, "set_hint": "x"}),
+            "indices_invalid",
+            "and a bare number is not a selection",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(8, {"indices": [1, 0], "set_hint": "x"}),
+            "indices_invalid",
+            "and neither is a card number below one",
+        )
+
+        hints = lambda: [
+            Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
+        ]
+        before = hints()
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(
+                8, {"indices": [1, 99], "set_hint": "swept"}
+            ),
+            "card_not_found",
+            "a selection naming a card the box does not hold refuses the WHOLE call — a "
+            "selection is a statement about a set, and an operator wrong about one member "
+            "may be wrong about which box they are looking at",
+        )
+        checks.equal(
+            hints(),
+            before,
+            "and it wrote NOTHING on the way to that refusal — card 1 was a valid member "
+            "and is untouched, which is the all-or-nothing this route promises everywhere",
+        )
+
+        narrowed = capture_server.do_put_box_claims(
+            8, {"indices": [1, 3], "set_hint": "picked"}
+        )
+        narrowed = narrowed[-1] if isinstance(narrowed, tuple) else narrowed
+        checks.equal(
+            [narrowed["eligible"], narrowed["applied"]],
+            [2, 2],
+            "a selection narrows the sweep to exactly its members — two of the box's five "
+            "cards, not the box",
+        )
+        checks.equal(
+            hints(),
+            ["picked", None, "picked", None, None],
+            "and card 2 — eligible, in the box, simply NOT SELECTED — is untouched, which "
+            "is the whole difference between a mass-select and a bulk apply",
+        )
+
+        whole = capture_server.do_put_box_claims(8, {"set_hint": "everything"})
+        whole = whole[-1] if isinstance(whole, tuple) else whole
+        checks.equal(
+            whole["eligible"],
+            5,
+            "OMITTING `indices` still means the whole box — the compatibility guarantee "
+            "that makes the selection strictly additive to the route that shipped without it",
+        )
+
 
 def check_place_neighbors(checks: Checks) -> None:
     """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.

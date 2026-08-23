@@ -79,6 +79,31 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
 ## Hard rules
 
+- **A ROUTE IS NOT A FEATURE. Nothing is built until it is reachable from a screen.**
+  A capability that exists only in `server/` is not done, is not "landed", and must never be
+  reported as either. Done means the whole chain: the route, a client function in
+  `app/src/server.ts`, a control on the screen a human would look for it on, and — where it
+  writes — its receipt and its way back. If a session ships the server half, the remaining
+  half is not a follow-up, it is the unfinished part of the same task, and the session says
+  so in those words.
+
+  **The owner's instruction, 2026-08-23, after finding three tested routes no screen could
+  reach**: box delete, mid-box delete-with-reindex, and retroactive box-level claims all
+  existed with full T7 coverage and *zero* client functions. `make harness` was green,
+  `make check` was green, and none of it could be used.
+
+  This is the repo's own recorded failure repeating. `docs/GATES.md` step 7 tells it at
+  length: 7b shipped with three screens missing from `App.tsx`'s ROUTES table while harness,
+  lint, typecheck and docs-audit were all green, and only `make design-check` — which is
+  deliberately NOT on the commit path — could tell. The finding it recorded then is the
+  reason this rule exists now: **nothing on the path that decides whether a commit proceeds
+  looks at whether a human can reach the thing you built.** So it has to be a rule someone
+  reads, because it is not a check anything runs.
+
+  Corollary for the report format below: a wrap-up that says BUILT about a server-only
+  capability is wrong, not merely incomplete. It goes under NEITHER until a screen reaches
+  it.
+
 - Never guess an identification, a variant, or a price. Ambiguity goes to the review
   queue with its photo. Never silently drop a card.
 - Never write output before reporting unmatched rows in both directions.

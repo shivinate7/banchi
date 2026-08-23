@@ -485,6 +485,71 @@ export type QueueSnapshot = {
  *  A PIPELINE STATE WORD (`live`, `pushed`, `staged`), never a sentence, and read as
  *  present-or-null rather than displayed. Nothing on the Fulfillment view may render it: that
  *  vocabulary is the owner's, and D5's second persona has no use for a state name. */
+/** What `PUT /inventory/<box>` answers — retroactive capture claims applied to many cards
+ *  in ONE write (the owner's ask, 2026-08-23: "if i accidentally didn't do it at the
+ *  capture level, i'd like to be able to do it retroactively").
+ *
+ *  `eligible` counts what the sweep could touch, `applied` what actually moved, and
+ *  `unchanged` the difference — a restatement of what a card already says writes nothing
+ *  and logs nothing, so the two numbers disagree on purpose and the screen should say so
+ *  rather than reporting `eligible` as a success count.
+ *
+ *  `skipped` names the sold and retired cards the sweep would not touch. They are not
+ *  failures: D26 and D10 make those records history, and a claim correction is not a thing
+ *  history accepts. Named rather than merely counted, because "3 cards were skipped" with
+ *  no numbers is the sentence an operator cannot act on. */
+export type BoxClaimResult = {
+  box: number
+  eligible: number
+  applied: number
+  unchanged: number
+  skipped_terminal: number
+  skipped: { index: number; state: string }[]
+  sidecars_rewritten: number
+}
+
+/** What `POST /inventory/<box>/<index>/remove` answers — D10 ruling 1's mid-box delete with
+ *  the cards behind it slid forward.
+ *
+ *  `shifted` is the count that moved down one index, and it is 0 when the target was the
+ *  top of its box (which is undo's case, reached by a different route). A non-zero value
+ *  means every label above the deleted card has just changed, and the screen has to say
+ *  that: it is the one operation in the product that renumbers, permitted only because the
+ *  physical cards really do slide forward in a contiguous stack. */
+export type RemoveResult = {
+  deleted: string
+  box: number
+  index: number
+  photo_deleted: boolean
+  sidecar_deleted: boolean
+  review_deleted: boolean
+  parked_deleted: boolean
+  cache_deleted: boolean
+  shifted: number
+  next_index: number
+}
+
+/** What `DELETE /boxes/<box>` answers — D10 ruling 3's whole-box delete.
+ *
+ *  Counts per kind rather than booleans, because a box holds many of each, and these
+ *  numbers ARE the receipt: this is the most destructive action in the product and the only
+ *  evidence it happened correctly is what it says it removed.
+ *
+ *  `directory_removed` false is not a failure. The server removes the photo directory only
+ *  when the files it enumerated were all it held; a stray left behind keeps the directory
+ *  and says so, rather than deleting something nobody accounted for. */
+export type BoxDeleteResult = {
+  deleted_box: number
+  cards: number
+  photos: number
+  sidecars: number
+  review_deleted: number
+  parked_deleted: number
+  cache_deleted: number
+  registry_deleted: boolean
+  directory_removed: boolean
+}
+
 export type SaleResult = {
   /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
   position: string
