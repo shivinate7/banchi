@@ -603,6 +603,33 @@ combined with the direct-write mutation above, which is how the pair was measure
 
 ---
 
+### The border search is measured against one rig, on one day
+
+`geometry/detect.py`'s tone path was measured at **0 of 53** against the Gate B photographs
+on 2026-08-22, and a border search was added that finds 53/53. T6 covers it with
+`_rig_scene`. What that leaves is smaller than what it closed, and it is not nothing.
+
+**The synthetic case reproduces a mechanism, not a photograph.** `_rig_scene` is built from
+the measured numbers — border-ring sides 33 / 65 / 82 / 66, card artwork spanning 88 to 231
+— and it does make the tone path refuse for the reason the rig makes it refuse. But it is
+still a drawing. There is no rig photo in this repo and there cannot be one: `captures/` is
+gitignored, twice, once under an opsec heading. So the harness can prove the border search
+handles the *mechanism* and can never prove it handles the *lighting*.
+
+**The 53 are one sample of one rig state.** One camera position, one lamp, one stand, one
+afternoon, one set. A second lighting setup, a sleeved card, a foil under raking light, or a
+black-bordered card on a dark mat are all untested and all plausible. 53 is a great deal more
+than the zero this file could point at last week; it is not a detection rate.
+
+**What would close it.** A second physical run under deliberately different lighting, with
+the frames scored through `detect_card` and the result committed the way T1's score is.
+That is a Gate C-shaped task, not a harness one — and it needs a decision about where rig
+photographs may live, given the opsec rule that keeps `captures/` out of git.
+
+**Not blocking anything.** The crop-retry path is a rescue for weak reads, and Gate B
+produced none: 53/53 at high confidence with zero retries, so `detect_card` was never
+reached in anger. Recorded so a green T6 is not read as more than it is.
+
 ## Reporting defects — a check runs but can report the wrong thing
 
 Full detail is in the review; the short form, by where it bites:

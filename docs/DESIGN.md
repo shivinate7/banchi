@@ -184,14 +184,25 @@ priced cards first and descending, unpriced last, then box-walk order by box and
 from that same price, and a parked row is dimmed rather than merely lower. A queue where
 every row looks equally important has thrown away a sort it already has.
 
-**The band edges are the one number on this screen nobody has measured**, and they are
-marked as an assumption at the place they are cut as well as here. They are multiples of
-D9's $0.40 threshold, so they follow it if it moves — the same instinct D9 applies to its
-own sub-threshold bands — but the multiples are a guess at a price distribution that does
-not exist yet. Unpriced is deliberately not the bottom band: `pipeline/routing.py` holds
-that no price is not a low price, so drawing it smallest would teach the eye the opposite of
-what routing decided. `docs/specs/capture-app.md` §10.2 item 3 is the measurement that
-redraws them, and redrawing them invalidates nothing else in that file.
+**The band edges are still the one number on this screen nobody has measured, and Gate B is
+why that sentence had to be rewritten rather than deleted.** They are marked as an
+assumption at the place they are cut as well as here. They are multiples of D9's $0.40
+threshold, so they follow it if it moves — the same instinct D9 applies to its own
+sub-threshold bands — but the multiples are a guess at a price distribution that, as of
+Gate B, still does not exist. Unpriced is deliberately not the bottom band:
+`pipeline/routing.py` holds that no price is not a low price, so drawing it smallest would
+teach the eye the opposite of what routing decided.
+
+**The measurement was taken on 2026-08-22 and it came back degenerate.** §10.2 item 3 was
+the named instrument and it fired: the whole run priced **$0.04 to $0.40, median ~$0.10**,
+and the queue's spread matched the run's. Every card landed in one band, so the type scale
+was never asked to separate anything. That is a real result and it is not the one this
+paragraph needed — a distribution with no top cannot redraw edges that exist to distinguish
+a $3 card from a $300 one. The measurement is therefore still owed, and it now has a
+precondition rather than a pointer: **a mixed-value lot**, not merely another run. Recorded
+this way because "§10.2 item 3 will redraw them" was true when written, has been executed,
+and would otherwise read to the next session as still-pending work that is in fact already
+spent.
 
 **Accent does two jobs at two weights, and the heavy one has a rule.**
 
@@ -257,10 +268,17 @@ deliberately, so that an answer outlives the question.
 Skipping writes nothing — the entry stays open in its file, the run report still counts it,
 and a reload forgets every skip. That is the half worth defending: a skip that persisted
 would be a third state between open and answered, the same tombstone shape D10 refuses for
-undo, and it would have to be cleared by something. What settles the control is Gate B
-traffic (`docs/specs/capture-app.md` §10.2 item 1). If nothing is ever skipped, delete it.
-If most of a queue is, the screen needs a real defer that records a reason, and that is a
-decision entry rather than a button.
+undo, and it would have to be cleared by something.
+
+**Gate B was named as what settles this and it did not settle it — the measurement was
+missed, not taken.** §10.2 item 1 asked for queue depth and got it (16 of 53), but nothing
+recorded how many of those 16 were skipped before being answered, and the owner answered all
+16 in one sitting. So the control is exactly as unsettled as it was, minus one opportunity.
+Written down rather than left pointing at a gate that has passed: the next real queue
+session is the instrument, and **counting skips has to be decided on before it rather than
+noticed afterwards**, which is the mistake this paragraph is a record of. If nothing is ever
+skipped, delete the control. If most of a queue is, the screen needs a real defer that
+records a reason, and that is a decision entry rather than a button.
 
 **Mono carries all metadata.** Reason codes, set and collector number, age, counts,
 positions and prices are utility face, uppercase, tracked. The body face is reserved for

@@ -77,6 +77,62 @@ BORDER_FRACTION = 0.04
 # end of the sweep and reports a confident, wrong angle. Measured, not reasoned about.
 PROFILE_FLOOR = 2
 
+# --------------------------------------------------------------------------- EDGE SEARCH
+#
+# The mask path above segments the card by TONE: everything far enough from the border
+# ring's median is foreground. That premise is false on the real rig, and Gate B's 53
+# photographs are the measurement — `detect_card` found nothing in any of them.
+#
+# Why, exactly, because the reason decides that this is a second method rather than a
+# tuned constant. The card sits in a clear plastic stand on a wood desk with a dark
+# backdrop above, and its own artwork spans 88 to 231 against a background near 64. There
+# is no threshold in between:
+#
+#   * at the adaptive threshold (88.5, which the BRIGHT CARD ITSELF sets through the
+#     99th-percentile term) 29% of the card's darker artwork is cut out of its own mask,
+#     fill lands at 0.21-0.67 and MIN_FILL refuses 52 of 53;
+#   * at MIN_DELTA alone, desk grain and the stand's edges are all foreground too, the
+#     box grows to the whole frame, and area and aspect refuse all 53.
+#
+# A planar background fit and a bottom-band background were both measured and both still
+# find nothing, so it is not the ring's non-uniformity on its own. T6 cannot catch any of
+# this: `_scene` paints one flat colour behind a uniformly bright synthetic card, which is
+# precisely the premise the mask path needs.
+#
+# So this path does not segment at all. It looks for the card's BORDER — four long straight
+# luminance edges whose spacing is a card — and assumes nothing about what is behind them.
+# It runs only when the mask path has already refused, so every frame the mask path handles
+# is unaffected, and T6's synthetic sweep never reaches here.
+#
+# NARROW ANGLE RANGE ON PURPOSE. The mask path owns rotation; measured on the 53 rig
+# photographs the card is upright to a median of 0.00 degrees and a p90 of 0.50. Searching
+# +/-12 here would also cost accuracy rather than buy it: rotating with expand=True paints
+# fill triangles whose straight boundary is a stronger edge than any card, and the wider the
+# sweep the more of the canvas is fill. `_edge_valid_box` excludes it; a narrow sweep keeps
+# the excluded area small.
+EDGE_MAX_ANGLE = 4.0
+EDGE_COARSE_STEP = 1.0
+EDGE_FINE_STEP = 0.25
+
+# Peaks per profile. The four card borders have to be in here alongside the stand's edges
+# and any second card in frame, and the pair search is O(n^4) in this.
+EDGE_PEAKS = 10
+EDGE_MIN_SIDE_FRACTION = 0.15
+
+# Of a possible 4.0, the four borders' normalised gradient strength summed.
+EDGE_MIN_BORDER = 1.20
+
+# THE GATE THAT DOES THE REAL WORK. A card's side is ONE continuous edge running the whole
+# side. A spurious pairing scores well by borrowing gradient from rows the rectangle does
+# not span — which is exactly how an earlier draft of this accepted T6's scattered debris,
+# its long-and-thin rectangle and an empty frame. This measures the share of each side's
+# gradient that actually lies along that side, and all five of T6's refusals turn on it.
+EDGE_MIN_SUPPORT = 0.55
+
+# Peaks this close to the canvas edge are ignored: the frame boundary and the rotation fill
+# both produce a perfect straight edge that is not a card.
+EDGE_BORDER_GUARD = 0.02
+
 
 class GeometryError(RuntimeError):
     """Detection could not run at all — missing dependency, unreadable image."""
@@ -98,6 +154,13 @@ class CardBox:
     bottom: float
     fill: float
     aspect: float
+    # Which path found it. Defaulted, so every existing construction is unchanged.
+    # `mask` is the tone-segmentation path below; `edges` is the border search that
+    # rescues the frames it cannot segment. Worth carrying because the two have
+    # different failure modes and a run report that cannot tell them apart cannot say
+    # which one to distrust — see EDGE SEARCH below for why `fill` means something
+    # slightly different on each.
+    method: str = "mask"
 
     @property
     def width(self) -> float:
@@ -111,9 +174,9 @@ class CardBox:
     def describe(self) -> str:
         return (
             "angle {0:+.2f} box ({1:.3f},{2:.3f})-({3:.3f},{4:.3f}) "
-            "fill {5:.2f} aspect {6:.3f}".format(
+            "fill {5:.2f} aspect {6:.3f} via {7}".format(
                 self.angle, self.left, self.top, self.right, self.bottom,
-                self.fill, self.aspect,
+                self.fill, self.aspect, self.method,
             )
         )
 
@@ -225,6 +288,170 @@ def _angles(centre: float, span: float, step: float) -> List[float]:
     return [centre + step * i for i in range(-count, count + 1)]
 
 
+def _edge_valid_box(shape, angle: float):
+    """Rows and columns of the rotated canvas that are real pixels, not rotation fill."""
+    height, width = shape
+    if abs(angle) < 1e-9:
+        return 0, height, 0, width
+    solid = Image.fromarray(np.full(shape, 255, np.uint8)).rotate(
+        angle, resample=Image.NEAREST, expand=True, fillcolor=0
+    )
+    kept = np.asarray(solid) > 127
+    rows = np.flatnonzero(kept.all(axis=1))
+    columns = np.flatnonzero(kept.all(axis=0))
+    if rows.size == 0 or columns.size == 0:
+        return None
+    return int(rows[0]), int(rows[-1]) + 1, int(columns[0]), int(columns[-1]) + 1
+
+
+def _edge_peaks(profile, count: int, min_sep: int, guard: int) -> List[int]:
+    """The strongest `count` separated positions, ignoring the guarded canvas margins."""
+    chosen: List[int] = []
+    for index in np.argsort(profile)[::-1]:
+        index = int(index)
+        if profile[index] <= 0:
+            break
+        if index < guard or index >= len(profile) - guard:
+            continue
+        if all(abs(index - kept) >= min_sep for kept in chosen):
+            chosen.append(index)
+            if len(chosen) >= count:
+                break
+    return sorted(chosen)
+
+
+def _edge_rect(gray):
+    """Best card-shaped rectangle in an upright frame, by its four borders."""
+    height, width = gray.shape
+    if height < 16 or width < 16:
+        return None
+    dx = np.abs(np.diff(gray, axis=1))
+    dy = np.abs(np.diff(gray, axis=0))
+    columns, rows = dx.sum(axis=0), dy.sum(axis=1)
+    if columns.max() <= 0 or rows.max() <= 0:
+        return None
+    columns = columns / columns.max()
+    rows = rows / rows.max()
+    xs = _edge_peaks(columns, EDGE_PEAKS, max(3, width // 40),
+                     max(2, int(width * EDGE_BORDER_GUARD)))
+    ys = _edge_peaks(rows, EDGE_PEAKS, max(3, height // 40),
+                     max(2, int(height * EDGE_BORDER_GUARD)))
+    best = None
+    for i in range(len(xs)):
+        for j in range(i + 1, len(xs)):
+            x0, x1 = xs[i], xs[j]
+            box_w = x1 - x0
+            if box_w < width * EDGE_MIN_SIDE_FRACTION:
+                continue
+            for a in range(len(ys)):
+                for b in range(a + 1, len(ys)):
+                    y0, y1 = ys[a], ys[b]
+                    box_h = y1 - y0
+                    if box_h < height * EDGE_MIN_SIDE_FRACTION:
+                        continue
+                    area_fraction = (box_w * box_h) / float(width * height)
+                    if not (MIN_AREA_FRACTION <= area_fraction <= MAX_AREA_FRACTION):
+                        continue
+                    short, long_ = ((box_w, box_h) if box_w <= box_h else (box_h, box_w))
+                    aspect = short / float(long_)
+                    if abs(aspect - CARD_ASPECT) > CARD_ASPECT * ASPECT_TOLERANCE:
+                        continue
+                    border = columns[x0] + columns[x1] + rows[y0] + rows[y1]
+                    if border < EDGE_MIN_BORDER:
+                        continue
+                    # `shares` are honest fractions in [0, 1]: how much of each side's
+                    # gradient really lies along that side. `support` divides by what a
+                    # uniform spread would give, so 1.0 means "no better than smeared" and
+                    # the gate reads the same whatever the rectangle's size — that ratio is
+                    # what refuses T6's debris and its long-and-thin rectangle. The raw
+                    # share is what gets reported, because `fill` is documented as a
+                    # fraction and a ratio would print above 1.
+                    shares = (
+                        dx[y0:y1, x0].sum() / (dx[:, x0].sum() + 1e-9),
+                        dx[y0:y1, x1].sum() / (dx[:, x1].sum() + 1e-9),
+                        dy[y0, x0:x1].sum() / (dy[y0, :].sum() + 1e-9),
+                        dy[y1, x0:x1].sum() / (dy[y1, :].sum() + 1e-9),
+                    )
+                    span = (box_h / float(height), box_h / float(height),
+                            box_w / float(width), box_w / float(width))
+                    support = min(sh / sp for sh, sp in zip(shares, span))
+                    if support < EDGE_MIN_SUPPORT:
+                        continue
+                    score = border * support * (area_fraction ** 0.5)
+                    if best is None or score > best[0]:
+                        best = (score, x0, y0, x1, y1, aspect, float(min(shares)))
+    return best
+
+
+def _edge_at(image, angle: float):
+    """`_edge_rect` on the image rotated by `angle`, normalised to the rotated canvas."""
+    turned = image if abs(angle) < 1e-9 else image.rotate(
+        angle, resample=Image.BILINEAR, expand=True, fillcolor=0
+    )
+    canvas = np.asarray(turned, dtype=np.float32)
+    valid = _edge_valid_box(np.asarray(image).shape, angle)
+    if valid is None:
+        return None
+    r0, r1, c0, c1 = valid
+    found = _edge_rect(canvas[r0:r1, c0:c1])
+    if found is None:
+        return None
+    score, x0, y0, x1, y1, aspect, support = found
+    canvas_h, canvas_w = canvas.shape
+    return (
+        score,
+        (x0 + c0) / float(canvas_w),
+        (y0 + r0) / float(canvas_h),
+        (x1 + c0) / float(canvas_w),
+        (y1 + r0) / float(canvas_h),
+        aspect,
+        support,
+    )
+
+
+def _detect_by_edges(image) -> Optional[CardBox]:
+    """The rescue path: find the card by its border rather than by its tone.
+
+    Runs only after the mask path refuses. Returns None on anything it cannot justify —
+    the same contract, and T6's five refusal cases all reach here and must survive it.
+
+    `fill` carries the border SUPPORT rather than mask coverage, because this path builds
+    no mask. Both answer the same question — how much of the box is really the card —
+    and `method` on the returned box says which one is being quoted, so a run report
+    cannot silently compare the two.
+    """
+    working = image.convert("L")
+    scale = WORKING_EDGE / float(max(working.size))
+    working = working.resize(
+        (max(1, int(working.width * scale)), max(1, int(working.height * scale)))
+    )
+    best = None
+    best_angle = 0.0
+    for angle in _angles(0.0, EDGE_MAX_ANGLE, EDGE_COARSE_STEP):
+        found = _edge_at(working, angle)
+        if found is not None and (best is None or found[0] > best[0]):
+            best, best_angle = found, angle
+    if best is None:
+        return None
+    for angle in _angles(best_angle, EDGE_COARSE_STEP, EDGE_FINE_STEP):
+        if abs(angle) > EDGE_MAX_ANGLE:
+            continue
+        found = _edge_at(working, angle)
+        if found is not None and found[0] > best[0]:
+            best, best_angle = found, angle
+    _, left, top, right, bottom, aspect, support = best
+    return CardBox(
+        angle=best_angle,
+        left=left,
+        top=top,
+        right=right,
+        bottom=bottom,
+        fill=support,
+        aspect=aspect,
+        method="edges",
+    )
+
+
 def detect_card(source) -> Optional[CardBox]:
     """Find the card, or return None. None means "a human should look", never "guess".
 
@@ -239,7 +466,7 @@ def detect_card(source) -> Optional[CardBox]:
 
     mask = _foreground_mask(gray)
     if not mask.any():
-        return None
+        return _detect_by_edges(image)
 
     # Coarse sweep, then a fine sweep around the winner. Minimum bounding-box area is the
     # minimum-area rectangle; brute force beats a derivation nobody will re-check.
@@ -253,7 +480,7 @@ def detect_card(source) -> Optional[CardBox]:
             best_area, best_angle = found[0], angle
 
     if best_area is None:
-        return None
+        return _detect_by_edges(image)
 
     for angle in _angles(best_angle, COARSE_STEP, FINE_STEP):
         if abs(angle) > MAX_ANGLE:
@@ -266,7 +493,7 @@ def detect_card(source) -> Optional[CardBox]:
 
     found = _box_at(mask, best_angle)
     if found is None:
-        return None
+        return _detect_by_edges(image)
     area, x0, y0, x1, y1, canvas_w, canvas_h, covered = found
 
     width, height = x1 - x0, y1 - y0
@@ -278,12 +505,16 @@ def detect_card(source) -> Optional[CardBox]:
     # so rotating does not make every card look smaller than it is.
     frame_area = float(gray.shape[0] * gray.shape[1])
     area_fraction = area / frame_area
+    # A shape refusal here is not the end of the question, only the end of THIS method's
+    # answer to it. Gate B measured the mask path refusing all 53 rig photographs on
+    # exactly these gates, so the refusal is handed to the border search rather than
+    # returned. The gates themselves are unchanged and still refuse for the mask path.
     if not (MIN_AREA_FRACTION <= area_fraction <= MAX_AREA_FRACTION):
-        return None
+        return _detect_by_edges(image)
     if fill < MIN_FILL:
-        return None
+        return _detect_by_edges(image)
     if abs(aspect - CARD_ASPECT) > CARD_ASPECT * ASPECT_TOLERANCE:
-        return None
+        return _detect_by_edges(image)
 
     return CardBox(
         angle=best_angle,

@@ -110,7 +110,23 @@ def _as_position_int(value, where: str) -> int:
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    """UTC, to the MILLISECOND — and the third decimal place is the whole point.
+
+    This was `timespec="seconds"` until 2026-08-22, when Gate B showed what that costs. The
+    feeder delivers a card roughly every 660ms, so whole-second stamps are coarser than the
+    thing they are timing: the run's 53 captures collapsed to a gap sequence of 0s and 1s
+    with a median absolute deviation of exactly 0.0, which reads as a perfectly regular
+    machine and is an artifact of the truncation. The real jitter — 34ms — was recoverable
+    only because APFS happened to preserve `st_birthtime` on the photographs through an
+    unrelated rewrite, and that is filesystem metadata: it does not survive a clone, a copy,
+    or an iCloud eviction of a repo that lives on iCloud Drive.
+
+    Gate C tunes an auto-capture trigger against that cadence. It should not have to hope
+    for a second accident, so the measurement is a property of the store now.
+
+    `datetime.fromisoformat` parses both forms, so every stamp already on disk still reads.
+    """
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
 def _days_since(stamp: Optional[str]) -> Optional[int]:

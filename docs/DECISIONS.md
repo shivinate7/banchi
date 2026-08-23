@@ -38,6 +38,22 @@ to one platform?
 
 Resolve normal / reverse holo / holo per card, in order:
 
+0. **A human's answer, if there is one** (added 2026-08-22). Above the ladder rather than a
+   rung inside it: `pipeline/join.py` applies it before the walk below starts, and the
+   routing gate cannot re-queue it. The distinction is the point — every rung below infers
+   a finish from evidence, and an answer is not an inference. It reads `sku` and
+   `condition` off the live inventory record, so a card the owner has ruled on in the
+   review queue keeps that ruling on every later join.
+
+   **It falls through rather than guessing.** If the current export no longer carries that
+   SKU, or carries it under a different Condition, the answer is discarded and the card
+   walks the ladder normally — the same as if nobody had answered.
+
+   Recorded here because Gate B is what produced it: the answer route wrote answers that
+   nothing on the join path ever read back, so sixteen answered cards re-derived their
+   disagreement on every join and re-parked forever. An answer that does not outlive the
+   question is not an answer. Tested by T3, not T4 — it is a join behaviour, not a ladder
+   behaviour, which is the same distinction this entry draws.
 1. **Capture-time metadata** — variant toggle in the capture app, stored in the card's JSON
    sidecar. Primary path. `--variant` on the batch script **fills the finish in where a
    sidecar records none, and never overrides one** (clarified 2026-08-03; this entry

@@ -19,8 +19,11 @@ A card counts as correct when BOTH halves of what the join actually consumes are
               scored as right, because zero-padding is the key builder's job.
 
 Known blind spot (docs/GATES.md): official API images are flat renders with no foil
-texture, so T1 CANNOT validate the `finish` field. That is Gate B's job, against ~10 real
-photos. Rather than leave that implicit, the prompt lets the model answer `unknown` and
+texture, so T1 CANNOT validate the `finish` field. Gate B did that job on 2026-08-22, on
+all 53 real photographs rather than the ~10 planned, and the answer was a 30% false
+positive rate — 16 normals read as foil, systematically, under the rig's lighting. T1 is
+still blind to it and will stay green while that rate is anything at all.
+Rather than leave that implicit, the prompt lets the model answer `unknown` and
 the results file records the finish distribution — so a green T1 alongside nothing but
 `unknown` finishes reads as "variant detection untested", which is the truth, instead of
 looking like variant detection working.
@@ -340,7 +343,9 @@ def run() -> Result:
         "finish_distribution": dict(sorted(finishes.items())),
         "finish_note": (
             "T1 cannot validate `finish` — official API images are flat renders with no "
-            "foil texture. Gate B validates it against real photos. See docs/GATES.md."
+            "foil texture. Gate B measured it on real photos 2026-08-22: 16 of 53 normals "
+            "read as foil, a 30% false-positive rate under the rig's lighting. T1 stays "
+            "green regardless. See docs/GATES.md."
         ),
         "batch_ids": run_result.batch_ids,
         "usage": {

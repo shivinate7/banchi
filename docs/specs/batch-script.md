@@ -147,7 +147,10 @@ downscaled full-card image is a coin flip; the same digits cropped and upscaled 
 Region location, in order:
 
 1. **Find the card in the frame** — new `geometry` module. Detect the card's boundary and
-   register it to a known rectangle.
+   register it to a known rectangle. **Two methods since 2026-08-22, in order**: segment by
+   tone, and if that refuses, search for the card's border. The second exists because the
+   first found nothing in any of the 53 Gate B photographs — see `docs/GATES.md`'s T6
+   section for the measurement and the mechanism. `CardBox.method` says which one answered.
 2. **Crop within the registered card** using generous fractional bands (title band, number
    corner). Generous, not tight, so small rotation or offset does not push the number out
    of frame.
@@ -157,13 +160,24 @@ Region location, in order:
    in the report so a systematic rig problem shows as a pattern.
 
 `geometry` is its own module because the Gate C feeder needs the same detection. It runs at
-**batch time**, not capture time: D1 requires capture to be fast, offline, and dumb, and
-the capture server does not exist yet.
+**batch time**, not capture time: D1 requires capture to be fast, offline, and dumb. That
+clause used to end "and the capture server does not exist yet", which stopped being true at
+step 5 on 2026-08-11 — the reason is D1 on its own, and it did not need the second half.
 
-*Dependency note.* Downscaling and cropping need Pillow. Card-boundary detection is
-specified to be attempted with Pillow + numpy first; `opencv-python-headless` is the
-fallback if measured detection rates are poor. `requirements.txt` deliberately names what
-it omits, so either addition is a recorded decision, not a drive-by import.
+*Dependency note, and its trigger has now fired.* Downscaling and cropping need Pillow.
+Card-boundary detection was specified to be attempted with Pillow + numpy first, with
+`opencv-python-headless` named as the fallback **if measured detection rates are poor**.
+They were measured on 2026-08-22 and they were as poor as they get: 0 of 53. Written down
+rather than quietly re-dated, the same rule `docs/DESIGN.md` applies to a fix trigger that
+fires and is passed.
+
+**The fallback was not taken, and the reason is that opencv would not have helped.** The
+tone path did not fail for want of a better segmentation library; it failed because its
+premise — a background flat relative to the card's own contrast — is false on this rig, and
+a planar background fit and a bottom-band background were both measured failing too. What
+answered it was a different question (find the border, not the region), and that is forty
+lines of numpy. `requirements.txt` still names what it omits, and opencv is still omitted —
+now against a measurement rather than against the absence of one.
 
 ### 4.6 The cache
 
@@ -240,6 +254,14 @@ themselves.
 ### 5.3 The ladder
 
 `pipeline/variant.resolve` is used unchanged. D3 is settled; nothing here reopens it.
+
+**One thing now happens before it, and it is not in `resolve`** (added 2026-08-22). D3's
+rung 0 — a human's answer from the review screen — is applied by `join_batch`, above the
+ladder rather than inside it, and it nulls confidence so the routing table below cannot
+re-queue an answered card. `resolve` is genuinely untouched; the addition is a
+short-circuit in front of it, because every rung `resolve` walks infers a finish from
+evidence and an answer is not an inference. It falls through to the ladder when the current
+export no longer carries that SKU, or carries it under a different Condition.
 
 ### 5.4 Routing — which queue a card lands in
 

@@ -88,10 +88,16 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new
   server route) was built to it. 7b (review queue, Fulfillment view, inventory view,
-  mark-sold, three more server routes) was built 2026-08-13 **before Gate B, which this spec
-  forbids**, at the owner's explicit instruction. **Read its STATUS section before trusting
-  those screens** — they display data no run has ever produced. Sections 0 and 9 are left
-  standing and marked overtaken; section 10.2 is what Gate B should measure as a result.
+  mark-sold, three more server routes) was built 2026-08-13 ahead of Gate B at the owner's
+  explicit instruction; that schedule question is settled, and the spec's sections 0 and 9
+  are marked overtaken rather than left reading as a prohibition over built code.
+  **Gate B ran those screens on 2026-08-22 and most of the doubt is gone**: the capture
+  screen drove a real feeder session, the review queue held 16 real entries and the owner
+  answered every one, and the pull preview found a stored photo at its physical location.
+  §10.2's measurements were taken and live in `docs/GATES.md`'s Gate B section.
+  **Two things are still unexercised and its STATUS section names them**: the Fulfillment
+  view against a real order, and the review screen's price-banded hierarchy against a
+  mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

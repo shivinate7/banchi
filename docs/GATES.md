@@ -48,8 +48,14 @@ per set and overall.
   committed score exists to show. `batch_ids` and `usage` are part of the comparison, so a
   fresh submission always writes even if the accuracy lands on the same number.
 - **Known blind spot**: official API images show no foil texture, so T1 cannot validate the
-  `finish` field. That is Gate B's job. Do not let a green T1 be read as variant detection
-  working.
+  `finish` field. Do not let a green T1 be read as variant detection working. **Gate B did
+  that job on 2026-08-22 and the answer was bad**: 16 of 53 normals read as foil, a 30%
+  false-positive rate, and detection agreed with itself across every duplicate pair — both
+  Thievuls, both Eiscues, both Pyroars — so it is systematic sheen under the rig's lighting
+  rather than noise. D3's disagreement routing carried all 16 to a human instead of to a
+  wrong listing, which is the ladder working. The blind spot is therefore no longer that
+  the number is unknown; it is that T1 still cannot see it, so this test will stay green
+  while that rate is anything at all.
 
 **Below the floor, tune the prompt — but never against the cards you score on.** Fixing the
 specific images that failed and re-measuring on the same set reports a number that means
@@ -136,15 +142,49 @@ Synthetic composites only: a card rectangle rendered onto a background at a **kn
 offset, scale and rotation, so the answer key is exact. No rig photo exists in this repo.
 
 - **Pass**: detected rectangle within tolerance across the sweep; bands contain their
-  target; no card -> not found
+  target; no card -> not found; a ground the tone path cannot segment is still found by its
+  borders
 - The sweep is offset, scale and rotation. "Bands" are the title band and the number
   corner, and each must contain its target region. "Not found" must be a refusal, never a
   guess.
-- **Known blind spot, and it is the important one**: this measures the algorithm against
-  images this repo generated, which is not the same as measuring it against photographs
-  from the rig. Real detection rates are a Gate B number. A green T6 means the geometry is
-  self-consistent, **not** that detection works. Treat it exactly as T1's finish blind spot
-  is treated: recorded here so a green harness cannot be misread.
+- **The blind spot this section warned about was measured on 2026-08-22, and it read
+  zero.** `detect_card` found the card in **0 of the 53 Gate B photographs**. The paragraph
+  below is left standing because it was right; what follows is what it was right about.
+
+  The cause is not a constant. The card sits in a clear stand on a wood desk with a dark
+  backdrop above, and its own artwork spans 88 to 231 against a border-ring median of 64,
+  so there is no threshold between the two failures: at the adaptive threshold (88.5, which
+  the bright card itself sets through the 99th-percentile term) 29% of the card is cut out
+  of its own mask and `MIN_FILL` refuses 52 of 53; at `MIN_DELTA` alone the desk grain and
+  the stand are foreground too, the box grows to the whole frame, and area and aspect refuse
+  all 53. A planar background fit and a bottom-band background were both measured and both
+  still find nothing.
+
+  **T6 could not have caught it, and that is the part worth keeping.** `_scene` paints one
+  flat colour behind a uniformly bright card — precisely the premise the tone path assumes —
+  so the test constructed the one condition under which the method works. A green harness
+  was not wrong; it was answering a question nobody had asked it.
+
+  It was latent rather than active: `detect_card` is reached only from the crop-retry path
+  (`cli/cmd_identify.py`), and Gate B identified 53/53 at high confidence with zero retries,
+  so it never ran. The cost is that the crop-retry rescue is inert on this rig — a weak read
+  would get `card_not_detected` and go to a human instead of being retried on an enlarged
+  number crop.
+
+  **Fixed 2026-08-22 by a second method, not by moving a threshold.** `geometry/detect.py`
+  gains a border search that runs only after the tone path refuses: four long straight
+  luminance edges whose spacing matches a card, assuming nothing about what is behind them.
+  It finds 53/53 on the Gate B photographs, and `CardBox.method` says which path answered so
+  a run report cannot confuse the two. The tone path and its gates are unchanged.
+
+  The regression case is `_rig_scene` in the test: the same synthetic card on a textured,
+  unevenly lit ground with artwork running down to the background level, built from the
+  measured ring values. It reproduces the mechanism rather than the photograph, because
+  `captures/` is gitignored and this repo still holds no rig photo.
+- **What is still not evidence.** The border search is measured against 53 photographs of
+  one rig in one lighting state on one day. That is 53 more than this section could claim
+  before, and it is still not a detection rate. Treat it as T1's finish blind spot is
+  treated: recorded here so a green harness cannot be misread.
 
 ### T7 — Inventory store, capture server, and the command seams
 
@@ -175,11 +215,19 @@ at a temporary directory, so nothing here touches the real inventory.
   bullet said those routes did not exist. **Of everything 7b shipped, the routes are the one
   part that did not get built ahead of its evidence**, and that is worth noticing when
   reading the rest of it.
-- **Known blind spot, and it is 7b's**: every queue entry these cases assert against was
-  hand-built by the test. What a green T7 says is that the routes behave the way
-  `docs/DESIGN.md` describes — **not** that a real run produces entries of that shape,
-  because no real run has produced one at all. Same standing as T6's synthetic composites
-  and T1's flat renders: self-consistency, not evidence. Gate B is where that changes.
+- **Known blind spot, and it is 7b's — half of it closed on 2026-08-22.** Every queue entry
+  these cases assert against is still hand-built by the test, so a green T7 still says only
+  that the routes behave the way `docs/DESIGN.md` describes. What is no longer true is the
+  sentence that used to follow: a real run HAS produced entries, 16 of them, and their shape
+  matches what the test builds — `position`, `reason`, `read`, `candidates`, `market`,
+  `first_seen`, `cleared_by_human`. All 16 were `metadata_detection_disagreement`, all
+  parked, and the owner answered every one through the answer route.
+
+  So the remaining gap is narrower and worth stating exactly: the fixtures are still
+  invented, and one run of one lot produced exactly one reason code out of twelve. Nothing
+  has exercised `no_catalog_row`, `set_ambiguous`, `low_confidence` or the other eight
+  against a real queue. Same standing as T6's synthetic composites: self-consistency over a
+  wider range than the evidence covers.
 
 ---
 
@@ -259,6 +307,29 @@ The feeder pauses per card, so the favored method is v1's motion state machine
 rhythm. Video frame extraction (ffmpeg) is the fallback if tuning misbehaves. Confirm with
 a 50-card run, then scale to a full box.
 
+**The rhythm has a number now, and half of one.** Recorded here because Gate B measured it
+by accident and the next run should not have to.
+
+- **The feeder emits roughly every 660 ms**, per the owner. Gate B's run independently
+  agrees: the operator's press loop started ~64 ms/card ahead of the machine, banked a peak
+  lead of 2.2 s by card 47 on cards the feeder had already dropped, then had to slow to the
+  supply — and its **last eight gaps average 661.9 ms**. Two estimates, 2 ms apart.
+- **Jitter across the whole run was 34 ms** (robust σ; 57 ms by standard deviation), min
+  458 ms, max 796 ms, over 52 intervals. Unimodal and peaked, not piled at a floor.
+- **The capture path is not the constraint.** An earlier burst the same evening did 25
+  consecutive captures in ≤6 s, bounding press-to-commit at 250 ms, so Gate B ran with
+  2.5–3.7× headroom.
+- **The half that is missing is the one the design turns on**: how much of each 660 ms the
+  card is *moving* versus sitting still. Nobody has measured it, §10.2 did not ask for it,
+  and a settle-based trigger is only feasible if the moving part is under ~358 ms at the
+  worst observed cycle.
+
+**None of the above came from anything the repo writes down.** `captured_at` was
+whole-second until 2026-08-22, which is coarser than the period it was timing; the real
+figures survived only as APFS `st_birthtime` on the photographs, which no clone or copy
+carries. `store/master.py`'s `now()` stamps milliseconds now, so the 50-card run measures
+its own cadence instead of depending on that accident a second time.
+
 ---
 
 ## Build order
@@ -314,11 +385,15 @@ a 50-card run, then scale to a full box.
    **7b was built before Gate B, at the owner's explicit instruction.** The spec's scope
    section and its "what this session must not build" list both said otherwise; both are
    left standing there and marked overtaken, and that file's STATUS section carries what it
-   costs. The short form, and the reason this list carries it too: **the screens 7b added
-   display data that no run has ever produced.** The review queue's row hierarchy is tuned
-   against a price distribution nobody has measured, and the twelve reason codes it renders
-   have never all fired. Read those screens as specified-and-unvalidated, never as
-   observed.
+   costs. The short form used to be that **the screens 7b added display data that no run has
+   ever produced** — true when written, false since 2026-08-22. Gate B put 53 real cards
+   through them: 16 real queue entries, all answered, and a pull preview that found the right
+   photo at the right physical location.
+
+   What survives is the narrower half, and it is worth keeping: all 16 entries carried **one
+   reason code out of twelve**, and the run priced $0.04-$0.40 end to end, so the review
+   queue's price-driven row hierarchy has still never been shown the mixed-value list it
+   exists to sort. Read those screens as validated in outline and unvalidated in range.
 
    **Built was not routed for a few hours, and the shape of that gap is worth keeping after
    the fix.** 7b shipped with none of its three screens in `app/src/App.tsx`'s ROUTES table,
@@ -343,7 +418,10 @@ a 50-card run, then scale to a full box.
    `make status` would then send whoever runs it to a twenty-card run against a build that
    has never met a card. That is still exactly what it does. It is now also correct: with
    nothing left in step 7 to build, meeting a card is the only remaining way to learn
-   anything, and Gate B is the name for doing it.
+   anything, and Gate B is the name for doing it. **It was done on 2026-08-22 and the
+   paragraph above is now history** — kept because the reasoning for moving `next` onto a
+   physical step is the reasoning Gate C will need again, and it was right: the run found
+   six defects that every green check in the repo had passed.
 
    **"CSV import with error reporting" was struck from this list on 2026-08-13.** It was a
    v1 feature that batch script v2 absorbed whole: `emit` writes `pushed`, `reconcile` moves

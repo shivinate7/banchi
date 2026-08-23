@@ -84,7 +84,12 @@ one fact.
   waiting: the screen `docs/DESIGN.md` calls the hardest in the product, and the one the
   owner is said to spend hours in, was designed against a length nobody has observed. "A
   queue where every row looks equally important has thrown away a sort it already has" is an
-  argument about a long list. Whether this is ever a long list is a Gate B number.
+  argument about a long list. Whether this is ever a long list was a Gate B number, and Gate
+  B answered it: **16 of 53, a 30% queue rate** — far from the "close to zero" section 0
+  predicted, and long enough that the hierarchy is doing real work rather than decorating.
+  What the run did not settle is the hierarchy's *content*: every one of the 16 was the same
+  reason code and the whole lot priced $0.04-$0.40, so the price bands the screen sorts on
+  have still never seen a mixed-value list.
 
 - **The Fulfillment view's floors are asserted; its copy is not.** The constraints table in
   `docs/DESIGN.md` is numbers precisely so a browser can check them, and a browser can. What
@@ -641,7 +646,15 @@ built, so the same numbers are no longer an input to a design — they are a che
 already made. That is a worse position to be in and it is the position we are in; 10.2 is
 what makes the check happen rather than leaving it to be noticed.
 
-### 10.2 — What Gate B should measure, now that 7b exists
+### 10.2 — What Gate B should measure, now that 7b exists — TAKEN 2026-08-22
+
+**Every measurement below was taken and the answers are in `docs/GATES.md`'s Gate B
+section.** The list is kept in the imperative it was written in, because it is also the
+list Gate C should re-take against a trigger rather than a person, and because the
+prediction each item makes is worth scoring twice. In short: item 1 came back 16/53, item 2
+came back one reason code out of twelve with ten firing zero times, item 3 came back
+degenerate — $0.04 to $0.40, the whole run in one band — item 4 came back zero, item 5 came
+back zero, and item 6 was not exercised because no order existed.
 
 **This subsection is the payoff for building 7b early, and writing it down is what turns a
 rule broken into a rule broken for something.** Every number below was a guess when the

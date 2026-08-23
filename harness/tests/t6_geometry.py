@@ -5,8 +5,7 @@ card in the frame: a wrong crop produces a miss indistinguishable from a bad rea
 does it confidently. So detection gets its own failing test name rather than hiding inside
 a green identification run.
 
-Pass: detected rectangle within tolerance across the sweep; bands contain their target;
-no card -> not found.
+Pass: detected rectangle within tolerance across the sweep; bands contain their target; no card -> not found; a ground the tone path cannot segment is still found by its borders
 
 The sweep is offset, scale and rotation. The bands are the title band and the number
 corner, and each must contain its target region. "Not found" is a refusal, never a guess.
@@ -15,12 +14,20 @@ SYNTHETIC COMPOSITES ONLY, and the answer key is exact because this test drew th
 a card rectangle with a coloured title bar and a white number box, rendered onto a background
 at a KNOWN offset, scale and rotation. Nothing is downloaded and nothing is hand-labelled.
 
-KNOWN BLIND SPOT, and it is the important one. This measures the algorithm against images
-this repo generated. That is not the same as measuring it against photographs from the rig:
-no glare, no shadow, no depth of field, no sleeve, no mat texture, and a background that is
-genuinely uniform in a way a real one is not. Real detection rates are a GATE B number. A
-green T6 means the geometry is self-consistent — it does NOT mean detection works. Read it
-exactly the way T1's finish blind spot is read.
+THE BLIND SPOT THIS PARAGRAPH WARNED ABOUT WAS MEASURED ON 2026-08-22, AND IT READ ZERO.
+`detect_card` found the card in 0 of the 53 Gate B photographs. The warning was right, and
+the reason is sharper than the warning: "a background that is genuinely uniform in a way a
+real one is not" is not merely unrealistic, it is THE PREMISE the tone path segments on, so
+a test that paints one could never fail for the reason a photograph does.
+
+The cause was not a constant — no threshold works. See `_rig_scene` below, which reproduces
+the mechanism from the measured numbers, and docs/GATES.md's T6 section for the full
+finding. `geometry/detect.py` now falls back to a border search when the tone path refuses;
+it finds 53/53, and `CardBox.method` says which path answered.
+
+Still not evidence. The border search is measured against 53 photographs of one rig in one
+lighting state on one day. A green T6 means the geometry is self-consistent — it does NOT
+mean detection works. Read it exactly the way T1's finish blind spot is read.
 
 The bands are checked by CONTENT, not by coordinates. Asserting that the number band starts
 at 0.82 of the card only proves the constant was not edited; asserting that the white number
@@ -36,7 +43,8 @@ NAME = "T6"
 DESCRIPTION = "Card boundary detection and crop-retry bands"
 PASS_CRITERIA = (
     "detected rectangle within tolerance across the sweep; bands contain their target; "
-    "no card -> not found"
+    "no card -> not found; a ground the tone path cannot segment is still found by its "
+    "borders"
 )
 
 # Angle tolerance in degrees. The fine search steps at 0.25, so anything inside half a
@@ -83,6 +91,50 @@ def _scene(Image, ImageDraw, angle=0.0, scale=1.0, dx=0, dy=0, size=(900, 1200))
         card,
         ((size[0] - card.width) // 2 + dx, (size[1] - card.height) // 2 + dy),
     )
+    return frame
+
+
+def _rig_scene(numpy, Image, ImageDraw, size=(900, 1200), seed=7):
+    """`_scene`'s card under the two conditions Gate B measured on the real rig.
+
+    `_scene` paints one flat colour behind a uniformly bright card, which is exactly the
+    premise `detect.py`'s tone path assumes — so it can never fail there for the reason it
+    fails on a photograph. This reproduces the reason, from the measured numbers:
+
+      * a TEXTURED, unevenly lit ground. The rig's border ring reads 33 / 65 / 82 / 66 on
+        its four sides against a wood desk, so the single background median the tone path
+        takes is not a background.
+      * a card whose own artwork runs DOWN TO the ground level. The real card spans 88 to
+        231 against a ring median of 64, which drives the 99th-percentile term to a
+        threshold of ~88 — and that threshold then cuts the card's own darker half out of
+        its own mask.
+
+    Between them the tone path lands at fill ~0.56, against the 0.21-0.67 measured on the
+    53 Gate B photographs, and MIN_FILL refuses it. The border search is what finds it.
+    """
+    rng = numpy.random.default_rng(seed)
+    width, height = size
+    ys, xs = numpy.mgrid[0:height, 0:width]
+    ground = 33 + 32 * (ys / height) + 18 * (xs / width) + rng.normal(0, 7, (height, width))
+    frame = Image.fromarray(
+        numpy.dstack([numpy.clip(ground, 0, 255)] * 3).astype(numpy.uint8)
+    ).convert("RGB")
+
+    card = _draw_card(Image, ImageDraw)
+    pen = ImageDraw.Draw(card)
+    card_w, card_h = card.size
+    bands, top, bottom, low, high = 40, 0.10, 0.88, 86, 190
+    for i in range(bands):
+        value = int(low + (i / (bands - 1)) * (high - low))
+        y = top + (bottom - top) * i / bands
+        pen.rectangle(
+            [
+                int(card_w * 0.05), int(card_h * y),
+                int(card_w * 0.95), int(card_h * (y + (bottom - top) / bands)) + 1,
+            ],
+            fill=(value, value, value),
+        )
+    frame.paste(card, ((width - card_w) // 2, (height - card_h) // 2))
     return frame
 
 
@@ -258,5 +310,48 @@ def run() -> Result:
         geometry.detect_card(tiny) is None,
         "a card-shaped speck is below the area floor and is refused",
     )
+
+    # --- a ground the tone path cannot segment ------------------------------------------
+    #
+    # REGRESSION, NOT NEW COVERAGE. `detect_card` found the card in 0 of the 53 real Gate B
+    # photographs, on gates every case above passes. Everything above this line is drawn on
+    # a flat mat, which is the one condition under which segmenting by tone works, so none
+    # of it could ever have caught that. This case reproduces the mechanism instead of the
+    # photograph — the repo holds no rig photo and `captures/` is gitignored.
+    rig = _rig_scene(numpy, Image, ImageDraw)
+    rig_box = geometry.detect_card(rig)
+    if c.ok(rig_box is not None, "a card on a textured, unevenly lit ground is still found"):
+        c.ok(
+            rig_box.method == "edges",
+            "and the border search is what found it — the tone path refused, as it did on "
+            "all 53 Gate B photographs",
+            rig_box.describe,
+        )
+        card_w, card_h = 420, 586
+        frame_w, frame_h = rig.size
+        expected = (
+            (frame_w - card_w) / 2 / frame_w,
+            (frame_h - card_h) / 2 / frame_h,
+            ((frame_w - card_w) / 2 + card_w) / frame_w,
+            ((frame_h - card_h) / 2 + card_h) / frame_h,
+        )
+        actual = (rig_box.left, rig_box.top, rig_box.right, rig_box.bottom)
+        c.ok(
+            all(abs(a - e) <= BOX_TOLERANCE for a, e in zip(actual, expected)),
+            f"and the box is within {BOX_TOLERANCE} of where the card was pasted",
+            f"expected {tuple(round(e, 3) for e in expected)}, got "
+            f"{tuple(round(a, 3) for a in actual)}",
+        )
+        rig_regions = geometry.crop_regions(rig, rig_box)
+        c.equal(
+            sorted(rig_regions),
+            sorted([geometry.REGION_CARD, geometry.REGION_TITLE, geometry.REGION_NUMBER]),
+            "and the crop-retry bands are cut from it, which is the whole point of finding it",
+        )
+        c.ok(
+            _share(numpy, rig_regions[geometry.REGION_TITLE], TITLE_RGB) >= PRESENT
+            and _share(numpy, rig_regions[geometry.REGION_NUMBER], TITLE_RGB) <= ABSENT,
+            "and the bands are still the right way up",
+        )
 
     return c.result()
