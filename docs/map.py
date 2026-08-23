@@ -187,10 +187,18 @@ COMPONENTS = [
         "status": "built",
         "does": "find the card in the frame; cut the crop-retry bands",
         "governed_by": ["D1", "D2"],
-        "note": "T6 is synthetic composites only. A green T6 means the geometry is "
-                "self-consistent, NOT that detection works on rig photos — that is a Gate B number.",
+        "note": "The Gate B number this entry used to be waiting for arrived 2026-08-22 and "
+                "read ZERO: detect_card found the card in 0 of 53 rig photographs, because the "
+                "tone path's premise — a background flat relative to the card's own contrast — "
+                "is false on a card in a clear stand on a wood desk. Fixed the same day by a "
+                "SECOND method rather than a moved threshold: a border search that runs only "
+                "after the tone path refuses, finds 53/53, and reports itself as "
+                "CardBox.method == 'edges'. T6 gained _rig_scene, which reproduces the "
+                "mechanism from the measured ring values because captures/ is gitignored and "
+                "no rig photo lives here. Still not a detection rate: one rig, one lighting "
+                "state, one day.",
         "modules": {
-            "detect.py": {"does": "card-boundary detection: where the card is, how far it is rotated",
+            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses",
                           "governed_by": ["D1"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
                         "governed_by": ["D1"], "tested_by": ["T6"]},
