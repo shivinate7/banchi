@@ -179,6 +179,26 @@ export function SearchField({
           /* Off on all four: a card name is not a word, an address or a sentence, and a browser
              correcting `Eiscue` to `Escue` mid-search is a wrong answer the person has to
              notice to undo. */
+          /* ESC HANDS FOCUS BACK, AND THE QUERY SURVIVES. Reported from the rig: the
+             leader chord lands focus here (autoFocus doing its job), and there was no way
+             out but a click — an input does not blur itself on Escape, so every keyboard
+             route into this field was a one-way door. Blurring is the whole fix: focus
+             returns to the document and every hotkey the field was swallowing works again.
+
+             `preventDefault` matters as much as the blur. On a `type="search"` input,
+             Chrome's NATIVE Escape clears the text — silently, keeping focus — so without
+             it the first Esc eats the query the person typed and gives back nothing. The
+             query is the screen's state, not the field's; leaving the field should no more
+             erase it than scrolling away would. Emptying the box stays one keystroke
+             (select-all, delete) and clearing-on-Esc was considered and declined: the
+             filtered list is what the person is about to act ON, and vanishing it as a
+             side effect of putting the keyboard down is the mis-tap this app keeps
+             designing out of other screens. */
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            event.currentTarget.blur()
+          }}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
