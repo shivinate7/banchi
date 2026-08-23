@@ -24,7 +24,7 @@ before and after every commit in this plan.
   and section 7 now writes its real path. If a future name must be written as a real
   reference before it is built, the sanctioned route is a line in
   scripts/docs-audit-allow.txt with a reason — the mechanism already covering
-  PKMNSCAN_IMAGE_MIRROR and T7.
+  PKMNSCAN_IMAGE_MIRROR today, and T7 until the day it was registered.
 - **Verbatim doc text below sits in blockquotes, never fenced blocks.** The audit reads
   every line of a fenced block as code, so a fenced quotation of prose mentioning a make
   target would be scanned as a command reference. Blockquotes scan as prose. Keep it that

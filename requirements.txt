@@ -12,9 +12,14 @@ anthropic>=0.69
 #
 # Both are a recorded decision, not a drive-by import — batch script v2 spec §4.5.
 # `opencv-python-headless` is the named fallback IF measured detection rates are poor.
-# Nothing has been measured yet: there is not one rig photo in this repo, and Gate B is
-# where the measurement happens. Adding a 40 MB binary ahead of that measurement is the
-# decision §4.5 exists to defer, so it stays absent until a number says otherwise.
+# They were measured on 2026-08-22: the tone path found the card in 0 of the 53 Gate B
+# photographs. The fallback was still not taken, because opencv would not have helped —
+# that path failed on a false premise (a background flat relative to the card's own
+# contrast), not for want of a better segmentation library. What answered was a
+# different question, the border search in geometry/detect.py, and it needed no new
+# dependency: it is more of the numpy already listed above, 53/53. The 40 MB binary
+# stays absent, now against a measurement rather than against the absence of one.
+# §4.5 carries the mechanism.
 Pillow>=9
 numpy>=1.21
 
@@ -22,4 +27,24 @@ numpy>=1.21
 #   requests   stdlib urllib covers the pokemontcg.io fetch; one fewer dependency
 #              between a clean clone and a green harness.
 #   csv libs   Python's own `csv` is the real CSV library CLAUDE.md requires.
+TWO edits to /Users/shivinate/Library/Mobile Documents/com~apple~CloudDocs/Claude Code/pkmnscan/requirements.txt. Both are required; applying either alone leaves the file self-contradictory.
+
+EDIT A — requirements.txt lines 15-17.
+FIND (verbatim, unique):
+# Nothing has been measured yet: there is not one rig photo in this repo, and Gate B is
+# where the measurement happens. Adding a 40 MB binary ahead of that measurement is the
+# decision §4.5 exists to defer, so it stays absent until a number says otherwise.
+REPLACE WITH:
+# They were measured on 2026-08-22 and they were as poor as they get: the tone path found
+# the card in 0 of the 53 Gate B photographs. The fallback was still not taken. That path
+# failed on a false premise — a background flat relative to the card's own contrast — and
+# not for want of a better segmentation library, so a 40 MB binary would not have helped;
+# a border search in forty lines of numpy finds 53/53. Spec §4.5 carries the mechanism.
+
+EDIT B — requirements.txt line 25.
+FIND (verbatim, unique):
 #   opencv     see above — a fallback gated on a measurement that has not happened.
+REPLACE WITH:
+#   opencv     see above — the fallback's trigger fired and it was declined anyway.
+
+Both replacements preserve the original argument (the omission is a decision, not an oversight) while matching what §4.5 already says in the tree: omitted "now against a measurement rather than against the absence of one." Line 14's conditional ("is the named fallback IF measured detection rates are poor") is left untouched and still reads correctly as the record of what was specified — §4.5 uses the same construction immediately before reporting the outcome.

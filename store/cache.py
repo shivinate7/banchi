@@ -25,9 +25,13 @@ the row, no re-run, prompt change, or re-identification pass overwrites it. If a
 happens to read that photo and disagrees, `disagreements()` reports it — cheap evidence that
 either the prompt improved or a clearing was a mistake — but the human answer stands.
 
-Nothing in this repo sets `cleared_by_human` yet. The review screen is build-order step 7,
-behind Gate B, and it writes this field. Until then the flag is carried, honoured on read,
-and never set — which means the permanence rule above is real code on an untravelled path.
+NOTHING SETS `cleared_by_human` ON THE CACHE. The review screen shipped 2026-08-13 and its
+answer route sets the flag on the queue entry, not here — deliberately: marking a model
+answer human-cleared would claim a person vouched for the NAME AND NUMBER the model read,
+while what he picked was a catalog row. `server/capture_server.py:do_review_answer` carries
+the argument. Gate B's 16 answers on 2026-08-22 went that way, so the permanence rule above
+is still real code on an untravelled path — and whether the chosen row should replace the
+model's answer here is the open decision that run put on the table.
 """
 
 from __future__ import annotations

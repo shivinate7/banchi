@@ -30,8 +30,9 @@ pull-preview  http://localhost:5173/#/pull
 
 # 7b's three screens, routed 2026-08-13. The review queue is the one to actually look at:
 # docs/DESIGN.md specifies its shape in more detail than any other screen in the product and
-# nobody has ever seen it hold a card, so the render is the only comparison available until
-# Gate B produces a queue.
+# it held its first real cards on 2026-08-22: Gate B's 16 entries, every one answered here.
+# The render still earns its place — all 16 were one reason code and all were parked, so
+# most of what docs/DESIGN.md specifies has still only ever been drawn.
 review        http://localhost:5173/#/review
 inventory     http://localhost:5173/#/inventory
 

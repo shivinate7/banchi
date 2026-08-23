@@ -15,8 +15,11 @@ row count it wrote. You see the number when choosing what to work on, and again 
 moment you commit an import file — which is the moment it is easiest to forget that seven
 cards are still sitting in a box unlisted.
 
-NOTHING HERE CLEARS AN ENTRY. The review screen is build-order step 7, behind Gate B; it
-sets `cleared_by_human` and this module honours it. Until then the queues only grow, and
+NOTHING HERE CLEARS AN ENTRY, and that is still the arrangement now that something finally
+does. `do_review_answer` in `server/capture_server.py` sets `cleared_by_human`; this module
+only honours it — `upsert` refuses to re-queue a cleared position, `release` refuses to drop
+one, and `open_entries` hides it. That path stopped being untravelled on 2026-08-22: Gate B's
+16 entries were all answered through it. Absent an answer the queues still only grow, and
 that is the correct behaviour rather than a gap to be patched with a clearing command the
 spec does not list — a card in a queue is at a known position in a box, and is not lost.
 """

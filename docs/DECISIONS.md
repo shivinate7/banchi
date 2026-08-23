@@ -82,7 +82,7 @@ only a holofoil row — reviews rather than being corrected to the only availabl
 costs a tap per mis-toggled holofoil-only rare; that is the price of the toggle meaning
 something, and it is why rung 2 is reachable only without metadata. The two review reasons
 stay distinct so the queue can be triaged: a run full of contradictions means a stack is
-misfiled, while disagreements scattered across a run mean individual cards are mis-sorted.
+misfiled, while disagreements scattered across a run mean individual cards are mis-sorted — or that the detector is systematically wrong, which is the reading Gate B added on 2026-08-22 and the first one to check now. 16 of 53 normals read as foil under the rig's lighting, and detection agreed with itself across duplicate copies of the same card, so that run's scattered `metadata_detection_disagreement` meant neither a misfiled stack nor mis-sorted cards: it meant the rig. `docs/GATES.md`'s Gate B section holds the numbers. Rung 3 survives it — a cross-check that spends 30% of a run on review taps is still cheaper than one wrong listing — but the two-way triage above is no longer the whole table.
 
 ## D4 — Review queue is digital-only
 
@@ -195,7 +195,20 @@ the `TCGplayer Id` SKU, which is never modified.
 
 ## D12 — Scope
 
-Modern era only (SWSH/SV), English, all Near Mint (hardcoded). Vintage/WOTC condition
+**Gate B ran entirely outside the two blocks named above, and nothing noticed.** The 53
+cards of 2026-08-22 were `ME01: Mega Evolution`, a block later than SV, and they went
+through capture, identification, join, emit, import to Staged and reconcile without a
+scope question arising — because nothing in the tree enforces the parenthetical. The only
+code that cites this entry for scope is `pipeline/variant.py`'s `CONDITION_BY_FINISH`,
+which hardcodes the Near Mint strings; there is no set or era filter anywhere. Read
+`(SWSH/SV)` as the blocks that existed the day this was written, not as an allowlist.
+
+**Whether "modern era" is open at the top end is unsettled, and it is the owner's call.**
+Recorded rather than answered, because a passing gate is evidence that nothing broke, not
+a decision that every future block is in scope. It matters in one place today: D15's
+mirror-scope paragraph reads this entry as the enumeration `SWSH/SV` when it sizes a
+narrowed image mirror at ~4.8 GB, so narrowing the mirror on that basis would exclude the
+only era this project has ever run against. Settle both lines together or neither. Vintage/WOTC condition
 strings (1st Edition, Shadowless, Unlimited) are a spec change, not a parameter.
 
 ## D13 — Stack
@@ -214,6 +227,24 @@ by kind from a laptop's built-in camera — only by its device label and id. Tha
 why `facingMode: "environment"` was v1 bug 3, and it is why the device picker is a
 requirement rather than a nicety: there is no camera-facing hint to select on, and the
 wrong guess photographs a whole box through the wrong lens.
+
+**The Cam Link hands the browser a landscape frame however the camera is mounted.**
+The second consequence of the same path, measured at Gate B on 2026-08-22 and the largest
+single defect that run found. The rig mounts the camera on its side so a portrait card
+fills the portrait field — the right call by the frame-tight rule below — and the stored
+photo came out sideways anyway. Haiku misread 45 of 53 of them into the review queue with
+names and numbers both garbled; `docs/GATES.md`'s Gate B section carries the rest of the
+counts. It belongs in this entry for the reason the paragraph above gives: nothing about
+the capture device reaches the browser except its label, its id, and the frame it sends,
+so mount orientation is not a thing the app can detect.
+
+The fix is a rotation remembered per device and applied at capture time rather than in the
+identify path: `app/src/useCamera.ts` holds the setting and `app/src/encode-worker.ts`
+turns the frame before it is encoded. Rotating there corrects the model, `geometry/`'s crop
+bands and the review queue's judging photo at once, where a fix in `identify/` would have
+left a sideways photo on every screen that shows one. The live preview is deliberately left
+as the camera sends it — the stored photo is the record that has to be right, and the
+last-capture panel shows it, so one capture confirms the setting.
 
 **The camera is not driven directly, and that was asked rather than assumed.** Tethered
 capture over USB — Sony's Camera Remote SDK, or `gphoto2` in PC Remote mode — buys full
@@ -505,6 +536,55 @@ generator is a separate program with no findings, not the audit gaining a write 
 constant into a confidently published sentence, with the audit green and no diff a
 reviewer would question. Checking lets two things disagree in public. Generating makes
 one thing true everywhere, including when it is wrong.
+
+## D19 — Motion capture: live fire behind the seam, a trace for tuning, video for neither
+
+**The auto-capture trigger fires live, per card, through the same `POST /capture` a key
+press uses. Recording the run to video and extracting frames afterwards was worked through
+and rejected as a capture path** — not on image quality, which is a configuration choice,
+but because segmenting a tape into per-card frames IS the motion state machine run offline:
+it avoids none of the tuning, while giving up the position↔photo binding `allocate_capture`
+makes inside the store lock at the instant of capture, D10's undo (whose whole safety
+argument is that the deleted photo is of a card still in your hand), and §5.5's
+halt-at-the-moment-of-failure. What video genuinely offers — re-runnability while tuning —
+the 64x36 luma trace offers at a thousandth of the bytes, so the tape is a debugging
+instrument for the rig session at most, never a photo source, and deleted once parameters
+sit on a plateau.
+
+**Every parameter is derived from a measurement, and the measurements are named where the
+constants live.** Gate B's recovered cadence (median gap 609.5 ms, robust σ 34 ms, floor
+458 ms, the feeder's own ~660 ms), the <250 ms capture round trip, and a worst-case
+frame-difference SNR of ~20x on the real frames. `docs/specs/motion-trigger.md` carries the
+full derivation; `docs/GATES.md`'s Gate C section carries the numbers. The thresholds are
+rig-tunable constants and the rig has not yet tuned them — BUILT is not TUNED, and the
+50-card run is where that changes.
+
+**Arming is an act, not a setting.** The mode is session-only and never persisted,
+deliberately unlike the remembered camera and the rotation chip: a remembered camera cannot
+take a photo on its own, and a remembered motion mode is an automatic shutter armed by a
+page load. Every session starts manual.
+
+**A fire the screen declines is counted, on screen, and the halt banner does the
+arithmetic.** Under a key, a swallowed fire is fine — the finger is attached to someone
+watching. Under a feeder that keeps delivering, each one is a card that may have passed the
+lens unrecorded, which is §5.5's exact failure. So motion mode counts every declined fire
+by reason, and a halt with the feeder running renders the count as the sentence it means:
+that many cards to set aside and re-feed.
+
+**A jam surfaces and does not fire.** Continuous motion past the stall window reports
+`stalled` on the HUD rather than capturing a moving card. The other side was argued —
+"never silently drop a card" favours firing — and loses for v1 because a hand in frame
+would capture-spam, and a loud stall is not silent. If the rig session shows real cards
+dying to stalls, this is the paragraph to reopen.
+
+**Undo stays manual forever.** No automatic anything reaches a control that hard-deletes a
+record, a sidecar and a photo. The motion trigger exists behind the capture seam only.
+
+**The ordering is the owner's, 2026-08-22: motion capture end to end before any other
+work.** Step 9 (vendor the catalog) was `next` for a few hours and is re-sequenced behind
+Gate C — it touches no app code, so nothing collides; one `next` is the rule and the owner
+chose which. This also dissolves the map's old circularity of step 10 being blocked by the
+gate that IS step 10.
 
 ---
 

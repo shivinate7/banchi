@@ -21,8 +21,12 @@ they are here for the same reason: each of them ends in a write to `inventory.js
 7b IS BUILT BEFORE GATE B, WHICH `docs/specs/capture-app.md` SECTION 0 SAYS NOT TO DO. The
 owner authorised it explicitly on this branch. The consequence to keep in mind while reading
 the three routes below is not that they are unverified — T7 covers every one of them — but
-that the DATA they move has never been produced by a real run. Every queue entry these
-routes have ever seen was hand-built, here or in the harness, so wherever `docs/DESIGN.md`
+that the DATA they move was hand-built until Gate B. That run produced the first real
+entries on 2026-08-22 — 16 of them — and the shape survived contact: same keys, same
+candidate rows, every one answered through the route below. What it did not widen is the
+range. All 16 carried one reason code, `metadata_detection_disagreement`, at prices that
+parked every one of them — a queue holding more than one kind of card is still something
+no run has produced, so wherever `docs/DESIGN.md`
 does not settle a behaviour the route says so in a comment naming what would settle it,
 rather than picking the plausible-looking option and leaving no trace.
 
@@ -1097,14 +1101,23 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
                                  for the NAME AND NUMBER the model read, while what was
                                  actually picked is a catalog row; the two coincide for a
                                  `low_confidence` card and come apart for a finish
-                                 disagreement, where the read was never in doubt. Settled by
-                                 Gate B: a real queue shows which reasons actually occur, and
-                                 whether the chosen row should replace the model's answer in
-                                 `identifications.json` is a decision to make with that in
-                                 hand rather than now.
+                                 disagreement, where the read was never in doubt. Gate B
+                                 answered the first half on 2026-08-22: all 16 real
+                                 queue entries were `metadata_detection_disagreement` and
+                                 none was `low_confidence`, and the owner answered every one
+                                 through this route — so every real answer so far is the
+                                 come-apart case. Whether the chosen row should replace the
+                                 model's answer in `identifications.json` now has that
+                                 evidence behind it and is still unmade.
 
-    ASSUMPTION, AND THE ONE WORTH READING TWICE: nothing downstream consumes this answer
-    yet. `cli/cmd_emit.py` re-derives its join from the run's identifications and writes
+    THE ANSWER IS CONSUMED DOWNSTREAM, as of 2026-08-22 — and it was not when this route
+    shipped. Gate B's first re-join proved it: sixteen answered cards re-derived their
+    disagreement and re-parked forever, listed never. `cli/resolve.py` now reads the
+    answered SKU and condition off `inventory.json` onto the card the join sees, and
+    `join_batch` applies them as rung 0 (`variant.HUMAN_ANSWERED`) before the ladder walks.
+    A SKU the current export no longer carries falls through to the ladder rather than
+    being guessed at. What this route writes is therefore the input to that rung, not a
+    record that only takes the card off the owner's screen. `cli/cmd_emit.py` re-derives its join from the run's identifications and writes
     import rows for matched positions, so a card answered here is recorded on its own record
     and does not appear in any CSV. That is not a defect in this route — it is the seam 7b
     could not build against, because it has never seen a real review queue. What would settle
@@ -1204,8 +1217,15 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             # that failed, or a card with no position, has no rows for a human to choose
             # between. `docs/DESIGN.md` describes a screen of candidate rows and says nothing
             # about what to do when there are none, so this refuses rather than inventing a
-            # free-text path into the one field the hard rule protects. What would settle it:
-            # Gate B, and how often a run actually produces one of these.
+            # free-text path into the one field the hard rule protects. Gate B fired the
+            # trigger, and the answer is not a flat zero. Its accepted run queued 16
+            # entries, every one with candidate rows; the same cards joined against a
+            # commons-only export produced 23 `no_catalog_row` cards, which are
+            # candidate-less by construction — `pipeline/variant.py` returns that reason
+            # only when `found.rows` is empty, and `pipeline/join.py` copies that same
+            # empty tuple into the entry. Every one of them wanted a re-export or a
+            # re-shoot, never a typed SKU, so the refusal stands on the evidence it asked
+            # for.
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "no_candidates",
@@ -1397,8 +1417,15 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     one, and the narrower rule (refuse a card that was never pushed to TCGplayer) would leave
     a person holding a card he has genuinely sold with no way to record it — against
     `CLAUDE.md`'s standing trade that unlisted is fine and unrecorded is not. The cost of
-    being wrong is one reversible state change. What would settle it: Gate B, and what the
-    Fulfillment view actually lists.
+        being wrong is one reversible state change. Gate B was named as what would settle it and
+    did not: the run of 2026-08-22 recorded no sale at all, because no order existed —
+    `docs/specs/capture-app.md` §10.2 item 6, the one measurement that had to be planned into
+    the day, is what it left unexercised. Recorded as a trigger that fired and was passed
+    rather than re-pointed at the next gate. What the run did surface is adjacent and sharpens
+    the question rather than closing it: a card pulled out, damaged or given away has no state
+    of its own, so this permissive rule is today the only way to record one — the `removed`
+    entry in `docs/DECISIONS.md`'s Someday list calls that "a sale record that lies". What
+    would settle it now: the first real order, and whether that entry is ratified.
 
     ONE `Store.write()` for either direction, and nothing outside the store is touched — no
     photo, no sidecar, no queue entry. A sold card keeps its capture photo, which is what the

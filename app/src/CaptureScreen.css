@@ -350,6 +350,23 @@
   color: var(--muted);
 }
 
+/* The motion machine's vitals — metadata, so the utility face carries it, same register
+ * as the trigger line above. One row of key-value pairs, wrapping on a narrow window;
+ * a hairline above separates it from the controls without adding a panel, because
+ * docs/DESIGN.md's separation mechanism is the 1px line and nothing else. */
+.capture-motion-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
 /* ---- what the last capture was ---- */
 
 .capture-said {

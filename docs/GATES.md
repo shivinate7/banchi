@@ -268,20 +268,32 @@ disagreement routing carried all 16 to a human instead of a wrong listing.
 full-rarity export — an export-scope artifact, not a pipeline one. Fired zero times:
 `set_ambiguous`, `no_market_data`, `metadata_not_stocked`, `detected_finish_not_stocked`,
 `ambiguous_no_signal`, `duplicate_condition`, `low_confidence`, `no_position`,
-`identification_failed`, `card_not_detected` (the last two fired only in the discarded
-sideways run). Price distribution: $0.04–$0.40 across the run, median ≈ $0.10; the queue's
+`identification_failed` — which fired only in the discarded sideways run — and
+`card_not_detected`, whose zero says nothing about the owner's stock:
+`pipeline/routing.py` defines the constant and nothing in `pipeline/`, `cli/` or
+`identify/` ever assigns it, so it could not have fired in either run. Price distribution: $0.04–$0.40 across the run, median ≈ $0.10; the queue's
 spread matched the run's, so the review screen's price-banded hierarchy has yet to be
 tested by a mixed-value lot. The Fulfiller item was not exercised — no order existed.
 
-**Six defects were found by the run and fixed the same day, each with a regression test
-observed failing against the old code first:** the Batch API refusing the store's
+**Six defects were found by the run and fixed the same day, three of them with a
+regression test observed failing against the old code first:** the Batch API refusing the store's
 `box/index` key as a `custom_id`; the capture screen leaking a 33 MB canvas per press;
 Chromium idle-scheduling the JPEG encode into 1–7 s stalls a capture burst never gives it;
 a re-routed position keeping its stale entry in the queue it left; review answers recorded
 by the answer route that nothing on the join path ever consumed (now rung 0 of the
 ladder); and a post-import re-emit that double-counted staged copies and regressed their
-states. The first three are why capture now sustains burst pace; the last three are why
-the queues, the answers, and the import files survived contact with a second cycle.
+states. The first is why the run reached the API at all; the second and third are why
+capture now sustains burst pace; the last three are why the queues, the answers, and the
+import files survived contact with a second cycle.
+
+**Three of the six carry no automated test, and that is recorded rather than rounded up.**
+The cross-queue release leak has a T7 case; rung 0 and the re-emit double-count have a T3
+case each — all three observed failing against the old code before the fix was restored.
+The `custom_id` refusal, the canvas leak and the idle-scheduled encoder have none: `app/`
+has no test runner outside the browser `make design-check` starts, and nothing under
+`harness/` reaches `cli/cmd_identify.py`'s id translation. Each is guarded by a comment
+beside the code and by nothing that runs, which is the weakest guard in this section and
+the reason it is named here rather than left to be inferred from the commit stats.
 
 **What the gate did not close:** the owner had no visibility into emitted import files —
 their names exist only in CLI output the owner never sees when someone else drives the
@@ -302,10 +314,15 @@ complexity, and a gate that tests the pipeline and an untuned trigger at once ca
 which one failed. `docs/specs/capture-app.md` builds the trigger as one replaceable piece
 so that this gate is an addition rather than a rewrite.
 
-The feeder pauses per card, so the favored method is v1's motion state machine
-(motion → stabilize → capture → cooldown), tuned once against a consistent mechanical
-rhythm. Video frame extraction (ffmpeg) is the fallback if tuning misbehaves. Confirm with
-a 50-card run, then scale to a full box.
+The feeder pauses per card, so the method is a motion state machine — and **the machine
+is BUILT as of 2026-08-22** (`app/src/motion.ts` behind the trigger seam, a mode toggle
+and live HUD on the capture screen, two specs in `make design-check`; spec at
+`docs/specs/motion-trigger.md`, decision at D19). Built is not tuned: every threshold is
+derived from Gate B's frames and none has met the running feeder. Video frame extraction
+is no longer "the fallback if tuning misbehaves" — D19 rejects it as a capture path
+outright and keeps it only as a rig-session debugging instrument. What remains of this
+gate is physical: the ~30-minute tuning protocol in the spec, the 50-card run, then a
+full box.
 
 **The rhythm has a number now, and half of one.** Recorded here because Gate B measured it
 by accident and the next run should not have to.
@@ -340,7 +357,7 @@ its own cadence instead of depending on that accident a second time.
 3. ~~Verification harness (T1–T4)~~ — done; T5 and T6 arrived with step 4.
 4. ~~Batch script v2: Batch API, variant ladder, catalog join, real CSV library~~ — code
    done 2026-08-03, spec at `docs/specs/batch-script.md`, harness green at T1–T6.
-   `./pkmnscan identify | join | emit | reconcile`. **Not yet run against a real card**:
+   `./pkmnscan identify | join | emit | reconcile`. `./pkmnscan identify | join | emit | reconcile`. **This line read "not yet run against a real card" until 2026-08-22**, when Gate B put 53 through all four commands and reconciled back in two clean round trips with zero unmatched in either direction. The run found defects in this step's own code that no fixture could: the Batch API refusing the store's `box/index` as a `custom_id`, `cmd_join` leaving a re-routed position's stale entry in the queue it left, review answers nothing on the join path ever read back (now rung 0 of the ladder), and a post-import re-emit that double-counted staged copies. The harness still exercises this step against fixtures and synthetic images only; the run itself is in the Gate B section above.
    that is Gate B, and until it passes this is verified against fixtures and synthetic
    images only.
 5. ~~Capture server: `POST /capture`, position-ordered filenames, JSON sidecars (position,

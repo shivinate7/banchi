@@ -29,9 +29,21 @@ safety is that the capture server never calls it.
 Positions are never renumbered and sold cards leave permanent gaps (D10). Nothing in this
 module deletes a card record; `sold` is a state, not a removal.
 
-NOTHING IN THE HARNESS REACHES THIS FILE. No module under `harness/tests` imports `store`,
-so a green harness says nothing about anything below. `docs/DEBTS.md` records why that is
-not being fixed before build-order step 5.
+T7 REACHES THIS FILE, as of 2026-08-13. `harness/tests/t7_store_and_seams.py` imports this
+module and drives the allocator directly: sequential positions that never collide, the
+newest-record deletion undo inherits (D10), a replayed `capture_id` that burns no second
+index, the string-typed record that once slipped past the box filter and handed back a
+colliding index, and `BadPosition`, `DuplicateCaptureId` and `UnknownState` each refusing in
+their own code.
+
+The paragraph here said the opposite, and it outlived the gap it described — true from step 5
+on 2026-08-11 until T7 landed two days later, wrong for the nine days after that. Corrected in
+place rather than swapped quietly, because nothing mechanical checks a claim of this kind: the
+audit resolves paths and thresholds, and a docstring asserting its own coverage is exactly the
+sentence it cannot read.
+
+WHAT T7 STILL DOES NOT ASSERT is in `docs/DEBTS.md`, so a green harness is read for what it
+is rather than as coverage of everything below.
 """
 
 from __future__ import annotations

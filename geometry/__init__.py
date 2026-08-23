@@ -5,8 +5,13 @@ detection: a motion state machine has to know a card is present and settled befo
 the shutter, and that is this question asked at a different moment.
 
 It runs at BATCH time, not capture time. D1 requires capture to be fast, offline and dumb,
-and step 5's capture server does not exist yet — so nothing registers a card while the
-photograph is being taken. Revisit at step 5 or Gate C, not before.
+and the capture server does none at capture time — `docs/specs/capture-server.md` §6.6 rules
+out "detection, cropping, downscaling or re-encoding at capture time" in as many words, so
+nothing looks for the card in the frame while the photograph is being taken. **The step-5 half
+of that revisit trigger has fired and been passed**: the server shipped 2026-08-11 and Gate B
+pushed 53 captures through it on 2026-08-22 without moving detection forward. D1 was always the
+reason; the missing server never was. Gate C is the half still open, for the reason in the
+paragraph above.
 
 WHAT THIS IS FOR. Crop retry (v2 §4.5). A `025` rendered 40px wide in a downscaled
 full-card image is a coin flip; the same digits cropped and upscaled are not. So a card that

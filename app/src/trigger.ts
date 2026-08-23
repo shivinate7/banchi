@@ -1,19 +1,17 @@
 /* Whatever fires a capture, behind one interface — docs/specs/capture-app.md section 6.
  *
- * The seam is the deliverable here, not the implementation. Gate B runs on a key press and
- * an on-screen button; at Gate C, v1's motion state machine (motion, stabilize, capture,
- * cooldown) becomes a second Trigger and drops into this same slot. The capture screen
- * never learns which one is behind it, which is what makes auto-capture an addition rather
- * than a rewrite — and it keeps Gate B a clean test of the pipeline instead of a
- * simultaneous test of the pipeline and an untuned trigger, where a bad result cannot say
- * which of the two failed.
+ * The seam was the deliverable before either implementation mattered, and on 2026-08-22 it
+ * paid out: Gate B ran on the key press below, and the motion state machine
+ * (src/motion.ts, Gate C's trigger) dropped into the same slot as a second Trigger with no
+ * change to the capture screen's caller — which was the whole promise. The screen still
+ * never learns which one is behind it, except through `name`.
  *
  * A Trigger fires. It never decides whether the app is in a state to capture. That split
- * is what the motion trigger will need and it is worth getting right while there is only
- * one implementation: a cooldown between frames is the trigger's own business, while "a
- * request is already in flight" and "no box is selected" belong to the screen. Putting
- * either on the wrong side is how the second implementation ends up rewriting the first
- * one's caller.
+ * held up exactly as hoped when the second implementation arrived: a cooldown between
+ * frames is the trigger's own business, while "a request is already in flight" and "no box
+ * is selected" belong to the screen — and motion mode adds one obligation on the screen's
+ * side of that line, counting the fires it declines (docs/specs/motion-trigger.md §3),
+ * because under a feeder a silently swallowed fire is a card with no record.
  */
 
 export type Trigger = {

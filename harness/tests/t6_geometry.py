@@ -161,8 +161,9 @@ def run() -> Result:
     import geometry
 
     c.note(
-        "SYNTHETIC composites, exact answer key. Real detection rates are a Gate B number "
-        "against rig photos — a green T6 is not evidence that detection works."
+        "SYNTHETIC composites, exact answer key. Gate B measured the real thing on 2026-08-22: "
+        "the tone path found 0 of 53 rig photographs, the border search 53/53. One rig, one "
+        "lighting state, one day — a green T6 is still self-consistency, not a detection rate."
     )
 
     # --- the sweep -----------------------------------------------------------------------

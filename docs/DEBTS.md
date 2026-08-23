@@ -296,8 +296,12 @@ counts the same 20 under `--staged`, where every read comes from the index inste
   replaces, rebuilt out of the machinery meant to replace it.
 - **The other direction is still open, and it was half of the original finding.** A module
   that a test *does* exercise and that carries no `tested_by` is invisible here.
-  `store/queues.py` and `store/cache.py` are exactly that case today — T7 imports both and
-  neither carries a claim, by the deliberate choice recorded in that entry's note. Closing
+  `store/cache.py` is exactly that case today — T7 reaches it through a session and it
+  carries no claim, by the deliberate choice recorded in that entry's note.
+  `store/queues.py` was the second example until 2026-08-22, when `check_queue_supersede`
+  began asserting `queues.apply_run` outright and the map's entry gained the `tested_by` it
+  had earned. Nothing detected that; a human did, which is what this direction being open
+  costs. Closing
   this direction means deciding that "a test imports it" is the same as "a test covers it",
   which is precisely what the first bullet refuses to say. It is a decision about what
   `tested_by` means, not a gap in the parser.
@@ -549,6 +553,19 @@ front of.
   `cleared_by_human` beside it. The queue entry records that a person answered; only this
   line records what he answered, which queue's offer governed it, and the reason code the
   card was queued under.
+
+  **The overwrite hazard was closed on 2026-08-22, and the line still earns its place.**
+  D3 rung 0 (`variant.HUMAN_ANSWERED`) has `cli/resolve.py` read the answered
+  `sku` + `condition` off the inventory record and `join_batch` resolve straight to that
+  row, so a later run reproduces the choice rather than deriving one over it. The residue is
+  narrow and deliberate: an answer whose SKU the current export no longer carries, or
+  carries under a different Condition, still falls through to the ladder rather than being
+  guessed at, and an emit that lists the resulting row does write it onto the record. What
+  the line uniquely holds has changed shape rather than gone away — the record is now the
+  durable home of *what* he answered, but `set_state` writes those same two fields from
+  `cmd_emit`'s push and `master.Card` has no field naming the writer, so the record cannot
+  say which of the two put them there. Only this line says a human did, names which queue's
+  offer governed it, and carries the reason code the card was queued under.
 
 **What shipped**: `SERVER_EVENTS` and `_history` in `server/capture_server.py`, and
 `check_history` in `harness/tests/t7_store_and_seams.py` — 30 assertions. Every event is
