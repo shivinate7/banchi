@@ -108,9 +108,9 @@ test('continuous motion past maxMoveMs reports stalled exactly once, and never f
 test('motion dwelling in the Schmitt band still stalls — the band cannot hide a jam', () => {
   const machine = new MotionMachine()
   const events: MotionEvent[] = []
-  // Enter MOVING once, then hover in the band (d between tLo 3.0 and tHi 6.0) — a hand
+  // Enter MOVING once, then hover in the band (d between tLo 4.5 and tHi 8.0) — a hand
   // resting half-in-frame. The stall clock must keep running even though d never crosses
-  // tHi again. Base alternation of ±2.2 gives d ≈ 4.4, inside the band.
+  // tHi again. Base alternation of ±3.0 gives d ≈ 6.0, inside the band.
   let ms = 0
   const feed = (base: number, phase: number) => {
     const event = machine.step(ms, still(base, phase))
@@ -119,7 +119,7 @@ test('motion dwelling in the Schmitt band still stalls — the band cannot hide 
   }
   feed(170, 0)
   feed(60, 1) // violent: MOVING starts
-  for (let i = 0; i < 50; i += 1) feed(i % 2 === 0 ? 60 : 64.4, i + 2) // band hover
+  for (let i = 0; i < 50; i += 1) feed(i % 2 === 0 ? 60 : 66, i + 2) // band hover
   expect(events).toEqual(['stalled'])
   expect(machine.diag.fires).toBe(0)
 })

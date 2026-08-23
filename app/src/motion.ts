@@ -64,11 +64,20 @@ export const ROI_CELLS = (ROI_X1 - ROI_X0) * (ROI_Y1 - ROI_Y0)
 export type MotionParams = {
   /** Mean-abs-diff (0-255) above which the scene is MOVING. Fixed rather than adaptive:
    *  §10.0 mandates manual exposure, so there is no drift to adapt to, and an EMA floor
-   *  that learns during slow motion is a way to go blind. 6.0 sits ~17x over the measured
-   *  0.35 noise floor and ~2.4x under the weakest observed swap. */
+   *  that learns during slow motion is a way to go blind. TUNED 2026-08-23 against the
+   *  first feeder trace (86 cycles): every swap burst peaked at 9.6 or higher and the
+   *  still phase never exceeded 4.56, so 8.0 splits the two populations with margin on
+   *  both sides. The first guess of 6.0 also worked live — every miss was tLo's fault. */
   tHi: number
   /** Below this the scene is STILL. The gap between tLo and tHi is the Schmitt band — a
-   *  single threshold chatters at the boundary and the still-counter never accumulates. */
+   *  single threshold chatters at the boundary and the still-counter never accumulates.
+   *  TUNED 2026-08-23, and this is the constant the first feeder run convicted: the LIVE
+   *  feed's still-phase noise is median 2.51, p99 4.07 — eleven times the 0.35 floor
+   *  measured off Gate B's stored JPEGs, because the preview stream never went through a
+   *  JPEG encode. The first guess of 3.0 sat INSIDE that noise, so "still" frames only
+   *  dipped under it 77% of the time and 14 of 86 cards passed without ever reaching a
+   *  verdict — the silent misses the owner saw. 4.5 sits above p99; the offline replay
+   *  scores 86/86 with zero double-fires across the whole tLo 4.0-5.0 plateau. */
   tLo: number
   /** Consecutive still frames that mean "settled". 2 frames = 67 ms at 30fps. The original
    *  guess of 6 (200 ms), plus a blinding 400 ms cooldown, summed to more than the 458 ms
@@ -82,7 +91,12 @@ export type MotionParams = {
    *  card sitting there and the fire is suppressed. The gate that actually prevents
    *  double-captures — the refractory is a guess about time, this is a statement about the
    *  picture. 4.0 is ~11x the noise floor and ~3.5x under the weakest same-card repeat
-   *  measured across the Gate B duplicates (14.3). */
+   *  measured across the Gate B duplicates (14.3). The feeder trace re-measured it live:
+   *  the closest consecutive pair of DIFFERENT fired cards read 7.6 — almost certainly a
+   *  duplicate-name pair, which must fire — so 4.0 cannot rise without risking real
+   *  duplicates and cannot fall toward the ~3 live noise. It stays, biased toward firing:
+   *  a false pass is a visible duplicate undo fixes, a false suppression is a silent
+   *  §5.5 loss. */
   tNovel: number
   /** Mean ROI luma below which a settled scene is an empty stand, not a card. The Gate B
    *  frames measure the card region at ~172 and the empty desk/backdrop at 30-65. NOT
@@ -97,10 +111,12 @@ export type MotionParams = {
   maxMoveMs: number
 }
 
-/* ~660 ms cycle, <250 ms round trip, 34 ms jitter. See each field's own comment. */
+/* Measured off the first feeder trace, 2026-08-23: period 623 ms burst-to-burst, each
+ * card ~217 ms moving and ~400 ms still (min still gap 132 ms), frames delivered at
+ * ~25 fps. See each field's own comment for its derivation. */
 export const DEFAULT_PARAMS: MotionParams = {
-  tHi: 6.0,
-  tLo: 3.0,
+  tHi: 8.0,
+  tLo: 4.5,
   stillFrames: 2,
   refractoryMs: 250,
   tNovel: 4.0,

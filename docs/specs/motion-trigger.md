@@ -4,7 +4,7 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — BUILT AND SELF-TESTED, NOT TUNED
+## STATUS — TUNED OFFLINE AGAINST THE FIRST FEEDER TRACE, NOT YET CONFIRMED LIVE
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
 mode toggle on the capture screen, with a live HUD and a swallowed-fire counter. Two specs
@@ -13,12 +13,17 @@ answer key, and `app/tests/motion-live.spec.ts` drives the real screen in a real
 with a synthetic camera stream, from arming through firing to the dropped-fire count. Both
 run in `make design-check`.
 
-**What a green run of both says is that the wiring works. It says nothing about the rig.**
-Every threshold below was derived from 53 photographs of one lot under one lamp, and
-crossed in tests by scenes built to cross it. The feeder's own rhythm, foil under the
-rig's light, and the operator's tolerance for false fires are all unmeasured. BUILT is not
-TUNED — the same distinction this repo already holds between built and validated — and
-§4's protocol is what closes it.
+**The first feeder trace arrived 2026-08-23 — 86 cycles, 65.3 s — and retuned the one
+constant it convicted.** The feeder's measured rhythm: period 623 ms burst-to-burst, each
+card ~217 ms moving and ~400 ms still (min still gap 132 ms), frames delivered at ~25 fps.
+The conviction: the LIVE feed's still-phase noise is median 2.51, p99 4.07 — eleven times
+the 0.35 floor measured off Gate B's stored JPEGs, because the preview stream never went
+through a JPEG encode — so the first `tLo` of 3.0 sat inside the noise and 14 of 86 cards
+(16%) passed without reaching a verdict, silently, exactly as the owner reported. The
+offline replay reproduced the live run frame-perfectly (72 fires, zero suppressions),
+and the swept retune (`tLo` 3.0 → 4.5, `tHi` 6.0 → 8.0) scores **86/86 with zero
+double-fires** across the whole tLo 4.0–5.0 plateau. Still open: a live confirmation run
+at the rig, foil under this lamp, and the 50-card bar.
 
 ## 1. The two halves
 
@@ -41,8 +46,8 @@ Phases: watching → moving → settling → (verdict) → watching, with a defe
 |---|---|---|
 | grid | 64×36 | each cell averages ~3,600 sensor pixels; noise attenuates ~60× |
 | watch region | centre, inset 20% x / 10% y | 15 of 53 Gate B frames carry a second card in the feed path; card placement repeats to ~30 px | 
-| `tHi` | 6.0 | ~17× the measured 0.35 noise floor, ~2.4× under the weakest real swap (14.3) |
-| `tLo` | 3.0 | the Schmitt band under `tHi`; one threshold chatters and the still-count never accumulates |
+| `tHi` | 8.0 | retuned 2026-08-23: burst peaks measured ≥ 9.6, still phase ≤ 4.56 — 8.0 splits the populations. The first guess (6.0, from Gate B stills) also worked live |
+| `tLo` | 4.5 | retuned 2026-08-23, the constant the trace convicted: live still-noise p99 is 4.07, eleven times the stored-JPEG floor the first guess (3.0) was derived from. Replay: 86/86 at 4.0–5.0, vs 72/86 live at 3.0 |
 | `stillFrames` | 2 (67 ms) | fire latency (stillFrames+1)·f = 100 ms = 22% of the 458 ms worst observed cycle. The first guess — 6 frames + a blinding 400 ms cooldown — summed past the *mean* cycle: 619.7 − 233 − 400 = −13 ms |
 | refractory | 250 ms, deferring | sized to the <250 ms capture round trip, not the card cycle; a settle inside the window fires at expiry instead of being dropped |
 | `tNovel` | 4.0 | ~11× noise, ~3.5× under the weakest same-card repeat across the Gate B duplicate pairs |
@@ -97,10 +102,12 @@ Cost: ~30 minutes at the rig, one box of expendable commons, before the 50-card
 confirmation run. Order matters; each step isolates one parameter family.
 
 1. **Noise floor first, nothing moving.** Arm motion with the rig lit and the stand empty.
-   `d` should idle far below 1. If it doesn't: mains flicker (pin the shutter to a multiple
-   of the mains period — §10.0's list), or the pane/lamp is unstable. Nothing else is
-   tunable until this is quiet. Expect one `empty` suppression at arm time and silence
-   after.
+   `d` should idle near **2.5, and under ~4.1** — the live feed's measured floor, NOT the
+   "far below 1" this step first predicted from Gate B's stored JPEGs; the preview stream
+   is ~11× noisier because it never went through a JPEG encode, and that misprediction is
+   what cost 14 cards in the first feeder run. Reading well above 4: mains flicker (pin
+   the shutter to a multiple of the mains period — §10.0's list) or an unstable lamp.
+   Expect one `empty` suppression at arm time and silence after.
 2. **Card-present floor.** Place one card by hand. `luma` should sit near 170 against an
    empty-stand reading near 50; `cardLumaFloor: 90` should split them with margin on both
    sides. A sleeved or dark-art card that reads low is a floor problem — lower it before

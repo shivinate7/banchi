@@ -314,6 +314,47 @@
   border-radius: var(--r);
 }
 
+/* The portrait pair, for a side-mounted camera (rotation 90/270). Asked for by the owner
+   on 2026-08-23 after the first feeder session: with the card upright the landscape frame
+   spent two thirds of itself on letterbox, and the stored photo drew at a third of the
+   width the panel paid for. Height-capped with width following, the same rule the review
+   queue's photo uses — the frames must not walk the controls off a laptop screen. Both
+   panels get the class together, so the comparison-across-equals rule above survives the
+   turn. */
+.capture-frame-portrait {
+  aspect-ratio: 9 / 16;
+  height: min(70vh, 620px);
+  width: auto;
+  margin-inline: auto;
+}
+
+/* The live <video> inside a portrait frame. The element still receives the camera's
+   LANDSCAPE frames — rotation is applied at encode time, and neither the encode input nor
+   the motion sampler sees any of this (CSS transforms are invisible to drawImage). The
+   sizes swap width and height around the rotation: the frame is exactly 9/16, so
+   width 177.78% of frame-width equals frame-height, and height 56.25% of frame-height
+   equals frame-width — a rotated exact fit, no letterbox. */
+.capture-media.capture-media-turn90,
+.capture-media.capture-media-turn270 {
+  /* Double class on purpose: .capture-media sets width/height 100% LATER in this file,
+     and these must outrank it or the swap silently loses the cascade — which drew the
+     video at 56% scale, letterboxed twice, the first time this was written. */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 177.78%;
+  height: 56.25%;
+}
+.capture-media.capture-media-turn90 {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+.capture-media.capture-media-turn270 {
+  transform: translate(-50%, -50%) rotate(270deg);
+}
+.capture-media.capture-media-turn180 {
+  transform: rotate(180deg);
+}
+
 /* contain, not cover: a crop that hides the edge of the frame hides the finger holding the
    card down, which is one of the two things this panel exists to catch. */
 .capture-media {
@@ -433,6 +474,13 @@
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: var(--r);
+}
+
+/* Stored photos are portrait under a side-mounted camera, and a portrait photo in a
+   landscape thumb was 63px of card in 112px of letterbox. */
+.capture-undo-thumb-portrait {
+  width: 63px;
+  aspect-ratio: 9 / 16;
 }
 
 .capture-undo-action {
