@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isEditableTarget } from './keys'
 import type { ComponentType } from 'react'
 
 import { CaptureScreen } from './CaptureScreen'
@@ -243,23 +244,6 @@ const LEADER = ','
  * docs/DESIGN.md's scale is spacing. */
 const CHORD_MS = 1500
 
-/* Focus that swallows a key: the same set trigger.ts refuses to fire through, ReviewQueue.tsx
- * refuses to answer through and PullPreview.tsx refuses to move through, including SELECT,
- * whose letter typeahead makes a focused native picker a real collision rather than a
- * hypothetical one. Without it the leader is a comma nobody can type into the search field.
- *
- * THIS IS THE FOURTH COPY IN THE APP and PullPreview.tsx's copy already records that the hoist
- * is due. It is still not done here, and the reason is narrower than that file's: the hoist
- * needs a module, `docs/map.py` has an orphan rule that fails the commit on a source file no
- * entry mentions, and the map is a document. A shared predicate is worth one commit that
- * touches the map on purpose; it is not worth smuggling one in beside a nav.
- */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
 
 /** `location.hash` as a route path: '' and '#' and '#/' all mean the root. */
 function currentPath(): string {

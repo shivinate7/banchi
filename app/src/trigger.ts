@@ -14,6 +14,8 @@
  * because under a feeder a silently swallowed fire is a card with no record.
  */
 
+import { isEditableTarget } from './keys'
+
 export type Trigger = {
   /** Which implementation is behind the seam, as a greppable machine string —
    *  `manual:Space` today, `motion` at Gate C. docs/DESIGN.md's idiom for exactly this:
@@ -39,22 +41,6 @@ function keyLabel(key: string): string {
   return key
 }
 
-/* Focus that swallows the key. INPUT and TEXTAREA are the obvious pair — the set hint is
- * free text (docs/specs/capture-app.md section 5.3) and typing a set name must not
- * photograph five cards.
- *
- * SELECT is in the list for a less obvious reason: a native select does letter typeahead,
- * so with the box or camera list focused, a single-letter trigger key would both jump the
- * list and fire a capture. The camera picker on this same screen is a select, which makes
- * that a real collision rather than a hypothetical one. contentEditable is here for
- * completeness and costs one clause.
- */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
 
 /** Gate B's trigger: one key, pressed by the owner. */
 export function manualTrigger(key: string): Trigger {

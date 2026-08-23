@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isEditableTarget } from './keys'
 import type {
   AnswerResult,
   CandidateRow,
@@ -515,16 +516,6 @@ const UNDO_KEY_LABEL = 'U'
  */
 const UNDO_WINDOW_MS = 20_000
 
-/* Focus that swallows a key, the same set `trigger.ts` refuses to fire through and for the
- * same reasons — including SELECT, whose letter typeahead would otherwise both jump a list
- * and answer a card. This screen has no field today; the guard costs one function and stops
- * that from being a thing to remember when it gains one. */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
 
 // ------------------------------------------------------------------------------ the screen
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isEditableTarget } from './keys'
 import type { InventoryCard } from './types'
 import type { Failure } from './server'
 import { describeFailure, positionLabel, getInventory, photoUrl } from './server'
@@ -81,25 +82,6 @@ const STEPS = [
   { key: 'ArrowRight', label: '→', delta: 1 },
 ] as const
 
-/* Focus that swallows a key: the same set `trigger.ts` refuses to fire through and
- * ReviewQueue.tsx refuses to answer through, including SELECT, whose letter typeahead makes a
- * focused native picker a real collision rather than a hypothetical one.
- *
- * THIS IS THE THIRD COPY IN THE APP and by this file's own precedent the hoist is now due —
- * `describeFailure` lived here, was copied twice, and the third copy is what made the move to
- * server.ts due. Recorded rather than done, because the move opens two files this change has
- * no other reason to touch, and a predicate hoisted in passing is a predicate nobody reviewed.
- *
- * There is no field on this screen today. `SearchField.tsx` is why the guard is written
- * anyway: a search box over a two-hundred-card list is the obvious next thing here, and a
- * hotkey that eats the arrow keys inside one is a bug found by whoever adds the field rather
- * than by whoever caused it. */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.isContentEditable) return true
-  const tag = target.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
 
 /* `describeFailure` and `Failure` LIVED HERE and moved to server.ts on 2026-08-13, beside
  * the `ServerError` they destructure. This file's copy was the original and the argument in

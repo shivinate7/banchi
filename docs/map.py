@@ -792,18 +792,6 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5", "D27"]},
-            "src/CameraPicker.tsx": {"does": "UNREFERENCED since the Pass D rebuild (2026-08-23): the camera picker UI "
-                    "moved into CaptureScreen's Camera field, built from the same useCamera "
-                    "hook, and no screen renders this component now. Kept pending the "
-                    "owner's call to delete or keep; the map records the state so the orphan "
-                    "rule cannot be read as coverage of a live screen.",
-            "governed_by": ["D13"]},
-            "src/CameraPicker.css": {"does": "UNREFERENCED since the Pass D rebuild (2026-08-23): the camera its sheet "
-                    "moved into CaptureScreen's Camera field, built from the same useCamera "
-                    "hook, and no screen renders this component now. Kept pending the "
-                    "owner's call to delete or keep; the map records the state so the orphan "
-                    "rule cannot be read as coverage of a live screen.",
-            "governed_by": ["D5"]},
             "src/PullPreview.tsx": {"does": "look only: the card's own capture photo beside its "
                                             "position label, the last link in the Gate B chain",
                                     "governed_by": ["D6", "D10", "D24"]},
@@ -963,6 +951,11 @@ COMPONENTS = [
                                             "and show no keys.",
                                     "governed_by": ["D5", "D13"]},
             "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5"]},
+            "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
+                                     "question every keyboard handler asks first. The three "
+                                     "prior copies each recorded the hoist as due; this is "
+                                     "the debt paid.",
+                            "governed_by": ["D5", "D13"]},
             "src/useSearch.ts": {"does": "GET /search behind a debounce, with an out-of-order guard so a "
                                          "slow early answer cannot overwrite a fast later one",
                                  "governed_by": ["D5", "D13"]},
