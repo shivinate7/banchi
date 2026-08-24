@@ -156,6 +156,77 @@ against today's 45.6%.
   chrome numbers unreachable as written, since there are no pages — that section would have
   to be re-argued as frame chrome.
 
+### 1.5 THE OBJECTION, AND THE FIVE MECHANISMS THAT ANSWER IT
+
+**The owner's response to the above, 2026-08-24**: *"I like the Rig, but I think having one
+page for the entire app is gonna grow frustrating fast and end up feeling cumbersome not
+efficient."*
+
+That is the correct objection and it is not a matter of taste. A page hands you five things
+for free that a single surface has to earn back deliberately, and a Rig that skips any one of
+them earns exactly that reputation. Recorded as a numbered ledger because each cause has one
+mechanism, and dropping a mechanism silently is how this proposal would fail.
+
+**Cause 1 — nothing has a name any more.** No bookmark, no link, no browser-back; every move
+is an unnamed mode change and the app forgets where you were. This is the biggest single
+reason one-surface apps feel worse than pages.
+
+> **Mechanism: the stage is ADDRESSED, not moded.** `#/2/17`, `#/box/2`, `#/answer`,
+> `#/run/2026-08-24-box2`. Back, forward, reload, bookmarks and two tabs side by side keep
+> working, because they are the browser's and were never ours to break. `app/src/App.tsx`'s
+> hash router already does this — the Rig changes what a route *paints*, not whether routes
+> exist. **This is the mechanism that makes the whole proposal survivable, and it is the one
+> that would be dropped first** for looking like a formality.
+
+**Cause 2 — everything secondary becomes a modal.** With no room for another screen, the
+fifteenth operation arrives as an overlay, then two. A stack of things covering the thing you
+were looking at is precisely how efficient turns into cumbersome.
+
+> **Mechanism: drawers, never overlays.** Box ops, claim corrections, the retire reasons and
+> `decisions.json` each open in the dock and PUSH the rows beneath them down. The stage is
+> never occluded, so the photograph being judged stays visible while you operate on the card.
+> `docs/DESIGN.md`'s destructive-action gate stays the one exception.
+
+**Cause 3 — fixed zones are wrong for most tasks.** A 280px box rail is right for choosing a
+box and waste while answering a queue. §1.4 already concedes 620px of committed chrome, which
+is the same complaint §0 makes about today's app.
+
+> **Mechanism: three states per zone — full, mini, gone**, on `[` and `]`, remembered per
+> subject. The stage then runs 820px browsing, 1044px answering, 1100px shooting and 1328px
+> judging one photograph, against today's 244px review photo. Below 1200px the rail auto-minis;
+> **below ~1000px the dock stops being a zone and becomes a drawer over the stage**, which is
+> this design's one honest concession and is named rather than designed away. D13 puts the rig
+> on a desktop browser, so that is a laptop-lid case.
+
+**Cause 4 — you can only look at one thing.** The real questions here are comparisons: is this
+Thievul the one already in box 1?
+
+> **Mechanism: the stage splits** on `\`, into two independently addressed panes — so the
+> split is itself in the hash and a comparison is a link you can keep.
+
+**Cause 5 — background work makes you go and look.** A run takes minutes to hours and outlives
+the request that started it (D33). If checking it means navigating away, you lose your place;
+that trip, three times a box, is most of §0's measured friction.
+
+> **Mechanism: a ticker, not a destination.** A live run paints one line across the bottom of
+> the stage from any subject — phase, count, elapsed, spend — expandable into the stage on a
+> key. `cli/runs.py` already makes a run an immutable input read from disk, so this holds no
+> state between requests.
+
+**Four of the five are answered by design. What remains real, and is the grounds to reject
+this:** three zones is a bet that every task decomposes into subject / content / controls, and
+a task that does not — a wide table, a long console — has to borrow the whole stage; the
+collapse keys are discoverable only from the dock caption, which is one more thing to know than
+a page needs; and the build is one large component tree that rewrites every Playwright selector
+outside `app/tests/fulfillment.spec.ts`, even though the screens' logic is re-hosted rather
+than re-implemented.
+
+**Visuals exist for all six modes** — answering, shooting, browsing, a drawer, a split, and the
+ticker — drawn to the real 1440x900 aspect with the zone budget as arithmetic. They are an
+artifact rather than a file in this repo, which is the one thing about this entry that is not
+self-contained; `docs/DESIGN.md`'s screenshot loop is the standing rule that a design needs a
+rendered reference, and this is that reference.
+
 ---
 
 ## 2. Proposal B — **The Line**: the pipeline is the navigation
@@ -303,14 +374,14 @@ Measured today against the projection for each proposal, at 1440x900.
 | | today | A · The Rig | B · The Line | C · The Slab |
 |---|---|---|---|---|
 | top-level unit | screen | box (place) | stage (process) | subject (address) |
-| chrome above content | 46 / 217 / 146px | 0px | 44px | 40px |
-| width used, review task | 45.6% | 100% | 100% | 100% |
+| chrome above content | 46 / 482 / 146px | 0px | 44px | 40px |
+| width used, review task | 45.6% | 100% (stage 1044px) | 100% | 100% |
 | scroll for one review card | 4.5 viewports | 0 | 0 | 0 |
-| routes | 5 | 1 + Fulfiller | 1 + Fulfiller | 0 + Fulfiller |
+| routes | 5 | addressed subjects + Fulfiller (§1.5 cause 1) | 1 + Fulfiller | 0 + Fulfiller |
 | clicks, shoot → CSVs in hand | 3 route changes, 3 folds | 0 route changes, 0 folds | 6 stop clicks, 0 folds | 0 clicks, 4 typed subjects |
 | "what do I do next" | terminal only | bead colour | the counts | `?` or a stale breadcrumb |
 | decision entries reopened | — | none (DESIGN.md re-argued) | **D31, D33** | D31 softened, DESIGN.md re-argued |
-| risk | — | one big tree | demotes the box axis | discoverability |
+| risk | — | one big tree; three zones is a bet | demotes the box axis | discoverability |
 
 **They are not equally safe.** A is the largest layout change with the smallest argument to
 have — it reopens no decision, because it keeps the box as the unit and only stops paginating
