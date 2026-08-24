@@ -570,9 +570,20 @@ def run(args, say) -> int:
         say(f"position from filename: {len(recovered)}")
     claimed = [i for i in items if i.capture.rarity_claim]
     if claimed:
-        # The preflight prints what will be sent, and a claim changes the user turn — so
-        # a run with claims says so before it costs anything, the same as the set hint.
-        say(f"rarity claims   {len(claimed)} card(s) carry a stack claim in the user turn")
+        # THIS LINE SAID "in the user turn" AND THAT STOPPED BEING TRUE the day the clause was
+        # switched off. The preflight exists to say what a run is about to send before it
+        # costs anything, so a stale sentence here is worse than no sentence: it describes
+        # spending that is not happening, in the one place a reader checks precisely because
+        # they are deciding whether to spend.
+        #
+        # What is true now: the claim is on the card, it is NOT in the prompt (see
+        # `rarity_claim=None` above and the measurement cited there), and it still does its
+        # other two jobs — the ladder cross-check at join time, and the chip narrowing on the
+        # capture screen. Both happen without the model ever seeing it.
+        say(
+            f"rarity claims   {len(claimed)} card(s) carry a stack claim — NOT sent to the "
+            f"model (measured and switched off); used by the ladder cross-check at join"
+        )
     if getattr(args, "variant", None):
         flagged = [i for i in items if i.capture.variant_from_flag]
         kept = [
