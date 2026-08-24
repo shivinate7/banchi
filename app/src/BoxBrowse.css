@@ -605,10 +605,22 @@
    to meet. */
 /* Fills its own column now rather than carrying a 420px cap of its own — the grid decides how
    wide the photo column is, and a second cap here would leave air inside it. */
+/* aspect-ratio: 63 / 88 reserved, the same reason ReviewQueue.css, Fulfillment.css,
+   CardLocations.css and Inventory.css all set it on their own card photos: 63x88mm is the
+   shape of every card this product will ever hold, so the box is the right shape before the
+   image loads and the panel does not jump when it does. This was the one photo in the app
+   that skipped it — `PhotoPanel` remounts the `<img>` per card (`key={row.key}:{src}`) so a
+   failed load cannot leave the previous card's broken state attached to the new one, which
+   means every arrow-key step tears down the element and mounts a fresh one with no known
+   height until its bytes arrive. Without a reserved box the `.browse-shot` column collapsed
+   toward zero and snapped back on load, a few millimetres of page reflow per photo that
+   arrow auto-repeat (STEPS has no `event.repeat` guard, deliberately) made visible as a
+   shake through the whole page below the sticky `.browse-map`. */
 .browse-photo {
   display: block;
   width: 100%;
-  height: auto;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
