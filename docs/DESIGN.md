@@ -367,6 +367,27 @@ makes the fill mean two different things on two screens. Reserving it for single
 screens means its meaning never has to be learned twice, and it is why the Fulfiller's
 pull-confirm is the loudest thing he ever sees.
 
+**THE THIRD FILL IN THE PRODUCT IS THE RUN PANEL'S SPEND BUTTON** (D33, 2026-08-24), and it
+is listed here so a later session reading the rule does not find it as an unexplained
+exception. `app/src/RunPanel.tsx` draws exactly one solid fill: the control that starts a
+paid identification run. It satisfies the rule literally rather than by argument — the
+button **does not exist** until the free preflight has answered, and at the moment it is
+drawn the card count and the estimate are on screen directly above it and the only remaining
+action is to spend or not to. Every other control on that panel is an outline, including all
+three free steps, because a free re-runnable step is never the only thing to do.
+
+**Absent, not disabled, and that distinction is the load-bearing half.** A disabled button is
+one attribute away from being pressable, and that attribute is what a later refactor removes
+without noticing; an element that is not rendered has to be deliberately re-added.
+`app/tests/run-panel.spec.ts` asserts the absence rather than the disablement for exactly
+that reason.
+
+**The panel is folded by default and none of the Fulfillment floors reach it.** It is an
+owner surface at the 4-16 end of the scale, and its fold is `BoxOps`' measured argument
+applied again: ~250px of panel, reached once a box, sitting above the card detail on the
+screen whose question is *where is this card*. A live run is the one thing that opens it
+unasked.
+
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
 thirteen strings — seven from the variant ladder in `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,

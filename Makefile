@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-history dev server screenshot design-check lint typecheck venv
+.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -30,7 +30,8 @@ help:
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
-	@echo "  make check        harness + docs-audit + lint + typecheck"
+	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
+	@echo "  make check        harness + docs-audit + its self-test + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -80,11 +81,25 @@ audit-history:
 
 # Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
 # A check suite has to run in a known order and stop at the first failure.
+# THE SELF-TEST RUNS HERE AND NOT IN THE GIT HOOK, and the split is D18's rather than a
+# preference: `--self-test` is the one mode of docs-audit.py that WRITES (into a temporary
+# directory it makes and destroys), and nothing that writes may run on the path that decides
+# whether a commit proceeds. `make check` is invoked by a person on demand, so it is not that
+# path — which makes it the right home for the one check that verifies the checker.
+#
+# It sat red and unnoticed until 2026-08-24 because nothing ran it at all: a stale fixture in
+# the `tested_by reach` case had stopped being false, and `make docs-audit` was green
+# throughout. A checker whose own self-test nobody runs is a checker nobody has watched fail.
 check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
+	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
+
+# python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
+audit-self-test:
+	@python3 scripts/docs-audit.py --self-test
 
 # Foreground and blocking, like `server` below — background it from an agent session, or
 # the Stop hook's harness run never gets to happen.

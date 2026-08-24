@@ -27,10 +27,13 @@ make server         # Python capture server on :8000. Blocks — background it.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
-make check          # harness + docs-audit + lint + typecheck — no stubs left in it
+make check          # harness + docs-audit + its self-test + lint + typecheck
+make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
+                                   #   --dry-run  preview both queues, write nothing
+                                   #   --bypass   trust the finish claim over the photo (D3)
 ./pkmnscan emit     <run-dir>       # write import CSVs. Free, re-runnable.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>
 ```

@@ -923,6 +923,39 @@ Full detail is in the review; the short form, by where it bites:
 
 ---
 
+## Closed 2026-08-24 — the self-test nobody ran
+
+Kept rather than deleted, because what closed it is smaller than what it teaches.
+
+**`python3 scripts/docs-audit.py --self-test` was RED, and had been for some time.** One case
+in `tested_by reach` — the one that replays the historical false claim `store/queues.py` citing
+a test that does not import `store` — was pinned to **T3**, and T3 had since begun importing
+`store` itself (commit `548515b`, where D7's fungibility amendment made it build a real store to
+exercise rung 0 and the `committed` flag). The claim stopped being false, so the case that
+asserts a false claim is caught stopped catching one.
+
+**`make docs-audit` was green throughout, and so was every commit.** Nothing ran `--self-test`:
+not the git hook, not `make check`, not the Stop hook. A checker whose own self-test nobody runs
+is a checker nobody has watched fail — which is the argument `docs/GATES.md` makes for the
+harness, turned on the tool that audits the docs.
+
+**Two fixes, and the second is the one that matters.** The case moved to T5 and states its
+requirement in the comment — *this case needs a test that reaches `pipeline` and not `store`* —
+naming T2 and T5 as the only two left and saying to move it again rather than weaken it.
+And `make check` now runs `audit-self-test`.
+
+**It is deliberately NOT in the git hook**, and that is D18 rather than taste: `--self-test` is
+the one mode of that script that writes, into a temporary directory it creates and destroys, and
+nothing that writes may run on the path that decides whether a commit proceeds. `make check` is
+invoked by a person on demand, so it is not that path.
+
+**The residual gap, stated so it is not read as closed:** `make check` is not automatic either.
+The Stop hook runs `make harness`, not `make check`, so a red self-test still surfaces only when
+somebody asks. That is the same standing this file gives every on-demand check, and it is better
+than the nothing it had.
+
+---
+
 ## Prose that outran the code
 
 - `docs/specs/audit-retirement.md` restates a check roster and a count that the shipped

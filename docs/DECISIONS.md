@@ -561,6 +561,14 @@ again the backstop rather than the whole guard.
 **Nothing on the audit path can write.** The script opens, compares, prints, and sets an
 exit code; it parses with `ast` rather than importing, so it does not even run project code.
 Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
+
+**`--self-test` therefore runs in `make check` and never in the git hook** (settled 2026-08-24).
+It is the one mode of this script that writes, and D18 forbids a writing thing on the path that
+decides whether a commit proceeds; `make check` is invoked by a person on demand, so it is not
+that path. Until then nothing ran it at all, and it had gone red without anyone noticing — a
+stale fixture in `tested_by reach` had stopped being false while every commit stayed green.
+`docs/DEBTS.md` carries the account. The residual gap is named there too: `make check` is not
+automatic either, so a red self-test still surfaces only when somebody asks.
 Adding a `--fix` flag is a change to this entry, not a configuration knob. The reason is the
 failure this entry exists to prevent:
 

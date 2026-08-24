@@ -3877,6 +3877,16 @@ NON_PATHS = [
     "`printedTotal` lives only in `sets/en.json`",
     "One file per run: `t1-<UTC date>.json`, carrying the overall accuracy",
     "The capture server serves stored photos at `GET /photo/<box>/<position>`",
+    # THE ROUTES WHOSE FIRST SEGMENT IS A REAL PACKAGE, which is the case the placeholder
+    # rule above cannot save because there is no placeholder in them. `POST
+    # /pipeline/identify` was read as the file `pipeline/identify` and blocked a commit on
+    # 2026-08-24 for describing a route correctly; `_ROUTE` is what fixed it, and these are
+    # the lines that keep it fixed. Both directions matter: a route is dropped, and the
+    # module of the same name in ordinary prose is still found (see REAL_PATHS).
+    "- **One route spends and is named for it** — `POST /pipeline/identify`. It refuses",
+    "`GET /pipeline/runs/<name>/file` — one artefact's bytes, for download",
+    "`PUT /pipeline/runs/<name>/decisions` — D9's sub-threshold answer",
+    "`DELETE /inventory/<box>/<index>` — D10's hard delete of a record",
     "Refill on later imports as `Add to Quantity = min(cap - live, backstock)`",
     "The repo sits under `~/Library/Mobile Documents/com~apple~CloudDocs/`",
     "Free at https://dev.pokemontcg.io and sent to api.pokemontcg.io only",
@@ -3892,6 +3902,12 @@ REAL_PATHS = [
     ("permissions live in `.claude/settings.json`", ".claude/settings.json"),
     ("Rationale: @../docs/CODES-DECISIONS.md", "@../docs/CODES-DECISIONS.md"),
     ("`docs/specs/batch-script.md` — the four commands", "docs/specs/batch-script.md"),
+    # THE OTHER HALF OF THE ROUTE RULE. `_ROUTE` drops a slash-path only when an HTTP method
+    # stands in front of it, and this is what proves the rule stayed narrow: the same
+    # package name in ordinary prose, and even a route path mentioned WITHOUT its method,
+    # are still extracted and still checked.
+    ("the seam lives in `server/pipeline_routes.py` and refuses", "server/pipeline_routes.py"),
+    ("read `pipeline/games.py` for which strategy a game uses", "pipeline/games.py"),
 ]
 
 
@@ -4178,19 +4194,33 @@ def self_test() -> int:
 
     # The false claim docs/DEBTS.md recorded, replayed against the real harness rather than
     # against a stand-in for it. `store/queues.py` cited T3 and T4 while nothing under
-    # harness/ imported store; T7 later arrived and does import it, so the case pins T3 —
-    # a test that reaches pipeline and nothing else.
+    # harness/ imported store.
+    #
+    # THE ID IN THIS CASE HAS MOVED TWICE, AND BOTH MOVES ARE THE CASE WORKING RATHER THAN
+    # ROTTING. It pinned T3 once T7 arrived and began importing store; then T3 itself began
+    # importing store (commit 548515b, when D7's fungibility amendment made it build a real
+    # store to exercise rung 0 and the `committed` flag), so the claim stopped being false
+    # and this case went red — a RED SELF-TEST WITH A GREEN AUDIT, which is exactly the
+    # shape a stale fixture takes. Found on 2026-08-24; nothing runs `--self-test` on the
+    # commit path, which is why it sat.
+    #
+    # Pinned to T5 now, and the requirement is stated rather than left to be rediscovered:
+    # THIS CASE NEEDS A TEST THAT REACHES `pipeline` AND NOT `store`. T2 and T5 are the only
+    # two left. If a later change gives T5 a store, move it again and add a line here — do
+    # not weaken the assertion, which is the whole point of the case: the `tested_by reach`
+    # row must be able to catch a claim that a test covers a package it never imports.
     if registry:
         found, claims = reach_findings(
-            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T3"]}}}], registry
+            [{"path": "store/", "modules": {"queues.py": {"tested_by": ["T5"]}}}], registry
         )
         ok(
             len(found) == 1 and claims == 1 and "store" in found[0].message,
-            "the historical false claim — store/queues.py citing T3 — is reported",
+            "the historical false claim — store/queues.py citing a pipeline-only test — "
+            "is reported",
             str(found),
         )
         found, claims = reach_findings(
-            [{"path": "pipeline/", "modules": {"join.py": {"tested_by": ["T3"]}}}], registry
+            [{"path": "pipeline/", "modules": {"pricing.py": {"tested_by": ["T5"]}}}], registry
         )
         ok(not found and claims == 1, "and the true claim beside it is not", str(found))
         found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T2"]}], registry)

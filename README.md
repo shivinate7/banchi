@@ -26,10 +26,11 @@ pipeline/                  CSV, variant ladder, pricing, join, routing, decision
 identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
-server/                    capture server: /capture, /status, /photo, inventory state
-app/                       the web app. Vite + React + TS. Six screens — capture, review
-                           queue, inventory, pull preview, Fulfillment, component gallery
-                           — all six routed. See "The app" below.
+server/                    capture server: /capture, /status, /photo, inventory state,
+                           and the pipeline seam — the one place a route can spend money
+app/                       the web app. Vite + React + TS. Five screens — capture, review
+                           queue, inventory, Fulfillment, component gallery — all five
+                           routed. See "The app" below.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
@@ -91,6 +92,21 @@ human. One blocking command would put a person in the middle of a poll loop.
 malformed sidecar and an unreadable photo all surface for nothing. `join` and `emit` cost
 nothing and are re-runnable, so fixing a review or changing a price is free.
 
+**`join` has two flags worth knowing.** `--dry-run` walks the ladder twice — once trusting
+the capture-time finish claim over a disagreeing photo and once not — diffs the two queues by
+reason code, and returns before the first write. `--bypass` is the trusting half, kept for a
+run rather than made a default: *where a finish claim exists, the photo may not contradict it,
+though it may still choose inside a multi-finish one.* A card with no claim is untouched,
+because there is nothing to resolve it by. It exists because box 2 measured detection wrong on
+**42% of a box whose truth the owner confirmed** — see `docs/GATES.md` and D3.
+
+**Since 2026-08-24 none of this needs a terminal.** `#/inventory` carries a folded Runs panel
+over the same four commands: a free preflight that prints the card count and the estimate, a
+two-step confirm before anything is spent, the three free steps, every command's stdout shown
+verbatim, and the import CSVs as downloads. D33 is the decision; the panel is the answer to
+the one thing Gate B could not close — *emit's import files existed only as filenames in
+terminal output the owner never saw.*
+
 Between `join` and `emit` you edit the run's `decisions.json`: what happens to sub-threshold
 cards, and a price for anything the catalog has no price for. `emit` refuses to write until
 both are answered — see D9. It is a file rather than a flag so the step 7 screen becomes an
@@ -105,20 +121,25 @@ Build-order step 7, both halves built 2026-08-13. It is a browser front end over
 server and nothing else: no pipeline logic, no second store, no auth, no login.
 
 ```
-capture        live camera, box / set hint / finish, position tracking, undo
+capture        live camera, box / game / set hint / finish / rarity, undo, motion trigger
 review queue   one card at a time, photo first — the answer writes and advances
-inventory      D7's SKU -> positions map: one row per SKU, expanding to the copies
-pull preview   look only: a card's own capture photo beside its position label
+inventory      the box walk, and everything that hangs off it: search, a card's copies
+               and its sale, the box's own operations, and the pipeline's Runs panel
 Fulfillment    the second persona's whole product: pull, photo-confirm, mark sold
 gallery        step 6's component sheet, rendered by the build so it cannot go stale
 ```
+
+**It was six until D31.** `#/boxes` and `#/pull` were separate routes over the same 767
+records, and the owner named the problem: they read as three instances of one thing. They are
+modes of `#/inventory` now — *"it's basically find a card in a box-based system if anything"*
+— with the box walk as the spine and search narrowing it rather than replacing it.
 
 `make dev` serves it on :5173, `make screenshot` renders `scripts/views.txt` into
 `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
 real browser.
 
-All six open at a hash, and the Fulfillment view opens **without the nav strip** the other
-five carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
+All five open at a hash, and the Fulfillment view opens **without the nav strip** the other
+four carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
 it, and a strip of links to the capture screen's hard-delete undo is exactly the route it
 forbids. `docs/map.py`'s `app/` entry is the current account of what each file does.
 
@@ -126,8 +147,8 @@ forbids. `docs/map.py`'s `app/` entry is the current account of what each file d
 spec's schedule — a question since settled rather than an outstanding deviation. What it
 cost used to be that the screens displayed data no run had ever produced. **Gate B ran them
 on 2026-08-22**: the capture screen drove a real feeder session, the review queue held 16
-real entries and every one was answered through the answer route, and the pull preview found
-a stored photo at its physical location. Two things are still unexercised and
+real entries and every one was answered through the answer route, and the pull preview (now
+the inventory walk's card detail) found a stored photo at its physical location. Two things are still unexercised and
 `docs/specs/capture-app.md`'s STATUS section names them — the Fulfillment view against a
 real order, and the review screen's price bands against a mixed-value lot, that run having
 priced $0.04 to $0.40 end to end.

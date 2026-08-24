@@ -104,8 +104,9 @@ BUILD_ORDER = [
              "and no harness case names it, and the two capture-latency fixes are in app/, "
              "which no harness test reaches at all (this file's app/ entry says so in its own "
              "note). docs/GATES.md's Gate B section carries the run's measurements."},
-    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "blocked",
-     "blocked_by": "step 13 (owner sequencing, not a technical dependency — nothing in step 13 needs the vendored catalog, and no production code reads it yet)",
+    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "next",
+     "was_blocked_by": "step 13, which is done as of 2026-08-24 — the sequencing was the "
+                       "owner's and never technical, so finishing 13 is what released it",
      "note": "THE GATE DEPENDENCY WAS RETIRED, NOT SATISFIED, and the difference matters to "
              "anyone reading this row later. This step carried `blocked_by: Gate C` from "
              "2026-08-22, when the owner re-sequenced it behind motion capture — not because "
@@ -138,21 +139,56 @@ BUILD_ORDER = [
              "open: that list says 'do not build until all gates pass', all gates now have, "
              "and whether that sentence is thereby spent is the owner's ruling to make in that "
              "file rather than a consequence anybody may infer from this one."},
-    {"step": 13, "title": "Order flow, boxes, and search", "status": "next",
+    {"step": 13, "title": "Order flow, boxes, and search", "status": "done",
      "note": "D7's fungible copies, D20's box object with its retroactive capacity, D10's "
-             "per-box sections, and the search-and-sell screens. Landed: schema v2 and its "
-             "migration, GET /search and the three box routes, PositionBar/CardLocations/"
-             "SearchField/useSearch, the owner's search-and-sell and Boxes screens, the "
-             "Fulfiller's search, and D28's layout half. Outstanding: D26 removed + re-shoot, "
-             "D27 sessionStorage, D28's undo half, D29 group answers, D30 the gap convention."},
-    {"step": 14, "title": "Multi-game: four capture choices plus misc", "status": "blocked",
-     "blocked_by": "step 13 (owner sequencing, not a technical dependency)",
-     "note": "D21-D25. Landed: pipeline/games.py behind three real TCGplayer exports, four "
-             "audit rows, per-game dispatch, and `game` through all ten capture hops with the "
-             "picker on the capture bar. Outstanding: the rarity claim end to end (the job "
-             "that pays — it catches confident-but-wrong reads no threshold fires on), the "
-             "multi-export join, pooled non-located inventory with both opsec discharges, the "
-             "rarity clause into the prompt behind its own A/B flag, and per-game finalisation."},
+             "per-box sections, and the search-and-sell screens. "
+             "THIS ROW CARRIED AN `Outstanding` LIST OF FIVE ITEMS THAT WERE ALL ALREADY ON "
+             "DISK, and it stayed `next` for a day after there was nothing left in it to "
+             "build. Re-derived by grep on 2026-08-24 rather than from the previous note, "
+             "which is the same correction docs/GATES.md's own step 13 records making: D26's "
+             "retire and re-shoot have routes AND client functions AND controls, D27's "
+             "sessionStorage is in CaptureScreen.tsx, D28's answer undo is in server.ts, D29's "
+             "group answer has do_review_group_answer and answerReviewGroup, and D30's gap "
+             "convention ships as `neighbors` and `section_gaps` on every located card. D31 "
+             "then merged #/boxes and #/pull into #/inventory, so the screens this step names "
+             "by their old routes are modes of one. "
+             "A STALE `next` IS WORSE THAN A STALE `done`, which is why this row is worth a "
+             "note rather than a one-word edit: `make status` reads this field to answer "
+             "\"do this next\", so a step that is finished and still says `next` sends every "
+             "session that asks to re-audit work that is already committed."},
+    {"step": 14, "title": "Multi-game: four capture choices plus misc", "status": "done",
+     "note": "D21-D25. pipeline/games.py behind four real TCGplayer exports, four audit rows, "
+             "per-game dispatch, `game` through all ten capture hops with the picker on the "
+             "capture bar, the rarity claim end to end, the repeatable --export with per-game "
+             "catalogs and one import file per game (D25), pooled non-located inventory with "
+             "both opsec discharges, and per-game finalisation — riftbound_card_v1 and "
+             "one_piece_card_v1 exist, are registered and carry parsers. "
+             "THE RARITY CLAUSE WAS BUILT, MEASURED, AND SWITCHED OFF because it lost: "
+             "holdout 0.9706 -> 0.9559 for $0.17, with high-confidence misses up two. The "
+             "claim's other two jobs — the ladder cross-check and the chip narrowing — are "
+             "what D23 now rests on. pokemon_card_v1 did not move: 1ef974bf511d, unchanged, "
+             "because prompt_fingerprint hashes ONE profile's fields. "
+             "WHAT NO AMOUNT OF CODE CLOSES: neither new game has met a card. The store holds "
+             "zero Riftbound and zero One Piece records, so every claim about those two "
+             "prompts is a claim about a CSV and a schema, not about a photograph."},
+    {"step": 15, "title": "The pipeline seam: the four commands, reachable from a screen", "status": "done",
+     "note": "D33, built 2026-08-24. THE LARGEST INSTANCE OF CLAUDE.md's "
+             "route-is-not-a-feature RULE THIS REPO HAS HAD, and nobody had counted it: the "
+             "four commands have existed since step 4 and have been through a 53-card run and "
+             "a 544-card run, and until this step they could be reached only by typing at a "
+             "terminal — which docs/GATES.md names as what Gate B did not close. "
+             "server/pipeline_routes.py is its own module because it is the one part of the "
+             "server that can cause money to be spent: ONE route does, it is named for it, it "
+             "refuses without an explicit confirm, and it refuses a second run over a capture "
+             "directory a live run is already reading. The preflight beside it is free and "
+             "creates no run directory at all. Everything else — the reads, and "
+             "join/emit/reconcile — is free and re-runnable, which is the property D1 gave "
+             "the two-phase split. "
+             "THE MONEY STEP SPAWNS DETACHED AND IS NEVER AWAITED, so a run outlives a "
+             "restart of the server that started it; the free steps answer inside the request "
+             "with their own stdout attached. app/src/RunPanel.tsx draws it folded on "
+             "#/inventory and app/tests/run-panel.spec.ts is the check the hard rule says "
+             "does not exist."},
 
 ]
 
@@ -432,7 +468,7 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D12", "D16", "D17", "D18", "D22", "D23", "D24"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
