@@ -5,7 +5,7 @@ Everything the model is told and everything we accept back lives here, so
 word of the prompt or a key of the schema and the fingerprint changes, which is what
 makes "rerun after any prompt change" (docs/GATES.md) enforceable rather than a habit.
 
-THREE PROFILES, AND NONE OF THEM IS ANOTHER ONE WITH FIELDS BLANKED OUT.
+FIVE PROFILES, AND NONE OF THEM IS ANOTHER ONE WITH FIELDS BLANKED OUT.
 `pokemon_card_v1` is the contract T1 scores and the one everything below describes.
 `misc_card_v1` reads the ~1% of the shelf that is a Magic, Yu-Gi-Oh, Weiss Schwarz or
 foreign-language card: its own system prompt, its own schema, its own parser, because those
@@ -13,10 +13,20 @@ cards do not print a `number/total` pair, do not carry the finishes `pipeline/va
 knows about, and do not share a rarity vocabulary. `pokemon_code_v1` is C8's image-to-text
 step: it TRANSCRIBES a code card's printed redemption code rather than identifying a
 catalog entry, because the ledger the fork exports is only worth keeping if the string
-beside each photograph is what a model actually read off it. `pipeline/games.py` says
+beside each photograph is what a model actually read off it. `riftbound_card_v1` and
+`one_piece_card_v1` arrived on 2026-08-23 and are the subject of their own section below:
+two games whose export is measured, whose card has never been photographed, and whose
+identifier is ONE string rather than Pokemon's two halves. `pipeline/games.py` says
 which profile reads which game; this module holds the profiles and never guesses between
 them. **A misc card IS identified and IS submitted to the Batch API** — the owner's
 correction of 2026-08-23 — and what it never does is join a catalog.
+
+**NOTHING BELOW EXCEPT `pokemon_card_v1` HAS EVER BEEN SCORED, AND THE TWO NEWEST HAVE
+NEVER MET A CARD AT ALL.** T1 measures one profile against 150 labelled images; there is
+no eval set for any of the others, and for Riftbound and One Piece this repo holds zero
+photographs, zero identifications and zero joins. Read every claim in those two sections
+as a claim about a CSV file and about what the cardboard is believed to print — never as
+an accuracy number. A green harness says these profiles are WIRED, not that they READ.
 
 The rest of this header is about `pokemon_card_v1`. Two of its shapes deserve a note:
 
@@ -40,7 +50,7 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from pipeline import games, variant
 
@@ -443,6 +453,426 @@ _CODE_USER_TEXT_WITH_CROPS = (
 )
 
 
+# ------------------------------------------------- the two printed-code contracts
+#
+# Riftbound and One Piece, written 2026-08-23. Both games had a measured export, a measured
+# rarity vocabulary and a two-finish enum in `pipeline/games.py`, and both still named
+# `unwritten` — so asking for either one's prompt refused by name rather than falling
+# through to Pokemon's. That refusal was correct and these two profiles are what replaces
+# it. `unwritten` itself stays, because it is still the right answer for the NEXT game.
+#
+# WHAT IS MEASURED AND WHAT IS NOT, BEFORE ANYTHING ELSE IN THIS SECTION IS READ.
+# Everything below about the export — the identifier shapes, their counts, which cells
+# collide, what a fold does to a key — is measured over
+# `fixtures/riftbound_export_untouched.csv` (10,078 rows) and
+# `fixtures/onepiece_export_untouched.csv` (3,622 rows, THREE SETS out of many, marked
+# partial). Everything below about the CARD — where a title sits, whether a set code is
+# printed beside the number, whether a treatment is visible at all — is BELIEF. No card of
+# either game has been photographed, identified or joined by this project, so there is no
+# accuracy number for either profile and there cannot be one until a real photograph
+# exists. Both system prompts are therefore written REGION-NEUTRALLY: neither says where on
+# the card to look, because copying Pokemon's "across the top of the card" would be
+# inventing the one fact nobody has.
+#
+# ONE STRING, NEVER TWO HALVES, AND THE FIELD IS NAMED `number`. Two separate decisions
+# that look like one:
+#
+#   ONE STRING   Both registry entries carry `join_key: "printed_code"`, and
+#                `pipeline/join.py:_lookup_printed_code` matches `card.number` against the
+#                export's `Number` cell VERBATIM — it never consults `printed_total`,
+#                because "reaching for one would invent half a key". Riftbound's cells are
+#                mostly Pokemon-shaped (`179/298`, 8,670 rows) and 450 of them are not
+#                (`R04`, `T03`, `T02 // T03`); One Piece has no denominator anywhere
+#                (`OP15-079`, `P-105`). A two-field schema would split the first shape
+#                happily and then invent a denominator for the second — and a per-game
+#                strategy has nowhere to put a fallback. This module's own header already
+#                makes the general form of the argument for `misc`: "asking for two halves
+#                of a thing that is one string invites the model to invent a split, and a
+#                split is what a parser waiting to disagree with the catalog looks like".
+#
+#   NAMED `number`   THE HIGHEST-CONSEQUENCE LINE IN THIS SECTION, and it is not obvious
+#                from anything nearby. `cli/resolve.py` reads the RAW model payload back out
+#                of a run's `identifications.json` — `identification.get("number")`,
+#                `.get("printed_total")`, `.get("finish")`, `.get("name")`,
+#                `.get("confidence")` — and never calls `parse`. Calling this field
+#                `printed_code`, or copying `misc`'s `printed_id`, would make that read
+#                return None, drop every card to the blank-`Number` name path, and bring the
+#                WHOLE RUN back as `no_catalog_row` — a miss that blames the export, which
+#                `pipeline/join.py` calls the worst shape a join failure can take because
+#                the report points away from the bug. `misc` gets away with `printed_id`
+#                only because it is not catalogued and is diverted before that read; these
+#                two are catalogued and are not. T7 asserts the seam end to end against the
+#                real export rather than trusting this paragraph.
+#
+# `printed_total` IS NOT IN EITHER SCHEMA. Not a blank we failed to read: a half neither
+# game has. Riftbound prints a denominator on most cards but it is part of the one printed
+# string, not a second field to be matched separately; One Piece prints none at all. The
+# parser sets `printed_total=""` — `misc`'s and `pokemon_code`'s shape exactly — so
+# `has_number` is False, which is the honest answer to the question it asks: no
+# `number/total` join key CAN be built for these games.
+#
+# NOT `normalize_number`-FOLDED, AND THE FOLD THAT MATTERS RUNS ELSEWHERE.
+# `pipeline/join.py:number_index_key` folds BOTH SIDES of the match: it strips leading zeros
+# from every digit run and upper-cases. So `66/298` already matches `066/298`, and
+# `op15-079` already matches `OP15-079` — zero padding and letter case are free, and the
+# prompts say so rather than demanding a padding the model would have to invent digits to
+# supply. What that fold does NOT forgive is a changed character: the letter suffix
+# (`066a/298` is a different card from `066/298`), the asterisk (`303*/298` is a different
+# card from `303/298`), the `/`, the hyphen, and the spaces around `//` in `T02 // T03`.
+# Those are what the prompts spend their rules on. Folding here would buy the join nothing
+# and would cost the record its "exactly as printed" property — `record_identification`
+# writes the PARSER's `number` onto the card, and that string is what the review screen and
+# `GET /search` put in front of a human.
+#
+# `rarity_clause=""` FOR BOTH, AND THAT IS AN ARGUED CHOICE RATHER THAN AN UNFINISHED ONE.
+# D23's clause was BUILT for Pokemon, measured for $0.17, and LOST on every watched axis —
+# holdout 0.9706 -> 0.9559, high-confidence misses 5 -> 7, and the finish distribution
+# hardened against the clause's own carve-out sentence. It is switched off in production.
+# Shipping it NEW on a game with no eval set at all would be spending the opposite of what
+# that measurement bought: an unmeasurable change on top of an unmeasured prompt. The
+# claim's other two jobs — the ladder cross-check and the chip narrowing — are unaffected
+# and need nothing from this module.
+#
+# TWO FIELDS WERE CONSIDERED FOR THESE SCHEMAS AND ARE DELIBERATELY ABSENT. Both are
+# recorded here rather than left to be re-invented, and both need the owner's ruling before
+# anyone adds them, because each is new surface area rather than a wiring detail:
+#
+#   `set` / `set_name`   NEVER. 174 Riftbound join keys reach rows in more than one set —
+#                        `247/298` is a $0.29 Origins card AND a $2,739 promo — and the
+#                        catalog already resolves that from the sidecar's set hint or
+#                        reviews it as `set_ambiguous`. A model-volunteered set would break
+#                        that tie by guessing, silently, at three orders of magnitude. This
+#                        one is not an open question; it is a refusal.
+#   `art_treatment`      OPEN, AND IT IS THE OWNER'S CALL. One Piece's collisions are the
+#                        argument: 197 of 395 distinct printed codes map to 2-3 products,
+#                        103 of them separable by NOTHING in the export but a parenthetical
+#                        in `Product Name` — `OP15-118` is Enel at $9.73, Enel (Alternate
+#                        Art) at $27.08 and Enel (Manga) at $1,051.34. Today all of them
+#                        land on `duplicate_condition` and go to review, which is the ladder
+#                        refusing rather than coin-flipping, and is safe. Against adding it:
+#                        nothing downstream reads it (the ladder filters on rarity and
+#                        finish only, and there is no treatment claim at capture), several
+#                        of the treatments are provenance rather than art and may not be
+#                        readable at all, and a field no consumer reads is a field nothing
+#                        keeps honest. It would land on `raw` like `misc`'s `detected_game`
+#                        — greppable in `identifications.json`, read by no screen. That is a
+#                        real precedent and a real argument; it is also a schema change with
+#                        a new failure mode, so it belongs in its own step with the ladder
+#                        filter it implies, not slipped into v1.
+
+# THE FINISH ENUM COMES FROM EACH GAME'S OWN REGISTRY ENTRY, READ ONCE AT IMPORT, AND NEVER
+# FROM `variant.FINISHES`. That constant is Pokemon's three, and reading it for another game
+# was a real bug — the same one `cli/resolve.py` and `pipeline/variant.py` each carried on
+# 2026-08-23: a Riftbound `foil` fell out of a whitelist that had nothing to do with the
+# game and landed as None, losing rung 3's cross-check for every card of every non-Pokemon
+# game. One read, bound to one name, used by BOTH the schema the model is sent and the
+# whitelist the answer is checked against — so the two can never disagree with each other,
+# which is the failure mode a second literal would introduce.
+RIFTBOUND_GAME = "riftbound"
+ONE_PIECE_GAME = "one_piece"
+
+RIFTBOUND_FINISHES: Tuple[str, ...] = tuple(games.get(RIFTBOUND_GAME)["finishes"])
+ONE_PIECE_FINISHES: Tuple[str, ...] = tuple(games.get(ONE_PIECE_GAME)["finishes"])
+
+
+# --------------------------------------------------------------------- riftbound
+#
+# THE NAME IS NOT A JOIN KEY HERE AND IS ASKED FOR ANYWAY. `_lookup_printed_code` falls to
+# the blank-`Number` name path only when the identifier is empty, and the only blank-`Number`
+# rows in this catalogue are 88 sealed-product rows, which are never captured. So `name`
+# earns its slot for two other jobs: it is the string the review queue puts beside the
+# photograph and `GET /search` substring-matches, and it is an INDEPENDENT second read of the
+# same card — the thing that catches a garbled identifier, which is the failure class T1's
+# recorded Pokemon misses actually have (`051/197` for `031/197`: right name, wrong digits,
+# high confidence, no threshold fires).
+#
+# WHICH IS WHY THE PROMPT SPENDS SO MANY WORDS ON THE EPITHET. 550 of 1,552 products are
+# `Champion, Epithet`, and the comma clause is the ONLY thing separating the fourteen
+# distinct Ahri products from each other. A title cut back to `Ahri` names all fourteen.
+#
+# AND WHY IT FORBIDS THE TREATMENT WORDS BY NAME. 391 products carry a TCGplayer
+# parenthetical — `(Alternate Art)`, `(Overnumbered)`, `(Signature)`, `(Metal)`,
+# `(Prize Wall)`, `(Best Of)`, `(Top 8)` — which are catalogue vocabulary and almost
+# certainly printed nowhere on the card. A model asked for "the name as catalogued" will
+# manufacture them; one asked for "exactly as printed" will not. Four products go the other
+# way and embed their own collector number in the `Product Name` (`Recruit (271) // Buff`),
+# which is the live specimen behind CLAUDE.md's "never join on Product Name" — and the
+# reason the prompt also says not to put the identifier in the title.
+#
+# THE LANDSCAPE PARAGRAPH IS THE ONE PIECE OF THIS PROMPT MOST WORTH CHECKING ON THE FIRST
+# REAL PHOTOGRAPH. Origins 275/298-298/298 are 24 consecutive location cards — battlefields
+# — and battlefields are printed in landscape, so roughly one card in twelve of a booster
+# set arrives rotated a quarter turn in a portrait rig. The rig's per-device rotation
+# corrects the portrait cards and leaves these wrong by 90 degrees, and a sideways frame is
+# exactly what cost Gate B 45 of 53 cards with "names and numbers both garbled". UNMEASURED:
+# no Riftbound card has been photographed. Telling the model the card may be rotated costs
+# two sentences and is the cheapest available hedge against the highest-value unknown here.
+
+RIFTBOUND_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": (
+                "Card title exactly as printed, including any comma and epithet. Empty if "
+                "no title is legible."
+            ),
+        },
+        "number": {
+            "type": "string",
+            "description": (
+                "The collector identifier exactly as printed, as ONE string — keep any "
+                "letter suffix, any asterisk, the slash, and the spaces around a double "
+                "slash. Empty if the card prints none."
+            ),
+        },
+        "finish": {
+            "type": "string",
+            "enum": list(RIFTBOUND_FINISHES) + [UNKNOWN_FINISH],
+            "description": "Foil treatment visible in this image, or unknown.",
+        },
+        "confidence": {
+            "type": "string",
+            "enum": list(CONFIDENCE_LEVELS),
+            "description": "How legible the title and the identifier were.",
+        },
+    },
+    "required": ["name", "number", "finish", "confidence"],
+    "additionalProperties": False,
+}
+
+RIFTBOUND_SYSTEM_PROMPT = """\
+You identify Riftbound: League of Legends Trading Card Game singles from a photograph of
+the card front.
+
+Read the card in the image and report what is printed on it. One card per image.
+
+Some cards in this game are printed in LANDSCAPE rather than portrait. The photograph is
+taken through a fixed portrait rig, so a landscape card reaches you rotated a quarter turn.
+Read it as a rotated card rather than assuming you are looking at something else.
+
+name
+  The card's title, exactly as printed. Many titles are a champion and an epithet joined by
+  a comma - "Ahri, Alluring", "Kai'Sa, Survivor", "Miss Fortune, Bounty Hunter". KEEP THE
+  COMMA AND THE EPITHET. They are what separates one champion's cards from each other, and
+  a title cut back to the champion's name alone names several different cards at once.
+  Keep the rest of the punctuation too: apostrophes ("Zhonya's Hourglass"), exclamation
+  marks ("Get Excited!"), hyphens ("Thousand-Tailed Watcher"), colons. A double-sided card
+  prints two titles joined by a double slash - write it with a space either side, "Bird //
+  Buff". Some titles are a single short word, such as "Buff" or "Smite"; that is ordinary.
+  Do not add the set name, the rarity, the card type, the domain, or a description of the
+  artwork, and do not put the collector identifier in the title. In particular do not add a
+  treatment word such as "Alternate Art", "Overnumbered", "Signature", "Metal" or "Prize
+  Wall" - those are catalogue labels, they are not printed on the card, and one added to
+  the title makes it match nothing.
+  If no title is legible, return "".
+
+number
+  The collector identifier, exactly as printed, AS ONE STRING. This game prints it in
+  several shapes and every one of them goes in this single field, unsplit:
+    179/298      a number over a set total
+    066a/298     the same, with a letter suffix
+    303*/298     the same, with an asterisk
+    SP3/006      a prefixed number over a total
+    R04          a rune: a letter and digits, with no total at all
+    T03          a token, likewise
+    T02 // T03   a double-sided token: two groups joined by a double slash
+  Four rules, and each of them changes which card this is:
+    - Keep a letter suffix. "066a/298" is a different card from "066/298".
+    - Keep an asterisk. It is part of the identifier, not a footnote mark.
+    - Keep the spaces either side of "//" on a double-sided token.
+    - A left number LARGER than the total is correct and ordinary - "303/298" is a real
+      card. Never adjust one side to make it agree with the other.
+  Do not supply a total the card does not print: "R04" is complete as it stands, and
+  "R04/298" is a card that does not exist. Do not add a set code printed elsewhere on the
+  card. Leading zeros do not matter, so do not add or remove one to make an identifier look
+  right - report the digits the card shows.
+  If the card prints no identifier at all, return "".
+
+finish
+  normal   Flat, non-foil card stock across the entire card.
+  foil     A foil, holographic or metallic treatment you can see on this card.
+  unknown  You cannot tell from this image.
+  There is no reverse holo in this game; those are the only two finishes it has.
+  Judge only from foil texture, glare, or sheen you can actually see. Flat, evenly lit
+  artwork with no foil signal either way is "unknown". Do not infer the finish from the
+  card's rarity, its artwork, or how a card of this kind is usually printed - a guess
+  here is worse than an admission, because a later step trusts this field to catch
+  mis-sorted cards.
+
+confidence
+  high    You can read both the title and the identifier clearly.
+  medium  One of the two is partly obscured, but you are reasonably sure of it.
+  low     You are guessing at either field.
+
+Report only what is printed. Never invent a card you cannot read.\
+"""
+
+_RIFTBOUND_USER_TEXT = "Identify this card."
+_RIFTBOUND_USER_TEXT_WITH_HINT = (
+    "Identify this card. The stack it came from is labelled {hint}, which is a hint "
+    "about the set and may be wrong - trust the card over the label."
+)
+_RIFTBOUND_HINT_CLAUSE = (
+    " The stack it came from is labelled {hint}, which is a hint about the set and may "
+    "be wrong - trust the card over the label."
+)
+# NO TITLE OR NUMBER BANDS NAMED, because the registry entry claims none: nothing has
+# measured where a Riftbound card puts either, and a band described to the model that the
+# cropper never cut would be a promise the images do not keep. Same shape as
+# `pokemon_code`'s turn, for the same reason.
+_RIFTBOUND_USER_TEXT_WITH_CROPS = (
+    "Identify this card. The first image is the whole card. The images after it are "
+    "enlarged views of the SAME card, not different cards. Read each field from whichever "
+    "image shows it most clearly."
+)
+
+
+# --------------------------------------------------------------------- one piece
+#
+# THE NAME DOES MORE WORK HERE THAN IN RIFTBOUND, and one population depends on it entirely:
+# 547 rows of this export carry a blank `Number`, of which 530 are DON!! cards, and
+# `_lookup_printed_code` falls to the name path for exactly those. That fallback is an EXACT
+# match on the raw `Product Name`, and TCGplayer names those products after their artwork —
+# `DON!! Card (Luffy)`, `DON!! Card (Boa Hancock) (Gold)` — a string the card does not print.
+# So every DON!! card will come back unmatched and be reported in both directions. That is
+# honest rather than broken (a wrong join would be worse), but it is an EXPECTED POPULATION
+# and not a surprise, and it is written here so the first real run does not read it as a
+# defect.
+#
+# THREE DISAMBIGUATOR CONVENTIONS, NONE OF THEM PRINTED ON THE CARD. 495 of 702 products
+# carry a parenthetical, in three inconsistent forms: `Brook (OP15-022)`, `Basil Hawkins -
+# OP07-029 (Reprint)`, `Uta (061) (Manga)`. They exist because 56 base names appear at more
+# than one printed code — Brook alone at five. The card prints `Brook`. A model asked for
+# "the catalogue name" will reconstruct one of these three forms; one asked for the printed
+# name will not, and the code below is what separates them anyway.
+#
+# TWO PRINTING CONVENTIONS THAT LOOK LIKE TYPOS AND ARE NOT, both called out in the prompt
+# because `normalize_name` will not save us: it folds case, accents, apostrophes, dashes and
+# whitespace runs, and it does NOT touch full stops. So `Monkey D. Luffy` never equals
+# `Monkey.D.Luffy` (51 products print the dotted, unspaced form), and a respaced
+# `Eustass "Captain" Kid` never equals the printed `Eustass"Captain"Kid`. On the DON!! name
+# path that is a miss; everywhere else it is the review queue's eyeball comparison failing
+# on a card that was actually read correctly.
+#
+# THE SET HINT IS WORTH LESS HERE THAN ANYWHERE ELSE, and the hint clause says so. The
+# export's `Set Name` is the TCGplayer PRODUCT the card was sold in, not the set code
+# printed on it: `Premium Booster -The Best- Vol. 2` alone holds cards numbered from 29
+# different set codes. Only 2 of 197 colliding numbers span more than one `Set Name`, so the
+# hint is close to worthless as a tiebreaker — and a model told the label is the set will
+# "correct" a printed `OP01` to match a stack labelled for a Premium Booster. The clause
+# therefore warns that the two disagree ordinarily.
+
+ONE_PIECE_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": (
+                "Card title exactly as printed, with nothing added in parentheses. Empty "
+                "if no title is legible."
+            ),
+        },
+        "number": {
+            "type": "string",
+            "description": (
+                "The printed card code exactly as printed, as ONE string, with its hyphen "
+                "where the card prints one. Empty if the card prints none."
+            ),
+        },
+        "finish": {
+            "type": "string",
+            "enum": list(ONE_PIECE_FINISHES) + [UNKNOWN_FINISH],
+            "description": "Foil treatment visible in this image, or unknown.",
+        },
+        "confidence": {
+            "type": "string",
+            "enum": list(CONFIDENCE_LEVELS),
+            "description": "How legible the title and the printed code were.",
+        },
+    },
+    "required": ["name", "number", "finish", "confidence"],
+    "additionalProperties": False,
+}
+
+ONE_PIECE_SYSTEM_PROMPT = """\
+You identify One Piece Card Game singles from a photograph of the card front.
+
+Read the card in the image and report what is printed on it. One card per image.
+
+name
+  The card's title, exactly as printed. Copy the characters the card shows and nothing
+  else. Three conventions in this game look like mistakes and are not:
+    - Names joined by full stops with no spaces around them - "Monkey.D.Luffy",
+      "Edward.Newgate", "Marshall.D.Teach". Write them exactly that way; do not respace
+      one to "Monkey D. Luffy".
+    - Names carrying quotation marks with no spaces around them, as in Eustass"Captain"Kid.
+    - Long sentence titles on event and stage cards - "Would You Let Me Eat the Flame-Flame
+      Fruit?". A title in this game is not necessarily short.
+  Do not add anything the card does not print. In particular do not append the card's code
+  to its title, and do not add a word such as "Reprint", "Alternate Art", "Manga", "Dash
+  Pack" or "SP" - those are catalogue labels rather than printed titles, and one added to
+  the title makes it match nothing. Several different cards genuinely share one printed
+  title; that is expected, and the code below is what separates them.
+  If no title is legible, return "".
+
+number
+  The card's printed code, exactly as printed, AS ONE STRING. It is a set code, a hyphen
+  and a three-digit index - "OP15-079", "EB04-042", "ST26-005", "PRB02-014" - or, on a
+  promo, a single letter, a hyphen and three digits: "P-105".
+  THE HYPHEN IS THE PART THAT MATTERS. Write one hyphen exactly where the card prints one.
+  "OP15 079", "OP15/079" and "OP-15-079" are all wrong, and none of them will match
+  anything. Leading zeros and letter case do not matter - "OP15-79" and "op15-079" are
+  read the same as "OP15-079" - so never add or remove a zero to make a code look right.
+  This game prints NO card-count denominator anywhere: there is no "/" in the code and no
+  set total to report, and you must not supply one.
+  A card carries several other numbers - a cost, a power in thousands such as 5000, a
+  counter value such as +1000, and on a leader card a life value. The code is the only
+  letters-then-hyphen-then-digits string on the card. Use the shape above to FIND it, never
+  to correct it: if what is printed does not fit that shape, report what is printed.
+  Some cards in this game print no code at all. If this one prints none, return "".
+
+finish
+  normal   Flat, non-foil card stock across the entire card.
+  foil     A foil, holographic or metallic treatment you can see on this card.
+  unknown  You cannot tell from this image.
+  There is no reverse holo in this game; those are the only two finishes it has.
+  Judge only from foil texture, glare, or sheen you can actually see. Flat, evenly lit
+  artwork with no foil signal either way is "unknown". Do not infer the finish from the
+  card's rarity, its artwork, or how a card of this kind is usually printed - a guess
+  here is worse than an admission, because a later step trusts this field to catch
+  mis-sorted cards.
+
+confidence
+  high    You can read both the title and the printed code clearly.
+  medium  One of the two is partly obscured, but you are reasonably sure of it.
+  low     You are guessing at either field.
+
+Report only what is printed. Never invent a card you cannot read.\
+"""
+
+_ONE_PIECE_USER_TEXT = "Identify this card."
+_ONE_PIECE_USER_TEXT_WITH_HINT = (
+    "Identify this card. The stack it came from is labelled {hint}, which is a hint about "
+    "the set and may be wrong - trust the card over the label. In this game the label "
+    "often names the product the cards were sold in rather than the set code printed on "
+    "them, so the two disagreeing is ordinary and is not a reason to change what you read."
+)
+_ONE_PIECE_HINT_CLAUSE = (
+    " The stack it came from is labelled {hint}, which is a hint about the set and may be "
+    "wrong - trust the card over the label. In this game the label often names the product "
+    "the cards were sold in rather than the set code printed on them, so the two "
+    "disagreeing is ordinary and is not a reason to change what you read."
+)
+# As Riftbound's: the registry claims no bands, so the retry carries the registered card
+# alone and this turn describes exactly that.
+_ONE_PIECE_USER_TEXT_WITH_CROPS = (
+    "Identify this card. The first image is the whole card. The images after it are "
+    "enlarged views of the SAME card, not different cards. Read each field from whichever "
+    "image shows it most clearly."
+)
+
+
 # ------------------------------------------------------------------ per-game dispatch
 #
 # `pipeline/games.py` says WHICH prompt reads a card, by name — `pokemon_card_v1` on the
@@ -531,12 +961,50 @@ POKEMON_CODE_V1 = Profile(
     schema=CODE_SCHEMA,
 )
 
+RIFTBOUND_CARD_V1 = Profile(
+    model=MODEL,
+    max_tokens=MAX_TOKENS,
+    system=RIFTBOUND_SYSTEM_PROMPT,
+    user=_RIFTBOUND_USER_TEXT,
+    user_with_hint=_RIFTBOUND_USER_TEXT_WITH_HINT,
+    user_with_crops=_RIFTBOUND_USER_TEXT_WITH_CROPS,
+    hint_clause=_RIFTBOUND_HINT_CLAUSE,
+    # Empty, and argued at length in this profile's section above: D23's clause was
+    # measured on Pokemon and lost, and this game has no eval set to measure a new one
+    # against. `user_text` renders no claim however loudly one is supplied.
+    rarity_clause="",
+    schema=RIFTBOUND_SCHEMA,
+)
+
+ONE_PIECE_CARD_V1 = Profile(
+    model=MODEL,
+    max_tokens=MAX_TOKENS,
+    system=ONE_PIECE_SYSTEM_PROMPT,
+    user=_ONE_PIECE_USER_TEXT,
+    user_with_hint=_ONE_PIECE_USER_TEXT_WITH_HINT,
+    user_with_crops=_ONE_PIECE_USER_TEXT_WITH_CROPS,
+    hint_clause=_ONE_PIECE_HINT_CLAUSE,
+    rarity_clause="",
+    schema=ONE_PIECE_SCHEMA,
+)
+
 # ONE STRATEGY NAME NOW NAMES NO PROFILE, WHERE THERE USED TO BE TWO.
 #
-#   unwritten       nobody has written this game's prompt YET. A gap with a fix — `riftbound`
-#                   and `one_piece` have exports now and still have no prompt. Asking for it
-#                   is a refusal, because the alternative is falling through to Pokemon's,
-#                   which fits every call and reads every card wrong.
+#   unwritten       nobody has written this game's prompt YET. A gap with a fix. It named
+#                   `riftbound` and `one_piece` until 2026-08-23, when both got the profiles
+#                   above; it names NOBODY today, and it stays anyway — it is the right
+#                   answer for the next game added, and its refusal is what stops that game
+#                   falling through to Pokemon's prompt, which fits every call and reads
+#                   every card wrong.
+#
+#                   IT IS KEPT UNCLAIMED WHERE `operator_note` WAS DELETED UNCLAIMED, and the
+#                   difference is not inconsistency. Deleting `operator_note` deleted a STATE
+#                   the product does not have — a game never sent to the model — along with
+#                   an exception nothing could raise and a predicate that could only answer
+#                   True. `unwritten` describes a state the product will certainly be in
+#                   again the moment a sixth game is registered, and its refusal is
+#                   reachable, tested, and the only thing standing between that game and
+#                   another game's contract.
 #
 # THE ONE THAT LEFT WAS `operator_note`, AND IT LEFT BECAUSE THE OWNER SAID SO. It named a
 # game deliberately never sent to the model, with the operator's free-text note standing in
@@ -562,6 +1030,8 @@ PROFILES: Dict[str, Optional[Profile]] = {
     "pokemon_card_v1": POKEMON_CARD_V1,
     "misc_card_v1": MISC_CARD_V1,
     "pokemon_code_v1": POKEMON_CODE_V1,
+    "riftbound_card_v1": RIFTBOUND_CARD_V1,
+    "one_piece_card_v1": ONE_PIECE_CARD_V1,
     UNWRITTEN: None,
 }
 
@@ -871,6 +1341,75 @@ def _parse_code(payload: Dict[str, Any]) -> Identification:
     )
 
 
+def _parse_printed_code(payload: Dict[str, Any], finishes: Tuple[str, ...]) -> Identification:
+    """Riftbound's and One Piece's answer: ONE printed identifier, carried in `number`.
+
+    ONE BODY FOR TWO GAMES, WHICH IS NOT THE SAME AS ONE PROFILE FOR TWO GAMES. The two
+    system prompts are different documents and are meant to stay different — they describe
+    different identifier shapes, different name conventions and different hazards. What is
+    genuinely shared is the SHAPE of the answer: four keys, one of which is an identifier
+    that is already one string. Writing that mapping twice would be two places for the
+    `printed_total=""` rule to drift apart.
+
+    `finishes` IS PASSED IN RATHER THAN LOOKED UP, and it is the same tuple the caller's
+    schema enum was built from. That is the whole reason this cannot disagree with the
+    contract the model was sent: one read of one registry entry feeds both. Never
+    `variant.FINISHES` — that is Pokemon's three, and reading it here would reject the very
+    finish these games' own registry entries author.
+
+    THE MAPPING, AND WHERE EACH FIELD GOES:
+
+      name            as printed, stripped. Same field, same meaning.
+      number          the WHOLE printed identifier. It is named `number` in the schema for
+                      the reason this module's printed-code section states at length:
+                      `cli/resolve.py` reads that key off the RAW payload and never calls
+                      `parse`, so any other name silently turns the run into
+                      `no_catalog_row`.
+      printed_total   "" — a half neither game has, not a half we failed to read.
+                      `has_number` is therefore False, which is the honest answer: no
+                      `number/total` key CAN be built for a game keyed by `printed_code`.
+      detected_finish the model's read, kept only if this game stocks it, with `unknown`
+                      mapped to None so `variant.resolve` sees D3's no-signal case rather
+                      than a manufactured disagreement.
+
+    NOT `normalize_number`-FOLDED, for misc's and the code card's reason plus one of its
+    own. Case and zero padding are already folded on BOTH SIDES by
+    `pipeline/join.py:number_index_key`, so folding here buys the join nothing — while
+    `record_identification` writes this exact string onto the card, where the review queue
+    and `GET /search` show it to a human. `normalize_number` would also strip a leading
+    `#`, which is decoration on a Pokemon collector number and would be a real printed
+    character here. Surrounding whitespace is as far as it goes.
+    """
+    finish = str(payload["finish"]).strip().lower()
+    if finish == UNKNOWN_FINISH:
+        detected: Optional[str] = None
+    elif finish in finishes:
+        detected = finish
+    else:
+        raise MalformedIdentification(
+            f"finish {finish!r} outside the enum {finishes}"
+        )
+
+    return Identification(
+        name=str(payload["name"]).strip(),
+        number=str(payload["number"]).strip(),
+        printed_total="",
+        detected_finish=detected,
+        confidence=_confidence_of(payload),
+        raw=payload,
+    )
+
+
+def _parse_riftbound(payload: Dict[str, Any]) -> Identification:
+    """`riftbound_card_v1`'s answer, checked against Riftbound's own finish enum."""
+    return _parse_printed_code(payload, RIFTBOUND_FINISHES)
+
+
+def _parse_one_piece(payload: Dict[str, Any]) -> Identification:
+    """`one_piece_card_v1`'s answer, checked against One Piece's own finish enum."""
+    return _parse_printed_code(payload, ONE_PIECE_FINISHES)
+
+
 # WHICH PARSER READS WHICH PROFILE'S ANSWER. A third dispatch table beside `PROFILES` and
 # `BAND_PROFILES`, and it earns its place: the two schemas do not share a required key list,
 # so one parser cannot serve both without asking "is this field present?" of every field —
@@ -884,6 +1423,8 @@ _PARSERS = {
     "pokemon_card_v1": _parse_pokemon,
     "misc_card_v1": _parse_misc,
     "pokemon_code_v1": _parse_code,
+    "riftbound_card_v1": _parse_riftbound,
+    "one_piece_card_v1": _parse_one_piece,
 }
 
 # Every strategy that HAS a profile must have a parser, checked at import for the reason the

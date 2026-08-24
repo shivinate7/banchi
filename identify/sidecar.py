@@ -87,7 +87,16 @@ class Capture:
     box: Optional[int] = None
     index: Optional[int] = None
     set_hint: Optional[str] = None
-    metadata_finish: Optional[str] = None
+    # D3 RUNG 1'S CLAIM, AND IT IS A SET (amended 2026-08-23). One member determines exactly
+    # as this rung always has; two or more filter the candidate rows and let rungs 2 and 3
+    # choose within what survives. None is no claim — never `()` — so `is None` stays the one
+    # test every caller writes, and `--variant`'s fill-gaps guarantee in `load` still reads.
+    #
+    # A TUPLE FOR THE SAME REASON THE DATACLASS IS FROZEN, exactly as `rarity_claim` below.
+    # `store/master.py:Card.metadata_finish` is a LIST for the opposite reason and its comment
+    # says so: that dataclass is not frozen and `asdict`/`json` must round-trip it unchanged.
+    # The two shapes disagreeing is correct, not an inconsistency to unify.
+    metadata_finish: Optional[Tuple[str, ...]] = None
     # THE RAW CLAIM, NOT THE BACKFILLED ONE. `None` means the sidecar named no game, which
     # is every file written before D21; `game_or_default` is where the substitution happens
     # and it is a property so the substitution is visible at the point of the read.
@@ -177,14 +186,30 @@ def _check_variant(value, game: Optional[str]):
     game. D3 rung 1's whole argument is that the toggle is a CLAIM the ladder trusts; a
     reader that discards it for the wrong game's vocabulary defeats the rung entirely.
 
-    IT IS STILL SINGLE-VALUED HERE, DELIBERATELY, and that is a split rather than an
-    oversight. D3 rung 1 was amended the same day to make the claim a SET, and this reader
-    is one of five places that has to move for that — with `store/master.py`, the capture
-    route, the capture screen's Finish track and the tests that assert a bare `"holo"`. They
-    move together or the record and the sidecar disagree about the shape of a claim, which
-    is the one disagreement `record_capture` cannot survive. A list is already accepted and
-    reduced to its first member below, so a sidecar written by a newer client is not
-    misread in the meantime.
+    THE CLAIM IS A SET, AND THIS READER KEEPS ALL OF IT (D3 rung 1, amended 2026-08-23).
+    It was single-valued here for half a day, accepting a list and returning its first
+    member — a REDUCTION, and the paragraph that stood here named the four files that had to
+    move before it could go: `store/master.py`, the capture route, the capture screen's
+    Finish track, and the tests that assert a bare `"holo"`. They moved together, because
+    the alternative is the record and the sidecar disagreeing about the shape of a claim,
+    which is the one disagreement `record_capture` cannot survive.
+
+    Keeping the whole set is not a widening of what is accepted — a list always parsed — it
+    is the difference between a claim that FILTERS and a claim that DETERMINES. Reduced to
+    one member, `{normal, reverse_holo}` reached the ladder as `normal` and resolved every
+    card in the stack to it: rung 1 determining on half of what the operator said, with no
+    refusal, no problem recorded and no review reason. That is worse than dropping the claim.
+
+    A BARE STRING STILL READS AS A ONE-MEMBER SET and nothing writes one any more — D21's
+    read-side backfill, and the reason there is no migration. `_first` already accepts the
+    key under three spellings; this accepts its value under two shapes, permanently, because
+    every sidecar written before the amendment carries a string.
+
+    Members come back in the GAME'S OWN ENUM ORDER, deduped — `kept` is built by walking
+    `stocked`, so both properties are free — which is byte-for-byte what
+    `pipeline/variant.py:_check_claim` does one layer down and what the capture route does
+    one layer up. Three normalisers, one canonical form: a claim written twice in two tap
+    orders is one value, and a no-op correction diffs as no change.
 
     The three game cases are `_check_rarity_claim`'s, for its reasons: a registered game
     checks membership, an unregistered one keeps members verbatim (its own problem is
@@ -219,7 +244,13 @@ def _check_variant(value, game: Optional[str]):
     try:
         entry = games.get((game or games.DEFAULT_GAME).strip().lower())
     except games.UnknownGame:
-        return cleaned[0], None
+        # DEDUPED EXPLICITLY, because this is the one branch with no `stocked` to walk and
+        # therefore the one where the canonical form is not free. `cleaned` is the file's
+        # own order with the file's own repeats; `dict.fromkeys` keeps the first occurrence
+        # of each. Order is the file's here and cannot be anything else — there is no enum
+        # to impose one — which is exactly `_check_rarity_claim`'s posture in the same
+        # branch, for the same reason.
+        return tuple(dict.fromkeys(cleaned)), None
     stocked = tuple(entry["finishes"])
 
     kept = [item for item in stocked if item in cleaned]
@@ -231,11 +262,20 @@ def _check_variant(value, game: Optional[str]):
             + (f"{entry['display']}'s finishes {stocked}" if stocked
                else f"{entry['display']}, which stocks no finishes at all")
         )
-    # FIRST MEMBER IN THE GAME'S OWN ENUM ORDER, not the file's — see the docstring for why
-    # this is not a tuple yet. Enum order rather than file order so the reduction is stable:
-    # a two-member claim reduced by the order somebody happened to type it would resolve
-    # differently for the same claim written twice.
-    return (kept[0] if kept else None), problem
+    # THE WHOLE SET, IN THE GAME'S OWN ENUM ORDER, not the file's. `kept` walks `stocked`,
+    # so it is ordered and deduped by construction — the same expression that used to feed
+    # the reduction this line replaced (`kept[0] if kept else None`), which took the first
+    # member and threw the operator's other claim away.
+    #
+    # EMPTY IS None, AND IT IS NOT D3's EMPTY-FILTER CASE. Reaching `()` here means every
+    # member the file named was dropped — they are not finishes of this game at all — so
+    # there is no claim to pass on and rungs 2 and 3 go live, with the problem above saying
+    # what was discarded. D3's "a filter that empties reviews as `metadata_not_stocked`" is
+    # a different emptiness four lines away in the prose and a whole layer away in the code:
+    # there the members ARE real finishes and the CARD does not come in them, and only
+    # `pipeline/variant.py` can know that, because only it has the candidate rows. Conflate
+    # the two and a card the operator contradicted gets listed instead of reviewed.
+    return (tuple(kept) or None), problem
 
 
 def _check_rarity_claim(value, game: Optional[str]):
@@ -406,6 +446,13 @@ def load(
 
     # `--variant` fills a gap; it never replaces a recorded toggle. The `is None` test is
     # the whole guarantee, so it is one line and it is here rather than at the call site.
+    #
+    # IT FILLS IT WITH A ONE-MEMBER CLAIM, and the flag stays single-valued — `cli/__main__.py`
+    # offers `choices=list(variant.FINISHES)` and is deliberately not repeatable
+    # (`docs/specs/batch-script.md`: "`--variant` is unchanged by that — it still fills a gap
+    # and still never overrides — but it fills it with a one-member claim"). Nothing here
+    # special-cases that: the same reader runs, and a bare string reads as a one-member set
+    # exactly as it does when it comes off the file.
     variant_from_flag = False
     if metadata_finish is None and variant_default is not None:
         metadata_finish, flag_problem = _check_variant(variant_default, game)

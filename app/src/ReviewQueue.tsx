@@ -201,6 +201,31 @@ function text(field: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed
 }
 
+/** D3 rung 1's finish claim as its members, or null for no claim.
+ *
+ *  TWO SHAPES, PERMANENTLY. The claim became a SET on 2026-08-23 and a bare string reads as
+ *  one member — there is no migration, and a `review.json` written before that date is
+ *  still a file this screen opens.
+ *
+ *  IT CANNOT BE `text()`, AND THAT IS THE WHOLE REASON IT EXISTS. `text()` fails CLOSED on
+ *  anything that is not a string: it returns null, so a two-member claim would render as
+ *  "no claim" and drop out of the sentence entirely — no crash, no console warning, nothing
+ *  red in `tsc`, `lint` or Playwright, while the operator was asked to judge a card against
+ *  a claim they never made. The union on `QueueRead.metadata_finish` is what turns that into
+ *  a compile error; this is what answers it.
+ *
+ *  Members are returned rather than a joined string because the two call sites join
+ *  differently on purpose: the SENTENCE reads " or " because it is prose a human reads, and
+ *  the fact row uses the app's " · " because it is metadata. One source, two renderings —
+ *  the strings themselves are the pipeline's own either way (D22). */
+function claimMembers(field: string | string[] | null | undefined): string[] | null {
+  const members = (typeof field === 'string' ? [field] : Array.isArray(field) ? field : [])
+    .filter((member): member is string => typeof member === 'string')
+    .map((member) => member.trim())
+    .filter((member) => member !== '')
+  return members.length === 0 ? null : members
+}
+
 /* The collector number as the model returned it, unpadded, exactly as PullPreview.tsx shows
  * it and for the same reason: `pipeline/join.py:join_key` zero-fills to three digits to
  * match the export's `Number` column, and doing that here would put a string on screen that
@@ -245,7 +270,7 @@ function duplicatedCondition(candidates: CandidateRow[]): string | null {
  */
 function sentence(entry: QueueEntryWire): Segment[] {
   const number = collectorNumber(entry.read)
-  const toggle = text(entry.read.metadata_finish)
+  const toggle = claimMembers(entry.read.metadata_finish)?.join(' or ') ?? null
   const detected = text(entry.read.detected_finish)
   const hint = text(entry.read.set_hint)
   const name = text(entry.read.name)
@@ -2381,7 +2406,7 @@ function Facts({ row }: { row: Row }) {
     { label: 'Queue', value: row.shadow === undefined ? row.queue : `${row.queue} · ${row.shadow}` },
     { label: 'Confidence', value: text(entry.confidence) ?? 'none recorded' },
     { label: 'Set hint', value: text(entry.read.set_hint) ?? 'none' },
-    { label: 'Toggle', value: text(entry.read.metadata_finish) ?? 'no claim' },
+    { label: 'Toggle', value: claimMembers(entry.read.metadata_finish)?.join(' · ') ?? 'no claim' },
     { label: 'Read finish', value: text(entry.read.detected_finish) ?? 'none' },
     { label: 'Waiting', value: seenText(entry) },
   ]

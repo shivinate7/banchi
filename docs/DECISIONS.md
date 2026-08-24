@@ -348,6 +348,20 @@ state is server-side JSON on the Mac, read and written through the capture serve
 owner's and Fulfiller's devices share one truth. Photos on Mac disk, box-keyed by capture
 position — see D6. Build environment is Claude Code on the Mac; code never lives in chat.
 
+**THE MAC STAYS THE ONE TRUTH, AND THE OWNER IS KEEPING A PORT OPEN** (recorded 2026-08-23 at
+their instruction, when asked whether to host the capture server somewhere persistent). The
+answer for now is no: the photographs and `inventory.json` live on this machine, and hosting
+means moving 682 photographs and the store off it — which is not a deployment detail but a
+different product, with backups, secrets and uptime attached. Remote access, when it is
+wanted, is a tunnel to this machine and needs no code change.
+
+Recorded rather than left implicit because the owner said it may eventually become a product
+for other people. Nothing in the design is being bent toward that today, and this paragraph
+is the marker so a later session knows the single-operator assumption is a CHOICE with a
+known exit, not an assumption nobody examined. The pieces that would have to move are named
+where they are: this entry (one truth on one disk), D5 (two personas on two devices), and
+D24's opsec rules, which assume a machine one person controls.
+
 **The rig's camera path, recorded 2026-08-13 because nothing in this repo ever said it.**
 A Sony RX100 VII or A7C, over HDMI into an Elgato Cam Link 4K.
 
@@ -750,6 +764,26 @@ fraction already drawn from that box wrong by one.
 **Sold cards do not shrink a box.** D10 makes their gaps permanent and `next_index` is a
 high-water mark, so a sealed box's capacity never falls as its contents sell. Re-opening a box
 sets `capacity` back to unknown rather than leaving a stale number standing.
+
+**THE SAME ARGUMENT HAS A SECOND INSTANCE ONE SCALE DOWN, and it arrived on 2026-08-23 with
+the section-scale position bar.** A section has a denominator problem of exactly this shape:
+`section_end` is a DECLARED bound taken from the box's dividers, not a count of the cards
+actually behind it. Box 1's section 3 runs 51..75 and holds three cards, so `card 3 of 25` and
+`card 3 of 3` are both true and mean opposite things — which is this entry's original complaint
+about `#40 of 53` versus `#40 of 250`, restated per section.
+
+The rule, and it turns on which bound is final rather than on the box's lid alone:
+
+- **Settled** — a divider with cards behind it, so the width is a fact. Render the declared
+  width and say **`slots`**: `Section 1 · card 1 of 25 slots`.
+- **Growing** — the last section of an open box, the one the next capture lands in, where the
+  end is not a divider but the edge of what exists. Render the fill and say **`so far`**, the
+  same two words this entry already puts on an open box's denominator, for the same reason.
+
+**The caption must name which it is.** A denominator that silently switches meaning between a
+full section and a half-empty one is precisely the failure this entry exists to prevent, and
+at section scale it is easier to miss because the number is smaller and the operator is
+already standing at the right box.
 
 ## D21 — Game is a per-card claim, not a mode
 
@@ -1195,6 +1229,24 @@ scrollbar disagree about what the box contains, and the operator would have no w
 which one was lying. Not persisted, for the reason D19 gives about arming: state that acts
 on its own must be re-established deliberately.
 
+**COLLAPSED IS THE RESTING STATE, and the control names what ONE press does.** Both were
+owner reports on 2026-08-23 and they are the same defect seen twice. The screen opened with
+the selected card's section already open while the button offered `expand all`, so the first
+press expanded and a second was needed to reach collapsed — *"you gotta click it once or twice
+for it to be working right"*. The cause was the mark-never-hidden effect firing for the
+INITIAL, automatic selection, which the operator never made. A move is now a step between two
+selections, so nothing opens on load, on a reload, or on an upstream write.
+
+The fold control reads `any` rather than `every`, so from a partial state one press always
+produces the state the label names. Collapse wins the tie because collapsed is where the walk
+rests.
+
+**A SEARCH OPENS EVERY SECTION HOLDING A MATCH, and clearing it collapses fully.** A result
+you cannot see is not a result. It is deliberately NOT a clause in `isOpen` — a fold made
+during a search has to stick, which is the same act-versus-consequence line drawn above.
+Clearing returns to the resting state rather than restoring what was open before, so there is
+one state to learn instead of two.
+
 **MASS-SELECT IS BOX-SCOPED AND IS NOT PERSISTED.** The selection clears on a box change
 because the write it feeds is box-scoped, and a selection surviving into a box it cannot
 apply to is a loaded gun. It survives a FOLD — the count is carried on the status line and on
@@ -1239,6 +1291,69 @@ still pass, unchanged and unweakened. `#/fulfillment` is not merged into anythin
 its own route — it is a different persona at a different posture, and it is the one screen
 in the product whose whole design is a floor. The ruling is about which arguments may
 decide architecture, not about which tests may go red.
+
+---
+
+## D32 — The pixel budget is spent on the card, not the desk
+
+**The owner's question, 2026-08-23**: *"should we run a mass crop / should i be prompted on a
+way to trim images where im like for this run you wont need the top or bottom 5% ... resizing
+with sliders or something to save on pixel load and thereby less tokens?"* The instinct was
+right and the axis was right — measured over 544 real frames, the card fills 80–88% of the
+width and only 61–72% of the height, so the waste really is top and bottom.
+
+**Detection, not sliders.** `geometry.detect_card` already answers this per frame, locally,
+for free — the border search built for Gate B and covered by T6. Over all 544 box-2 frames it
+found the card **544 times, refusing none** (467 by edge search, 77 by tone). A fixed
+percentage would be a guess that is wrong per frame: card area across that same box ranges
+39% to 81%, because cards move on the tray. The detector knows; the operator would be
+estimating.
+
+**At identify time, in memory, never on disk.** The photograph is not modified. A wrong crop
+costs one re-run of a free local step; a crop written at capture is irreversible by the time
+anyone notices, because the card is back in the box. That is D10's undo argument read the
+other way — undo is safe *because* the card is still in your hand, and at identify time it is
+not. It also means the 682 photographs already taken benefit, which a capture-time preset
+could never do, and that every other consumer keeps the full frame: the review queue photo a
+human judges foil against, the pull preview matched to a physical slot, the re-shoot
+comparison.
+
+**A refusal sends the whole frame.** `detect_card` answers `None` rather than guessing (T6:
+*"'Not found' must be a refusal, never a guess"*), and the honest response is to send what was
+always sent. The preflight names the count, because a nonzero refusal count means some cards
+are going at whole-frame cost and that is worth seeing before spending.
+
+**THE COST MODEL WAS GOT WRONG IN PUBLIC FIRST, AND THE CORRECTION IS THE USEFUL PART.** The
+first estimate reasoned from the card's AREA in the frame — 53%, therefore a ~40% saving. That
+is wrong, because `MAX_EDGE` normalises the LONG EDGE, not the area. The frames are 2160x3840
+(aspect 0.56) and a card is aspect 0.72 — fatter — so at an unchanged 1568 cap the crop sends
+*more* pixels, not fewer: measured, +26% cost. Cropping buys resolution by default and only
+buys money if `--max-edge` comes down with it. Recorded because the arithmetic looks obvious
+in the wrong direction and a later session will re-derive it the same way.
+
+The measured frontier, 20 real frames, against today's full-frame @1568 baseline of $0.72 for
+box 2 and 268x57 native pixels on the collector-number strip:
+
+| config | box 2 | native px on the number | vs today |
+|---|---|---|---|
+| crop @1400 | $0.76 | 1.95x area | dearer, much sharper |
+| crop @1200 | $0.62 | +16% linear | cheaper AND sharper |
+| crop @1100 | $0.56 | +6% linear | cheaper, ~parity |
+| crop @1000 | $0.50 | -3% linear | cheaper, ~parity |
+| crop @900 | $0.44 | -13% linear | cheapest, softer |
+
+**Off by default, behind `--crop`.** It changes the bytes a card is read from, and Gate B's
+53-card end-to-end run — the only one this project has — was full-frame. Turning it on is a
+per-run choice until a measurement says otherwise.
+
+**KNOWN GAP, NAMED RATHER THAN PATCHED: the crop is not part of the cache identity.** The
+cache is keyed by card key plus the profile's prompt fingerprint, and neither `--crop` nor
+`--max-edge` is in that hash — so a cropped run over cards already answered uncropped would
+reuse the old answers and report cache hits. It cannot bite today: box 2 has zero cached
+answers, and the A/B that measures this ran in isolated `PKMNSCAN_HOME` directories precisely
+so the two configurations could not read each other's cache. The remedy when it matters is the
+shape `rarity_fingerprint` already established — a sibling hash kept deliberately OUT of
+`prompt_fingerprint`, so recording what an image was read from cannot move `1ef974bf511d`.
 
 ---
 

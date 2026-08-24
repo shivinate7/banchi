@@ -313,11 +313,23 @@ function OwnerRows({
                   where it does not — `sections` says which, and the lookup is per copy
                   because two rows of one group can be in two differently divided boxes.
                   NO BAR AT ALL FOR A POOLED COPY — `isPooled` has the argument. */}
+              {/* `sectionDepth` ON THE OWNER'S ROWS AND NOT THE FULFILLER'S. This is the row
+                  the owner's own screenshot was taken of, and it is where the box scale alone
+                  misleads: two copies of one card, one at `Section 1 · Card 1` drawing hard
+                  left and one at `Section 3 · Card 1` drawing hard right, both of them the
+                  first card of their section. The second bar is the answer to that, and
+                  `PositionBar.tsx` argues the denominator it uses.
+
+                  The Fulfiller's block below deliberately does NOT pass it — see the prop's
+                  own note: a second caption in his view is a second sentence somebody decided
+                  he needs to read, and that is the owner's call rather than a side effect of
+                  an owner-side ask. */}
               {pooled ? null : (
                 <PositionBar
                   place={copy.place}
                   persona="owner"
                   sections={sections?.get(copy.place.box)}
+                  sectionDepth
                 />
               )}
 

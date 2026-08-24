@@ -135,6 +135,22 @@ D29's group answer and C8's code ledger:
                          photo. Every code string in it is invented, in a scratch
                          store; nothing code-shaped touches a tracked file.
 
+`check_printed_code_profiles` LANDED 2026-08-23 WITH RIFTBOUND'S AND ONE PIECE'S PROMPTS,
+and it is the same kind of test as the code ledger's record seam one section up: not "is
+this rule right" but "does the string arrive". The seam it guards is a name.
+`cli/resolve.py` reads the RAW model payload back out of `identifications.json` and never
+calls `prompt.parse`, so a schema that called the identifier `printed_code` — which is
+exactly what `pipeline/games.py` calls the same idea one file over — would parse cleanly,
+record cleanly, and hand the join a card with no number: the entire run back as
+`no_catalog_row`, blaming the export. Nothing short of the round trip against the real
+riftbound and One Piece exports can see that, so that is what the section does, on pairs
+where one dropped character is a different real SKU at a different real price.
+
+WHAT IT DOES NOT SAY, and this is the sentence to keep: it says those two profiles are
+WIRED. It says nothing about whether a model can read a card of either game, because this
+repo holds no photograph of one. There is no eval set and no accuracy figure for either
+profile, and a green T7 must never be read as one.
+
 WHAT THIS STILL DOES NOT COVER, and it is the important sentence in this file now. These
 three routes were built before Gate B, which `docs/specs/capture-app.md` scheduled them
 after. Every queue entry these cases assert against is still hand-built — by the harness
@@ -752,6 +768,45 @@ def check_server_routes(checks: Checks) -> None:
             lambda: capture_server.do_capture(capture_payload(3, variant="foil")),
             "variant_invalid",
             "a finish outside the enum refuses as variant_invalid",
+        )
+        # D3 rung 1's claim is a SET (amended 2026-08-23), and these are the route's half of
+        # it. `variant="foil"` above is unchanged and stays first: the bare string is what
+        # every client in the tree sends and what all 682 live records carry, so the wire
+        # keeps accepting one forever — the read-side backfill, not a deprecation.
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(
+                capture_payload(3, variant=["normal", "foil"])
+            ),
+            "variant_invalid",
+            "ONE bad member refuses the WHOLE claim, in the same code and with no new one — "
+            "a silently shortened claim is a claim the operator did not make, and a "
+            "two-member claim quietly cut to one stops filtering and starts DETERMINING",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(capture_payload(3, variant=["normal", 7])),
+            "variant_invalid",
+            "and a member that is not a string refuses on shape, before any vocabulary is "
+            "consulted — the split `_variant_shape`/`_check_variant_members` exists for",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(capture_payload(3, variant={"a": 1})),
+            "variant_invalid",
+            "as does a claim that is neither a string nor a list — it used to be COERCED, "
+            "`str(raw).strip()`, which is how a JSON list became the literal \"['normal', "
+            "'holo']\" and made a set-valued claim unmakeable over this wire",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(
+                capture_payload(3, game="misc", variant=["normal"])
+            ),
+            "variant_invalid",
+            "and the vocabulary is THIS GAME's: `misc` authors no finishes, so every member "
+            "refuses — the capture screen draws no Finish field for it, so a finish arriving "
+            "under one did not come from the control",
         )
         refusal(
             checks,
@@ -3758,9 +3813,15 @@ def check_reshoot(checks: Checks) -> None:
         files.write_json(
             drifted, {"box": 3, "index": 1, "variant": "normal", "set_hint": "swsh1"}
         )
+        # The seed stays a BARE STRING and the expectation moves to the one-member tuple.
+        # It used to assert `"normal"` back, which was the same value in and out and could
+        # not tell a reader that backfills from one that never heard of a set (D3 rung 1,
+        # amended 2026-08-23). This says both things at once: the drift is real, AND a
+        # hand-written sidecar in the old shape is still read — which is the whole reason
+        # there is no migration.
         checks.equal(
             sidecar.scan(capture_server.captures_root())[0].metadata_finish,
-            "normal",
+            ("normal",),
             "the seeded drift is REAL — the reader believes the drifted sidecar, which "
             "is what makes the repair below a repair and not a restatement",
         )
@@ -3802,7 +3863,7 @@ def check_reshoot(checks: Checks) -> None:
         )
         checks.equal(
             repaired.metadata_finish,
-            "holo",
+            ("holo",),
             "...and the drifted finish with it — a sidecar the reader cannot trust to "
             "match the record would send D3 rung 1 a claim nobody made",
         )
@@ -3991,9 +4052,15 @@ def check_history(checks: Checks) -> None:
         )
 
         corrected = last_event("3/1")
+        # BOTH SIDES ARE LISTS because both were written by this route since D3's amendment
+        # of 2026-08-23 — the capture above sent a bare `"holo"` and the route canonicalised
+        # it to `["holo"]` on the way to the record, so `from` is what the record actually
+        # held. `from` is the RAW stored value, not a canonical rendering of it: the block
+        # below adds the legacy case, where a record predating the amendment still holds the
+        # bare string and this line has to say so.
         checks.equal(
             corrected.get("changed"),
-            {"metadata_finish": {"from": "holo", "to": "reverse_holo"}},
+            {"metadata_finish": {"from": ["holo"], "to": ["reverse_holo"]}},
             "and it carries the value it REPLACED: the record and the sidecar are both "
             "overwritten in place, so this line is the only thing left that says the card "
             "was ever toggled holo (D3 rung 1 — the toggle is a claim, and the claim is "
@@ -4030,6 +4097,54 @@ def check_history(checks: Checks) -> None:
             "a PUT that restates the current claim logs NOTHING, and neither does one "
             "naming no settable field — the question this event answers is when the claim "
             "CHANGED, and a re-save has no answer to contribute",
+        )
+
+        # THE SAME PROMISE ACROSS D3's TWO SPELLINGS OF ONE CLAIM (amended 2026-08-23), and
+        # the case above cannot make it: both its values were written by this route, so both
+        # are lists and a raw `!=` would have passed. These are the two ways the amendment
+        # can break it.
+        #
+        # 1. A LEGACY RECORD. All 682 records written before the amendment hold a bare
+        #    string, there is no migration, and every client now sends a list — so the FIRST
+        #    PUT that so much as mentions the finish would log a `corrected` event and
+        #    rewrite a sidecar for a claim that did not move. Written straight onto the
+        #    record because nothing in the product can produce it any more; the seed is the
+        #    hazard, exactly as the drifted sidecar above is.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/1"].metadata_finish = "reverse_holo"
+        capture_server.do_put_card(3, 1, {"variant": ["reverse_holo"]})
+        checks.equal(
+            len(events_for("3/1")),
+            2,
+            "a list restating what a PRE-AMENDMENT record holds as a bare string logs "
+            "nothing either — one member and one string are one claim (D3: a bare string "
+            "reads as a one-member set), and the diff has to compare claims rather than "
+            "representations or every legacy card logs a correction that corrected nothing",
+        )
+
+        # 2. TAP ORDER. `["reverse_holo", "normal"]` and `["normal", "reverse_holo"]` are
+        #    one claim, and stay one value only because the route canonicalises to the
+        #    GAME's enum order. Without that they diff as a change forever, in both
+        #    directions, on every save.
+        capture_server.do_put_card(3, 1, {"variant": ["normal", "reverse_holo"]})
+        checks.equal(
+            len(events_for("3/1")),
+            3,
+            "a genuinely different claim still logs — the guard above narrows the diff, it "
+            "does not switch it off",
+        )
+        checks.equal(
+            Store().read().inventory.cards["3/1"].metadata_finish,
+            ["normal", "reverse_holo"],
+            "...and lands in the game's enum order, not the order it was sent",
+        )
+        capture_server.do_put_card(3, 1, {"variant": ["reverse_holo", "normal"]})
+        checks.equal(
+            len(events_for("3/1")),
+            3,
+            "so the SAME claim sent in the other tap order logs nothing — the canonical "
+            "form is what makes a no-op PUT a no-op, and it is the same form "
+            "`variant._check_claim` and `sidecar._check_variant` produce",
         )
 
         capture_server.do_put_card(3, 1, {"set_hint": None})
@@ -4403,8 +4518,16 @@ def check_sidecar_seam(checks: Checks) -> None:
 
         first = captures[0]
         checks.equal(first.set_hint, "sv9", "the set hint reaches the sidecar")
+        # A ONE-MEMBER TUPLE, not the bare string this asserted before D3's amendment of
+        # 2026-08-23. The capture that produced it still sends a bare `variant="holo"` on
+        # the wire (see `capture_payload` above), so this asserts the whole hop the way the
+        # product actually walks it: string in from a client that has always sent one, set
+        # out to the ladder. That is strictly more than the old assertion, which could not
+        # tell the two shapes apart because they were the same shape.
         checks.equal(
-            first.metadata_finish, "reverse_holo", "and so does the capture-time variant"
+            first.metadata_finish,
+            ("reverse_holo",),
+            "and so does the capture-time variant",
         )
         checks.ok(
             captures[1].metadata_finish is None,
@@ -4417,7 +4540,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         corrected = sidecar.scan(capture_server.captures_root())[1]
         checks.equal(
             corrected.metadata_finish,
-            "holo",
+            ("holo",),
             "a PUT correction reaches the SIDECAR, which is what identify reads",
         )
 
@@ -4426,7 +4549,7 @@ def check_sidecar_seam(checks: Checks) -> None:
         checks.equal(after.set_hint, "sv3pt5", "a hint-only PUT updates the hint")
         checks.equal(
             after.metadata_finish,
-            "reverse_holo",
+            ("reverse_holo",),
             "and leaves an already-recorded finish alone",
         )
 
@@ -4450,6 +4573,75 @@ def check_sidecar_seam(checks: Checks) -> None:
             3,
             "but a render under captures/ui/ is outside the root and costs nothing",
         )
+
+        # ------------------------------------- a SET-VALUED claim, wire to record to reader
+        # D3 rung 1, amended 2026-08-23. This is the hop the amendment exists for and the
+        # one nothing could exercise before it: a stack that genuinely holds two finishes
+        # had no honest claim available, because the wire took one string and the reader
+        # reduced a list to its first member.
+        capture_server.do_capture(
+            capture_payload(3, variant=["reverse_holo", "normal", "normal"])
+        )
+        capture_server.do_capture(capture_payload(3, variant=[]))
+
+        record = Store().read().inventory.cards["3/3"]
+        checks.equal(
+            record.metadata_finish,
+            ["normal", "reverse_holo"],
+            "a two-member claim reaches the RECORD as a list — deduped, and in the GAME's "
+            "own enum order rather than the order it was sent, so one claim is one value "
+            "however it was tapped (the same canonical form `variant._check_claim` and "
+            "`sidecar._check_variant` produce, which is what makes re-normalising harmless)",
+        )
+        checks.ok(
+            Store().read().inventory.cards["3/4"].metadata_finish is None,
+            "and an EMPTY claim is no claim: None on the record, never `[]`. D3 makes the "
+            "empty set identical to the null this field has always allowed, and `[]` "
+            "reaching `record_capture` would overwrite a real claim on the next re-record",
+        )
+
+        raw = json.loads(
+            capture_server.sidecar_path(
+                capture_server.photo_path(3, 3)
+            ).read_text("utf-8")
+        )
+        checks.equal(
+            raw.get("variant"),
+            ["normal", "reverse_holo"],
+            "and the SIDECAR carries the same list — this is the file identify reads, so a "
+            "set that stopped at inventory.json would reach the ladder as no claim at all",
+        )
+        empty_raw = json.loads(
+            capture_server.sidecar_path(
+                capture_server.photo_path(3, 4)
+            ).read_text("utf-8")
+        )
+        checks.ok(
+            "variant" not in empty_raw,
+            "while an empty claim writes NO KEY — absent, not null and not `[]`; the file "
+            "stays a record of claims actually made (D3 rung 1)",
+            f"sidecar was: {empty_raw}",
+        )
+
+        both = {c.key: c for c in sidecar.scan(capture_server.captures_root())}
+        checks.equal(
+            both["3/3"].metadata_finish,
+            ("normal", "reverse_holo"),
+            "and the reader hands the ladder BOTH members — the assertion that would have "
+            "caught the interim reduction (`kept[0]`), which nothing looked at and which "
+            "would have collapsed every two-member claim in silence, resolving rather than "
+            "reviewing",
+        )
+        checks.ok(
+            both["3/4"].metadata_finish is None,
+            "...and no claim stays None across the whole hop, so rungs 2 and 3 stay live",
+        )
+
+        # The money rule, both directions. `scan()` counts photos, and every photo it finds
+        # is a paid Batch request. The capture root is captures/cards/ and not captures/ so
+        # that screenshot renders under captures/ui/ are never scanned as paid captures.
+        stray = capture_server.captures_root() / "box3" / "stray.png"
+        stray.write_bytes(b"\x89PNG\r\n\x1a\n")
 
 
 # ------------------------------------------------------------------ the capture-claim chain
@@ -4530,6 +4722,38 @@ def check_capture_claim_chain(checks: Checks) -> None:
         "and a RE-RECORD carries every claim onto the incumbent, not the three the loop "
         "used to name by hand",
     )
+
+    # AN EMPTY CLAIM CARRIES NO FURTHER THAN A MISSING ONE — and this is the only thing in
+    # `store/master.py` that this change can actually assert. The annotation on
+    # `Card.metadata_finish` is documentation and nothing else: `Inventory.parse` filters on
+    # the KEY NAME (`Card.__annotations__`), dataclasses do no runtime type checking, and
+    # `scripts/docs-audit.py` does not read this file — so widening it to a set is a silent
+    # no-op that LOOKS like the feature landed. The `if value:` guard in `record_capture` is
+    # the behavioural half, and it is a NEW hazard rather than an old bug.
+    #
+    # D3 says an empty set is "identical to the null this field has always allowed". Under
+    # the old test — `if value is not None` — `[]` is not None, so an incoming empty claim
+    # OVERWROTE a real one, and unrecoverably: a later re-record carrying None does not
+    # carry, so nothing puts it back. It could not happen while the finish was a string
+    # (`_variant_shape` mapped `""` to None before the store saw it); it can now.
+    # `rarity_claim` has carried the identical hole since it shipped, saved only by the
+    # server normalising `cleaned or None` on the way in — the store depending on a
+    # normalisation it does not enforce. One guard closes it for every claim in the tuple.
+    #
+    # Driven by the tuple and by both falsy spellings, never by a list of which claims are
+    # set-valued today: naming them is exactly the failure this test's docstring argues
+    # against, and the guard is truthiness, which has no per-field cases.
+    for empty in ([], ""):
+        inventory.record_capture(
+            master.Card(box=7, index=1, **{name: empty for name in marks})
+        )
+        checks.equal(
+            {name: getattr(inventory.cards["7/1"], name) for name in marks},
+            {name: f"re-{name}" for name in marks},
+            f"and an EMPTY claim ({empty!r}) leaves the incumbent alone, exactly as None "
+            "does — D3 makes an empty set no claim at all, so a re-record carrying one may "
+            "not erase a claim that was really made",
+        )
 
     # A misspelled claim refuses BY NAME and burns no index, which is what the tuple buys
     # over four named keyword arguments — `TypeError` from a `Card` constructor two frames
@@ -5095,10 +5319,15 @@ def check_box_claims(checks: Checks) -> None:
             "from; the card route stays the deliberate one-position door",
         )
         after = Store().read().inventory
+        # A LIST ON THE RECORD, and the list is the point rather than a spelling change.
+        # `store/master.py:Card.metadata_finish` is a list because `to_payload` calls
+        # `asdict` and JSON has to round-trip it unchanged; the two frozen carriers
+        # downstream (`sidecar.Capture`, `join.IdentifiedCard`) hold tuples for the opposite
+        # reason, and this test asserts both shapes in their own places on purpose.
         checks.ok(
             all(
                 (after.cards[f"6/{i}"].game, after.cards[f"6/{i}"].metadata_finish)
-                == ("pokemon", "reverse_holo")
+                == ("pokemon", ["reverse_holo"])
                 for i in (1, 2, 3)
             ),
             "every eligible card carries the claims now — including the one whose game "
@@ -5113,7 +5342,7 @@ def check_box_claims(checks: Checks) -> None:
             capture_server.sidecar_path(capture_server.photo_path(6, 1)).read_text("utf-8")
         )
         checks.ok(
-            sidecar_now.get("variant") == "reverse_holo"
+            sidecar_now.get("variant") == ["reverse_holo"]
             and sidecar_now.get("game") == "pokemon",
             "the sidecar is rewritten for a changed card — the correction has to reach "
             "the file `identify` actually reads, or D3 rung 1 never hears it",
@@ -6341,6 +6570,396 @@ def check_code_ledger(checks: Checks) -> None:
             )
 
 
+# -------------------------------------------------- the printed-code profiles (D21, D25)
+
+
+RIFTBOUND_EXPORT = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "riftbound_export_untouched.csv"
+)
+ONE_PIECE_EXPORT = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "onepiece_export_untouched.csv"
+)
+
+
+def check_printed_code_profiles(checks: Checks) -> None:
+    """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.
+
+    WHAT THIS ASSERTS AND WHAT IT CANNOT. It asserts that a model answer shaped like these
+    two profiles' schemas survives every hop between the API and a catalog row — the
+    parser, the raw payload written into `identifications.json`, `cli/resolve.py`'s read of
+    that payload, the per-game join key, and the fold on both sides of the match. It says
+    NOTHING about whether a model can read a Riftbound or One Piece card, because this
+    repo holds no photograph of either: there is no eval set, no T1 score, and no accuracy
+    figure for either profile. Same standing as T6's synthetic composites — self-consistent
+    over a wider range than the evidence covers.
+
+    THE SEAM THAT LIES IS THE FIELD NAME, and it is why this section reaches all the way to
+    a real export instead of stopping at `parse`. `cli/resolve.py` reads the RAW model
+    payload back out of the run — `identification.get("number")` — and never calls
+    `prompt.parse`. So a schema that called this field `printed_code`, or copied misc's
+    `printed_id`, would parse perfectly, write a perfectly good record, and then hand the
+    join a card with no number at all: every card in the run back as `no_catalog_row`,
+    blaming the export. Nothing short of the round trip below can see that, and the
+    temptation to rename the field is permanent, because `printed_code` is what the
+    registry's `join_key` calls the same idea one file over.
+
+    THE EXPORTS ARE THE REAL ONES AND THE PRICES ARE WHY. Every identifier below is a cell
+    that exists, and the pairs are chosen so that dropping a single character lands on a
+    different real SKU at a different real price: `066a/298` ($8.89) against `066/298`,
+    `303*/298` ($3,420.28) against `303/298` ($384.31). An invented fixture would assert
+    that this code is consistent with itself.
+    """
+    checks.note("")
+    checks.note("PRINTED-CODE PROFILES — identify/prompt.py, cli/resolve.py, the join key")
+
+    # ------------------------------------------------- the registry <-> profile seam
+    #
+    # BOTH DIRECTIONS, because the two files are reconciled at import in one direction only
+    # (a registry name with no profile stops the process; a profile no entry names does
+    # not). The half that is not checked at import is the half asserted here: the entry
+    # still names the profile that was written FOR it.
+    for game, strategy in (
+        ("riftbound", "riftbound_card_v1"),
+        ("one_piece", "one_piece_card_v1"),
+    ):
+        entry = games.get(game)
+        checks.equal(
+            entry["prompt"],
+            strategy,
+            f"the {game} registry entry names {strategy} — it said `unwritten` until "
+            "2026-08-23, and asking for it refused rather than reading the card with "
+            "another game's prompt",
+        )
+        chosen = prompt.profile(strategy)
+
+        # D3 rung 3's enum, PER GAME. `variant.FINISHES` is Pokemon's three, and reading it
+        # for another game was a real bug fixed in four places on 2026-08-23. Asserted as an
+        # exact set rather than by naming `normal`/`foil`, so that widening the registry
+        # entry widens this without anyone remembering to.
+        offered = chosen.schema["properties"]["finish"]["enum"]
+        checks.equal(
+            sorted(offered),
+            sorted(set(entry["finishes"]) | {prompt.UNKNOWN_FINISH}),
+            f"{strategy}'s finish enum is exactly {game}'s own finishes plus `unknown` — "
+            "read from the registry entry, never from variant.FINISHES",
+        )
+        checks.ok(
+            not ({"holo", "reverse_holo"} & set(offered)),
+            "and it offers no Pokemon-only finish: a `reverse_holo` here would be a "
+            "condition string neither game's export carries",
+            f"enum was {offered!r}",
+        )
+        # The prompt text and the schema enum are two statements of one fact, and only the
+        # schema is machine-read. A finish the model is allowed to return but is never told
+        # about is a member nothing will ever produce.
+        for finish in entry["finishes"]:
+            checks.ok(
+                f"\n  {finish}" in chosen.system,
+                f"and {game}'s `{finish}` is described in the system prompt as well as "
+                "allowed by the schema — an enum member the prompt never mentions is a "
+                "member the model has no reason to choose",
+                f"not found in {strategy}'s system prompt",
+            )
+
+        # THE FIELD NAME, asserted at the schema before the round trip asserts it in anger.
+        checks.equal(
+            sorted(chosen.schema["required"]),
+            ["confidence", "finish", "name", "number"],
+            f"{strategy} asks for FOUR fields and calls the identifier `number` — the key "
+            "cli/resolve.py reads off the raw payload",
+        )
+        checks.ok(
+            "printed_total" not in chosen.schema["properties"],
+            "and `printed_total` is absent rather than blank: a game keyed by "
+            "printed_code has no denominator half, and _lookup_printed_code never reads "
+            "one in either direction",
+            f"properties were {sorted(chosen.schema['properties'])!r}",
+        )
+
+        # D23's clause lost its A/B on Pokemon for $0.17 and is off in production; shipping
+        # it new on a game with no eval set would be unmeasurable by construction. Asserted
+        # through `user_text` rather than only on the field, because the field is only half
+        # the promise — the other half is that a claim supplied anyway renders nothing.
+        checks.equal(chosen.rarity_clause, "", f"{strategy} carries no rarity clause")
+        checks.equal(
+            prompt.user_text(rarity_claim=("Common", "Rare"), strategy=strategy),
+            chosen.user,
+            "and a rarity claim supplied anyway renders NOTHING — the turn is byte-for-"
+            "byte the unclaimed one",
+        )
+        # `crop_bands: ()` — nobody has measured where either game puts a title or a
+        # number, so the retry turn must not name a band the cropper will never cut.
+        checks.equal(tuple(entry["crop_bands"]), (), f"{game} claims no crop bands")
+        for band in ("title band", "collector number", "number is printed"):
+            checks.ok(
+                band not in chosen.user_with_crops,
+                f"and {strategy}'s crop-retry turn does not name a `{band}` it cannot "
+                "be sent — it describes enlarged views of the same card and nothing more",
+                f"turn was: {chosen.user_with_crops!r}",
+            )
+
+    # `unwritten` NAMES NOBODY NOW AND STILL REFUSES. This is the case that stops a later
+    # session deleting the strategy as dead: it is what the NEXT game registered here lands
+    # on, and its refusal is the only thing between that game and Pokemon's contract.
+    checks.ok(
+        all(entry["prompt"] != prompt.UNWRITTEN for entry in games.GAMES),
+        "no registry entry names `unwritten` any more",
+        f"still named by: {[e['key'] for e in games.GAMES if e['prompt'] == prompt.UNWRITTEN]!r}",
+    )
+    checks.equal(
+        prompt.PROFILES.get(prompt.UNWRITTEN, "missing"),
+        None,
+        "and it is kept anyway, mapped to None — the honest value for the next game, "
+        "unlike `operator_note`, which named a state the product does not have and was "
+        "deleted",
+    )
+    refusal = checks.raises(
+        prompt.UnwrittenPrompt,
+        lambda: prompt.profile(prompt.UNWRITTEN),
+        "asking for it still refuses BY NAME rather than falling through",
+    )
+    if refusal is not None:
+        checks.ok(
+            "do not read this game with another game's prompt" in str(refusal),
+            "and the refusal still says what the alternative would cost",
+            f"message was: {refusal}",
+        )
+
+    # ------------------------------------------------------ the parsers, field by field
+    #
+    # `066a/298` and `T02 // T03` are the two shapes a fold or a tidy-up would break, and
+    # both are asserted through `parse` rather than by reading the schema: the parser is
+    # where a later session would reach for `normalize_number`, which upper-cases and
+    # strips a leading `#`.
+    riftbound_read = prompt.parse(
+        {
+            "name": "Ahri, Alluring",
+            "number": "066a/298",
+            "finish": "foil",
+            "confidence": "high",
+        },
+        "riftbound_card_v1",
+    )
+    checks.equal(
+        [riftbound_read.name, riftbound_read.number, riftbound_read.printed_total],
+        ["Ahri, Alluring", "066a/298", ""],
+        "the identifier lands WHOLE in `number`, case and letter suffix untouched, and "
+        "`printed_total` is empty — a half this game does not have rather than one we "
+        "failed to read",
+    )
+    checks.equal(
+        riftbound_read.detected_finish,
+        "foil",
+        "and `foil` survives the parser's whitelist, which is this game's enum and not "
+        "Pokemon's",
+    )
+    checks.equal(
+        riftbound_read.has_number,
+        False,
+        "has_number is False, which is the honest answer to the question it asks: no "
+        "number/total key CAN be built for a printed_code game",
+    )
+    checks.equal(
+        prompt.parse(
+            {
+                "name": "Bird // Buff",
+                "number": "T02 // T03",
+                "finish": "unknown",
+                "confidence": "medium",
+            },
+            "riftbound_card_v1",
+        ).number,
+        "T02 // T03",
+        "a double-sided token keeps the SPACES around its `//` — number_index_key folds "
+        "zeros and case and nothing else, so `T02//T03` would fold to `T2//T3` and match "
+        "nothing",
+    )
+    checks.equal(
+        prompt.parse(
+            {"name": "x", "number": "y", "finish": "unknown", "confidence": "low"},
+            "one_piece_card_v1",
+        ).detected_finish,
+        None,
+        "`unknown` maps to None — D3's no-signal case, not a manufactured disagreement",
+    )
+    checks.equal(
+        prompt.parse(
+            {
+                "name": "Monkey.D.Luffy",
+                "number": "ST26-005",
+                "finish": "foil",
+                "confidence": "high",
+            },
+            "one_piece_card_v1",
+        ).name,
+        "Monkey.D.Luffy",
+        "and a dotted, unspaced One Piece name survives verbatim — normalize_name folds "
+        "case, accents, apostrophes and dashes and does NOT fold a full stop, so a "
+        "respaced `Monkey D. Luffy` would never compare equal to what the card prints",
+    )
+    for strategy in ("riftbound_card_v1", "one_piece_card_v1"):
+        checks.raises(
+            prompt.MalformedIdentification,
+            lambda s=strategy: prompt.parse(
+                {
+                    "name": "x",
+                    "number": "y",
+                    "finish": "reverse_holo",
+                    "confidence": "high",
+                },
+                s,
+            ),
+            f"{strategy} REFUSES a Pokemon finish rather than dropping it to None — a "
+            "silent drop here would lose rung 3's cross-check with nothing on screen",
+        )
+        checks.raises(
+            prompt.MalformedIdentification,
+            lambda s=strategy: prompt.parse(
+                {"name": "x", "number": "y", "finish": "normal", "confidence": "sure"}, s
+            ),
+            "and an out-of-enum confidence too — routing reads that field",
+        )
+        checks.raises(
+            prompt.MalformedIdentification,
+            lambda s=strategy: prompt.parse(
+                {"name": "x", "printed_code": "y", "finish": "normal", "confidence": "high"},
+                s,
+            ),
+            "and a payload naming the identifier `printed_code` is a MISSING KEY, loudly "
+            "— never a card read with an empty number",
+        )
+
+    # ------------------------------ the round trip: raw payload -> resolve -> a real row
+    #
+    # THE CASE THIS SECTION EXISTS FOR. The payload written into `identifications.json` is
+    # `Identification.raw` — the model's own keys — and `cli/resolve.py` reads them back
+    # without parsing. Every pair below is chosen so that one dropped character lands on a
+    # different real SKU: the fold forgives zero padding and case and forgives nothing else.
+    plans = (
+        (
+            "riftbound",
+            RIFTBOUND_EXPORT,
+            (
+                ("066a/298", "Ahri, Alluring", "foil"),
+                # The same card written unpadded. number_index_key strips leading zeros
+                # from every digit run on BOTH sides, so this must aggregate onto the SKU
+                # above rather than miss — which is why neither prompt demands padding.
+                ("66a/298", "Ahri, Alluring", "foil"),
+                ("303*/298", "Ahri, Nine-Tailed Fox", "foil"),
+            ),
+            {
+                "8926002": ("066a/298", "Near Mint Foil", 2),
+                "8927897": ("303*/298", "Near Mint Foil", 1),
+            },
+        ),
+        (
+            "one_piece",
+            ONE_PIECE_EXPORT,
+            (
+                ("OP15-079", "Absalom", "normal"),
+                ("op15-79", "Absalom", "normal"),
+                ("P-105", "Sabo", "foil"),
+            ),
+            {
+                "9196764": ("OP15-079", "Near Mint", 2),
+                "9194101": ("P-105", "Near Mint Foil", 1),
+            },
+        ),
+    )
+    for game, export, reads, expected in plans:
+        strategy = str(games.get(game)["prompt"])
+        with isolated_home() as home:
+            run = runs.Run(directory=home, manifest={})
+            cards = {}
+            for index, (number, name, finish) in enumerate(reads, start=1):
+                parsed = prompt.parse(
+                    {
+                        "name": name,
+                        "number": number,
+                        "finish": finish,
+                        "confidence": "high",
+                    },
+                    strategy,
+                )
+                cards[f"7/{index}"] = {
+                    "box": 7,
+                    "index": index,
+                    "game": game,
+                    "photo": f"captures/box7/{index:04d}.jpg",
+                    # RAW, exactly as `cli/cmd_identify.py` writes it: `item.identification
+                    # = dict(outcome.identification.raw)`. Writing the parsed fields here
+                    # instead would test a seam the pipeline does not have.
+                    "identification": dict(parsed.raw),
+                }
+            run.write_identifications({"cards": cards})
+            report = resolve.load(run, {game: Path(export)}).joins[game].report
+
+        checks.equal(
+            report.cards_in, len(reads), f"{game}: every card reached the {game} catalog"
+        )
+        checks.equal(
+            {
+                sku: (
+                    match.row[tcgcsv.NUMBER_COLUMN],
+                    match.condition,
+                    len(match.positions),
+                )
+                for sku, match in report.matches.items()
+            },
+            expected,
+            f"{game}: the model's raw `number` reached a REAL export row through "
+            "cli/resolve.py without being parsed on the way — the seam that would have "
+            "silently returned no_catalog_row for the whole run if this field were named "
+            "`printed_code`",
+        )
+
+    # The negative that gives the round trip its meaning: one character dropped is a
+    # different card at a different price, and the pipeline does not smooth it over.
+    with isolated_home() as home:
+        run = runs.Run(directory=home, manifest={})
+        run.write_identifications(
+            {
+                "cards": {
+                    f"8/{index}": {
+                        "box": 8,
+                        "index": index,
+                        "game": "riftbound",
+                        "photo": f"captures/box8/{index:04d}.jpg",
+                        "identification": dict(
+                            prompt.parse(
+                                {
+                                    "name": "Ahri, Nine-Tailed Fox",
+                                    "number": number,
+                                    "finish": "foil",
+                                    "confidence": "high",
+                                },
+                                "riftbound_card_v1",
+                            ).raw
+                        ),
+                    }
+                    for index, number in enumerate(("303*/298", "303/298"), start=1)
+                }
+            }
+        )
+        starred = resolve.load(run, {"riftbound": RIFTBOUND_EXPORT}).joins["riftbound"]
+    prices = {
+        match.row[tcgcsv.NUMBER_COLUMN]: match.market_price
+        for match in starred.report.matches.values()
+    }
+    checks.equal(
+        sorted(prices),
+        ["303*/298", "303/298"],
+        "the asterisk is not decoration: `303*/298` and `303/298` are two different real "
+        "SKUs and both are found",
+    )
+    checks.ok(
+        prices.get("303*/298") != prices.get("303/298"),
+        "and they are not the same card — a model that reads the asterisk as a footnote "
+        "mark lands on a real row for a real card that is not the one in its hand",
+        f"prices were {prices!r}",
+    )
+
+
 # ---------------------------------------------------------------------- command refusals
 
 
@@ -7032,6 +7651,7 @@ def run() -> Result:
     check_origin_gate(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
+    check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
     return checks.result(

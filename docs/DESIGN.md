@@ -42,6 +42,24 @@ Spacing    4 8 12 16 24 32 48 64        one scale, no other values
 Radius     4px                          one value, everywhere
 ```
 
+**The position bar carries TWO SCALES, and they must be distinguishable at a glance.**
+Added 2026-08-23 on the owner's ask — *"not only its location at the box level but section
+level"*, then *"while retaining box depth too"*. The box scale answers how far into the box
+to put your thumb (D20's original argument); the section scale answers where you are inside a
+divider. They routinely disagree: a card reading `#51 of 53` draws hard right at box scale
+and is `Card 1` of section 3 — the very front — at section scale. Both are true, and a person
+walking to a box needs the first to get near it and the second to land on it.
+
+Three cues separate them, and none is a new colour: the section track is shorter (8px against
+16px), a hairline indents it beneath the box track, and its caption opens with the section
+number where the box caption opens with `#`. The marker convention is the server's own
+`fraction`, so a card at the front of both sits at the front of both.
+
+**The section denominator says which kind it is** — `slots` for a settled divider, `so far`
+for the growing last section of an open box. That rule is D20's, argued there; it is repeated
+in the caption because the number is small and the operator is already at the right box, which
+is exactly when a silently switching denominator is easiest to miss.
+
 **One system, two densities.** Owner screens use the 4–16 end of the scale; the Fulfillment
 view uses 24–64 and the minimums in the table below. Same palette, same three faces, same
 radius. The alternative — two deliberately different visual worlds — was considered and

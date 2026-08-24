@@ -327,7 +327,7 @@ COMPONENTS = [
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
-                          "governed_by": ["D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D28"], "tested_by": ["T7"]},
@@ -815,7 +815,7 @@ COMPONENTS = [
                         "priced from the export, and an answer that writes and advances with "
                         "no dialog. Reads GET /queues and writes one candidate row back "
                         "through src/server.ts like every other screen.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D23", "D28", "D29"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D28", "D29"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -943,7 +943,7 @@ COMPONENTS = [
                                             "divider, a marker at this card. Says '#40 of 250 · 16% "
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
@@ -998,6 +998,21 @@ COMPONENTS = [
                         "fire would POST /capture into a real store. The dropped counter IS "
                         "the assertion.",
             },
+            "tests/capture-claims.spec.ts": {
+                "does": "the capture screen's claim controls in a real browser: the Finish "
+                        "track is a MULTI-SELECT (D3 rung 1's set), the claim is held in the "
+                        "game's enum order rather than tap order, re-tapping the last cell "
+                        "clears it and stores nothing, a sessionStorage value written before "
+                        "the claim was a set reads back as one member, and narrowing a "
+                        "two-member claim to one CLEARS it rather than promoting a filter "
+                        "into a determination. Run by `make design-check`.",
+                "governed_by": ["D3", "D22", "D23", "D27"],
+                "note": "No box is ever selected and only reads are stubbed, so no capture "
+                        "is ever taken — motion-live.spec.ts's rule, for its reason. It "
+                        "exists because nothing ran these controls at all: when the claim "
+                        "became a set, tsc, eslint and every spec stayed green over a "
+                        "control that had never been pressed by anything but a human.",
+            },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
                         "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
@@ -1013,7 +1028,7 @@ COMPONENTS = [
                         "per-card claims, the mid-box delete and the whole-box delete — "
                         "asserted at the request boundary against a stubbed server, so a "
                         "control that draws but sends the wrong body fails here.",
-                "governed_by": ["D5", "D7", "D10", "D13", "D24", "D26", "D31"],
+                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D24", "D26", "D30", "D31"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

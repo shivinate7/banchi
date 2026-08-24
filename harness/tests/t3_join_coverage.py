@@ -97,6 +97,10 @@ AMPERSAND_NAME = "Billy & O'Nare"
 AMPERSAND_NORMAL_SKU = "8608674"  # 142/159 Near Mint, 0.12
 AMPERSAND_REVERSE_SKU = "8608679"  # 142/159 Near Mint Reverse Holofoil, 0.23
 SEVEN_COPY_SKU = "8608459"  # Dunsparce 120/159 Near Mint, 2.06
+# The same number's other condition row. 120/159 is stocked in both finishes, which is
+# what makes it the number a set-valued claim can be asserted against at all: a claim of
+# {normal, reverse_holo} has two rows to narrow to and something left for rung 3 to pick.
+SEVEN_COPY_REVERSE_SKU = "8608464"  # Dunsparce 120/159 Near Mint Reverse Holofoil, 2.60
 BUTTERFREE_REVERSE_SKU = "8607369"  # 003/159 Near Mint Reverse Holofoil, 0.47
 
 BOX = 3
@@ -285,6 +289,104 @@ def _command(c, *argv):
     text = buffer.getvalue()
     c.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
     return text
+
+
+def _check_set_valued_claim(c, export) -> None:
+    """D3 rung 1's SET, across the hop T3 owns: run record -> `cli/resolve.py` -> the ladder.
+
+    THE ONE HOP NOTHING ELSE REACHES. T4 asserts the ladder against `variant.resolve`
+    directly and T7 asserts the wire, the record and the sidecar — but the claim also
+    travels `identifications.json`, which `cli/cmd_identify.py` writes and `cli/resolve.py`
+    reads back into a FROZEN `IdentifiedCard`. Nothing proved a list crossed it, and the two
+    ways it can fail there are both silent: a raw `record.get` puts a mutable list on a
+    frozen dataclass, and a bare string iterated as a sequence becomes six one-letter
+    "finishes" that `variant._check_claim` then raises `UnknownFinish` on.
+
+    Both shapes travel the SAME RUN, deliberately, and take different rungs: the set falls
+    through and lets detection choose within it, the bare string determines at rung 1. That
+    pair is the amendment in one assertion — a set narrows, one member behaves exactly as
+    this rung always has — and the bare string is the half that matters most, because every
+    run record written before 2026-08-23 carries one and `join` and `emit` are free and
+    deliberately re-runnable over old identification files.
+    """
+    with _isolated_home() as home:
+        _capture(2)
+        run = runs.create("t3-set-claim")
+        payload = _identifications(2, "Dunsparce", "120")
+        cards = payload["cards"]
+        # Card 1: a SET, in the order the operator tapped rather than the enum's. Detection
+        # reads `normal`, INSIDE the claim, so rung 3 chooses within what the claim left.
+        cards[master.position_key(BOX, 1)]["metadata_finish"] = ["reverse_holo", "normal"]
+        # Card 2: the BARE STRING every pre-amendment record carries, with detection
+        # agreeing, so rung 1 determines exactly as it did before the amendment.
+        cards[master.position_key(BOX, 2)]["metadata_finish"] = "reverse_holo"
+        cards[master.position_key(BOX, 2)]["identification"]["finish"] = "reverse_holo"
+        run.write_identifications(payload)
+        resolved = resolve.load(run, _export_file(home / "export.csv", export))
+        report = resolved.report
+
+        c.equal(
+            [q.destination.reason for q in report.queued],
+            [],
+            "neither card queues — a two-member claim NARROWS and the rungs below decide "
+            "within what survives, which is the whole of the amendment",
+        )
+        matched = report.matches.get(SEVEN_COPY_SKU)
+        if c.ok(matched is not None, "the set-claimed copy matches 120/159 Near Mint"):
+            c.equal(
+                matched.stages,
+                [variant.DETECTION],
+                "and it resolved at rung 3 — the set filtered the rows to the two it named "
+                "and DETECTION picked between them. A reader that reduced the set to its "
+                "first member would report `metadata` here, having determined on half of "
+                "what the operator said, with no refusal and no review reason",
+            )
+        reverse = report.matches.get(SEVEN_COPY_REVERSE_SKU)
+        if c.ok(reverse is not None, "and the bare-string copy matches the Reverse row"):
+            c.equal(
+                reverse.stages,
+                [variant.METADATA],
+                "at rung 1, DETERMINING — one member behaves exactly as this rung always "
+                "has, which is the compatibility guarantee that makes the amendment "
+                "additive rather than a rewrite of the ladder",
+            )
+
+    # THE QUEUE ENTRY, which is what the review screen reads. A set that reached the ladder
+    # and then rendered as "no claim" on screen is the failure with no error attached:
+    # `app/src/ReviewQueue.tsx` would ask the operator to judge a card while showing them a
+    # claim they never made, or none at all.
+    with _isolated_home() as home:
+        _capture(1)
+        run = runs.create("t3-set-claim-queue")
+        payload = _identifications(1, "Articuno", "161")
+        payload["cards"][master.position_key(BOX, 1)]["metadata_finish"] = [
+            "normal",
+            "reverse_holo",
+        ]
+        run.write_identifications(payload)
+        resolved = resolve.load(run, _export_file(home / "export.csv", export))
+        queued = resolved.report.queued
+        if c.equal(
+            [q.destination.reason for q in queued],
+            ["metadata_not_stocked"],
+            "a claim NONE of whose members 161/159 is stocked in reviews as "
+            "metadata_not_stocked — the same fact as a single claim the number does not "
+            "come in, which is why D3 gives it no reason code of its own",
+        ):
+            c.equal(
+                queued[0].card.metadata_finish,
+                ("normal", "reverse_holo"),
+                "the claim reached `IdentifiedCard` with BOTH members and as a TUPLE — the "
+                "carrier is frozen, and a list on it is a hashability bug waiting for its "
+                "first `set()` (the reason `rarity_claim` beside it is one too)",
+            )
+            c.equal(
+                resolve.queue_entry(queued[0]).read["metadata_finish"],
+                ["normal", "reverse_holo"],
+                "and the queue entry carries the whole claim as a JSON LIST — this is what "
+                "`review.json` holds and the review screen renders, so a set silently shown "
+                "as one member would put a claim nobody made in front of the operator",
+            )
 
 
 def _check_committed_from_counts(c, export) -> None:
@@ -1078,6 +1180,7 @@ def run() -> Result:
     # two sections below drive the same two rules through `cli/resolve.py` against a real
     # store, which is the seam where a count becomes a `committed` flag and where a human's
     # answer is read back off the card record.
+    _check_set_valued_claim(c, export)
     _check_committed_from_counts(c, export)
     _check_answer_off_the_record(c, export)
     _check_game_partition(c, export)

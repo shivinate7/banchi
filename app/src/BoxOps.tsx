@@ -957,7 +957,10 @@ type ClaimField = 'game' | 'setHint' | 'variant' | 'rarityClaim' | 'note'
 
 export type ClaimPatch = {
   setHint?: string | null
-  variant?: string | null
+  /** D3 rung 1's finish claim, A LIST since the amendment of 2026-08-23: one member
+   *  determines, two or more filter the candidate rows. `null` clears the claim, which is
+   *  what an armed-but-empty control sends. */
+  variant?: readonly string[] | null
   game?: string
   rarityClaim?: string[] | null
   note?: string | null
@@ -991,7 +994,7 @@ export function ClaimEditor({
   const [armed, setArmed] = useState<readonly ClaimField[]>([])
   const [pickedGame, setPickedGame] = useState<string | null>(game)
   const [setHint, setSetHint] = useState('')
-  const [variant, setVariant] = useState('')
+  const [variant, setVariant] = useState<readonly string[]>([])
   const [rarity, setRarity] = useState<readonly string[]>([])
   const [note, setNote] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
@@ -1043,7 +1046,7 @@ export function ClaimEditor({
      * as a clear rather than as an omission. */
     if (isArmed('game') && key !== null) patch.game = key
     if (isArmed('setHint')) patch.setHint = setHint.trim() === '' ? null : setHint.trim()
-    if (isArmed('variant')) patch.variant = variant === '' ? null : variant
+    if (isArmed('variant')) patch.variant = variant.length === 0 ? null : [...variant]
     if (isArmed('rarityClaim')) patch.rarityClaim = rarity.length === 0 ? null : [...rarity]
     if (isArmed('note')) patch.note = note.trim() === '' ? null : note.trim()
     onApply(patch)
@@ -1091,21 +1094,54 @@ export function ClaimEditor({
         label="Finish"
         armed={isArmed('variant')}
         onArm={arm}
-        says="no claim clears it, and the ladder infers the finish instead"
+        says="none ticked clears it, and the ladder infers the finish instead"
       >
-        <select
-          className="boxops-field-input"
-          value={variant}
-          onChange={(event) => setVariant(event.target.value)}
-          aria-label="Finish"
-        >
-          <option value="">no claim</option>
-          {(entry?.finishes ?? []).map((finish) => (
-            <option key={finish} value={finish}>
-              {finish}
-            </option>
-          ))}
-        </select>
+        {/* CHIPS, NOT A SELECT, since D3 rung 1's claim became a SET on 2026-08-23. A
+            single `<select>` cannot express `{normal, reverse_holo}` — the claim a box of
+            mixed-finish stock actually wants — and the one it could express, one finish,
+            is the DETERMINING case rather than the filtering one. Deliberately the rarity
+            row's markup below, cell for cell: D3's stated point is that a screen whose
+            claims all work one way is one rule to hold, and this editor is the only other
+            place in the product where a finish claim is made.
+
+            A game with fewer than two finishes still draws the row here, unlike the
+            capture screen, and that is not an oversight: this editor's whole job is
+            retroactive correction, and CLEARING a claim on a `misc` or `pokemon_code` card
+            that should never have carried one is a real thing to want. The empty-vocabulary
+            case says so rather than drawing an empty box. */}
+        {(entry?.finishes ?? []).length === 0 ? (
+          <p className="boxops-machine">
+            {entry === null ? 'finishes: unread' : `finishes: none for ${entry.display}`}
+          </p>
+        ) : (
+          <div className="boxops-chips">
+            {(entry?.finishes ?? []).map((name) => {
+              const on = variant.includes(name)
+              return (
+                <button
+                  key={name}
+                  className="boxops-chip"
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    setVariant((held) =>
+                      held.includes(name)
+                        ? held.filter((f) => f !== name)
+                        : // Rebuilt in the game's enum order, never tap order — the same
+                          // canonical form `pipeline/variant.py:_check_claim` and the
+                          // capture route impose, so a restated claim diffs as no change.
+                          (entry?.finishes ?? []).filter(
+                            (f) => f === name || held.includes(f),
+                          ),
+                    )
+                  }
+                >
+                  {name}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </ClaimRow>
 
       <ClaimRow

@@ -139,6 +139,119 @@ export function sentenceOf(place: Place): string {
   return `#${index} of ${box_total} so far`
 }
 
+/** The second scale: how far into its own SECTION a card sits. Null when there is no honest
+ *  answer — a pooled card, a degraded block, a box the server cannot size. */
+export type SectionDepth = {
+  /** `Place.card`, the server's own slot number inside the section. Never derived here. */
+  slot: number
+
+  /** The denominator, and `growing` is what says which of the two things it is. */
+  of: number
+
+  /** True when the far bound is not final, so the number can be larger tomorrow. */
+  growing: boolean
+
+  /** 0..100 along the section track. */
+  marker: number
+
+  sentence: string
+}
+
+/**
+ * HOW FAR INTO ITS SECTION, WHICH IS NOT THE QUESTION THE BAR ABOVE IT ANSWERS. The owner's
+ * screenshot is the whole argument and it is two rows of one card:
+ *
+ *     Box 1 · Section 1 · Card 1    marker hard left     #1 OF 53 SO FAR
+ *     Box 1 · Section 3 · Card 1    marker hard right    #51 OF 53 SO FAR
+ *
+ * The second copy draws as *near the end of the box* and it is the FIRST card of its section.
+ * Both readings are true and they point opposite ways, and only one of them is drawable today —
+ * the one that misleads at exactly the moment a divider matters. A person walking to a box needs
+ * the box scale to get near it and the section scale to land on it, which is why this is
+ * additive and the box bar above is untouched.
+ *
+ * ARITHMETIC ON TWO NUMBERS THE SERVER SENT, AND NEVER A SECOND LABEL FORMULA. `slot` is
+ * `Place.card` verbatim — the server's own answer to which slot of its section this is — and the
+ * denominator is the distance between two bounds it also sent. Nothing here derives a section
+ * from an index, and nothing parses the label string. `pipeline/join.py:Position` stays the only
+ * label formula in the repo, exactly as `spansOf` above refuses the tempting tiling.
+ *
+ * WHICH DENOMINATOR, AND WHY THE PICTURE HAS TO SAY WHICH. This is D20's open-versus-sealed
+ * argument at section scale, and it bites harder on a bar than in a sentence. `section_end` is
+ * the DECLARED bound — from the box's dividers, or from the 25-rule where a box declares none —
+ * and it is not a count of cards present. Box 1 is open with 53 cards and its section 3 is
+ * declared `51..75`, so three cards sit in twenty-five slots. Both readings are defensible and
+ * they are different sentences:
+ *
+ *   - `card 1 of 25 slots` — true of the divider, and it draws a card at 4% with 96% empty
+ *     track. Right for a section whose far bound is real and final.
+ *   - `card 1 of 3 so far` — true of what is physically there, and it is the same word D20
+ *     makes the box bar say while the box is open, for the identical reason: a denominator that
+ *     is different tomorrow is worse than no denominator, because it is the kind of wrong
+ *     nobody checks.
+ *
+ * SO THE RULE IS D20's, APPLIED TO WHICHEVER BOUND IS ACTUALLY FINAL. A section is `growing`
+ * when the box is open AND its declared end reaches or passes what the box currently holds —
+ * that is the last section, the one the next capture lands in, and its width will be larger
+ * tomorrow. Every other section is bounded on both sides by something that is not moving: a
+ * divider between two filled sections is 25 slots wide today and 25 slots wide next week, gaps
+ * or no gaps. A growing section is measured against its fill so far and says `so far`; a settled
+ * one is measured against its declared width and says `slots`. The word is the whole point —
+ * a denominator that silently switched meaning between a full section and a half-empty one is
+ * precisely what D20 exists to prevent.
+ *
+ * `section_end >= box_total` IS THE TEST AND IT NEEDS NOTHING BUT `place`. Checked against the
+ * live store: box 1 open at 53, section 1 ends at 25 (settled, 25 slots), section 3 ends at 75
+ * (growing, 53 - 51 + 1 = 3 so far); box 2 sealed at 544, section 5 ends at 544 (settled, 151).
+ * A declared-divider box whose last section ends exactly at the fill is caught by the same test,
+ * which is why it reads `>=` rather than `>`.
+ *
+ * D30's GAP COUNT IS DELIBERATELY NOT IN THIS SENTENCE. It is already drawn one line away by
+ * `server.ts:placeSentence` — "2 slots in this section are empty" — on every screen that renders
+ * this bar, and the two together are what make a settled section's `of N slots` countable by
+ * hand. Repeating it inside the caption would be the same fact at two sizes in one row, which is
+ * noise rather than emphasis.
+ *
+ * NO PERCENTAGE ON THIS LINE, where a settled section could legitimately carry one. The track is
+ * the picture and the caption is the number; the box line already publishes the one percentage
+ * this component makes, and a second would make two captions that have to be told apart by
+ * reading rather than by shape.
+ */
+export function sectionDepthOf(place: Place): SectionDepth | null {
+  /* A pooled card is a count and not a location (D24), so there is no section to be inside. */
+  if (place.located === false) return null
+
+  const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
+  if (slot === null || section === null) return null
+  if (!Number.isFinite(slot) || slot < 1) return null
+  if (!Number.isFinite(total) || total <= 0) return null
+  if (!Number.isFinite(start) || start < 1) return null
+
+  /* `end === null` — a box that declares no end for this section at all — is growing by the
+   * same rule and by the same reading: nothing has bounded it, so what is in it is all there is
+   * to measure against. It cannot reach the settled branch, which is why the `?? total` below
+   * is unreachable rather than a second answer to the question. */
+  const growing = !place.box_closed && (end === null || end >= total)
+  const of = (growing ? total : (end ?? total)) - start + 1
+  if (!Number.isFinite(of) || of <= 0) return null
+
+  /* The same convention the server's own `fraction` uses — it answers `(index - 1) / box_total`,
+   * so card 1 of an open box reads 0 and the last reads just short of the end. Mirrored exactly
+   * rather than re-invented, because these two markers are stacked one above the other and a
+   * card at the front of both must sit at the front of both. */
+  const marker = clamp(((slot - 1) / of) * 100, 0, 100)
+
+  return {
+    slot,
+    of,
+    growing,
+    marker,
+    sentence: growing
+      ? `Section ${section} · card ${slot} of ${of} so far`
+      : `Section ${section} · card ${slot} of ${of} slots`,
+  }
+}
+
 export type PositionBarProps = {
   place: Place
 
@@ -151,11 +264,30 @@ export type PositionBarProps = {
    *  because it is the difference between drawing the dividers the box has and drawing this
    *  card's own section, and a screen holding a box record already has them. */
   sections?: readonly SectionDetail[]
+
+  /** Draw the second, section-scale depth beneath the box one (`sectionDepthOf`). ADDITIVE:
+   *  the box track and its `#51 of 53 so far` are untouched, because the owner's ruling on the
+   *  ask was "yes, while retaining box depth too" — the two answer different questions and
+   *  that is the whole reason both are wanted.
+   *
+   *  OFF BY DEFAULT, AND THE DEFAULT IS D5's. This is an owner-side ask and the Fulfiller's
+   *  view is the one screen in the product whose design is a floor: a second caption there is a
+   *  second sentence somebody decided he needs to read, which `Fulfillment.css` names as the
+   *  thing not to do, and every text node in that view is asserted at >= 20px. Turning it on
+   *  for him is the owner's call, not a side effect of an owner-side request. `CardLocations`
+   *  passes it on its owner rows only. */
+  sectionDepth?: boolean
 }
 
-export function PositionBar({ place, persona = 'owner', sections }: PositionBarProps) {
+export function PositionBar({
+  place,
+  persona = 'owner',
+  sections,
+  sectionDepth = false,
+}: PositionBarProps) {
   const spans = spansOf(place, sections)
   const sentence = sentenceOf(place)
+  const depth = sectionDepth ? sectionDepthOf(place) : null
 
   /* Drawn only when the server said where the card is. The clamp is for layout and not for
    * truth: a fraction outside 0..1 is a bug, and pinning the marker to an end at least leaves
@@ -172,7 +304,11 @@ export function PositionBar({ place, persona = 'owner', sections }: PositionBarP
     <div
       className={`position-bar position-bar-${persona}`}
       role="img"
-      aria-label={sentence}
+      /* BOTH SCALES IN THE ONE LABEL, for the reason `sentenceOf` gives about its own: one
+         string so the two cannot drift. `role="img"` excludes every descendant from the
+         accessibility tree, so the section caption below is invisible to a screen reader
+         unless it is said here — which is also why the visible text carries no aria-hidden. */
+      aria-label={depth === null ? sentence : `${sentence} · ${depth.sentence}`}
       data-place={place.label}
     >
       <div className="position-bar-track">
@@ -191,6 +327,34 @@ export function PositionBar({ place, persona = 'owner', sections }: PositionBarP
         )}
       </div>
       <p className="position-bar-text">{sentence}</p>
+
+      {/* THE SECOND SCALE, AND IT HAS TO BE TELLABLE FROM THE FIRST AT A GLANCE — two honest
+          bars that read alike are one honest bar turned into two ambiguous ones. Three cues,
+          none of them a new colour:
+
+            · a SHORTER track (8px against the box's 16px, and 16 against 26 at the Fulfiller's
+              density), so the box scale stays the heavier of the two;
+            · a hairline rule down the left with the whole block indented behind it — the
+              product's one separation mechanism, saying "this is inside the thing above";
+            · a caption that opens with the section's own number, where the box caption opens
+              with `#`.
+
+          Rejected: painting the current box segment to link the two, which needs a token that
+          means "quiet fill" and this file already argues at length why that token does not
+          exist. Rejected too: a lens drawn from the box segment's edges down to this track's —
+          it is the prettiest of the options and it draws a 6%-wide funnel for box 1's section
+          3, which is exactly the case the feature is for.
+
+          NOT ITS OWN role="img". The wrapper above already claims both sentences, and a nested
+          image role inside an image role is a second answer to what this component is. */}
+      {depth === null ? null : (
+        <div className="position-bar-zoom">
+          <div className="position-bar-track position-bar-sectiontrack">
+            <span className="position-bar-marker" style={{ left: `${depth.marker}%` }} />
+          </div>
+          <p className="position-bar-text">{depth.sentence}</p>
+        </div>
+      )}
     </div>
   )
 }

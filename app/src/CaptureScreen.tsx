@@ -67,7 +67,7 @@ const UNDO_KEY_LABEL = 'U'
  * `aria-pressed` markup always described.
  *
  * It is not a member of any game's enum — the server answers anything outside THE CHOSEN
- * GAME's finishes with `variant_invalid` (`_check_variant_member`; it was Pokemon's three
+ * GAME's finishes with `variant_invalid` (`_check_variant_members`; it was Pokemon's three
  * under every game until the day this comment was rewritten, which is the bug that cost a
  * Riftbound `foil` its capture) — it is `null`, and it sends no `variant` key at all,
  * exactly as a blank set hint sends no `set_hint`. Both rules come from the same sentence
@@ -114,9 +114,10 @@ type Shot = {
   // *next* card will get, and a stack toggled wrong is D3's expensive failure: it is
   // discovered here or not until the review queue.
   setHint: string | null
-  // Null when nothing was claimed, which is what was sent: no `variant` key at all. Shown
+  // EMPTY when nothing was claimed, which is what was sent: no `variant` key at all. Shown
   // as such rather than as 'normal', because the whole point of the state is that the two
-  // are different things.
+  // are different things. A SET since D3 rung 1's amendment of 2026-08-23, so this is what
+  // the stack was said to hold rather than what one card was said to be.
   finish: FinishClaim
   // NOT NULLABLE, unlike the two above, and that is D21 rather than an oversight: a game is
   // always claimed, so there is always one to record here. Kept per shot for the same
@@ -273,13 +274,37 @@ function readSessionSetHint(): string {
   return readSession(SESSION_KEYS.setHint) ?? ''
 }
 
-/** The claim as stored. NOT validated here, because the vocabulary this must be checked
- *  against is per-game and arrives from `GET /games` after the first render — see the effect
- *  that drops a claim the chosen game does not stock. A remembered `reverse_holo` means
- *  nothing under Riftbound, and sending it would earn a `variant_invalid` refusal mid-run
- *  with a card at the lens. */
+/** The claim as stored: a JSON list of finish strings, or `[]` for anything else.
+ *
+ *  NOT VALIDATED HERE, because the vocabulary this must be checked against is per-game and
+ *  arrives from `GET /games` after the first render — see the effect that drops a claim the
+ *  chosen game does not stock. A remembered `reverse_holo` means nothing under Riftbound,
+ *  and sending it would earn a `variant_invalid` refusal mid-run with a card at the lens.
+ *
+ *  A BARE STRING READS AS ONE MEMBER, which `readSessionRarityClaim` below needs no clause
+ *  for and this one does. The key held a bare string until D3's amendment of 2026-08-23, so
+ *  every capture tab open at that moment has one under it right now; without this line the
+ *  first reload after the change starts a run with the claim silently gone — which is the
+ *  failure D27 exists to prevent, on the screen where a lost claim costs a review tap per
+ *  card for the rest of the stack. It is the same read-side backfill the sidecar, the
+ *  record and the wire all do, applied to the one store nothing else can reach.
+ *
+ *  Junk collapses to the empty claim rather than to a partial one, and non-string members
+ *  are dropped rather than failing the whole list — `readSessionRarityClaim`'s rules, for
+ *  its reasons, because the two claims are one shape now (D3). */
 function readSessionFinish(): FinishClaim {
-  return readSession(SESSION_KEYS.finish)
+  const stored = readSession(SESSION_KEYS.finish)
+  if (stored === null) return []
+  try {
+    const parsed: unknown = JSON.parse(stored)
+    if (typeof parsed === 'string') return [parsed]
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((member): member is string => typeof member === 'string')
+  } catch {
+    /* Not JSON at all — which is exactly what a pre-amendment tab holds, since a bare
+     * `reverse_holo` was written unquoted. One member, not six letters and not nothing. */
+    return [stored]
+  }
 }
 
 /** Likewise unvalidated here and checked against the registry when it lands: a key that was
@@ -593,8 +618,11 @@ export function CaptureScreen() {
   const [boxDraft, setBoxDraft] = useState('')
   const [boxNote, setBoxNote] = useState<string | null>(null)
   const [setHint, setSetHint] = useState(readSessionSetHint)
-  // Null, not 'normal'. See NO_CLAIM_LABEL above: the default has to be "the operator has
-  // said nothing", or D3's rungs 2 and 3 are dead for every card this rig ever sees.
+  // EMPTY, not ['normal']. See NO_CLAIM_LABEL above: the default has to be "the operator
+  // has said nothing", or D3's rungs 2 and 3 are dead for every card this rig ever sees.
+  // A SET since the amendment of 2026-08-23 — any number of members is legal, including all
+  // of them, and toggling the last one off IS the clear, exactly as the rarity claim beside
+  // it behaves. That sameness is D3's stated point, not a coincidence of implementation.
   const [finish, setFinish] = useState<FinishClaim>(readSessionFinish)
 
   /* D23's stack claim: which of the chosen game's rarities this pre-sorted stack may hold.
@@ -795,7 +823,12 @@ export function CaptureScreen() {
   useEffect(() => {
     writeSession(SESSION_KEYS.box, box === null ? null : String(box))
     writeSession(SESSION_KEYS.setHint, setHint.trim() === '' ? null : setHint)
-    writeSession(SESSION_KEYS.finish, finish)
+    // Empty stored as absent, and a non-empty claim as JSON — the rarity claim's rule five
+    // lines down, for its reason, now that both claims are lists.
+    writeSession(
+      SESSION_KEYS.finish,
+      finish.length === 0 ? null : JSON.stringify(finish),
+    )
     writeSession(SESSION_KEYS.game, game)
     // Empty is stored as absent, the same rule the wire applies: an empty claim is NO
     // claim, and a stored `[]` would be a record of nothing that still has to be read.
@@ -896,7 +929,7 @@ export function CaptureScreen() {
    */
   const pickGame = useCallback((key: string) => {
     setGame(key)
-    setFinish(null)
+    setFinish([])
     setRarityClaim([])
   }, [])
 
@@ -942,11 +975,7 @@ export function CaptureScreen() {
    * It cannot fight the operator: the only states it changes are ones the track cannot
    * produce, since the track offers only `gameEntry.finishes` and refuses excluded cells. */
   useEffect(() => {
-    if (finish === null || gameEntry === null) return
-    if (!gameEntry.finishes.includes(finish)) {
-      setFinish(null)
-      return
-    }
+    if (finish.length === 0 || gameEntry === null) return
     /* A GAME THAT DRAWS NO FINISH FIELD MAY NOT CARRY A FINISH CLAIM, and this is the case
      * the membership check above cannot see: `pokemon_code` stocks `normal`, so a `normal`
      * claimed under Pokemon is a MEMBER of the new game's enum and survives the line above
@@ -955,10 +984,32 @@ export function CaptureScreen() {
      * would then ride invisibly onto every capture of the run, which is worse than the
      * auto-selection D23 refuses: at least an auto-selected claim is on screen. */
     if (gameEntry.finishes.length < 2) {
-      setFinish(null)
+      setFinish([])
       return
     }
-    if (offeredFinishes !== null && !offeredFinishes.has(finish)) setFinish(null)
+    /* MEMBER-WISE SINCE D3's AMENDMENT (2026-08-23), and the rarity effect below is NOT a
+     * template that can be copied verbatim here — it has no analogue of the hazard in the
+     * next paragraph, because a one-member rarity claim still only filters.
+     *
+     * NARROWING A CLAIM OF TWO OR MORE DOWN TO ONE CLEARS IT INSTEAD. A one-member finish
+     * claim DETERMINES: it outranks the catalog at rung 2 and is what detection is
+     * cross-checked against at rung 3. So silently keeping the survivor of `{normal, holo}`
+     * would manufacture a determining claim the operator never made, out of a filtering one
+     * they did — auto-selection by the back door, and D23 refuses auto-selection in words
+     * ("it never auto-selects, not even when one finish is left") for exactly this reason.
+     * Two or more survivors are kept, because a narrower filter is still a filter and still
+     * something the operator said.
+     *
+     * Falling back to NO claim rather than to the nearest thing the game stocks is the same
+     * rule this effect always had: D3 rung 1 treats the control as a claim the operator
+     * made, and no claim is the state every run starts in. The whole row reads `no claim`
+     * when it happens, so the loss is on screen rather than silent. */
+    const kept = finish.filter(
+      (member) =>
+        gameEntry.finishes.includes(member) &&
+        (offeredFinishes === null || offeredFinishes.has(member)),
+    )
+    if (kept.length !== finish.length) setFinish(kept.length <= 1 ? [] : kept)
   }, [finish, gameEntry, offeredFinishes])
 
   /* The rarity claim's copy of the effect above, for the same two arrivals — a restored
@@ -985,6 +1036,26 @@ export function CaptureScreen() {
    * both should read in the catalog's own order however the operator happened to tap:
    * `games.py` says stack order is the point of the list, and a claim stored in tap order
    * would put the same four rarities in a different order per session. */
+  /* Toggle one finish in or out — and REBUILD THE LIST IN THE GAME'S ENUM ORDER whichever
+   * way the toggle went, which is `toggleRarity` below with a different order to impose.
+   * `pipeline/variant.py:_check_claim`, `identify/sidecar.py:_check_variant` and the capture
+   * route all canonicalise to that same order; doing it here as well means the claim leaves
+   * this screen already in the form everything downstream will put it in, so two identical
+   * claims tapped in different orders are one value and a restated correction diffs as no
+   * change rather than churning a sidecar and a history line. */
+  const toggleFinish = useCallback(
+    (member: string) => {
+      const order = gameEntry?.finishes ?? []
+      setFinish((prev) => {
+        const next = prev.includes(member)
+          ? prev.filter((f) => f !== member)
+          : [...prev, member]
+        return order.filter((f) => next.includes(f))
+      })
+    },
+    [gameEntry],
+  )
+
   const toggleRarity = useCallback(
     (name: string) => {
       const order = gameEntry?.rarities ?? []
@@ -1120,10 +1191,17 @@ export function CaptureScreen() {
         const member = (gameEntry?.finishes ?? [])[nth]
         if (member === undefined) return
         if (offeredFinishes !== null && !offeredFinishes.has(member)) return
-        // Re-picking the finish already claimed clears it, exactly as tapping its own cell
-        // does — the toggle rule the removed "no claim" cell handed over to every cell.
-        setFinish(finish === member ? null : member)
-        closeField()
+        // Re-pressing a claimed finish takes it back out, exactly as tapping its own cell
+        // does — the toggle rule the removed "no claim" cell handed over to every cell, and
+        // since D3's amendment the way to clear the whole claim as well.
+        //
+        // NO `closeField()` HERE ANY MORE, and it is a real cadence change rather than a
+        // tidy-up: a multi-select cannot close on the first press or the second member
+        // could never be claimed. The field now closes on Esc or F, which is one more key
+        // on a screen that runs at a 623 ms feeder cadence — and it is the rarity field's
+        // existing behaviour a few branches up, so the idiom is one the operator already
+        // has rather than a second rule for one control.
+        toggleFinish(member)
       } else if (openField === 'rotation') {
         const value = ROTATIONS[nth]
         if (value !== undefined) {
@@ -1149,7 +1227,7 @@ export function CaptureScreen() {
       camera,
       gameEntry,
       offeredFinishes,
-      finish,
+      toggleFinish,
       switchTrigger,
     ],
   )
@@ -1333,8 +1411,10 @@ export function CaptureScreen() {
           game: gameEntry.key,
           setHint: hint,
           // Omitted when nothing has been claimed, so the sidecar records no `variant` and
-          // D3's rungs 2 and 3 stay live for this card. See NO_CLAIM_LABEL.
-          variant: finish ?? undefined,
+          // D3's rungs 2 and 3 stay live for this card. See NO_CLAIM_LABEL. Byte-identical
+          // to the rarity claim's rule on the next line, which is what D3 asked for when it
+          // made the two claims one shape.
+          variant: finish.length === 0 ? undefined : finish,
           // Same omission rule one claim over (D23): an empty claim sends no key, the
           // sidecar records nothing, and the ladder walks as if the field never existed.
           rarityClaim: rarityClaim.length === 0 ? undefined : rarityClaim,
@@ -2096,7 +2176,7 @@ export function CaptureScreen() {
                 <OpenField
                   k="F"
                   label="Finish"
-                  meta={finish === null ? 'Optional · none claimed' : 'Tap again to clear'}
+                  meta={`Choose any · ${finish.length} of ${gameEntry.finishes.length}`}
                   onClose={closeField}
                 >
                   {/* The pipeline's own strings, verbatim, cell for cell — the same
@@ -2118,12 +2198,17 @@ export function CaptureScreen() {
                     label="Finish"
                     cells={gameEntry.finishes.map((member) => ({
                       text: member,
-                      on: finish === member,
+                      on: finish.includes(member),
                       disabled: offeredFinishes !== null && !offeredFinishes.has(member),
-                      onPick: () => {
-                        setFinish(finish === member ? null : member)
-                        closeField()
-                      },
+                      // MULTI-SELECT SINCE D3's AMENDMENT (2026-08-23), and `Track` needed
+                      // no change for it: its cells have always carried `aria-pressed` and
+                      // the stylesheet keys on `[aria-pressed='true']` per cell, so several
+                      // can read as on already. It stays shared with the rotation and
+                      // trigger tracks, which are still single-select — the component was
+                      // never the thing enforcing that.
+                      //
+                      // It does NOT close on pick: a set is built by more than one press.
+                      onPick: () => toggleFinish(member),
                     }))}
                   />
                   {offeredFinishes === null ||
@@ -2140,11 +2225,26 @@ export function CaptureScreen() {
                 <Row
                   k="F"
                   label="Finish"
+                  /* THE PIPELINE'S OWN STRINGS, joined — not the rarity row's bitfield,
+                     and the difference is deliberate. That row draws a bitfield because
+                     Pokemon authors thirteen rarities and they cannot be spelled out; a
+                     game authors at most three finishes. Spelling them keeps NO_CLAIM_LABEL
+                     readable AT FULL CONTRAST in the same slot, which is the property the
+                     removed "no claim" cell handed to this row and which a bitfield says
+                     only in an aria-label.
+
+                     THE COST, recorded rather than designed around: `.capture-val` is
+                     nowrap + ellipsis at 12px, so all three of Pokemon's finishes claimed
+                     at once truncates. One and two members fit. The full claim is one
+                     keypress away in the open field and the last-capture panel shows what
+                     was actually sent, so the failure is a shortened label rather than a
+                     wrong one — but if a real session claims all three often, the bitfield
+                     is the fix to reach for. */
                   right={
-                    finish === null ? (
+                    finish.length === 0 ? (
                       <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                     ) : (
-                      <span className="capture-val">{finish}</span>
+                      <span className="capture-val">{finish.join(' · ')}</span>
                     )
                   }
                   onToggle={() => toggleField('finish')}
@@ -2677,7 +2777,9 @@ export function CaptureScreen() {
                     <span>{last.setHint ?? 'no set hint'}</span>
                     {/* The same words the chip carries, so one state has one name. Read in the
                         finish slot beside "no set hint", which is what supplies the noun. */}
-                    <span>{last.finish ?? NO_CLAIM_LABEL}</span>
+                    <span>
+                      {last.finish.length === 0 ? NO_CLAIM_LABEL : last.finish.join(' · ')}
+                    </span>
                     {last.card.new_box ? <span className="capture-flag">new box</span> : null}
                     {/* Every other flag here describes the capture; this one describes what the
                         server did with it. Kept beside them anyway, and per shot rather than as

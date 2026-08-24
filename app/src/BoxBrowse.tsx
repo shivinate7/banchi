@@ -373,6 +373,23 @@ type Detail = { label: string; value: string; mono: boolean }
  * docs/DESIGN.md's mono-carries-all-metadata rule applied one field at a time rather than
  * one panel at a time.
  */
+/** D3 rung 1's finish claim, rendered. A SET since 2026-08-23 and a bare string before it
+ *  — both shapes live on disk permanently, because a bare string reads as a one-member set
+ *  and there is deliberately no migration.
+ *
+ *  `_card_row` ships `asdict(card)` straight to the browser, so this really does receive
+ *  whichever shape the record holds. Rendering the value directly is what would print
+ *  `normal,reverse_holo` from JavaScript's array coercion — no crash, no error, just a
+ *  wrong screen; the union on `InventoryCard.metadata_finish` is what makes that a compile
+ *  error instead, and this is the answer to it. " · " is the app's separator for metadata,
+ *  which is what this row is. */
+function finishClaimText(claim: string | string[] | null): string {
+  const members = (typeof claim === 'string' ? [claim] : (claim ?? [])).filter(
+    (member) => typeof member === 'string' && member.trim() !== '',
+  )
+  return members.length === 0 ? 'none recorded' : members.join(' · ')
+}
+
 function detailsOf(card: InventoryCard): Detail[] {
   return [
     { label: 'Card', value: card.name ?? 'not identified yet', mono: card.name === null },
@@ -385,7 +402,7 @@ function detailsOf(card: InventoryCard): Detail[] {
     { label: 'State', value: card.state, mono: true },
     { label: 'Captured', value: card.captured_at ?? 'not recorded', mono: true },
     { label: 'Set hint', value: card.set_hint ?? 'none', mono: true },
-    { label: 'Finish', value: card.metadata_finish ?? 'none recorded', mono: true },
+    { label: 'Finish', value: finishClaimText(card.metadata_finish), mono: true },
   ]
 }
 
@@ -530,6 +547,16 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
   }, [inQuery, shelf])
 
   const sections = useMemo(() => sectionsOf(visible), [visible])
+
+  /* IS THE WALK BELOW ACTUALLY A SET OF MATCHES? `searching` alone does not answer that and
+   * using it as though it did is a real defect rather than a nicety: it goes true on the first
+   * keystroke, while the debounce and the request are still out and `inQuery` is still every
+   * row in the box. The search-expands-its-matches effect keys on THIS instead, so box 2's 544
+   * rows are never thrown open for the length of a debounce and then mostly thrown away again.
+   *
+   * A FAILED search reads false here, which is the same answer the walk itself gives: the rows
+   * stay unfiltered under the failure panel, so there is nothing match-shaped to expand. */
+  const filtered = searching && matched !== null
 
   /* The box row for the shelf being walked, or null — the header draws `BoxOps` only for a
    * NUMBERED shelf that the registry actually knows. A box a card names but `GET /boxes` has
@@ -927,10 +954,25 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
    * act wins. */
   const isOpen = (section: Section) => opened.includes(section.key)
 
-  const allExpanded = sections.length > 0 && sections.every((s) => opened.includes(s.key))
+  /* THE ONE FOLD CONTROL READS *ANY* RATHER THAN *EVERY*, AND THAT IS THE SECOND HALF OF THE
+   * CLICK-TWICE FIX. It used to say `collapse all` only when every section was open, so from
+   * any PARTIAL state — one section opened by a step, one folded by hand — it offered to
+   * expand, and reaching a collapsed list took two presses. That is the owner's report in one
+   * sentence: "you gotta click it once or twice for it to be working right".
+   *
+   * With `any`, one press always produces the state the label names: nothing open offers
+   * `expand all` and opens everything; anything open offers `collapse all` and shuts
+   * everything. There is no state from which the control needs a warm-up press.
+   *
+   * WHICH DIRECTION A PARTIAL STATE OFFERS IS THE REAL CHOICE HERE, and collapse wins because
+   * collapsed is this walk's resting state: the fold exists to turn box 2's 544 rows into 22
+   * readable lines, so the way BACK to the table of contents is the gesture that has to be one
+   * press from anywhere. Expanding 544 rows is the deliberate, rarer act and can afford the
+   * second press. */
+  const anyExpanded = sections.some((section) => opened.includes(section.key))
 
   const toggleAllSections = () =>
-    setOpened(allExpanded ? [] : sections.map((section) => section.key))
+    setOpened(anyExpanded ? [] : sections.map((section) => section.key))
 
   const toggleSection = (section: Section) =>
     setOpened((held) =>
@@ -965,13 +1007,81 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
    * the operator asked for is not undone on the next render.
    *
    * Adds only, and only when the section is shut, so it cannot fight a fold of some OTHER
-   * section and cannot loop: a selection that does not move re-runs this to no effect. */
+   * section and cannot loop: a selection that does not move re-runs this to no effect.
+   *
+   * A MOVE IS A STEP FROM ONE CARD TO ANOTHER, AND THE LOADER'S OWN FIRST PICK IS NOT ONE.
+   * Added 2026-08-23, and it is the whole of the click-twice bug the owner reported. This
+   * effect fired for the AUTOMATIC selection every read plants on the first row (see the
+   * loader, and the two follows-the-filter effects), so a freshly opened box arrived with one
+   * section already open while the control beside it offered to `expand all` — the first press
+   * expanded, and only the second reached the collapsed list the press was for. Measured on box
+   * 1: load 25 rows, press 53, press 0.
+   *
+   * `cameFrom` is the previous selection and the test is `both are cards and they differ`. A
+   * transition OUT OF null is by construction automatic — nothing on this screen navigates from
+   * nothing, only the loader and the filter plant a selection where there was none — so
+   * ignoring it is exactly the rule "the operator moved" written in the one term the component
+   * actually holds. A ref rather than state because it is bookkeeping about renders and not a
+   * fact the screen draws; storing it in state would re-render to record that nothing happened.
+   *
+   * It also buys a second thing worth having: a re-read (Reload, a write upstream, a box edit)
+   * rebuilds `sections` with the selection unchanged, and this now leaves the folds exactly as
+   * the operator left them instead of re-opening one. */
+  const cameFrom = useRef<string | null>(null)
   useEffect(() => {
-    if (selected === null) return
+    const previous = cameFrom.current
+    cameFrom.current = selected
+    if (previous === null || selected === null || selected === previous) return
     const holding = sections.find((section) => section.rows.some((row) => row.key === selected))
     if (holding === undefined) return
     setOpened((held) => (held.includes(holding.key) ? held : [...held, holding.key]))
   }, [selected, sections])
+
+  /* A SEARCH OPENS EVERY SECTION IT MATCHES INTO. The owner's ask, verbatim: "i want if i
+   * search for a card, all results of that card in whatever/all section/box are expanded
+   * (immediately findable)". Under a query `visible` is already only the matches, so every
+   * section the walk still draws holds one — the effect is "open all of them", and it stays
+   * true across boxes because pressing another cell on the strip rebuilds `sections` for that
+   * box and re-runs this. The strip itself already offers only boxes a match survives in.
+   *
+   * AN EFFECT AND NOT A CLAUSE IN `isOpen`, which is the same ruling the nav effect above
+   * carries and for the same reason: a `searching || …` override would make a fold under a
+   * query record a close that the next paint discarded, which is the exact defect the owner
+   * reported as clickable-and-not-working. Here the expansion is a write like any other, so a
+   * section folded during a search stays folded — `opened` changes, `sections` does not, and
+   * this effect does not re-run. */
+  useEffect(() => {
+    if (!filtered) return
+    setOpened((held) => {
+      const shut = sections.filter((section) => !held.includes(section.key))
+      return shut.length === 0 ? held : [...held, ...shut.map((section) => section.key)]
+    })
+  }, [filtered, sections])
+
+  /* AND GIVES IT ALL BACK WHEN THE QUERY GOES. Clearing the field returns the walk to the state
+   * it opens in — fully collapsed — rather than leaving the shape a search built standing over
+   * a list that is no longer an answer to anything. The expansion above was never asked for by
+   * a hand on a fold; it belonged to the query, and it goes when the query does.
+   *
+   * The property that makes this the right default rather than merely a tidy one: a cleared
+   * search and an arrival now render identically, so there is one resting state to learn and
+   * not two. The mark can sit inside a shut section afterwards, exactly as it does on arrival —
+   * the detail column, the photograph and the copies are all still drawn for it, and the first
+   * arrow key opens its section by the effect above.
+   *
+   * DECLINED: snapshotting the folds standing when the query arrived and restoring them. It is
+   * nicer in the one case where the operator had expanded something on purpose before typing,
+   * and it costs a second remembered fold state that nothing on screen names — so what the
+   * screen does after a clear would depend on a thing the operator cannot see. Collapsing is
+   * predictable from the label in front of them.
+   *
+   * `filtered` ALONE IN THE DEPS, deliberately: `sections` changes on every re-read, box switch
+   * and box edit, and a collapse keyed on that would throw away folds whenever anything
+   * upstream wrote. This fires on the edge out of a search and nowhere else. */
+  useEffect(() => {
+    if (filtered) return
+    setOpened((held) => (held.length === 0 ? held : []))
+  }, [filtered])
 
   /* THE SELECTION, REPORTED UPWARDS. `Inventory.tsx` draws the copies of whatever card the walk
    * is pointing at, and it cannot know which one that is without being told. The memo above is
@@ -1155,7 +1265,7 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
               {sections.length < 2 ? null : (
                 <>
                   <button className="browse-quiet" type="button" onClick={toggleAllSections}>
-                    {allExpanded ? 'collapse all' : 'expand all'}
+                    {anyExpanded ? 'collapse all' : 'expand all'}
                   </button>
                   <span className="browse-status-sep">·</span>
                   <span>
@@ -1232,13 +1342,20 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
                      narrowing beside the search, and two narrowings that look different and
                      compound is how a screen starts lying about how many cards it holds.
 
-                     COLLAPSED BY DEFAULT, and the force-open is what makes that safe rather
-                     than hostile. Box 2 holds 544 cards over 22 sections; opened flat that is a
-                     scroller whose position tells you nothing, which is the complaint this work
-                     started from. Opened collapsed it is 22 lines readable at a glance with the
-                     selected card's own section already open — so a one-section box renders
-                     EXACTLY as it did before this change, and a 22-section box renders as a
-                     table of contents. */
+                     FULLY COLLAPSED BY DEFAULT — zero rows, INCLUDING the section holding the
+                     selection the loader planted. Box 2 holds 544 cards over five sections;
+                     opened flat that is a scroller whose position tells you nothing, which is
+                     the complaint this work started from. Opened collapsed it is a table of
+                     contents readable at a glance.
+
+                     THE ARRIVING SELECTION USED TO OPEN ITS SECTION AND NO LONGER DOES, which
+                     is the owner's click-twice bug: a screen that arrives partly expanded while
+                     the control beside it says `expand all` needs two presses to reach a
+                     collapsed list. Nothing is lost by shutting it — the selected card's
+                     photograph, its facts and its copies are all drawn in the detail column
+                     beside this list; only its ROW is folded away, and any key that moves the
+                     selection opens the section it lands in. See the nav effect above for the
+                     line that draws that distinction. */
                   const open = isOpen(section)
                   const ticked = section.rows.filter((row) => picked.includes(row.key)).length
                   return (

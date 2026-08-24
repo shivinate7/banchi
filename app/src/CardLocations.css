@@ -111,11 +111,29 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* THE BAR TAKES ITS OWN LINE UNDER THE ROW, and this replaces a measured 6rem cap with a
+   measured full width. The cap was right while the bar carried one caption and it stopped being
+   right the day it carried two (PositionBar.tsx: the section scale).
+
+   THE MEASUREMENT, at 1440x900 in the detail column D31's merge draws this list in. The row is
+   474px and the bar's cell was 96px, so `#1 of 53 so far` already wrapped onto two lines — 29px
+   for one line of text — and `Section 1 · card 1 of 25 slots` wrapped onto FOUR, taking the row
+   to 183px against its ~56px budget. Two honest scales illegibly stacked is worse than one, so
+   the choice was to widen the cell or drop a scale, and the owner's ruling was "yes, while
+   retaining box depth too".
+
+   `order` RATHER THAN A DIFFERENT DOM ORDER. The row already wraps, and a 100% basis on the
+   second of four children would have pushed the state and the action onto a THIRD line. Ordered
+   last it wraps to exactly two: where it is, what state, what can be done — then the picture of
+   it, full width, both captions on one line each. Nothing moves for a screen reader, which
+   reads the DOM and gets the bar where it always was.
+
+   The reason the old cap gave for keeping the bar small still holds and is now satisfied by
+   geometry rather than by a cap: the position label is the string somebody carries to a shelf
+   and it must not break, and on its own line the bar cannot take a pixel from it. */
 .card-locations-owner .card-locations-row > .position-bar {
-  /* 6rem, measured: at 8rem the bar took the width the position label needed and the label
-     wrapped mid-sentence. The bar is a picture of the number beside it and stays legible
-     small; the label is the string somebody carries to a shelf and must not break. */
-  flex: 0 1 6rem;
+  flex: 1 1 100%;
+  order: 1;
 }
 
 .card-locations-owner .card-locations-row > .card-locations-state,

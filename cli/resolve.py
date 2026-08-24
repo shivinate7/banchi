@@ -282,6 +282,39 @@ def _detected(finish, game: str):
     return finish if finish in stocked else None
 
 
+def _finish_claim(raw) -> Optional[Tuple[str, ...]]:
+    """The run record's `metadata_finish`, shaped for `IdentifiedCard` — defensively.
+
+    D3 rung 1's claim is a SET (amended 2026-08-23) and `IdentifiedCard` is frozen, so this
+    is a tuple for the reason that dataclass's own comment gives. `_rarity_claim` below is
+    the same function for the same reason and this is deliberately its twin, down to the
+    order of its branches — the two claims are now one shape and reading alike is the point.
+
+    A BARE STRING BECOMES ONE MEMBER RATHER THAN SIX LETTERS. That is D3's read-side backfill
+    at the hop where it matters most: every run record written before the amendment carries a
+    string, `identifications.json` files are kept and re-joined (`join` and `emit` are both
+    free and re-runnable by design), and iterating one would hand the ladder a claim of
+    `'n', 'o', 'r', 'm', 'a', 'l'` — six finishes of no game, which `variant._check_claim`
+    would raise `UnknownFinish` on. The claim's own reader had the identical trap and
+    `_check_rarity_claim` calls it "the classic bug this function exists to refuse".
+
+    NO VOCABULARY CHECK, and no re-ordering either. Membership was `identify/sidecar.py`'s
+    job at the read, which is also where the enum order was imposed; `variant._check_claim`
+    normalises again anyway, and it is idempotent because both normalisers order by the same
+    game's enum. What survives here is shape.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, (list, tuple)):
+        values = [item for item in raw if isinstance(item, str)]
+    else:
+        return None
+    cleaned = tuple(text.strip() for text in values if text and text.strip())
+    return cleaned or None
+
+
 def _rarity_claim(raw) -> Optional[Tuple[str, ...]]:
     """The run record's `rarity_claim`, shaped for `IdentifiedCard` — defensively.
 
@@ -687,7 +720,11 @@ def load(
                 name=identification.get("name") or "",
                 number=number,
                 printed_total=total if number else None,
-                metadata_finish=record.get("metadata_finish"),
+                # THROUGH A NORMALISER RATHER THAN RAW, since D3's amendment made this a
+                # set: a run record carries a JSON array now and a bare string before that,
+                # and `IdentifiedCard` is frozen. `_finish_claim` is `_rarity_claim`'s twin
+                # a few arguments down and carries the argument for the string case.
+                metadata_finish=_finish_claim(record.get("metadata_finish")),
                 # Tested against THIS GAME's finishes, never against a literal tuple. The
                 # enum has one home and a copy of it here cannot be kept in step with it:
                 # a finish added there would fall out of a literal written here, land as
@@ -810,7 +847,14 @@ def queue_entry(queued: join.QueuedCard) -> queues.QueueEntry:
             "number": card.number,
             "printed_total": card.printed_total,
             "set_hint": card.set_hint,
-            "metadata_finish": card.metadata_finish,
+            # A LIST ON THE WIRE, not the tuple the frozen carrier holds. This dict is
+            # written to `review.json` and read by `app/src/ReviewQueue.tsx`, so the shape
+            # that matters is the JSON one — `json` would render a tuple as an array either
+            # way, and spelling it out here is what keeps the entry equal to itself after a
+            # round trip through the file. None stays None: no claim, and the screen says so.
+            "metadata_finish": (
+                None if card.metadata_finish is None else list(card.metadata_finish)
+            ),
             "detected_finish": card.detected_finish,
         },
         confidence=card.confidence,

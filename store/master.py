@@ -64,7 +64,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 VERSION = 2
 
@@ -231,7 +231,30 @@ class Card:
     index: int
     photo: Optional[str] = None
     set_hint: Optional[str] = None
-    metadata_finish: Optional[str] = None
+    # D3 RUNG 1'S FINISH CLAIM, AND IT IS A SET (amended 2026-08-23). One member determines,
+    # exactly as this rung always has; two or more FILTER the candidate rows and let rungs 2
+    # and 3 choose within what survives; an empty set is no claim at all, identical to the
+    # `None` this field has always allowed. `pipeline/variant.py:_check_claim` is where all
+    # three of those are decided — nothing in this package reads this value.
+    #
+    # BOTH SHAPES ARE LEGAL HERE PERMANENTLY, WHICH IS WHY THE ANNOTATION IS A UNION rather
+    # than a list that a migration would arrive at eventually. A bare string reads as a
+    # ONE-MEMBER SET and nothing writes one any more — D21's read-side backfill, for D21's
+    # reason: every record written before the amendment carries a string, and rewriting them
+    # to say what every reader can work out for itself is a write across the whole store that
+    # changes nothing. There is no migration and there is not going to be one, so this field
+    # holds two shapes for as long as those records do.
+    #
+    # A LIST, NEVER A TUPLE, and that is the trap rather than an inconsistency with the two
+    # frozen carriers downstream. `to_payload` calls `asdict`, which PRESERVES a tuple;
+    # `json.dumps` writes it as an array and `json.loads` hands back a list — so a tuple
+    # assigned here goes in as a tuple and comes out as a list, and `to_payload` and `parse`
+    # stop being each other's inverse. `Card` is not frozen, so a list is safe here.
+    # `identify/sidecar.py:Capture` and `pipeline/join.py:IdentifiedCard` want the opposite
+    # for the opposite reason: both ARE frozen, and a frozen carrier of a mutable member is a
+    # hashability bug waiting for its first `set()`. `rarity_claim` below splits exactly the
+    # same way and says so.
+    metadata_finish: Optional[Union[str, List[str]]] = None
     captured_at: Optional[str] = None
     # Idempotency key for one POST /capture. Optional because every record predating the
     # capture server has none, and `parse` filters on `Card.__annotations__`, so a field
@@ -701,9 +724,29 @@ class Inventory:
         # THE TUPLE, NOT A LITERAL LIST OF THREE NAMES. This loop is where a claim added
         # everywhere else in the chain used to be discarded — on a re-record only, so it
         # worked until the operator corrected a card. `docs/DEBTS.md` named it.
+        # AN EMPTY CLAIM CARRIES NO FURTHER THAN A MISSING ONE, and this line read
+        # `if value is not None` until D3's amendment of 2026-08-23 made that unsafe.
+        #
+        # `None` has always meant "this record makes no such claim, leave the incumbent
+        # alone". A SET-VALUED claim has a second spelling of the same thing — D3: "an empty
+        # set is no claim at all, identical to the null this field has always allowed" — and
+        # `[]` is not `None`, so under the old test an incoming empty claim would OVERWRITE a
+        # real one. Unrecoverably: a later re-record carrying `None` does not carry, so
+        # nothing puts the claim back. It could not happen while the finish was a string,
+        # because `capture_server._variant_shape` mapped `""` to `None` before the store ever
+        # saw it; it can happen now, and `rarity_claim` has carried the identical hole since
+        # the day it shipped — saved only by the server normalising `cleaned or None` on the
+        # way in, which is the store depending on a normalisation it does not enforce itself.
+        #
+        # Truthiness rather than a per-shape test, and it is exact rather than loose here:
+        # every member of `CAPTURE_CLAIM_FIELDS` is a string, a list of strings, or None, so
+        # there is no falsy value among them that is a claim. It is also the same rule
+        # `server/capture_server.py:sidecar_payload` already applies on the way to the file
+        # ("a hint or a toggle the operator did not set is omitted rather than written
+        # null"), so the record and the sidecar now agree about what an empty claim means.
         for attribute in CAPTURE_CLAIM_FIELDS:
             value = getattr(card, attribute)
-            if value is not None:
+            if value:
                 setattr(existing, attribute, value)
         return existing
 

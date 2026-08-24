@@ -427,10 +427,29 @@ def run(args, say) -> int:
         return 1
 
     items = [Item(capture=capture) for capture in captures]
+    cropped = 0
     for item in items:
         _attach_registry(item)
         try:
-            item.prepared = images.prepare(item.capture.photo, max_edge=args.max_edge)
+            # CROP TO THE DETECTED CARD BEFORE THE DOWNSCALE, when asked for. Local, free and
+            # deterministic — `geometry.detect_card` is the same border search T6 covers and
+            # Gate B's photographs proved, with no model call and no network.
+            #
+            # A REFUSAL FALLS BACK TO THE WHOLE FRAME rather than failing the card. Detection
+            # answers `None` when it cannot find a card (T6: "'Not found' must be a refusal,
+            # never a guess"), and the honest response to that is to send what we always sent
+            # — the run costs a little more and reads exactly as it would have.
+            box = None
+            if args.crop:
+                try:
+                    box = geometry.detect_card(item.capture.photo)
+                except Exception:
+                    box = None
+                if box is not None:
+                    cropped += 1
+            item.prepared = images.prepare(
+                item.capture.photo, max_edge=args.max_edge, crop_box=box
+            )
         except images.ImageError as exc:
             item.error = str(exc)
             item.status = "unreadable"
@@ -524,6 +543,15 @@ def run(args, say) -> int:
     say(f"to send         {len(to_send)}")
     say(f"payload         {payload_bytes / 1_000_000:.1f} MB in {chunks} batch chunk(s)")
     say(f"estimated cost  ${_estimate(to_send)}")
+    if args.crop:
+        # NAMED IN THE PREFLIGHT because it changes the bytes, and the preflight's whole job
+        # is to say what is about to be sent. A refusal count of anything but zero is worth
+        # seeing before spending: it means some cards are going as whole frames at whole-frame
+        # cost, which is safe but is not what was asked for.
+        refused = len(items) - cropped
+        say(f"crop            to the detected card +{images.CROP_PAD*100:.0f}% "
+            f"— {cropped} cropped"
+            + (f", {refused} sent whole (detection refused)" if refused else ""))
     say(
         f"prompt          {fingerprint}  (crop retry {prompt.retry_fingerprint()}, "
         f"rarity clause {prompt.rarity_fingerprint()})"
@@ -762,7 +790,21 @@ def run(args, say) -> int:
                         index=item.capture.index,
                         photo=str(item.capture.photo),
                         set_hint=item.capture.set_hint,
-                        metadata_finish=item.capture.metadata_finish,
+                        # LIST, NOT THE READER'S TUPLE, and this conversion is load-bearing
+                        # rather than cosmetic. The claim is a set since D3 rung 1's
+                        # amendment; `identify/sidecar.py:Capture` holds it as a tuple
+                        # because that dataclass is frozen, and `store/master.py:Card` holds
+                        # a LIST because `to_payload` calls `asdict` — which PRESERVES a
+                        # tuple, so a tuple assigned here would be written to
+                        # `inventory.json` as an array and reload as a list, leaving
+                        # `to_payload` and `parse` no longer each other's inverse. Both
+                        # dataclasses say so at the field. `record_capture` skips a falsy
+                        # claim, so `None` still leaves the record's own claim alone.
+                        metadata_finish=(
+                            None
+                            if item.capture.metadata_finish is None
+                            else list(item.capture.metadata_finish)
+                        ),
                         game=item.capture.game,
                         note=item.capture.note,
                     )

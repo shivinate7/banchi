@@ -135,3 +135,40 @@
   text-transform: none;
   color: var(--ink);
 }
+
+/* ---- the second scale: how far into the SECTION (PositionBar.tsx: sectionDepthOf) ---- */
+
+/* Indented behind a hairline, which is the one separation mechanism this product has and here
+   it is saying "inside the thing above" rather than "next to it". The block is a child of
+   `.position-bar`, so it inherits the column layout's gap and needs no margin of its own — the
+   left rule and the padding are the whole of the treatment.
+
+   NO SECOND COLOUR AND NO SECOND WEIGHT. The two scales are told apart by track height, by the
+   rule down the side and by what their captions open with; every one of those is a shape and
+   not a hue, which is what keeps this inside a palette that gives `--accent` exactly two jobs
+   and has no token for a quiet fill. */
+.position-bar-zoom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: var(--s2);
+}
+
+/* Shorter than the box track at both densities, so the box scale stays the heavier of the two
+   and the eye reads the pair in the right order. The density rules above set a height on every
+   `.position-bar-track`, so these carry BOTH classes to win on specificity rather than on
+   source order — a rule that depends on which line it sits at is one an edit can silently
+   reverse.
+
+   NO SEGMENTS INSIDE IT. A section is not divided by anything; its ends are the dividers, and
+   they are the track's own border. That absence is also the fastest way to tell the two tracks
+   apart when a box has several sections: the box track is ticked and this one is not. */
+.position-bar-owner .position-bar-track.position-bar-sectiontrack {
+  height: var(--s2);
+}
+
+.position-bar-fulfiller .position-bar-track.position-bar-sectiontrack {
+  height: var(--s4);
+}

@@ -65,7 +65,7 @@ from pathlib import Path
 
 from harness.tests import Checks, Result
 from cli import resolve, runs
-from identify import sidecar
+from identify import prompt, sidecar
 from pipeline import games, join, routing, tcgcsv, variant
 from store import files
 
@@ -392,6 +392,65 @@ def run() -> Result:
         lambda: variant.resolve(both, metadata_finish="foil", game="pokemon"),
         "and `foil` is still unknown to POKEMON — the per-game fix widened nothing",
     )
+
+    # --- rung 3 for the two printed-code games, against their OWN prompts' enum ----------
+    # Riftbound and One Piece got real identification profiles on 2026-08-23
+    # (`riftbound_card_v1`, `one_piece_card_v1`); until then their registry entries named
+    # `unwritten` and no model answer could reach this ladder at all, so rung 3 was
+    # unreachable for both games however well the vocabulary was authored.
+    #
+    # ASSERTED FROM THE PROFILE'S SCHEMA RATHER THAN FROM A LITERAL, which is what makes
+    # this a seam test rather than a restatement. The chain is: the schema enum the model
+    # is sent -> `prompt.parse`'s whitelist -> `cli/resolve.py:_detected` -> `variant
+    # .vocabulary` -> the ladder. A `foil` that the profile offers and the ladder rejects
+    # would be a card sent to review with nothing on screen saying why, which is the silent
+    # drop this pipeline may never do; a finish the ladder stocks and the profile never
+    # offers is a cross-check that can never fire. Both directions, both games.
+    for game in ("riftbound", "one_piece"):
+        stocked, condition_by_finish = variant.vocabulary(game)
+        offered = set(
+            prompt.profile(str(games.get(game)["prompt"]))
+            .schema["properties"]["finish"]["enum"]
+        ) - {prompt.UNKNOWN_FINISH}
+        c.equal(
+            sorted(offered),
+            sorted(stocked),
+            f"{game}: every finish its prompt may return is a finish its ladder stocks, "
+            "and vice versa — the schema enum and the ladder's vocabulary are one "
+            "registry entry read twice",
+        )
+        for finish in sorted(stocked):
+            condition = condition_by_finish[finish]
+            rows = [
+                _row(condition_by_finish[other], sku=f"sku-{other}")
+                for other in sorted(stocked)
+            ]
+            resolution = variant.resolve(rows, detected_finish=finish, game=game)
+            c.equal(
+                [resolution.stage, resolution.condition],
+                [variant.DETECTION, condition],
+                f"{game}: a model-detected `{finish}` decides at rung 3 and resolves to "
+                f"{condition!r} — the row a wrong read here would mis-price against",
+            )
+        # `unknown` is the third schema member and is NOT a finish: `prompt.parse` maps it
+        # to None, which is D3's no-signal case rather than a manufactured disagreement.
+        c.ok(
+            prompt.UNKNOWN_FINISH not in stocked,
+            f"{game}: `unknown` is a schema member and NOT a ladder finish — parse maps "
+            "it to None, and a card with no foil signal walks the ladder rather than "
+            "arguing with the toggle",
+            f"stocked was {stocked!r}",
+        )
+        c.equal(
+            variant.resolve(
+                [_row(condition_by_finish[f], sku=f"sku-{f}") for f in sorted(stocked)],
+                detected_finish=None,
+                game=game,
+            ).reason,
+            variant.AMBIGUOUS_NO_SIGNAL,
+            f"{game}: with no claim and no detection the ladder reviews as "
+            "ambiguous_no_signal rather than picking a finish",
+        )
 
     # --- D3 rung 1's claim is a SET (amended 2026-08-23) -----------------------------------
     # One member determines, exactly as this rung always has. Two or more FILTER: the rows
@@ -796,10 +855,22 @@ def run() -> Result:
         (captures / "0003.jpg").write_bytes(b"")  # no sidecar at all
 
         without = {c_.photo.stem: c_ for c_ in sidecar.scan(captures, box=3)}
+        # The seeded sidecar at 0001 says `"variant": "normal"` — a BARE STRING, kept
+        # deliberately. It is the shape every sidecar written before D3's amendment of
+        # 2026-08-23 carries, and asserting the reader hands back the one-member tuple
+        # `("normal",)` is what proves the read-side backfill rather than only the new path.
+        # This used to assert the bare string back, which was strictly weaker: it could not
+        # tell a backfill from a reader that had never heard of a set.
         c.equal(
             [without[k].metadata_finish for k in ("0001", "0002", "0003")],
-            ["normal", None, None],
-            "with no flag: only the recorded toggle supplies a finish",
+            [("normal",), None, None],
+            "with no flag: only the recorded toggle supplies a finish, and a bare string in "
+            "the file reads as the ONE-MEMBER SET it always meant (D3 rung 1)",
+        )
+        c.ok(
+            without["0002"].metadata_finish is None,
+            "and no claim is None rather than an empty tuple — one spelling of 'nobody "
+            "said anything', so `is None` stays the test every caller writes",
         )
 
         filled = {
@@ -808,7 +879,7 @@ def run() -> Result:
         }
         c.equal(
             filled["0001"].metadata_finish,
-            "normal",
+            ("normal",),
             "--variant=reverse_holo does NOT override a sidecar that says normal",
         )
         c.ok(
@@ -817,8 +888,10 @@ def run() -> Result:
         )
         c.equal(
             [filled["0002"].metadata_finish, filled["0003"].metadata_finish],
-            ["reverse_holo", "reverse_holo"],
-            "--variant fills a sidecar with no variant, and a photo with no sidecar",
+            [("reverse_holo",), ("reverse_holo",)],
+            "--variant fills a sidecar with no variant, and a photo with no sidecar — with "
+            "a ONE-MEMBER claim, which is what `docs/specs/batch-script.md` settles: the "
+            "flag stays single-valued and is deliberately not repeatable",
         )
         c.ok(
             filled["0002"].variant_from_flag and filled["0003"].variant_from_flag,
@@ -835,6 +908,53 @@ def run() -> Result:
             ).metadata_finish
             is None,
             "a finish outside the enum is not applied, even from the flag",
+        )
+
+        # --- the reader keeps the WHOLE set (D3 rung 1, amended 2026-08-23) --------------
+        # NOTHING ASSERTED THIS UNTIL NOW, which is the reason it is here. `_check_variant`
+        # accepted a list from the day it was written and returned `kept[0]` — the first
+        # member in the game's enum order — so a two-member claim was reduced to one on
+        # every read. That reduction could have survived this whole change in silence: no
+        # test looked at a list-valued sidecar, and a reduced claim does not refuse or
+        # report a problem. It resolves. Rung 1 stops FILTERING and starts DETERMINING on
+        # half of what the operator said, which is worse than dropping the claim outright.
+        (captures / "0004.jpg").write_bytes(b"")
+        (captures / "0004.json").write_text(
+            json.dumps({"box": 3, "position": 4, "variant": ["reverse_holo", "normal"]})
+        )
+        (captures / "0005.jpg").write_bytes(b"")
+        (captures / "0005.json").write_text(
+            json.dumps({"box": 3, "position": 5, "variant": ["normal", "holographic"]})
+        )
+        (captures / "0006.jpg").write_bytes(b"")
+        (captures / "0006.json").write_text(
+            json.dumps({"box": 3, "position": 6, "variant": []})
+        )
+
+        sets = {c_.photo.stem: c_ for c_ in sidecar.scan(captures, box=3)}
+        c.equal(
+            sets["0004"].metadata_finish,
+            ("normal", "reverse_holo"),
+            "a TWO-MEMBER sidecar keeps both members — the reduction to `kept[0]` is gone, "
+            "and the order is the GAME'S ENUM's and not the file's, so the same claim "
+            "written in either order is one value",
+        )
+        c.equal(
+            sets["0005"].metadata_finish,
+            ("normal",),
+            "a member outside the game's finishes is DROPPED from the claim rather than "
+            "refusing it — this reader defends files already on disk, where salvage beats a "
+            "refusal nobody can act on; the capture route refuses the same body outright, "
+            "because its caller can fix the request",
+        )
+        c.ok(
+            sets["0005"].problem is not None and "holographic" in sets["0005"].problem,
+            "...and the dropped member is NAMED in the problem, never discarded silently",
+        )
+        c.ok(
+            sets["0006"].metadata_finish is None,
+            "an empty list is no claim, identical to the null this field has always "
+            "allowed (D3) — and it is None, not `()`, so rungs 2 and 3 stay live",
         )
 
     # --- rung 3's whitelist is the enum itself, asserted by ADDING to it ------------------

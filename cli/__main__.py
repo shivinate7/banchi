@@ -67,6 +67,13 @@ def build_parser() -> argparse.ArgumentParser:
         "identify", help="submit, wait, collect, cache. THE ONE THAT COSTS MONEY."
     )
     identify.add_argument("capture_dir", help="directory of photos + JSON sidecars")
+    identify.add_argument(
+        "--crop",
+        action="store_true",
+        help="crop each photo to the detected card before downscaling. Local and free "
+             "(geometry.detect_card, no model call); a frame where detection refuses is "
+             "sent whole. Spends the pixel budget on the card instead of the desk.",
+    )
     identify.add_argument("--label", help="run label (default: the capture dir's name)")
     identify.add_argument(
         "--run-dir", help="resume into an existing run instead of creating one"

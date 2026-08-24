@@ -137,7 +137,13 @@ JOIN_KEY_STRATEGIES = (
 # actually carries, rather than Pokemon's shape with the Pokemon-shaped fields left blank.
 # `unwritten` is not a placeholder to be tidied away later — it is the honest value for a
 # game whose prompt has never been written, and it is named so that a consumer dispatching
-# on it refuses instead of falling through to Pokemon's.
+# on it refuses instead of falling through to Pokemon's. AS OF 2026-08-23 NO ENTRY NAMES
+# IT, because `riftbound` and `one_piece` — its only two claimants — got real profiles that
+# day. It stays regardless: the next game registered here starts in exactly this state, and
+# the refusal is the only thing standing between that game and another game's contract.
+# That is NOT the case that deleted `operator_note` below; see the paragraph after this one
+# for the difference, which is that `operator_note` named a state the product does not have
+# while this one names a state it will certainly be in again.
 #
 # THERE WAS A THIRD VALUE HERE, `operator_note`, AND ITS REMOVAL IS THE OWNER'S CORRECTION
 # RATHER THAN A TIDY-UP (2026-08-23). It named a game deliberately never sent to the model,
@@ -163,6 +169,15 @@ PROMPT_STRATEGIES = (
     # answers "what code is printed here", which is the image-to-text step the dispute
     # flow re-checks by eye when a buyer says a code did not work (C6 rules the remedy).
     "pokemon_code_v1",
+    # WRITTEN 2026-08-23, AND THEY ARE WHY `unwritten` NOW NAMES NOBODY. Both games print
+    # ONE collector identifier rather than Pokemon's two halves — which is the same fact
+    # their `join_key: "printed_code"` records one field down — so each has its own schema
+    # asking for that string whole, its own two-finish enum read from its own entry below,
+    # and its own parser. NEITHER HAS EVER READ A CARD: no Riftbound or One Piece card has
+    # been photographed by this project, so these two names buy a WIRED path and not a
+    # measured one. See identify/prompt.py's printed-code section.
+    "riftbound_card_v1",
+    "one_piece_card_v1",
     "unwritten",
 )
 
@@ -459,7 +474,14 @@ GAMES = (
         # preserves the suffix for free, which matters: `066a/298` is a different card from
         # `066/298`, and any normalisation that folds the letter silently merges two SKUs.
         "join_key": "printed_code",
-        "prompt": "unwritten",
+        # WRITTEN 2026-08-23; this line said `unwritten` until then and asking for it
+        # refused by name. `identify/prompt.py:RIFTBOUND_CARD_V1` asks for the identifier
+        # WHOLE — one field, letter suffix and asterisk and the spaces around `//` all
+        # kept — which is the same fact `join_key` above records, seen from the model's
+        # side. The prompt is WIRED and UNMEASURED: no Riftbound card has ever been
+        # photographed, so there is no accuracy figure for it and the crop bands below
+        # stay empty for exactly the same missing photograph.
+        "prompt": "riftbound_card_v1",
         # `geometry/crop.py`'s bands are fractions measured on a Pokemon card. Nothing has
         # measured where a Riftbound card puts its title or its number, and a band claimed
         # without that measurement is cut over the wrong pixels — the same refusal
@@ -550,7 +572,14 @@ GAMES = (
         # asserts for Pokemon code cards. `printed_code` describes how the other 3075 rows
         # are keyed; it does not have to describe the blank ones.
         "join_key": "printed_code",
-        "prompt": "unwritten",
+        # WRITTEN 2026-08-23, as Riftbound's was. `identify/prompt.py:ONE_PIECE_CARD_V1`
+        # asks for the printed code as ONE string with its hyphen intact — there is no
+        # denominator in this game to be a second half of, which is the same fact
+        # `join_key` records. Its prompt is deliberately REGION-NEUTRAL about where the
+        # title sits: Pokemon's says "across the top of the card" and a One Piece card is
+        # believed to print its name at the bottom of the artwork, and BELIEVED is the
+        # whole of it — nobody has photographed one.
+        "prompt": "one_piece_card_v1",
         # As Riftbound: nothing has measured this game's title or number placement.
         "crop_bands": (),
         "card_aspect": 0.716,

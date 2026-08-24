@@ -394,7 +394,13 @@ export async function capture(input: {
    * refuses an unregistered key as `game_invalid`. */
   game: string
   setHint?: string
-  variant?: Finish
+  /* D3 rung 1's finish claim, and A LIST since the amendment of 2026-08-23 — one member
+   * determines, two or more filter the candidate rows and let the rungs below choose within
+   * what survives. The server still accepts a bare string and reads it as one member (every
+   * record written before the amendment carries one, and there is no migration), but nothing
+   * on this side sends one any more: `FinishClaim` is the array, so the one shape the screen
+   * can hold is the one shape the wire gets. An empty or absent claim is no claim at all. */
+  variant?: readonly Finish[]
   /* D23's multi-select stack claim: the exact Rarity cells of the chosen game, as `GET
    * /games` spells them. A LIST on the wire — the server refuses a bare string as
    * `rarity_claim_invalid` rather than iterating it into six one-letter rarities, and an
@@ -420,7 +426,7 @@ export async function capture(input: {
    * of the run. It goes through `updateCard` afterwards, against a position that exists. */
   const hint = input.setHint?.trim()
   if (hint) payload.set_hint = hint
-  if (input.variant) payload.variant = input.variant
+  if (input.variant && input.variant.length > 0) payload.variant = input.variant
   if (input.rarityClaim && input.rarityClaim.length > 0) payload.rarity_claim = input.rarityClaim
 
   /* 201 on a new card, 200 on a replay. Neither is inspected: `created` in the body says
@@ -459,7 +465,10 @@ export async function updateCard(
   index: number,
   fields: {
     setHint?: string | null
-    variant?: Finish | null
+    /** D3's finish claim, a list since 2026-08-23. `null` CLEARS it, which is why the union
+     *  keeps a null the capture argument above does not need: `'variant' in fields` is what
+     *  decides whether the key is sent at all, and a key present with null is the clear. */
+    variant?: readonly Finish[] | null
     game?: string
     /** D23's stack claim. IT WAS MISSING HERE while the route had always accepted it —
      *  `PUT_FIELDS` is built from `master.CAPTURE_CLAIM_FIELDS`, which has carried
@@ -469,7 +478,7 @@ export async function updateCard(
     note?: string | null
   },
 ): Promise<CardSummary> {
-  const payload: Record<string, string | string[] | null> = {}
+  const payload: Record<string, string | readonly string[] | null> = {}
   if ('setHint' in fields) payload.set_hint = fields.setHint ?? null
   if ('variant' in fields) payload.variant = fields.variant ?? null
   if ('game' in fields && fields.game !== undefined) payload.game = fields.game
@@ -1052,14 +1061,15 @@ export async function applyBoxClaims(
   box: number,
   fields: {
     setHint?: string | null
-    variant?: Finish | null
+    /* A list, and `null` clears — `updateCard`'s rule at box scale (D3 rung 1's set). */
+    variant?: readonly Finish[] | null
     game?: string
     rarityClaim?: string[] | null
     note?: string | null
   },
   indices?: number[],
 ): Promise<BoxClaimResult> {
-  const payload: Record<string, string | string[] | number[] | null> = {}
+  const payload: Record<string, string | readonly string[] | number[] | null> = {}
   if ('setHint' in fields) payload.set_hint = fields.setHint ?? null
   if ('variant' in fields) payload.variant = fields.variant ?? null
   if ('game' in fields && fields.game !== undefined) payload.game = fields.game

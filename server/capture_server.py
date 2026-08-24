@@ -304,11 +304,20 @@ _BOXES_ITEM_RE = re.compile(r"^/boxes/(\d+)$")
 # and renaming either would break a file `identify.sidecar` already reads.
 CLAIM_WIRE_NAMES = {
     "set_hint": "set_hint",
+    # D3 rung 1's finish claim, and SINCE 2026-08-23 A JSON LIST of the game's finishes —
+    # the second set-valued claim in this map, not the only one. The key does not move: the
+    # sidecar and the request body have called it `variant` since before it had a shape, and
+    # `identify/sidecar.py` reads that spelling off files already on disk.
+    #
+    # A BARE STRING IS STILL READ, and it is what all 682 records written before the
+    # amendment carry: one member, and D3 says nothing writes one any more. There is no
+    # migration, so both shapes travel this wire permanently.
     "metadata_finish": "variant",
     "game": "game",
     # D23's multi-select stack claim: a JSON list of the game's exact `Rarity` cells.
     # `sidecar_payload`'s truthiness filter means an empty list is never written — absent
-    # is no claim, exactly as `variant` and `set_hint` behave.
+    # is no claim, exactly as `variant` and `set_hint` behave, and now for the same reason
+    # rather than by coincidence: both claims are sets and an empty set is no claim (D3, D23).
     "rarity_claim": "rarity_claim",
     "note": "note",
 }
@@ -700,23 +709,66 @@ def _require_image(payload: dict) -> bytes:
     return blob
 
 
-def _variant_shape(payload: dict) -> Optional[str]:
-    """The shape half of the finish claim: present, a string, non-empty. No vocabulary.
+def _variant_shape(payload: dict) -> Optional[List[str]]:
+    """The shape half of the finish claim: a SET of finish strings. No vocabulary.
 
     Split from the membership check below for the same reason `_rarity_claim_shape` is —
     `do_put_card` can know the shape before it takes the lock and cannot know the game
     until it is inside one. The split arrived late here, and the lateness IS the bug: a
     finish has a per-game vocabulary and this file spent its whole life believing there
     was one global one.
+
+    D3 RUNG 1'S CLAIM IS A SET (amended 2026-08-23), so this returns a list where it used to
+    return one string. It also used to COERCE — `str(raw).strip()` turned a JSON array into
+    the literal `"['normal', 'holo']"`, which then failed membership as `variant_invalid`,
+    so a set-valued claim could not be made over this wire at all.
+
+    A BARE STRING IS ACCEPTED AND WRAPPED, which is the one deliberate divergence from
+    `_rarity_claim_shape` directly below — that one REFUSES a bare string, on the stated
+    grounds that a live caller can fix its own request. This caller cannot, and that is the
+    whole difference: `app/src/server.ts` typed `variant` as one `Finish` from the day it was
+    written, so every client in the tree sends a string today and refusing one would break
+    every capture in the product on the first request. The rarity claim never had a
+    single-valued past to be compatible with; this one does, on the wire and on 682 records.
+    It is the same read-side backfill D21 uses for `game` and D3 names for this field, and
+    it is permanent for the same reason: there is no migration.
+
+    An absent key, `""` and `[]` are all NO CLAIM and all return `None`. `[]` mapping to
+    `None` rather than to itself is load-bearing rather than tidy — see `_check_variant_members`
+    for what an empty list does to `record_capture`.
     """
     raw = payload.get("variant")
     if raw is None or raw == "":
         return None
-    return str(raw).strip()
+    if isinstance(raw, str):
+        members = [raw]
+    elif isinstance(raw, list):
+        members = raw
+    else:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "variant_invalid",
+            f"variant was {type(raw).__name__}; send one of this game's finish strings, or "
+            "a JSON list of them. GET /games serves each game's finishes.",
+        )
+    cleaned: List[str] = []
+    for item in members:
+        if not isinstance(item, str) or not item.strip():
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "variant_invalid",
+                f"variant member {item!r} is not a finish string.",
+            )
+        text = item.strip()
+        if text not in cleaned:  # deduped — claiming one finish twice claims it once
+            cleaned.append(text)
+    return cleaned or None
 
 
-def _check_variant_member(finish: Optional[str], game: Optional[str]) -> Optional[str]:
-    """The membership half: the finish must be one THIS GAME stocks.
+def _check_variant_members(
+    claim: Optional[List[str]], game: Optional[str]
+) -> Optional[List[str]]:
+    """The membership half: every member must be a finish THIS GAME stocks.
 
     IT WAS CHECKED AGAINST `variant.FINISHES` FOR EVERY GAME, AND THAT REFUSED REAL
     CAPTURES. `pipeline/variant.py` defines `FINISHES` as literally `_POKEMON["finishes"]`,
@@ -738,24 +790,88 @@ def _check_variant_member(finish: Optional[str], game: Optional[str]) -> Optiona
     `misc` authors no finishes at all, so any finish under it refuses. That is right rather
     than harsh — the capture screen draws no Finish field for a game with an empty enum, so
     a finish arriving under one did not come from the control.
+
+    ONE BAD MEMBER REFUSES THE WHOLE CLAIM, never just itself, and every offender is named.
+    `pipeline/variant.py` takes the identical line one layer down (`UnknownFinish` out of
+    `_check_claim`, asserted by T4): a silently shortened claim is a claim the operator did
+    not make, and a two-member claim quietly reduced to one stops filtering and starts
+    DETERMINING — the strictly worse failure, since it resolves rather than reviews.
+
+    IT ALSO CANONICALISES, and that is the half a caller cannot skip. Members come back
+    deduped and in the GAME'S OWN ENUM ORDER rather than the order they were tapped, which
+    is what `pipeline/variant.py:_check_claim` and `identify/sidecar.py:_check_variant` both
+    already do — three normalisers, one canonical form. Ordering has to happen HERE and not
+    in `_variant_shape`, because the order is the game's and only this half knows the game.
+    Without it `["holo", "normal"]` and `["normal", "holo"]` are two values for one claim,
+    and the diff loops in `do_put_card` and `do_put_box_claims` would log a `corrected`
+    event and rewrite a sidecar for a PUT that corrected nothing — a whole box of them for
+    a restated sweep, which is exactly what those routes' docstrings promise does not happen.
+
+    AN EMPTY CLAIM IS `None` AND NEVER `[]`, which `_variant_shape` guarantees on the way in
+    and this preserves. `store/master.py:record_capture` upserts every claim that is
+    truthy, so `[]` and `None` both correctly leave an incumbent claim alone — but that
+    store-side guard is the backstop, not the contract. The contract is that no route in
+    this file ever hands the store an empty claim to interpret.
     """
-    if finish is None:
+    if claim is None:
         return None
     entry = games.get(game if game else games.DEFAULT_GAME)
     vocabulary = tuple(entry["finishes"])
-    if finish not in vocabulary:
+    unknown = [member for member in claim if member not in vocabulary]
+    if unknown:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "variant_invalid",
-            f"variant was {finish!r}; {entry['display']} stocks "
-            f"{', '.join(vocabulary) or '(no finishes)'}. GET /games serves the registry.",
+            f"variant {', '.join(repr(u) for u in unknown)} is not a finish of "
+            f"{entry['display']}. Stocked: {', '.join(vocabulary) or '(no finishes)'}. "
+            "GET /games serves the registry.",
         )
-    return finish
+    return [finish for finish in vocabulary if finish in claim]
 
 
-def _optional_variant(payload: dict, game: Optional[str]) -> Optional[str]:
+def _optional_variant(payload: dict, game: Optional[str]) -> Optional[List[str]]:
     """Shape and membership in one call, for the route that has the game in hand."""
-    return _check_variant_member(_variant_shape(payload), game)
+    return _check_variant_members(_variant_shape(payload), game)
+
+
+def _finish_claim_form(value) -> Optional[List[str]]:
+    """A stored finish claim in the list shape, FOR COMPARISON ONLY — never for writing.
+
+    D3 rung 1 says a bare string reads as a one-member set and there is no migration, so
+    `Card.metadata_finish` genuinely holds both shapes and will for as long as the 682
+    records written before 2026-08-23 do. Every one of them carries a string.
+
+    That makes `getattr(card, "metadata_finish") != value` the wrong question for the two
+    diff loops in this file. A card holding `"holo"` and a PUT restating `["holo"]` is a
+    claim that did not move, and comparing raw would call it a change: a `corrected` event
+    that corrects nothing, a rewritten sidecar, and — at the box route — a whole box
+    reported as `applied` for a sweep that restated what it already said. Both routes
+    promise the opposite in their own docstrings, and the promise is what this keeps.
+
+    It is not used to WRITE. A no-op PUT leaves the stored string exactly as it is rather
+    than converting it, because D3's read-side backfill means nothing downstream needs the
+    conversion and a write with no logged change is the thing those loops exist to avoid.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [value]
+    return list(value)
+
+
+def _claim_moved(field: str, current, value) -> bool:
+    """Whether a claim actually changed — the diff test both correction routes share.
+
+    Only `metadata_finish` has two spellings of one value (see `_finish_claim_form`), so
+    only it is canonicalised. `rarity_claim` is compared raw: it is list-valued too, but it
+    has no single-valued past on disk, and the ONE way to write it — `_rarity_claim_shape`,
+    which dedupes and keeps tap order — is the shape every record carries. Two tap orders of
+    one rarity claim would diff as a change, which is a real but separate gap and is not
+    something this change introduces or should quietly repair from the side.
+    """
+    if field == "metadata_finish":
+        return _finish_claim_form(current) != _finish_claim_form(value)
+    return current != value
 
 
 def _optional_indices(payload: dict) -> Optional[set]:
@@ -1468,7 +1584,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # THE FINISH JOINED THIS SENTENCE LATE, WHICH IS WHY IT SAID `rarity_claim` ALONE. The
     # finish was checked against Pokemon's three enum members whatever game was named, so a
     # Riftbound `foil` — offered by the screen, authored by the registry — was refused at
-    # the lens. `_check_variant_member` carries the full account.
+    # the lens. `_check_variant_members` carries the full account.
     #
     # A body with no game validates against `games.DEFAULT_GAME`, which is the game its
     # record will be READ as (D21's read-side backfill) — validation only, never a write.
@@ -1856,7 +1972,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     # SHAPE ONLY, FOR THE FINISH TOO — its vocabulary is the game's, and the game is either
     # in this body or on the card inside the lock. Exactly the rarity claim's split, added
     # when the finish turned out to have been judged against Pokemon's enum under every
-    # game; `_check_variant_member` carries that account.
+    # game; `_check_variant_members` carries that account.
     variant_shape = _variant_shape(payload) if "variant" in payload else None
     # SHAPE ONLY, HERE — membership needs the card's game and the card lives inside the
     # lock. Kept out of `incoming` until it is checked, so the apply loop below never sees
@@ -1884,7 +2000,10 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # force every game correction to restate a claim it never mentioned.
         judged_against = incoming["game"] if "game" in incoming else card.game
         if "variant" in payload:
-            incoming["metadata_finish"] = _check_variant_member(
+            # The RETURN is what lands, not `variant_shape`: this is where the claim is put
+            # into the game's enum order, and only this side knows the game (D3 rung 1's set
+            # — see `_check_variant_members`).
+            incoming["metadata_finish"] = _check_variant_members(
                 variant_shape, judged_against
             )
         if "rarity_claim" in payload:
@@ -1904,10 +2023,18 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # Every other key this file writes into the log — `position`, `sku`, `run` — is a
         # `Card` field, and a history line is read while holding `inventory.json` open. The
         # wire name belongs to the request body and the sidecar, which are both inputs.
+        #
+        # `_claim_moved` RATHER THAN `!=`, since D3's amendment gave one claim two spellings.
+        # A card holding the bare `"holo"` every record written before 2026-08-23 carries,
+        # restated by a client that now always sends `["holo"]`, is a claim that did not move
+        # — and a raw `!=` would log it as one on the first PUT that so much as mentions the
+        # finish. `from` is still the RAW stored value, not the canonical one: this line
+        # answers "what did the record say", and the record said a string.
         changed = {}
         for field, value in incoming.items():
-            if getattr(card, field) != value:
-                changed[field] = {"from": getattr(card, field), "to": value}
+            current = getattr(card, field)
+            if _claim_moved(field, current, value):
+                changed[field] = {"from": current, "to": value}
                 setattr(card, field, value)
 
         photo = photo_path(card.box, card.index)
@@ -2062,7 +2189,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
         # refuses the whole call with the cards named.
         if "game" in incoming:
             if "variant" in payload:
-                _check_variant_member(variant_shape, incoming["game"])
+                _check_variant_members(variant_shape, incoming["game"])
             if "rarity_claim" in payload:
                 _check_rarity_members(claim_shape, incoming["game"])
         elif "variant" in payload or "rarity_claim" in payload:
@@ -2070,7 +2197,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             for at, key, card in targets:
                 try:
                     if "variant" in payload:
-                        _check_variant_member(variant_shape, card.game)
+                        _check_variant_members(variant_shape, card.game)
                     if "rarity_claim" in payload:
                         _check_rarity_members(claim_shape, card.game)
                 except BadRequest as refused:
@@ -2097,13 +2224,28 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
         for at, key, card in targets:
             fields = dict(incoming)
             if "variant" in payload:
-                fields["metadata_finish"] = variant_shape
+                # RE-CHECKED PER CARD RATHER THAN REUSING `variant_shape`, and phase one is
+                # what makes that safe: every card was validated against exactly this game
+                # above, so this call cannot raise. What it is here for is the canonical
+                # form — the game's enum order (D3 rung 1's set; see
+                # `_check_variant_members`) — and the order is the CARD's game's on a mixed
+                # box, which is a per-card fact. Writing the raw shape would put tap order
+                # on disk and make the next restated sweep diff as a change.
+                fields["metadata_finish"] = _check_variant_members(
+                    variant_shape,
+                    incoming["game"] if "game" in incoming else card.game,
+                )
             if "rarity_claim" in payload:
                 fields["rarity_claim"] = claim_shape
             changed = {}
             for field, value in fields.items():
-                if getattr(card, field) != value:
-                    changed[field] = {"from": getattr(card, field), "to": value}
+                current = getattr(card, field)
+                # `_claim_moved`, for `do_put_card`'s reason and with more at stake: a raw
+                # `!=` against a box captured before D3's amendment would report every card
+                # as `applied` and rewrite every sidecar for a sweep that restated what the
+                # box already said — the exact churn this route's docstring rules out.
+                if _claim_moved(field, current, value):
+                    changed[field] = {"from": current, "to": value}
                     setattr(card, field, value)
             if not changed:
                 unchanged += 1

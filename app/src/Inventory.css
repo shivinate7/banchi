@@ -137,6 +137,17 @@
   overflow-wrap: anywhere;
 }
 
+/* The two depths, on their own line under the label — `CardLocations.css` argues the same rule
+   for the group's rows and the measurement it rests on is the same one. This row carries a
+   position label, a state word and two controls; at the ~460px this panel gets, a bar sharing
+   that line has under 100px and both captions wrap into four-line columns. Ordered last so the
+   row wraps to two lines and not three, and so nothing is taken from the label — which is the
+   string somebody carries to a shelf. */
+.inventory-lone > .position-bar {
+  flex: 1 1 100%;
+  order: 1;
+}
+
 /* A command name or a field name inside a sentence: a machine string, so the utility face at
    the size of the sentence around it. Same treatment as the capture screen's inline position
    label. */

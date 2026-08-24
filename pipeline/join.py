@@ -244,7 +244,27 @@ class IdentifiedCard:
     name: str
     number: Optional[str] = None
     printed_total: Optional[str] = None
-    metadata_finish: Optional[str] = None
+    # D3 rung 1's claim, read off the capture sidecar by `cli/resolve.py`. A SET since
+    # 2026-08-23: one member determines, two or more filter the candidate rows and let
+    # rungs 2 and 3 choose within what survives, and an empty set is no claim at all —
+    # which is why this is None rather than `()` when nobody claimed anything, exactly as
+    # `rarity_claim` below. `variant.resolve` decides all three; nothing here interprets it.
+    #
+    # A TUPLE, for `rarity_claim`'s reason two fields down: this dataclass is frozen and a
+    # frozen carrier of a mutable member is a hashability bug waiting for its first `set()`.
+    # `store/master.py:Card.metadata_finish` is a LIST for the opposite reason — that one is
+    # not frozen and has to round-trip through `asdict` and JSON unchanged.
+    #
+    # A BARE STRING STILL RESOLVES IDENTICALLY, which is what makes the amendment additive:
+    # `variant._check_claim` reads one as a one-member set, so a hand-made run record and
+    # every record written before the amendment walk the path they always did. The annotation
+    # names the shape this pipeline WRITES; the ladder accepts both.
+    metadata_finish: Optional[Tuple[str, ...]] = None
+    # ONE STRING, AND DELIBERATELY NOT A SET beside the claim above. Detection is the model
+    # reading one photograph of one card, so it has exactly one answer or none — where the
+    # claim describes a STACK, which is the whole reason that one became a set and this did
+    # not. Rung 3 cross-checks membership of this in the claim (`detected_finish not in
+    # claimed`), which is the identity test it always was when the claim has one member.
     detected_finish: Optional[str] = None
     photo: Optional[str] = None
     set_hint: Optional[str] = None
@@ -398,9 +418,18 @@ def _lookup_printed_code(catalog: "Catalog", card: IdentifiedCard):
     THE OPPOSITE SHAPE TO THE ONE ABOVE, and the difference is where the string is built.
     Pokemon prints two halves and this pipeline composes the key — zero-padding the left
     one, because `25` and `025` are the same card and the export writes the padded form.
-    Riftbound and One Piece print ONE identifier (`OGN-001`, `OP01-001`) and the export's
-    `Number` cell carries that same string, so there is nothing to compose and nothing to
-    pad: padding here would turn a code the export holds into one it does not.
+    Riftbound and One Piece print ONE identifier and the export's `Number` cell carries
+    that same string, so there is nothing to compose and nothing to pad: padding here would
+    turn a code the export holds into one it does not.
+
+    THE EXAMPLES ARE THE EXPORTS' OWN CELLS, corrected 2026-08-23. This docstring offered
+    `OGN-001` for Riftbound, and no cell anywhere in `fixtures/riftbound_export_untouched.csv`
+    looks like that — a set-code-prefixed shape borrowed from One Piece and attributed to
+    the wrong game. Riftbound's real cells are `179/298`, `066a/298`, `303*/298`, `SP3/006`,
+    `R04` and `T02 // T03`; One Piece's are `OP15-079`, `EB04-042`, `PRB02-014` and `P-105`.
+    The invented example mattered more than a docstring usually does: it is what a prompt
+    author reads to learn what shape to ask the model for, and asking for `OGN-001` would
+    have put a set code into the joined field and matched nothing.
 
     `printed_total` is not consulted at all, in either direction. A game keyed this way has
     no denominator to disagree with, and reaching for one would invent half a key.
@@ -1203,11 +1232,23 @@ def join_batch(
                 stage=variant.REVIEW, reason=routing.SET_AMBIGUOUS
             )
         else:
+            # `game=` IS NOT OPTIONAL HERE, AND OMITTING IT WAS THE LAST LIVE INSTANCE OF THE
+            # POKEMON-ENUM LEAK. `variant.vocabulary` falls back to `games.DEFAULT_GAME`
+            # without it, so every card of every game was resolved against Pokemon's three
+            # finishes — and `_check_claim` RAISES `UnknownFinish` rather than refusing
+            # politely, so a Riftbound card whose sidecar claims `foil` (a finish its own
+            # registry entry authors and the capture screen offers) took the whole join down.
+            # `variant.vocabulary`'s docstring and `cli/resolve.py`'s detected-finish
+            # whitelist each record fixing this at their own layer on 2026-08-23; this call
+            # site is one layer above both and was missed. Reached only after
+            # `catalog.candidates` has already put `card.game` through `lookup_for`, so a
+            # `misc` card refuses there and this can never be handed a game `require` rejects.
             resolution = variant.resolve(
                 found.rows,
                 metadata_finish=card.metadata_finish,
                 detected_finish=card.detected_finish,
                 rarity_claim=card.rarity_claim,
+                game=card.game,
             )
 
         if router is not None:

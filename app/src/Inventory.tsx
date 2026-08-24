@@ -781,6 +781,25 @@ function CopiesPanel({
         ) : (
           <div className="inventory-lone">
             <span className="inventory-lone-place">{lone.place.label ?? `pooled · ${row.key}`}</span>
+            {/* THE TWO DEPTHS REACH THE 92% OF THE STORE THAT HAS NO GROUP. This is where they
+                matter most and where they were nearly left out: 629 of the 682 records on this
+                Mac are captured-and-never-identified, so `GET /search` cannot reach them and
+                every one of them takes this branch. A feature that drew both bars only for the
+                53 identified cards would have answered "how far into the section is this" for
+                8% of the boxes the owner actually walks to.
+
+                NEVER FOR A POOLED CARD (D24). It is a count and not a location, so there is no
+                box to draw and no section to be inside — the same refusal `CardLocations` makes
+                on its own rows, and `sectionDepthOf` refuses the second scale for it besides.
+                The label slot above already says the pooled fact where the position would be. */}
+            {lone.place.located === false ? null : (
+              <PositionBar
+                place={lone.place}
+                persona="owner"
+                sections={layouts.get(lone.place.box)}
+                sectionDepth
+              />
+            )}
             <Action
               copy={lone}
               busyKey={busyKey}
@@ -1007,8 +1026,11 @@ function Confirm({
         )}
 
         {/* The same bar the row carries, so what the owner confirms against is what he chose the
-            copy by. Nothing here is computed: `spansOf` draws the server's own numbers. */}
-        <PositionBar place={copy.place} persona="owner" sections={sections} />
+            copy by. Nothing here is computed: `spansOf` draws the server's own numbers, and
+            `sectionDepth` adds the second scale off two more of them — the SAME pair of bars
+            that is on the row this panel was opened from, because a confirm that draws less
+            than the thing it is confirming makes the operator check twice. */}
+        <PositionBar place={copy.place} persona="owner" sections={sections} sectionDepth />
 
         <div className="inventory-confirm-actions">
           <PullConfirm label="Mark sold" onConfirm={onConfirm} disabled={busy} />
@@ -1088,7 +1110,8 @@ function RetirePanel({
           <p className="inventory-confirm-boxname">{copy.place.box_name}</p>
         )}
 
-        <PositionBar place={copy.place} persona="owner" sections={sections} />
+        {/* Both scales, as on the sale panel above and for its reason. */}
+        <PositionBar place={copy.place} persona="owner" sections={sections} sectionDepth />
 
         {/* What the choice does, before the choices: the record stays, the gap stays. Kept to one
             sentence — the panel is a decision point, not documentation. */}

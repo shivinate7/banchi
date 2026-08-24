@@ -38,28 +38,43 @@
  * only what `GET /games` said, never to re-decide it. */
 export type Finish = string
 
-/** What the finish control on the capture screen holds, which is one state wider than the
- *  wire enum. `null` is NO CLAIM: the operator has not said anything about this stack, so
- *  nothing is sent and `sidecar_payload` writes no `variant` key at all — the file stays a
- *  record of claims actually made (D3 rung 1), which is the rule `set_hint` already
+/** What the finish control on the capture screen holds. A SET since D3 rung 1's amendment
+ *  of 2026-08-23, and `[]` is NO CLAIM: the operator has not said anything about this
+ *  stack, so nothing is sent and `sidecar_payload` writes no `variant` key at all — the
+ *  file stays a record of claims actually made, which is the rule `set_hint` already
  *  followed on this side of the wire and `variant` did not.
  *
- *  THE NULL IS WHAT KEEPS D3 RUNGS 2 AND 3 REACHABLE, and that is the reason it exists
- *  rather than tidiness. `pipeline/variant.py:resolve` consults the catalog (rung 2,
- *  CATALOG_FORCED) and cross-checks detection (rung 3) only where `metadata_finish` is
- *  None. An app that always sends a claim makes both rungs dead for every card this product
- *  will ever capture: a holofoil-only SV-era rare shot with an untouched toggle would
- *  return METADATA_NOT_STOCKED and cost a review-queue tap, where the single catalog row
- *  would have decided it with no attention at all. Not touching a toggle is not a claim of
- *  `normal`, and once the sidecar is written the two are indistinguishable.
+ *  HOW MANY MEMBERS IT HAS DECIDES WHAT IT DOES, and that is the whole of the amendment.
+ *  One member DETERMINES, exactly as this rung always has. Two or more FILTER: the
+ *  candidate rows narrow to the claimed finishes and the rungs below choose within what
+ *  survives. A stack that genuinely holds two finishes had no honest claim available
+ *  before — name one and be wrong about half the cards, or claim nothing and throw away
+ *  the half of the truth you did know.
+ *
+ *  `[]` RATHER THAN `null`, AND NOT BOTH. It was `Finish | null` and the null was the
+ *  no-claim state; an empty set is the same state, and D3 says so outright ("an empty set
+ *  is no claim at all, identical to the null this field has always allowed"). Two spellings
+ *  of one state is the thing a reader has to learn and the thing a `?? []` somewhere gets
+ *  wrong. `InventoryCard.rarity_claim` is the shape this is deliberately copying — D3
+ *  chose it precisely so a capture screen whose claims all work one way is one rule to hold.
+ *
+ *  THE EMPTY CLAIM IS WHAT KEEPS D3 RUNGS 2 AND 3 REACHABLE, and that is the reason it
+ *  exists rather than tidiness — the argument transfers from the null verbatim.
+ *  `pipeline/variant.py:resolve` consults the catalog (rung 2, CATALOG_FORCED) and
+ *  cross-checks detection (rung 3) only where no claim was made. An app that always sends
+ *  one makes both rungs dead for every card this product will ever capture: a holofoil-only
+ *  SV-era rare shot with an untouched control would return METADATA_NOT_STOCKED and cost a
+ *  review-queue tap, where the single catalog row would have decided it with no attention
+ *  at all. Not touching the control is not a claim of `normal`, and once the sidecar is
+ *  written the two are indistinguishable.
  *
  *  A SEPARATE TYPE RATHER THAN A FOURTH MEMBER OF `Finish`. Widening `Finish` itself is the
  *  shorter edit and the wrong one: `Finish` is the wire enum, and the server answers
- *  anything outside `pipeline/variant.py:FINISHES` with `variant_invalid`. A no-claim member
+ *  anything outside THE CHOSEN GAME's finishes with `variant_invalid`. A no-claim member
  *  living inside it would typecheck at `server.capture()`'s `variant` argument and fail at
  *  the rig. Two names keep "what the operator can choose" and "what the wire accepts" from
  *  collapsing into one set. */
-export type FinishClaim = Finish | null
+export type FinishClaim = readonly Finish[]
 
 /** One entry of `pipeline/games.py`, as `GET /games` serves it (D21, D22).
  *
@@ -287,11 +302,17 @@ export type InventoryCard = {
 
   set_hint: string | null
 
-  /** The capture-time variant toggle. Typed as a loose string rather than `Finish | null`
-   *  on purpose: this comes off disk, and the store holds records written before the
-   *  server validated anything. Narrowing it here would make the type assert something
-   *  about `inventory.json` that only `POST /capture` and `PUT /inventory` enforce. */
-  metadata_finish: string | null
+  /** The capture-time finish claim. Typed loosely rather than as `FinishClaim` on purpose:
+   *  this comes off disk, and the store holds records written before the server validated
+   *  anything. Narrowing it here would make the type assert something about
+   *  `inventory.json` that only `POST /capture` and `PUT /inventory` enforce.
+   *
+   *  BOTH SHAPES, PERMANENTLY. D3 rung 1's claim became a set on 2026-08-23 and there is no
+   *  migration — a bare string reads as a one-member set, all 682 records written before it
+   *  carry one, and `_card_row` ships `asdict(card)` raw. So the wire really does carry two
+   *  shapes and this says so; the union is what makes a renderer that forgets the array
+   *  case a compile error rather than a screen printing `normal,reverse_holo`. */
+  metadata_finish: string | string[] | null
 
   /** Which game the operator said this card is (D21). Loose `string | null` for the same
    *  reason `metadata_finish` is: this comes off disk, and records written before the field
@@ -413,7 +434,16 @@ export type QueueRead = {
   number?: string | null
   printed_total?: string | null
   set_hint?: string | null
-  metadata_finish?: string | null
+  /** D3 rung 1's claim, as `cli/resolve.py:queue_entry` recorded it. A LIST since the
+   *  amendment of 2026-08-23 — and still a bare string in any `review.json` written before
+   *  it, which is why both shapes are named. A queue file outlives the run that wrote it.
+   *
+   *  The union is the guard. `ReviewQueue.tsx`'s `text()` returns null for anything that is
+   *  not a string, so a set arriving under a `string | null` annotation would render as
+   *  "no claim" and vanish from the sentence — no crash, no console warning, nothing red in
+   *  `tsc`, `lint` or Playwright, while the screen asked the operator to judge a card
+   *  against a claim they never made. Naming the array here makes that a compile error. */
+  metadata_finish?: string | string[] | null
   detected_finish?: string | null
 }
 
