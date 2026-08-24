@@ -910,15 +910,23 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
       .map((row) => row.card.index)
   }, [rows, picked, shelf])
 
-  /* A section is open when it was opened, OR when the selection is inside it. The second half
-   * is the whole reason collapsed-by-default is safe: every key that moves the selection —
-   * arrows, PgUp/PgDn, Home/End, a box cell — opens whatever it lands in, so no control on this
-   * screen can put the mark on a row nobody can see. */
-  const isOpen = (section: Section) =>
-    opened.includes(section.key) || section.rows.some((row) => row.key === selected)
+  /* A SECTION IS OPEN WHEN IT IS IN THE OPEN SET. Nothing else. The invariant that no control
+   * can put the mark on a row nobody can see is kept by the effect below, which OPENS the
+   * landing section when the selection moves — at navigation time, not at render time.
+   *
+   * IT USED TO READ `opened.includes(key) || selection is inside it`, and that second clause
+   * made an explicit fold of the section you are standing in do NOTHING: the click recorded
+   * the close, the render overrode it, and the operator saw a control that moves nothing. The
+   * owner reported it exactly that way — clickable, does not work — alongside an eleven-pixel
+   * dead zone above it (BoxBrowse.css), and the two together are why it felt broken rather
+   * than merely stubborn.
+   *
+   * The distinction is D19's, about arming: an explicit act and an automatic consequence are
+   * not the same thing and must not be decided in the same expression. Navigation opens what
+   * it lands in — that is the automatic half, and it still holds. Folding is an act, and an
+   * act wins. */
+  const isOpen = (section: Section) => opened.includes(section.key)
 
-  /* Computed off the EXPLICIT set rather than off `isOpen`, so a one-section box does not read
-     as "already expanded" merely because the selection forced its only section open. */
   const allExpanded = sections.length > 0 && sections.every((s) => opened.includes(s.key))
 
   const toggleAllSections = () =>
@@ -949,6 +957,21 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
       const rest = held.filter((key) => !keys.includes(key))
       return shownAllTicked ? rest : [...rest, ...keys]
     })
+
+  /* THE INVARIANT THE RENDER-TIME OVERRIDE USED TO CARRY, moved to where it belongs. Every key
+   * that moves the selection — arrows, PgUp/PgDn, Home/End, a box cell, a search landing —
+   * ends here, so the section the mark lands in is opened as a CONSEQUENCE of the move rather
+   * than as a condition of drawing. The mark can never sit on a row nobody can see, and a fold
+   * the operator asked for is not undone on the next render.
+   *
+   * Adds only, and only when the section is shut, so it cannot fight a fold of some OTHER
+   * section and cannot loop: a selection that does not move re-runs this to no effect. */
+  useEffect(() => {
+    if (selected === null) return
+    const holding = sections.find((section) => section.rows.some((row) => row.key === selected))
+    if (holding === undefined) return
+    setOpened((held) => (held.includes(holding.key) ? held : [...held, holding.key]))
+  }, [selected, sections])
 
   /* THE SELECTION, REPORTED UPWARDS. `Inventory.tsx` draws the copies of whatever card the walk
    * is pointing at, and it cannot know which one that is without being told. The memo above is

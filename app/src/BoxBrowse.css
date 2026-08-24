@@ -316,6 +316,21 @@
    opens it. Both were asked for by name — "in inventory i need the sections to be collapsible",
    and a mass-select needs a unit bigger than one row to be worth having. They sit on one line
    at the same height the header already was, so collapsibility cost the walk nothing. */
+/* NO VERTICAL PADDING HERE — IT LIVES ON THE FOLD BUTTON, and that is a hit-target fix
+   rather than a style preference. This row was `padding: var(--s1) var(--s2)` with a fold
+   button at `padding: 0`, so the button drew 12px tall inside a 23px header: ELEVEN PIXELS
+   of a row that looks like one control did nothing when clicked. The owner reported it as
+   the fold being "clickable" and not working, which is exactly how that feels — hit the
+   text dead centre and it folds, miss by four pixels and it does not, with no way to tell
+   which happened.
+
+   Measured before and after rather than reasoned about: the button now matches the header's
+   full height, so every pixel of the row that looks foldable is foldable. The horizontal
+   padding stays here because the tick sits inside it and must not be foldable.
+
+   The general form, worth carrying to the next control: a padded container whose only
+   interactive child has no padding of its own has a dead border the width of that padding.
+   `.browse-row` never had the defect because it IS the button. */
 .browse-secthead {
   position: sticky;
   top: 0;
@@ -324,7 +339,7 @@
   align-items: center;
   gap: var(--s2);
   background: var(--surface);
-  padding: var(--s1) var(--s2);
+  padding: 0 var(--s2);
   border-bottom: 1px solid var(--line);
 }
 
@@ -352,7 +367,8 @@
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 0;
+  /* The header's former vertical padding, moved onto the thing you actually press. */
+  padding: var(--s1) 0;
   cursor: pointer;
 }
 

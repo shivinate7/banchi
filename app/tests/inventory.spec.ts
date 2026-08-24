@@ -404,10 +404,44 @@ test('expand all opens every section and collapse all shuts them', async ({ page
   await page.getByRole('button', { name: 'expand all' }).click()
   await expect(page.locator('.browse-row')).toHaveCount(5)
 
+  /* COLLAPSE ALL SHUTS EVERY SECTION, INCLUDING THE ONE HOLDING THE SELECTION.
+   *
+   * This assertion used to read `toHaveCount(3)` and explained itself as the force-open
+   * "which is what makes collapsed-by-default safe rather than hostile". It was neither: the
+   * owner reported the fold as clickable and doing nothing, and this was half the reason —
+   * `isOpen` re-opened the selected section on every render, so an explicit fold recorded a
+   * close that the next paint discarded. A control whose label says `collapse all` and which
+   * leaves a section open is not safe, it is lying.
+   *
+   * The invariant the override carried is real and did not go: the mark must never sit on a
+   * row nobody can see. It moved to where it belongs, an effect that opens the landing
+   * section when the selection MOVES — asserted below. Navigation is an automatic
+   * consequence; folding is an act; they are not decided in the same expression. */
   await page.getByRole('button', { name: 'collapse all' }).click()
-  // Section 1 stays open because the selection is inside it — the force-open, which is what
-  // makes collapsed-by-default safe rather than hostile.
-  await expect(page.locator('.browse-row')).toHaveCount(3)
+  await expect(page.locator('.browse-row')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'expand all' }).click()
+  await expect(page.locator('.browse-row')).toHaveCount(5)
+})
+
+test('moving the selection opens the section it lands in, so the mark is never hidden', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* The other half of the fold fix. With everything shut, a key that moves the selection has
+   * to open whatever it lands in — otherwise collapsed-by-default would let the walk put the
+   * mark on a row nobody can see, which is the failure the old render-time override was
+   * written to prevent and the one thing that must survive its removal. */
+  await page.getByRole('button', { name: 'expand all' }).click()
+  await page.getByRole('button', { name: 'collapse all' }).click()
+  await expect(page.locator('.browse-row')).toHaveCount(0)
+
+  await page.locator('.browse-list').focus()
+  await page.keyboard.press('ArrowRight')
+
+  await expect(page.locator('.browse-row').first()).toBeVisible()
+  await expect(page.locator('.browse-row')).not.toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the mass-select

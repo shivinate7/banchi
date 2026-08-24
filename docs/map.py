@@ -797,7 +797,7 @@ COMPONENTS = [
                     "— the re-shoot control (D26, owner's placement ruling): replace a bad "
                     "stored photo from a file, record untouched, allocator never involved. "
                     "Everything else stays look-only, and the header argues the exception.",
-            "governed_by": ["D6", "D10", "D20", "D21", "D22", "D24", "D26", "D27", "D30", "D31"]},
+            "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D24", "D26", "D27", "D30", "D31"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve",
