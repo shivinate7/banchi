@@ -44,7 +44,7 @@
    would fix it outright, which docs/DESIGN.md forbids by name so that one layout serves a
    laptop and a phone.
 
-   THE CAP IN FORCE IS 60vh, DECLARED ONCE AS `--photo-cap` ON `.review` AND READ BY TWO
+   THE CAP IN FORCE IS 48vh, DECLARED ONCE AS `--photo-cap` ON `.review` AND READ BY TWO
    RULES: `.review-photo`'s max-height, and the min-height of the `.review-frame` that
    reserves the space whether or not there is an image to put in it (D28). The argument for
    the number is beside those rules, along with the 2026-08-22 measurement of what it costs.

@@ -177,7 +177,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
@@ -1637,6 +1637,72 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         checks.equal(
             fresh["index"], 1,
             "and recreating the number starts from nothing, like a box never used",
+        )
+
+
+def check_queue_starvation(checks: Checks) -> None:
+    """The starvation tier, in its own home because it writes a queue the other blocks count.
+
+    ITS OWN `isolated_home` IS THE POINT, and it is this file's own recorded lesson: the mass-
+    select cases were first written inside a block that counts history lines over a box it
+    builds card by card, and they failed on the fixture rather than on the code. The first
+    draft of THIS block did exactly the same thing — six entries added to `check_queues`'s
+    store, and four of that block's own assertions went red because they count what is open.
+
+    `upsert` OVERWRITES `first_seen` WITH TODAY on insert; it preserves only an EXISTING
+    stamp. That is right for the store — a card is first seen when it is first queued — and
+    it means a test cannot age an entry by passing the field in. The stamp is written after
+    the upsert, inside the same session, which is also the only way a real entry ever gets
+    old.
+    """
+    with isolated_home():
+        stamp = lambda days: (  # noqa: E731
+            datetime.now(timezone.utc) - timedelta(days=days)
+        ).strftime("%Y-%m-%d")
+
+        with Store().write() as snapshot:
+            snapshot.review.upsert(entry(1, 1, market="12.00"))
+            snapshot.review.upsert(entry(1, 2, market="0.75"))
+            snapshot.review.upsert(entry(1, 3, market=None))
+            snapshot.review.upsert(entry(2, 1, market=None))
+            snapshot.review.upsert(entry(2, 2, market=None))
+            # Aged after the fact, per the docstring.
+            snapshot.review.entries["2/1"].first_seen = stamp(queues.STARVATION_DAYS + 5)
+            snapshot.review.entries["2/2"].first_seen = stamp(queues.STARVATION_DAYS + 40)
+            snapshot.review.entries["1/3"].first_seen = stamp(queues.STARVATION_DAYS - 5)
+
+        positions = [e.position for e in Store().read().review.open_entries]
+        checks.equal(
+            positions,
+            ["2/2", "2/1", "1/1", "1/2", "1/3"],
+            "starved first and OLDEST-first inside the tier, then docs/DESIGN.md's "
+            "expensive-first order untouched, then the unpriced card that has not yet "
+            "starved — the tier promotes, it does not re-score (store/queues.py:sort_key)",
+        )
+
+        one_day_short = queues.QueueEntry(
+            position="9/9",
+            box=9,
+            index=9,
+            label="x",
+            photo="p",
+            reason="r",
+            candidates=[],
+            first_seen=stamp(queues.STARVATION_DAYS - 1),
+        )
+        checks.equal(
+            one_day_short.sort_key[0],
+            2,
+            "the threshold is a real boundary: one day short of it, an unpriced card is "
+            "still last and has not been quietly promoted",
+        )
+        checks.equal(
+            queues.QueueEntry(
+                position="9/9", box=9, index=9, label="x", photo="p", reason="r", candidates=[]
+            ).sort_key[0],
+            2,
+            "and an entry with NO first_seen can never starve at all: an unmeasurable wait "
+            "must not outrank a known price (store/queues.py:_age_days returns None)",
         )
 
 
@@ -7937,6 +8003,7 @@ def run() -> Result:
     check_undo(checks)
     check_remove_and_box_delete(checks)
     check_queues(checks)
+    check_queue_starvation(checks)
     check_queue_supersede(checks)
     check_review_answer(checks)
     check_group_answer(checks)

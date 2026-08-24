@@ -250,8 +250,17 @@ const LEADER = ','
  * where that keystroke was an answer or a capture. Long enough to be a deliberate two-key
  * sequence typed by a hand that paused to think; short enough that an accident has cost its
  * one key before you notice. Not a token — this is a duration and not a measurement, and
- * docs/DESIGN.md's scale is spacing. */
-const CHORD_MS = 1500
+ * docs/DESIGN.md's scale is spacing.
+ *
+ * ONE SECOND, NOT 1500ms, AS OF 2026-08-24, and the number now comes from somewhere rather
+ * than from taste. Vim's `timeoutlen` and which-key's default are both 1000ms, so a hand
+ * trained on either already expects this window; practitioners routinely cut it to 500.
+ * The rig supplies the harder bound: the feeder emits every ~623ms, so the old 1500ms was
+ * 2.4 card-cycles during which this handler would swallow whatever was typed — on the one
+ * screen where a swallowed key is a card that went past the lens unrecorded. The sentence
+ * above already said an armed leader eats the next keystroke; it just never counted how
+ * many cards fit inside the eating. docs/specs/ui-research.md carries the sources. */
+const CHORD_MS = 1000
 
 
 /** `location.hash` as a route path: '' and '#' and '#/' all mean the root. */

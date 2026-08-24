@@ -59,6 +59,13 @@ def _age_days(stamp: Optional[str]) -> Optional[int]:
     return (datetime.now(timezone.utc) - seen).days
 
 
+# How long a card may wait before it outranks price. Thirty days rather than a tuned
+# number: it is long enough that nothing in a normal week of working the queue is touched
+# by it, and short enough that a starved card surfaces inside the month it was captured.
+# It is a threshold and not a token — docs/DESIGN.md's scale is spacing.
+STARVATION_DAYS = 30
+
+
 @dataclass
 class QueueEntry:
     """One card waiting for a human, with everything the review screen needs to show it."""
@@ -85,11 +92,40 @@ class QueueEntry:
         return None if self.market is None else Decimal(self.market)
 
     @property
-    def sort_key(self) -> Tuple[int, Decimal, int, int]:
-        """Priced first, descending by price, unpriced last; then box-walk order."""
+    def sort_key(self) -> Tuple[int, int, Decimal, int, int]:
+        """Starved first, then priced descending, then unpriced; ties by box-walk order.
+
+        THE STARVATION TIER EXISTS BECAUSE PRICE ALONE NEVER RELEASES SOME CARDS. A card
+        with no catalog row has no market price, `price` is None, and the tier below sorts
+        it last — permanently. Box 2 left 47 residual entries in exactly that state, every
+        one `no_catalog_row`, and no amount of working the queue from the top ever reaches
+        them. At forty boxes that is several hundred entries that are queued, counted, and
+        unreachable.
+
+        This is not a new idea and it is not a guess: prioritised medical worklists hit the
+        same wall, where a scored ordering pushed the worst-case wait to 1178 minutes
+        against 890 under plain FIFO until a maximum-waiting-time escalation was added.
+        docs/specs/ui-research.md carries the citation. The fix is the same shape here.
+
+        ESCALATION IS A TIER, NOT A WEIGHT. A blended score — price plus some multiple of
+        age — would be one number nobody could predict, and it would quietly re-order the
+        expensive cards against each other as days passed. A tier leaves
+        docs/DESIGN.md's "worked expensive-first" ordering byte-identical for everything
+        inside the threshold, and only ever promotes a card that has genuinely been
+        abandoned. Inside the tier the OLDEST goes first, which is the only ordering that
+        makes the tier empty itself.
+
+        An entry with no `first_seen` has no age, so it can never starve. That is the
+        conservative reading: `_age_days` returns None for a missing or malformed stamp,
+        and a card whose wait cannot be measured must not be promoted over one whose
+        price is known.
+        """
+        age = self.age_days
+        if age is not None and age >= STARVATION_DAYS:
+            return (0, -age, Decimal("0"), self.box, self.index)
         if self.price is None:
-            return (1, Decimal("0"), self.box, self.index)
-        return (0, -self.price, self.box, self.index)
+            return (2, 0, Decimal("0"), self.box, self.index)
+        return (1, 0, -self.price, self.box, self.index)
 
     @property
     def describe(self) -> str:
