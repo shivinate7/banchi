@@ -317,6 +317,15 @@ type BoxBrowseProps = {
    *  function because the caller already knows which card is selected: it is told below. */
   detail?: ReactNode
 
+  /** Rendered beneath the box header, for the BOX being walked rather than for a card in it.
+   *
+   *  A SEPARATE SLOT FROM `detail` BECAUSE THE GUARD IS DIFFERENT, and that difference is the
+   *  whole reason this prop exists. `detail` is drawn only when a card is selected, which is
+   *  right for a panel about one card and wrong for anything about the box: the run panel went
+   *  in there first and disappeared whenever the walk had nothing selected — so starting a run
+   *  over a box required picking a card in it, for no reason a person could have guessed. */
+  boxPanel?: ReactNode
+
   /** Which card the walk is pointing at, reported on every change and `null` when the filter
    *  leaves nothing to point at. The caller needs it to build `detail`. */
   onSelect?: (row: Row | null) => void
@@ -330,6 +339,15 @@ type BoxBrowseProps = {
    *  A sale or a retirement changes a state this walk draws, and the walk holds no second copy
    *  of the inventory to patch. */
   reloadToken?: number
+
+  /** WHAT A RUN WOULD BE SCOPED TO: the box being walked, and the ticked cards inside it.
+   *
+   *  The third thing this component reports upwards, and it exists for the same reason the
+   *  other two do — the walk owns the state and the screen above owns the write. `indices` is
+   *  the same `pickedIndices` a bulk claim would reach, so a run and a claim correction can
+   *  never disagree about what "the selection" means; `box` is null on a pooled or unplaced
+   *  shelf, which has no box to identify. */
+  onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
 }
 
 
@@ -415,7 +433,15 @@ function collectorNumber(card: InventoryCard): string {
   return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
 }
 
-export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: BoxBrowseProps) {
+export function BoxBrowse({
+  head,
+  detail,
+  boxPanel,
+  onSelect,
+  onBoxes,
+  onScope,
+  reloadToken = 0,
+}: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -1091,6 +1117,14 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
     onSelect?.(selectedRow)
   }, [selectedRow, onSelect])
 
+  /* THE SCOPE, REPORTED UPWARDS, on the same terms and for the same reason. `pickedIndices` is
+   * already memoised on exactly the three things that can move it, so this fires on a real
+   * change to the selection or the shelf and not on every render — the identical guard the
+   * effect above relies on. */
+  useEffect(() => {
+    onScope?.({ box: typeof shelf === 'number' ? shelf : null, indices: pickedIndices })
+  }, [shelf, pickedIndices, onScope])
+
   /* Read once for the selected card and passed down, rather than read again inside
    * PhotoPanel. Two reads of the same field cannot disagree today, but they are two places
    * to edit the day the field is renamed, and the failure mode of getting that half-right
@@ -1518,6 +1552,12 @@ export function BoxBrowse({ head, detail, onSelect, onBoxes, reloadToken = 0 }: 
                 onChanged={() => setReloads((n) => n + 1)}
               />
             )}
+
+            {/* THE BOX PANEL — beneath the box header, and about the same box. Outside the
+                `selectedRow` guard below, deliberately: what goes here is about the shelf, and
+                a control for the box that vanished when no card was selected would be a
+                control the operator could only find by accident. */}
+            {boxPanel}
 
             {shelf === 'pooled' ? (
               <div className="browse-gap">

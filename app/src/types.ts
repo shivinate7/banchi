@@ -1011,3 +1011,125 @@ export type BoxRecord = {
 export type BoxSummary = {
   boxes: BoxRecord[]
 }
+
+/* ------------------------------------------------------------------ the pipeline seam
+ *
+ * The four commands of batch script v2, as `server/pipeline_routes.py` answers for them.
+ * Until these existed the pipeline was the one capability in the product with no way in:
+ * every run this project has done was driven by somebody typing commands in a terminal,
+ * and `docs/GATES.md` records the cost of that — "the owner had no visibility into emitted
+ * import files; their names exist only in CLI output the owner never sees when someone
+ * else drives the commands".
+ *
+ * THE CONSOLE FIELD IS THE COMMAND'S OWN STDOUT AND IS MEANT TO BE SHOWN VERBATIM.
+ * `docs/DESIGN.md`'s copy rule makes the owner's screens the place the pipeline's own words
+ * appear rather than a paraphrase — being able to grep what you saw is worth more than a
+ * consistent register — and a run report is the densest thing this product ever says.
+ */
+
+/** Which of the four steps a run is waiting for. Derived from the run directory on every
+ *  read, never stored: `cli/runs.py` makes a run an immutable input rather than state. */
+export type RunPhase =
+  | 'ready'
+  | 'identifying'
+  | 'identify'
+  | 'join'
+  | 'emit'
+  | 'reconcile'
+  | 'done'
+
+/** What a run was scoped to. `whole_box` is the common case and costs no temporary
+ *  anything; a selection builds a directory of symlinks that is swept after 48 hours. */
+export type RunScope = {
+  box: number
+  whole_box: boolean
+  /** How many cards were selected, or null for a whole box — where the count is whatever
+   *  is on disk at the moment the run starts rather than a number chosen in advance. */
+  cards: number | null
+}
+
+/** One downloadable artefact. `is_import` is what lets a screen offer the file the owner
+ *  actually came for without knowing the per-game naming rule. */
+export type RunFile = {
+  name: string
+  bytes: number
+  modified: number
+  is_import: boolean
+}
+
+export type RunSummary = {
+  run: string
+  path: string
+  created_at?: string | null
+  updated_at?: string | null
+  capture_dir?: string | null
+  scope?: RunScope | null
+  started_by?: string | null
+  /** A child process is still driving this run. Checked with signal 0 rather than trusted
+   *  from a pid file, because the file outlives the process it names. */
+  live: boolean
+  pid: number | null
+  phase: RunPhase
+  batch_ids: string[]
+  collected: boolean
+  joined: boolean
+  counts: Record<string, number>
+  /** The run was joined with D3 rung 3 switched off, and how many cards that resolved.
+   *  Reported rather than inferred from a smaller queue: these are the cards the operator
+   *  took responsibility for. */
+  bypass_detection: boolean
+  bypassed: number | null
+  usage: { input_tokens?: number; output_tokens?: number }
+}
+
+export type RunDetail = RunSummary & {
+  console: string
+  files: RunFile[]
+  manifest: Record<string, unknown>
+}
+
+/** What a run WOULD cost. Free, and creates no run directory at all — `identify --dry-run`
+ *  returns before `runs.create`. The two numbers a screen must show before it may ask to
+ *  spend; null where the preflight did not print the line, so a changed preflight shows as
+ *  a missing figure rather than as a confident zero. */
+export type RunPreflight = {
+  ok: boolean
+  exit_code: number
+  scope: RunScope
+  capture_dir: string
+  console: string
+  photographs: number | null
+  cache_hits: number | null
+  to_send: number | null
+  estimate_usd: number | null
+  /** A live run already reading these cards. The screen disables its own confirm on this
+   *  rather than letting the operator press a button that is going to refuse. */
+  busy_run: string | null
+}
+
+export type RunStarted = {
+  run: string
+  path: string
+  pid: number
+  scope: RunScope
+  argv: string[]
+}
+
+/** A free step's result. A non-zero `exit_code` arrives as a 200 with `ok: false` — `emit`
+ *  refusing while a price is unanswered is the most useful thing that command does, and an
+ *  HTTP error would put a stack trace where the sentence naming the SKU belongs. */
+export type RunStepResult = {
+  ok: boolean
+  exit_code: number
+  step: 'join' | 'emit' | 'reconcile'
+  run: string
+  console: string
+  dry_run: boolean
+  files: RunFile[]
+  summary: RunSummary
+}
+
+/** An uploaded CSV. Uploaded rather than named by path: a screen cannot know what is on
+ *  the server's disk, and a route that opened any absolute path a request named would be a
+ *  file-read primitive guarded by an origin header. */
+export type CsvUpload = { name: string; content: string }

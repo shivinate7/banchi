@@ -65,6 +65,12 @@ make check          # harness + docs-audit + lint + typecheck — no stubs left 
   in the comments beside the two keys.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
+- **The pipeline is reachable from a screen as of 2026-08-24** (D33). `#/inventory` carries a
+  folded Runs panel: a free preflight, a two-step money gate with no typing, the three free
+  steps, every command's stdout verbatim, and the import CSVs as downloads. `server/
+  pipeline_routes.py` is its own module because it is the one part of the server that can cause
+  money to be spent — one route does, it is named for it, and it refuses without an explicit
+  `confirm`. Everything else there is free and re-runnable.
 - **The app has five screens and five routes** — four the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven, and D31 then merged two away:
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — browse the boxes,

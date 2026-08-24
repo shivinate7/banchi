@@ -20,6 +20,12 @@ import type {
   BoxClaimResult,
   RemoveResult,
   BoxDeleteResult,
+  CsvUpload,
+  RunDetail,
+  RunPreflight,
+  RunStarted,
+  RunStepResult,
+  RunSummary,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -1133,4 +1139,167 @@ export async function removeCardInPlace(
  */
 export async function deleteBox(box: number): Promise<BoxDeleteResult> {
   return (await request(`/boxes/${box}`, { method: 'DELETE' })) as BoxDeleteResult
+}
+
+/* ---------------------------------------------------------------------- the pipeline
+ *
+ * The four commands, reachable from a screen for the first time. `server/pipeline_routes.py`
+ * carries the argument for why one of them is spawned and the rest answer in the request;
+ * what matters on this side is that ONE of these functions can cost money and it is named
+ * for it.
+ *
+ * NO CLIENT-SIDE TIMEOUT HERE EITHER, and the reason is stronger than it is above. A
+ * preflight decodes and crops every photograph in a box — measured at about a minute for
+ * 544 cards — and a join parses a 30,000-row export. An AbortController shorter than either
+ * would convert a working command into `unreachable`, which is the same lie this module
+ * already refuses to tell about the store lock.
+ */
+
+/**
+ * What a run would cost. FREE, and creates no run directory at all.
+ *
+ * THIS IS WHAT THE SCREEN MUST SHOW BEFORE IT MAY ASK TO SPEND, and it is the whole of the
+ * first step of the two-step confirm. `to_send` and `estimate_usd` are lifted out of the
+ * command's own preflight stdout rather than recomputed anywhere, so the figure on the
+ * screen and the figure in the run's log are the same string produced by the same code.
+ */
+export async function preflightRun(input: {
+  box: number
+  indices?: number[]
+  crop?: boolean
+  maxEdge?: number
+}): Promise<RunPreflight> {
+  return (await request('/pipeline/preflight', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      box: input.box,
+      indices: input.indices,
+      crop: input.crop,
+      max_edge: input.maxEdge,
+    }),
+  })) as RunPreflight
+}
+
+/**
+ * START A RUN. THE ONE FUNCTION IN THIS MODULE THAT SPENDS MONEY.
+ *
+ * `confirm: true` is not decoration and is not something to default. The server refuses
+ * without it, deliberately as a field rather than a typed string — the owner ruled against
+ * typing on this control, and `docs/DESIGN.md`'s destructive-action clause is satisfied by
+ * the two-step the screen draws, with this field as its second step.
+ *
+ * It answers as soon as the child is running, with the run's name and nothing about the
+ * result. Everything after that is `getRun` polling the run directory, which is what lets a
+ * run outlive a restart of the server that started it — or of this browser tab.
+ *
+ * Refusals worth branching on: `run_already_live` (a live run is already reading these
+ * cards — two batches over one box is two invoices), and every scope refusal the preflight
+ * would have shown first.
+ */
+export async function startRun(input: {
+  box: number
+  indices?: number[]
+  crop?: boolean
+  maxEdge?: number
+  label?: string
+}): Promise<RunStarted> {
+  return (await request('/pipeline/identify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      confirm: true,
+      box: input.box,
+      indices: input.indices,
+      crop: input.crop,
+      max_edge: input.maxEdge,
+      label: input.label,
+    }),
+  })) as RunStarted
+}
+
+/** Every run, newest first. A read; costs nothing and holds nothing, so a run started from
+ *  a terminal appears here exactly as one started from this app does. */
+export async function getRuns(): Promise<RunSummary[]> {
+  const body = (await request('/pipeline/runs', NO_CACHE)) as { runs: RunSummary[] }
+  return body.runs
+}
+
+/** One run, with its console tail and its artefacts. This is the poll. */
+export async function getRun(name: string): Promise<RunDetail> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}`, NO_CACHE)) as RunDetail
+}
+
+/**
+ * A free step: `join`, `emit` or `reconcile`. Runs inside the request and returns its own
+ * stdout.
+ *
+ * A NON-ZERO EXIT IS NOT A THROW. The promise resolves with `ok: false` and the console
+ * attached, because `emit` refusing while a price is unanswered is the most useful thing
+ * that command does and the screen needs the sentence naming the SKU, not an error class.
+ * Only a refusal the ROUTE made — a bad rule, a file that is not a CSV, a run that does not
+ * exist — arrives as a `ServerError`.
+ *
+ * `exports` absent means re-use whatever this run was last joined against, which is what
+ * keeps `join` free and re-runnable from a screen: change the rule, clear a review, press
+ * it again. An empty array is refused rather than read as that, because a selection that
+ * failed to send must not silently become "use the old file".
+ */
+export async function runStep(
+  name: string,
+  step: 'join' | 'emit' | 'reconcile',
+  options: {
+    exports?: CsvUpload[]
+    stagedExport?: CsvUpload
+    rule?: string
+    basis?: 'market' | 'low'
+    reviewBelowConfidence?: 'none' | 'low' | 'medium'
+    dryRun?: boolean
+    bypass?: boolean
+  } = {},
+): Promise<RunStepResult> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      exports: options.exports,
+      staged_export: options.stagedExport,
+      rule: options.rule,
+      basis: options.basis,
+      review_below_confidence: options.reviewBelowConfidence,
+      dry_run: options.dryRun,
+      bypass: options.bypass,
+    }),
+  })) as RunStepResult
+}
+
+/**
+ * Where a run artefact can be downloaded. The import CSVs, the report, `decisions.json`.
+ *
+ * A URL rather than a fetch, because the browser's own download is what the operator wants
+ * — this is the file that goes into TCGplayer's Import to Staged, and a string in a text
+ * area is not that. `docs/GATES.md` names the gap this closes: emit's import files existed
+ * only as filenames in terminal output the owner never saw.
+ */
+export function runFileUrl(name: string, file: string): string {
+  return `${base}/pipeline/runs/${encodeURIComponent(name)}/file?name=${encodeURIComponent(file)}`
+}
+
+/**
+ * D9's sub-threshold answer, which gates `emit` and nothing else.
+ *
+ * Replaces the whole document, because it is one file the operator is editing and a merge
+ * would need this route to understand a schema it deliberately does not own — `emit` owns
+ * what a disposition MEANS and refuses on it. Read the current file through `runFileUrl`
+ * first; that is the same read-modify-write the run report tells a terminal user to do.
+ */
+export async function putDecisions(
+  name: string,
+  decisions: Record<string, unknown>,
+): Promise<{ ok: boolean; run: string; written: string }> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/decisions`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decisions }),
+  })) as { ok: boolean; run: string; written: string }
 }

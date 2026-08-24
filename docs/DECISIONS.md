@@ -1397,6 +1397,87 @@ shape `rarity_fingerprint` already established — a sibling hash kept deliberat
 
 ---
 
+## D33 — The pipeline is reachable from a screen, and one route can spend
+
+**BUILT 2026-08-24, and it is the largest instance of `CLAUDE.md`'s route-is-not-a-feature rule
+this repo has had.** The owner: *"how do i get api calls/pushing from our localhost server so
+that i can actually push runs at box/section/whatever-level i want, get data back, and manage
+CSVs?"* — and then, after a session that designed the screen, interviewed them about it and drew
+a mockup without building any of it: *"i also don't see any of the UI you stated you'd be
+building that let me do all of this within the app???"* Both were correct. `./pkmnscan identify |
+join | emit | reconcile` has existed since build-order step 4, has been through a 53-card run and
+a 544-card run, and could be reached only by somebody typing at a terminal.
+
+**`server/pipeline_routes.py` is its own module because it is the one part of the server that
+can cause money to be spent.** `server/capture_server.py`'s header promised *"this process never
+spends money: it holds no API key and makes no outbound call"*. Both halves stay literally true —
+nothing there reads a key or opens a socket to Anthropic — and the sentence was written to mean
+more than its letter, so it is rewritten rather than leaned on. A promise that quietly narrows to
+a technicality is the drift D16 exists to catch.
+
+**What replaces it, because a guarantee deleted and not replaced is a regression:**
+
+- **One route spends and is named for it** — `POST /pipeline/identify`. It refuses without an
+  explicit `confirm` field, and it refuses a second run over a capture directory a live run is
+  already reading: a double-click is the realistic accident, and two live batches over one box
+  is two invoices for one answer.
+- **The preflight is free, is a separate route, and creates no run directory at all** —
+  `identify --dry-run` returns before `runs.create`. It is what the screen must show first.
+- **Everything else is free and re-runnable**, which is the property D1 gave the two-phase split.
+
+**THE MONEY STEP SPAWNS AND IS NEVER AWAITED; EVERY OTHER STEP RUNS IN THE REQUEST.** Not a
+preference — the shape of the work. A Batch takes minutes to hours and no HTTP request may be
+held open for that; `join`, `emit` and `reconcile` are local arithmetic over a parsed CSV. The
+child is detached and logs into the run directory, so **a run outlives the server that started
+it**: the Mac sleeps, `make server` restarts, a tab closes, and the poll still reads the run
+directory. `cli/runs.py` already makes a run an immutable input rather than state, and this
+leans on that entirely — nothing is held between requests.
+
+**Scope is a box, or a selection inside one.** A subset becomes a directory of symlinks built
+**outside `captures/cards/`**, which is load-bearing: `identify.sidecar.scan` walks its root
+recursively, so a scope directory under it would be walked by the next run pointed at the box
+above and every card submitted twice. Gitignored under the opsec rule as well as the derived one
+— a bearer instrument reached through a symlink is still a bearer instrument.
+
+**Exports are uploaded, never named by path.** A screen cannot know what is on the server's disk,
+and a route that opened any absolute path a request named would be a file-read primitive guarded
+by an origin header. It also leaves the run holding the exact bytes it was joined against, which
+the manifest could only describe by hash.
+
+**THE MONEY GATE IS TWO STEPS AND NO TYPING** (the owner's ruling). Check cost, read the count and
+the estimate the command itself printed, then press the confirm that appears beneath them. The
+confirm **does not exist** before the preflight has answered — absent, not disabled, because a
+disabled button is one attribute away from pressable and that attribute is what a later refactor
+drops without noticing. `docs/DESIGN.md` permits a gate on a genuinely destructive action; the
+cheapest honest gate here is making the number impossible not to have seen.
+
+**The panel sits on `#/inventory` and is folded by default.** D31 collapsed three screens into
+that route on the finding that they were separate instances of one thing, and a run is not a
+different thing again: it is something done to the box being walked, or to the cards just ticked
+in it. A route of its own would re-implement the box strip, the search and the mass-select, and
+would then be free to disagree with them about what is selected. It is folded for `BoxOps`'
+measured reason — it is ~250px, it is reached once a box, and the question this screen answers is
+*where is this card*. A live run opens it on its own; that is the only thing that does.
+
+**Every command's stdout is shown verbatim and nothing summarises one**, which is
+`docs/DESIGN.md`'s copy rule for the owner's screens. The one thing the panel adds on top is the
+download link for a file the console can only name — the gap `docs/GATES.md` records as what
+Gate B did not close: *"emit's import files existed only as filenames in terminal output the
+owner never sees when someone else drives the commands."*
+
+**`decisions.json` is edited as text, not as a form.** The route says in its own comment that it
+does not validate what a disposition MEANS — `emit` owns that refusal — and a typed form would
+encode the schema a second time in TypeScript, where nothing audits it against
+`pipeline/decisions.py`. The file already explains itself: `join` writes a `_note` block naming
+every field and what `emit` will refuse without.
+
+**`--force-resubmit` is deliberately not offered to a screen.** It is the one identify flag whose
+purpose is to pay again for an answer already bought, and D32's known cache gap means a re-crop
+cannot be distinguished from a re-run by the cache. It stays a terminal flag until the crop is
+part of the cache identity.
+
+---
+
 ## Deferred — do not build until all gates pass
 
 - PKMNVAULT and anything Supabase/eBay related, **except** the PKMNCODES track, whose

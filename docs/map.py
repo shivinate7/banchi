@@ -978,6 +978,26 @@ COMPONENTS = [
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
                                       "governed_by": ["D5", "D7", "D31"]},
+            "src/RunPanel.tsx": {"does": "THE PIPELINE, ON A SCREEN. The four commands of batch "
+                                         "script v2 in the detail column of #/inventory, scoped to "
+                                         "the box the walk is in or the cards ticked in it. A two-step "
+                                         "money gate with no typing: Check cost prints the command's "
+                                         "own preflight, and only then does the one solid accent fill "
+                                         "on the panel appear. Join, emit and reconcile beside it, "
+                                         "each marked free and re-runnable; every command's stdout "
+                                         "shown verbatim; the import CSVs downloadable, which is the "
+                                         "gap docs/GATES.md names as what Gate B did not close.",
+                                 # D1 is why one step spawns and three answer in the request. D9 is
+                                 # the decisions document this panel edits as text rather than as a
+                                 # form. D3 is the finish-claim bypass its join control offers. D31
+                                 # is why it is a panel on #/inventory and not a seventh route. D32
+                                 # is the crop and the max-edge beside it.
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32"]},
+            "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
+                                         "on every number, and exactly one solid accent fill: the "
+                                         "button that spends, drawn only once the estimate is on "
+                                         "screen above it.",
+                                 "governed_by": ["D31"]},
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
@@ -1045,6 +1065,26 @@ COMPONENTS = [
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
+            },
+            "tests/run-panel.spec.ts": {
+                "does": "the pipeline panel in a browser: that all four commands are reachable "
+                        "from #/inventory at all, and that the money gate holds. The strongest "
+                        "assertion in it is NEGATIVE — before the free preflight has answered, "
+                        "the control that spends does not EXIST, absent rather than disabled. "
+                        "The spend route is intercepted and its body read; no real request is "
+                        "ever made, which matters more here than on any other screen because "
+                        "one of these routes costs money.",
+                # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
+                # bypass the join control offers; D9 is the pricing answer that gates emit;
+                # D31 is why this is a panel on #/inventory rather than a seventh route.
+                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32"],
+                "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
+                        "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
+                        "since step 4 and have been through a 53-card run and a 544-card run; "
+                        "until 2026-08-24 they could be reached only by typing at a terminal, "
+                        "which docs/GATES.md names as what Gate B did not close. Like its "
+                        "siblings it is not a harness test and must not become one: it starts "
+                        "a browser, and make design-check is what runs it.",
             },
             "tests/inventory.spec.ts": {
                 "does": "the owner's inventory screen in a browser: the unified box walk, the "

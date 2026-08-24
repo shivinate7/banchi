@@ -360,6 +360,16 @@ async function open(page: Page): Promise<Wire[]> {
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
   })
 
+  /* THE RUN PANEL'S ONE READ ON MOUNT, stubbed like everything else and for the reason at the
+     top of this file: nothing here may touch the real store. It is only a read — but an
+     unstubbed read is a request to whatever is listening on port 8000, which in this repo is
+     the owner's actual capture server over their actual 767-card inventory. It also makes the
+     suite depend on `make server` being up, which no other test here does. Empty, because the
+     run list is `app/tests/run-panel.spec.ts`'s subject and not this file's. */
+  await page.route(/\/pipeline\/runs$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' })
+  })
+
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   /* THE SECTION HEADERS AND NOT A CARD ROW, because the walk arrives fully collapsed since

@@ -19,6 +19,7 @@ import {
   undoSale,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
+import { RunPanel } from './RunPanel'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PullConfirm } from './PullConfirm'
@@ -316,6 +317,16 @@ export function Inventory() {
    * file used to fetch `GET /boxes` for itself, which was one route read twice on one screen —
    * harmless and still two places for the same answer to arrive at different times. */
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+
+  /* WHAT A RUN WOULD BE SCOPED TO — the box the walk is in, and the cards ticked inside it.
+   * Reported by `BoxBrowse` on the same terms as the selection and the registry, and for the
+   * same reason: the walk owns the state, this screen owns the write. It is the identical
+   * `pickedIndices` a bulk claim correction reaches, so a run and a claim can never disagree
+   * about what "the selection" means — which they could if this screen derived its own. */
+  const [runScope, setRunScope] = useState<{ box: number | null; indices: readonly number[] }>({
+    box: null,
+    indices: [],
+  })
   const layouts = useMemo(
     () => (boxRecords.length === 0 ? NO_LAYOUTS : layoutsOf(boxRecords)),
     [boxRecords],
@@ -648,7 +659,20 @@ export function Inventory() {
         detail={detail}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
+        onScope={setRunScope}
         reloadToken={reloads}
+        /* THE PIPELINE, BESIDE THE BOX IT RUNS OVER. D31 collapsed three screens into this one
+           on the finding that they were separate instances of one thing, and a run is not a
+           different thing again — it is something you do to the box you are looking at, or to
+           the cards you have just ticked in it. A route of its own would have to re-implement
+           the box strip, the search and the mass-select, and would then be free to disagree
+           with them about what is selected.
+
+           `boxPanel` AND NOT `detail`, and the difference is not cosmetic: `detail` is drawn
+           only when a card is selected. This went there first and vanished whenever the walk
+           had nothing picked, which made starting a run require choosing a card in the box —
+           a step with no reason behind it that a person could have worked out. */
+        boxPanel={<RunPanel scope={runScope} />}
       />
 
       {pending === null ? null : (

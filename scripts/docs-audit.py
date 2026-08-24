@@ -325,6 +325,24 @@ _TRAILING = ".,;:)]}—"
 # Placeholders are documentation, not paths: `t1-<UTC date>.json`, `GET /photo/<box>/…`.
 _PLACEHOLDER = re.compile(r"[<>*?{}]")
 
+# A ROUTE IS NOT A PATH, and until 2026-08-24 nothing here knew the difference. Most routes
+# in these docs got away with it by accident: `/queues` is one segment and resolves to
+# nothing, and `/inventory/<box>/<index>/sold` is broken up by the placeholder rule above. A
+# two-segment route whose first segment happens to name a top-level package has neither
+# escape — `POST /pipeline/identify` was read as the file `pipeline/identify`, which will
+# never exist, and blocked a commit for describing a route correctly.
+#
+# Removed by the HTTP METHOD in front of it rather than by the shape of the path, because the
+# shape is exactly what cannot be told apart: `pipeline/identify` is a plausible module and
+# `/pipeline/identify` is a real route, and only the `POST` says which one the sentence means.
+# That also keeps the rule narrow — a path mentioned in prose with no method before it is
+# still checked, which is every path reference this check exists for.
+#
+# The allowlist was the other option and is the wrong tool: D16 makes it self-cleaning by
+# FAILING when an entry comes true, and `pipeline/identify` is a file that can never come
+# true, so the entry would sit there forever being no evidence of anything.
+_ROUTE = re.compile(r"\b(?:GET|POST|PUT|DELETE|PATCH|HEAD)\s+(/[A-Za-z0-9_./<>-]*)")
+
 
 # Suffixes that mean "this is a file". Anything else after the final dot is read as an
 # attribute — `pipeline/variant.resolve` names a function, not a file, and the docs use
@@ -339,6 +357,10 @@ KNOWN_SUFFIXES = {
 def path_candidates(line: str) -> List[str]:
     """Extract path-shaped tokens. Deliberately conservative — see the note above."""
     out: List[str] = []
+    # Routes first: a method in front of a slash-path means the sentence is about an HTTP
+    # route, and this script has nothing to say about whether one exists. The path check
+    # cannot tell a route from a module by shape alone — see `_ROUTE`.
+    line = _ROUTE.sub(" ", line)
     if _PLACEHOLDER.search(line):
         line = _PLACEHOLDER.sub(" ", line)
     for match in _CANDIDATE_RE.finditer(line):
