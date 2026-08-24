@@ -109,8 +109,9 @@ A frame that never reflows, at any subject, ever:
   one row carrying its number, name, fill bar and a **stage bead** (see §1.2). Beneath the
   boxes, the run list and the queue depth as two more rows of the same kind. Nothing else.
 - **STAGE (fluid, full height)** — the largest thing on screen at all times, and the only
-  thing that changes. Camera preview while shooting; the card photograph while answering; the
-  box walk while browsing; a run's console while it runs.
+  thing that changes. The live/last-capture pair — coequal, per `CaptureScreen.css`'s own
+  rule — while shooting; the card photograph while answering; the box walk while browsing;
+  a run's console while it runs.
 - **DOCK (340px, fixed)** — the capture screen's collapsed key-row pattern, generalised. That
   pattern is the best thing in the current app and it is used on exactly one screen: a 32px
   row carrying `key · LABEL · right-aligned value`, which opens in place. In the Rig it
@@ -226,6 +227,30 @@ ticker — drawn to the real 1440x900 aspect with the zone budget as arithmetic.
 artifact rather than a file in this repo, which is the one thing about this entry that is not
 self-contained; `docs/DESIGN.md`'s screenshot loop is the standing rule that a design needs a
 rendered reference, and this is that reference.
+
+**THE FIRST DRAWING OF SHOOTING WAS WRONG, AND THE OWNER CAUGHT IT ON SIGHT.** *"I don't see
+how any of these work given the current capture setup of needing two images (one of live
+camera feed, one of capture) while you've just done a one large square box."* Checked against
+`CaptureScreen.tsx` and `CaptureScreen.css`: the real stage is `grid-template-columns: 1fr
+1fr`, two panels captioned "Live" and "Last capture," same 16:9 aspect, same size —
+`CaptureScreen.css`'s own comment states the rule directly: *"Both frames share one aspect and
+one size so the photo can be compared against the live view without either being the small
+one."* The first drawing gave Live the whole stage and Last Capture a 16%-height strip with two
+placeholder rows, which is the exact thing that comment forbids.
+
+It was not only a proportion error. "Last capture" is not a thumbnail — it renders the bytes
+the *server* stored, deliberately not a local preview, "which is the one failure this screen
+exists to make loud," and it carries the position label, the game/set-hint/finish claims, flags
+(`new box`, `already recorded`), and a per-card note field with its own `<form>` so Enter saves
+the note rather than firing the shutter. None of that survived the 16% strip. The corrected
+wireframe draws both panels at true equal size and puts the note and metadata back on the
+Last Capture panel rather than in the claims dock — matching the real screen's own reasoning,
+which is that a note is per-card state tied to the photo it is about, not a session setting set
+once and left alone.
+
+**Grepped for the same failure shape elsewhere first**: no other screen in `app/src/` pairs two
+coequal panels (`grep -n "grid-template-columns: 1fr 1fr" app/src/*.css` returns exactly this
+one rule), so this was Shooting's defect alone, not a pattern to hunt down mode by mode.
 
 ---
 
