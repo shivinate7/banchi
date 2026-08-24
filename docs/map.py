@@ -627,7 +627,31 @@ COMPONENTS = [
                 # D10 earned a second job with the history lines: index reuse after an undo is
                 # what decides that a removal must be logged at all, since without the line
                 # the log reads `captured 3/2` twice over two physical cards.
-                "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D11", "D13", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30"],
+                # D1, D9 and D16 arrived with the pipeline seam this file dispatches to:
+                # D1's two-phase split is why one route spawns and the rest answer in the
+                # request, D9's decisions file is what the PUT writes, and D16 is cited in
+                # the header's own argument for rewriting a promise rather than leaning on
+                # its letter.
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30"],
+                "tested_by": ["T7"],
+            },
+            "pipeline_routes.py": {
+                "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
+                        "POST /pipeline/identify (THE ONE THAT SPENDS — spawns a detached "
+                        "child and returns the run name), GET /pipeline/runs and "
+                        "/pipeline/runs/<name> (read the run directory, hold nothing), "
+                        "GET .../file (the import CSVs and the report, matched by shape and "
+                        "then by membership), POST .../<join|emit|reconcile> (free, run "
+                        "inside the request, stdout returned verbatim) and PUT "
+                        ".../decisions (D9's sub-threshold answer, which gates emit alone). "
+                        "Its own module because it is the one part of this server that can "
+                        "cost money: everything in capture_server.py still holds no key, "
+                        "opens no socket and starts no child.",
+                # D1 is the two-phase split, which is why join/emit/reconcile can answer in
+                # the request and identify cannot. D9 is the decisions gate. D13 is one truth
+                # on one Mac, which is what a detached child outliving this process rests on.
+                # D32 is why --force-resubmit is deliberately not offered to a screen.
+                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D25", "D32"],
                 "tested_by": ["T7"],
             },
         },

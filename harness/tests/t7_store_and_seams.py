@@ -174,6 +174,7 @@ import sys
 import tempfile
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
@@ -7625,8 +7626,310 @@ def check_boxes_and_listings(checks: Checks) -> None:
 # ------------------------------------------------------------------------------------ run
 
 
+def check_pipeline_routes(checks: Checks) -> None:
+    """The pipeline seam — and every refusal that stands between a screen and an invoice.
+
+    THE ONE ROUTE IN THIS SERVER THAT CAN SPEND MONEY IS `POST /pipeline/identify`, and the
+    cases below never let it succeed. That is deliberate rather than a gap: a test that
+    proved the happy path would have to submit a real Batch, and `harness/run.py` runs at
+    the end of every turn. What IS provable without spending is the whole guard rail — that
+    it refuses without an explicit confirm, that it refuses a scope that names nothing, and
+    that the free preflight beside it computes the same numbers while creating no run — and
+    that is what this section holds.
+
+    Everything else here is free by construction: reading a run reads a directory, and
+    `join --dry-run` walks the ladder and writes nothing. Both are exercised over real
+    sockets against a real store in a temporary home.
+    """
+    with isolated_home() as home:
+        # A capture directory with two real photographs, so a scope can be built from it and
+        # `sidecar.scan` has something to find. The bytes are the same tiny JPEG every other
+        # section captures with — nothing here reads a card out of them.
+        box_dir = home / "captures" / "cards" / "box3"
+        box_dir.mkdir(parents=True)
+        for index in (1, 2):
+            (box_dir / f"{index:04d}.jpg").write_bytes(JPEG)
+            (box_dir / f"{index:04d}.json").write_text(
+                json.dumps({"box": 3, "index": index, "game": "pokemon", "variant": "normal"})
+            )
+
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            # ---------------------------------------------------------- the money gate
+            status, body, _ = request(
+                port, "POST", "/pipeline/identify", payload={"box": 3}
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (400, "confirm_required"),
+                "the spending route refuses a well-formed request that did not say confirm "
+                "— the gate is a field a stray request does not carry, not a typed string, "
+                "because the owner ruled against typing on this control",
+            )
+            status, body, _ = request(
+                port, "POST", "/pipeline/identify", payload={"confirm": True}
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (400, "box_required"),
+                "and confirm alone buys nothing: a run is always scoped to one box, so a "
+                "confirm with no scope is refused rather than read as every box",
+            )
+            checks.equal(
+                sorted(p.name for p in (home / "runs").iterdir())
+                if (home / "runs").is_dir()
+                else [],
+                [],
+                "and NEITHER refusal created a run directory — a refused request that left "
+                "a run behind would put an empty row on the screen for every mis-tap",
+            )
+
+            # ------------------------------------------------------------- scope refusals
+            for payload, expected_status, expected, label in (
+                (
+                    {"box": 3, "indices": []},
+                    400,
+                    "indices_invalid",
+                    "an EMPTY selection is refused rather than read as the whole box — the "
+                    "same refusal PUT /inventory/<box> makes, and for the harder reason "
+                    "here: a selection that failed to send would become a run over 544 cards",
+                ),
+                (
+                    {"box": 3, "indices": [1, "two"]},
+                    400,
+                    "indices_invalid",
+                    "one bad member refuses the whole selection rather than being dropped "
+                    "from it, which is the rule the finish claim already follows",
+                ),
+                (
+                    {"box": 404},
+                    404,
+                    "box_has_no_captures",
+                    "a box nothing was photographed into is refused by name, so a mistyped "
+                    "box number cannot silently identify nothing and report success",
+                ),
+                (
+                    {"box": 3, "indices": [90001]},
+                    404,
+                    "no_photos_in_scope",
+                    "and a selection whose cards have no photographs on disk refuses too — "
+                    "the scope directory is torn down rather than left empty behind it",
+                ),
+                (
+                    {"box": 3, "max_edge": 99},
+                    400,
+                    "max_edge_invalid",
+                    "max_edge is bounded: the flag reaches the child's argv, and a route "
+                    "that passed any integer through would be an argv a request controls",
+                ),
+                (
+                    {"box": 3, "retry_budget": 9},
+                    400,
+                    "retry_budget_invalid",
+                    "as is retry_budget, which multiplies what a run submits",
+                ),
+            ):
+                status, body, _ = request(
+                    port, "POST", "/pipeline/preflight", payload=payload
+                )
+                checks.equal(
+                    (status, error_code(body)), (expected_status, expected), label
+                )
+
+            checks.equal(
+                sorted(entry.name for entry in (home / ".scopes").iterdir())
+                if (home / ".scopes").is_dir()
+                else [],
+                [],
+                "no scope directory survives a refusal, and none is under captures/cards/ "
+                "in the first place — a directory of symlinks there would be walked by the "
+                "next run pointed at the box above it and every card submitted twice",
+            )
+
+            # -------------------------------------------------- reading runs, and refusals
+            status, body, _ = request(port, "GET", "/pipeline/runs")
+            checks.equal(
+                (status, json.loads(body)["runs"]),
+                (200, []),
+                "the run list answers an empty store with an empty list rather than a 404 "
+                "— a screen that has done nothing yet is not an error",
+            )
+            status, body, _ = request(port, "GET", "/pipeline/runs/nope-01")
+            checks.equal(
+                (status, error_code(body)),
+                (404, "no_such_run"),
+                "a run that does not exist answers in its own code",
+            )
+            status, body, _ = request(port, "GET", "/pipeline/runs/..")
+            checks.equal(
+                status,
+                404,
+                "and a name that is not a run name never reaches the filesystem at all — "
+                "the route pattern admits no separator and no dot-dot",
+            )
+
+            # ------------------------------------------------- a real run directory, read
+            made = runs.create("box3")
+            made.set(capture_dir=str(box_dir), scope={"box": 3, "whole_box": True})
+            (made.directory / "console.log").write_text("$ pkmnscan identify\nphotographs 2\n")
+            (made.directory / "import-listed.csv").write_text("TCGplayer Id,Add to Quantity\n1,2\n")
+
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")
+            payload = json.loads(body)
+            checks.equal(
+                (status, payload["phase"], payload["live"]),
+                (200, "ready", False),
+                "a run with a manifest and no batch ids reads as `ready` and not live — the "
+                "phase is DERIVED from the directory on every read, because cli/runs.py "
+                "makes a run an immutable input and a phase held anywhere else would be a "
+                "second answer to a question the files already answer",
+            )
+            checks.ok(
+                "photographs 2" in payload["console"],
+                "the console tail is served from the child's own log, so a screen polling "
+                "this route reads exactly what the command printed",
+            )
+            checks.equal(
+                sorted(row["name"] for row in payload["files"]),
+                ["console.log", "import-listed.csv", "manifest.json"],
+                "artefacts are listed off the DIRECTORY rather than off a table of names "
+                "here — runs.import_listed_name makes the import files per-game, and a "
+                "hard-coded list would stop offering them for every game added later",
+            )
+            checks.equal(
+                [row["is_import"] for row in payload["files"] if row["name"].endswith(".csv")],
+                [True],
+                "and the import file is flagged as one, which is what lets the screen offer "
+                "the download the owner actually came for",
+            )
+
+            # ----------------------------------------------------------- the file download
+            status, body, headers = request(
+                port,
+                "GET",
+                f"/pipeline/runs/{made.directory.name}/file?name=import-listed.csv",
+            )
+            checks.equal(
+                (status, headers.get("Content-Type")),
+                (200, "text/csv"),
+                "an import file downloads as CSV, which is the whole point of the route: "
+                "before it, an emitted file existed only as a filename in terminal output "
+                "the owner never saw when somebody else was driving the commands",
+            )
+            for name, expected in (
+                ("../../etc/passwd", "file_name_invalid"),
+                ("no-such-file.csv", "no_such_file"),
+            ):
+                status, body, _ = request(
+                    port,
+                    "GET",
+                    f"/pipeline/runs/{made.directory.name}/file?name="
+                    + urllib.parse.quote(name),
+                )
+                checks.equal(
+                    error_code(body),
+                    expected,
+                    f"and {name!r} is refused as {expected} — matched by shape and THEN by "
+                    f"membership of what this run lists, so a pattern loosened later still "
+                    f"cannot reach outside the run directory",
+                )
+
+            # ----------------------------------------------------------- the free steps
+            status, body, _ = request(
+                port,
+                "POST",
+                f"/pipeline/runs/{made.directory.name}/identify",
+                payload={},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (404, "no_such_step"),
+                "identify is NOT reachable as a step on a run — it costs money, so it has "
+                "its own route and its own confirm rather than hiding among three free ones",
+            )
+            for payload, expected, label in (
+                (
+                    {"rule": "undercut:oops"},
+                    "rule_invalid",
+                    "a pricing rule is validated before it reaches argv",
+                ),
+                (
+                    {"basis": "vibes"},
+                    "basis_invalid",
+                    "as is the basis",
+                ),
+                (
+                    {"exports": []},
+                    "exports_invalid",
+                    "an empty exports array is refused rather than read as `re-use what the "
+                    "manifest recorded` — absent means that, and the two must not collapse",
+                ),
+                (
+                    {"exports": [{"name": "x.csv", "content": "not a spreadsheet"}]},
+                    "export_not_csv",
+                    "and a file with no comma on its first line is refused HERE rather than "
+                    "several seconds later by an empty-catalog message about product lines",
+                ),
+            ):
+                status, body, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{made.directory.name}/join",
+                    payload=payload,
+                )
+                checks.equal((status, error_code(body)), (400, expected), label)
+
+            # ------------------------------------------------------------- the decisions PUT
+            status, body, _ = request(
+                port,
+                "PUT",
+                f"/pipeline/runs/{made.directory.name}/decisions",
+                payload={"decisions": {"rule": "match"}},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (409, "decisions_not_written"),
+                "the pricing answer refuses a run that has not been joined — `join` is what "
+                "writes decisions.json with every SKU that needs an answer already in it, "
+                "and a route that created the file would invent the question as well",
+            )
+            (made.directory / runs.DECISIONS).write_text('{"rule": "match"}\n')
+            status, body, _ = request(
+                port,
+                "PUT",
+                f"/pipeline/runs/{made.directory.name}/decisions",
+                payload={"decisions": {"rule": "undercut:5", "sub_threshold": "floor"}},
+            )
+            checks.equal(
+                (status, json.loads((made.directory / runs.DECISIONS).read_text())),
+                (200, {"rule": "undercut:5", "sub_threshold": "floor"}),
+                "and once it exists the route replaces it wholesale — one document the "
+                "operator is editing, and a merge would need this route to understand a "
+                "schema it deliberately does not own",
+            )
+            status, body, _ = request(
+                port,
+                "PUT",
+                f"/pipeline/runs/{made.directory.name}/decisions",
+                payload={"decisions": "floor"},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (400, "decisions_invalid"),
+                "a non-object answer is refused rather than written — emit owns what a "
+                "disposition MEANS, but this route still owns what a document IS",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+
+
 def run() -> Result:
     checks = Checks()
+    check_pipeline_routes(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)

@@ -28,6 +28,14 @@ harness/.cache/
 runs/
 inventory/
 
+# Scope directories: symlinks to a SUBSET of a box, built when the app starts a run over a
+# selection rather than a whole box (`server/pipeline_routes.py`). Derived and swept after
+# 48 hours, so they are `runs/`-shaped rather than `inventory/`-shaped — but they are listed
+# under the opsec rule as well as the derived one, because a link inside one can point at a
+# code-card photograph, and a bearer instrument reached through a symlink is still a bearer
+# instrument.
+.scopes/
+
 # Playwright's own output from `make design-check`. Derived and per-run. The artefact worth
 # keeping is the spec, not the record of one execution of it — same rule as harness/.cache/
 # above. app/package-lock.json is deliberately NOT here: a pinned Playwright version that

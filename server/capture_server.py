@@ -26,6 +26,13 @@
     GET    /boxes                          every box: its dividers, its fill, its capacity
     POST   /boxes                          register a box before any card goes into it
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
+    POST   /pipeline/preflight             what a run would cost. FREE, creates no run
+    POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
+    GET    /pipeline/runs                  every run, newest first, with its phase
+    GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
+    GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
+    POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
+    PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
 undo, and it lives here rather than in the app because deleting a record, a sidecar, a
@@ -77,8 +84,32 @@ no run has produced, so wherever `docs/DESIGN.md`
 does not settle a behaviour the route says so in a comment naming what would settle it,
 rather than picking the plausible-looking option and leaving no trace.
 
-Still absent and still deliberate: no identification, no pricing, no UI. This process never
-spends money: it holds no API key and makes no outbound call.
+THE LAST SEVEN ARE THE PIPELINE SEAM, AND THEY CHANGE WHAT THIS FILE IS. Its header said
+for months: *"Still absent and still deliberate: no identification, no pricing, no UI. This
+process never spends money: it holds no API key and makes no outbound call."* Both halves of
+the last sentence are still literally true — nothing here reads a key and nothing here opens
+a socket to Anthropic — but it was written to mean something stronger than its letter, and
+`POST /pipeline/identify` starts a child that spends. Rewriting the sentence rather than
+leaning on its letter is the point: a promise that quietly narrows to a technicality is the
+drift D16 exists to catch.
+
+The owner asked for it in as many words — *"how do i get api calls/pushing from our
+localhost server so that i can actually push runs at box/section/whatever-level i want, get
+data back, and manage CSVs?"* — and until those routes existed the answer was that they
+could not. Every run this project has done was driven by an agent typing commands, which
+made the pipeline the one capability in the product with no way in, and `CLAUDE.md`'s
+route-is-not-a-feature rule pointed straight at it.
+
+What replaces the promise, since a guarantee deleted and not replaced is a regression: ONE
+route spends and is named for it; it refuses without an explicit `confirm`; it refuses a
+second run over a capture directory a live run is already reading; and the preflight beside
+it is free, creates no run directory at all, and is what the screen shows first. The rest of
+the seam — every read, and `join`/`emit`/`reconcile` — is free and re-runnable, which is the
+property D1 gave the two-phase split. `server/pipeline_routes.py` carries the whole argument
+and every handler; this file dispatches to it and translates one exception type.
+
+Still absent and still deliberate: no UI, no pricing rule, no identification logic. This
+file computes nothing about a card that `pipeline/` does not already decide.
 
 READS ARE OPEN AND WRITES ARE ORIGIN-CHECKED, as of this change. `Access-Control-Allow-Origin: *`
 on every route meant any page in any other tab of the owner's browser could send
@@ -165,6 +196,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline import games, join  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
+
+# The pipeline seam, in its own module because it is the one part of this server that can
+# cause money to be spent — see its header for what replaced the promise this file's own
+# header used to make. Imported here rather than inlined so that the boundary is a file
+# boundary: everything above this line still holds no key, opens no socket, and starts no
+# child process.
+# `from server import ...` and not a bare `import pipeline_routes`: this file is run BOTH
+# ways — by path as `make server` does, where sys.path[0] is server/, and as a package
+# module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
+# under both, and the sys.path line above is what makes it work under the first.
+from server import pipeline_routes  # noqa: E402
 
 HOST = "0.0.0.0"
 PORT = 8000
@@ -293,6 +335,14 @@ _REMOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/remove$")
 # handler that would refuse it in `box_invalid` — the same trade the four patterns above
 # already make, and the reason `_require_box` still exists for the body of POST /boxes.
 _BOXES_ITEM_RE = re.compile(r"^/boxes/(\d+)$")
+
+# The pipeline routes. A run name is `<date>-<slug>-<nn>` and nothing else builds one, so
+# the character class here is the same one `pipeline_routes._open_run` validates against —
+# a path that reaches the handler is already known not to hold a separator.
+_RUN_ITEM_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)$")
+_RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
+_RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
+_RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
 # ------------------------------------------------------- the capture claims, on the wire
 #
@@ -5505,6 +5555,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             handler()
         except BadRequest as exc:
             self._fail(exc.status, exc.code, str(exc))
+        except pipeline_routes.PipelineRefusal as exc:
+            # The pipeline module raises its own exception type rather than this file's,
+            # because this file imports it and the reverse import would be a cycle. One
+            # `except` clause is the whole of that seam; every refusal it carries already
+            # holds the status and the code it wants to be answered with.
+            self._fail(exc.status, exc.code, str(exc))
         except files.LockTimeout:
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
@@ -5597,6 +5653,24 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 blob = do_photo(int(match.group(1)), int(match.group(2)))
                 return self._send(HTTPStatus.OK, blob, "image/jpeg")
+            # The pipeline reads. All three are free and hold nothing: each one opens the
+            # run directory, reads it, and answers — which is what lets a screen poll a run
+            # this process did not start and would not otherwise know about.
+            if path == "/pipeline/runs":
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
+            match = _RUN_FILE_RE.match(path)
+            if match:
+                # The download. Matched BEFORE the run-item pattern, which would otherwise
+                # never see it (the item regex is anchored and admits no slash) — ordered
+                # this way for the reader, so the more specific path is the one above.
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob, kind = pipeline_routes.do_pipeline_file(match.group(1), wanted[0])
+                return self._send(HTTPStatus.OK, blob, kind)
+            match = _RUN_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_run(match.group(1))
+                )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No GET route {path}.")
 
         self._dispatch(run)
@@ -5658,6 +5732,27 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
+            # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
+            # THAT CAN COST MONEY. It is named for it, it refuses without an explicit
+            # `confirm`, and it refuses a second run over a capture directory a live run is
+            # already reading — see `server/pipeline_routes.py`'s header for what that
+            # replaces. The preflight beside it is free and creates no run at all, which is
+            # what the screen must show before it may ask.
+            if path == "/pipeline/preflight":
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())
+                )
+            if path == "/pipeline/identify":
+                status, body = pipeline_routes.do_pipeline_identify(self._body())
+                return self._json(status, body)
+            match = _RUN_STEP_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_step(
+                        match.group(1), match.group(2), self._body()
+                    ),
+                )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No POST route {path}.")
 
         self._dispatch(run)
@@ -5688,6 +5783,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, do_put_box(int(match.group(1)), self._body())
+                )
+            # D9's sub-threshold answer, which gates `emit` and nothing else. Matched
+            # before nothing — `/pipeline/runs/<name>/decisions` shares no prefix with the
+            # two inventory PUTs — and kept a PUT because it replaces one whole document.
+            match = _RUN_DECISIONS_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_decisions(match.group(1), self._body()),
                 )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No PUT route {path}.")
 
