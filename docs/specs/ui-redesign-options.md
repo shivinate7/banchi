@@ -420,6 +420,68 @@ benefit without reopening D31. That is a recommendation, not a decision.
 
 ---
 
+## 4.5 THE EVIDENCE PASS — B AND C ARE REFUTED, A SURVIVES AS A SKELETON
+
+**Run 2026-08-24 at the owner's instruction**, after this file's §4 recommended A on
+reasoning alone. Twelve agents, eight domains of prior art, live web research, then an
+adversarial pass that tried to refute each proposal. Full record and every source in
+`docs/specs/ui-research.md`. The three verdicts:
+
+- **B, The Line — REFUTED, and not on taste.** Jenkins Blue Ocean was the purest stage-first
+  UX ever shipped and is deprecated as of July 2026; Dagster beat Airflow by moving *further*
+  toward objects; GitHub Actions ships zero counts in navigation. It is not brave and untested,
+  it is the position the field occupied and vacated. It also fails on its own facts: the seven
+  stops omit `join` — `RunPanel.tsx:68` holds exactly identify / join / emit / reconcile — which
+  is the step that PRODUCES both the ANSWER queue and the PRICE questions, and the counts carry
+  three different denominators (cards, run directories, SKU copies) so the one claim B rests on
+  cannot hold. D7's fungibility puts one card at several stops at once.
+- **C, The Slab — REFUTED on an absence.** The corpus was searched for a tool with more than one
+  object type navigating by typed line alone and found none; Superhuman, the most
+  keyboard-extreme product surveyed, says so in its own palette guide. And C's arithmetic is
+  fatal on its own terms: deleting a 45px nav to install a 40px command line recovers **5px of
+  900**, while the measured waste is 752px of width and 4,018px of scroll. **Its component half
+  is the best-supported single addition in the corpus** — a subject field hosted in the rail.
+- **A, The Rig — SURVIVES, but "as written" does not.** The skeleton is the best-evidenced
+  structure in the corpus. The owner's objection is confirmed by the field that invented fixed
+  layouts: where the protocol library is thin, "the viewer defaults to a layout that satisfies
+  no one." The remedy is not fewer zones but **named postures** — SHOOT / ANSWER / BROWSE / RUN
+  — the way OHIF ships hanging protocols with a guaranteed default and Blender ships Workspaces.
+
+**"One frame for the entire app" is withdrawn.** It is false by construction:
+`#/fulfillment` cannot live in this frame under any configuration — a rail of box rows fails the
+20px text floor and the 44x44/12px tap floor at once, a key-labelled dock fails "his screens are
+touch and show none", and a rail that navigates at all is a route *out* of the view, which
+`docs/DESIGN.md`'s constraints table forbids outright. The frame is **four owner routes**. This
+product will carry two navigational paradigms and that is correct.
+
+**The single most useful finding reframes §0's headline number.** The review screen's 752px of
+empty width is not idle waste sitting beside a badly-sized photo — it is the *cause* of the
+photo's size. `ReviewQueue.css:93` caps the image at `--photo-cap: 48vh` = 432px, because
+everything stacks in one 688px column and the sentence plus first candidate must stay visible.
+The card therefore draws 309x432 = **10.3% of the viewport** for the one thing that screen
+exists to show. Splitting photo and candidates side by side takes it to 551x769 = **32.7%**,
+which is **3.17x the area**, and retires the cap rather than tuning it.
+
+**What the research vindicates, so it is not re-litigated**: no overlays (Figma shipped floating
+panels in UI3 beta and reversed them — they "cramped the canvas" and measurably slowed power
+users); `[` and `]` as bare zone toggles (Linear ships exactly this pairing); hash addressing
+inside a one-page shell (Linear ships full history too); one bare key per candidate with no
+modifier and no confirm (Prodigy sustains ~2.9s/item on bare digits; Label Studio requires
+Ctrl+Enter and is nobody's throughput reference); one card at a time, photo first (RSNA measured
+stack mode 3.2-5.7x faster than tile, P=.0002); expensive-first sorting (active worklist
+reordering cut turnaround 43.7% where decoration-only cut 7.6%); and D29's group answer, which
+MorphoCluster shows raises macro precision to 0.949 from 0.738 — so D29's safety hedge points at
+the wrong risk.
+
+**The strongest argument against the whole direction, kept because it is strong**: the frame
+fixes none of the four measured defects, and two of its three zones already exist —
+`CaptureScreen.css:151` and `BoxBrowse.css:137` are already rail|stage layouts, and the 240px
+header and the y=482 photo happened *inside* them. Every item in the ranked list is achievable
+without a frame. The correct response is sequencing rather than argument: build the ANSWER
+posture first, on the route where the measured harm is largest, and let it earn the rest.
+
+---
+
 ## 5. Two defects found while measuring, which are not proposals
 
 Both are real today, in the tree, independent of anything above.
