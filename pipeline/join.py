@@ -1048,6 +1048,11 @@ class JoinReport:
     below_threshold: SubThresholdBucket = field(default_factory=SubThresholdBucket)
     cards_in: int = 0
     collisions: int = 0
+    # Cards that resolved ONLY because the run was joined with the detection cross-check
+    # off (`trust_claim`). Reported rather than left to be inferred from a smaller queue:
+    # the operator is accepting responsibility for exactly these cards, and a number is the
+    # only honest way to say how many that is.
+    bypassed: int = 0
 
     def queue(self, name: str) -> List[QueuedCard]:
         """One standing queue's cards, in the order they should be worked.
@@ -1195,8 +1200,14 @@ def join_batch(
     router: Optional[Router] = None,
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,
+    trust_claim: bool = False,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
+
+    `trust_claim` is passed straight to `variant.resolve` — see its docstring for the one
+    rule it encodes. It reaches only the ladder call below: rung 0 (a human's answer) is
+    above it and already outranks detection, and the set-collision refusal is not about
+    finishes at all.
 
     With a `router`, every card that does not list is written into `report.queued` with the
     queue it belongs in — reviews stop suppressing output, because the card is recorded
@@ -1249,7 +1260,10 @@ def join_batch(
                 detected_finish=card.detected_finish,
                 rarity_claim=card.rarity_claim,
                 game=card.game,
+                trust_claim=trust_claim,
             )
+        if resolution.bypassed:
+            report.bypassed += 1
 
         if router is not None:
             destination = router(card, found, resolution)

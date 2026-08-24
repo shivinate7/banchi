@@ -531,6 +531,119 @@ def run() -> Result:
         "silently shortened claim is a claim the operator did not make",
     )
 
+    # --- the pre-emptive bypass: `trust_claim` (2026-08-24) --------------------------------
+    # ONE RULE — detection may not contradict a finish claim, but may still choose inside
+    # one. The evidence is in docs/GATES.md's box-2 section: 230 of 544 cards contradicted a
+    # claim the owner confirmed was right every time, and the SAME photograph read
+    # differently at two downscales. The cases below are written so that each can fail on
+    # its own: a flag that only ever turned reviews into resolutions would pass a single
+    # happy-path case while quietly overruling rungs it was never meant to reach.
+    bypassed = variant.resolve(
+        three, metadata_finish=["normal"], detected_finish="holo", trust_claim=True
+    )
+    _check_stage(
+        c,
+        bypassed,
+        variant.METADATA,
+        _row(NM)[tcgcsv.SKU_COLUMN],
+        NM,
+        Decimal(_row(NM)[tcgcsv.MARKET_PRICE_COLUMN]),
+        "trust_claim resolves a contradicted one-member claim at RUNG 1 — the claim was "
+        "always what rung 1 trusts, so the bypass changes which signals are consulted and "
+        "never which rung answers",
+    )
+    c.equal(
+        bypassed.bypassed,
+        True,
+        "and the resolution SAYS it was bypassed, so the run report can count the cards the "
+        "operator is answering for rather than leaving it inferred from a smaller queue",
+    )
+
+    c.equal(
+        variant.resolve(
+            three, metadata_finish=["normal"], detected_finish="holo"
+        ).reason,
+        variant.METADATA_DETECTION_DISAGREEMENT,
+        "the identical card WITHOUT the flag still reviews — the bypass is per-run and "
+        "opt-in, and a default that changed would have moved D3 rung 3 for everyone",
+    )
+
+    agreeing = variant.resolve(
+        three, metadata_finish=["normal"], detected_finish="normal", trust_claim=True
+    )
+    c.equal(
+        [agreeing.stage, agreeing.bypassed],
+        [variant.METADATA, False],
+        "a claim detection AGREES with is not counted as bypassed — nothing was overruled, "
+        "and a count inflated by the cards the cross-check passed would misreport exactly "
+        "the number the operator turned the flag on to see",
+    )
+
+    unclaimed = variant.resolve(three, detected_finish="holo", trust_claim=True)
+    c.equal(
+        [unclaimed.stage, unclaimed.condition, unclaimed.bypassed],
+        [variant.DETECTION, NMH, False],
+        "a card with NO claim is untouched by the flag — rung 3 still decides it, because "
+        "there is no claim to resolve it by and suppressing detection here would review a "
+        "card the ladder could answer",
+    )
+
+    inside_still = variant.resolve(
+        three,
+        metadata_finish=["normal", "reverse_holo"],
+        detected_finish="reverse_holo",
+        trust_claim=True,
+    )
+    c.equal(
+        [inside_still.stage, inside_still.condition, inside_still.bypassed],
+        [variant.DETECTION, NMR, False],
+        "detection INSIDE a claimed set still decides under the flag — it is not "
+        "contradicting the claim, so half the rule would be lost by switching rung 3 off "
+        "wholesale instead of switching off its power to contradict",
+    )
+
+    dropped = variant.resolve(
+        [_row(NM), _row(NMR)],
+        metadata_finish=["normal", "reverse_holo"],
+        detected_finish="holo",
+        trust_claim=True,
+    )
+    c.equal(
+        [dropped.stage, dropped.reason],
+        [variant.REVIEW, variant.AMBIGUOUS_NO_SIGNAL],
+        "a contradicted MULTI-member claim drops detection entirely and falls to rung 4 — "
+        "not to detected_finish_not_stocked, which would refuse the card by citing the very "
+        "signal the flag just set aside and send the operator to look at the catalog",
+    )
+
+    narrowed = variant.resolve(
+        [_row(NM), _row(NMH)],
+        metadata_finish=["normal", "reverse_holo"],
+        detected_finish="holo",
+        trust_claim=True,
+    )
+    c.equal(
+        [narrowed.stage, narrowed.condition, narrowed.bypassed],
+        [variant.CATALOG_FORCED, NM, True],
+        "and when that narrowing leaves ONE row it resolves at rung 2 and is still counted "
+        "as bypassed — the card only got here because a contradiction was set aside",
+    )
+
+    c.equal(
+        variant.resolve([_row(NMH)], metadata_finish=["normal"], trust_claim=True).reason,
+        variant.METADATA_NOT_STOCKED,
+        "the flag does NOT reach metadata_not_stocked — a claim the catalog contradicts is "
+        "not a claim detection contradicts, and bypassing it would list a card as a finish "
+        "the number is not stocked in",
+    )
+    c.equal(
+        variant.resolve([], metadata_finish=["normal"], trust_claim=True).reason,
+        variant.NO_CATALOG_ROW,
+        "nor no_catalog_row — with no rows there is nothing for a claim to resolve TO, "
+        "which is the plain-English boundary the operator was given: the bypass trusts your "
+        "claim, it does not invent a row for it",
+    )
+
     # --- three condition strings, one number: SYNTHETIC (see the fixture gap above) --------
     template = {row[tcgcsv.CONDITION_COLUMN]: row for row in both}
     synthetic = [

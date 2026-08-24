@@ -122,6 +122,46 @@ something, and it is why rung 2 is reachable only without metadata. The two revi
 stay distinct so the queue can be triaged: a run full of contradictions means a stack is
 misfiled, while disagreements scattered across a run mean individual cards are mis-sorted — or that the detector is systematically wrong, which is the reading Gate B added on 2026-08-22 and the first one to check now. 16 of 53 normals read as foil under the rig's lighting, and detection agreed with itself across duplicate copies of the same card, so that run's scattered `metadata_detection_disagreement` meant neither a misfiled stack nor mis-sorted cards: it meant the rig. `docs/GATES.md`'s Gate B section holds the numbers. Rung 3 survives it — a cross-check that spends 30% of a run on review taps is still cheaper than one wrong listing — but the two-way triage above is no longer the whole table.
 
+**RUNG 3 CAN NOW BE SWITCHED OFF FOR A RUN, AND BOX 2 IS WHY** (owner's ruling, 2026-08-24;
+`pkmnscan join --bypass`). The paragraph above kept rung 3 on the argument that a 30%
+false-positive rate is still cheaper than one wrong listing. At 544 cards with the owner
+supplying ground truth, the rate was **42% — 230 cards contradicting a claim that was right
+every single time** — and the same photograph read differently at two downscales on 19 of 40
+cards. `docs/GATES.md`'s box-2 section holds the numbers. A cross-check that is wrong more
+often than the thing it checks has stopped being a cross-check, and 230 review taps against a
+claim the operator already knows is correct is not a cost the ladder is entitled to impose.
+
+**The flag is ONE RULE: where a finish claim exists, detection may not contradict it — but it
+may still choose inside it.** Both halves matter. Suppressing rung 3 wholesale would throw away
+its real work, which is picking between the members of a multi-finish claim; suppressing only
+its power to contradict is the narrowest change that answers the measurement.
+
+**It does not reach any other rung, and the reason is the same one that makes the flag
+honest.** A card with no claim is untouched, because there is nothing to resolve it by.
+`metadata_not_stocked` is untouched, because a claim the *catalog* contradicts is a different
+fact from a claim *detection* contradicts, and listing through it would sell a finish the
+number is not stocked in. `no_catalog_row` is untouched, because there is no row to resolve
+to. The operator's own framing is the boundary and it is worth keeping in their words: the
+bypass trusts your claim, it does not invent a row for it.
+
+**A bypassed card resolves at RUNG 1 and is COUNTED.** No new stage and no new reason code:
+rung 1 has always meant "the claim determined", which is exactly what happened. What is new is
+that `Resolution.bypassed` records that a contradiction was set aside, so `join` can report the
+number rather than leave it inferred from a smaller queue — the owner's choice, in their words,
+was *"resolved by the claim, and the run report says so"*. It is named on the run's stdout, in
+`report.txt`, and in the manifest as `bypass_detection` beside its count.
+
+**Per-run and opt-in, never a default.** The precedent is `--review-below-confidence=none`,
+which this deliberately copies: a routing switch the operator sets for a run they can see the
+shape of, rather than a threshold moved once for everybody. `join --dry-run` exists so the
+shape is visible before the choice — it walks the ladder twice, with the flag and without, and
+diffs the two queues, writing nothing at all.
+
+**What would reopen this: a rig that measures better.** The flag treats the detector as
+untrustworthy under this lamp, which is what two runs measured. It is not a finding about
+foil detection in general, and a re-measurement after the lighting changes is the evidence
+that would make rung 3 worth leaving on.
+
 ## D4 — Review queue is digital-only
 
 Shows the stored capture photo beside candidate catalog rows for a one-tap choice. The

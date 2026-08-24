@@ -241,6 +241,11 @@ class Resolved:
         }
 
     @property
+    def bypassed(self) -> int:
+        """Cards across every game that resolved only because the cross-check was off."""
+        return sum(g.report.bypassed for g in self.joins.values())
+
+    @property
     def sub_threshold_skus(self):
         return {
             sku
@@ -579,6 +584,7 @@ def load(
     basis: str = pricing.BASIS_MARKET,
     review_below: str = routing.CONFIDENCE_LOW,
     live_cap: int = join.LIVE_QUANTITY_CAP,
+    trust_claim: bool = False,
 ) -> Resolved:
     """Read the run, build one catalog per game, walk the ladder, route every card.
 
@@ -791,6 +797,7 @@ def load(
             router=join.default_router(review_below=review_below),
             rule=rule,
             basis=basis,
+            trust_claim=trust_claim,
         )
         joins_out[game] = GameJoin(
             game=game,

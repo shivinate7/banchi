@@ -209,7 +209,7 @@ COMPONENTS = [
         "modules": {
             "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
-            "cmd_join.py": {"does": "resolve identifications against the export", "governed_by": ["D7", "D8", "D11", "D25"], "tested_by": ["T7"]},
+            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, --bypass trusts the finish claim", "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25"], "tested_by": ["T4", "T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9", "D25"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26"], "tested_by": ["T7"]},

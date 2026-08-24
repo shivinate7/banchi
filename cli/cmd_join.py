@@ -20,12 +20,88 @@ hard stop on a snapshot's age would block a legitimate run for a reason already 
 
 from __future__ import annotations
 
+from collections import Counter
+
 from cli import resolve, runs
 from pipeline import decisions, join, routing
 from store import master, queues
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
+
+
+def _reason_counts(resolved: resolve.Resolved) -> Counter:
+    """What this run would put in the standing queues, counted by reason code.
+
+    Read off `entries_for` rather than off the reports directly, so the preview counts the
+    entries that would actually be WRITTEN — pre-join failures included. A preview built
+    from a different source than the write is a preview that can be wrong in the one way
+    that matters.
+
+    Raw reason strings, never a friendly gloss. `app/src/ReviewQueue.tsx` carries the only
+    label table in the product and says in its own comment that nothing keeps it in step
+    with the Python constants; a second table here would be a third vocabulary with even
+    less holding it together, which is exactly the drift D16 exists to catch. The plain
+    English the operator needs is about the BYPASS RULE, not about each code, and that is
+    one sentence printed once — see `_preview`.
+    """
+    main, parked = resolve.entries_for(resolved)
+    return Counter(entry.reason for entry in main + parked)
+
+
+def _counts_block(say, counts: Counter, indent: str = "                   ") -> None:
+    for reason, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        say(f"{indent}{reason:<34} {count}")
+
+
+def _preview(args, run_dir, plan, resolved, say) -> int:
+    """`--dry-run`: everything the join would compute, and nothing it would write.
+
+    The comparison is the point. It walks the ladder a SECOND time with the bypass flipped
+    and diffs the two queues, so the operator sees what the flag buys on their own cards
+    before spending a decision on it — rather than reading a description of what it does
+    and guessing. Walking twice is free: the ladder is local arithmetic over an export
+    already parsed and a store already read.
+    """
+    mine = _reason_counts(resolved)
+    say("")
+    say(f"DRY RUN          nothing written — no queues, no {runs.DECISIONS}, no "
+        f"{runs.REPORT}, no manifest")
+    say(f"would queue      {sum(mine.values())} card(s)")
+    _counts_block(say, mine)
+
+    try:
+        other = resolve.load(
+            run_dir,
+            plan.by_game,
+            rule=args.rule,
+            basis=args.basis,
+            review_below=args.review_below_confidence,
+            trust_claim=not args.bypass,
+        )
+    except join.EmptyCatalog:  # pragma: no cover — the first load would have refused first
+        return 0
+
+    theirs = _reason_counts(other)
+    with_bypass, without = (mine, theirs) if args.bypass else (theirs, mine)
+    cleared = sum(without.values()) - sum(with_bypass.values())
+    say("")
+    if args.bypass:
+        say(f"without --bypass {sum(without.values())} would queue instead — "
+            f"--bypass is clearing {cleared}")
+    else:
+        say(f"with --bypass    {cleared} of these resolve by the finish claim you made at "
+            f"capture,")
+        say(f"                 and {sum(with_bypass.values())} still need you: they have no "
+            f"claim to fall back on,")
+        say(f"                 so answering them for you would mean inventing a row rather "
+            f"than trusting you.")
+        if with_bypass:
+            _counts_block(say, with_bypass)
+    say("")
+    say(f"next: pkmnscan join {run_dir.directory} --export <file>"
+        f"{'' if args.bypass else ' --bypass'}  (to write it)")
+    return 0
 
 
 def run(args, say) -> int:
@@ -66,6 +142,7 @@ def run(args, say) -> int:
             rule=args.rule,
             basis=args.basis,
             review_below=args.review_below_confidence,
+            trust_claim=args.bypass,
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -102,6 +179,15 @@ def run(args, say) -> int:
         say(f"                 {note}")
     say(f"pricing          rule={resolved.rule} basis={resolved.basis} "
         f"review-below-confidence={args.review_below_confidence}")
+    if args.bypass:
+        # Named on every run it is on, and named as a LOSS rather than as a setting. The
+        # operator chose "resolved by the claim, and the run report says so", and a line
+        # that read `bypass=True` would satisfy the letter of that while telling a reader
+        # six weeks later nothing about what the run gave up to get its small queue.
+        say("cross-check      OFF (--bypass): where a finish claim exists, the photo may "
+            "not contradict it.")
+        say("                 D3 rung 3 is not consulted for those cards. Cards with no "
+            "claim are unaffected.")
     say("")
 
     # ------------------------------------------------- the report itself, game by game
@@ -117,6 +203,13 @@ def run(args, say) -> int:
         say(f"pre-join failures (-> main queue): {len(resolved.failures)}")
         for failure in resolved.failures:
             say(f"    {failure.describe}")
+
+    # ------------------------------------------------------------------------ dry run
+    # BEFORE the first write and after the whole report, which is the only ordering that
+    # makes this useful: a preview that skipped the report would preview nothing, and one
+    # that ran after the queues were written would not be a preview.
+    if args.dry_run:
+        return _preview(args, run_dir, plan, resolved, say)
 
     # --------------------------------------------------------------- write the queues
     main, parked = resolve.entries_for(resolved)
@@ -183,6 +276,9 @@ def run(args, say) -> int:
     say("")
     say(f"queued           +{added_main} main, +{added_parked} parked, "
         f"-{len(released)} resolved and released")
+    if resolved.bypassed:
+        say(f"bypassed         {resolved.bypassed} card(s) resolved by the finish claim "
+            f"over a disagreeing photo")
     say(f"standing queues  {queue_line}")
     if moved_live:
         rose = sum(after - before for _, before, after in moved_live if after > before)
@@ -237,6 +333,11 @@ def run(args, say) -> int:
         rule=str(resolved.rule),
         basis=resolved.basis,
         review_below_confidence=args.review_below_confidence,
+        # The manifest is what explains a result months later, so the flag is recorded
+        # beside the count it produced. `bypassed: 0` on a `--bypass` run is a real and
+        # different fact from the key being absent, which is why both are written.
+        bypass_detection=bool(args.bypass),
+        bypassed=resolved.bypassed,
         joined=True,
         counts={
             "cards_in": sum(g.report.cards_in for g in resolved.joins.values()),
@@ -262,6 +363,14 @@ def run(args, say) -> int:
         ]
         + [
             f"rule={resolved.rule} basis={resolved.basis}",
+        ]
+        + (
+            [f"cross-check: OFF (--bypass) — {resolved.bypassed} card(s) resolved by the "
+             f"finish claim over a disagreeing photo"]
+            if args.bypass
+            else []
+        )
+        + [
             "",
             report_text,
             "",

@@ -128,6 +128,11 @@ class Resolution:
     row: Optional[tcgcsv.Row] = None
     condition: Optional[str] = None
     market_price: Optional[Decimal] = None
+    # This card resolved only because `trust_claim` was on — the detection cross-check
+    # would have sent it to review. Carried on the resolution rather than counted at the
+    # call site so the run report can say how many cards the operator's claim answered
+    # for, which is the whole of what they are accepting when they turn the flag on.
+    bypassed: bool = False
 
     @property
     def needs_review(self) -> bool:
@@ -184,13 +189,14 @@ def _check_claim(
     return tuple(finish for finish in stocked if finish in members)
 
 
-def _resolved(stage: str, row: tcgcsv.Row) -> Resolution:
+def _resolved(stage: str, row: tcgcsv.Row, bypassed: bool = False) -> Resolution:
     return Resolution(
         stage=stage,
         reason=stage,
         row=row,
         condition=row[tcgcsv.CONDITION_COLUMN],
         market_price=tcgcsv.parse_price(row[tcgcsv.MARKET_PRICE_COLUMN]),
+        bypassed=bypassed,
     )
 
 
@@ -211,8 +217,23 @@ def resolve(
     detected_finish: Optional[str] = None,
     rarity_claim: Optional[Sequence[str]] = None,
     game: Optional[str] = None,
+    trust_claim: bool = False,
 ) -> Resolution:
     """Walk the ladder for one card. `candidates` are the catalog rows for its number.
+
+    `trust_claim` is the operator's pre-emptive bypass, and it is ONE RULE: **detection may
+    not contradict a finish claim, but may still choose inside one.** It does nothing at all
+    to a card with no claim — there is no claim to resolve by, so rungs 2 and 3 run exactly
+    as they always do. Where a claim exists and detection lands outside it, detection is
+    dropped for that card rather than overruled selectively: a signal the operator has just
+    declared untrustworthy for this run may not go on to pick a row further down the ladder.
+
+    It costs D3 rung 3's cross-check on the cards it touches, and that is the whole of the
+    trade — it is not a softening of rung 1, which already trusts the toggle. The evidence
+    it was built for is in `docs/GATES.md`'s box-2 section: 230 of 544 cards contradicted a
+    claim that the owner confirmed was right every time, at a measured 42% false-positive
+    rate, with the same photograph reading differently at two downscales. A cross-check that
+    is wrong more often than the thing it checks is not a cross-check.
 
     `rarity_claim` is D23's multi-select stack claim: the exact `Rarity` cells the operator
     says this stack holds. None or empty narrows nothing — the compatibility guarantee that
@@ -292,10 +313,17 @@ def resolve(
         # Rung 3 as a cross-check, before trusting rung 1. Detection outside the claimed set
         # is the disagreement whatever the set's size — with one member this is the identity
         # test it has always been.
-        if detected_finish is not None and detected_finish not in claimed:
+        contradicted = detected_finish is not None and detected_finish not in claimed
+        if contradicted and not trust_claim:
             return Resolution(stage=REVIEW, reason=METADATA_DETECTION_DISAGREEMENT)
+        if contradicted:
+            # Dropped, not merely not-reported. Leaving it live would let it fire at rung 3
+            # against the narrowed rows below and answer DETECTED_FINISH_NOT_STOCKED — a
+            # refusal sourced from the signal this flag just set aside, wearing a reason
+            # code that would send the operator looking at the catalog instead.
+            detected_finish = None
         if len(claimed) == 1:
-            return _resolved(METADATA, next(iter(kept.values())))
+            return _resolved(METADATA, next(iter(kept.values())), bypassed=contradicted)
         # TWO OR MORE: narrow and FALL THROUGH. Deliberately the same move D23's rarity
         # filter makes a few lines above — narrow the rows, then let every rung below run on
         # what is left. Rung 2 fires when the claim leaves exactly one row, rung 3 picks
@@ -304,17 +332,19 @@ def resolve(
         # the ladder to disagree with itself.
         candidates = list(kept.values())
         by_condition = kept
+    else:
+        contradicted = False
 
     # Rung 2 — catalog-forced. Reached with no metadata to contradict, or with a set-valued
     # claim that narrowed to one row.
     if len(candidates) == 1:
-        return _resolved(CATALOG_FORCED, candidates[0])
+        return _resolved(CATALOG_FORCED, candidates[0], bypassed=contradicted)
 
     # Rung 3 — detection.
     if detected_finish is not None:
         wanted_row = condition_by_finish[detected_finish]
         if wanted_row in by_condition:
-            return _resolved(DETECTION, by_condition[wanted_row])
+            return _resolved(DETECTION, by_condition[wanted_row], bypassed=contradicted)
         return Resolution(stage=REVIEW, reason=DETECTED_FINISH_NOT_STOCKED)
 
     # Rung 4 — review.

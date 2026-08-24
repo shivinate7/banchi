@@ -417,6 +417,14 @@ claim that was right every time. D29's group answer cannot absorb them — it re
 candidate, and 230 cards are 230 different catalog rows. This is the paragraph to read before
 joining a box shot on this rig.
 
+**The remedy the owner chose, the same day: `join --bypass`** (D3, amended). Rung 3 is
+switched off for a run wherever a finish claim exists, so the claim resolves the card and the
+disagreement is never raised. Measured against this box with `join --dry-run`, which walks the
+ladder twice and writes nothing: **256 cards would queue, 209 of them clear by the claim, and
+47 remain** — all `no_catalog_row`, and all of them the crop-damaged reads (38 blank numbers,
+9 wrong Pokedex-style numbers) that the flat-pad bug produced before it was fixed. Those 47
+have no claim to fall back on, which is exactly where the flag stops.
+
 ### Gate C — feeder integration. PASSED 2026-08-22
 
 **The feeder exists and runs today** (confirmed 2026-08-13). Cards are fed onto a tray,
