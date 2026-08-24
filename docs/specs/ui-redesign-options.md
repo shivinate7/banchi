@@ -500,3 +500,62 @@ Both are real today, in the tree, independent of anything above.
    vertical rent above the screen's subject. Re-ordering the column so the detail sits
    directly under the box header would cost nothing and is independent of every proposal
    above.
+
+---
+
+## 6. Proposal D — **The Repair**: no frame, four screens fixed where they stand
+
+**RECORDED 2026-08-24, and it is the direct consequence of §4.5's strongest counterargument.**
+That argument was: the frame fixes none of the four measured defects, two of its three zones
+already exist, and every item in the ranked list is achievable without it. Taken seriously,
+that is not a caveat on the Rig — it is a fourth proposal, and it is the cheapest one on the
+table.
+
+**The thesis, verified in the tree.** `CaptureScreen.css:151` is already
+`grid-template-columns: var(--side-w) minmax(0, 1fr)`. `BoxBrowse.css:137` is already
+`minmax(300px, 380px) minmax(0, 1fr)`. Both are rail-and-stage layouts today, and **the 240px
+header and the y=482 photograph happened inside them**. A frame cannot fix a stacking order.
+Every measured defect is a decision about what sits above what, inside a column that exists.
+
+**Four edits, no new routes, no shell change:**
+
+1. **`#/review` — split the column, move the worklist out, retire `--photo-cap`.** The card
+   goes from 10.3% of the viewport to a projected 32.7% (3.17x the area) and the 4,018px of
+   scroll goes to zero. What sits beside the card becomes the **last ten decisions** — what is
+   behind you, not ahead of you — which is Prodigy's shape and Zendesk's stated reason. The
+   price-band sort is not lost: `store/queues.py:sort_key` already orders expensive-first
+   server-side, so the operator gets the benefit without paying 3,318px to look at it.
+2. **`#/review` — a 1:1 sheen inset**, ~400x300 native pixels, prefetched with the next card.
+   The one change that raises accuracy rather than speed: FADGI and Metamorfoze both require
+   this judgment at 100%, and detection was wrong on 230 of 544 with 19 of 40 frames
+   disagreeing with themselves across downscales.
+3. **`#/inventory` — put the card detail above the two folds.** The folds move onto the head
+   line. The clicked card's photograph opens at y=115 instead of y=482 and stops being cut
+   off. **This is a reorder of one column and nothing else.**
+4. **`#/fulfillment` — search-first, no default full list.** The 124,348px scroll is a scaling
+   defect, not a navigation one, and all nine floors stay green.
+
+**What the Rig was right about survives as CONVENTION rather than architecture**, and costs
+nothing here because the routes already exist: each route declares its layout and never
+reflows (radiology's hanging protocol, applied per screen — the fix is that the width is
+*declared*, not that every screen shares one); deep operations push rather than cover; the URL
+addresses the subject.
+
+**What is dropped**: the global frame, the box rail as primary navigator (past ~15 boxes it
+scrolls, its items move, and the stable-coordinate claim that is the frame's whole case is
+gone), and zone collapse on `[` / `]` — there is nothing to collapse once each screen is sized
+for its own task.
+
+**One item is deliberately NOT a change and needs the owner's ruling: the capture pane ratio.**
+`CaptureScreen.css` argues coequal panes so the photo can be compared against the live view
+"without either being the small one", and **no capture UI surveyed does that** — Capture One's
+Slipstream flips its panes between shooting and retake, Sony's Remote window has no
+captured-image area, and Lightroom Classic ships tethering with no live view at all. The
+research further holds that the panel's stated job — making a failed write visible — is a
+counter's job being done badly by an image, since nothing is verified by eye at 623ms. The
+gap-and-`capture_id` check the repo already runs is the right instrument. Recorded as a
+question; nothing changes without a ruling.
+
+**The sequencing rule, which is the whole point of this proposal:** do the review split first,
+because it carries the largest measured harm. **If it does not deliver, nothing after it is
+worth building — and no frame was rewritten to find out.**
