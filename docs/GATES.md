@@ -276,6 +276,22 @@ at a temporary directory, so nothing here touches the real inventory.
   photos following their records byte-for-byte, the `renumbered` mapping and the
   per-position roll-call lines that keep the state reversals reading the right card) and
   the whole-box delete behind `box_not_empty_of_commitments`.
+- **The queue's starvation tier is covered as of 2026-08-24, in its own isolated home.**
+  `store/queues.py:sort_key` gained a tier that promotes an entry past `STARVATION_DAYS`
+  ahead of price, because price alone never releases an unpriced card: `no_catalog_row` has
+  no market, so it sorted last permanently, and box 2 left 47 entries queued, counted and
+  unreachable. The case asserts oldest-first inside the tier, expensive-first untouched
+  inside the threshold, the boundary one day short, and that a missing `first_seen` can
+  never starve — **observed failing against the old key before it was kept**.
+
+  **Two findings from writing it, both of which are this file's own lessons repeating.**
+  `Queue.upsert` overwrites `first_seen` with today on insert and preserves only an existing
+  stamp, so an entry cannot be aged by passing the field in — which is correct for the store
+  and means the test writes the stamp afterwards. And the first draft put six entries into
+  `check_queues`' shared store and took four of that block's own assertions red: the same
+  shared-fixture failure the mass-select bullet below already records, found again the same
+  way, and fixed the same way.
+
 - **The mass-select on `PUT /inventory/<box>` is covered, in its own isolated home.** The
   owner's `indices` selection narrows the box-wide claim sweep, and it is checked on the
   route rather than as a client loop for the reason the case states: N card calls are N
