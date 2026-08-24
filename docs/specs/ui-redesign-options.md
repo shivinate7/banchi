@@ -546,15 +546,31 @@ scrolls, its items move, and the stable-coordinate claim that is the frame's who
 gone), and zone collapse on `[` / `]` — there is nothing to collapse once each screen is sized
 for its own task.
 
-**One item is deliberately NOT a change and needs the owner's ruling: the capture pane ratio.**
-`CaptureScreen.css` argues coequal panes so the photo can be compared against the live view
-"without either being the small one", and **no capture UI surveyed does that** — Capture One's
-Slipstream flips its panes between shooting and retake, Sony's Remote window has no
-captured-image area, and Lightroom Classic ships tethering with no live view at all. The
-research further holds that the panel's stated job — making a failed write visible — is a
-counter's job being done badly by an image, since nothing is verified by eye at 623ms. The
-gap-and-`capture_id` check the repo already runs is the right instrument. Recorded as a
-question; nothing changes without a ruling.
+**THE CAPTURE PANE-RATIO ITEM IS WITHDRAWN, and the owner is why.** This section first
+proposed collapsing Live to a strip during a run so Last Capture could grow, on the research's
+finding that no surveyed capture UI draws the two coequal. The owner, on seeing the drawing:
+*"Your #3 is wrong because 16:9 is landscape and we use portrait."*
+
+Correct, and it removes the proposal rather than merely re-drawing it. The rig's camera is
+side-mounted (D13), so `.capture-frame-portrait` applies: `aspect-ratio: 9/16`, and
+`.capture-stage-portrait` sizes the pair by HEIGHT then centres it. At 1440x900 the derivation
+resolves to **`--portrait-by-height` 748px against `--portrait-by-width` 827px — height binds**,
+giving two 421x748 frames with 96px of centring slack in a 970px stage. **A frame already as
+tall as the stage allows cannot grow when width is freed beside it**, so collapsing Live buys
+nothing. The "recover ~485px" figure was landscape arithmetic applied to a portrait rig.
+
+**What survives is not a layout change at all**: at 623ms nobody verifies a write by looking at
+an image, and the panel's stated job — making a failed write visible — is a counter's job being
+done badly by a photograph. The repo already computes the right instrument ("85 records at
+indices 1..85, zero gaps, 85 distinct `capture_id`s"); it has never been on a screen. That is
+the whole of the capture item now, and it is XS.
+
+**Recorded at length because it is the second miss on this one screen.** The first drawing gave
+Live the whole stage and Last Capture a 16%-height strip; the second drew both panes landscape.
+Both times the source said otherwise in plain sight — `.capture-frame-portrait` has been in the
+file since 2026-08-23, and `docs/specs/ui-research.md`'s own correction list opens by noting
+that "the 16:9 waste is real only at rotation 0". The evidence was in hand and went unused
+twice. **The capture screen's geometry is read before it is drawn, not after.**
 
 **The sequencing rule, which is the whole point of this proposal:** do the review split first,
 because it carries the largest measured harm. **If it does not deliver, nothing after it is
