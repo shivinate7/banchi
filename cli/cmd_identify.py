@@ -58,7 +58,20 @@ from store.session import Store
 INPUT_PER_MTOK = Decimal("0.50")
 OUTPUT_PER_MTOK = Decimal("2.50")
 PIXELS_PER_TOKEN = Decimal("750")
-SYSTEM_TOKENS = 500
+# MEASURED, NOT ASSUMED, as of 2026-08-23. This read 500 and was wrong by about half: box 2's
+# 544-card run billed 1,315,698 input tokens — 2,419 per card — against roughly 1,416 of image
+# at that configuration, leaving ~1,000 tokens of system and user turn. The estimate came in at
+# $0.62 against an actual $0.71, 15% low.
+#
+# The docstring above is right that this is an estimate and not an invoice, and nothing
+# reconciles against it. But it is the number somebody reads while deciding whether to spend,
+# so a bias that runs consistently in the cheap direction is the wrong bias to leave in place.
+# One real run is better evidence than the round number that was here.
+#
+# It is Pokemon's turn that was measured. `misc` and the code-card profile carry different
+# prompts and are not separately measured; per-profile overhead is the refinement to reach for
+# if a run of those ever misses by enough to matter.
+SYSTEM_TOKENS = 1000
 OUTPUT_TOKENS = 60
 
 # What triggers which kind of retry (v2 §4.4, §4.5).
