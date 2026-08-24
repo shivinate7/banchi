@@ -26,7 +26,10 @@ import hashlib
 import io
 from dataclasses import dataclass
 from pathlib import Path
+
 from typing import Optional
+
+import geometry
 
 try:  # reported as a message at call time, not as a traceback at import
     from PIL import Image
@@ -48,7 +51,16 @@ MAX_EDGE = 1568
 #
 # Clamped to the frame, so a pad that would run off the edge is simply cut short. The card
 # is never cut: the pad only ever adds.
-CROP_PAD = 0.04
+# RAISED FROM 4% TO 8% ON EVIDENCE, 2026-08-23. The aspect correction below fixes a
+# PROPORTIONAL error; it cannot fix a box that is also OFFSET. Crawdaunt at 2/15 is the case
+# that proved the difference: its box came back at aspect 0.745 — only mildly short, so the
+# correction added just 4% — and its collector number was still clipped, because the box was
+# shifted up as well as squashed. Swept on that worst case: `085/132` is cut at 4%, whole at
+# 6%, and has real margin at 8%.
+#
+# Chosen at 8% rather than 6% because 6% was the point where it merely fit. A margin that is
+# exactly sufficient on the worst frame measured is not a margin.
+CROP_PAD = 0.08
 
 JPEG_QUALITY = 90
 
@@ -122,7 +134,7 @@ def downscale(image, max_edge: int = MAX_EDGE):
     return image.resize(size, Image.LANCZOS), True
 
 
-def card_crop(image, box, pad: float = CROP_PAD):
+def card_crop(image, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT):
     """The detected card plus `pad`, clamped to the frame. `box` is a `geometry.CardBox`.
 
     IN MEMORY, NEVER ON DISK, and that placement is the whole safety argument. A crop
@@ -138,7 +150,43 @@ def card_crop(image, box, pad: float = CROP_PAD):
     width, height = image.size
     left, top = box.left * width, box.top * height
     right, bottom = box.right * width, box.bottom * height
-    pad_x, pad_y = (right - left) * pad, (bottom - top) * pad
+    box_w, box_h = right - left, bottom - top
+
+    # THE PAD WAS A FLAT GUESS AND IT CUT COLLECTOR NUMBERS OFF. Box 2's first run sent 544
+    # cards cropped at a flat 4%: 38 came back with NO number at all, and a further handful
+    # came back with the wrong one — `0342`, `0326`, `0934`, which are NATIONAL POKEDEX
+    # numbers read off the artwork strip once the real collector number had been cropped
+    # away. A blank is recoverable by the name fallback; a confident wrong number is the
+    # failure D23 says no confidence threshold catches.
+    #
+    # The cause is measurable and was sitting in the detector's own output the whole time. A
+    # card is `CARD_ASPECT` — 63/88, 0.716 — and the detected boxes came back at a MEDIAN of
+    # 0.790, with the failures at 0.801 and the worst at 0.822. The box is systematically too
+    # SHORT for its width, because the border search locks onto the artwork's strong inner
+    # edges more readily than the card's own bottom border. A flat margin cannot fix a
+    # proportional error: 92% of the cards that DID keep their number had the same distortion
+    # and merely landed on the right side of it.
+    #
+    # SO THE CORRECTION IS COMPUTED, NOT GUESSED. If the box is short for its width, restore
+    # the height a real card of that width would have. The pad is then a genuine safety
+    # margin on a box that is already the right shape, rather than the only thing standing
+    # between the crop and the number.
+    #
+    # Applied symmetrically. The observed deficit sits at the bottom — the number end — but
+    # `CardBox` reports no per-edge confidence, so attributing the whole correction downward
+    # would be inventing a fact. Symmetric costs a few pixels at the top and cannot be wrong
+    # about which edge was short.
+    #
+    # ONLY EVER GROWS. A box already taller than its width implies is left alone: that is a
+    # box with room to spare, and narrowing it would be this defect in the other direction.
+    if aspect and box_h > 0 and (box_w / box_h) > aspect:
+        want_h = box_w / aspect
+        grow = (want_h - box_h) / 2.0
+        top -= grow
+        bottom += grow
+        box_h = want_h
+
+    pad_x, pad_y = box_w * pad, box_h * pad
     return image.crop((
         max(0, int(left - pad_x)),
         max(0, int(top - pad_y)),

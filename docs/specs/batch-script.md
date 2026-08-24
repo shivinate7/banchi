@@ -466,6 +466,12 @@ is load-bearing. `--variant`'s own `choices` are still Pokémon's, which is a sm
 version of the same thing and is recorded rather than fixed: the flag fills gaps in a
 sidecar-less directory, and no such directory exists for any other game yet.
 
+**The pixel budget can be spent on the card rather than the desk** — `--crop`, D32. Off by
+default. It crops to `geometry.detect_card`'s box before the downscale, correcting the box
+toward a real card's 63/88 proportions first, because the detector's boxes come back
+systematically short for their width and a flat margin cannot fix a proportional error. A
+frame where detection refuses is sent whole and the preflight names the count.
+
 **D3 rung 1's claim is a SET.** One member determines exactly as this table's behaviour
 always described; two or more filter the candidate rows and let rungs 2 and 3 choose within
 what survives. `--variant` is unchanged by that — it still fills a gap and still never
