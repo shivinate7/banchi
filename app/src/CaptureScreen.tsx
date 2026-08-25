@@ -1324,6 +1324,43 @@ export function CaptureScreen() {
 
   const last = shots.length === 0 ? undefined : shots[shots.length - 1]
 
+  /* THE RUN COUNTER, AND IT IS THE INSTRUMENT THAT ACTUALLY VERIFIES A CAPTURE.
+   *
+   * The Last capture panel's stated job is making a failed write visible, and at the feeder's
+   * ~623ms — 5,778 cards an hour — nobody verifies anything by looking at a photograph. No
+   * tethering product tries: Capture One owns a counter for exactly this, because the camera
+   * cannot be asked how many frames it sent.
+   *
+   * What this repo already treats as proof is arithmetic, not an image. docs/GATES.md's Gate C
+   * confirmation reads "85 records at indices 1..85, zero gaps, 85 distinct capture_ids" — and
+   * that check has only ever been run afterwards, by hand, over the store. It is computed here
+   * from `shots`, which is the same fact while the run is still going and while a gap can still
+   * be re-fed.
+   *
+   * GAPS ARE COUNTED OVER THE SPAN, NOT AGAINST THE COUNT. A box whose run starts at index 41
+   * has no gap; a run of 40 whose highest index is 45 has five. `next_index` is a high-water
+   * mark (D10) so the span is what the allocator actually handed out.
+   *
+   * A REPLAYED capture_id IS NOT A SECOND CARD, which is why the distinct count is drawn beside
+   * the total rather than instead of it: `created: false` means the server already had that id
+   * and the photograph did not take a new position. Two numbers that differ is the one thing
+   * on this screen that says a card may have passed the lens unrecorded. */
+  const runCount = useMemo(() => {
+    const mine = box === null ? [] : shots.filter((shot) => shot.card.box === box)
+    if (mine.length === 0) return null
+    const indices = mine.map((shot) => shot.card.index)
+    const low = Math.min(...indices)
+    const high = Math.max(...indices)
+    const ids = new Set(mine.map((shot) => shot.card.capture_id ?? `none:${shot.card.key}`))
+    return {
+      shots: mine.length,
+      low,
+      high,
+      gaps: high - low + 1 - new Set(indices).size,
+      ids: ids.size,
+    }
+  }, [box, shots])
+
   const undoTarget = useMemo<UndoTarget | null>(() => {
     if (box === null) return null
 
@@ -2419,6 +2456,36 @@ export function CaptureScreen() {
               stack are all claims. */}
           <div className="capture-session">
             <p className="capture-groupcap">Session</p>
+
+            {/* THE RUN COUNTER. Not a claim and not a control — the one row in this sidebar
+                that is evidence, which is why it sits at the top of Session rather than among
+                the claims above. It answers the question the Last capture panel is asked to
+                answer by eye and cannot at feeder pace: did every card that went past the lens
+                get a position of its own?
+
+                Drawn only once this box has a shot in this session, because before that there
+                is nothing to count and a row of zeroes reads as a fault. */}
+            {runCount === null ? null : (
+              <p className="capture-runcount">
+                <span className="capture-runcount-n">{runCount.shots}</span>
+                <span className="capture-runcount-word">
+                  captured &middot; #{runCount.low}&ndash;{runCount.high}
+                </span>
+                <span
+                  className={
+                    runCount.gaps === 0 && runCount.ids === runCount.shots
+                      ? 'capture-runcount-ok'
+                      : 'capture-runcount-off'
+                  }
+                >
+                  {runCount.gaps === 0 ? 'no gaps' : `${runCount.gaps} missing`}
+                  {' · '}
+                  {runCount.ids === runCount.shots
+                    ? `${runCount.ids} ids`
+                    : `${runCount.ids} ids of ${runCount.shots}`}
+                </span>
+              </p>
+            )}
 
             {/* The game decides what the claim fields above may offer — the finish enum
                 and the rarity vocabulary are both per-game — and it still does: picking

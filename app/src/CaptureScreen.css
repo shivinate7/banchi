@@ -676,6 +676,50 @@
   margin-bottom: var(--s1);
 }
 
+/* THE RUN COUNTER. Mono because every value in it is a number, and docs/DESIGN.md gives the
+   utility face every number in the product — here it also means the row cannot change width
+   between cards, which on a sidebar beside a live feeder is the difference between a number
+   you can read at a glance and one that twitches.
+
+   TWO STATES AND NO THIRD. Muted while the arithmetic agrees with itself; ink and a rule
+   while it does not. There is deliberately no colour: docs/DESIGN.md's palette has no
+   semantic red, the accent means "unsure" or "the only action", and this is neither — it is
+   a fact that wants reading, not a warning that wants obeying. Weight and a hairline are the
+   whole vocabulary. */
+.capture-runcount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: var(--s2);
+}
+
+.capture-runcount-n {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.capture-runcount-word {
+  color: var(--muted);
+}
+
+.capture-runcount-ok {
+  color: var(--muted);
+}
+
+/* The disagreement case: a gap, or fewer distinct capture ids than shots. Both mean a card
+   may have gone past the lens without taking a position of its own, which is the one thing
+   on this screen worth interrupting a run for. */
+.capture-runcount-off {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom: 1px solid var(--ink);
+}
+
 .capture-session .capture-row {
   min-height: 24px;
 }
