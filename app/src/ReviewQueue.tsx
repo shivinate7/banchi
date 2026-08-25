@@ -528,31 +528,42 @@ const RELOAD_KEY_LABEL = 'R'
 const UNDO_KEY = 'u'
 const UNDO_KEY_LABEL = 'U'
 
-/* Twenty seconds, and it is not a number this file chose: `Fulfillment.tsx:UNDO_WINDOW_MS` is
- * the same value on the same product for the same job, and D28 asks for "the shape the product
- * already ships" rather than a second one.
+/* TEN ANSWERS DEEP, AND NO CLOCK AT ALL. This was twenty seconds, copied from
+ * `Fulfillment.tsx:UNDO_WINDOW_MS` because D28 asks for "the shape the product already ships".
+ * The copy was right about the shape and wrong about the screen, and the difference is pace.
  *
- * THE CLOCK IS HELD HERE AND NOT BY THE SERVER, which is the owner's ruling taken on the day —
- * screen-held now, server-enforced only if it bites — and it matches mark-sold exactly:
- * `POST /review/<box>/<index>/answer` has no expiry, because a deadline down there fails the
- * reversal precisely when the store is slow to lock. What the twenty seconds govern is how long
- * the control stays on screen.
+ * Mark-sold happens with the card in his hand: he pulls it, presses once, and knows
+ * immediately whether it was the right one. Twenty seconds is generous there because the
+ * feedback is physical and instant. Review runs at two to six seconds a card for an hour, and
+ * the mistake is noticed the way mistakes on a fast loop always are — three cards later, when
+ * something about the last one nags. A twenty-second window is about four cards wide, so it
+ * expires at almost exactly the moment it becomes useful; and it reached only the newest
+ * answer anyway, so noticing at N+3 meant it was never reachable at all.
  *
- * WHAT THAT COSTS, RECORDED RATHER THAN DISCOVERED. Two things, both accepted:
+ * So the bound moves from time to COUNT: the last ten answers stay reversible until ten more
+ * push them out. Prodigy, the reference tool for annotation throughput, runs a ten-deep
+ * history with no expiry for the same reason. `Fulfillment.tsx` keeps its twenty seconds —
+ * different screen, different pace, and D28's shape rule was never a rule about the number.
+ *
+ * THIS IS A CHANGE OF BOUND, NOT OF RULE. `store/queues.py:Queue.upsert` still refuses to
+ * re-queue a position a human has cleared, so an answer still outlives its question for
+ * everything outside the ten; this is the hole D28 punched through that, made a useful size.
+ *
+ * WHAT IT COSTS, RECORDED RATHER THAN DISCOVERED. Both were true of the clock too:
  *
  *   it does not survive a reload   The receipts live in component state, so a refresh, a route
  *                                  change or a crash takes every standing undo with it. The
  *                                  answer is written and the card stays answered; what is lost
  *                                  is the way back. The trigger for revisiting is the first
- *                                  answer actually lost that way, and the fix would be a
- *                                  deadline on the `answered` history line rather than a
- *                                  longer window here.
+ *                                  answer actually lost that way, and the fix would be reading
+ *                                  the `answered` history line back rather than holding more
+ *                                  here.
  *   the other device knows nothing A browser that never saw the answer never draws its undo
  *                                  (D13: two devices, one store, no session between them). The
  *                                  route would accept the reversal from either; only this
  *                                  screen decides to offer it.
  */
-const UNDO_WINDOW_MS = 20_000
+const UNDO_DEPTH = 10
 
 /* Enter the group state: the whole eligible worklist drawn as photographs over one confirm
  * (docs/DECISIONS.md, "A homogeneous queue may be answered as a group" — the entry that
@@ -843,10 +854,6 @@ type Receipt = {
    *  docs/DESIGN.md's rule that an action keeps its name through the whole flow. */
   said: string
 
-  /** Wall-clock deadline, fixed when the answer lands and never touched again. A duration held
-   *  here instead would have to be restarted on every re-render. ONE deadline for a whole
-   *  group: its sixteen answers landed in one write, so they age as one. */
-  until: number
 }
 
 /** A refusal, with the card it was about.
@@ -931,8 +938,8 @@ export function ReviewQueue() {
    * would blame the wrong card for a missing file. */
   const [photoAbsent, setPhotoAbsent] = useState<string | null>(null)
 
-  /* Answers still inside their twenty seconds (D28), newest first. See `Receipt` for why this
-   * is a list, and `UNDO_WINDOW_MS` for what a screen-held clock costs.
+  /* The last ten answers (D28), newest first, each still reversible. See `Receipt` for why
+   * this is a list, and `UNDO_DEPTH` for why the bound is a count rather than a clock.
    *
    * NEWEST FIRST, which is the opposite of every other list on this screen and is right for the
    * same reason `Fulfillment.tsx` orders its receipts that way: everything else here is a
@@ -1119,33 +1126,11 @@ export function ReviewQueue() {
   /** Stand a receipt up for one answer. A position answered twice replaces its own rather than
    *  stacking, which cannot happen while the entry is cleared in between and is the same rule
    *  `Fulfillment.tsx` states for a second sale of one position. */
-  const remember = useCallback((receipt: Omit<Receipt, 'until'>) => {
-    setReceipts((held) => [
-      { ...receipt, until: Date.now() + UNDO_WINDOW_MS },
-      ...held.filter((standing) => standing.key !== receipt.key),
-    ])
-  }, [])
-
-  /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per receipt —
-   * `Fulfillment.tsx`'s shape, and the reasoning transfers unchanged. Each receipt carries its
-   * own `until`, so this cannot re-arm anybody's window: it fires at the front of the queue,
-   * drops whatever has actually expired, and the state change arms it again for the next one.
-   * The 25ms of slack is what stops a timer firing a hair early from dropping nothing,
-   * returning the same array, and leaving the panel up forever — React bails out on an
-   * identical reference, so nothing would re-arm it. */
-  useEffect(() => {
-    if (receipts.length === 0) return
-    const soonest = Math.min(...receipts.map((receipt) => receipt.until))
-    const timer = window.setTimeout(
-      () =>
-        setReceipts((held) => {
-          const standing = held.filter((receipt) => receipt.until > Date.now())
-          return standing.length === held.length ? held : standing
-        }),
-      Math.max(0, soonest - Date.now()) + 25,
+  const remember = useCallback((receipt: Receipt) => {
+    setReceipts((held) =>
+      [receipt, ...held.filter((standing) => standing.key !== receipt.key)].slice(0, UNDO_DEPTH),
     )
-    return () => window.clearTimeout(timer)
-  }, [receipts])
+  }, [])
 
   const answer = useCallback(
     (row: Row, candidate: CandidateRow) => {
@@ -2011,8 +1996,8 @@ function RefusalPanel({
 
 /* THE UNDO RECEIPTS — D28's twenty seconds, drawn.
  *
- * ONE PANEL PER ANSWER, newest at the top, each with its own deadline. See `Receipt` for why
- * this is a list and `UNDO_WINDOW_MS` for what the clock costs.
+ * ONE PANEL PER ANSWER, newest at the top. See `Receipt` for why this is a list and
+ * `UNDO_DEPTH` for why they leave by being pushed out rather than by expiring.
  *
  * IT REUSES `review-note`, WHICH IS `RefusalPanel`'s SHELL. Not a shortcut: this is the same
  * kind of thing — a sentence, a machine line, and one control — sitting in the same slot, and a
