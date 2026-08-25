@@ -268,7 +268,7 @@ built, looked at, and rejected. Do not add one, and do not write a rule about th
 **This section specified a screen that now exists, and reads as a description of it.**
 `app/src/ReviewQueue.tsx` and `app/src/ReviewQueue.css` render it at `#/review`. Read every
 statement below as *does* and hold it against the screen — one card at a time, photo first,
-single column; the sentence; the candidate rows with their keys; the human label over the
+photo beside the choices above 900px; the sentence; the candidate rows with their keys; the human label over the
 machine string; a type scale that steps down with the price and a parked row dimmed rather
 than merely lower. The old header said "NONE OF THIS IS BUILT" and told you to read every
 line as *shall*; it survived the screen by one commit, which is exactly the drift it was
@@ -291,7 +291,7 @@ stops short of what this section asks: keys are drawn on the first nine candidat
 The hardest screen in the product and the one the owner spends hours in, so its shape is
 part of the design and not left to step 7.
 
-**One card at a time, photo first, single column — with one narrow exception since D29.** A
+**One card at a time, photo first — with one narrow exception since D29.** A
 queue where every entry shares a reason code AND offers the same single candidate may be
 answered as a group. Gate B is the evidence D4 did not have: 16 of 53 entries, every one the
 same reason, detection agreeing with itself across every duplicate pair — one systematic fact
@@ -301,16 +301,38 @@ because a bulk write over cards a human has not compared is exactly what D4 exis
 **The group confirm (D29, built 2026-08-23) is this screen's one solid fill, and the fill
 rule survives it**: the fill means "exactly one thing to do", and D29's eligibility — one
 shared reason, one candidate per card, one condition — is precisely what reduces the state to
-one action, so there is no second answer for the fill to be biased against. Reason chips on
-the Waiting heading filter the worklist (filtered rows dim, never hide); `G` opens the group
+one action, so there is no second answer for the fill to be biased against. Reason chips in
+the rail filter the worklist; `G` opens the group
 offer, Enter confirms over the grid of photographs — the grid IS the confirmation — and `U`
 reverses the whole group.
 
-Photo as large as the viewport allows at
-the top, then one
-sentence naming what the system found, then the candidate rows with their prices. No
-left/right split, so the same layout works on a laptop and a phone. Answering advances
-immediately.
+Photo as large as the viewport allows, then one sentence naming what the system found, then
+the candidate rows with their prices. Answering advances immediately.
+
+**"NO LEFT/RIGHT SPLIT" WAS THIS SECTION'S RULE AND IS REVERSED ABOVE 900px, ON THE OWNER'S
+APPROVAL OF 2026-08-24 AND ON A MEASUREMENT THIS FILE NEVER HAD.** The sentence that stood
+here — *"No left/right split, so the same layout works on a laptop and a phone"* — bought one
+layout for two devices, and the price is now known. Measured in a browser at 1440x900 against
+a populated queue: the photograph draws **244x432, which is 8.1% of the viewport**, on the one
+screen whose whole job is looking at a photograph; the candidate rows begin at y=721 and the
+third is **cut off by the fold**; the pending worklist starts 234px below it; one card costs
+**2,356px of scroll**; and **752px — 52% of the width — is empty** beside all of it.
+
+**The empty column is not waste sitting next to a small photograph. It is the CAUSE of it.**
+`--photo-cap` exists precisely because everything stacks in one column and the sentence plus
+the first candidate must stay in view. Put the choices beside the photograph and the cap stops
+having anything to buy.
+
+**The phone keeps the single column, byte for byte.** The split is a desktop layout and
+nothing below 900px is re-tuned — which is what preserves the half of the old rule that was
+actually about the phone. What the old sentence got wrong was treating one layout for both as
+free; it was being paid for by the laptop, in the currency this screen exists to spend.
+
+**The height cap is REBASED, not retired.** Retiring it was the instruction and it is refused:
+`--photo-cap` has exactly two readers, `.review-photo`'s `max-height` and `.review-frame`'s
+`min-height`, and *their being the same expression is what makes D28's reservation exact*.
+Deleting the variable deletes the reservation. Its value moves from `48vh` to the height that
+is actually left, and both readers are untouched.
 
 **"As large as the viewport allows" replaced "full width at the top" on 2026-08-13, after
 building it.** Full column width is right on a phone and wrong on a laptop: a card is 63×88,
@@ -327,11 +349,18 @@ largest thing on the screen and that what you compare it to stays in view with i
 judging screen: the photograph has to be big enough to settle whether the foil matches the
 toggle, which is the disagreement that put the card in this queue.
 
-**Worked expensive-first, and that ordering is visible.** `store/queues.py:sort_key` sorts
-priced cards first and descending, unpriced last, then box-walk order by box and index;
-`app/src/ReviewQueue.tsx:bandOf` puts every worklist row in one of five type-size bands cut
-from that same price, and a parked row is dimmed rather than merely lower. A queue where
-every row looks equally important has thrown away a sort it already has.
+**Worked expensive-first — and the sentence that used to follow this one was already false
+before the split touched it.** `store/queues.py:sort_key` gained a **starvation tier ahead of
+price** on 2026-08-24: an entry past `STARVATION_DAYS` outranks every priced card, oldest
+first, because an unpriced `no_catalog_row` has no market and sorted last *permanently* — box
+2 left 47 entries queued, counted and unreachable. `bandOf` is price-only and cannot see that
+tier, so the five type-size bands render a sort the queue no longer has.
+
+So the bands are retired with the worklist they were drawn on rather than carried into the
+rail, and what discharges "the ordering is visible" now is honest about the sort that actually
+runs: the card head carries how long this card has waited, and the rail's reason chips carry
+counts computed over the whole queue. A band scale in answer order would render a price sort
+the list does not have, which is the same bias this file rejects for the candidate rows.
 
 **The band edges are still the one number on this screen nobody has measured, and Gate B is
 why that sentence had to be rewritten rather than deleted.** They are marked as an

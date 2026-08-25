@@ -24,8 +24,9 @@ import './ReviewQueue.css'
  *
  * "The hardest screen in the product and the one the owner spends hours in, so its shape is
  * part of the design and not left to step 7." Every structural choice below is that
- * section's, not this file's: one card at a time, photo first, single column; the sentence
- * before the candidates; the price-driven type scale; accent outlined and never filled where
+ * section's, not this file's: one card at a time, photo first, the choices BESIDE the
+ * photograph above 900px and beneath it below (the split that section forbade until
+ * 2026-08-24, reversed there with its measurement); the sentence before the candidates; the price-driven type scale; accent outlined and never filled where
  * there are two answers; the human label above the machine string; a key on every choice.
  *
  * BUILT BEFORE GATE B, WHICH ITS OWN SPEC SAYS NOT TO DO. docs/specs/capture-app.md §0 puts
@@ -1874,6 +1875,10 @@ export function ReviewQueue() {
           replaces the card rather than floating over it, because it IS the screen while it
           is up — the photographs it draws are the confirmation, and a card still answerable
           underneath them would be two writes armed at once. */}
+      {/* THE BODY: the card (or the group offer) and the rail beside it. One wrapper, because
+          the card and the group are alternatives in a single slot and the worklist is their
+          SIBLING — so the grid that puts them side by side cannot live on either of them. */}
+      <div className="review-body">
       {current === null ? null : grouping && groupOffer !== null ? (
         <GroupConfirm
           offer={groupOffer}
@@ -1911,6 +1916,7 @@ export function ReviewQueue() {
           disabled={busy || loading}
         />
       )}
+      </div>
     </main>
   )
 }
@@ -1949,7 +1955,8 @@ type CardProps = {
 
 /* WHERE THE EYE ALREADY IS, WHICH IS NOT WHERE THIS PANEL USED TO BE DRAWN.
  *
- * It was rendered between the header and the card. With the photo frame at 60vh that puts a
+ * It was rendered between the header and the card. With the photo frame stacked above the
+ * rows at 60vh, that puts a
  * refusal roughly 700px above the candidate rows the operator is looking at — off-screen at
  * 1440x900, measured — so a refused answer was invisible at the moment it happened. The card
  * had meanwhile been restored and was the next keypress's target, which is the worst possible
@@ -2202,8 +2209,10 @@ function GroupConfirm({
   )
 }
 
-/* Photo first, then the finding, then the rows. Single column, so the same layout works on a
- * laptop and a phone — docs/DESIGN.md rejects a left/right split by name. */
+/* Photo first, then the finding, then the rows — the photograph in its own grid track and
+ * the finding, rows, panels, actions and facts in theirs, side by side above 900px and
+ * stacked below it. docs/DESIGN.md rejected a left/right split by name until 2026-08-24 and
+ * now carries the measurement that reversed it. */
 function Card({
   row,
   activity,
@@ -2239,8 +2248,16 @@ function Card({
 
   return (
     <section className="review-card">
-      <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
+      {/* THE STAGE. Its own element because the photograph is now a grid TRACK rather than the
+          first item of a column, and because sticky needs a box of its own to stick. */}
+      <div className="review-stage">
+        <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
+      </div>
 
+      {/* THE CHOICE COLUMN, WHICH IS WHAT `.review-card` USED TO BE. Everything below is
+          unmoved and un-retuned: same order, same measure, same flex column with
+          `align-items: flex-start`. Only its position relative to the photograph changed. */}
+      <div className="review-choice">
       {/* WHERE IT IS AND WHY IT IS HERE, ON ONE LINE. Stacked, these two cost 110px of the
           gap between the photograph and the candidate rows — on a screen that had the third
           candidate row 12px below a 900px fold. Side by side they cost 68px and the whole
@@ -2384,6 +2401,7 @@ function Card({
           are worth having on the screen the owner debugs a run from; they are not worth
           standing between the finding and the choice. */}
       <Facts row={row} />
+      </div>
     </section>
   )
 }
@@ -2563,8 +2581,10 @@ function Waiting({
    * disagreements scattered across a run mean individual cards are mis-sorted.
    *
    * ON THIS SECTION'S OWN HEADING AND NOT AT THE TOP OF THE SCREEN, which is where it was
-   * asked for. Every pixel above the card pushes the candidate rows further below the fold —
-   * they already start at y=911 of 900 at 1440x900 — and this list is where a shape is read
+   * asked for. Every pixel above the card pushed the candidate rows further below the fold —
+   * they started at y=911 of 900 at 1440x900 before the split of 2026-08-24 put them beside
+   * the photograph, and the reason survives the fix: this heading is beside the card rather
+   * than above it, so it still costs the rows nothing — and this list is where a shape is read
    * against the rows that make it up. Nothing above the photograph moved to make room for it.
    */
   const shape = useMemo(() => {

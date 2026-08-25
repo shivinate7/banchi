@@ -4,8 +4,11 @@
  * FOUR RULES DO ALL THE WORK IN THIS FILE, and they are the document's rather than this
  * file's:
  *
- *   1. One card at a time, photo first, SINGLE COLUMN. No left/right split, so the same
- *      layout works on a laptop and a phone.
+ *   1. One card at a time, photo first. THE PHOTOGRAPH AND THE CHOICES SIT SIDE BY SIDE
+ *      above 900px and stack below it — the split this rule used to forbid, reversed on
+ *      2026-08-24 with the owner's approval and the measurement docs/DESIGN.md now carries.
+ *      The phone keeps the single column byte for byte, which was the half of the old rule
+ *      that was ever about the phone.
  *   2. The sort has to be visible: a row's name size and its price size both step down as
  *      the price does, and a parked row is dimmed rather than merely lower.
  *   3. Accent has exactly two jobs. Outline and text weight where the system is unsure —
@@ -40,9 +43,16 @@
    costs that scroll once per card across hundreds of them.
 
    So the chrome is tight — s5 vertically rather than s6, one line of lede, s3 between the
-   card's parts — and the photo carries a height cap. Rejected: the left/right split that
-   would fix it outright, which docs/DESIGN.md forbids by name so that one layout serves a
-   laptop and a phone.
+   card's parts — and the photo carries a height cap.
+
+   THE SPLIT THIS PARAGRAPH REJECTED IS NOW WHAT SHIPS, AND THE REJECTION IS WHY IT TOOK SO
+   LONG. It read: "Rejected: the left/right split that would fix it outright, which
+   docs/DESIGN.md forbids by name so that one layout serves a laptop and a phone." The
+   forbidding was real; what nobody had was the price. Measured on 2026-08-24 against a
+   populated queue at 1440x900: the photograph drew 8.1% of the viewport, the third candidate
+   row was cut off by the fold, and 52% of the width was empty. One layout for two devices was
+   never free — the laptop was paying for it, on the screen that exists to look at a
+   photograph. The split is desktop-only and the phone below 900px is untouched.
 
    THE CAP IN FORCE IS 48vh, DECLARED ONCE AS `--photo-cap` ON `.review` AND READ BY TWO
    RULES: `.review-photo`'s max-height, and the min-height of the `.review-frame` that
@@ -73,24 +83,53 @@
      rows further below the fold. Nothing about this screen ever asked for his density; it was
      inherited from nowhere in particular. */
   padding: var(--s4);
-  /* One column, and narrow enough that the sentence does not run to newspaper measure.
-     Everything on this screen stacks inside it — photo, finding, candidates, worklist — so
-     a phone gets the same order with no rules to switch off.
+  /* THE VERTICAL BUDGET, SPELLED OUT SO A LATER SESSION CAN CHECK IT RATHER THAN RE-MEASURE
+     IT. 162 = 46 (the nav strip, app/src/App.css — no token owns that number) + 16 (this
+     element's padding-top) + 68 (.review-head: the shared title/controls line, the lede, its
+     padding-bottom and its 1px rule) + 16 (.review-card's margin-top) + 16 (padding-bottom).
+     At 1440x900 that puts the frame's top at y=146 — UNCHANGED from the single-column layout,
+     which is what keeps docs/DESIGN.md's 150px first-content rule green — and leaves 738px
+     beneath it. */
+  --photo-h: calc(100vh - 162px);
 
-     688 RATHER THAN 720, WHICH IS THE SAME COLUMN AND NOT A NARROWER ONE. `box-sizing:
-     border-box` puts the padding inside this number, so the tuned content measure is
-     720 - 2x32 = 656px; dropping the padding to 16 without dropping this to 688 would have
-     widened the sentence to 688px on the quiet. The measure is what was tuned and the measure
-     is what is held. */
-  max-width: 688px;
+  /* 0.5625 IS THE RIG'S FRAME, NOT A CARD. D13: the Cam Link hands the browser a landscape
+     frame and the rotation is applied at encode time, so the STORED photo is 2160x3840 — 9/16.
+     Deriving the track width from the height is what stops the column reflowing when the image
+     decodes, and it is why the photograph grows with a taller screen rather than a wider one.
+     Every area figure computed from a bare card's 63:88 is wrong about this screen. */
+  --photo-w: calc(var(--photo-h) * 0.5625);
+
+  /* THE TUNED MEASURE, UNCHANGED AND MOVED RATHER THAN WIDENED. 688 - 2x16 = 656px of content
+     is what the sentence, the candidate rows and the facts panel were all tuned against, and
+     they still sit inside a 688px box — only what is BESIDE them has changed. 688 rather than
+     720 for the reason this comment has always given: `box-sizing: border-box` puts the
+     padding inside the number, so 720 with 16px padding would have widened the sentence to
+     688 on the quiet. The measure is what was tuned and the measure is what is held. */
+  --choice-w: 688px;
+  --rail-w: 280px;
+
+  /* Binds only above the split, where it stops the head's controls flying off to the right on
+     a very wide display. It does not bind at 1440, where the grid's own tracks decide. */
+  max-width: calc(
+    var(--photo-w) + var(--s5) + var(--choice-w) + var(--s5) + var(--rail-w) + (var(--s4) * 2)
+  );
 
   /* THE CAP, DECLARED ONCE AND READ TWICE — by the frame that reserves the space and by the
      photograph that fills it. docs/DESIGN.md requires one cap and says this file is where the
      number lives; two rules that both spell `60vh` would be two caps one edit away from
      disagreeing, and the frame silently reserving a different height from the image it holds
      is the exact defect D28 sent this session to remove. Not a design token: tokens.css owns
-     colour, type, spacing and radius, and this is a judgement about one screen. */
-  --photo-cap: 48vh;
+     colour, type, spacing and radius, and this is a judgement about one screen.
+
+     REBASED FROM 48vh ON 2026-08-24, AND THE VARIABLE IS DELIBERATELY NOT RETIRED. Retiring
+     it was the instruction and it is refused: the two readers below are D28's reservation, and
+     THEIR BEING THE SAME EXPRESSION is the whole of why the frame reserves exactly what the
+     image fills. Delete the variable and the reservation goes with it. 48vh existed only
+     because the sentence and the first candidate row stacked UNDER the photograph and had to
+     stay in view; they sit beside it now, so the cap is simply the height that is left. An
+     uncapped photo at 9/16 in this column would draw 1152px tall and put page scroll straight
+     back, which is the thing the split exists to remove. */
+  --photo-cap: var(--photo-h);
 }
 
 /* ---- head ----
@@ -273,8 +312,8 @@
 }
 
 /* THE REFUSAL PANEL, DRAWN INSIDE THE CARD BENEATH THE CANDIDATE ROWS. It used to sit between
-   the header and the card, which at a 60vh photograph is some 700px above the rows the
-   operator is looking at when he presses a digit — a refusal nobody sees, over a card that was
+   the header and the card, which — when the photograph stood above the rows rather than beside
+   them — is some 700px above the rows the operator is looking at when he presses a digit — a refusal nobody sees, over a card that was
    silently restored and is the next keypress's target. It cannot go ABOVE the rows, because
    anything that appears there pushes every one of them down by its own height, which is the
    movement this session was sent to remove.
@@ -283,7 +322,7 @@
    the space; and `align-items: flex-start` means it must claim the width or it shrinks to its
    own sentence. Both are the container's business rather than the panel's, which is why this
    is a child rule and not an edit to `.review-note`. */
-.review-card > .review-note {
+.review-choice > .review-note {
   width: 100%;
   margin-top: 0;
 }
@@ -307,14 +346,50 @@
   word-break: break-all;
 }
 
+/* ---- the body: the card (or the group offer), and the rail beside it ---- */
+
+/* The card and the group offer are alternatives in ONE slot, and the rail is their sibling —
+   so the outer grid cannot live on `.review-card`. This wrapper owns the margin the card used
+   to carry; leaving it on both would double the gap. */
+.review-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, var(--rail-w));
+  gap: var(--s5);
+  align-items: start;
+  margin-top: var(--s4);
+}
+
 /* ---- the one card ---- */
 
+/* THE SPLIT ITSELF: the photograph in a track sized from its own height, the choices beside
+   it in the measure they were tuned in. docs/DESIGN.md's reversed rule is the argument. */
 .review-card {
+  display: grid;
+  grid-template-columns: var(--photo-w) minmax(0, var(--choice-w));
+  gap: var(--s5);
+  align-items: start;
+}
+
+/* Sticky for the reason BoxBrowse.css gives one screen over: a column of rows long enough to
+   scroll must not push the thing being checked off the screen. The photograph is exactly
+   viewport-height, so it has no bottom of its own to reveal. */
+.review-stage {
+  position: sticky;
+  top: var(--s4);
+  align-self: start;
+  min-width: 0;
+}
+
+/* THIS IS WHAT `.review-card` USED TO BE, VERBATIM. Every child — the card head, the sentence,
+   the candidate rows, the refusal and receipt panels, the actions, the facts — keeps the exact
+   box it had in the single column, including `align-items: flex-start`, which four other rules
+   in this file depend on by name. */
+.review-choice {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--s3);
-  margin-top: var(--s4);
+  min-width: 0;
 }
 
 /* "Photo as large as the viewport allows" is the rule — docs/DESIGN.md's own words since
@@ -329,6 +404,15 @@
    `width: 100%` with `object-fit: contain`, which drew a correct photograph beside an equal
    area of empty surface inside one border — a panel that looks like a bug. Rendered, looked
    at, changed.
+
+   EVERYTHING FROM HERE TO THE END OF THIS COMMENT IS A DATED RECORD AND IS SUPERSEDED. It
+   argued a cap between 34vh and 60vh, and the argument was entirely about how much room the
+   sentence and the first candidate row needed BENEATH the photograph. They are beside it as
+   of 2026-08-24, so the whole trade dissolved: `--photo-cap` is now the height that is left
+   and the photograph draws 415x736. The measurements are kept because they are measurements —
+   this repo does not rewrite those to agree with a later tree — and the lead-in below is left
+   in place with this paragraph over it rather than edited, so the record still reads as what
+   it was. Read it as history; the live number is on `.review`.
 
    60vh, NOT 38vh, AND EVERY MEASUREMENT IS HERE BECAUSE THIS IS WHERE THE NUMBER IS. Taken
    at 1280x900 with three candidate rows: at 34vh the photo drew 220x306 with all three rows
@@ -794,10 +878,35 @@
 /* 24 above the rule and 12 below it, down from 32 and 16. The rule is what separates the card
    from the list; the space either side of it only has to say which side of the rule a thing is
    on, and 32px was the Fulfiller's end of the scale doing an owner's job. */
+/* IT IS A RAIL NOW, AND IT SCROLLS ITSELF RATHER THAN SCROLLING THE PAGE. This is the whole
+   of the 4,018px: the worklist was 47 rows in the page flow, 234px below the fold, so reading
+   it meant taking the photograph off the screen. Beside the card it costs no vertical budget
+   at all, and capping it at the viewport with its own overflow is what stops 47 rows — or 544
+   — putting page scroll back.
+
+   REPLACING IT WITH A LAST-TEN-DECISIONS LIST WAS THE PLAN AND IS DEFERRED, DELIBERATELY.
+   Prodigy and Zendesk both remove the pending queue at work time, and the argument is good;
+   but drawn here the list costs nothing, it is the only rendering of docs/DESIGN.md's
+   "the ordering is visible", and swapping it for a session-local list that empties on every
+   reload — including the `R` the server itself prescribes in six refusal messages — is a
+   trade the owner should make rather than one a stylesheet should. The scroll is fixed either
+   way, which is what this change was for.
+
+   The margin and rule that separated it from the card BELOW are gone: it sits beside the card
+   now, and a top border on a column is a line pointing the wrong way. */
 .review-waiting {
-  margin-top: var(--s5);
-  border-top: 1px solid var(--line);
-  padding-top: var(--s3);
+  position: sticky;
+  top: var(--s4);
+  align-self: start;
+  /* THE SAME BUDGET THE PHOTOGRAPH GETS, and for the same reason: the rail's top is the
+     frame's top (y=146), so `100vh` minus the page's own padding would overrun by exactly the
+     header. One variable, two columns, no second arithmetic to drift. */
+  max-height: var(--photo-h);
+  overflow-y: auto;
+  /* The scrollbar lives inside the rail's 280px, so gaining one cannot narrow the row text
+     and reflow what is already on screen. */
+  scrollbar-gutter: stable;
+  min-width: 0;
 }
 
 /* A section label, so the utility face uppercase and tracked — the same treatment App.css
@@ -1093,6 +1202,54 @@
 .review-group-confirm:disabled .review-key {
   color: var(--muted);
   border-color: var(--line);
+}
+
+/* ---- narrower than the split ---- */
+
+/* THIS FILE'S FIRST MEDIA QUERIES, and they exist because docs/DESIGN.md's reversed rule is
+   scoped to the desktop rather than applied everywhere. Nothing moves in the DOM at any
+   width — the order is stage, choice, rail throughout — so a screen reader and the tab ring
+   read the same thing on a phone as on the rig. */
+
+/* The rail drops beneath the card first, because it is the one column that is beside the work
+   rather than part of it. */
+@media (max-width: 1200px) {
+  .review-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* THE PHONE IS THE PRE-SPLIT SCREEN, BYTE FOR BYTE, AND THAT IS THE POINT. Below this width
+   the declared numbers go back to what they were, the card collapses to one column, and the
+   order is photo, finding, candidates, panels, actions, facts — which is what this file
+   shipped with and what 375px was tuned against. The split is a desktop layout; the phone
+   gets no new rules to be wrong about, which is the half of the old rule worth keeping. */
+@media (max-width: 900px) {
+  .review {
+    max-width: 688px;
+    --photo-cap: 48vh;
+  }
+
+  .review-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-stage {
+    position: static;
+  }
+
+  /* AND THE RAIL GOES BACK INTO THE PAGE FLOW, which is the half of "byte for byte" that a
+     grid change alone does not deliver. Beside the card it is a column that must not scroll
+     the page; beneath the card on a phone it is the worklist again, and a sticky box with its
+     own scrollbar inside a page that already scrolls is two scrollbars arguing. */
+  .review-waiting {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    margin-top: var(--s5);
+    border-top: 1px solid var(--line);
+    padding-top: var(--s3);
+  }
 }
 
 /* ---- focus ---- */

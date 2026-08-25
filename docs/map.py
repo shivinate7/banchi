@@ -870,7 +870,8 @@ COMPONENTS = [
             # seen it hold a real card — the distinction the whole entry note above is about,
             # and the one a reader skimming `does` lines would otherwise lose.
             "src/ReviewQueue.tsx": {
-                "does": "the review queue: one card at a time, photo first, single column, the "
+                "does": "the review queue: one card at a time, photo first, the choices "
+                        "BESIDE the photograph above 900px and stacked below it, the "
                         "reason as a human label over its machine string, candidate rows "
                         "priced from the export, and an answer that writes and advances with "
                         "no dialog. Reads GET /queues and writes one candidate row back "
@@ -882,7 +883,10 @@ COMPONENTS = [
             # numbers in this directory invented rather than read out of a module, and D9's
             # threshold is the only real number they are anchored to.
             "src/ReviewQueue.css": {
-                "does": "its layout, and the price-driven type scale that makes the sort "
+                "does": "its layout — a photo track sized from its own height beside a "
+                        "choice column in the tuned 656px measure, with the worklist as a "
+                        "self-scrolling rail so 47 rows cost the page no height — and the "
+                        "price-driven type scale that makes the sort "
                         "visible — name size and price size stepping down together, parked "
                         "rows dimmed. Accent outlined, never filled, wherever there are two "
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
