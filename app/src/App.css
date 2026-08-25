@@ -27,6 +27,19 @@
   display: flex;
   align-items: stretch;
 
+  /* IT WRAPS, AS OF 2026-08-24, BECAUSE IT DID NOT AND THAT WAS A REAL DEFECT. Found by
+     app/tests/review.spec.ts asserting no sideways scroll at 375px: the page scrolled to
+     557px on a 375px viewport, and the culprit was not the screen under test — it was this
+     strip. Five route names in one non-wrapping row are wider than a phone, so every owner
+     screen inherited a horizontal scrollbar there and none of them could do anything about
+     it.
+
+     Nothing about the desktop changes: at any width that fits, a wrapping flex row lays out
+     identically to a non-wrapping one. What wrapping buys is that the strip gets taller on a
+     narrow screen instead of pushing the page sideways — and a sideways scroll is the one
+     kind that hides content with no affordance saying so. */
+  flex-wrap: wrap;
+
   /* 16px, DOWN FROM 32, AND THE REASON IS ALIGNMENT RATHER THAN DENSITY. docs/DESIGN.md's
      page-chrome rule puts an owner screen's outer padding at 16px, so a 32px nav left the
      first route name one full step out of line with the heading directly beneath it — a

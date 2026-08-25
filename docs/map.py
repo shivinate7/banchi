@@ -1142,6 +1142,33 @@ COMPONENTS = [
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
             },
+            # THE SCREEN docs/DESIGN.md SPECIFIES HARDEST WAS THE ONE WITH NO BROWSER
+            # COVERAGE, until 2026-08-24. `grep -rn '#/review' app/tests/` returned nothing:
+            # the Fulfiller's view had its nine-row table, the inventory screen had its
+            # reachability battery, step 6's button had its own sheet, and the screen the
+            # owner spends the most hours in had prose. This file is the split's own
+            # instrument — it asserts the numbers that justified reversing a rule
+            # docs/DESIGN.md had stated by name, so a later session that re-stacks the
+            # screen fails these before anyone has to remember why it was split.
+            "tests/review.spec.ts": {
+                "does": "the review queue's geometry and its two guarantees: the photograph "
+                        "at >=23% of the viewport with a >=700px long edge, zero page scroll "
+                        "for one card, every candidate row on screen beside the photo, D28's "
+                        "frame not moving between cards, the 1:1 loupe painting native pixels "
+                        "rather than a second downscale, an answer that stays reversible past "
+                        "the twenty seconds the old clock allowed, the single column below "
+                        "900px, and D24's pooled card drawing no photograph here. Every route "
+                        "is stubbed and no write is ever issued. Run by `make design-check`.",
+                "governed_by": ["D4", "D13", "D24", "D28", "D29"],
+                "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
+                        "off the seven-test contract deliberately. The photograph stub is "
+                        "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
+                        "(D13), and a square stand-in would make every area assertion a "
+                        "confident lie about a shape the screen never sees. Writing it found "
+                        "a defect it was not looking for — app/src/App.css's nav strip did "
+                        "not wrap, so five route names scrolled every owner screen sideways "
+                        "to 557px on a 375px viewport.",
+            },
             "tests/fulfillment.spec.ts": {
                 "does": "all nine rows of the Fulfillment constraints table against the "
                         "rendered view, with every contrast ratio computed from the colours "
