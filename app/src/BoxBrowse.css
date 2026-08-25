@@ -543,9 +543,18 @@
 
    It collapses to one column under 900px, where two columns would leave neither wide enough to
    be worth having. Owner-side and desktop by D13, so this is the only breakpoint in the file. */
+/* THE PHOTOGRAPH GETS A REAL TRACK, AS OF 2026-08-24. It was capped at 280px and drew
+   280x435 — 9.4% of a 1440x900 viewport — while the review queue, doing the same job of
+   looking at a card, gives it 415x736 and 23.6%. Two screens that both exist to show a
+   photograph disagreed by a factor of two and a half about how big one should be, and this
+   was the small one despite being the screen with the whole box beside it.
+
+   The ceiling rises with the page's reclaimed 200px rather than at the facts' expense: the
+   value column beside it still holds its own measure, and the facts are short strings that
+   were never using the width they had. */
 .browse-detail {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
   gap: var(--s4) var(--s5);
   align-items: start;
   min-width: 0;
@@ -694,12 +703,17 @@
   min-width: 0;
 }
 
+/* TIGHTENED FROM s2 TO s1, WHICH IS 16px OF THE SEVEN ROWS. Measured before: a fact row was
+   48px tall to carry `Thievul` — six characters — and seven of them spent 336px saying what
+   fits in half that. docs/DESIGN.md puts owner screens at the 4-16 end of the spacing scale
+   and this was at its loose end on the densest screen in the product. The hairline still
+   separates every row, so nothing is lost but air. */
 .browse-fact {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
   gap: var(--s3);
   align-items: baseline;
-  padding: var(--s2) 0;
+  padding: var(--s1) 0;
   border-bottom: 1px solid var(--line);
 }
 

@@ -81,17 +81,49 @@ const REMEMBERED_DEVICE_KEY = 'pkmnscan.capture.deviceId'
  * every screen that shows one. */
 const ROTATION_KEY = 'pkmnscan.capture.rotation'
 
-export type Rotation = 0 | 90 | 180 | 270
+/* QUARTER TURNS ONLY, AND ONLY THE TWO THAT ARE EVER RIGHT ON THIS RIG (owner, 2026-08-24).
+ * This was `0 | 90 | 180 | 270` and offering all four was offering two wrong answers.
+ *
+ * D13 settles the geometry and it does not vary: the camera is MOUNTED ON ITS SIDE so a
+ * portrait card fills the portrait field, and the Cam Link hands the browser a landscape
+ * frame however it is mounted. So the stored photograph is only ever upright after a
+ * quarter turn — 90 or 270 depending on which way the body faces — and 0 leaves every card
+ * on its side while 180 leaves it on its side upside down. Gate B measured what that costs:
+ * 45 of 53 cards misread into the review queue, names and numbers both garbled, from
+ * exactly this defect before the setting existed at all.
+ *
+ * A control that can be set to a value that is never correct is a control that will
+ * eventually be set to it — and the failure is silent, because a sideways photograph looks
+ * like a photograph. Two choices, both of them right, and the operator picks the one that
+ * matches which way the body faces.
+ *
+ * 0 IS NO LONGER THE FALLBACK, and that is the half of this change that matters most. The
+ * reader below used to answer 0 for a missing, malformed or out-of-range value, so any device
+ * that had never chosen — every new browser, and every device whose storage was cleared —
+ * started sideways. It answers 90 now: a guess that is right half the time beats one that is
+ * wrong always, and the wrong half is one keypress away on a control whose value is printed
+ * in the sidebar. */
+export type Rotation = 90 | 270
 
-export const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270]
+export const ROTATIONS: readonly Rotation[] = [90, 270]
+
+/** The turn a device that has never chosen gets. See the note above: never 0. */
+const DEFAULT_ROTATION: Rotation = 90
 
 function readRememberedRotation(): Rotation {
   try {
     const stored = window.localStorage.getItem(ROTATION_KEY)
-    const value = stored === null ? 0 : Number(stored)
-    return (ROTATIONS as readonly number[]).includes(value) ? (value as Rotation) : 0
+    const value = stored === null ? DEFAULT_ROTATION : Number(stored)
+    /* A DEVICE THAT REMEMBERS 0 OR 180 IS MIGRATED RATHER THAN OBEYED. Those were legal
+       until today and are written into real browsers' storage; reading one back now would
+       reinstate the defect this change removes, on precisely the devices that have been
+       running longest. Out-of-range falls to the default, which is what this branch already
+       did for junk — the range simply got narrower. */
+    return (ROTATIONS as readonly number[]).includes(value)
+      ? (value as Rotation)
+      : DEFAULT_ROTATION
   } catch {
-    return 0
+    return DEFAULT_ROTATION
   }
 }
 

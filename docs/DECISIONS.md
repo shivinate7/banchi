@@ -422,6 +422,23 @@ counts. It belongs in this entry for the reason the paragraph above gives: nothi
 the capture device reaches the browser except its label, its id, and the frame it sends,
 so mount orientation is not a thing the app can detect.
 
+**THE ROTATION IS TWO CHOICES, NOT FOUR (owner, 2026-08-24).** It was `0 | 90 | 180 | 270`,
+and offering all four was offering two answers that are never right. The geometry above does
+not vary: the camera is mounted on its side and the Cam Link sends landscape regardless, so
+the stored photograph is upright only after a QUARTER turn — 90 or 270 depending which way
+the body faces. 0 leaves every card sideways; 180 leaves it sideways and upside down.
+
+**And 0 was the fallback, which is the half that actually bit.** The reader answered 0 for a
+missing, malformed or out-of-range value, so every new browser and every cleared device
+started in the state that produced this entry's own disaster — 45 of 53 misread, names and
+numbers garbled. It answers 90 now, and a stored 0 or 180 from before today migrates to it
+rather than being obeyed. A guess that is right half the time beats one that is wrong always,
+and the other half is one keypress away on a control whose value is printed in the sidebar.
+
+The narrowed union did the rest of the work by itself: TypeScript found the landscape stage,
+the landscape frame and the landscape undo thumbnail as unreachable branches, and all three
+are deleted rather than left permanently true.
+
 The fix is a rotation remembered per device and applied at capture time rather than in the
 identify path: `app/src/useCamera.ts` holds the setting and `app/src/encode-worker.ts`
 turns the frame before it is encoded. Rotating there corrects the model, `geometry/`'s crop

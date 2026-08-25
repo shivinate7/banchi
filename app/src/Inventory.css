@@ -38,10 +38,20 @@
    and 32px of its height spent before anything is drawn. */
 .inventory {
   padding: var(--s4);
-  /* The measure the whole screen is drawn inside. Unchanged: the two-column body below fills it
-     now rather than leaving half of it empty, which was the actual complaint. */
-  max-width: 1240px;
-  margin: 0 auto;
+
+  /* 1440 AND NO CENTRING, AS OF 2026-08-24, AND THE OLD PAIR WAS THROWING AWAY 200px.
+     `max-width: 1240px` with `margin: 0 auto` put 100px of dead page down each side of a
+     1440 viewport — on the screen that walks a box, shows a photograph and lists every copy,
+     all of which wanted the width. Measured beside its siblings, this screen was the worst of
+     three different answers to the same question: capture commits 1400, review derives its
+     own from its columns and wastes nothing, and this wasted 13.9%.
+
+     NO `margin: 0 auto`, which is the half that matters. docs/DESIGN.md requires the nav to
+     share the page's reading edge — app/src/App.css pads the strip to this same 16px so the
+     first route name sits directly above a screen's heading — and centring the page breaks
+     exactly that alignment on every viewport wider than the measure. Hard left, like the
+     review queue. */
+  max-width: 1440px;
 }
 
 /* THE PAGE TITLE, RENDERED INTO THE WALK'S OWN HEADER ROW rather than onto a line of its own —

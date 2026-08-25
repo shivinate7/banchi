@@ -1715,19 +1715,22 @@ export function CaptureScreen() {
    * and a mode change, and both are state updates that re-render on their own. */
   const traceFrames = traceRef.current?.frameCount ?? 0
 
-  /* A side-mounted camera stores portrait photos, and as of 2026-08-23 the previews turn
-   * with it: the frames go portrait and the live video is rotated by CSS so the operator
-   * sees the card the way the pipeline will. Display only — the encode worker and the
-   * motion sampler both read the element's intrinsic frames, which a CSS transform never
-   * touches. */
-  const turned = camera.rotation === 90 || camera.rotation === 270
-  const frameClass = turned ? 'capture-frame capture-frame-portrait' : 'capture-frame'
-  /* The stage narrows with the frames. Two portrait frames left in half-width landscape
-   * columns draw ~350px of card inside ~950px of column, and the operator reads the blank
-   * as a broken layout rather than as centring — reported from the rig on 2026-08-23. */
-  const stageClass = turned ? 'capture-stage capture-stage-portrait' : 'capture-stage'
-  const liveMediaClass =
-    camera.rotation === 0 ? 'capture-media' : `capture-media capture-media-turn${camera.rotation}`
+  /* THE FRAMES ARE ALWAYS PORTRAIT NOW, because the rotation is always a quarter turn
+   * (`useCamera.ts:ROTATIONS`, narrowed to 90/270 by the owner on 2026-08-24). The camera is
+   * mounted on its side so a portrait card fills the portrait field, and the Cam Link hands
+   * the browser a landscape frame regardless — so the preview turns with the stored photo and
+   * the operator sees the card the way the pipeline will.
+   *
+   * Display only: the encode worker and the motion sampler both read the element's intrinsic
+   * frames, which a CSS transform never touches.
+   *
+   * THE `turned` TERNARIES ARE GONE RATHER THAN LEFT ALWAYS-TRUE. They chose between a
+   * portrait and a landscape stage, and the landscape half is now unreachable — TypeScript
+   * said so, which is what a narrowed union is for. A branch that cannot be taken is a branch
+   * a later reader has to prove cannot be taken. */
+  const frameClass = 'capture-frame capture-frame-portrait'
+  const stageClass = 'capture-stage capture-stage-portrait'
+  const liveMediaClass = `capture-media capture-media-turn${camera.rotation}`
 
   /* Why the capture control is unavailable — first match wins, in the order the operator
    * can act on them.
@@ -2398,9 +2401,7 @@ export function CaptureScreen() {
                         fact in words, and what the thumbnail adds — whether this is the card you
                         meant — is not a thing alt text can carry. */}
                     <img
-                      className={
-                        turned ? 'capture-undo-thumb capture-undo-thumb-portrait' : 'capture-undo-thumb'
-                      }
+                      className="capture-undo-thumb capture-undo-thumb-portrait"
                       src={photoSrc(undoTarget.box, undoTarget.index, revision)}
                       alt=""
                     />
