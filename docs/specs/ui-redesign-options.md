@@ -575,3 +575,60 @@ twice. **The capture screen's geometry is read before it is drawn, not after.**
 **The sequencing rule, which is the whole point of this proposal:** do the review split first,
 because it carries the largest measured harm. **If it does not deliver, nothing after it is
 worth building — and no frame was rewritten to find out.**
+
+---
+
+## 7. THE REPAIR, AS BUILT — 2026-08-24
+
+Proposal D shipped. Every item measured, on the owner's instruction to complete the plan.
+
+| # | Change | Measured result | State |
+|---|---|---|---|
+| 1 | `#/review` splits: photograph beside the choices | photo 8.1% -> **23.6%** of viewport (2.91x area); page scroll 2,356px -> **0**; third candidate row was cut off, now every row is on screen | BUILT |
+| 2 | 1:1 sheen loupe, `background-size: auto` | native pixels at 240x180, inside the frame, no second request | BUILT |
+| 3 | `#/inventory` card detail above the folds | detail y=413 -> **y=115**; photo y=482 (cut off at 917) -> **y=184** | BUILT |
+| 4 | `#/fulfillment` caps the default list | **124,348px -> 4,693px** against the real 682 cards; all 42 of his assertions still pass | BUILT |
+| 5 | review undo: depth 10, no clock | verified live — three answers still reversible at 35s, where the old window dropped them at 20 | BUILT |
+| 6 | capture run counter | arithmetic correct on 7 cases incl. a gap and a replayed `capture_id`; render typechecked, NOT browser-verified | BUILT, partly verified |
+| 7 | grey patch on the tray | **physical, not code — see below** | NOT DONE, owner's to do |
+| + | `app/tests/review.spec.ts` | 9 assertions, all passing; 113 across every suite | BUILT |
+
+**Two deviations from the plan, both deliberate and both argued where they landed.** The
+worklist was NOT replaced by a last-ten-decisions list — beside the card it costs no vertical
+budget, it is the only rendering of "the ordering is visible", and the replacement would empty
+on every reload including the `R` the server prescribes in six refusal messages; it got a
+`max-height` and its own overflow instead, which fixes the scroll completely. And `--photo-cap`
+was NOT retired — its two readers are D28's reservation and their being one expression is what
+makes it exact — so the value was rebased and both readers left alone.
+
+**Three defects were found by doing the work rather than by looking for them**: the served
+frame is 9:16 and every area figure in this file and in `ui-research.md` was computed from a
+bare card's 63:88; `store/queues.py:sort_key` stopped being purely expensive-first when the
+starvation tier landed, so `docs/DESIGN.md`'s "that ordering is visible" was already false; and
+`app/src/App.css`'s nav strip did not wrap, so **every owner screen inherited a sideways scroll
+to 557px on a 375px viewport** from the shell.
+
+### 7.1 Item 7 — the grey patch, which is the highest leverage-per-dollar item here
+
+**It is not a UI change and no session can complete it, because it is a piece of card.** Stated
+here so it stops being carried as an unfinished software task.
+
+**What to do**: print a neutral grey patch — an 18% grey card, or the grey row of any colour
+target — and fix it to the tray inside the camera's field, within about 5cm of where the card
+lands, in the same plane. Metamorfoze 3.2 requires a workflow target in every preservation
+master for exactly this reason, "to compare the stability of the image performance over a
+series of images or scans"; RBGE mounts a fixed chart and scale bar on the backboard. It
+survives D32's crop, because that crop is in memory at identify time and the stored frame is
+untouched.
+
+**What it buys, and why it is worth more than anything above.** Two runs have now concluded
+"systematic sheen under the rig's lighting" — 30% at Gate B, **42% on box 2 with the owner
+supplying ground truth** — from entirely INDIRECT evidence. A patch of known reflectance in
+every frame turns that into a per-card number computed locally and free, and it makes D3's own
+stated re-enable condition — *"a rig that measures better"* — a thing that can be TESTED rather
+than asserted. `join --bypass` currently exists because nobody can measure the lamp.
+
+**What it does not need**: a decision entry, a route, or a line of code. Once the patch is in
+frame, the measurement is a few lines against `geometry/`, and that is worth writing only after
+the patch exists — code that reads a target no photograph contains is the shape this repo calls
+built-but-unreachable.
