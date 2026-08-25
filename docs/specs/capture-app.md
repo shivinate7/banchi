@@ -348,7 +348,11 @@ paraphrase them into something friendlier and less actionable.
 **OVERTAKEN 2026-08-23 — the control bar this section describes was rebuilt to Pass D**, the
 owner-approved hybrid of two design passes and an adversarial critique: one hairline row per
 field at rest, one field open at a time, a claims panel over a SESSION footer, rarity as a
-bitfield, the box list as a filter that never renders as a list. `docs/map.py`'s
+bitfield, the box list as a filter that never renders as a list. **The sidebar was re-ordered
+and re-boxed on 2026-08-24 at the owner's instruction** and the clause above is history: it is
+three independent panels down the column now — SESSION at the top, the claims in the middle,
+the shutter and undo at the foot, 12px of air between — rather than one panel whose groups are
+divided by hairlines. `docs/map.py`'s
 `CaptureScreen.tsx` entry carries the current shape; the mockup that served as the build spec
 is not in the repo (a scratchpad artifact), so the map and the component's own comments are
 the record. The section below is kept as the history of the chip-row era it specified —
@@ -376,8 +380,17 @@ never composes a second one.
 
 ### 5.2 — Box selection
 
-**Pick from a list of boxes already in use.** The list comes from `GET /status`, which
-already reports the next index per known box; no new route.
+**OVERTAKEN 2026-08-25 — the box field is one control, and the number is no longer typed.**
+D20's amendment carries the argument. The two inputs this section describes (a list to pick
+from, and a separate typed number to start a new box) are one free-text field that searches
+number and name together and reads `GET /boxes` on mount and on open, not `GET /status`; a box
+is created by NAME with `POST /boxes` allocating the lowest free number inside the lock
+(`next_box_number`), so there is no number to mistype; a duplicate name refuses `name_taken`;
+the creation row is drawn last so that Enter-takes-the-top-row cannot make a junk box; and a
+sealed box draws `sealed` and refuses. The `new_box` flag paragraph below is history for the
+same reason — the typo it was built to catch is a typo nobody can now make. The rest of this
+section is kept as the record of the era it specified; `docs/map.py`'s `CaptureScreen.tsx`
+entry carries the current shape.
 
 **Starting a new box is a typed number with no confirmation step.** The owner was offered a
 confirmation and declined it, and the cost is worth stating plainly rather than

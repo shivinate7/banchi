@@ -255,6 +255,8 @@ async function open(
             next_index: 2,
             cards: 1,
             sold: 0,
+            retired: 0,
+            listed: 0,
             sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }],
           },
         ],

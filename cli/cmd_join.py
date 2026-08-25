@@ -199,6 +199,53 @@ def run(args, say) -> int:
     for line in report_text.splitlines():
         say(line)
 
+    # D36 — said before the report rather than after it, because it changes what every
+    # position in that report MEANS. A correction the operator learns about afterwards is one
+    # they have already read a run report without.
+    if resolved.realigned:
+        say("")
+        say(
+            f"slots realigned: {len(resolved.realigned)} card(s) matched to the slot their "
+            f"photograph is in NOW, not the slot they were identified at."
+        )
+        say(
+            "    A card was deleted from the middle of this box since it was identified, so "
+            "everything after it slid down one (D10). Matched by photograph, never guessed."
+        )
+        for old_key, new_key in sorted(
+            resolved.realigned.items(), key=lambda kv: int(kv[0].split("/")[1])
+        )[:5]:
+            say(f"    {old_key} -> {new_key}")
+        if len(resolved.realigned) > 5:
+            say(f"    ... and {len(resolved.realigned) - 5} more")
+        say("")
+
+    # Named rather than dropped in silence — `CLAUDE.md`'s rule is that a card may leave the
+    # pipeline unlisted, never unrecorded, and a card that has left the BOX is the one case
+    # where there is no queue to record it into.
+    if resolved.departed:
+        say(
+            f"skipped: {len(resolved.departed)} card(s) in this run are no longer in the box "
+            f"— deleted mid-box or retired since it was identified."
+        )
+        for key in resolved.departed[:5]:
+            say(f"    {key} (identified here, photograph is gone)")
+        if len(resolved.departed) > 5:
+            say(f"    ... and {len(resolved.departed) - 5} more")
+        say("")
+
+    # An unchecked box must not read as a verified one.
+    if resolved.unverified_boxes:
+        boxes = ", ".join(str(b) for b in resolved.unverified_boxes)
+        say(
+            f"slots NOT verified for box {boxes}: nothing on disk to check them against — "
+            f"no photographs, no record carrying a digest, or none of this run's digests "
+            f"among the photographs there (a re-shoot replaces the bytes). This run's slot "
+            f"numbers were taken as recorded. If a card was deleted mid-box since it was "
+            f"identified, they are wrong and nothing here can tell."
+        )
+        say("")
+
     if resolved.failures:
         say(f"pre-join failures (-> main queue): {len(resolved.failures)}")
         for failure in resolved.failures:

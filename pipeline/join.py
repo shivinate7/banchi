@@ -64,8 +64,9 @@ has already failed to decide.
 
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -377,6 +378,45 @@ def number_index_key(text) -> str:
     return "".join(out).upper()
 
 
+# The number this export decorates a `Product Name` with, when it decorates one at all.
+# Anchored at the end and requiring the slash, so only a trailing collector number matches:
+# `Ho-Oh`, `Wally's Compassion` and `Team Rocket's Mewtwo` keep every character they have.
+_NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
+
+
+def name_index_key(text) -> str:
+    """The one fold the NAME index and every name lookup pass through (D35).
+
+    `number_index_key`'s rule applied to the other column, for the same reason and with the
+    same invariant: one function, both sides of the comparison. It exists because
+    `Product Name` inconsistently embeds the collector number and `CLAUDE.md` says so in as
+    many words — *"Never join on Product Name — it inconsistently embeds numbers."* D35
+    narrows that rule rather than repealing it, and this function is the narrowing: the
+    embedded number is decoration on an identity, exactly as `zfill` padding is decoration
+    on a number, so it is folded away on both sides instead of being matched against.
+
+    THE INCONSISTENCY IS NOT HYPOTHETICAL AND IT COST A MEASUREMENT. Box 2's export writes
+    both spellings in one column — `Delibird - 105/132` and `Nickit` — and the first pass at
+    D35's measurement matched raw names, scoring 35 of 46. The same measurement through this
+    fold scores 45. The eleven it missed were not absent from the export; they were spelled
+    with their number attached.
+
+        Nickit                      -> `NICKIT`
+        Delibird - 105/132          -> `DELIBIRD`
+        Wally's Compassion - 132/132 -> `WALLY'S COMPASSION`
+        Ho-Oh                       -> `HO-OH`, the hyphen is not a suffix
+        Radiant Greninja - 46/98    -> `RADIANT GRENINJA`
+
+    Case is folded and interior whitespace is collapsed, because the two sides come from a
+    model's reading and a marketplace's catalog and neither owns the other's spelling.
+
+    NOT APPLIED TO `Number`, EVER. That column is the primary key and it is folded by
+    `number_index_key`, which is a different rule for a different string.
+    """
+    text = _NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
+    return " ".join(text.split()).upper()
+
+
 # ------------------------------------------------------------------ per-game dispatch
 #
 # `pipeline/games.py` says HOW a game's cards find their catalog rows, by name — the
@@ -391,9 +431,15 @@ def number_index_key(text) -> str:
 # Names plus a per-module dict is also the only shape `scripts/docs-audit.py` can check: it
 # reads both files with `ast` and compares two sets of strings, running neither.
 #
-# A STRATEGY TAKES `(catalog, card)` AND ANSWERS `(rows, lookup)`. `lookup` is the string the
-# run report and the queue entry print, so it says which key was tried as well as what it
-# was — `number:031/197` and `name:Pikachu` are different questions with different remedies.
+# A STRATEGY TAKES `(catalog, card)` AND ANSWERS `(rows, lookup)`, or `(rows, lookup,
+# name_inferred)` where it needs the third. `lookup` is the string the run report and the
+# queue entry print, so it says which key was tried as well as what it was — `number:031/197`
+# and `name:Pikachu` are different questions with different remedies.
+#
+# `name_inferred` defaults False and is set by exactly one rung today (D35). It is a THIRD
+# ELEMENT rather than a prefix sniffed off `lookup`, deliberately: `lookup` is a human-facing
+# vocabulary printed on reports, and making a routing decision depend on parsing it would tie
+# a rule to a spelling that exists to be read.
 
 
 def _lookup_number_and_printed_total(catalog: "Catalog", card: IdentifiedCard):
@@ -406,10 +452,52 @@ def _lookup_number_and_printed_total(catalog: "Catalog", card: IdentifiedCard):
     """
     if card.number is not None and card.printed_total is not None:
         key = join_key(card.number, card.printed_total)
-        return catalog.rows_for_key(key), f"number:{key}"
-    # No collector number on the product (code cards, some promos). These are exactly the
-    # rows whose `Number` is blank, so the name fallback stays scoped to them.
-    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+        rows = catalog.rows_for_key(key)
+        if rows:
+            return rows, f"number:{key}"
+        # A NUMBER THAT FINDS NOTHING IS A NUMBER WE SHOULD STOP BELIEVING, and falling
+        # through here is half of D35 rather than a widening of it. The 9 confident-wrong
+        # reads box 2 produced are the case: `0326`, `0342`, `0934`, `721` — National Pokedex
+        # numbers read off the artwork strip once the real collector number had been cropped
+        # away. Four of them carried a denominator too, so they composed a perfectly
+        # well-formed key that matched nothing, and stopping at this return would leave them
+        # exactly as stuck as a blank number does.
+        #
+        # It cannot mislist anything, and that is what makes it safe rather than merely
+        # useful: this branch is reached only when the key already found zero rows, so the
+        # card was bound for `no_catalog_row` regardless — and what the name rung produces is
+        # a REVIEW entry, never a listing. The change is strictly from an unanswerable queue
+        # entry to an answerable one.
+    else:
+        # No collector number on the product (code cards, some promos). These are exactly the
+        # rows whose `Number` is blank, so this fallback stays scoped to them.
+        rows = catalog.rows_for_blank_number_name(card.name)
+        if rows:
+            return rows, f"name:{card.name}"
+
+    # D35 — THE LAST RESORT, AND THE ASSUMPTION IT REPAIRS IS THE COMMENT DIRECTLY ABOVE IT.
+    # "No collector number on the product" was read off `card.number is None`, which is a
+    # fact about the READ and not about the product. The two are the same thing only when
+    # the photograph is good. Box 2 shipped 544 cards cropped by a pad that cut the number
+    # off the bottom of the frame: 37 came back with no number and 9 with a National Pokedex
+    # number read off the artwork strip, and every one of them landed here, found nothing,
+    # and queued as `no_catalog_row` — 45 of the 46 against an export that held their row the
+    # whole time and had already matched it for other copies in the same run.
+    #
+    # So: when the product's own blank-`Number` rows come back empty, the card is one that
+    # DOES print a number and we failed to read it. Ask the name.
+    #
+    # THIS MAY NEVER LIST A CARD ON ITS OWN, and that is not enforced here — `join_batch`
+    # holds it, because listing is its decision and not this function's. What is enforced
+    # here is that the answer says how it was found: `name?:` and not `name:`. A row found
+    # because the product prints no number and a row found because we could not read one are
+    # different facts with different remedies, and the RUN REPORT prints this string (D16 — the
+    # machine string stays greppable). It does NOT reach the queue entry: `store/queues.py`'s
+    # `QueueEntry` has no `lookup` field and `Queue.parse` drops unknown keys. So a name-inferred
+    # card that does not resolve cleanly never reaches the `number_unread_name_matched` block
+    # below, and its entry is indistinguishable on screen from one whose number read fine — see
+    # D35, which names carrying the lookup onto the entry as the unargued fix.
+    return catalog.rows_for_name(card.name), f"name?:{card.name}", True
 
 
 def _lookup_printed_code(catalog: "Catalog", card: IdentifiedCard):
@@ -574,6 +662,10 @@ class Candidates:
     lookup: str
     set_ambiguous: bool = False
     candidate_sets: Tuple[str, ...] = ()
+    # D35 — these rows were found by name because the collector number could not be read.
+    # `join_batch` reads it to keep such a card in front of a human; nothing else may treat
+    # it as an ordinary match.
+    name_inferred: bool = False
 
     @property
     def market_prices(self) -> Tuple[Optional[Decimal], ...]:
@@ -612,6 +704,15 @@ class Catalog:
         self.export = export
         self._by_number: Dict[str, List[tcgcsv.Row]] = {}
         self._blank_number_by_name: Dict[str, List[tcgcsv.Row]] = {}
+        # D35's last-resort index: every row that HAS a number, keyed by its folded name.
+        # NUMBERED ROWS ONLY, and that is the boundary rather than an optimisation. The rung
+        # above this one owns the blank-`Number` rows — code cards, sealed product, promos —
+        # and this rung exists for the opposite case: a product that DOES print a number, on
+        # a photograph the number could not be read from. Keeping the two sets disjoint is
+        # also what makes a name collision between a card and a code card impossible here,
+        # which matters because `from_export` deliberately KEEPS code-card rows in the
+        # `pokemon` catalog (see its docstring).
+        self._by_name: Dict[str, List[tcgcsv.Row]] = {}
         self._order: Dict[str, int] = {}
         self._sets_by_key: Dict[str, List[str]] = {}
         # Folded key -> the export's own spelling of it, for anything printed at a human.
@@ -632,6 +733,12 @@ class Catalog:
                 key = number_index_key(number)
                 self._by_number.setdefault(key, []).append(row)
                 self._cell_by_key.setdefault(key, number)
+                # Folded by `name_index_key`, and `rows_for_name` folds what it is handed
+                # with the same function — the invariant this class already keeps for
+                # numbers, kept for the other column too.
+                self._by_name.setdefault(
+                    name_index_key(row[tcgcsv.NAME_COLUMN]), []
+                ).append(row)
             else:
                 name = row[tcgcsv.NAME_COLUMN].strip()
                 self._blank_number_by_name.setdefault(name, []).append(row)
@@ -749,6 +856,15 @@ class Catalog:
     def rows_for_blank_number_name(self, name: str) -> List[tcgcsv.Row]:
         return list(self._blank_number_by_name.get(name.strip(), ()))
 
+    def rows_for_name(self, name: str) -> List[tcgcsv.Row]:
+        """Every NUMBERED row whose folded name is this one. D35's last resort.
+
+        Answers rows the caller must not list on that basis alone — see
+        `_lookup_number_and_printed_total` for the rung and `join_batch` for the routing
+        that keeps a card found this way in front of a human.
+        """
+        return list(self._by_name.get(name_index_key(name), ()))
+
     def candidates(self, card: IdentifiedCard) -> Candidates:
         """Rows this card could be, and how they were found.
 
@@ -757,7 +873,12 @@ class Catalog:
         with the blank-`Number` name fallback underneath it — exactly the two branches this
         method used to hold inline — so a Pokemon card takes the same path it always did.
         """
-        rows, lookup = lookup_for(card.game)(self, card)
+        # A strategy answers two elements or three — see the dispatch block above for why
+        # the third is a value rather than a prefix on `lookup`.
+        answer = lookup_for(card.game)(self, card)
+        rows, lookup, name_inferred = (
+            answer if len(answer) == 3 else (answer[0], answer[1], False)
+        )
 
         sets: List[str] = []
         for row in rows:
@@ -766,7 +887,9 @@ class Catalog:
                 sets.append(name)
 
         if len(sets) <= 1:
-            return Candidates(rows=tuple(rows), lookup=lookup)
+            return Candidates(
+                rows=tuple(rows), lookup=lookup, name_inferred=name_inferred
+            )
 
         # Rung 3 of §5.1 — a colliding key, disambiguated by the sidecar set hint.
         if card.set_hint:
@@ -777,7 +900,9 @@ class Catalog:
             ]
             if narrowed:
                 return Candidates(
-                    rows=tuple(narrowed), lookup=f"{lookup} set:{card.set_hint}"
+                    rows=tuple(narrowed),
+                    lookup=f"{lookup} set:{card.set_hint}",
+                    name_inferred=name_inferred,
                 )
 
         # Rung 4 — no hint, or a hint naming none of the candidates.
@@ -786,6 +911,7 @@ class Catalog:
             lookup=lookup,
             set_ambiguous=True,
             candidate_sets=tuple(sets),
+            name_inferred=name_inferred,
         )
 
     def catalog_index(self, sku: str) -> int:
@@ -1264,6 +1390,62 @@ def join_batch(
             )
         if resolution.bypassed:
             report.bypassed += 1
+
+        # D35 — THE ROW WAS FOUND BY NAME, SO IT IS NOT LISTED ON THAT ALONE.
+        #
+        # The rung below `_lookup_number_and_printed_total`'s blank-number fallback answers
+        # rows for a card whose collector number could not be read. The ladder then does its
+        # ordinary work on them and, on a stack with a one-member finish claim, resolves
+        # cleanly — which would list the card. That is the outcome this block refuses.
+        #
+        # The number is the field that distinguishes one card from another, and it is exactly
+        # the field that is missing. What is left is a name, a set the operator declared for
+        # the stack, and a photograph — and the photograph is the part no code can read. So
+        # the card is queued with the row the ladder chose, and a human confirms it against
+        # the picture. That is D4's argument, applied to a card that resolved.
+        #
+        # IT IS NOT ONE PRESS PER CARD. Every entry from this path carries ONE candidate (the
+        # ladder's row, narrowed below) under ONE shared reason, and a uniform stack gives one
+        # shared condition string — which is D29's group-answer eligibility exactly. Box 2's
+        # 45 are one `G`, one Enter and one `U` to reverse, over a grid of their photographs.
+        #
+        # `found` is narrowed to the resolved row so the queue entry offers one candidate and
+        # routing cuts on that row's own price rather than on the cheapest of a pair the
+        # ladder has already chosen between.
+        #
+        # RUNG 0 IS ABOVE THIS BLOCK, NOT INSIDE IT, AND LEAVING IT OUT WAS A SILENT DROP.
+        # D3 rung 0 is a human's answer, applied a few lines above, and D23 already states the
+        # rule this clause enforces: *"Rung 0 must not consult it. A human who looked at the
+        # photograph beside the candidate rows outranks a claim about the stack it came from."*
+        # A `HUMAN_ANSWERED` resolution carries a row and does not need review, so without the
+        # `stage` test below it satisfied every condition here and was overwritten straight
+        # back into a review reason.
+        #
+        # What that cost is the whole feature. D35's own argument for queuing rather than
+        # listing is that box 2's 45 cards are ONE `G` and ONE Enter — and the join after that
+        # press re-raised the identical question on every one of them. `store/queues.py:upsert`
+        # then refuses to re-queue a position a human has cleared, deliberately, so the card
+        # was not re-queued EITHER: not listed, not in the queue, gone from both ends of the
+        # pipeline until somebody went looking for it. `CLAUDE.md` forbids exactly that.
+        #
+        # It is the failure D3 rung 0 was written for, one rung further down. Gate B's record
+        # of it is the sentence to keep: an answer that does not outlive the question is not
+        # an answer.
+        if (
+            found.name_inferred
+            and resolution.stage != variant.HUMAN_ANSWERED
+            and not resolution.needs_review
+            and resolution.row is not None
+        ):
+            found = replace(found, rows=(resolution.row,))
+            resolution = variant.Resolution(
+                stage=variant.REVIEW,
+                reason=routing.NUMBER_UNREAD_NAME_MATCHED,
+                row=resolution.row,
+                condition=resolution.condition,
+                market_price=resolution.market_price,
+                bypassed=resolution.bypassed,
+            )
 
         if router is not None:
             destination = router(card, found, resolution)

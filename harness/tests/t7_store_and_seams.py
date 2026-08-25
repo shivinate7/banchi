@@ -169,6 +169,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import hashlib
 import os
 import sys
 import tempfile
@@ -1637,6 +1638,261 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         checks.equal(
             fresh["index"], 1,
             "and recreating the number starts from nothing, like a box never used",
+        )
+
+
+def check_listing_release(checks: Checks) -> None:
+    """GET /boxes/<box>/listings and its release — D34, the door the delete gate lacked.
+
+    THE GAP THIS CLOSES WAS FOUND BY A BOX THAT COULD NOT BE DELETED, AND THE MECHANISM IS
+    WORTH RESTATING WHERE THE TEST IS. `_listing_hold` blocks a whole-box delete while any
+    card's SKU carries a stage, which is right — deleting a copy TCGplayer is holding would
+    leave the counts claiming a card that is no longer in the building. But `staged` is drawn
+    down in exactly one place, `cli/cmd_join.py`, by the RISE in live quantity a fresh Filtered
+    Export reports. An import that never lands never raises live, so the drawdown never runs
+    and the count stands forever. On 2026-08-24 that was box 1: 53 Gate B cards behind 45
+    records claiming 53 staged copies TCGplayer had not held for two days.
+
+    THE BUDGET IS THE SUBJECT OF MOST OF THIS BLOCK, and it is the owner's ruling of the same
+    day. The first build zeroed each SKU outright; a release reached from box 1 could therefore
+    give up commitments only box 3's copies could ever have backed. Each SKU now gives up at
+    most the UNSOLD copies the calling box holds, which makes that impossible structurally
+    rather than by care — and leaves a remainder wherever a SKU is shared, so the box stays
+    refused. **That remainder is the intended behaviour**, confirmed by the owner, and it is
+    asserted here in both directions: what is given up, and what is deliberately kept.
+
+    ITS OWN `isolated_home`, and this file has now recorded that lesson three times — the
+    mass-select cases, then the starvation tier. This block writes LISTINGS, which
+    `check_boxes_and_listings` counts and `check_cli_seams` reads through `emit`.
+    """
+    checks.note("")
+    checks.note("LISTING RELEASE — D34, the missing door out of `staged`")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        # SHARED: box 4 holds 2 of 5 staged; box 6 holds 3. OWNED: box 4 holds both.
+        # SOLDCOPY: box 4 holds 1 unsold and 1 sold against 2 staged.
+        layout = (
+            (4, 1, "SHARED"), (4, 2, "SHARED"), (6, 1, "SHARED"), (6, 2, "SHARED"),
+            (6, 3, "SHARED"), (4, 3, "OWNED"), (4, 4, "OWNED"),
+            (4, 5, "SOLDCOPY"), (4, 6, "SOLDCOPY"),
+        )
+        for box, index, _ in layout:
+            capture_server.do_capture(
+                {"box": box, "capture_id": f"L{box}{index}", "image": blob(index)}
+            )
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            for box, index, sku in layout:
+                key = f"{box}/{index}"
+                inventory.record_identification(
+                    key, name="N", number="001", printed_total="102", confidence="high",
+                )
+                inventory.cards[key].sku = sku
+            inventory.set_state("4/6", master.SOLD)
+            inventory.listing("SHARED", condition="Near Mint").set(master.STAGED, 5)
+            inventory.listing("OWNED", condition="Near Mint").set(master.STAGED, 2)
+            inventory.listing("SOLDCOPY", condition="Near Mint").set(master.STAGED, 2)
+
+        # ------------------------------------------------------- the free preflight first
+        plan = answers(
+            checks,
+            lambda: capture_server.do_box_listings(4),
+            "the preflight answers without a confirm and without writing — D33's shape one "
+            "register down, and the step the release control may not be drawn before",
+        )
+        if plan is not None:
+            rows = {row["sku"]: row for row in plan["listings"]}
+            checks.equal(
+                sorted(rows), ["OWNED", "SHARED", "SOLDCOPY"], "every held SKU is named"
+            )
+            checks.equal(
+                (rows["SHARED"]["copies_here"], rows["SHARED"]["releases"],
+                 rows["SHARED"]["after"]),
+                (2, {"staged": 2}, {"staged": 3}),
+                "a SHARED SKU gives up only what THIS box's copies could account for — the "
+                "owner's ruling: a release reached from box 4 may never give up box 6's three",
+            )
+            checks.ok(
+                rows["SHARED"]["still_held"]
+                and rows["SHARED"]["also_in_boxes"] == [{"box": 6, "copies": 3}],
+                "and it says so before the press, naming the other box and its copies — the "
+                "blast radius the first build reported only in the receipt",
+                f"row was: {rows['SHARED']!r}",
+            )
+            checks.equal(
+                (rows["OWNED"]["releases"], rows["OWNED"]["after"], rows["OWNED"]["still_held"]),
+                ({"staged": 2}, {}, False),
+                "a SKU this box holds every copy of goes to zero, which is the ordinary case",
+            )
+            checks.equal(
+                (rows["SOLDCOPY"]["copies_here"], rows["SOLDCOPY"]["releases"]),
+                (1, {"staged": 1}),
+                "a SOLD copy does not count toward the budget — it has already left, and it "
+                "is not one of the copies a remaining commitment could be backed by",
+            )
+            checks.ok(
+                plan["frees_box"] is False and plan["still_held"] == ["SHARED", "SOLDCOPY"],
+                "and `frees_box` states up front that the box will STILL be refused — the "
+                "one outcome a person would otherwise read as a bug",
+                f"summary was: {plan!r}",
+            )
+        checks.equal(
+            Store().read().inventory.listing_counts(),
+            {"pushed": 0, "staged": 9, "live": 0},
+            "and the preflight moved nothing: it is a read",
+        )
+
+        # --------------------------------------------------------------- the refusals
+        refusal(
+            checks,
+            lambda: capture_server.do_release_box_listings(4, {}),
+            "confirm_required",
+            "a release without an explicit confirm refuses — this route's whole content is "
+            "a claim about a system the process cannot see, so it may not be made by accident",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_release_box_listings(4, {"confirm": "true"}),
+            "confirm_required",
+            "and a STRINGIFIED confirm refuses too — `\"false\"` is truthy in Python, so a "
+            "flag whose two values are do-it and do-not is the last place to coerce",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_release_box_listings(4, {"confirm": True, "skus": []}),
+            "field_not_settable",
+            "an unknown field refuses before the box is looked up",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_release_box_listings(9, {"confirm": True}),
+            "box_not_found",
+            "a box nothing has heard of refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_box_listings(9),
+            "box_not_found",
+            "and so does the preflight, in the same code",
+        )
+        checks.equal(
+            Store().read().inventory.listing_counts(),
+            {"pushed": 0, "staged": 9, "live": 0},
+            "and not one refusal moved a count",
+        )
+
+        # ------------------------------------------------------- the delete it unblocks
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_box(4),
+            "the box refuses deletion first — this is the state D34 was built for",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "box_not_empty_of_commitments", "in its own code"
+            )
+
+        body = capture_server.do_release_box_listings(4, {"confirm": True})
+        checks.equal(
+            (body["released"], body["given_up"]),
+            (3, {"staged": 5}),
+            "the release gives up 2 + 2 + 1 — every SKU budgeted by this box's unsold copies, "
+            "never the whole count",
+        )
+        checks.ok(
+            body["frees_box"] is False and body["still_held"] == ["SHARED", "SOLDCOPY"],
+            "and the receipt repeats that the box is still held rather than implying success",
+            f"body was: {body}",
+        )
+        checks.equal(body["also_in_boxes"], [6], "naming the box whose copies remain")
+
+        after = Store().read().inventory
+        checks.equal(
+            (after.listings["SHARED"].staged, after.listings["OWNED"].staged,
+             after.listings["SOLDCOPY"].staged),
+            (3, 0, 1),
+            "BOX 6'S THREE STAGED COPIES SURVIVE UNTOUCHED — the whole point of the budget, "
+            "and what the first build could not promise",
+        )
+        checks.ok(
+            after.listings["OWNED"].staged_at is None
+            and after.listings["SHARED"].staged_at is not None,
+            "`staged_at` clears only where staged reached zero: a record with copies REMAINING "
+            "really has been staged since that date, which is what the stale warning looks for",
+        )
+        checks.ok(
+            after.listings.get("OWNED") is not None
+            and after.listings["OWNED"].condition == "Near Mint",
+            "the record survives at zeros rather than being popped — `_listing_hold` already "
+            "reads all-zeros as not held, and the condition is worth keeping",
+        )
+        checks.ok(
+            any(
+                e.get("event") == "listings_released"
+                and e.get("box") == 4
+                and e.get("skus") == 3
+                and e.get("copies") == {"staged": 5}
+                and e.get("still_held") == ["SHARED", "SOLDCOPY"]
+                and "position" not in e
+                for e in Store().history()
+            ),
+            "one `listings_released` line carries the box, the SKU count, the copies AND what "
+            "stayed held — without the last, the log would say a release happened and not "
+            "that it was partial",
+            f"history was: {[e for e in Store().history() if e.get('event') == 'listings_released']!r}",
+        )
+        checks.ok(
+            capture_server.LISTINGS_RELEASED not in master.STATES,
+            "and the event name is not a state — `_state_before_sale` filters against "
+            "`master.STATES`, so a collision would restore a reversed sale to it",
+        )
+
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_box(4),
+            "THE BOX IS STILL REFUSED, exactly as the plan said — a shared SKU keeps copies "
+            "this box could not account for, and the owner ruled that remainder in",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "box_not_empty_of_commitments", "in its own code"
+            )
+
+        # A second release gives up the rest of what box 4's copies can account for. The
+        # SOLDCOPY remainder is beyond it: one unsold copy already spent its budget.
+        capture_server.do_release_box_listings(4, {"confirm": True})
+        checks.equal(
+            Store().read().inventory.listings["SHARED"].staged,
+            1,
+            "a second release spends the budget again — each press is its own assertion, and "
+            "the cap is per press rather than a memory of what box 4 has ever released",
+        )
+
+        # ----------------------------------------- the boundary: it frees listings ONLY
+        with Store().write() as snapshot:
+            for sku in ("SHARED", "SOLDCOPY"):
+                snapshot.inventory.listings[sku].release(99)
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_delete_box(4),
+            "a box held open by a SOLD card still refuses once every listing in it is clear "
+            "— the release answers one of the three grounds and must not reach the others",
+        )
+        if caught is not None:
+            checks.ok(
+                "is sold" in str(caught),
+                "and it refuses for the sale, naming it",
+                f"message was: {caught}",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_release_box_listings(4, {"confirm": True}),
+            "nothing_to_release",
+            "and with every stage at zero a replay refuses rather than answering a cheerful "
+            "200 — what keeps a stale screen distinguishable from a release that worked",
         )
 
 
@@ -5291,6 +5547,156 @@ def check_box_routes_and_search(checks: Checks) -> None:
 # -------------------------------------------------------------------------- place block
 
 
+def check_box_names(checks: Checks) -> None:
+    """A name is how a box is ADDRESSED now, so it is unique, it is logged, and it can stand
+    in for a number nobody wants to type.
+
+    ITS OWN `isolated_home`, this file's own repeated lesson. Every case here writes boxes,
+    and `check_box_routes_and_search` counts them; the mass-select block and the starvation
+    block were both first written into somebody else's fixture and both failed on the
+    fixture rather than on the code.
+
+    WHAT CHANGED AND WHY IT NEEDED COVERAGE. `Box.name` existed from D20 and nothing checked
+    it — right while the NUMBER was the identifier, because a duplicate name cost a confusing
+    row and nothing else. The capture screen now finds a box by name, which makes a second
+    "commons" an ambiguous physical address, and makes a rename relabel every card in the box
+    the way a moved divider relabels every card behind it. `server/capture_server.py` had
+    recorded the missing event as a known gap in `do_put_box`'s own docstring, with the right
+    reason for leaving it — "a name is a label, not a claim the pipeline spends money
+    against". That sentence is what stopped being true.
+    """
+    checks.note("")
+    checks.note("BOX NAMES — store/master.py, server/capture_server.py")
+
+    with isolated_home():
+        # --- a name alone is a complete creation -----------------------------------------
+        named = capture_server.do_create_box({"name": "ME01 commons"})[1]
+        checks.equal(
+            [named["box"], named["name"]],
+            [1, "ME01 commons"],
+            "POST /boxes with a NAME and no number takes the lowest free number — the "
+            "owner's ask, in their words: the primary key is something they do not care "
+            "about, and the label is what they work in",
+        )
+        second = capture_server.do_create_box({"name": "mega pulls"})[1]
+        checks.equal(
+            second["box"],
+            2,
+            "and the next one takes the next free number rather than a high-water mark: a "
+            "box number names a physical object nobody types any more, so there is no gap "
+            "for a mark to protect",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_create_box({}),
+            "box_or_name_required",
+            "a body with neither refuses: it does not describe a box, and inventing both "
+            "halves of an object nobody named is how a registry fills with rows no one meant",
+        )
+
+        # --- uniqueness, folded and stripped ---------------------------------------------
+        # THE STORE'S EXCEPTION, NOT THE ROUTE'S CODE, and the difference is the one this
+        # file already draws for `BoxClosed`: `store/master.py` raises and `_dispatch` is
+        # what turns it into `name_taken`, so an in-process call asserts the rule while the
+        # socket case asserts what a client is told. The rule is the half that protects the
+        # data, and it is the half that would be lost if the check moved into the route.
+        checks.raises(
+            master.BoxNameTaken,
+            lambda: capture_server.do_create_box({"name": "  ME01 Commons "}),
+            "a duplicate name refuses even folded and padded — `Commons` and `commons ` are "
+            "one box to a person at a shelf, and a store that took both would enforce a "
+            "rule nobody can see",
+        )
+        checks.equal(
+            len(capture_server.do_boxes()["boxes"]),
+            2,
+            "and the refusal wrote nothing: two boxes, not three",
+        )
+
+        # --- a rename logs both names ----------------------------------------------------
+        before = len(Store().history())
+        capture_server.do_put_box(1, {"name": "ME01 commons, tray 2"})
+        renamed = [e for e in Store().history() if e["event"] == "box_renamed"]
+        checks.equal(
+            [len(renamed), renamed[-1]["name_from"], renamed[-1]["name_to"]],
+            [1, "ME01 commons", "ME01 commons, tray 2"],
+            "a rename appends `box_renamed` carrying BOTH names — `resectioned`'s sibling "
+            "one scale up, because the label a rename moves is every card in the box",
+        )
+        checks.equal(
+            len(Store().history()) - before,
+            1,
+            "and exactly one event: the rename, not a rename plus a box_created from the "
+            "`ensure_box` the route calls on its way to it",
+        )
+
+        # --- a no-op rename is not a rename ----------------------------------------------
+        steady = len(Store().history())
+        capture_server.do_put_box(1, {"name": "ME01 commons, tray 2"})
+        checks.equal(
+            len(Store().history()),
+            steady,
+            "re-sending a box its own name writes NO event — a log line for a request that "
+            "changed nothing is a rename that never happened, and history is read as the "
+            "record of what did",
+        )
+        checks.equal(
+            capture_server.do_put_box(1, {"name": "ME01 commons, tray 2"})["name"],
+            "ME01 commons, tray 2",
+            "and it does not conflict with ITSELF: the uniqueness check skips the box being "
+            "written, which is the shape a screen that PUTs its whole form back produces",
+        )
+
+        # --- clearing puts it back to unnamed --------------------------------------------
+        cleared = capture_server.do_put_box(1, {"name": None})
+        checks.equal(
+            cleared["name"],
+            None,
+            "`{name: null}` clears the name — the shape a cleared text field sends, and a "
+            "legitimate edit rather than a refusal",
+        )
+        cleared_event = [e for e in Store().history() if e["event"] == "box_renamed"][-1]
+        checks.equal(
+            [cleared_event["name_from"], "name_to" in cleared_event],
+            ["ME01 commons, tray 2", False],
+            "and the clear is logged like any other rename, with `name_to` ABSENT rather "
+            "than null — `_log` drops None by construction, the same convention that keeps "
+            "a box-level event from carrying a null `position`. Asserted rather than worked "
+            "around: after this write there is no other evidence the box was ever called "
+            "anything, so what the line does and does not carry is the whole record",
+        )
+        freed = capture_server.do_create_box({"name": "ME01 commons, tray 2"})[1]
+        checks.equal(
+            freed["box"],
+            3,
+            "and the freed name is claimable again — uniqueness is over what is CURRENTLY "
+            "held, not over every name a store has ever seen",
+        )
+
+        # --- the allocator sees cards, not just the registry -----------------------------
+        with Store().write() as snapshot:
+            checks.equal(
+                snapshot.inventory.next_box_number(),
+                4,
+                "next_box_number skips every number the registry holds",
+            )
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(7))
+        with Store().write() as snapshot:
+            # The pre-D20 shape: a box that holds cards and has no registry entry. It cannot
+            # be reached through the front door any more, which is exactly why it is built by
+            # hand — every box filled before the registry existed is in it.
+            del snapshot.inventory.boxes["7"]
+        with Store().write() as snapshot:
+            taken = snapshot.inventory.next_box_number()
+        checks.equal(
+            taken,
+            4,
+            "and it skips a number held by CARDS with no registry entry — handing that one "
+            "out again would put two boxes' photographs in one directory",
+        )
+
+
 def check_box_claims(checks: Checks) -> None:
     """PUT /inventory/<box> — the box-level claim apply, the owner's ask of 2026-08-23.
 
@@ -6646,6 +7052,341 @@ RIFTBOUND_EXPORT = (
 ONE_PIECE_EXPORT = (
     Path(__file__).resolve().parents[2] / "fixtures" / "onepiece_export_untouched.csv"
 )
+
+
+def check_review_stand_down(checks: Checks) -> None:
+    """POST /review/<box>/<index>/stand-down — D37, closing a question without answering it.
+
+    ITS OWN ISOLATED HOME, this file's standing lesson: it clears queue entries, and the
+    blocks around it count entries and history lines over stores they build by hand.
+
+    THE CONTROL docs/DESIGN.md ASKED FOR BY NAME. That file has carried Skip as an OPEN
+    QUESTION since the review screen was built — *"the screen needs a real defer that records
+    a reason, and that is a decision entry rather than a button"* — and the owner pulled the
+    trigger on 2026-08-25 asking for a stand-down on a wasted position.
+
+    THE ASSERTION THAT CARRIES THE FEATURE IS THAT THE CARD IS UNTOUCHED. An answer writes a
+    SKU and a condition; a retirement writes a terminal state; this writes NEITHER, and if it
+    ever does it has silently become one of the other two.
+    """
+    checks.note("")
+    checks.note("STAND DOWN — POST /review/<box>/<index>/stand-down")
+
+    with isolated_home():
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(3))
+        with Store().write() as snapshot:
+            for key in ("3/1", "3/2", "3/3", "3/4"):
+                snapshot.inventory.set_state(key, master.IDENTIFIED)
+            snapshot.review.upsert(entry(3, 1, market="12.00"))
+            # No candidates — the case that CANNOT be answered at all, and the one the owner
+            # was looking at: a black frame, a hallucinated read, no catalog row.
+            snapshot.review.upsert(
+                entry(3, 2, candidates=[], reason="no_catalog_row")
+            )
+            # In both files, so the both-queues clearing is exercised.
+            snapshot.review.upsert(entry(3, 3, market="12.00"))
+            snapshot.parked.upsert(entry(3, 3, market="0.05"))
+            # 3/4 is identified and in no queue at all.
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 1, {}),
+            "reason_required",
+            "a stand-down with no reason refuses — docs/DESIGN.md asked for a defer that "
+            "RECORDS a reason, so a reasonless one is not the feature",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 1, {"reason": "because"}),
+            "stand_down_reason_invalid",
+            "a reason outside the vocabulary refuses rather than being recorded verbatim",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(
+                3, 1, {"reason": "pulled"}
+            ),
+            "stand_down_reason_invalid",
+            "and a RETIRE reason is refused here — those four say the card left inventory, "
+            "which is the one thing a stand-down must never be recorded as",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(
+                3, 1, {"reason": "wasted_position", "undo": True}
+            ),
+            "field_not_settable",
+            "a reversal carrying a reason refuses rather than obeying with the reason ignored",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 4, {"reason": "not_listing"}),
+            "not_in_queue",
+            "a card in no queue has no question to stand down from",
+        )
+
+        # --- the write itself, on the card that cannot be answered --------------------
+        before = Store().read().inventory.cards["3/2"]
+        was = (before.state, before.sku, before.condition)
+
+        body = capture_server.do_review_stand_down(3, 2, {"reason": "wasted_position"})
+        checks.equal(body["stood_down"], True, "the stand-down reports itself")
+        checks.equal(body["undone"], False, "and which direction it went")
+        checks.equal(body["reason"], "wasted_position", "and echoes the reason recorded")
+        checks.equal(
+            body["queue_reason"],
+            "no_catalog_row",
+            "and the QUEUE's own reason beside the operator's — two different strings that "
+            "both matter, and the pair is what makes the log answerable to 'which questions "
+            "get waved off, and why'",
+        )
+
+        snapshot = Store().read()
+        checks.ok(
+            snapshot.review.entries["3/2"].cleared_by_human,
+            "the entry is cleared, so `Queue.upsert` will not re-ask on any later run",
+        )
+        after = snapshot.inventory.cards["3/2"]
+        checks.equal(
+            (after.state, after.sku, after.condition),
+            was,
+            "AND THE CARD IS UNTOUCHED — no sku, no condition, no state. This is the whole "
+            "feature: if this ever fails, a stand-down has quietly become an answer or a "
+            "retirement",
+        )
+        checks.ok(
+            any(
+                event.get("event") == "stood_down" and event.get("position") == "3/2"
+                for event in Store().history()
+            ),
+            "and a `stood_down` line is on the log — the only place the reason survives",
+        )
+        checks.ok(
+            "stood_down" not in master.STATES,
+            "`stood_down` is an event and never a state, which T7 asserts for every event "
+            "name here: a state would make months of these parse as card states",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 2, {"reason": "not_listing"}),
+            "already_cleared",
+            "a second stand-down refuses rather than re-writing a settled question",
+        )
+
+        # --- both queues, one press ---------------------------------------------------
+        capture_server.do_review_stand_down(3, 3, {"reason": "cannot_settle"})
+        both = Store().read()
+        checks.ok(
+            both.review.entries["3/3"].cleared_by_human
+            and both.parked.entries["3/3"].cleared_by_human,
+            "a position held in BOTH files is cleared in both — clearing one would leave the "
+            "screen still showing a card whose question is closed",
+        )
+
+        # --- the reversal --------------------------------------------------------------
+        back = capture_server.do_review_stand_down(3, 2, {"undo": True})
+        checks.equal(back["undone"], True, "the reversal reports itself")
+        checks.ok(
+            not Store().read().review.entries["3/2"].cleared_by_human,
+            "and the entry is waiting again",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 2, {"undo": True}),
+            "not_stood_down",
+            "a second reversal refuses — the first reopened the entry, so nothing has to "
+            "remember that a reversal happened",
+        )
+
+        # --- THE GUARD THAT MATTERS MOST -----------------------------------------------
+        # An ANSWERED card must not be reopened through this control. Observed failing
+        # against a draft whose reversal only checked `cleared_by_human`.
+        answered = {"sku": CANDIDATES[1]["sku"], "condition": CANDIDATES[1]["condition"]}
+        capture_server.do_review_answer(3, 1, answered)
+        refusal(
+            checks,
+            lambda: capture_server.do_review_stand_down(3, 1, {"undo": True}),
+            "not_stood_down",
+            "a card closed by an ANSWER refuses this reversal — taking back a real "
+            "identification through the un-dismiss control is the one thing it must not do",
+        )
+        still = Store().read().inventory.cards["3/1"]
+        checks.equal(
+            still.sku,
+            answered["sku"],
+            "and the answer is still on the card after that refusal",
+        )
+
+
+def check_run_realignment(checks: Checks) -> None:
+    """D36 — a run's slot numbers are re-bound to the photographs they were taken from.
+
+    ITS OWN ISOLATED HOME, which is this file's own lesson for the fourth time: this block
+    writes photographs into a box, and the blocks above count records and history lines over
+    boxes they build card by card.
+
+    THE DEFECT: a run directory is immutable (`cli/runs.py`) and the store is not. D10 ruling 1
+    lets a junk capture be deleted from the middle of a box, sliding every higher card down one
+    slot; the store remaps records, photographs, sidecars and both queue files and writes a
+    `renumbered` event. The run cannot be remapped — it is a record of a past event — so
+    re-joining a box edited since it was identified paired every card with its NEIGHBOUR's
+    slot, photograph and label. Measured on box 2, 2026-08-24: card `2/7` deleted, 537 cards
+    shifted, and a re-join wrote all 47 queue entries one position off.
+
+    Every case below was observed FAILING against the unguarded loader before it was kept.
+    """
+    def build(bodies, names):
+        return {
+            "cards": {
+                f"2/{i}": {
+                    "box": 2,
+                    "index": i,
+                    "photo": f"captures/cards/box2/{i:04d}.jpg",
+                    "photo_sha256": hashlib.sha256(body).hexdigest(),
+                    "identification": {"name": names[i], "confidence": "high"},
+                }
+                for i, body in bodies.items()
+            }
+        }
+
+    with isolated_home() as home:
+        box = home / "captures" / "cards" / "box2"
+        box.mkdir(parents=True)
+        bodies = {i: f"photo-of-card-{i}".encode() for i in (1, 2, 3, 4)}
+        names = {1: "Alpha", 2: "Beta", 3: "Gamma", 4: "Delta"}
+        for i, body in bodies.items():
+            (box / f"{i:04d}.jpg").write_bytes(body)
+        original = build(bodies, names)
+
+        # 1. Nothing has moved: the payload comes back as the SAME OBJECT, which is what keeps
+        #    a healthy run's join byte-for-byte identical.
+        same, moved, departed, unverified = resolve.realign(original)
+        checks.ok(same is original, "D36: an unmoved run's payload is returned untouched")
+        checks.equal(moved, {}, "D36: and nothing is reported as moved")
+        checks.equal(departed, [], "D36: and nothing as departed")
+        checks.equal(unverified, [], "D36: and the box counts as verified")
+
+        # 2. Card 2 is deleted mid-box and 3, 4 slide down — exactly D10 ruling 1.
+        (box / "0002.jpg").write_bytes(bodies[3])
+        (box / "0003.jpg").write_bytes(bodies[4])
+        (box / "0004.jpg").unlink()
+        rebound, moved, departed, unverified = resolve.realign(original)
+        checks.equal(
+            moved,
+            {"2/3": "2/2", "2/4": "2/3"},
+            "D36: cards behind a mid-box delete re-bind to the slot their photograph is in now",
+        )
+        checks.equal(
+            departed, ["2/2"], "D36: and the deleted card is reported departed, not joined"
+        )
+        checks.equal(
+            sorted(rebound["cards"]),
+            ["2/1", "2/2", "2/3"],
+            "D36: the rebound payload holds the surviving cards at their new slots",
+        )
+        checks.equal(
+            rebound["cards"]["2/2"]["identification"]["name"],
+            "Gamma",
+            "D36: and the READ travels with its photograph — the whole point, since the old "
+            "loader left Gamma's name on Beta's slot and Beta's photograph",
+        )
+        checks.equal(
+            rebound["cards"]["2/2"]["index"],
+            2,
+            "D36: `index` is rewritten too, not only the key — the position label is built from it",
+        )
+        # OBSERVED FAILING FIRST, and found on the screen rather than here: the entry read
+        # `Mewtwo ex` and rendered `0096.jpg`, a photograph of a different card. `queue_entry`
+        # carries this path onto the queue entry verbatim and the review screen renders exactly
+        # it, so a rebound record keeping its old path shows the slot's PREVIOUS occupant —
+        # this function's own defect, surviving one field deeper.
+        checks.equal(
+            rebound["cards"]["2/2"]["photo"],
+            "captures/cards/box2/0002.jpg",
+            "D36: and so is `photo` — the review screen renders that path verbatim",
+        )
+        checks.equal(
+            original["cards"]["2/3"]["index"], 3, "D36: and the run's own payload is not mutated"
+        )
+
+        # 3. One photograph at two slots is a question, not an answer.
+        (box / "0004.jpg").write_bytes(bodies[3])
+        try:
+            resolve.realign(original)
+            checks.ok(False, "D36: a duplicated photograph must refuse")
+        except runs.RunError as refusal:
+            checks.ok(
+                "more than one slot" in str(refusal),
+                "D36: a photograph at two slots refuses rather than picking one",
+            )
+        (box / "0004.jpg").unlink()
+
+        # 4. A BOX WITH NO PHOTOGRAPHS IS UNVERIFIED, NOT EMPTIED. The first draft of this
+        #    declared all 53 of box 1's cards departed, because box 1's photographs had been
+        #    deleted while its records lived on — which inverts what the check means. Absence
+        #    of photographs is absence of evidence, not evidence of absent cards.
+        for photo in box.glob("*.jpg"):
+            photo.unlink()
+        blind, moved, departed, unverified = resolve.realign(original)
+        checks.ok(
+            blind is original, "D36: a box with no photographs on disk passes through untouched"
+        )
+        checks.equal(departed, [], "D36: and NONE of its cards are called departed")
+        checks.equal(unverified, [2], "D36: the box is reported unverified instead")
+
+        # 5. TWO RECORDS ON ONE SLOT REFUSE, and this is the disk check's missing twin.
+        #    Case 3 above catches one PHOTOGRAPH at two slots. Nothing caught two RECORDS
+        #    carrying one digest: both resolve through `at` to the same position and then
+        #    collide in the rebuilt payload, where the second write wins.
+        #
+        #    OBSERVED FAILING FIRST, on exactly this fixture: two cards in, ONE card out,
+        #    `departed` empty and nothing printed. A silent drop, inside the function written
+        #    to prevent one, which `CLAUDE.md` forbids outright.
+        #    A FRESH BOX inside the same home: box 2's photographs were deleted by case 4
+        #    above, and re-creating them would re-open assertions already made over them.
+        nine = home / "captures" / "cards" / "box9"
+        nine.mkdir(parents=True)
+        (nine / "0002.jpg").write_bytes(b"one-photo")
+        digest = hashlib.sha256(b"one-photo").hexdigest()
+        twins = {
+            "cards": {
+                "9/1": {"box": 9, "index": 1, "photo_sha256": digest, "photo": "a.jpg"},
+                "9/3": {"box": 9, "index": 3, "photo_sha256": digest, "photo": "b.jpg"},
+            }
+        }
+        try:
+            resolve.realign(twins)
+            checks.ok(False, "D36: two records landing on one slot must refuse")
+        except runs.RunError as refusal:
+            checks.ok(
+                "more than one record" in str(refusal),
+                "D36: two records claiming one slot refuse rather than one being dropped",
+            )
+            checks.ok("9/2" in str(refusal), "D36: and the contested slot is named")
+
+        # 6. A POSITIONLESS KEY SURVIVES A REALIGN INSTEAD OF CRASHING IT.
+        #    `identify/sidecar.py` keys a capture with no position as `file:<name>` — the
+        #    documented shape for a directory of photographs with no sidecars. It is never
+        #    in `by_box`, so it can never move, but the rebuild walks EVERY card: one
+        #    stray key used to raise an unhandled ValueError the moment anything else in
+        #    its box shifted, taking `join` and `emit` down for that run permanently.
+        #    OBSERVED FAILING FIRST: `ValueError: not enough values to unpack`.
+        stray = {
+            "cards": {
+                "file:stray.jpg": {"name": "Stray", "photo": "stray.jpg"},
+                "9/1": {"box": 9, "index": 1, "photo_sha256": digest, "photo": "a.jpg"},
+            }
+        }
+        out, moved, departed, unverified = resolve.realign(stray)
+        checks.ok(
+            "file:stray.jpg" in out["cards"],
+            "D36: a positionless key passes through a realign untouched",
+        )
+        checks.equal(
+            moved, {"9/1": "9/2"}, "D36: and the card that really moved is still re-bound"
+        )
 
 
 def check_printed_code_profiles(checks: Checks) -> None:
@@ -8004,6 +8745,7 @@ def run() -> Result:
     check_remove_and_box_delete(checks)
     check_queues(checks)
     check_queue_starvation(checks)
+    check_listing_release(checks)
     check_queue_supersede(checks)
     check_review_answer(checks)
     check_group_answer(checks)
@@ -8015,12 +8757,15 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_box_routes_and_search(checks)
+    check_box_names(checks)
     check_box_claims(checks)
     check_place_neighbors(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
+    check_review_stand_down(checks)
+    check_run_realignment(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)

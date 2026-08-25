@@ -426,15 +426,19 @@ export function RunPanel({ scope }: RunPanelProps) {
     .join(' · ')
 
   return (
-    /* FOLDED BY DEFAULT, and the argument is `BoxOps`' measured one applied to this panel: it
-     * is ~250px tall, it sits above the card detail, and it is reached once a box — while the
-     * question the operator arrives at this screen with is "where is this card", which the
-     * detail beneath it answers. Drawing it open on every visit would spend a quarter of the
-     * viewport, on every arrival, on a control used once per session.
+    /* NOT FOLDED, AND THE COMMENT THAT USED TO SIT HERE SAID OTHERWISE FOR LONGER THAN THE
+     * CODE DID. It argued the fold on `BoxOps`' measured grounds — ~250px, above the card
+     * detail, reached once a box — and pointed at a `defaultOpen` prop and a `<details>` that
+     * were removed when D33 was amended. The markup below is a plain `<div>`: no disclosure,
+     * no triangle, nothing to press before the four commands are reachable.
      *
-     * `<details>` and not a hand-rolled toggle, for the reason that file also gives: the
-     * platform ships this, including the keyboard behaviour. A live run is what opens it on
-     * its own — see `defaultOpen` below, which is deliberately not a persisted setting. */
+     * The owner overruled the fold in three messages, the last unambiguous: "both box and
+     * run, i don't want click in functionality, i want their buttons just there." D33 carries
+     * the argument — reached once a box IS every box, which is the definition of the primary
+     * task rather than an exception to it, and NN/g prices a collapsed panel at five
+     * accumulating substeps before the first click of real work. What replaces the fold's
+     * saving is the ROW, not the disclosure: `.browse-boxrun` puts this panel and `BoxOps`
+     * side by side at `1fr 1fr`, so the pair costs one panel's height rather than two. */
     <div className="run-panel">
       <p className="run-head">
         <span className="run-title">Runs</span>

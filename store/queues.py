@@ -16,8 +16,13 @@ moment you commit an import file — which is the moment it is easiest to forget
 cards are still sitting in a box unlisted.
 
 NOTHING HERE CLEARS AN ENTRY, and that is still the arrangement now that something finally
-does. `do_review_answer` in `server/capture_server.py` sets `cleared_by_human`; this module
-only honours it — `upsert` refuses to re-queue a cleared position, `release` refuses to drop
+does. TWO things set `cleared_by_human`, and they are categorically different:
+`do_review_answer` writes an identification onto the card (D4), and `do_review_stand_down`
+writes NOTHING to the card at all — it closes the QUESTION and leaves the card in its slot,
+sellable if it is ever identified properly (D37, whose reasons are `STAND_DOWN_REASONS`
+below). One flag, two meanings, and the log is what tells them apart: `_clearing_event` reads
+back which event closed a question so the un-dismiss control cannot take back a real answer.
+This module only honours the flag — `upsert` refuses to re-queue a cleared position, `release` refuses to drop
 one, and `open_entries` hides it. That path stopped being untravelled on 2026-08-22: Gate B's
 16 entries were all answered through it. Absent an answer the queues still only grow, and
 that is the correct behaviour rather than a gap to be patched with a clearing command the
@@ -64,6 +69,30 @@ def _age_days(stamp: Optional[str]) -> Optional[int]:
 # by it, and short enough that a starved card surfaces inside the month it was captured.
 # It is a threshold and not a token — docs/DESIGN.md's scale is spacing.
 STARVATION_DAYS = 30
+
+# D37 — why a human waved a card off the queue without answering it.
+#
+# ITS OWN VOCABULARY RATHER THAN `master.RETIRE_REASONS`, and the difference is the whole
+# point of the feature. D26's four reasons — pulled, damaged, lost, given_away — all say the
+# CARD left inventory. A stand-down says the QUESTION is closed while the card stays exactly
+# where it is, in its slot, in its box, still findable and still sellable if it is ever
+# identified properly. Borrowing the retire words would have made "stop asking me" indexable
+# as "this card is gone", which is the one thing it must not mean.
+#
+# THREE, AND HAND-AUTHORED IN D22'S SENSE. A later session could reasonably disagree with the
+# cut, so it is argued rather than derived, and it renders verbatim on screen beneath its
+# human label exactly as a routing reason does.
+STAND_DOWN_REASONS = ("wasted_position", "cannot_settle", "not_listing")
+
+
+class UnknownStandDownReason(ValueError):
+    """A stand-down reason outside `STAND_DOWN_REASONS`. Never coerced, never defaulted."""
+
+
+def check_stand_down_reason(reason: str) -> str:
+    if reason not in STAND_DOWN_REASONS:
+        raise UnknownStandDownReason(f"{reason!r} not in {STAND_DOWN_REASONS}")
+    return reason
 
 
 @dataclass

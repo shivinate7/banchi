@@ -292,7 +292,8 @@ that joins to a real row, so nothing downstream can catch it.
 
 | Condition | Destination |
 |---|---|
-| Resolved cleanly, confidence `medium`/`high` | Listed. |
+| Resolved cleanly, confidence `medium`/`high` | Listed — **unless the row was reached by NAME**, one row down. |
+| Row found by NAME because the number could not be read (D35) | **Main queue if that row is ≥ $0.40, parked if below. Never listed on the name alone**, however cleanly the ladder resolved or however confident the read. `join_batch` rewrites the resolution to `REVIEW` before routing, keeping the chosen row — so the entry carries one candidate under one shared reason, which is D29's group-answer eligibility. Rung 0 is exempt: a card a human has already answered is listed on that answer. |
 | Confidence `low`, resolved market **≥ $0.40** | **Main review queue.** Not listed until looked at. A wrong listing on a $12 card ships the wrong card to a buyer; that is worse than a tap. |
 | Confidence `low`, resolved market **< $0.40** | **Parked** in the low-value queue. Not listed, not dropped, never in the main queue. |
 | Ladder → review (D3 reasons) | Main queue if the cheapest candidate row is ≥ $0.40, parked if below. |

@@ -369,6 +369,25 @@ class UnknownBox(ValueError):
     """A box number no registry entry covers."""
 
 
+class BoxNameTaken(ValueError):
+    """Two boxes cannot answer to one name once the name is how a box is addressed.
+
+    D20 authored `name` as an optional label and nothing checked it, which was right while
+    it was decoration: the number was the identifier and a duplicate name cost nothing but
+    a confusing row on the Boxes screen. The capture screen now finds a box BY name, so a
+    second "commons" is an ambiguous physical address — it moves the ambiguity off the key
+    the operator stopped caring about and onto the label they navigate by, which is worse
+    than where it started.
+
+    FOLDED AND STRIPPED FOR COMPARISON, STORED VERBATIM. `Commons` and `commons ` are the
+    same box to a person standing at a shelf, and a store that accepted both would be
+    enforcing a rule nobody can see. What is written down is what was typed — the same
+    split `pipeline/join.py:number_index_key` draws between a matching form and a stored
+    one, for the same reason: a normalised value written back is a value the operator
+    cannot correct.
+    """
+
+
 def check_box_state(state: str) -> str:
     if state not in BOX_STATES:
         raise UnknownState(f"{state!r} not in {BOX_STATES}")
@@ -518,6 +537,87 @@ class Listing:
         if stage == STAGED and by > 0:
             self.staged_at = self.at
         return value
+
+    def release(self, budget: int) -> Dict[str, int]:
+        """Give up at most `budget` copies TCGplayer is believed to hold. Returns what went.
+
+        THE OPERATION THAT WAS MISSING, and the shape of the gap is worth stating because it
+        took a box that could never be deleted to find it. `staged` is written by `reconcile`
+        and drawn down in exactly one place — `cli/cmd_join.py`, by the RISE in live quantity
+        a fresh Filtered Export reports. That is correct for an import that LANDS: the copies
+        move to live and the staged count follows them down. It has no answer at all for one
+        that does not. A staged row deleted on TCGplayer, or left sitting and then cleared by
+        hand, never becomes live, so live never rises, so the drawdown never runs and the
+        count stands forever. `staged_stale` names those SKUs — its own docstring calls them
+        "the import nobody finished" — and until this method nothing could act on the warning.
+
+        What that cost, measured on 2026-08-24: box 1's 53 Gate B cards were held by 45
+        listing records carrying 53 staged copies, every one a claim about rows the owner had
+        long since cleared off TCGplayer. `_listing_hold` reads those counts, so all 53 cards
+        blocked `box_not_empty_of_commitments` and the box was PERMANENTLY undeletable.
+
+        IT TAKES A BUDGET RATHER THAN ZEROING, AND THAT IS THE OWNER'S RULING OF 2026-08-24.
+        The first build zeroed the record outright, on the argument that "TCGplayer holds
+        nothing for this SKU" is a claim about TCGplayer and therefore cannot be scoped to one
+        box. The owner overruled it, and the reason is better than the argument it replaced:
+        **a release reached from box 1 must never be able to give up commitments that only
+        box 3's copies could account for.** A budget of the calling box's copies makes that
+        structurally impossible rather than merely unlikely — the caller cannot release more
+        than the cards it is actually removing could ever have backed.
+
+        The cost is real and is not hidden: where a SKU is shared, the remainder stays and the
+        box stays held. That is the honest state — TCGplayer really is still holding copies of
+        a SKU this box has copies of, and D7 makes every copy equally a candidate for being
+        one of them — and `do_box_listings` puts it on screen before the press rather than
+        leaving it to be discovered after.
+
+        LEAST-COMMITTED FIRST: `pushed`, then `staged`, then `live`. The budget is a total
+        across the three, never `budget` from each — two cards cannot account for two staged
+        AND two live copies, and decrementing per stage would give up four commitments for two
+        departing cards. Which stage a given copy actually backs is unknowable by construction
+        (D7: copies are fungible and the backing is deliberately unrecorded), so the order is
+        a rule rather than a lookup, and it is the conservative one: `pushed` is a row written
+        into a file that may never have been imported, `staged` is a row TCGplayer confirmed,
+        and `live` is a card actually for sale. Being wrong about `live` is the most expensive
+        of the three, so it is surrendered last.
+
+        `staged_at` IS CLEARED ONLY WHEN `staged` REACHES ZERO. `Listing.set` stamps it as
+        `staged_at or at`, so a record released to zero and later re-staged would otherwise
+        carry the old date forward and read as stale on the day it was staged — a warning
+        firing on success. A record with staged copies REMAINING keeps its stamp, because
+        those copies really have been staged since that date and are exactly what the warning
+        exists to find.
+
+        The record is left in place rather than deleted, because `_listing_hold` already reads
+        all-zeros as not held and says so in as many words: "zeros mean TCGplayer is not
+        holding anything". Popping it would be a second way of expressing the same fact, and
+        the surviving `condition` is worth keeping.
+        """
+        remaining = max(0, int(budget))
+        gave: Dict[str, int] = {}
+        for stage in LISTING_STAGES:
+            if remaining <= 0:
+                break
+            try:
+                count = max(0, int(getattr(self, stage)))
+            except (TypeError, ValueError):
+                # `_listing_hold`'s rule: a count that will not coerce is "something is
+                # there". It cannot be budgeted against because it cannot be read, so it is
+                # zeroed and costs nothing — the honest reading of an unreadable quantity, and
+                # the same direction the guard path takes everywhere else.
+                setattr(self, stage, 0)
+                continue
+            take = min(count, remaining)
+            if not take:
+                continue
+            setattr(self, stage, count - take)
+            gave[stage] = take
+            remaining -= take
+        if int(self.staged or 0) <= 0:
+            self.staged_at = None
+        if gave:
+            self.at = now()
+        return gave
 
 
 @dataclass
@@ -852,12 +952,95 @@ class Inventory:
         number = _as_position_int(number, "box")
         entry = self.boxes.get(str(number))
         if entry is None:
+            if name is not None:
+                self._check_name_free(name, number)
             entry = Box(box=number, name=name, created_at=now())
             self.boxes[str(number)] = entry
             self._log("box_created", None, box=number, name=name)
         elif name is not None and entry.name != name:
-            entry.name = name
+            # Through `set_name` rather than by assignment, so a rename reached this way
+            # gets the same uniqueness check and the same `box_renamed` line as one reached
+            # through the route. Assignment here is what made the name a field two callers
+            # could set by different rules.
+            self.set_name(number, name)
         return entry
+
+    def _check_name_free(self, name: str, number: int) -> None:
+        """Refuse a name another box already answers to. Folded and stripped to compare.
+
+        Skips the box being written, so re-sending a box its own name is a no-op rather
+        than a conflict with itself — which is the shape a screen that PUTs its whole form
+        back produces, and refusing it would make an unrelated edit fail.
+        """
+        wanted = name.strip().casefold()
+        if wanted == "":
+            return
+        for entry in self.boxes.values():
+            if entry.box == number or entry.name is None:
+                continue
+            if entry.name.strip().casefold() == wanted:
+                raise BoxNameTaken(f"box {entry.box} is already called {entry.name!r}")
+
+    def set_name(self, number, name: Optional[str]) -> Box:
+        """Name a box, rename it, or clear the name. Logs both names; refuses a duplicate.
+
+        THE EVENT IS WHY THIS IS A METHOD AND NOT AN ASSIGNMENT. `server/capture_server.py`
+        recorded the absence as a known gap and gave the right reason for leaving it: "a
+        name is a label, not a claim the pipeline spends money against". That sentence was
+        true while the number was the only address. It is not true now — the capture screen
+        finds a box by name, so a rename relabels every card in it, and an unlogged rename
+        leaves no record of what the box used to be called.
+
+        THIS IS D10's DIVIDER ARGUMENT AT BOX SCALE, and it resolves the same way. Moving a
+        divider relabels every card behind it, and D10 chose a `resectioned` event carrying
+        both layouts over restricting the operation. `box_renamed` carries both names for
+        exactly that reason: the trail is the safety, not a confirmation dialog
+        `docs/DESIGN.md` would ban anyway.
+        """
+        entry = self.ensure_box(number)
+        wanted = None if name is None or name.strip() == "" else name
+        if wanted is not None:
+            self._check_name_free(wanted, entry.box)
+        before = entry.name
+        if before == wanted:
+            # A no-op writes no event, `do_put_card`'s rule: a log line for a request that
+            # changed nothing is a rename that never happened, and the history is read as
+            # the record of what did.
+            return entry
+        entry.name = wanted
+        self._log("box_renamed", None, box=entry.box, name_from=before, name_to=wanted)
+        return entry
+
+    def next_box_number(self) -> int:
+        """The lowest positive integer no box and no card claims. A HIGH-WATER MARK IT IS NOT.
+
+        D10's allocator inside a box hands an index straight back when the newest record is
+        deleted, deliberately: the position was assigned to a photograph that no longer
+        exists and burning it would put a permanent hole in a box over a mis-tapped button.
+        A box number is the other case. It names a physical object on a shelf, the operator
+        no longer types it (the name is the address), and the only thing that reads it is
+        the store, the disk and the wire — so the lowest free number is the honest answer
+        and there is no gap for it to close wrongly.
+
+        Cards are consulted as well as the registry, because a box that holds cards and has
+        no registry entry is a real box — `_box_row` renders exactly that case, and handing
+        its number out again would put two boxes' photographs in one directory.
+        """
+        taken = set()
+        for key in self.boxes:
+            try:
+                taken.add(int(key))
+            except (TypeError, ValueError):
+                continue
+        for card in self.cards.values():
+            try:
+                taken.add(int(card.box))
+            except (TypeError, ValueError):
+                continue
+        number = 1
+        while number in taken:
+            number += 1
+        return number
 
     def set_sections(self, number, sections) -> Tuple[int, ...]:
         """Declare a box's divider layout. Refuses a bad one; never repairs it.

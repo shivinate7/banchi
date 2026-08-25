@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
 
-import type { BoxClaimResult, BoxDeleteResult, BoxRecord, GameEntry, Place, SectionDetail } from './types'
+import type {
+  BoxClaimResult,
+  BoxDeleteResult,
+  BoxRecord,
+  GameEntry,
+  BoxListingPlan,
+  BoxListingRow,
+  ListingReleaseResult,
+  Place,
+  SectionDetail,
+} from './types'
 import type { Failure } from './server'
 import {
   applyBoxClaims,
   createBox,
   deleteBox,
   describeFailure,
+  getBoxListings,
   getGames,
+  releaseBoxListings,
   updateBox,
 } from './server'
 import { spansOf } from './PositionBar'
@@ -590,17 +602,18 @@ export function BoxOps({
         </div>
       )}
 
-      {/* THE LAYOUT AND THE FOUR CONTROLS, ONE PRESS DOWN. Everything above this line is a
-          reading of the box a person wants at a glance over its cards; everything inside it is
-          an operation on the box or the raw fields an operation is checked against. Closed by
-          default and remembered by nothing — a disclosure is not session state (D27 is about
-          the capture screen's claims, and this is a panel that redraws per box anyway).
+      {/* THE LAYOUT AND THE FOUR CONTROLS, AND THEY ARE NOT ONE PRESS DOWN ANY MORE. This
+          comment described a `<details>` disclosure — "closed by default", a drawn marker,
+          the platform's keyboard semantics — and outlived it. What renders is a plain `<div>`
+          with a heading: the controls are on screen with the box they operate on, and the
+          heading is a label rather than a summary.
 
-          `<details>` rather than a button and a boolean, for `Inventory.tsx`'s reason: the
-          element already owns the open/closed semantics a screen reader announces, and a
-          hand-rolled toggle is a second implementation of a thing the platform ships. The
-          marker is drawn rather than left to the browser, same as that file's, so the render
-          `make screenshot` takes matches the browser the owner works in. */}
+          D33's amendment is why, in the owner's words: "both box and run, i don't want click
+          in functionality, i want their buttons just there." The measured argument the fold
+          rested on had the weaker half of a true premise — reached once a box IS every box —
+          and this repo's own record already made the point one notch further along, with
+          three routes shipping behind no reachable control at all. A control behind a fold is
+          one step better than that, not a different kind of thing. */}
       <div className="boxops-more">
         <p className="boxops-more-head">
           <span className="boxops-more-label">Layout and controls</span>
@@ -780,6 +793,12 @@ export function BoxOps({
             other control here is reversible or is a reading; this one destroys a box. Nothing
             below it, nothing beside it, and two presses plus a typed number away from a screen
             that is otherwise for looking at cards. */}
+        {/* ABOVE THE DELETE, BECAUSE IT IS WHAT MAKES THE DELETE POSSIBLE. D34's release is
+            the answer to one of the three things `box_not_empty_of_commitments` refuses on,
+            and the operator meets that refusal at the control below this one. It draws
+            nothing at all unless this box actually holds a listing. */}
+        <ReleaseListings record={record} onChanged={onChanged} />
+
         <DeleteBox record={record} onChanged={onChanged} />
       </div>
     </section>
@@ -1307,6 +1326,238 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
   )
 }
 
+/** One SKU's line in the plan and in the receipt. `2 of 5 staged · box 3 holds 3`.
+ *
+ *  MONO, BECAUSE IT IS ALL NUMBERS. docs/DESIGN.md: the utility face carries every count in
+ *  the product, and this row is nothing but counts and a SKU. */
+function ListingLine({ row }: { row: BoxListingRow }) {
+  const gives = Object.entries(row.releases)
+  const keeps = Object.entries(row.after)
+  return (
+    <p className="boxops-machine">
+      {row.sku} · {gives.length === 0 ? 'nothing' : gives.map(([k, n]) => `${n} ${k}`).join(' ')}
+      {keeps.length === 0 ? '' : ` · keeps ${keeps.map(([k, n]) => `${n} ${k}`).join(' ')}`}
+      {row.also_in_boxes.length === 0
+        ? ''
+        : ` · also ${row.also_in_boxes.map((o) => `box ${o.box} (${o.copies})`).join(', ')}`}
+    </p>
+  )
+}
+
+/* THE LISTING RELEASE — D34, and the door `box_not_empty_of_commitments` was missing.
+ *
+ * WHAT IT IS FOR, IN THE ORDER THE OPERATOR MEETS IT. The delete below refuses on three
+ * grounds: a sold card, a retired card, a card whose SKU holds a TCGplayer listing stage. The
+ * first two reverse on their own controls and the refusal says so. The third had no control
+ * anywhere, and no path through the pipeline either — `staged` is drawn down in exactly one
+ * place, `cli/cmd_join.py`, by the RISE in live quantity a fresh Filtered Export reports. That
+ * is the right answer for an import that lands and no answer at all for one that does not, so
+ * a staged row cleared by hand on TCGplayer left a count nothing could ever take back down.
+ * Box 1's 53 Gate B cards sat behind 45 such records and the box was undeletable, not by any
+ * rule anybody had argued for.
+ *
+ * IT IS TWO STEPS, AND THE FIRST IS FREE. Opening the panel fetches `GET /boxes/<box>/listings`
+ * and draws the plan; the button that asserts does not exist until that has answered. This is
+ * D33's preflight-then-confirm shape one register down — there the free step puts the cost on
+ * screen before the control that spends appears, here it puts the SKUs, the copy counts and
+ * THE OTHER BOXES on screen before the control that claims appears. No extra press: the fetch
+ * runs on open, so the numbers arrive without being asked for.
+ *
+ * IT SHIPPED WITHOUT THAT AND THE OWNER CAUGHT IT. The first build zeroed each SKU outright
+ * and reported which other boxes it had reached in the RECEIPT — honest, and after the write.
+ * Two things changed together: the release is now budgeted by this box's unsold copies, so it
+ * cannot give up what only another box's copies could account for; and the plan is drawn
+ * before the press.
+ *
+ * `frees_box` IS DRAWN LOUDEST, because it is the one outcome a person would otherwise read as
+ * a bug. A shared SKU leaves a remainder, a remainder keeps the card listing-held, and the box
+ * therefore STAYS refused after a release that did exactly what it said. The owner ruled that
+ * remainder in deliberately; the panel's job is to say so first.
+ *
+ * IT DRAWS NOTHING WHEN THERE IS NOTHING TO RELEASE, which is why the entry button reads
+ * `record.listed` rather than offering itself unconditionally. This is a screen whose question
+ * is where a card is; a control for a state most boxes are never in is chrome the rest of the
+ * time.
+ *
+ * ONE PRESS, NOT A TYPED NUMBER, and the difference from the delete beneath it is deliberate.
+ * The typed box number exists because that control's risk is destroying box 9 while looking at
+ * box 95, and a gesture that cannot be performed by momentum is what answers that. This
+ * control's risk is a claim that turns out to be wrong, and typing digits does not make anyone
+ * check TCGplayer. The preflight above the button is the gate here — the numbers are what a
+ * person can actually check.
+ */
+function ReleaseListings({
+  record,
+  onChanged,
+}: {
+  record: BoxRecord
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [plan, setPlan] = useState<BoxListingPlan | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [trouble, setTrouble] = useState<Failure | null>(null)
+  const [receipt, setReceipt] = useState<ListingReleaseResult | null>(null)
+
+  const box = record.box
+
+  /* THE PLAN IS FETCHED ON OPEN AND RE-FETCHED IF THE BOX CHANGES UNDER THE PANEL. The second
+     half matters: the box strip can move while this is open, and a plan describing box 1 drawn
+     above a button that would release box 3 is the exact mis-aim the whole preflight exists to
+     prevent. `ignore` drops a slow answer that lands after the box moved on. */
+  useEffect(() => {
+    if (!open) return
+    let ignore = false
+    setLoading(true)
+    setPlan(null)
+    setTrouble(null)
+    getBoxListings(box)
+      .then((answer) => {
+        if (!ignore) setPlan(answer)
+      })
+      .catch((err) => {
+        if (!ignore) setTrouble(describeFailure(err))
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [open, box])
+
+  const run = async () => {
+    if (busy) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      const result = await releaseBoxListings(box)
+      setReceipt(result)
+      setOpen(false)
+      setPlan(null)
+      /* The re-read is the caller's, as every write in this file leaves it. It matters more
+         here than elsewhere: `record.listed` is what draws this control, and the delete panel
+         under it recites the same three counts. Both are stale until the box row comes back. */
+      onChanged()
+    } catch (err) {
+      setTrouble(describeFailure(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* The receipt outlives the panel, and unlike the delete's it outlives the FACT: once the
+     counts are down there is nothing on any screen that says what they were. Every SKU is
+     listed rather than sampled because that list is what makes the claim checkable against
+     TCGplayer afterwards — the one thing a person could still go and do. */
+  if (receipt !== null) {
+    const gave = Object.entries(receipt.given_up)
+    return (
+      <div className="boxops-receipt">
+        <p className="boxops-note-text">
+          Released {count(receipt.released, 'SKU', 'SKUs')} in box {receipt.box}
+          {gave.length === 0
+            ? '.'
+            : `, giving up ${gave.map(([stage, n]) => `${n} ${stage}`).join(' · ')}.`}{' '}
+          Nothing was deleted — these are counts, and staging again re-establishes them.
+        </p>
+        {receipt.frees_box ? null : (
+          <p className="boxops-note-text">
+            <strong>Box {receipt.box} is still held.</strong>{' '}
+            {count(receipt.still_held.length, 'SKU', 'SKUs')} kept copies this box could not
+            account for
+            {receipt.also_in_boxes.length === 0
+              ? ''
+              : `, and ${receipt.also_in_boxes.map((b) => `box ${b}`).join(', ')} hold copies of
+                 them`}
+            . Those copies are still believed to be on TCGplayer, so the delete will go on
+            refusing — which is the point of releasing only what this box's cards could back.
+          </p>
+        )}
+        {receipt.listings.map((row) => (
+          <ListingLine key={row.sku} row={row} />
+        ))}
+      </div>
+    )
+  }
+
+  if (record.listed === 0) return null
+
+  if (!open) {
+    return (
+      <div className="boxops-actions boxops-actions-lone">
+        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
+          Release the listing hold on {count(record.listed, 'card', 'cards')}…
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="boxops-danger">
+      <p className="boxops-note-text">
+        {count(record.listed, 'card', 'cards')} in box {box}{' '}
+        {record.listed === 1 ? 'belongs' : 'belong'} to a SKU this store believes TCGplayer is
+        holding — pushed, staged, or live. Releasing records that{' '}
+        <strong>you have checked TCGplayer and it is holding none of them</strong>. Nothing here
+        can verify that: a Filtered Export reports live quantity and an Export From Staged lists
+        only the rows that are there, so absence proves nothing.
+      </p>
+
+      {loading ? <p className="boxops-hint">Reading what these SKUs are holding…</p> : null}
+
+      {plan === null ? null : (
+        <>
+          <p className="boxops-hint">
+            Each SKU gives up at most the copies this box holds, so nothing another box's copies
+            could account for is touched.{' '}
+            {plan.frees_box ? (
+              <>This releases box {box} completely.</>
+            ) : (
+              <>
+                <strong>This will not free box {box}.</strong>{' '}
+                {count(plan.still_held.length, 'SKU', 'SKUs')} will keep copies
+                {plan.also_in_boxes.length === 0
+                  ? ''
+                  : ` that ${plan.also_in_boxes.map((b) => `box ${b}`).join(', ')} also hold`}
+                , so the delete will go on refusing.
+              </>
+            )}
+          </p>
+          {plan.listings.map((row) => (
+            <ListingLine key={row.sku} row={row} />
+          ))}
+        </>
+      )}
+
+      <Trouble failure={trouble} />
+      <div className="boxops-actions">
+        {/* ABSENT, NOT DISABLED, UNTIL THE FREE STEP HAS ANSWERED — docs/DESIGN.md's rule for
+            the run panel's spend button, applied for the same reason: a disabled button is one
+            attribute away from pressable, and that attribute is what a later refactor drops
+            without noticing. An element that is not rendered has to be deliberately re-added. */}
+        {plan === null || plan.skus === 0 ? null : (
+          <button className="boxops-plain" type="button" disabled={busy} onClick={() => void run()}>
+            {busy ? 'Releasing…' : 'TCGplayer holds none of these — release'}
+          </button>
+        )}
+        <button
+          className="boxops-plain"
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            setPlan(null)
+            setTrouble(null)
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* THE WHOLE-BOX DELETE — D10's third 2026-08-23 ruling, and the most destructive action in the
  * product.
  *
@@ -1424,9 +1675,21 @@ function DeleteBox({
         cache and the box itself. <strong>There is no undo.</strong> Unlike an undone capture,
         these cards are not in your hand.
       </p>
+      {/* THE HINT NAMES WHICH GROUND, NOW THAT THE BOX ROW CARRIES ALL THREE (D34). It used
+          to recite the rule — "sold, retired or listed" — which is what the refusal says, and
+          the operator would learn which of the three applied to THIS box only by pressing an
+          irreversible button and reading the error. The three have different remedies, so
+          which one it is decides what they do next. */}
       <p className="boxops-hint">
-        A box holding a sold, retired or listed card is refused: those records are history and
-        commitments, not clutter.
+        {record.sold + record.retired + record.listed === 0
+          ? 'A box holding a sold, retired or listed card is refused: those records are history and commitments, not clutter.'
+          : `This box will be refused: ${[
+              record.sold ? `${count(record.sold, 'card', 'cards')} sold` : null,
+              record.retired ? `${count(record.retired, 'card', 'cards')} retired` : null,
+              record.listed ? `${count(record.listed, 'card', 'cards')} listed` : null,
+            ]
+              .filter((part): part is string => part !== null)
+              .join(', ')}. Sold and retired cards reverse on their own controls; a listing hold is released above.`}
       </p>
       <div className="boxops-fields">
         {/* NO PLACEHOLDER. The label already says which number to type, and a placeholder

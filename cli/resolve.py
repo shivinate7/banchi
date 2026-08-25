@@ -22,15 +22,16 @@ flags keeping.
 
 from __future__ import annotations
 
+import hashlib
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from decimal import Decimal
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from cli import runs
 from pipeline import games, join, pricing, routing, tcgcsv, variant
-from store import master, queues
+from store import files, master, queues
 from store.session import Store
 
 
@@ -155,6 +156,20 @@ class Resolved:
     # identifications file has no capture record behind it, and a state transition that
     # silently lands nowhere is exactly what this pipeline must not do.
     photos: Dict[str, Optional[str]] = field(default_factory=dict)
+    # D36 — positions this run's records were re-bound to, because the photograph they were
+    # identified from has since moved slot. `old key -> new key`, empty on a healthy run.
+    # Carried so the run report can SAY it happened: a silent correction to a position is
+    # indistinguishable from no correction at all, and this pipeline may not move a card
+    # between slots without printing that it did.
+    realigned: Dict[str, str] = field(default_factory=dict)
+    # D36 — records skipped because the photograph they were identified from is in this box
+    # no longer: the card was deleted mid-box or retired after the run. Named in the report,
+    # never dropped in silence.
+    departed: List[str] = field(default_factory=list)
+    # D36 — boxes whose photographs are not on disk, so their slots could not be checked at
+    # all. Their records pass through as the run recorded them; the report says so rather
+    # than letting an unchecked box read as a verified one.
+    unverified_boxes: List[int] = field(default_factory=list)
 
     def _only(self) -> GameJoin:
         if len(self.joins) == 1:
@@ -416,6 +431,8 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     game string raises here exactly as it would in `load` — a typo'd game is a loud stop,
     never a quiet bucket.
     """
+    # Positions are not read here beyond the box number, and `load` realigns them a moment
+    # later — so this reads the payload raw rather than paying for the photo digests twice.
     payload = run.read_identifications()
     held_cards = Store().read().inventory.cards
     needed: "OrderedDict[str, List[str]]" = OrderedDict()
@@ -576,6 +593,224 @@ def exports_for(
     return ExportPlan(by_game=by_game, notes=notes)
 
 
+# --------------------------------------------------------------- D36: the slot may have moved
+#
+# A RUN DIRECTORY IS IMMUTABLE AND THE STORE IS NOT, AND THAT IS THE WHOLE DEFECT.
+# `cli/runs.py` makes a run an immutable input on purpose — it is what lets a batch outlive
+# the server that started it (D33) and what makes a run an auditable record of what was
+# submitted and billed. Nothing about that is wrong. What was wrong is that the run's POSITIONS
+# were then trusted as truth.
+#
+# D10's ruling 1 lets a junk capture be deleted from the middle of a box, sliding every higher
+# card down one slot. The store does that correctly and completely: records, photographs,
+# sidecars and both queue files are all remapped, and a `renumbered` history event maps every
+# old index to its new one. The run directory is not remapped, because it cannot be — it is a
+# record of a past event.
+#
+# So re-joining a box that has been edited since it was identified paired every card with its
+# NEIGHBOUR's slot, photograph and label. Found 2026-08-24 on box 2: card `2/7` had been
+# deleted, 537 cards shifted, and a re-join wrote all 47 queue entries one position off — a
+# review screen showing one card's name over another card's photograph. The owner's reading is
+# the one this fix is built to:
+#
+#     "It should've gone away and autocorrected all the others too... I don't see how these
+#      could've been disconnected."
+#
+# THE FIX IS THAT THE RUN NO LONGER OWNS THE SLOT NUMBER. It owns what the model said about a
+# PHOTOGRAPH; the store owns which slot that photograph is in. `photo_sha256` is the join
+# between them, it is on every run record whose photograph could be read — `cmd_identify` writes
+# `None` where the image raised, which is the `blind` branch below — and it is the only binding
+# that survives a
+# renumber — a slot number is exactly what moved.
+#
+# MEASURED BEFORE IT WAS CHOSEN: box 2's 543 photographs are 997 MB and hash in 0.56s, to 543
+# distinct digests with no collisions. Reading the photographs is affordable per join, and it
+# is strictly better than trusting the store's identification cache, which is another derived
+# copy that a future defect could leave stale in the same way.
+#
+# IT CORRECTS SILENTLY ONLY WHEN IT IS CERTAIN, AND REFUSES OTHERWISE. A digest that matches no
+# photograph on disk, or more than one, is not a slot that moved — it is a question, and
+# `CLAUDE.md` forbids guessing an identity. A run whose every record already sits at its own
+# photograph returns untouched, so a healthy run joins byte-for-byte as it always did.
+
+
+def _photo_digests(boxes) -> Tuple[Dict[str, str], set]:
+    """(sha256 -> position key, digests seen more than once) over the boxes this run touches.
+
+    Reads the photographs themselves rather than any record OF them. That is the point: every
+    derived copy of a position is a copy that a renumber has to remember to update, and this
+    function exists because one of them was not.
+    """
+    found: Dict[str, str] = {}
+    twice: set = set()
+    for box in sorted(boxes):
+        directory = files.home() / "captures" / "cards" / f"box{int(box)}"
+        if not directory.is_dir():
+            continue
+        for photo in sorted(directory.glob("*.jpg")):
+            try:
+                index = int(photo.stem)
+            except ValueError:
+                continue
+            digest = hashlib.sha256(photo.read_bytes()).hexdigest()
+            if digest in found:
+                twice.add(digest)
+                continue
+            found[digest] = f"{int(box)}/{index}"
+    return found, twice
+
+
+def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
+    """Re-bind a run's records to the slots their photographs occupy now (D36).
+
+    Returns `(payload, moved, departed, unverified_boxes)`. The first three are empty and the
+    payload is the identical object when nothing has shifted, which is what keeps a healthy
+    run's join byte-for-byte unchanged.
+
+    REASONED PER BOX, BECAUSE ABSENCE OF PHOTOGRAPHS IS NOT EVIDENCE OF ABSENT CARDS. The
+    first draft of this reasoned over the whole run and declared all 53 of box 1's cards
+    departed — because box 1's photographs have been deleted from disk while its records live
+    on. That inverts the meaning of the check: a missing photograph tells you the PHOTOGRAPH
+    is missing, and only a box whose other photographs are present can tell you that one
+    particular card has left it.
+
+    So a box whose photographs are entirely absent is `unverified`: its records pass through
+    untouched, exactly as before this function existed, and the report says the slots were not
+    checked. A box whose photographs ARE present is checked, and there the three outcomes are
+    real and distinct:
+
+      moved      the digest is on disk at a different slot. Re-bound, and reported.
+      departed   the digest is on no photograph in a box whose other photographs are there.
+                 The card has left — deleted mid-box (D10 ruling 1) or retired. Skipped
+                 rather than joined, because there is nothing to join it to, and NAMED in the
+                 report: `CLAUDE.md` forbids dropping a card silently, not dropping one.
+      ambiguous  the digest is on two photographs. That is a question, not a slot, and
+                 `CLAUDE.md` forbids guessing an identity. Refuses the whole run.
+
+    A record with no digest cannot be checked. Harmless while nothing in its box has moved,
+    unresolvable once something has, so it refuses only in the second case.
+    """
+    cards = payload.get("cards") or {}
+    by_box: Dict[int, Dict[str, dict]] = {}
+    for key, record in cards.items():
+        if isinstance(record, dict) and record.get("box") is not None:
+            by_box.setdefault(int(record["box"]), {})[key] = record
+
+    moved: Dict[str, str] = {}
+    departed: List[str] = []
+    ambiguous: List[str] = []
+    blind: List[str] = []
+    unverified: List[int] = []
+
+    for box, records in sorted(by_box.items()):
+        at, twice = _photo_digests([box])
+        verifiable = {
+            key: rec["photo_sha256"] for key, rec in records.items() if rec.get("photo_sha256")
+        }
+        # Nothing to compare against, or nothing that matches: the photographs are gone, not
+        # the cards. Leave this box exactly as the run recorded it.
+        if not at or not verifiable or not any(d in at for d in verifiable.values()):
+            unverified.append(box)
+            continue
+        blind += sorted(set(records) - set(verifiable))
+        for key, digest in sorted(verifiable.items()):
+            if digest in twice:
+                ambiguous.append(key)
+            elif digest not in at:
+                departed.append(key)
+            elif at[digest] != key:
+                moved[key] = at[digest]
+
+    if not moved and not departed and not ambiguous:
+        return payload, {}, [], unverified
+
+    # TWO RECORDS THAT LAND ON ONE SLOT ARE A QUESTION, NOT A SLOT — the same rule the
+    # `twice` check above applies to the DISK, applied to the PAYLOAD, and it was missing.
+    # `twice` catches two photographs carrying one digest; nothing caught two RECORDS
+    # carrying one digest, which resolve to the same position through `at` and then collide
+    # in `rebuilt` — where the second write wins and the first card leaves the run with no
+    # entry anywhere and nothing printed. Measured on a two-card payload: two cards in, one
+    # card out, `departed` empty. That is a silent drop inside the function written to stop
+    # one, and `CLAUDE.md` forbids it in as many words.
+    gone = set(departed)
+    landing: Dict[str, List[str]] = {}
+    for key in cards:
+        if key in gone:
+            continue
+        landing.setdefault(moved.get(key, key), []).append(key)
+    collided = sorted(slot for slot, keys in landing.items() if len(keys) > 1)
+
+    if ambiguous or collided or (blind and moved):
+        lines = ["this run cannot be placed against the box as it stands now. Nothing was joined.", ""]
+        if collided:
+            lines += [
+                "These slots are claimed by more than one record, so which card is at each "
+                "is a question rather than a fact: " + ", ".join(collided[:8])
+                + (" ..." if len(collided) > 8 else ""),
+                "",
+            ]
+        if ambiguous:
+            lines += [
+                "These records' photographs appear at more than one slot, so which card they "
+                "are is a question rather than a fact: " + ", ".join(ambiguous[:8])
+                + (" ..." if len(ambiguous) > 8 else ""),
+                "",
+            ]
+        if blind and moved:
+            lines += [
+                f"{len(moved)} card(s) have moved slot since they were identified, and these "
+                "records predate the photo digest, so they cannot be checked at all: "
+                + ", ".join(blind[:8]) + (" ..." if len(blind) > 8 else ""),
+                "",
+            ]
+        lines.append("Re-identify this box and join again.")
+        raise runs.RunError("\n".join(lines))
+
+    # Rebuilt rather than mutated: `read_identifications` hands back the run's own parsed
+    # payload, and a caller that reads it again must not find it silently rewritten. The run
+    # directory on disk is never touched — its record of what was submitted stays true.
+    rebound = dict(payload)
+    rebuilt = {}
+    for key, record in cards.items():
+        if key in gone:
+            continue
+        now = moved.get(key, key)
+        slot = now.split("/")
+        # A KEY THAT IS NOT A POSITION PASSES THROUGH UNTOUCHED, and it is not hypothetical:
+        # `identify/sidecar.py` keys a capture with no position as `file:<name>`, which is
+        # the documented shape for a directory of photographs with no sidecars. Such a record
+        # is never in `by_box`, so it can never be in `moved` — but this loop walks EVERY
+        # card, so one stray positionless key used to take the whole run down with an
+        # unhandled `ValueError` the moment anything else in its box had shifted, and take
+        # `join` and `emit` down with it permanently. There is nothing to re-bind here (no
+        # slot moved, because it never had one), so the honest action is to leave it exactly
+        # as the run recorded it.
+        if len(slot) != 2 or not (slot[0].isdigit() and slot[1].isdigit()):
+            rebuilt[now] = record
+            continue
+        box, index = slot
+        moved_record = {**record, "box": int(box), "index": int(index)}
+        # AND THE PHOTO PATH, WHICH IS THE FIELD THIS FIX FIRST FORGOT. `box` and `index`
+        # decide the position LABEL, but `cli/resolve.py:queue_entry` carries `record["photo"]`
+        # onto the queue entry verbatim and the review screen renders exactly that file. A
+        # rebound record keeping its old path points at the slot's PREVIOUS occupant — so the
+        # screen drew one card's name over another card's photograph, which is the identical
+        # defect this whole function exists to prevent, surviving one field deeper.
+        #
+        # Found by looking at the screen: the entry read `Mewtwo ex` and rendered `0096.jpg`,
+        # a photograph of something else. Renaming only the FILENAME, so a mirror or an
+        # overridden captures root moves with it and nothing here has to know where photos live.
+        photo = record.get("photo")
+        if isinstance(photo, str) and photo:
+            source = PurePosixPath(photo)
+            moved_record["photo"] = str(
+                source.with_name(f"{int(index):04d}{source.suffix}")
+            )
+        rebuilt[now] = moved_record
+    rebound["cards"] = rebuilt
+    return rebound, moved, departed, unverified
+
+
 def load(
     run: runs.Run,
     exports: Union[str, Path, Mapping[str, Path]],
@@ -600,6 +835,10 @@ def load(
             (game, Path(path)) for game, path in exports.items()
         )
     payload = run.read_identifications()
+    # D36 — BEFORE anything reads a position out of this payload. A run directory is immutable
+    # and the store is not, so the slot a card was identified at may not be the slot it is in
+    # now. Matched by photograph, refused when uncertain, untouched when nothing has moved.
+    payload, realigned, departed, unverified = realign(payload)
 
     # The store's settled identities, read off the live inventory. A record carries
     # `sku` + `condition` from exactly two writers — `do_review_answer` (a human chose the
@@ -815,6 +1054,9 @@ def load(
         basis=basis,
         not_joined=not_joined,
         photos=photos,
+        realigned=realigned,
+        departed=departed,
+        unverified_boxes=unverified,
     )
 
 

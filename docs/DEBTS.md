@@ -836,9 +836,16 @@ exports. Nothing polices the registry against the *code*, so a field can be perf
 and entirely inert. D22 says "a field no consumer reads is a field nothing keeps honest", and
 this table is that sentence measured.
 
-### `removed` names two different things, and one of them is already shipped
+### `removed` names two different things — resolved 2026-08-23
 
-D26 ratifies a `removed` **card state** — `sold`'s sibling for a card pulled out, damaged, lost
+**THE OWNER TOOK THE FIRST OF THE THREE WAYS OUT: rename the STATE.** D26 drafted `removed` and
+shipped **`retired`** (`store/master.py`), so the card state and the history event no longer
+collide; the event keeps its on-disk name `removed` (`server/capture_server.py`), and nothing
+already written to `history.jsonl` moved. The analysis below is kept because it is the argument
+the rename rests on, and because the mechanism it describes is still exactly what would bite
+the next name collision.
+
+D26 drafted a `removed` **card state** — `sold`'s sibling for a card pulled out, damaged, lost
 or given away. `server/capture_server.py` already defines `REMOVED = "removed"` as the **history
 event** capture-undo appends.
 
@@ -848,9 +855,13 @@ the last event naming a state and filters against that tuple. Add `removed` to `
 months-old undo event starts parsing as a state, and a reversed sale becomes restorable to
 `removed`.
 
-**Nothing catches it at import; the T7 disjointness case will catch it at build time.** Three
-ways out — rename the state, rename the event, or narrow the reader — and which one is an owner
-decision, because the event name is already written into `history.jsonl` on disk.
+**Nothing catches it at import; the T7 disjointness case DOES catch it at build time.**
+`harness/tests/t7_store_and_seams.py` asserts `set(SERVER_EVENTS) & set(master.STATES)` is
+empty, and asserts separately that `master.RETIRED` is in `STATES` and not in `SERVER_EVENTS`.
+Three ways out were available — rename the state, rename the event, or narrow the reader — and
+the owner chose the first, because the event name was already written into `history.jsonl` on
+disk. "Nothing catches it at import" stays true: there is no module-level assert in either
+file, and T7 is the only guard.
 
 ## Reporting defects — a check runs but can report the wrong thing
 

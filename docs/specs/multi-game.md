@@ -28,9 +28,18 @@ written: the rarity claim's Python side and picker plumbing are BUILT (the ladde
 and chip narrowing; the prompt clause was built, measured for $0.17, LOST — holdout down 1.5
 points, high-confidence misses up two — and is switched off with the measurement cited at the
 switch; `docs/GATES.md`'s T1 section has the numbers). The multi-export join (D25) is BUILT,
-proven byte-identical on a single-export Pokemon run. Still not built: pooled non-located
-inventory and the two opsec discharges (D24), and per-game finalisation. Section 9 carries the
-original arguments.
+proven byte-identical on a single-export Pokemon run. **EVERYTHING THIS SENTENCE USED TO LIST
+AS UNBUILT IS BUILT, corrected 2026-08-25**: pooled non-located inventory (D24) is live —
+`pipeline/games.py` carries `"located": False` on `pokemon_code`, the server builds the pooled
+place block, and `app/tests/fulfillment.spec.ts` asserts a pooled card never reaches the
+Fulfiller's screen; both opsec discharges are made — `scripts/guard-opsec.sh` was re-enabled as
+a `PreToolUse` hook on 2026-08-23 with the narrowed pattern D16 prescribes, and
+`scripts/views.txt` names no code-card-renderable URL; and per-game finalisation landed as
+prompts — `riftbound_card_v1` and `one_piece_card_v1` are written, registered and dispatched
+to. What is still true, and is the honest remaining gap, is that **neither new game has met a
+card**: the store holds zero Riftbound and zero One Piece records, so every claim about those
+two prompts is a claim about a CSV and a schema rather than about a photograph. Section 9
+carries the original arguments.
 
 **WHAT HAS MET A REAL CARD.** Nothing here. Gate B ran 53 Pokémon cards through a pipeline that
 had no `game` field in it. No Riftbound card, no One Piece card and no misc card has been

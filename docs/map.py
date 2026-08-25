@@ -186,8 +186,10 @@ BUILD_ORDER = [
              "the two-phase split. "
              "THE MONEY STEP SPAWNS DETACHED AND IS NEVER AWAITED, so a run outlives a "
              "restart of the server that started it; the free steps answer inside the request "
-             "with their own stdout attached. app/src/RunPanel.tsx draws it folded on "
-             "#/inventory and app/tests/run-panel.spec.ts is the check the hard rule says "
+             "with their own stdout attached. app/src/RunPanel.tsx draws it UNFOLDED on "
+             "#/inventory — sharing one .browse-boxrun row with BoxOps, because the owner "
+             "overruled the fold on 2026-08-24 (D33, amended) — and "
+             "app/tests/run-panel.spec.ts is the check the hard rule says "
              "does not exist."},
 
 ]
@@ -245,10 +247,10 @@ COMPONENTS = [
         "modules": {
             "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
-            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, --bypass trusts the finish claim", "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25"], "tested_by": ["T4", "T7"]},
+            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, --bypass trusts the finish claim", "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36"], "tested_by": ["T4", "T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9", "D25"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11"], "tested_by": ["T7"]},
-            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26"], "tested_by": ["T7"]},
+            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25"], "tested_by": ["T7"]},
         },
     },
@@ -298,7 +300,7 @@ COMPONENTS = [
                                  "entry is right — the values are byte-identical to the literals "
                                  "it replaced."},
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D20", "D21", "D23", "D24", "D25"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -310,7 +312,7 @@ COMPONENTS = [
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
-                           "governed_by": ["D3", "D4", "D9"], "tested_by": ["T4"]},
+                           "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag",
                              "governed_by": ["D9"]},
         },
@@ -363,10 +365,10 @@ COMPONENTS = [
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
-                          "governed_by": ["D4", "D9", "D28"], "tested_by": ["T7"]},
+                          "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
             "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
@@ -647,15 +649,27 @@ COMPONENTS = [
                 # register. What a reader actually needs from this entry is which SHAPES of
                 # route exist, and that is what the line below now says.
                 "does": "the capture, status, photo, inventory, queue, review-answer, "
-                        "mark-sold, undo, search and box routes; the sidecar identify reads "
+                        "mark-sold, undo, search and box routes — including D34's listing "
+                        "release and the free plan that must be drawn before it, D37's "
+                        "stand-down in both directions, and D20's box name as an address "
+                        "(`name_taken`, and a number allocated rather than typed); "
+                        "the sidecar identify reads "
                         "back; the photo store; the origin allowlist that stands between a "
                         "stray browser tab and a hard delete; "
-                        "and SERVER_EVENTS — `corrected`, `removed`, `answered`, `unanswered`, `reshot`, appended "
+                        "and SERVER_EVENTS, appended "
                         "to history.jsonl through _history inside the route's own "
                         "Store.write(), so the line and the change it describes commit "
-                        "together or neither does. None of the five is a member of "
+                        "together or neither does. NOT ONE OF THEM is a member of "
                         "master.STATES, which is what keeps _state_before_sale from "
                         "restoring a reversed sale to one of them.",
+                # THE EVENT NAMES ARE NOT ENUMERATED HERE, and that is the fix rather than a
+                # thinning. This line named five of them — `corrected`, `removed`, `answered`,
+                # `unanswered`, `reshot` — and said "none of the five", while the tuple had
+                # grown to eleven and then to thirteen without the sentence moving. A restated
+                # list nothing reconciles is D18's own test failing in public: the membership
+                # is verifiable, nothing in it is arguable, and the tuple in
+                # server/capture_server.py is the register. T7 is what asserts the
+                # disjointness this sentence claims.
                 # D5 is here because the file cites it: the concurrency it is tested at is two
                 # and four simultaneous captures, and two is D5's two people on two devices.
                 # D4 and D7 arrived with 7b — the review answer is D4's one-tap choice, and
@@ -668,7 +682,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -700,9 +714,10 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "step": 10,
-        "does": "the web app. Six routes behind a hand-written hash router, five of them the "
-                "owner's — the capture screen that Gate B runs on, the review queue, the "
-                "inventory SKU view, the pull preview and step 6's component gallery — and one "
+        "does": "the web app. FIVE routes behind a hand-written hash router, four of them the "
+                "owner's — the capture screen that Gate B runs on, the review queue, the one "
+                "inventory view (D31 folded the box walk and the pull preview into it) and "
+                "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. Two "
                 "Playwright specs assert docs/DESIGN.md's Fulfillment floors, one against step "
                 "6's component and one against the Fulfillment view.",
@@ -774,8 +789,10 @@ COMPONENTS = [
             "src/App.tsx": {"does": "the shell: five hash routes since D31 merged #/boxes and #/pull "
                                     "into #/inventory, one ROUTES table driving both "
                                     "the nav and the render, and the persona field that decides "
-                                    "the Fulfiller's view gets no chrome at all. #/boxes is the "
-                                    "seventh, registered with D20's screen rather than after it.",
+                                    "the Fulfiller's view gets no chrome at all. #/boxes WAS "
+                                    "the seventh, registered with D20's screen rather than after "
+                                    "it; D31 deleted the route and kept the screen — the "
+                                    "registration rule stands, the route does not.",
                             "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
@@ -789,11 +806,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D33", "D34", "D37"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D33", "D34", "D37"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -828,21 +845,47 @@ COMPONENTS = [
                                       "a thin DOM sampler that feeds it one 64x36 luma grid per "
                                       "decoded frame. Parameters derived from Gate B's measured "
                                       "cadence and SNR — see docs/specs/motion-trigger.md. "
-                                      "BUILT 2026-08-22; thresholds are rig-tunable constants "
-                                      "and the rig has not yet tuned them.",
+                                      "BUILT 2026-08-22 and TUNED AT THE RIG 2026-08-23 off "
+                                      "the first 86-cycle feeder trace (tLo 3.0 -> 4.5, tHi 6.0 "
+                                      "-> 8.0, recovering 14 silently-missed cards), then "
+                                      "confirmed live at 85/85 on box 95. The trigger half of "
+                                      "Gate C is confirmed; the pipeline half is not.",
                               "governed_by": ["D13", "D19"]},
 
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
                     "every control one hairline row at rest (key chip, label, value), one "
-                    "field open at a time, claims panel (Box, Set hint, Rarity, Finish) over "
-                    "a quiet SESSION footer (Game, Camera, Rotation, Trigger). Rarity at rest "
+                    "field open at a time. RE-ORDERED AND RE-BOXED 2026-08-24 by the owner: "
+                    "the sidebar is three independent panels down the column rather than one "
+                    "panel divided by hairlines — a quiet SESSION box (Game, Camera, Rotation, "
+                    "Trigger) at the TOP, the claims (Box, Set hint, Rarity, Finish) in the "
+                    "middle, the shutter and undo at the FOOT, 12px of air between. It read "
+                    "claims-over-a-SESSION-footer before that. Rarity at rest "
                     "is the bitfield — one 6px mark per rarity of the chosen game, filled = "
                     "claimed; the box list is never rendered as a list (filter, re-indexed "
                     "digits, Enter); small single-selects open as content-sized segmented "
                     "tracks. Camera folded into the row grammar; the camera never opens on "
-                    "mount. Undo that names what it would delete.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D21", "D22", "D23", "D27"]},
+                    "mount. Undo that names what it would delete. THE BOX FIELD IS ONE "
+                    "CONTROL AS OF 2026-08-25 (D20, amended): one free-text entry searching "
+                    "number and name together over `GET /boxes`, each row carrying the name "
+                    "as `Opt`'s de-emphasised suffix, the creation row drawn LAST so "
+                    "Enter-takes-the-top-row cannot make a junk box, a sealed box drawn "
+                    "`sealed` and refusing, and creation by name alone — the number is "
+                    "allocated server-side, never typed. `boxDraft`, `newBoxRef`, "
+                    "`onBoxSubmit` and the box branch of `fieldPick` are gone with it. "
+                    "EVERY OPTION RIDES A KEY "
+                    "AS OF 2026-08-24, not just the first nine (owner's ruling): `OPTION_KEYS` "
+                    "is digits, then `0`, then every letter this screen has not already spent "
+                    "— the eight field letters and `c`/`u`, which are the shutter and "
+                    "the undo. `n` WAS RESERVED HERE AND IS NOT ANY MORE: it was the jump to "
+                    "the Box field's second input, and that input no longer exists, so it "
+                    "re-enters the alphabet at its own place. That moves NOTHING before the "
+                    "twentieth option — the first thirteen keys are `1234567890ade` either "
+                    "way, so Pokemon's thirteen rarities are untouched — and shifts the "
+                    "twentieth onward by one letter. Skipped rather than shadowed: a literal a-z hands Pokemon's "
+                    "thirteenth rarity the capture key, and either resolution of that fires "
+                    "one act while the operator believes the other did.",
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -874,9 +917,15 @@ COMPONENTS = [
                         "BESIDE the photograph above 900px and stacked below it, the "
                         "reason as a human label over its machine string, candidate rows "
                         "priced from the export, and an answer that writes and advances with "
-                        "no dialog. Reads GET /queues and writes one candidate row back "
-                        "through src/server.ts like every other screen.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D28", "D29"],
+                        "no dialog. Reads GET /queues and writes THREE KINDS OF THING back "
+                        "through src/server.ts: an identification (D4's answer, single and "
+                        "D29's group, both reversible per D28), a CLOSED QUESTION that writes "
+                        "nothing to the card at all (D37's stand-down, on the `X` panel with "
+                        "its three reasons), and a TERMINAL CARD STATE (D26's retirement, "
+                        "offered on the same panel). The panel owns the keyboard while it is "
+                        "up, because its choices ride digits that mean candidates everywhere "
+                        "else on this screen; the mid-box delete is deliberately not on it.",
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -892,7 +941,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -939,7 +988,10 @@ COMPONENTS = [
                         "which are the four things D20 says a box has that a person decides — "
                         "register one before a card goes into it, rename it, re-divide it, seal "
                         "or re-open it. Its NUMBER is not among them: that would be a renumber, "
-                        "which D10 forbids outright.",
+                        "which D10 forbids outright. Two destructive-adjacent controls sit "
+                        "beneath them: D34's listing release, drawn over a free plan and "
+                        "budgeted by this box's own copies, and D10 ruling 3's whole-box "
+                        "delete behind a typed box number.",
                 "note": "TWO CONTROLS SAY WHAT THEY WILL DO BEFORE THEY DO IT, and both "
                         "sentences are the decision rather than a nicety. Sealing reads 'Seal "
                         "box — freezes capacity at 59', because from that press every fraction "
@@ -961,7 +1013,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -1032,7 +1084,7 @@ COMPONENTS = [
                                  # form. D3 is the finish-claim bypass its join control offers. D31
                                  # is why it is a panel on #/inventory and not a seventh route. D32
                                  # is the crop and the max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32", "D33"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1092,7 +1144,12 @@ COMPONENTS = [
                         "clears it and stores nothing, a sessionStorage value written before "
                         "the claim was a set reads back as one member, and narrowing a "
                         "two-member claim to one CLEARS it rather than promoting a filter "
-                        "into a determination. Run by `make design-check`.",
+                        "into a determination. And, since 2026-08-24, the option alphabet "
+                        "over a thirteen-rarity fixture: the tenth rides `0` and the "
+                        "eleventh `a`, the last two ride `d` and `e`, and — the case that "
+                        "matters, which is negative — `c` stays the shutter and `b` stays "
+                        "the Box field, because a literal a-z would have put Rainbow Rare on "
+                        "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D22", "D23", "D27"],
                 "note": "No box is ever selected and only reads are stubbed, so no capture "
                         "is ever taken — motion-live.spec.ts's rule, for its reason. It "
@@ -1135,7 +1192,7 @@ COMPONENTS = [
                         "per-card claims, the mid-box delete and the whole-box delete — "
                         "asserted at the request boundary against a stubbed server, so a "
                         "control that draws but sends the wrong body fails here.",
-                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D24", "D26", "D30", "D31"],
+                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D24", "D26", "D30", "D31", "D33", "D34"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -1157,12 +1214,20 @@ COMPONENTS = [
                 "does": "the review queue's geometry and its two guarantees: the photograph "
                         "at >=23% of the viewport with a >=700px long edge, zero page scroll "
                         "for one card, every candidate row on screen beside the photo, D28's "
-                        "frame not moving between cards, the 1:1 loupe painting native pixels "
-                        "rather than a second downscale, an answer that stays reversible past "
+                        "frame not moving between cards, the 1:1 loupe — HIDDEN AT REST, "
+                        "aimed by the pointer, painting native pixels rather than a second "
+                        "downscale, and leaving nothing behind when the pointer does (the "
+                        "four cases were rewritten 2026-08-25 when the loupe stopped being a "
+                        "fixed centred inset; the old ones asserted `50% 50%` and an element "
+                        "on screen at rest, both wrong by design now) — an answer that stays reversible past "
                         "the twenty seconds the old clock allowed, the single column below "
                         "900px, and D24's pooled card drawing no photograph here. Every route "
                         "is stubbed and no write is ever issued. Run by `make design-check`.",
-                "governed_by": ["D4", "D13", "D24", "D28", "D29"],
+                # D32 and D35 arrived with the rewritten loupe cases: the aim-is-never-a-
+                # constant case argues from D32's measured 39-81% card fill, and the reason the
+                # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
+                # misread-as-collector-number string exactly.
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

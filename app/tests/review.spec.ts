@@ -252,26 +252,91 @@ test('the photograph does not move between cards', async ({ page }) => {
 
 /* -------------------------------------------------------------------- the 1:1 loupe */
 
+/* THE LOUPE MOVES, AS OF 2026-08-24, AND THESE CASES WERE REWRITTEN WITH IT. It used to be a
+   fixed inset pinned to the frame and painting the CENTRE of the stored photograph, so this
+   file asserted `background-position: 50% 50%` and that the element was on screen the moment
+   the card was. Both are now wrong by design: the owner reported the fixed aim as confusing
+   ("i'm kinda confused as to what i'm supposed to be looking at"), and the centre of a
+   2160x3840 frame is the Pokedex data strip — which decides nothing, and whose National
+   Pokedex number is the exact string D35 records the model misreading as a collector number.
+
+   What replaced it is hidden at rest and aimed by the pointer. So the assertions move from
+   "it is there, showing the middle" to the three properties the new design actually rests on:
+   it is ABSENT until the pointer is over the photograph, it paints at 1:1 wherever it is
+   aimed, and NOTHING survives the pointer leaving. The 1:1 assertion is the one carried over
+   unchanged, because it is the reason the element exists — FADGI and Metamorfoze both require
+   this class of judgement at 100%, and a magnifier that is itself a downscale is worse than no
+   magnifier because it looks like evidence. */
+
+test('the sheen loupe is absent until the pointer is on the photograph', async ({ page }) => {
+  await open(page)
+  await expect(page.locator('.review-photo')).toBeVisible()
+
+  /* HIDDEN AT REST is the fix for what the owner reported, so it is asserted before anything
+     else: an unexplained crop sitting on the card at all times is the confusion itself. */
+  await expect(page.locator('.review-inset')).toHaveCount(0)
+})
+
 test('the sheen loupe paints native pixels, not a downscale', async ({ page }) => {
   await open(page)
+  const photo = page.locator('.review-photo')
+  await expect(photo).toBeVisible()
+
+  await photo.hover({ position: { x: 120, y: 200 } })
   const inset = page.locator('.review-inset')
   await expect(inset).toBeVisible()
 
-  /* FADGI and Metamorfoze both require this judgement at 100%. `background-size: auto` with
-     a centred position IS 1:1 — any other size is a second downscale wearing a magnifier,
-     which is worse than no loupe because it looks like evidence. */
-  const painted = await inset.evaluate((el) => {
-    const style = getComputedStyle(el)
-    return { size: style.backgroundSize, position: style.backgroundPosition }
-  })
-  expect(painted.size).toBe('auto')
-  expect(painted.position).toBe('50% 50%')
+  /* `background-size: auto` paints the file at its natural size — that is the whole of the
+     1:1 guarantee, and any other value is a second downscale wearing a magnifier. The
+     POSITION is no longer a constant to assert: it is the natural pixel under the pointer,
+     which the next case checks by moving the pointer rather than by naming a number here. */
+  const size = await inset.evaluate((el) => getComputedStyle(el).backgroundSize)
+  expect(size).toBe('auto')
 
-  // Inside the photograph it magnifies, not floating somewhere off it.
+  /* Centred on the pointer, which is what makes it a loupe rather than a fixed inset. Within
+     a few px rather than exactly: the element is positioned by its 220px content box while
+     `boundingBox()` reports the 224px border box, so the two centres differ by the border and
+     asserting an exact number would be asserting that border width. What is being checked is
+     that the glass sits where the pointer is — a fixed inset would be out by hundreds. */
   const box = await inset.boundingBox()
-  const photo = await page.locator('.review-photo').boundingBox()
-  expect(box!.x + box!.width).toBeLessThanOrEqual(photo!.x + photo!.width + 1)
-  expect(box!.y + box!.height).toBeLessThanOrEqual(photo!.y + photo!.height + 1)
+  const frame = await photo.boundingBox()
+  expect(Math.abs(box!.x + box!.width / 2 - (frame!.x + 120))).toBeLessThanOrEqual(4)
+  expect(Math.abs(box!.y + box!.height / 2 - (frame!.y + 200))).toBeLessThanOrEqual(4)
+})
+
+test('the loupe aims where the pointer is, so the aim is never a constant', async ({ page }) => {
+  await open(page)
+  const photo = page.locator('.review-photo')
+  await expect(photo).toBeVisible()
+  const inset = page.locator('.review-inset')
+
+  const offsetAt = async (x: number, y: number) => {
+    await photo.hover({ position: { x, y } })
+    await expect(inset).toBeVisible()
+    return inset.evaluate((el) => getComputedStyle(el).backgroundPosition)
+  }
+
+  /* D32's argument, applied to the glass: the card fills 39% to 81% of the frame across one
+     box because cards move on the tray, so ANY constant offset is a guess that is wrong per
+     frame. Two aims that produced the same background offset would mean the pointer is not
+     reaching the arithmetic — the defect this whole redesign exists to remove. */
+  const near = await offsetAt(80, 120)
+  const far = await offsetAt(300, 520)
+  expect(near).not.toBe(far)
+})
+
+test('nothing the loupe did survives the pointer leaving', async ({ page }) => {
+  await open(page)
+  const photo = page.locator('.review-photo')
+  await photo.hover({ position: { x: 120, y: 200 } })
+  await expect(page.locator('.review-inset')).toBeVisible()
+
+  /* `onPointerLeave` clears the aim, and the design comment leans on that to argue the loupe
+     is not the list -> detail -> back loop docs/DESIGN.md bans on this screen: no state
+     survives the pointer leaving. Asserted rather than trusted, because it is the sentence
+     that makes the ban compatible with a mouse gesture at all. */
+  await page.mouse.move(2, 2)
+  await expect(page.locator('.review-inset')).toHaveCount(0)
 })
 
 /* ---------------------------------------------------------------- answering, and undo */

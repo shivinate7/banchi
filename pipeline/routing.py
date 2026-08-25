@@ -50,6 +50,20 @@ NO_POSITION = "no_position"
 IDENTIFICATION_FAILED = "identification_failed"
 SET_AMBIGUOUS = "set_ambiguous"
 CARD_NOT_DETECTED = "card_not_detected"
+# D35 — the collector number could not be read, and the card's row was found by its name
+# inside the set the operator declared. Emitted by `join_batch`, the same way and for the
+# same reason as `SET_AMBIGUOUS` directly above: both are facts about HOW the catalog row was
+# reached, which is the catalog's question and not the finish ladder's.
+#
+# IT IS A REVIEW REASON ON A CARD THAT RESOLVED, and what is unique about it is that the JOIN
+# writes it OVER a successful ladder resolution — `low_confidence` and `no_market_data` also sit
+# on resolved cards, but they reach `routing.route` still resolved and are re-routed there,
+# where this one arrives already un-resolved. That is the whole of D35. The ladder really did pick one row and the entry really does carry it —
+# the card is queued anyway, because a row reached without its number is a row a human should
+# see beside the photograph before it is listed. What that costs is one press, not one press
+# per card: every such entry offers exactly one candidate under one shared reason, which is
+# precisely D29's group-answer eligibility.
+NUMBER_UNREAD_NAME_MATCHED = "number_unread_name_matched"
 
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,
 # always sorted last.

@@ -1,5 +1,7 @@
 import type {
   AnswerResult,
+  StandDownReason,
+  StandDownResult,
   BoxRecord,
   BoxState,
   BoxSummary,
@@ -20,6 +22,8 @@ import type {
   BoxClaimResult,
   RemoveResult,
   BoxDeleteResult,
+  BoxListingPlan,
+  ListingReleaseResult,
   CsvUpload,
   RunDetail,
   RunPreflight,
@@ -643,6 +647,65 @@ async function answerCall(
   })) as AnswerResult
 }
 
+/* One route in both directions — `POST /review/<box>/<index>/stand-down`, with
+ * `{"undo": true}` to put the question back. `answerCall`'s shape on the control
+ * docs/DESIGN.md asked for by name and D37 settles: close a queued question WITHOUT
+ * answering it, leaving the card untouched in its slot.
+ *
+ * THE TWO DIRECTIONS TAKE DIFFERENT BODIES AND THE SERVER ENFORCES THAT, as everywhere else
+ * in this module: an undo carrying a reason refuses as `field_not_settable` rather than being
+ * obeyed with the reason ignored.
+ *
+ * THE REFUSAL WORTH BRANCHING ON IS `not_stood_down` ON A REVERSAL, and it carries two
+ * different facts under one code. Either the entry is already waiting — success in the same
+ * sense `not_sold` is — or the question was closed by an ANSWER rather than a stand-down, and
+ * this control may not reach it: taking back a real identification through the un-dismiss
+ * button is the one thing this route refuses on principle. The message says which. */
+async function standDownCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<StandDownResult> {
+  return (await request(`/review/${box}/${index}/stand-down`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as StandDownResult
+}
+
+/**
+ * Close a queued question without answering it: the card is untouched, only the flag drops.
+ *
+ * D37. NOT AN ANSWER AND NOT A RETIREMENT — the card keeps its slot, its photograph and its
+ * place in the box walk, and stays sellable if it is ever identified properly. What ends is
+ * the queue asking about it, permanently, across every future join: `Queue.upsert` refuses to
+ * re-queue a position a human has cleared.
+ *
+ * THE REASON IS REQUIRED, which is docs/DESIGN.md's wording and not a preference — "a real
+ * defer that RECORDS A REASON". It is also the instrument that file says has never been read:
+ * without it, nothing can ever say which questions get waved off or why.
+ */
+export async function standDown(
+  box: number,
+  index: number,
+  reason: StandDownReason,
+): Promise<StandDownResult> {
+  return standDownCall(box, index, { reason })
+}
+
+/**
+ * Put a stood-down question back on the screen. The twenty-second window's other half.
+ *
+ * It puts back nothing but the flag, because the flag is all the stand-down wrote — no SKU,
+ * no state, no count. Refuses `not_stood_down` when the question was closed by an answer.
+ */
+export async function undoStandDown(
+  box: number,
+  index: number,
+): Promise<StandDownResult> {
+  return standDownCall(box, index, { undo: true })
+}
+
 /**
  * Take one review answer back. D28's twenty-second undo, server side.
  *
@@ -940,13 +1003,25 @@ export async function getBoxes(): Promise<BoxSummary> {
  *
  * Refuses `box_exists` on a number already declared — take that as a fact rather than an
  * error to retry through, and reach for `updateBox` if the intent was to rename or re-divide.
+ *
+ * `box` IS OPTIONAL, AND A NAME ALONE IS A COMPLETE REQUEST. The owner addresses a box by
+ * what it is called and does not care what number it carries, so the server takes the lowest
+ * free one — see `store/master.py:next_box_number` for why that is the lowest rather than a
+ * high-water mark. Sending neither refuses `box_or_name_required`: a body with no number and
+ * no name does not describe a box, and inventing both halves of an object nobody named is
+ * how a registry fills with rows no one meant to make.
+ *
+ * A DUPLICATE NAME REFUSES `name_taken`, which is new with the same change. Two boxes
+ * answering to one name is an ambiguous physical address the moment a name is how a box is
+ * reached, and the refusal names the box that already holds it.
  */
 export async function createBox(input: {
-  box: number
+  box?: number
   name?: string
   sections?: number[]
 }): Promise<BoxRecord> {
-  const payload: Record<string, string | number | number[]> = { box: input.box }
+  const payload: Record<string, string | number | number[]> = {}
+  if (input.box !== undefined) payload.box = input.box
 
   /* Omitted rather than sent empty, the same rule `capture()` applies to `set_hint`: the
    * record stays a record of what was actually declared. A name trimmed to nothing is no name,
@@ -1139,6 +1214,62 @@ export async function removeCardInPlace(
  */
 export async function deleteBox(box: number): Promise<BoxDeleteResult> {
   return (await request(`/boxes/${box}`, { method: 'DELETE' })) as BoxDeleteResult
+}
+
+/**
+ * What this box's SKUs are believed to be holding, and what a release would give up.
+ * FREE and read-only (D34).
+ *
+ * THE STEP THAT COMES FIRST, and the release control must not be drawn until it has answered.
+ * D33's preflight-then-confirm shape one register down: there the free step shows what a run
+ * would cost before the button that spends appears; here it shows which SKUs, how many copies,
+ * and WHICH OTHER BOXES the release reaches before the button that asserts appears.
+ *
+ * It exists because the first build put the blast radius in the receipt — reported honestly,
+ * and reported after the write. An operator releasing from box 1's header learned box 3 was
+ * involved once it was already done.
+ *
+ * `frees_box` IS THE FIELD TO DRAW MOST LOUDLY. The budget is per box, so a shared SKU leaves
+ * a remainder and the box stays refused afterwards. That is the intended behaviour and it is
+ * the one thing a person would otherwise assume had gone wrong.
+ *
+ * Zero rows is ordinary — most boxes have never been listed — and is not an error.
+ */
+export async function getBoxListings(box: number): Promise<BoxListingPlan> {
+  return (await request(`/boxes/${box}/listings`)) as BoxListingPlan
+}
+
+/**
+ * Give up what this box's copies could account for, on the operator's word (D34).
+ *
+ * THE OTHER HALF OF `box_not_empty_of_commitments`, and the reason `deleteBox` above could
+ * refuse forever. That refusal has two grounds. A sold or retired card can be freed: both
+ * reverse on their own routes and the refusal says so. A LISTING could not be, at all —
+ * `staged` is drawn down in one place, by the rise in live quantity a fresh export reports, so
+ * an import staged and then cleared by hand on TCGplayer leaves counts nothing in the pipeline
+ * can ever take back down. Box 1's 53 cards sat behind 45 such records.
+ *
+ * IT RECORDS A CLAIM RATHER THAN MEASURING ANYTHING, which is why it is the only function in
+ * this module whose argument is the operator's own knowledge. No export this pipeline reads can
+ * say "nothing is staged" — a Filtered Export reports live quantity, and an Export From Staged
+ * lists the rows that ARE there, so absence proves nothing. The server requires `confirm: true`
+ * and writes a history line either way.
+ *
+ * EACH SKU GIVES UP AT MOST THE UNSOLD COPIES THIS BOX HOLDS. A release reached from box 1
+ * therefore cannot give up a commitment only box 3's copies could account for — structurally,
+ * not by care. Call `getBoxListings` first and draw its plan; both come from one function
+ * server-side, so the preview and the write are the same arithmetic.
+ *
+ * It refuses `nothing_to_release` when no SKU in the box holds a stage — reachable only from a
+ * stale screen or a replayed request, and a refusal rather than a cheerful no-op precisely so
+ * those two stay distinguishable from a release that worked.
+ */
+export async function releaseBoxListings(box: number): Promise<ListingReleaseResult> {
+  return (await request(`/boxes/${box}/listings/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as ListingReleaseResult
 }
 
 /* ---------------------------------------------------------------------- the pipeline

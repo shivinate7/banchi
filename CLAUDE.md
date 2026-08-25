@@ -52,8 +52,19 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
   was a real silent zero-join: the catalog indexed `Number` verbatim while the key padded it,
   so an export writing `39/236` was never found by a key built as `039/236`. 950 rows joined
   nothing and reported `no_catalog_row`, which blames the export. Both sides now go through
-  `pipeline/join.py:number_index_key`. Never join on Product Name — it inconsistently embeds
-  numbers.
+  `pipeline/join.py:number_index_key`. **Never join on Product Name as the KEY — it
+  inconsistently embeds numbers** (`Delibird - 105/132` and `Nickit` sit in one column of one
+  export). D35 narrows this rather than repealing it: the name is permitted as a LAST RESORT
+  that fires only where the number key found nothing, folds the embedded number away on both
+  sides through `pipeline/join.py:name_index_key`, and **may never list a card on its own** —
+  it queues for review under `number_unread_name_matched`.
+- **A run directory's slot numbers are not the truth; the photograph is** (D36). A run is
+  immutable and the store is not, so a mid-box delete (D10 ruling 1) slides every higher card
+  down one and the run keeps describing the box as it was. `cli/resolve.py:realign` re-binds
+  every record to the slot its `photo_sha256` is at now, before anything reads a position.
+  It refuses on an ambiguous digest, on two records carrying one digest, and on a
+  digest-less record in a box that has moved; it reports a box it cannot check against its
+  photographs as unverified rather than treating its cards as gone.
 - **Only two columns are ever written**: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
@@ -69,11 +80,20 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33). `#/inventory` carries a
-  folded Runs panel: a free preflight, a two-step money gate with no typing, the three free
+  Runs panel — not folded (D33, amended): a free preflight, a two-step money gate with no typing, the three free
   steps, every command's stdout verbatim, and the import CSVs as downloads. `server/
   pipeline_routes.py` is its own module because it is the one part of the server that can cause
   money to be spent — one route does, it is named for it, and it refuses without an explicit
   `confirm`. Everything else there is free and re-runnable.
+- **A BOX IS ADDRESSED BY ITS NAME, AND NAMES ARE UNIQUE** (D20, amended 2026-08-25). The
+  capture screen's Box field is ONE free-text control searching number and name together, and a
+  new box is created by name — `store/master.py:next_box_number` allocates the lowest free
+  integer inside the lock, so there is no number to mistype and `new_box`'s typo guard is
+  history. A duplicate name refuses `BoxNameTaken` / 409 `name_taken`; comparison folds case
+  and strips, storage is verbatim. **`next_box_number` is deliberately NOT D10's high-water
+  mark** — that rule governs the card index inside a box and nothing else. The name never
+  enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
+  spec unweakened, so the name travels as `box_name` beside it instead.
 - **The app has five screens and five routes** — four the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven, and D31 then merged two away:
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — browse the boxes,
@@ -168,10 +188,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   **Two things are still unexercised and its STATUS section names them**: the Fulfillment
   view against a real order, and the review screen's price-banded hierarchy against a
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
-- `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested
-  2026-08-22, thresholds derived from Gate B's measurements and NOT yet tuned at the rig.
-  Its §4 is the rig-tuning protocol; D19 is the decision. Read its STATUS before treating
-  a green `make design-check` as evidence about the feeder.
+- `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested 2026-08-22,
+  and **TUNED AT THE RIG on 2026-08-23** off the first 86-cycle feeder trace (`tLo` 3.0 → 4.5,
+  `tHi` 6.0 → 8.0, which recovered 14 silently-missed cards), then confirmed live at 85/85 on
+  box 95. Its §4 is the rig-tuning protocol; D19 is the decision. Read its STATUS before
+  treating a green `make design-check` as evidence about the feeder — the TRIGGER half of
+  Gate C is confirmed and the PIPELINE half is not: box 95's 85 records are all still
+  `captured`, and no run directory exists for that box.
 - @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

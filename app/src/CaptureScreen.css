@@ -154,9 +154,25 @@
   min-height: 0;
 }
 
-/* The sidebar itself: one panel, in the surface-and-hairline treatment the control bar
-   used to have. Flex rather than grid, so a field can be added to the list without the
-   layout being re-decided around it.
+/* THE SIDEBAR IS THREE PANELS AS OF 2026-08-24, NOT ONE, and this element is now only the
+   column that stacks them. The owner: "add some whitespace separation between GVOT, BSRF,
+   and the capture part ... so they seem independent, so not just a line, proper box."
+
+   It was one panel with the groups divided by hairlines, and a hairline is the wrong
+   mechanism for THIS separation even though it is the right one everywhere else in the
+   file. Inside a group the rows are the same kind of thing and a rule between them says
+   "next row"; between the groups they are three different kinds of thing — the rig, the
+   stack, the run — and a rule between them still says "next section of one panel". Three
+   surfaces with air between them say the thing the reorder was for.
+
+   NO NEW MECHANISM AND NO NEW TOKEN. Each group takes the surface-and-hairline treatment
+   this element used to carry — `--surface`, one 1px `--line` border, the one 4px radius —
+   so docs/DESIGN.md's "every separation is a 1px hairline" is intact: what changed is how
+   many boxes the treatment is applied to, not what a box is made of. No shadow, no second
+   ground, no tint.
+
+   Flex rather than grid, so a field can be added to the list without the layout being
+   re-decided around it.
 
    `align-self: start` IS THE WHOLE OF THE NO-INNER-SCROLL RULE, and it replaces a
    `min-height: 0` here plus an `overflow-y: auto` on the field list. The owner's words,
@@ -180,15 +196,30 @@
   align-self: start;
   display: flex;
   flex-direction: column;
-  /* s2, not s3, since the pass-D rebuild: the column's separations are hairlines carried
-     by the rows and group borders themselves, so the flex gap is only the air AROUND those
-     lines — and the 8px difference is exactly what the tallest state (rarity open,
-     thirteen rows, measured 824px at 1440x900) was overrunning its column by. */
-  gap: var(--s2);
+  /* s3, back up from the s2 the single-panel era ran: the gap IS the separation now rather
+     than the air around a hairline, so it has to be seen. 12px is the one step of the scale
+     that reads as a break without reading as a margin — 8px looks like a row gap that lost
+     its rule, and 16px is the Fulfiller's end of the scale on the owner's densest screen. */
+  gap: var(--s3);
+}
+
+/* THE PANEL TREATMENT, applied to each group rather than to the column that holds them.
+   One declaration for all three so they cannot drift apart into three slightly different
+   boxes — which is what would happen the first time one of them needed a padding tweak.
+
+   The horizontal padding is LOAD-BEARING at exactly `--s3` and must not be tuned on its
+   own: `.capture-open` pulls its 2px ink rail out to the panel edge with
+   `margin-left: calc(-1 * var(--s3))`, so that negative margin and this padding are one
+   number written twice. Vertical is `--s2`, which is air and is free to move — and is 8
+   rather than 12 because three boxes pay for their padding three times, and the tallest
+   state (rarity open, thirteen rows) has a measured 91px of headroom at 1440x900 to spend. */
+.capture-session,
+.capture-side-fields,
+.capture-side-foot {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  padding: var(--s3);
+  padding: var(--s2) var(--s3);
 }
 
 /* THE STAGE COLUMN, and the reason it is a wrapper rather than the stage itself.
@@ -217,7 +248,15 @@
    GAP ZERO, and that is pass D in one declaration: the fields are hairline-separated rows
    now, each row carrying its own top border, so any gap between them would split a 1px
    line into two lines with air in the middle. Separation is the border, per
-   docs/DESIGN.md's one mechanism. */
+   docs/DESIGN.md's one mechanism.
+
+   THE GROUP HAIRLINE IS GONE AGAIN, and it lived here for about an hour. When the session
+   group moved above the claims this rule took the `border-top` that had separated the two,
+   on the principle that the lower group always carries the line. The owner then asked for
+   the groups to be boxes rather than sections, so the separation is the box's own border
+   plus the column's gap, and a second rule inside the box would draw a line a pixel below
+   the one the border already draws. `.capture-side-fields > .capture-row:first-child`
+   dropping its own top border is what keeps that corner clean. */
 .capture-side-fields {
   display: flex;
   flex-direction: column;
@@ -228,8 +267,9 @@
    two are the run itself. A capture button you have to scroll a column to find is a card
    photographed late or not at all.
 
-   Separated by a 1px hairline and nothing else, which is docs/DESIGN.md's separation
-   mechanism and, per that file, the only one.
+   Its own box since 2026-08-24, so the hairline that separated it from the claims is the
+   box border now. docs/DESIGN.md's separation mechanism is unchanged — that border is the
+   same 1px `--line` the rule was.
 
    `flex: 0 0 auto` outlived the scroll box it was written against — it was the half of that
    rule that said the fields give and the shutter never does. It is kept because it still
@@ -240,8 +280,6 @@
   flex-direction: column;
   gap: var(--s2);
   flex: 0 0 auto;
-  padding-top: var(--s2);
-  border-top: 1px solid var(--line);
 }
 
 /* ---- the fields: pass D's one-line grammar (spec 5.3's fields, one hairline row each) ----
@@ -409,6 +447,27 @@
 
 .capture-open .capture-row {
   border-top: 0;
+}
+
+/* A SENTENCE OR A LONE BUTTON SITTING DIRECTLY IN AN OPEN FIELD, and the 4px is not a
+   choice — it is the interior air every other open field already takes. `.capture-trackline`
+   carries `margin: var(--s1) 0` and `.capture-opennote` a `var(--s1)` top, so Rotation and
+   Trigger open with 4px above and below their track. The camera's not-open state had
+   nothing: measured at 1440x900, the sentence's first line touched the head row's baseline
+   box, the button touched the sentence, and the button's bottom edge touched the field's own
+   closing hairline — 120px of content with no air anywhere in it. The rules that gave the
+   other fields their 4px are attached to the SHAPES those fields use, and prose and a bare
+   button are the two shapes nothing had claimed.
+
+   Direct children only. A `.capture-quiet` inside `.capture-opts` ("No cameras found") is
+   spaced by the list it belongs to, and one that picked up a margin here as well would sit
+   further from its own rows than they sit from each other. */
+.capture-open > .capture-quiet {
+  margin: var(--s1) 0;
+}
+
+.capture-open > .capture-go {
+  margin-bottom: var(--s1);
 }
 
 /* The head row of an open field closes it, but it is not a choice being hovered toward —
@@ -659,12 +718,17 @@
 
 /* ---- the SESSION group: same grammar, quieter ----
    Game, Camera, Rotation and Trigger — set once when the rig is set up, then read. 24px
-   rows to the claims' 32, one size down on every face. Below the actions: the cadence bet
-   is that the rows above the shutter are the ones a stack actually touches. */
-.capture-session {
-  border-top: 1px solid var(--line);
-  padding-top: var(--s2);
-}
+   rows to the claims' 32, one size down on every face.
+
+   FIRST IN THE COLUMN as of 2026-08-24 (owner), where it used to sit under the shutter, and
+   its own box since later the same day — the box treatment is up with `.capture-side`, shared
+   with the other two groups so all three cannot drift apart. What is left here is the
+   caption and the row overrides that make this group the quiet one.
+
+   Quiet is what keeps the move honest. Sitting under the shutter was how this group stayed
+   out of the way of the claims; being one size down on every face, at 24px rows, under a
+   caption, is how it stays out of their way from above — and being a separate box is what
+   stops "above the claims" reading as "the first thing you must fill in". */
 
 .capture-groupcap {
   font-family: var(--util);

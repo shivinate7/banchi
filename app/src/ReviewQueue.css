@@ -497,34 +497,47 @@
   min-height: var(--photo-cap);
 }
 
-/* THE 1:1 SHEEN INSET. `background-size: auto` paints the file at its natural size and
-   `background-position: center` picks the middle of it — that pair IS 1:1, with no scaling
-   arithmetic to get wrong and no second request, because the browser already has the bytes
-   for the photograph beside it.
+/* THE 1:1 LOUPE. `background-size: auto` paints the file at its natural size and the inline
+   `background-position` picks which natural pixel sits under the pointer — that pair IS 1:1,
+   with no scaling arithmetic to get wrong and no second request, because the browser already
+   has the bytes for the photograph beside it.
 
-   240x180 rather than the 400x300 first drawn: at 415px the photograph's own width is the
-   budget, and a 400px inset covers most of the card it is supposed to be a detail OF. This
-   is a loupe, not a second photograph.
+   IT FOLLOWS THE POINTER AND IS ABSENT OTHERWISE (owner, 2026-08-24). It was a fixed 240x180
+   rectangle pinned bottom-right showing `background-position: center`, and the owner reported
+   not knowing what they were looking at. They were right: the centre of a 2160x3840 frame is
+   the middle of the card's artwork, which on the Crawdaunt they were looking at is the Pokedex
+   strip `NO. 0342 Rogue Pokemon HT: 3'7"`. It decided nothing — and `0342` is the very
+   National Pokedex number D35 records the model misreading as a collector number, so the glass
+   was magnifying the cause of the error it sat beside.
 
-   BOTTOM-RIGHT because the card sits centred in a 9/16 frame and its lower right is the
-   emptiest corner of the composition — the same corner the collector number does not occupy.
-   It overlaps the photograph deliberately: a loupe beside the thing it magnifies costs the
-   thing itself width, which is what this whole screen was just widened to stop.
+   `left`/`top` are set inline per pointer move; only the size, the shape and the chrome live
+   here. Circular because it is a magnifier and should read as one at a glance — the old
+   rectangle read as a second photograph, which is half of why it confused.
 
-   Pointer-events off. It is evidence, not a control — docs/DESIGN.md bans a list-to-detail
-   loop on this screen and a clickable magnifier is the first step down it. */
+   Pointer-events stay off ON THE GLASS ITSELF, and that is now load-bearing rather than a
+   policy: the glass is centred under the cursor, so a glass that took the pointer would
+   swallow the very `pointermove` events that aim it and the loupe would stick to the first
+   pixel it was given.
+
+   `will-change: transform` is deliberately NOT set. The element moves by `left`/`top` on a
+   pointer move, and promoting a 220px circle with a 2160x3840 background to its own layer
+   costs more than it saves on the one screen whose photograph is already decoded. */
 .review-inset {
   position: absolute;
-  right: var(--s2);
-  bottom: var(--s2);
-  width: 240px;
-  height: 180px;
-  border: 1px solid var(--accent);
-  border-radius: var(--r);
+  width: 220px;
+  height: 220px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
   background-repeat: no-repeat;
-  background-position: center;
   background-size: auto;
   pointer-events: none;
+  box-shadow: 0 0 0 1px var(--bg);
+}
+
+/* The pointer is the aim, so say so on the thing being aimed at. `zoom-in` rather than
+   `crosshair`: the gesture reveals magnification, it does not select a point. */
+.review-photo {
+  cursor: zoom-in;
 }
 
 
@@ -1299,4 +1312,98 @@
 .review-group-confirm:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
+}
+
+/* ---- D37: closing a card without answering it ----
+ *
+ * OUTLINES ONLY, NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly
+ * one thing to do, and this panel is by construction a screen with seven — plus the candidate
+ * rows still readable above it. The group confirm earns its fill because D29's eligibility
+ * reduces the state to one action; nothing here does.
+ *
+ * IT SITS BETWEEN THE ROWS AND THE ACTIONS rather than replacing either. The card it is about
+ * stays on screen and so do the answers it is an alternative to — which is the whole argument
+ * for the panel over a dialog: the operator is choosing NOT to take an option that is still
+ * visible beside the choice.
+ *
+ * D28 IS NOT AT RISK HERE, and it is worth being exact rather than reassuring. That rule is
+ * about the candidate rows moving under a finger already travelling toward a digit. This panel
+ * opens BELOW the rows and only on a deliberate press, so nothing above it moves; the rows keep
+ * the positions they had. */
+.review-close {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s4);
+  margin-top: var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.review-close-lede {
+  margin: 0 0 var(--s2);
+  font-size: 17px;
+}
+
+/* The utility face, because these two words are a category and not a sentence — the same rule
+   that puts every reason code and position label in mono on this screen. */
+.review-close-head {
+  margin: var(--s3) 0 var(--s1);
+  font-family: var(--util);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.review-close-note {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.review-close-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s1) var(--s3);
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.review-close-choice:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.review-close-choice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.review-close-label {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+/* Both spans sit in column 2 under the label, so the key chip keeps its own column and the
+   three lines of one choice read as one block rather than as three rows. */
+.review-close-choice .review-machine,
+.review-close-why {
+  grid-column: 2;
+}
+
+.review-close-why {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.review-close-elsewhere {
+  margin: var(--s3) 0 0;
+  font-size: 15px;
+  color: var(--muted);
 }

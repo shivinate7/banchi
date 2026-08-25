@@ -152,10 +152,47 @@ const BOXES = {
       next_index: 6,
       cards: 5,
       sold: 1,
+      retired: 1,
+      listed: 0,
       sections_detail: [
         { section: 1, start: 1, end: 3, count: 3 },
         { section: 2, start: 4, end: 5, count: 2 },
       ],
+    },
+  ],
+}
+
+/** `GET /boxes/<box>/listings` (D34). Deliberately a SHARED case: `8937370` gives up 2 of its
+ *  5 staged copies — the budget is this box's copies — and keeps 3 that box 7 holds, so the
+ *  plan's `frees_box` is false. That is the state the panel has to say out loud BEFORE the
+ *  press, and the fixture is built to exercise it rather than the easy case. */
+const PLAN = {
+  box: 2,
+  skus: 2,
+  releases: { staged: 3 },
+  still_held: ['8937370'],
+  also_in_boxes: [7],
+  frees_box: false,
+  listings: [
+    {
+      sku: '8937200',
+      condition: 'Near Mint',
+      copies_here: 1,
+      before: { staged: 1 },
+      releases: { staged: 1 },
+      after: {},
+      still_held: false,
+      also_in_boxes: [],
+    },
+    {
+      sku: '8937370',
+      condition: 'Near Mint',
+      copies_here: 2,
+      before: { staged: 5 },
+      releases: { staged: 2 },
+      after: { staged: 3 },
+      still_held: true,
+      also_in_boxes: [{ box: 7, copies: 3 }],
     },
   ],
 }
@@ -264,7 +301,7 @@ function searchAnswer(query: string) {
 /** Stub the whole server and open the screen. Every route the view calls is intercepted; a
  *  request that reaches none of them would fail at the fetch, which is itself the assertion
  *  that this screen talks to the routes it claims to. */
-async function open(page: Page): Promise<Wire[]> {
+async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
   const wire: Wire[] = []
 
   const record = (method: string, url: string, body: unknown) =>
@@ -313,6 +350,40 @@ async function open(page: Page): Promise<Wire[]> {
     })
   })
 
+  /* D34's two, registered before the `/boxes/<n>` delete stub they share a prefix with. That
+     regex is anchored one segment shorter, so neither can be swallowed by it; they are
+     separate handlers so the preflight READ and the release WRITE stay distinguishable in
+     `wire`, which is what the "does not exist before the plan" case reads. */
+  await page.route(/\/boxes\/\d+\/listings$/, async (route) => {
+    const request = route.request()
+    record(request.method(), request.url(), null)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(PLAN),
+    })
+  })
+
+  await page.route(/\/boxes\/\d+\/listings\/release$/, async (route) => {
+    const request = route.request()
+    record(request.method(), request.url(), request.postDataJSON())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        released: 2,
+        listings: PLAN.listings,
+        skus: ['8937200', '8937370'],
+        given_up: { staged: 3 },
+        still_held: ['8937370'],
+        frees_box: false,
+        also_in_boxes: [7],
+        listings_after: { staged: 3 },
+      }),
+    })
+  })
+
   await page.route(/\/inventory\/\d+$/, async (route) => {
     const request = route.request()
     record(request.method(), request.url(), request.postDataJSON())
@@ -344,8 +415,14 @@ async function open(page: Page): Promise<Wire[]> {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(GAMES) })
   })
 
+  /* THE BOX ROW IS OVERRIDABLE, and D34's release is why. That control draws only when the
+     row reports `listed > 0`, which is a state the default fixture is deliberately not in —
+     most boxes never are. A parameter rather than a second `page.route` in the test, because
+     Playwright matches handlers in reverse registration order and a test that re-registered
+     this one would be relying on that rule to be read correctly by everyone who edits the
+     file afterwards. */
   await page.route(/\/boxes$/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(BOXES) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxes) })
   })
 
   await page.route(/\/inventory$/, async (route) => {
@@ -390,13 +467,15 @@ async function expandAll(page: Page) {
   await expect(page.locator('.browse-row').first()).toBeVisible()
 }
 
-/** Open the box header's disclosure, where every box operation lives.
+/** Wait for the box header's controls, where every box operation lives.
  *
- *  IT IS SHUT BY DEFAULT AND THAT IS THE MEASURED CHOICE `BoxOps.tsx` ARGUES: on the old
- *  `#/boxes` this panel drew every box at once at 304-355px each, so four boxes cost 1744px of
- *  scroll to say four things. What is always visible is the reading — number, name, lid, fill,
- *  track — and the operations are one press beneath it. Every test that presses a box control
- *  therefore presses this first, which is also the honest cost of the fold stated in a helper. */
+ *  THERE IS NO DISCLOSURE ANY MORE AND THIS HELPER'S CLICK IS INERT (D33, amended). It said
+ *  "shut by default" and pressed a `<summary>`; `BoxOps` renders a plain `<div>` now, on the
+ *  owner's ruling — "both box and run, i don't want click in functionality, i want their
+ *  buttons just there." The click is left in place because it is harmless on a `<p>` and the
+ *  `expect` beneath it is the real content of this helper: a sync point that every box-control
+ *  test needs anyway, so that a test measuring a control cannot start before the panel has
+ *  rendered. Renaming it to `awaitBoxOps` would touch every call site to say the same thing. */
 async function openBoxOps(page: Page) {
   await page.locator('.boxops-more-head').click()
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible()
@@ -870,6 +949,126 @@ test('the whole-box delete will not fire until the box number is typed', async (
   // The receipt is per-kind and is the only evidence the operation did what it said: there is
   // nothing left to go and check.
   await expect(page.locator('.boxops-receipt')).toContainText('There is no undo')
+})
+
+// -------------------------------------------------------------- the listing release (D34)
+
+/** The same box, holding a listing. `listed` is what draws the release control, and no other
+ *  fixture in this file is in that state — which is the point: most boxes never are. */
+const HELD_BOXES = {
+  boxes: [{ ...BOXES.boxes[0], listed: 3 }],
+}
+
+test('a box with no listing hold is offered no release at all', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* ABSENT, NOT DISABLED, and the reason is `docs/DESIGN.md`'s about the run panel's spend
+     button one register down: a disabled control is one attribute away from pressable. This
+     one is cheap to render and would be chrome on every box that has never been listed. */
+  await expect(page.getByRole('button', { name: /Release the listing hold/ })).toHaveCount(0)
+})
+
+test('a listing hold is named on the delete panel rather than discovered by pressing it', async ({
+  page,
+}) => {
+  await open(page, HELD_BOXES)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Delete box 2/ }).click()
+
+  /* The three grounds of `box_not_empty_of_commitments` have three different remedies, and
+     before D34 added `listed` and `retired` to the box row a screen could say a box has
+     commitments and never which kind. */
+  await expect(page.locator('.boxops-danger')).toContainText('1 card sold')
+  await expect(page.locator('.boxops-danger')).toContainText('1 card retired')
+  await expect(page.locator('.boxops-danger')).toContainText('3 cards listed')
+})
+
+test('the control that releases does not exist until the free plan has answered', async ({
+  page,
+}) => {
+  const wire = await open(page, HELD_BOXES)
+  await openBoxOps(page)
+
+  /* D33's preflight-then-confirm shape, one register down: there the free step puts the cost
+     on screen before the button that spends appears, here it puts the SKUs, the copy counts
+     and the other boxes on screen before the button that asserts appears. Held open here by
+     never fulfilling the read, which is the only way to observe the intermediate state. */
+  await page.route(/\/boxes\/\d+\/listings$/, async () => {
+    /* deliberately never fulfilled */
+  })
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+
+  /* ABSENT, NOT DISABLED — docs/DESIGN.md's rule for the run panel's spend button, for the
+     same reason: a disabled button is one attribute away from pressable, and that attribute
+     is what a later refactor drops without noticing. */
+  await expect(
+    page.getByRole('button', { name: 'TCGplayer holds none of these — release' }),
+  ).toHaveCount(0)
+  expect(wire.filter((sent) => sent.path.endsWith('/listings/release'))).toHaveLength(0)
+})
+
+test('the plan names what each SKU gives up, what it keeps, and which box holds the rest', async ({
+  page,
+}) => {
+  await open(page, HELD_BOXES)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+
+  const panel = page.locator('.boxops-danger')
+  await expect(panel).toContainText('you have checked TCGplayer and it is holding none of them')
+
+  /* THE BUDGET, VISIBLE. The owner's ruling of 2026-08-24: each SKU gives up at most the
+     copies this box holds, so a release reached from box 2 can never give up what only box
+     7's copies could account for. The line says both halves. */
+  await expect(panel).toContainText('8937370 · 2 staged · keeps 3 staged · also box 7 (3)')
+
+  /* AND THE OUTCOME A PERSON WOULD OTHERWISE READ AS A BUG. A shared SKU leaves a remainder,
+     a remainder keeps the card listing-held, so the box stays refused after a release that
+     did exactly what it said. The panel says so before the press, not after. */
+  await expect(panel).toContainText('This will not free box 2')
+})
+
+test('the release sends confirm, and only after the plan is on screen', async ({ page }) => {
+  const wire = await open(page, HELD_BOXES)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+
+  const fire = page.getByRole('button', { name: 'TCGplayer holds none of these — release' })
+  await expect(fire).toBeVisible()
+  /* The free read landed first, and it is a GET: the plan and the write are two routes. */
+  const read = wire.find((sent) => sent.path === '/boxes/2/listings')
+  expect(read?.method).toBe('GET')
+  expect(wire.filter((sent) => sent.path.endsWith('/listings/release'))).toHaveLength(0)
+
+  await fire.click()
+
+  const sent = wire.find((sent) => sent.path.endsWith('/listings/release'))
+  expect(sent?.method).toBe('POST')
+  expect(sent?.path).toBe('/boxes/2/listings/release')
+  /* The server refuses without it, deliberately as a field: this route's whole content is a
+     human's claim, so a request that did not say so on purpose must not make it by accident. */
+  expect(sent?.body).toEqual({ confirm: true })
+})
+
+test('the receipt repeats that the box is still held rather than implying success', async ({
+  page,
+}) => {
+  await open(page, HELD_BOXES)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /Release the listing hold on 3 cards/ }).click()
+  await page.getByRole('button', { name: 'TCGplayer holds none of these — release' }).click()
+
+  const receipt = page.locator('.boxops-receipt')
+  await expect(receipt).toContainText('Released 2 SKUs in box 2')
+  await expect(receipt).toContainText('3 staged')
+  /* The half that matters most on a partial release: the delete will go on refusing, and a
+     receipt that only reported success would leave that looking like a broken gate. */
+  await expect(receipt).toContainText('Box 2 is still held')
+  await expect(receipt).toContainText('box 7')
+  /* Every SKU by name — the list that makes the claim checkable against TCGplayer afterwards. */
+  await expect(receipt).toContainText('8937370')
+  await expect(receipt).toContainText('8937200')
 })
 
 // ----------------------------------------------------------------- what the merge kept (D26)

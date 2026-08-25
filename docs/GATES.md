@@ -292,6 +292,36 @@ at a temporary directory, so nothing here touches the real inventory.
   shared-fixture failure the mass-select bullet below already records, found again the same
   way, and fixed the same way.
 
+- **D34's listing release and its free preflight are covered as of 2026-08-24, in their own
+  isolated home.** `GET /boxes/<box>/listings` answers what a release would give up;
+  `POST /boxes/<box>/listings/release` gives it up, on the operator's word that TCGplayer is
+  holding none of those copies. The block asserts every refusal (`confirm_required` including
+  the stringified-flag case, `field_not_settable`, `box_not_found` on both routes, and
+  `nothing_to_release` on a replay), that neither the preflight nor any refusal moves a count,
+  and the two boundaries that keep the operation honest: **a sold card still holds its box open
+  after every listing in it is clear**, and **a SKU shared with another box keeps that box's
+  copies untouched**.
+
+  **The budget is what most of the block is about.** Each SKU gives up at most the unsold copies
+  the calling box holds (D34, the owner's ruling). The fixture is built to exercise the hard
+  case rather than the easy one: box 4 holds 2 of a SKU's 5 staged copies and box 6 holds the
+  other 3, so the release gives up 2 and **box 6's three survive** — which the first build,
+  zeroing outright, could not promise. A remainder therefore stays, the box is STILL refused
+  afterwards, and both the plan and the receipt say so before and after. That remainder is
+  intended, not a defect.
+
+  **The gap it closes was found by a box that could not be deleted, and the mechanism is the
+  finding.** `staged` is drawn down in exactly one place — `cli/cmd_join.py`, by the *rise* in
+  live quantity a fresh Filtered Export reports — so an import that never lands leaves a count
+  nothing can take back down. Box 1's 53 Gate B cards sat behind 45 records claiming 53 staged
+  copies TCGplayer had long since cleared. `staged_stale` has named that case since D7's
+  amendment and nothing could act on it: a diagnostic with no remedy.
+
+  **Its own home, and that is this file's own lesson a third time.** The block writes listings,
+  which `check_boxes_and_listings` counts and `check_cli_seams` reads back through `emit` — the
+  same shared-fixture failure the two bullets above already record, avoided rather than
+  rediscovered.
+
 - **The mass-select on `PUT /inventory/<box>` is covered, in its own isolated home.** The
   owner's `indices` selection narrows the box-wide claim sweep, and it is checked on the
   route rather than as a client loop for the reason the case states: N card calls are N
@@ -320,10 +350,14 @@ at a temporary directory, so nothing here touches the real inventory.
   parked, and the owner answered every one through the answer route.
 
   So the remaining gap is narrower and worth stating exactly: the fixtures are still
-  invented, and one run of one lot produced exactly one reason code out of twelve. Nothing
-  has exercised `no_catalog_row`, `set_ambiguous`, `low_confidence` or the other eight
-  against a real queue. Same standing as T6's synthetic composites: self-consistency over a
-  wider range than the evidence covers.
+  invented, and Gate B's run of one lot produced exactly one reason code. **Box 2 produced a
+  second, and this bullet denied it until 2026-08-25**: `no_catalog_row` has stood in the live
+  queue as 47 real entries with zero candidates — the case D35 was written for and the case
+  D37's `wasted_position` was measured against, both landing in this repo on the strength of
+  it. The count was stale too: the roster is fourteen, not twelve. So **two of fourteen have
+  met a real card**, and nothing has exercised `set_ambiguous`, `low_confidence` or the other
+  eleven against a real queue. Same standing as T6's synthetic composites: self-consistency
+  over a wider range than the evidence covers.
 
 ---
 
@@ -390,6 +424,19 @@ has no test runner outside the browser `make design-check` starts, and nothing u
 `harness/` reaches `cli/cmd_identify.py`'s id translation. Each is guarded by a comment
 beside the code and by nothing that runs, which is the weakest guard in this section and
 the reason it is named here rather than left to be inferred from the commit stats.
+
+**BOX 1'S RECORDS WERE DELETED ON 2026-08-24, AND EVERY NUMBER ABOVE STANDS.** Recorded so a
+later session that goes looking for the 53 records does not conclude the run never happened.
+The box was a shakedown lot the owner wanted gone, and it could not go: its 45 listing records
+still claimed 53 staged copies and one live, so `box_not_empty_of_commitments` refused it, and
+nothing in the repo could clear a staged count that never went live (D34 carries the mechanism).
+The listings were released on the owner's word that TCGplayer held none of them — box 1 shared
+no SKU with box 2, so every one of its 45 records went to zero and nothing else was reached —
+and the box was then deleted whole — 53 records, 53 photographs, 53 sidecars, 16 parked queue entries and 53
+cached identification answers. **The measurements in this section are evidence about a run on a
+date and are not touched by it**, which is this file's own rule; what is gone is the inventory,
+not the finding. The one thing no longer re-checkable by hand is the photographs, so nothing
+above may be re-derived from them.
 
 **What the gate did not close:** the owner had no visibility into emitted import files —
 their names exist only in CLI output the owner never sees when someone else drives the
@@ -756,7 +803,8 @@ served by whatever was true when you started it.
     that started it, which is what makes `GET /pipeline/runs` able to show a run somebody
     started in a terminal.
 
-    `app/src/RunPanel.tsx` draws it folded on `#/inventory`, and
+    `app/src/RunPanel.tsx` draws it UNFOLDED on `#/inventory` — sharing one `.browse-boxrun`
+    row with `BoxOps`, the owner having overruled the fold on 2026-08-24 (D33, amended) — and
     `app/tests/run-panel.spec.ts` is the check the hard rule says does not exist — 13 cases,
     of which the strongest is negative: **before the free preflight has answered, the control
     that spends does not exist.** Absent, not disabled.

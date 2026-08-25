@@ -1613,4 +1613,134 @@ def run() -> Result:
         "a matching file and inventory reconcile clean",
     )
 
+    # --- D35: the number could not be read, so the name found the row ------------------
+    #
+    # `Accelgor` is a real SV09 row whose name maps to exactly one collector number — 133 of
+    # the fixture's 157 names do, which is why a name is a usable last resort at all.
+    REAL_NAME, REAL_NUMBER, REAL_TOTAL = "Accelgor", "013", "159"
+
+    #
+    # THE RUNG BELOW THE BLANK-NUMBER FALLBACK. `_lookup_number_and_printed_total` used to
+    # treat "this card has no number" as "this PRODUCT prints no number" and look only at the
+    # export's blank-`Number` rows — true for a code card, false for a photograph whose bottom
+    # edge was cropped off. Box 2 sent 544 cards through a bad crop: 37 came back with no
+    # number and 9 with a National Pokedex number read off the artwork strip, and 46 of the 47
+    # queued as `no_catalog_row` against an export that held their row the whole time.
+    #
+    # Every case below was observed FAILING before it was kept.
+    name_rows = catalog.rows_for_name(REAL_NAME)
+    c.ok(len(name_rows) > 0, "D35: the name index finds a NUMBERED row by its name")
+    c.equal(
+        catalog.rows_for_blank_number_name(REAL_NAME),
+        [],
+        "D35: and the blank-number fallback above it finds nothing for that same name — "
+        "the two indexes are disjoint, which is what keeps a card and a code card apart",
+    )
+
+    # 1. A blank number resolves by name, and says so in the lookup string.
+    blank = catalog.candidates(_card(801, REAL_NAME, number=None))
+    c.ok(blank.name_inferred, "D35: a card with no number is name-inferred")
+    c.ok(blank.lookup.startswith("name?:"), "D35: and the lookup says `name?:`, not `name:`")
+    c.ok(len(blank.rows) > 0, "D35: and it found rows")
+
+    # 2. A WRONG number falls through. This is the half that nearly shipped missing: four of
+    #    box 2's misreads carried a denominator too, so they composed a well-formed key that
+    #    matched nothing and stopped there.
+    wrong = catalog.candidates(_card(802, REAL_NAME, number="0342", total="132"))
+    c.ok(
+        wrong.name_inferred,
+        "D35: a number that matches NO row falls through to the name rung",
+    )
+    c.equal(
+        {r[tcgcsv.SKU_COLUMN] for r in wrong.rows},
+        {r[tcgcsv.SKU_COLUMN] for r in name_rows},
+        "D35: and finds the same rows the name index holds",
+    )
+
+    # 3. A number that DOES match is never second-guessed.
+    good = catalog.candidates(_card(803, REAL_NAME, number=REAL_NUMBER, total=REAL_TOTAL))
+    c.ok(not good.name_inferred, "D35: a number that matches is used, and the name rung is not reached")
+    c.ok(good.lookup.startswith("number:"), "D35: and the lookup still says `number:`")
+
+    # 4. A name that matches nothing is still `no_catalog_row` — the rung adds no guessing.
+    missing = catalog.candidates(_card(804, "Not A Real Card At All", number=None))
+    c.equal(len(missing.rows), 0, "D35: an unknown name finds nothing and stays unmatched")
+
+    # 5. It ROUTES TO REVIEW rather than listing, which is the owner's ruling and the half
+    #    that cannot be inferred from the lookup alone.
+    named = join.join_batch(
+        [_card(805, REAL_NAME, number=None, metadata=("normal",))],
+        catalog,
+        router=join.default_router(),
+        live_cap=LIVE_QUANTITY_CAP,
+    )
+    queued = named.queue(routing.MAIN) + named.queue(routing.PARKED)
+    c.equal(len(queued), 1, "D35: a name-resolved card is QUEUED, never listed on the name alone")
+    c.equal(
+        queued[0].resolution_reason,
+        routing.NUMBER_UNREAD_NAME_MATCHED,
+        "D35: under its own reason code",
+    )
+    c.equal(
+        len(queued[0].candidates),
+        1,
+        "D35: offering exactly ONE candidate — the row the ladder chose — which is what "
+        "makes a queue of these answerable as one D29 group",
+    )
+
+    # 6. The name fold, on both sides. `Product Name` embeds the number inconsistently, and
+    #    matching raw scored 35 of box 2's 46 against 45 through the fold.
+    c.equal(join.name_index_key("Delibird - 105/132"), "DELIBIRD", "D35: the embedded number folds away")
+    c.equal(join.name_index_key("Nickit"), "NICKIT", "D35: and a bare name is unchanged")
+    c.equal(join.name_index_key("Ho-Oh"), "HO-OH", "D35: an interior hyphen is not a suffix")
+    c.equal(
+        join.name_index_key("Wally's Compassion - 132/132"),
+        "WALLY'S COMPASSION",
+        "D35: an apostrophe survives the fold",
+    )
+
+    # 7. D3 RUNG 0 OUTRANKS THIS RUNG, AND THE CASE IS HERE BECAUSE IT DID NOT.
+    #
+    #    The block in `join_batch` fired on `name_inferred and not needs_review and row`, and
+    #    a human's answer satisfies all three — `variant.answered` returns a resolution
+    #    carrying the chosen row at stage `HUMAN_ANSWERED`. So the answer was overwritten back
+    #    into `number_unread_name_matched` on the very next join.
+    #
+    #    What made it a SILENT DROP rather than a re-ask: `store/queues.py:upsert` refuses to
+    #    re-queue a position a human has cleared, so the card was pushed out of listing and
+    #    then refused re-entry to the queue. Not listed, not queued. That is the failure D3
+    #    rung 0 exists to prevent (Gate B: sixteen answered cards re-deriving their
+    #    disagreement forever) and the one `CLAUDE.md` names as never dropping a card.
+    #
+    #    Observed failing before the `stage != HUMAN_ANSWERED` clause was added: this asserted
+    #    REVIEW/`number_unread_name_matched` and zero listed rows.
+    answered_row = catalog.rows_for_name(REAL_NAME)[0]
+    answered = join.join_batch(
+        [
+            join.IdentifiedCard(
+                position=join.Position(box=BOX, index=806),
+                name=REAL_NAME,
+                number=None,
+                printed_total=None,
+                metadata_finish=("normal",),
+                photo=f"captures/box{BOX}/0806.jpg",
+                confidence="high",
+                answered_sku=answered_row[tcgcsv.SKU_COLUMN],
+                answered_condition=answered_row[tcgcsv.CONDITION_COLUMN],
+            )
+        ],
+        catalog,
+        router=join.default_router(),
+        live_cap=LIVE_QUANTITY_CAP,
+    )
+    c.equal(
+        len(answered.queue(routing.MAIN) + answered.queue(routing.PARKED)),
+        0,
+        "D35/D3 rung 0: a card the human already answered is NOT re-queued by the name rung",
+    )
+    c.ok(
+        answered_row[tcgcsv.SKU_COLUMN] in answered.matches,
+        "D35/D3 rung 0: it is listed on the answer, because an answer outlives the question",
+    )
+
     return c.result()

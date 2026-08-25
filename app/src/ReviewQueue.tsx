@@ -7,6 +7,8 @@ import type {
   QueueName,
   QueueRead,
   QueueSnapshot,
+  RetireReason,
+  StandDownReason,
 } from './types'
 import type { Failure } from './server'
 import {
@@ -16,7 +18,11 @@ import {
   describeFailure,
   getQueues,
   photoUrl,
+  retireCard,
+  standDown,
   undoAnswer,
+  undoRetire,
+  undoStandDown,
 } from './server'
 import './ReviewQueue.css'
 
@@ -112,9 +118,11 @@ import './ReviewQueue.css'
 
 // --------------------------------------------------------------------------- reason codes
 
-/* The twelve, transcribed from the two modules that emit them: six from
- * `pipeline/variant.py` (the D3 ladder's review reasons) and six from `pipeline/routing.py`
- * (v2 §5.4's routing reasons). docs/DESIGN.md requires each on screen as a human label with
+/* The FOURTEEN, transcribed from the two modules that emit them: seven from
+ * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
+ * `rarity_claim_mismatch`) and seven from `pipeline/routing.py` (v2 §5.4's routing reasons,
+ * including D35's `number_unread_name_matched`). It read "twelve, six and six" until
+ * 2026-08-25, having been written before either of those two landed. docs/DESIGN.md requires each on screen as a human label with
  * the machine string small beneath it, because a friendly label alone is a second vocabulary
  * that nothing audits and a raw string alone is honest and unreadable.
  *
@@ -127,11 +135,12 @@ import './ReviewQueue.css'
  * than as a blank line.
  *
  * The labels are still the least tested copy in the product, and Gate B narrowed that rather
- * than closing it. Exactly one of the twelve has fired against a photograph of a card:
- * `metadata_detection_disagreement`, 16 times out of 53, which is 16 cards' worth of evidence
- * for one label and none at all for the other eleven. (`no_catalog_row` fired 23 times against
- * a commons-only export and zero times against the full one, which is a fact about the export
- * rather than about the label.) A label written for a code that fires weekly and one written
+ * than closing it. TWO of the fourteen have now fired against a photograph of a card:
+ * `metadata_detection_disagreement`, 16 times out of 53 at Gate B, and `no_catalog_row`, which
+ * box 2 left standing in the live queue — the case D35 and D37 were both written for. That is
+ * two labels with evidence behind them and none at all for the other twelve. (`no_catalog_row`
+ * ALSO fired 23 times at Gate B against a commons-only export and zero times against the full
+ * one, which was a fact about that export rather than about the label; box 2's is not.) A label written for a code that fires weekly and one written
  * for a code that fires once a year are different pieces of copy, and after a real run the
  * only one this repo can tell apart is the first.
  */
@@ -155,10 +164,17 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   identification_failed: 'Identification failed',
   set_ambiguous: 'Two sets share this number',
   card_not_detected: 'No card found in the photograph',
+  /* D35. The one reason the JOIN writes over a successful ladder resolution — the row is
+   * found and the entry offers it, and the card is queued anyway because the field that tells
+   * one card from another is the field that could not be read. (Not the only reason sitting on
+   * a resolved card: `low_confidence` and `no_market_data` do too, and they differ in reaching
+   * `routing.route` still resolved, where this one arrives already un-resolved.) The label says what happened rather
+   * than what failed, because nothing failed: a name was matched instead of a number. */
+  number_unread_name_matched: 'Number unreadable, matched by name',
   /* Reachable on screen only if the route puts it in a queue. `cli/resolve.py:entries_for`
    * queues `routing.MAIN` and `routing.PARKED`, and `no_market_data` is neither — it is its
    * own destination, priced by hand in decisions.json. Kept because docs/DESIGN.md names
-   * twelve, and a map that quietly held eleven would be the drift this comment is about. */
+   * fourteen, and a map that quietly held thirteen would be the drift this comment is about. */
   no_market_data: 'No market price',
 }
 
@@ -282,6 +298,25 @@ function sentence(entry: QueueEntryWire): Segment[] {
       return number === null
         ? [say('The export has no row for this card.')]
         : [say('The export has no row for '), value(number), say('.')]
+
+    /* D35. Both halves of the sentence are load-bearing and neither may be dropped: what was
+     * NOT read, and what was matched instead. The operator is being asked to confirm an
+     * identity that was established without its primary key, so the sentence has to say that
+     * outright — a card whose number is simply absent from the photograph and one whose
+     * number was misread into a Pokedex number look identical here otherwise. */
+    case 'number_unread_name_matched': {
+      const head: Segment[] =
+        number === null
+          ? [say('No collector number could be read from this photograph. ')]
+          : [say('The number read as '), value(number), say(', which is in no row. ')]
+      const matched: Segment[] =
+        only === null
+          ? [say(' matched one row in this set by name.')]
+          : [say(' matched one '), claim(only), say(' row in this set by name.')]
+      return name === null
+        ? [...head, say('The name matched one row in this set.')]
+        : [...head, value(name), ...matched]
+    }
 
     case 'metadata_not_stocked': {
       if (toggle === null) return [say('The export stocks no row for the finish recorded on this stack.')]
@@ -577,6 +612,80 @@ const UNDO_DEPTH = 10
  * a per-card confirm, and here it confirms a state the operator chose to enter rather than
  * doubling a keystroke. Escape leaves without writing, which is what Escape means.
  */
+/* D37. `X` for "close this out", and it opens a panel rather than writing — every choice
+ * behind it needs a reason, so a single keystroke could not carry one honestly. The panel
+ * owns the keyboard while it is up, exactly as the group offer does, which is what makes it
+ * safe to key the choices on digits that mean candidates everywhere else. */
+const CLOSE_KEY = 'x'
+const CLOSE_KEY_LABEL = 'X'
+
+/** What pressing a row in the close panel does. */
+type CloseChoice =
+  | { kind: 'stand_down'; reason: StandDownReason }
+  | { kind: 'retire'; reason: RetireReason }
+
+/* THE PANEL IS THE PLACE THE DIFFERENCE IS TAUGHT, and it is the reason these two live on one
+ * control instead of two. The owner's question was "why can't I delete a card from here, and
+ * why can't I stand down on the flag" — and the honest answer is that those are three
+ * different acts with three different costs, which no button label can convey on its own.
+ *
+ * DELETE IS DELIBERATELY ABSENT. `POST /inventory/<box>/<index>/remove` exists and works, but
+ * it slides every card behind it down one slot — so pressing it from a worklist would
+ * renumber the very positions that worklist is drawn from, and it is a hard delete with no
+ * undo at all. It stays on the Inventory screen, where the box you are renumbering is the
+ * thing on screen. Retire reaches the same practical end here (the card stops being active)
+ * while moving nothing and staying reversible. */
+const CLOSE_CHOICES: {
+  choice: CloseChoice
+  label: string
+  machine: string
+  note: string
+}[] = [
+  {
+    choice: { kind: 'stand_down', reason: 'wasted_position' },
+    label: 'Wasted position',
+    machine: 'wasted_position',
+    note: 'The slot holds nothing worth listing — a double feed, a divider, a blank.',
+  },
+  {
+    choice: { kind: 'stand_down', reason: 'cannot_settle' },
+    label: 'Cannot settle it',
+    machine: 'cannot_settle',
+    note: 'The photograph will not decide this one, and it is not worth re-shooting.',
+  },
+  {
+    choice: { kind: 'stand_down', reason: 'not_listing' },
+    label: 'Not listing it',
+    machine: 'not_listing',
+    note: 'A real card you have decided not to list. It keeps its slot either way.',
+  },
+  {
+    choice: { kind: 'retire', reason: 'pulled' },
+    label: 'Pulled',
+    machine: 'pulled',
+    note: 'Taken out of the box by hand.',
+  },
+  {
+    choice: { kind: 'retire', reason: 'damaged' },
+    label: 'Damaged',
+    machine: 'damaged',
+    note: 'Not sellable at the condition this pipeline hardcodes.',
+  },
+  {
+    choice: { kind: 'retire', reason: 'lost' },
+    label: 'Lost',
+    machine: 'lost',
+    note: 'Gone, and not sold.',
+  },
+  {
+    choice: { kind: 'retire', reason: 'given_away',
+    },
+    label: 'Given away',
+    machine: 'given_away',
+    note: 'It left without a sale.',
+  },
+]
+
 const GROUP_KEY = 'g'
 const GROUP_KEY_LABEL = 'G'
 
@@ -854,6 +963,17 @@ type Receipt = {
    *  docs/DESIGN.md's rule that an action keeps its name through the whole flow. */
   said: string
 
+  /** HOW TO TAKE THIS ONE BACK, carried on the receipt rather than assumed by `undo` (D37).
+   *  Three writes now end up here — an answer, a stand-down and a retirement — and each has
+   *  its own reversal route. `undo` used to call `undoAnswer` unconditionally, which was
+   *  right while an answer was the only thing that produced a receipt and becomes a silent
+   *  cross-wiring the moment it is not: reversing a retirement through the answer route
+   *  refuses `not_answered`, and the operator reads a true refusal about the wrong question.
+   *
+   *  The whole receipt shape is otherwise unchanged, which is the point — `U` acts on the
+   *  newest receipt without caring what made it, and the walk, the partial-reversal report
+   *  and the final-refusal rule are one code path for all three. */
+  reverse: (box: number, index: number) => Promise<unknown>
 }
 
 /** A refusal, with the card it was about.
@@ -932,6 +1052,11 @@ export function ReviewQueue() {
    * it is about to answer for". Not persisted anywhere, exactly like a skip: reload the
    * page and the queue is one card at a time again. */
   const [grouping, setGrouping] = useState(false)
+
+  /* D37's close panel — `X` raises it for the card on screen. Not persisted, for the same
+   * reason `grouping` is not: a panel that writes on a digit must be re-raised deliberately,
+   * never restored by a page load into a state where the next keystroke closes a card. */
+  const [closing, setClosing] = useState(false)
 
   /* The key whose photo 404'd rather than a boolean, for PullPreview.tsx's reason: an
    * `onError` for the previous card can land after the queue has advanced, and a boolean
@@ -1098,6 +1223,16 @@ export function ReviewQueue() {
     if (grouping && groupOffer === null) setGrouping(false)
   }, [grouping, groupOffer])
 
+  /* THE PANEL NEVER SURVIVES THE CARD IT WAS RAISED FOR. Without this, answering or skipping
+   * with the panel up would leave it standing over the NEXT card and the next digit would
+   * close that one instead — a write against a card the operator never chose, which is the
+   * whole hazard of keying choices on digits that mean something else everywhere on this
+   * screen. */
+  const currentKey = current?.key ?? null
+  useEffect(() => {
+    setClosing(false)
+  }, [currentKey])
+
   /* Put dropped rows back where they came from. Two callers now — a refused answer, and an
    * answer taken back inside its window — which is why it stopped being a closure inside
    * `answer` and became one function.
@@ -1131,6 +1266,89 @@ export function ReviewQueue() {
       [receipt, ...held.filter((standing) => standing.key !== receipt.key)].slice(0, UNDO_DEPTH),
     )
   }, [])
+
+  /* CLOSE A CARD WITHOUT ANSWERING IT — D37's stand-down, and D26's retirement reached from
+   * the screen the card is actually on.
+   *
+   * ONE CALLBACK FOR BOTH, because from this screen's point of view they are the same
+   * gesture with different consequences: the card leaves the worklist, a receipt stands for
+   * twenty seconds, and `U` takes it back. What differs is the route, which the receipt now
+   * carries (`Receipt.reverse`), and what it means — which is the panel's job to say, not
+   * this function's.
+   *
+   * DELIBERATELY SIMPLER THAN `answer`, and the missing parts are missing for a reason.
+   * There is no candidate to validate, because nothing is being identified. There is no
+   * `clearedQueues` read, because neither route reports per-queue clearing and both clear
+   * everything they find or refuse outright. And there is no `restores_to` gate: a
+   * stand-down writes nothing downstream so it is always reversible, and a retirement's own
+   * route answers `restores_to` which this checks before standing a receipt up.
+   *
+   * IT DOES NOT ADVANCE OPTIMISTICALLY THE WAY AN ANSWER DOES, and that is the one place it
+   * departs from docs/DESIGN.md's no-acknowledgement rule on purpose. An answer is the
+   * common case and pays for its optimism; closing a card is rare, deliberate, and the
+   * operator has just read a panel to get here — so the row is dropped only once the server
+   * has confirmed, and a refusal never has to put a card back under a finger already moving. */
+  const closeCard = useCallback(
+    (row: Row, how: CloseChoice) => {
+      if (busyRef.current || loadingRef.current) return
+      const position = row.entry.position
+      const at = rows === null ? -1 : rows.findIndex((held) => held.entry.position === position)
+      const dropped = rows === null ? [row] : rows.filter((held) => held.entry.position === position)
+
+      busyRef.current = true
+      setBusy(true)
+      setRefusal(null)
+      setClosing(false)
+
+      const call =
+        how.kind === 'stand_down'
+          ? standDown(row.entry.box, row.entry.index, how.reason)
+          : retireCard(row.entry.box, row.entry.index, how.reason)
+
+      void call
+        .then((result: unknown) => {
+          setRows((prev) =>
+            prev === null ? prev : prev.filter((held) => held.entry.position !== position),
+          )
+          /* A RETIREMENT'S UNDO IS THE SERVER'S CALL AND A STAND-DOWN'S IS NOT, which is the
+           * one asymmetry worth carrying rather than flattening. `RetireResult.restores_to`
+           * is null when the log cannot say what state the copy was in — the same contract
+           * `markSold` states — and a control whose only outcome is a refusal is the defect
+           * docs/DESIGN.md records as having shipped twice. A stand-down has no prior state
+           * to restore, so nothing can withhold it. */
+          const reversible =
+            how.kind === 'stand_down' ||
+            (result as { restores_to?: unknown } | null)?.restores_to != null
+          if (!reversible) return
+          remember({
+            key: position,
+            reverse: how.kind === 'stand_down' ? undoStandDown : undoRetire,
+            targets: [
+              {
+                box: row.entry.box,
+                index: row.entry.index,
+                position,
+                label: row.entry.label,
+              },
+            ],
+            label: row.entry.label,
+            dropped,
+            at,
+            /* docs/DESIGN.md's copy rule: the action keeps its name through the flow, so the
+             * receipt says back exactly what the panel offered. */
+            said: how.kind === 'stand_down' ? 'Stood down' : 'Retired',
+          })
+        })
+        .catch((err: unknown) => {
+          setRefusal({ failure: describeFailure(err), at: row.entry.label })
+        })
+        .finally(() => {
+          busyRef.current = false
+          setBusy(false)
+        })
+    },
+    [rows, remember],
+  )
 
   const answer = useCallback(
     (row: Row, candidate: CandidateRow) => {
@@ -1221,6 +1439,7 @@ export function ReviewQueue() {
           if (kept.length === 0 && canTakeBack(result as AnswerResult)) {
             remember({
               key: position,
+              reverse: undoAnswer,
               /* A group of one, to the reversal — see `Receipt.targets`. */
               targets: [
                 {
@@ -1323,7 +1542,7 @@ export function ReviewQueue() {
         const failures: { label: string; failure: Failure }[] = []
         for (const target of receipt.targets) {
           try {
-            await undoAnswer(target.box, target.index)
+            await receipt.reverse(target.box, target.index)
             reversed.push(target.position)
           } catch (err: unknown) {
             failures.push({ label: target.label, failure: describeFailure(err) })
@@ -1471,6 +1690,7 @@ export function ReviewQueue() {
         if (reversible && dropped.length > 0) {
           remember({
             key: result.answered.join('+'),
+            reverse: undoAnswer,
             targets: result.results.map((member) => ({
               box: member.box,
               index: member.index,
@@ -1644,6 +1864,32 @@ export function ReviewQueue() {
 
       if (current === null) return
 
+      /* THE CLOSE PANEL OWNS THE KEYBOARD WHILE IT IS UP, exactly as the group state does and
+       * for the identical reason: its choices are keyed on digits, and a digit landing on a
+       * candidate nobody can see would be a write from a screen that is not showing it. R and
+       * U stay live above this line — a reload re-derives everything, and the undo acts on
+       * receipts for cards already gone. */
+      if (closing) {
+        if (key === 'escape') {
+          event.preventDefault()
+          setClosing(false)
+          return
+        }
+        const pick = Number(key)
+        const chosen = CLOSE_CHOICES[pick - 1]
+        if (Number.isInteger(pick) && chosen !== undefined) {
+          event.preventDefault()
+          closeCard(current, chosen.choice)
+        }
+        return
+      }
+
+      if (key === CLOSE_KEY) {
+        event.preventDefault()
+        setClosing(true)
+        return
+      }
+
       if (key === SKIP_KEY) {
         event.preventDefault()
         skip(current)
@@ -1669,6 +1915,8 @@ export function ReviewQueue() {
   }, [
     current,
     answer,
+    closing,
+    closeCard,
     skip,
     clearSkips,
     allSkipped,
@@ -1885,6 +2133,9 @@ export function ReviewQueue() {
           onPhotoAbsent={() => setPhotoAbsent(current.key)}
           onChoose={(candidate) => answer(current, candidate)}
           onSkip={() => skip(current)}
+          onClose={() => setClosing((up) => !up)}
+          closing={closing}
+          onCloseChoice={(choice) => closeCard(current, choice)}
           refusal={refusal}
           onReload={reload}
           receipts={receiptPanel}
@@ -1922,6 +2173,16 @@ type CardProps = {
    *  to refuse. */
   onChoose: (candidate: CandidateRow) => void
   onSkip: () => void
+
+  /** D37's close panel: raise it, whether it is up, and what a choice inside it does.
+   *
+   *  THE PANEL IS THIS COMPONENT'S TO DRAW AND NOT ITS TO OWN, matching `receipts` above and
+   *  `grouping` above that. Whether it is open is queue-level state — it has to be cleared
+   *  when the card changes, which this component cannot see — so it arrives as a boolean and
+   *  a pair of callbacks rather than as a `useState` in here. */
+  onClose: () => void
+  closing: boolean
+  onCloseChoice: (choice: CloseChoice) => void
 
   /** The refusal the last write came back with, or null. Drawn at the bottom of this card
    *  rather than above it — see `RefusalPanel`. */
@@ -2205,6 +2466,9 @@ function Card({
   onPhotoAbsent,
   onChoose,
   onSkip,
+  onClose,
+  closing,
+  onCloseChoice,
   refusal,
   onReload,
   receipts,
@@ -2362,6 +2626,68 @@ function Card({
           card already gone, so the newer thing is nearer the rows. */}
       {receipts}
 
+      {/* D37's panel, above the actions that raise it and below the candidate rows — so the
+          thing it is about (this card) is still on screen, and the rows it is an alternative
+          to are still readable above it. It replaces nothing while it is up. */}
+      {!closing ? null : (
+        <div className="review-close" role="group" aria-label="Close this card without answering it">
+          <p className="review-close-lede">
+            Neither of these identifies the card. Both stop the queue asking about it, for good.
+          </p>
+
+          <p className="review-close-head">
+            Stand down · <span className="review-close-note">the card stays exactly where it is</span>
+          </p>
+          {CLOSE_CHOICES.map((option, at) =>
+            option.choice.kind !== 'stand_down' ? null : (
+              <button
+                key={option.machine}
+                className="review-close-choice"
+                type="button"
+                onClick={() => onCloseChoice(option.choice)}
+                disabled={busy}
+              >
+                <kbd className="review-key">{at + 1}</kbd>
+                <span className="review-close-label">{option.label}</span>
+                <span className="review-machine">{option.machine}</span>
+                <span className="review-close-why">{option.note}</span>
+              </button>
+            ),
+          )}
+
+          <p className="review-close-head">
+            Retire · <span className="review-close-note">the card leaves inventory, its slot stays empty</span>
+          </p>
+          {CLOSE_CHOICES.map((option, at) =>
+            option.choice.kind !== 'retire' ? null : (
+              <button
+                key={option.machine}
+                className="review-close-choice"
+                type="button"
+                onClick={() => onCloseChoice(option.choice)}
+                disabled={busy}
+              >
+                <kbd className="review-key">{at + 1}</kbd>
+                <span className="review-close-label">{option.label}</span>
+                <span className="review-machine">{option.machine}</span>
+                <span className="review-close-why">{option.note}</span>
+              </button>
+            ),
+          )}
+
+          {/* THE ONE THAT IS NOT HERE, SAID OUT LOUD. The owner asked for a delete on this
+              screen; it lives on Inventory because it slides every card behind it down a slot,
+              which would renumber the worklist this panel is drawn from, and because it is the
+              one operation here with no undo at all. Saying so is cheaper than letting someone
+              hunt for it and conclude it does not exist. */}
+          <p className="review-close-elsewhere">
+            Deleting the capture and reclaiming the slot is on the Inventory screen. It
+            renumbers every card behind this one and cannot be undone, so it is not offered
+            from a worklist.
+          </p>
+        </div>
+      )}
+
       <div className="review-actions">
         {/* Skip is the only control on this screen that is not a candidate row, and it is the
             only way past a card that cannot be answered — see the no-candidates note above.
@@ -2369,6 +2695,22 @@ function Card({
         <button className="review-action" type="button" onClick={onSkip} disabled={busy}>
           <span>Skip</span>
           <kbd className="review-key">{SKIP_KEY_LABEL}</kbd>
+        </button>
+
+        {/* D37. Beside Skip because they are the two ways past a card that is not being
+            answered, and the difference between them is exactly what the panel exists to
+            say: Skip forgets on reload, this one is permanent. Also an outline and never a
+            fill — docs/DESIGN.md reserves the solid fill for a screen with exactly one thing
+            to do, and this screen always has the candidates too. */}
+        <button
+          className="review-action"
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          aria-expanded={closing}
+        >
+          <span>Close this card</span>
+          <kbd className="review-key">{CLOSE_KEY_LABEL}</kbd>
         </button>
 
         {/* Not a spinner and not a disabled-everything overlay: a line that says which state
@@ -2473,6 +2815,11 @@ function PhotoContent({
   onAbsent: () => void
 }) {
   const { entry } = row
+  /* Declared before every early return below, because hooks are. The aim is in NATURAL pixel
+     coordinates, which every stored frame shares (2160x3840), so it stays meaningful across an
+     advance: answer a card with the keyboard while hovering and the glass shows the next
+     card's same region rather than blinking out. `onPointerLeave` is what clears it. */
+  const [aim, setAim] = useState<LoupeAim | null>(null)
 
   if (entry.box < 1) {
     return (
@@ -2519,6 +2866,13 @@ function PhotoContent({
         src={src}
         alt={`The card photographed at ${entry.label}`}
         onError={onAbsent}
+        // The loupe aims off THIS element rather than off a copy of it: one <img>, one box,
+        // one set of natural dimensions, so the glass cannot drift from the photograph it is
+        // magnifying. `draggable` off because a drag inside the frame is a pointer gesture
+        // the browser would otherwise turn into a ghost image of the card.
+        draggable={false}
+        onPointerMove={(event) => setAim(loupeAim(event.currentTarget, event.clientX, event.clientY))}
+        onPointerLeave={() => setAim(null)}
       />
       {/* THE 1:1 INSET, AND IT IS THE ONE THING ON THIS SCREEN THAT CHANGES WHAT A HUMAN CAN
           ACTUALLY SEE RATHER THAN HOW FAR THEY REACH.
@@ -2542,13 +2896,82 @@ function PhotoContent({
 
           aria-hidden because it is the same photograph at a different magnification; the <img>
           above carries the alt text, and a screen reader announcing the card twice is noise. */}
-      <span
-        className="review-inset"
-        style={{ backgroundImage: `url(${src})` }}
-        aria-hidden="true"
-      />
+      {aim === null ? null : (
+        <span
+          className="review-inset"
+          style={{
+            backgroundImage: `url(${src})`,
+            backgroundPosition: `${-aim.bx}px ${-aim.by}px`,
+            left: `${aim.x - LOUPE / 2}px`,
+            top: `${aim.y - LOUPE / 2}px`,
+          }}
+          aria-hidden="true"
+        />
+      )}
     </>
   )
+}
+
+/* THE LOUPE, AND IT MOVES (owner, 2026-08-24).
+ *
+ * It used to be a fixed 240x180 inset pinned bottom-right, showing the centre of the stored
+ * frame at 1:1 with `background-position: center`, and `pointer-events: none` on the grounds
+ * that "it is evidence, not a control". The owner, looking at it over a Crawdaunt:
+ *
+ *     "resolve this zoom thing we have going on here, i'm kinda confused as to what i'm
+ *      supposed to be looking at"
+ *
+ * They were right, and the fixed aim is the whole defect. The centre of a 2160x3840 frame is
+ * the middle of the card's artwork — on that Crawdaunt, the Pokedex data strip reading
+ * `NO. 0342 Rogue Pokemon HT: 3'7"`. That region decides NOTHING. Worse, `0342` is exactly the
+ * National Pokedex number D35 records the model misreading as a collector number, so the one
+ * thing the inset magnified was the string that caused the error it was sitting beside.
+ *
+ * A FIXED AIM CANNOT BE RIGHT, and D32 already argued why in a different context: the card
+ * occupies 39% to 81% of the frame across one box, because cards move on the tray. Any
+ * constant offset is a guess that is wrong per frame. The detector knows where the card is;
+ * a CSS percentage never can.
+ *
+ * So the aim becomes the operator's. Pointer inside the photograph moves the loupe to what is
+ * under it, at 1:1 — which reaches the collector number, the set code, the rarity symbol and
+ * the sheen, rather than committing to one of them forever.
+ *
+ * WHAT THIS DOES NOT REOPEN. `docs/DESIGN.md` bans a list -> detail -> back loop on this
+ * screen, and the old comment leaned on that ban to keep the inset inert. A hover loupe is
+ * not that loop: nothing is navigated, nothing is clicked, no state survives the pointer
+ * leaving, and every key on this screen does exactly what it did before. The keyboard flow —
+ * digits, `G`, `S`, `U` — is untouched, so the mouse is an addition and never a requirement.
+ *
+ * 1:1 IS PRESERVED, and it is the reason this element exists at all. `background-size: auto`
+ * paints the file at natural size; the offset below picks which natural pixel sits under the
+ * pointer. FADGI and Metamorfoze both require this class of judgement at 100% magnification,
+ * and the detector was wrong on 230 of 544 box-2 cards while 19 of 40 frames disagreed with
+ * themselves between two downscales — so a human ruling from a 5.2:1 render is ruling on
+ * evidence the standards say is already gone.
+ *
+ * HIDDEN AT REST. The confusion the owner reported was an unexplained crop sitting on the
+ * photograph at all times; a loupe that appears under the pointer explains itself by moving.
+ * `.review-photo` has no `object-fit`, so the <img> box IS the drawn image and the pointer
+ * maps to it with no letterbox arithmetic. */
+/* The loupe's diameter, in CSS px, and the one number both sides of the aim must agree on:
+   the element is drawn this wide and the background is offset by half of it, so a change here
+   moves the glass and its contents together. Kept in TS rather than read back out of the
+   stylesheet because the offset arithmetic below needs it as a number. */
+const LOUPE = 220
+
+type LoupeAim = { x: number; y: number; bx: number; by: number }
+
+function loupeAim(img: HTMLImageElement, clientX: number, clientY: number): LoupeAim | null {
+  const box = img.getBoundingClientRect()
+  const x = clientX - box.left
+  const y = clientY - box.top
+  if (x < 0 || y < 0 || x > box.width || y > box.height) return null
+  /* `naturalWidth` is 0 until the image decodes, so a pointer that arrives first gets no
+     loupe rather than a divide-by-zero aim. */
+  if (img.naturalWidth === 0 || img.naturalHeight === 0 || box.width === 0) return null
+  const nx = (x / box.width) * img.naturalWidth
+  const ny = (y / box.height) * img.naturalHeight
+  return { x, y, bx: nx - LOUPE / 2, by: ny - LOUPE / 2 }
 }
 
 // ------------------------------------------------------------------------- what is waiting

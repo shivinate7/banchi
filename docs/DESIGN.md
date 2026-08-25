@@ -356,10 +356,16 @@ first, because an unpriced `no_catalog_row` has no market and sorted last *perma
 2 left 47 entries queued, counted and unreachable. `bandOf` is price-only and cannot see that
 tier, so the five type-size bands render a sort the queue no longer has.
 
-So the bands are retired with the worklist they were drawn on rather than carried into the
-rail, and what discharges "the ordering is visible" now is honest about the sort that actually
-runs: the card head carries how long this card has waited, and the rail's reason chips carry
-counts computed over the whole queue. A band scale in answer order would render a price sort
+**THE BANDS WERE NOT RETIRED, AND THIS PARAGRAPH SAID THEY WERE.** Corrected 2026-08-25 after
+reading the screen rather than this file: `bandOf` is live at `app/src/ReviewQueue.tsx:469`,
+applied as `data-band` on every rail row at `:3073`, and all five sizes are the only
+`font-size` those spans have (`app/src/ReviewQueue.css:1089-1112`). The worklist was not
+retired either — it BECAME the rail. So what is true is narrower and worse than a retirement:
+**the five bands still render, and they render a sort the queue only partly has.** That is an
+unrepaired mismatch, open as of today, not a completed removal. What DOES discharge "the
+ordering is visible" alongside them is honest about the tier `bandOf` cannot see: the card head
+carries how long this card has waited, and the rail's reason chips carry counts computed over
+the whole queue. A band scale in answer order would render a price sort
 the list does not have, which is the same bias this file rejects for the candidate rows.
 
 **The band edges are still the one number on this screen nobody has measured, and Gate B is
@@ -411,33 +417,58 @@ without noticing; an element that is not rendered has to be deliberately re-adde
 `app/tests/run-panel.spec.ts` asserts the absence rather than the disablement for exactly
 that reason.
 
-**The panel is folded by default and none of the Fulfillment floors reach it.** It is an
-owner surface at the 4-16 end of the scale, and its fold is `BoxOps`' measured argument
-applied again: ~250px of panel, reached once a box, sitting above the card detail on the
-screen whose question is *where is this card*. A live run is the one thing that opens it
-unasked.
+**THE SAME SHAPE NOW GUARDS A CLAIM RATHER THAN AN INVOICE (D34, 2026-08-24), AND IT IS NOT A
+THIRD FILL.** The listing-release control on the box header is an outline like every other
+control in `BoxOps`, so the fill rule above is untouched — what it borrows is the *sequencing*:
+a free `GET /boxes/<box>/listings` is fetched when the panel opens, and the button that asserts
+"TCGplayer holds none of these" does not exist until that has answered. The reason is the one
+this paragraph already gives, and the failure it was written against is on the record: the first
+build reported which OTHER boxes a release reached in the receipt, i.e. after the write. The
+plan now names the SKUs, the copy counts, the other boxes and whether the box will actually be
+freed, above the control. `app/tests/inventory.spec.ts` asserts the absence, not the
+disablement.
+
+**The panel must say when a release will NOT free the box.** D34 budgets each SKU by the calling
+box's own copies, so a shared SKU leaves a remainder and the delete goes on refusing — correct,
+intended, and the one outcome a person reads as a broken gate if nothing says otherwise. That
+sentence is drawn before the press and repeated in the receipt.
+
+**The panel is NOT folded, and none of the Fulfillment floors reach it.** It is an owner
+surface at the 4–16 end of the scale. This paragraph used to argue the fold on `BoxOps`'
+measured grounds — ~250px, reached once a box, above the card detail on the screen whose
+question is *where is this card* — and the owner overruled it: *"both box and run, i don't
+want click in functionality, i want their buttons just there."* D33 carries the argument, and
+what replaces the fold's saving is the ROW rather than the disclosure: `.browse-boxrun` puts
+the run panel and `BoxOps` side by side at `1fr 1fr`, so the pair costs one panel's height
+instead of two.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-thirteen strings — seven from the variant ladder in `pipeline/variant.py`
+fourteen strings — seven from the variant ladder in `pipeline/variant.py`
 (`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
 `detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and six from
+`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and seven from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-`set_ambiguous`, `card_not_detected`, `no_market_data`). Showing only a friendly label
+`set_ambiguous`, `card_not_detected`, `no_market_data`, and D35's
+`number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
+resolution, keeping that row so the entry offers exactly one candidate, which is what makes a
+queue of them one D29 group. It is *not* the only reason sitting on a card the ladder resolved:
+`low_confidence` and `no_market_data` do too, and the difference is that they reach
+`routing.route` still resolved and are re-routed there, where this one arrives already
+un-resolved). Showing only a friendly label
 creates a second vocabulary that nothing audits — the drift D16 exists to catch — and
 leaves no way to get from what you saw on screen to what the pipeline actually said.
 Showing only the raw string is honest and unreadable. Both, at two sizes, costs one line of
 chrome and keeps the string greppable across the screen, the run report and `review.json`.
 **Owner-side only**: the Fulfillment banned-word list forbids this register entirely.
 
-**Twelve of the thirteen can reach this screen. `no_market_data` cannot, and this paragraph
+**Thirteen of the fourteen can reach this screen. `no_market_data` cannot, and this paragraph
 used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
 destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
 for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
 priced by hand in `decisions.json` (D9) and never appears here. The screen carries a label
 for it all the same, which is right: one line of a lookup table is cheaper than a bare
 machine string rendered the first time routing ever queues one. The claim to keep out of
-this file is the count — thirteen are defined, twelve are reachable, and the two numbers
+this file is the count — fourteen are defined, thirteen are reachable, and the two numbers
 answer different questions.
 
 **Every choice shows its key, and the built screen draws nine of them.** Owner-side, an hour
@@ -449,6 +480,57 @@ list and any other mapping is a second thing to learn — which stops at nine, s
 needs a modifier or a two-key sequence. Rows past the ninth draw no chip rather than a chip
 that does nothing. A card with ten candidate rows is rare enough that reaching for the mouse
 is the right cost; a real queue full of them is the argument for reopening this.
+
+**THE CAPTURE SCREEN STOPPED AT NINE ON THIS PARAGRAPH'S AUTHORITY AND NO LONGER DOES
+(owner, 2026-08-24).** `app/src/CaptureScreen.tsx:Opt` cited the rule above in as many
+words — rows past the ninth draw no chip rather than a chip that does nothing — and drew
+Pokemon's last four rarities keyless: `Special Illustration Rare`, `Hyper Rare`, `Secret
+Rare` and `Rainbow Rare` were mouse-only, on the screen the owner shoots a box from at a
+623 ms cadence. `OPTION_KEYS` there is now digits, then `0`, then the letters that screen
+has not already spent.
+
+**What the borrowed rule got wrong is one clause: "a tenth needs a modifier or a two-key
+sequence".** A tenth needs `0`, and an eleventh needs a letter, and both are one unmodified
+press. That was worth an escape hatch on the review queue, where a candidate list is
+per-card and a tenth row is rare; it was never worth four permanently unreachable rows in a
+vocabulary `pipeline/games.py` authors by hand and the operator claims every stack.
+
+**The review queue is deliberately NOT changed with it, so the two screens disagreeing is a
+ruling rather than drift.** Its list is candidate catalog rows — variable per card, ordered
+by the pipeline, and its digits are the numbered list they name. The capture screen's is a
+fixed authored vocabulary in stack order, where position 11 is `Hyper Rare` on every card
+of every run, so a letter there is learned once and not re-read per card. If a real queue
+turns up full of ten-candidate cards, the paragraph above is still the one to reopen, and
+`OPTION_KEYS` is then the thing to reach for rather than a second alphabet.
+
+**The alphabet SKIPS rather than shadows, and that is the half a later session must not
+tidy.** The capture screen has already spent ten letters, two of which are `c` and `u` —
+the shutter and the undo. (It read *eleven* until 2026-08-25, and the eleventh was `n`, the
+jump to the Box field's second input; D20's amendment merged that input away, so `n` re-enters
+the alphabet. It re-enters at its own place, which moves nothing before the twentieth option —
+the first thirteen keys are `1234567890ade` either way — so nothing on this screen redrew.) A literal `a`–`z` puts `Rainbow Rare` on `c`. Neither resolution
+of that collision is safe: whichever act wins, the other looks like it fired, silently, one
+card at a time. So the gaps at `b` and `c` are the design, and they cost nothing to read
+because every row draws its own key in its chip. `app/tests/capture-claims.spec.ts` asserts
+the skip — the negative case, because nothing in the type system or the render says it.
+
+**THE QUESTION BELOW IS CLOSED AS OF 2026-08-25 — D37 IS THE DECISION ENTRY IT ASKED FOR.**
+This section said the screen "needs a real defer that records a reason, and that is a decision
+entry rather than a button", and named counting skips as the measurement that would settle it.
+The owner asked for the defer directly instead: *"why can't i mark something as known skip
+kinda like a stand down on the flag i get that this is a wasted position"*.
+
+`X` now raises a panel offering a **stand-down** — three reasons, `cleared_by_human` set, and
+the card itself untouched — beside D26's **retirement**, whose route existed with no control on
+this screen. The mid-box delete is deliberately not there: it renumbers every card behind the
+one being deleted, which would re-point the worklist the panel is drawn from, and it is the one
+operation here with no undo. D37 carries the whole argument.
+
+**Skip survives, narrowed and no longer load-bearing.** It is still the only move that writes
+nothing, which is right for a card the owner intends to come back to this session; what it is
+no longer is the ONLY move for a card that can never be answered. The paragraphs below are left
+standing because their reasoning is what produced D37, and because the measurement they ask for
+is still owed — the stand-down's recorded reason is now the instrument that takes it.
 
 **Skip is an OPEN QUESTION, not a decision.** The built screen carries a control this section
 never asked for: Skip, on `S`, which moves the current card to the back of this session's

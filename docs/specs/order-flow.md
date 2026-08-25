@@ -391,13 +391,23 @@ card correction route already refuses to do.
 
 ### 6.6 — What the box routes deliberately do not do
 
+**BUILT 2026-08-25 — A RENAME NOW APPENDS `box_renamed`, AND IT LANDED WHERE THIS PARAGRAPH
+SAID IT HAD TO.** `store/master.py:set_name` owns the event, so it is in the STORE's vocabulary
+rather than the server's — which is exactly the objection below, discharged rather than worked
+around. `PUT /boxes/<box>` and `ensure_box`'s silent rename both route through it, and the line
+carries `name_from` and `name_to`. What retired the cost argument is D20 as amended: a name is
+the ADDRESS now — the capture screen finds a box by name — so a rename relabels every card in
+the box, exactly as a moved divider relabels every card behind it, and an unlogged rename would
+leave no record of what the box used to be called. The paragraph below is kept as the record of
+the era in which a name was only a label.
+
 **A rename appends no history event, and that is a gap rather than a decision.**
 `set_sections` logs `resectioned` and `close_box` logs `box_closed`; a name change logs
 nothing, because the store has no event for it and inventing one in the server would put it in
 the server's vocabulary instead of the store's. What it costs is small — a name is a label,
 not a claim the pipeline spends money against — but it is a gap and is written down as one.
 
-Related and worth knowing before it bites: the four box event names in the server are a
+Related and worth knowing before it bites: the five box event names in the server are a
 **mirror** of literals that live inside the store's own log calls, because that module exports
 no constants for them. The tuple can drift from the strings actually written and only a test
 comparing the two would notice. Naming them in the store is the fix.

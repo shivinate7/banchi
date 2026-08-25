@@ -580,6 +580,92 @@ export type BoxDeleteResult = {
   directory_removed: boolean
 }
 
+/** Copies at each TCGplayer stage. Stages sitting at zero are omitted rather than sent as 0,
+ *  which is the same convention `join` and `reconcile` print their closing lines with. */
+export type ListingStages = Partial<Record<'pushed' | 'staged' | 'live', number>>
+
+/** One SKU on `GET /boxes/<box>/listings`, and the same row echoed back by the release.
+ *
+ *  THE BUDGET IS THE BOX'S UNSOLD COPIES (D34, owner's ruling 2026-08-24). Each SKU gives up
+ *  at most `copies_here`, so a release reached from box 1 can never give up a commitment only
+ *  box 3's copies could account for. Where the SKU is shared that leaves a remainder — and a
+ *  remainder keeps the card listing-held, so the box stays refused. That is the intended
+ *  outcome, not a failure, and `still_held` is what says so BEFORE the press. */
+export type BoxListingRow = {
+  sku: string
+  condition: string | null
+
+  /** Unsold, unretired copies of this SKU in this box. The release budget, and the number an
+   *  operator counts when they look in the box. */
+  copies_here: number
+
+  before: ListingStages
+  releases: ListingStages
+  after: ListingStages
+
+  /** True when something remains after the release — so this SKU still holds the box. */
+  still_held: boolean
+
+  /** Other boxes holding an unsold copy of this SKU, and how many each holds. Empty in the
+   *  ordinary case. Rendered, never dropped: it is the whole reason the preflight exists. */
+  also_in_boxes: { box: number; copies: number }[]
+}
+
+/** `GET /boxes/<box>/listings` — FREE, read-only, and the step that comes first (D34).
+ *
+ *  The screen draws this on opening the release panel, and the control that releases does not
+ *  exist until it has answered — D33's preflight-then-confirm shape applied to a claim instead
+ *  of an invoice. The first build reported the blast radius in the RECEIPT, which was honest
+ *  and too late; this is that moved ahead of the press. */
+export type BoxListingPlan = {
+  box: number
+
+  /** How many SKUs hold something. Zero is ordinary — most boxes are never listed. */
+  skus: number
+
+  /** What the release would give up in total, per stage. */
+  releases: ListingStages
+
+  /** SKUs that would still hold something afterwards. */
+  still_held: string[]
+
+  /** Every other box holding a copy of a SKU this release touches. */
+  also_in_boxes: number[]
+
+  /** Whether the box would actually become deletable. NOT the same as "something would be
+   *  released": a box every one of whose SKUs is shared can give up real copies and stay
+   *  refused, which is exactly what this flag is here to state up front. */
+  frees_box: boolean
+
+  listings: BoxListingRow[]
+}
+
+/** What `POST /boxes/<box>/listings/release` answers (D34).
+ *
+ *  THE RECEIPT IS THE ONLY EVIDENCE, and that is why every field is a count of something given
+ *  up rather than a status word. After the write the store has no record the counts ever
+ *  stood, and a box deleted straight afterwards takes the cards that would have implied them. */
+export type ListingReleaseResult = {
+  box: number
+
+  /** How many SKUs were touched. Never 0: the route refuses `nothing_to_release` instead. */
+  released: number
+
+  /** Every SKU touched, with what it gave up and what it kept. */
+  listings: BoxListingRow[]
+
+  /** Those SKUs by name, in full — the list that makes the claim checkable against TCGplayer. */
+  skus: string[]
+
+  given_up: ListingStages
+  still_held: string[]
+  frees_box: boolean
+  also_in_boxes: number[]
+
+  /** Store-wide totals AFTER. Empty means nothing anywhere is staged. */
+  listings_after: ListingStages
+}
+
 export type SaleResult = {
   /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
   position: string
@@ -677,6 +763,35 @@ export type AnswerOrigin = {
  *  history cannot say what the answer replaced (`answer_origin_unknown`). On a reversal it is
  *  always null and means only that there is nothing left to reverse — not that a second undo
  *  is available. */
+/** Why a human closed a queued question without answering it. D37, and `store/queues.py`'s
+ *  `STAND_DOWN_REASONS` verbatim — a second friendly vocabulary is the drift D16 exists to
+ *  catch, so these render beneath their labels exactly as a routing reason does.
+ *
+ *  DELIBERATELY NOT `RetireReason`. Those four all say the CARD left inventory; these three
+ *  say the QUESTION closed while the card stayed exactly where it is. */
+export type StandDownReason = 'wasted_position' | 'cannot_settle' | 'not_listing'
+
+/** `POST /review/<box>/<index>/stand-down`, both directions. */
+export type StandDownResult = {
+  /** `"<box>/<index>"`, the store's own key. */
+  position: string
+
+  /** True when this call took a stand-down back rather than recording one. `AnswerResult`'s
+   *  `undone` under the same name, so one client shape reads either route. */
+  undone: boolean
+
+  /** The reason recorded, echoed back — on the reversal it is the reason being withdrawn. */
+  reason: StandDownReason | null
+
+  /** The QUEUE's own reason for asking, beside the operator's reason for declining. Absent on
+   *  a reversal, which is about the stand-down and not about the question. */
+  queue_reason?: string
+
+  /** Always true on the recording direction: a stand-down writes nothing downstream, so
+   *  nothing downstream can hold it. Typed anyway so this reads like `AnswerResult`. */
+  reversible?: boolean
+}
+
 export type AnswerResult = {
   /** `"<box>/<index>"`, the store's own key — `master.position_key`, not a label. */
   position: string
@@ -1002,6 +1117,15 @@ export type BoxRecord = {
   next_index: number
   cards: number
   sold: number
+
+  /** Cards in this box that are `retired` (D26), and cards whose SKU holds a listing stage
+   *  (D7 amended). Added with D34 so the delete panel can name WHICH of
+   *  `box_not_empty_of_commitments`'s three grounds is holding the box open before anything
+   *  is pressed — the three have different remedies, and `sold` alone could not tell them
+   *  apart. `listed` counts CARDS, not SKUs and not copies: it is the number the refusal
+   *  itself would name. */
+  retired: number
+  listed: number
   sections_detail: SectionDetail[]
 }
 

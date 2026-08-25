@@ -55,12 +55,60 @@ const GAMES = {
   ],
 }
 
-async function open(page: Page, session?: Record<string, string>): Promise<void> {
+/** Pokemon's THIRTEEN rarities, verbatim from `pipeline/games.py` — stack order and matrix
+ *  both. The three-rarity fixture above cannot see the case these last cases are about: the
+ *  option alphabet only runs past the digits when a vocabulary does, and Pokemon's is the
+ *  longest one any game authors. Copied rather than trimmed for the header's reason — a
+ *  fixture that invented a rarity would be testing itself. */
+const THIRTEEN = {
+  default: 'pokemon',
+  games: [
+    {
+      ...GAMES.games[0],
+      rarities: [
+        'Common',
+        'Uncommon',
+        'Rare',
+        'Holo Rare',
+        'Double Rare',
+        'Radiant Rare',
+        'ACE SPEC Rare',
+        'Illustration Rare',
+        'Ultra Rare',
+        'Special Illustration Rare',
+        'Hyper Rare',
+        'Secret Rare',
+        'Rainbow Rare',
+      ],
+      finish_by_rarity: {
+        Common: ['normal', 'holo', 'reverse_holo'],
+        Uncommon: ['normal', 'holo', 'reverse_holo'],
+        Rare: ['normal', 'holo', 'reverse_holo'],
+        'Holo Rare': ['holo', 'reverse_holo'],
+        'Double Rare': ['holo'],
+        'Radiant Rare': ['holo'],
+        'ACE SPEC Rare': ['holo'],
+        'Illustration Rare': ['holo'],
+        'Ultra Rare': ['holo'],
+        'Special Illustration Rare': ['holo'],
+        'Hyper Rare': ['holo'],
+        'Secret Rare': ['holo'],
+        'Rainbow Rare': ['holo'],
+      },
+    },
+  ],
+}
+
+async function open(
+  page: Page,
+  session?: Record<string, string>,
+  games: unknown = GAMES,
+): Promise<void> {
   await page.route(/\/games$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(GAMES),
+      body: JSON.stringify(games),
     })
   })
   await page.route(/\/status$/, async (route) => {
@@ -219,4 +267,101 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
   expect(
     await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.finish')),
   ).toBeNull()
+})
+
+/* ---- THE OPTION ALPHABET (owner's ruling, 2026-08-24) --------------------------------
+ *
+ * The chips ran `1`-`9` and stopped, so Pokemon's last four rarities — `Special
+ * Illustration Rare`, `Hyper Rare`, `Secret Rare`, `Rainbow Rare` — could be claimed only
+ * with a mouse, on the screen whose whole keyboard argument is that a claim costs one
+ * press. `CaptureScreen.tsx:OPTION_KEYS` carries the replacement: digits, then `0`, then
+ * every letter this screen has not already spent.
+ *
+ * THE THIRD CASE IS THE ONE THAT MATTERS AND IT IS NEGATIVE. A literal `a`-`z` would have
+ * put `Rainbow Rare` on `c`, which is the shutter, at a 623 ms feeder cadence — so the
+ * alphabet SKIPS the eleven keys this screen has spent. Nothing in the type system says so
+ * and nothing in the render says so; a later session widening the string by hand would
+ * break it silently, one card at a time, which is why it is asserted rather than argued.
+ */
+
+/** One row of the open rarity list, by its rendered name. `.capture-opt-name` is stem plus
+ *  a de-emphasised ` Rare` in two spans, which normalises to the whole cell. */
+function rarityOpt(page: Page, name: string) {
+  return page
+    .locator('.capture-opts .capture-opt')
+    .filter({ has: page.locator('.capture-opt-name', { hasText: name }) })
+}
+
+async function openRarity(page: Page): Promise<void> {
+  await page.keyboard.press('r')
+  await expect(rarityOpt(page, 'Rainbow Rare')).toBeVisible()
+}
+
+test('the tenth rarity rides 0 and the eleventh rides A — past the digits, by key', async ({
+  page,
+}) => {
+  await open(page, undefined, THIRTEEN)
+  await openRarity(page)
+
+  /* The chips first, because the operator never computes the alphabet — they read it off
+     the row. The DOM text is lower case; `text-transform` in CaptureScreen.css is what
+     draws `A`, which is how the owner named this key. */
+  await expect(rarityOpt(page, 'Special Illustration Rare').locator('.capture-k')).toHaveText(
+    '0',
+  )
+  await expect(rarityOpt(page, 'Hyper Rare').locator('.capture-k')).toHaveText('a')
+
+  await page.keyboard.press('0')
+  await page.keyboard.press('a')
+
+  await expect(rarityOpt(page, 'Special Illustration Rare')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(rarityOpt(page, 'Hyper Rare')).toHaveAttribute('aria-pressed', 'true')
+
+  /* Stored in the game's stack order (D22), not the order the keys were pressed — the same
+     canonicalisation the finish claim above asserts, over a different control. */
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.rarityClaim')),
+  ).toBe(JSON.stringify(['Special Illustration Rare', 'Hyper Rare']))
+})
+
+test('the alphabet skips the keys this screen has spent: the last two ride D and E, not B and C', async ({
+  page,
+}) => {
+  await open(page, undefined, THIRTEEN)
+  await openRarity(page)
+
+  await expect(rarityOpt(page, 'Secret Rare').locator('.capture-k')).toHaveText('d')
+  await expect(rarityOpt(page, 'Rainbow Rare').locator('.capture-k')).toHaveText('e')
+
+  await page.keyboard.press('e')
+  await expect(rarityOpt(page, 'Rainbow Rare')).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('C stays the shutter and B stays the box: an option key never shadows one already spent', async ({
+  page,
+}) => {
+  await open(page, undefined, THIRTEEN)
+  await openRarity(page)
+
+  /* `c` with the rarity field open. Under a literal `a`-`z` alphabet this is position 13,
+     `Rainbow Rare` — the claim would move and the operator, whose finger is on the shutter
+     at feeder pace, would have no way to know which act fired. No box is selected here, so
+     the capture itself refuses before it reaches the wire (CaptureScreen: `box === null`);
+     what is asserted is that the press did not land on the list. */
+  await page.keyboard.press('c')
+  await expect(rarityOpt(page, 'Rainbow Rare')).toHaveAttribute('aria-pressed', 'false')
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.rarityClaim')),
+  ).toBeNull()
+
+  /* And `b` — position 12 under a literal alphabet — still opens the Box field, which is
+     the other half of "every existing key keeps the meaning it had". The field letters are
+     tested before the option lookup and are excluded from it, so neither can win a press
+     the other wanted. */
+  await page.keyboard.press('b')
+  await expect(rarityOpt(page, 'Secret Rare')).toHaveCount(0)
+  await expect(page.locator('.capture-open').filter({ hasText: /Box/ })).toBeVisible()
 })

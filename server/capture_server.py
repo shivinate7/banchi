@@ -10,6 +10,8 @@
     DELETE /inventory/<box>/<index>        undo the newest capture: every trace of one position
     GET    /queues                         both standing queues, in the order they are worked
     POST   /review/<box>/<index>/answer    the human picks a candidate row, or takes it back
+    POST   /review/<box>/<index>/stand-down close a queued question without answering it —
+                                           the card is untouched, only the question closes
     POST   /review/group-answer            answer a homogeneous group in one write — one
                                            shared reason, one candidate row per card
     POST   /inventory/<box>/<index>/sold   mark one copy sold, or put its state back
@@ -21,6 +23,10 @@
                                            card down one index (D10, owner ruling 1)
     DELETE /boxes/<box>                    delete a whole box — records, photos, sidecars,
                                            queue entries, cache, registry (D10, owner ruling 3)
+    GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
+                                           and what a release would give up. FREE (D34)
+    POST   /boxes/<box>/listings/release   give up what this box's copies could account for,
+                                           on the operator's word (D34)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /boxes                          every box: its dividers, its fill, its capacity
@@ -62,6 +68,26 @@ refused as `box_not_empty_of_commitments` while anything in it is sold, retired 
 listing-held — those records are history and commitments, not clutter. The routes are the
 gate's mechanism; the typed confirmation `docs/DESIGN.md`'s destructive-action clause asks
 for is the app's, on top of these refusals, never instead of them.
+
+THAT REFUSAL HAD TWO GROUNDS AND ONE DOOR UNTIL D34, and the missing one is a PAIR of routes:
+`GET /boxes/<box>/listings` and `POST /boxes/<box>/listings/release`. A box held open by a
+sold or retired card can be freed — both states reverse on their own routes, and the refusal
+names them. A box held open by a LISTING could not be, ever: `staged` is drawn down in one
+place, by the rise in live quantity a fresh export reports, so an import that never landed
+left counts nothing in this repo could clear. Box 1's 53 cards sat behind 45 such records.
+
+The release's answer is unlike everything else in this file: it deletes nothing, moves no
+record, touches no file, and its entire content is a claim by the operator about a system
+this process cannot see. So it takes D33's `confirm` field and always writes a history line.
+
+AND IT IS BUDGETED BY THE CALLING BOX'S UNSOLD COPIES — the owner's ruling, overruling a
+first build that zeroed each SKU outright. A listing is per SKU and copies are fungible (D7
+amended), so zeroing let a release reached from box 1 give up commitments only box 3's copies
+could ever have backed. Each SKU now gives up at most what THIS box holds, which makes that
+impossible structurally. Where a SKU is shared the remainder stays and the box stays refused,
+deliberately; the GET names that outcome (`frees_box`, `still_held`) BEFORE the press, which
+is D33's preflight shape one register down and the half the first build got wrong by putting
+the blast radius in the receipt. `_release_plan` is the single source for both routes.
 
 EVERY CARD ANSWER NOW CARRIES A `place` BLOCK, and it is D20's sentence rather than a
 convenience. A bare index tells you nothing about where to put your thumb; "#40 of 250, 16%
@@ -183,7 +209,7 @@ import os
 import re
 import sys
 from bisect import bisect_left, bisect_right
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -317,6 +343,11 @@ _INVENTORY_ITEM_RE = re.compile(r"^/inventory/(\d+)/(\d+)$")
 # a path cannot carry one segment and two.
 _INVENTORY_BOX_RE = re.compile(r"^/inventory/(\d+)$")
 _REVIEW_ANSWER_RE = re.compile(r"^/review/(\d+)/(\d+)/answer$")
+# D37. Its own path rather than a mode of the answer, because it is a different act: the
+# answer says what the card IS, and this says the question is closed while the card is
+# untouched. A flag on the answer route would have made "I decline to identify this" reach
+# the code path whose entire job is validating an identification.
+_REVIEW_STAND_DOWN_RE = re.compile(r"^/review/(\d+)/(\d+)/stand-down$")
 _SOLD_RE = re.compile(r"^/inventory/(\d+)/(\d+)/sold$")
 _RETIRE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/retire$")
 _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
@@ -335,6 +366,12 @@ _REMOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/remove$")
 # handler that would refuse it in `box_invalid` — the same trade the four patterns above
 # already make, and the reason `_require_box` still exists for the body of POST /boxes.
 _BOXES_ITEM_RE = re.compile(r"^/boxes/(\d+)$")
+
+# D34's one route. Under `/boxes/<box>` rather than under `/listings` because the operator
+# arrives at it from a box — it is the box header's answer to the box header's refusal —
+# even though what it writes is SKU-scoped and the response has to say so.
+_BOX_LISTINGS_RE = re.compile(r"^/boxes/(\d+)/listings$")
+_BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 
 # The pipeline routes. A run name is `<date>-<slug>-<nn>` and nothing else builds one, so
 # the character class here is the same one `pipeline_routes._open_run` validates against —
@@ -429,6 +466,11 @@ UNDO_FIELDS = ("undo",)
 # write is all-or-nothing while the reversal is per-card.
 GROUP_ANSWER_FIELDS = ("answers",)
 
+# D37's stand-down: the reason alone in one direction, the flag alone in the other. Two
+# tuples for `ANSWER_FIELDS`' reason — a body carrying `undo` AND a reason is a client that
+# has confused the directions, and the reason would be silently ignored.
+STAND_DOWN_FIELDS = ("reason", "undo")
+
 # ...and what each of its elements may carry: the single route's own pair, plus the position
 # it is for. The pair is copied off that entry's ONE offered row and re-validated against it,
 # never trusted — `_answer_target` runs the same checks for both routes, so the group cannot
@@ -464,6 +506,12 @@ RESHOOT_FIELDS = ("image", "capture_id")
 # again. The one target this cannot protect is a record with no id at all whose upstairs
 # neighbour also has none; both are pre-server records, and the limit is named at the check.
 REMOVE_FIELDS = ("capture_id",)
+
+# What `POST /boxes/<box>/listings/release` accepts. `confirm` is required and must be
+# exactly `true` — D33's field, reused rather than reinvented, and required for its reason:
+# this route asserts a fact about a system this process cannot see, so a request that did
+# not say so deliberately must not be able to make the assertion by accident.
+RELEASE_FIELDS = ("confirm",)
 
 # `PUT /inventory/<box>` accepts the claims plus ONE non-claim field. `indices` narrows the
 # sweep from "every eligible card in the box" to the ones the operator actually selected —
@@ -531,11 +579,17 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # for the last event naming a state and filters against that tuple, so a name added here is
 # inert to it by construction. A name that collided would restore a reversed sale to
 # `corrected`. T7 asserts the two sets are disjoint rather than leaving that to whoever adds
-# the fourth event.
+# the next event — WHICH IS WHY THE ROSTER IS NOT COUNTED IN PROSE ANY MORE. The ordinals
+# below number the route-written names in the order they arrived, and the tuple at the foot of
+# this block is the register; a restated total is the thing that goes stale, and this block has
+# said 'four' about a group of five before.
 #
 #   corrected   an operator changed a recorded claim: the set hint or the finish toggle (D3).
 #   removed     undo deleted a record and released its position for the next capture (D10).
 #   answered    a human chose one catalog row for a card the pipeline refused to guess (D4).
+#   stood_down  a human closed a queued question WITHOUT answering it, and the card was left
+#               alone — no SKU, no state, no listing count (D37). The same line carries the
+#               reversal, flagged rather than named separately.
 #   unanswered  he took that answer back inside the undo window, and the card is waiting again
 #               (D28).
 #
@@ -555,21 +609,25 @@ UNDOABLE_STATES = (master.CAPTURED,)
 CORRECTED = "corrected"
 REMOVED = "removed"
 ANSWERED = "answered"
+# D37. Outside `master.STATES` like every other event name here — T7 asserts that, and a
+# stand-down is emphatically not a card state: the card does not move, does not change, and
+# does not leave. Only the QUESTION closes.
+STOOD_DOWN = "stood_down"
 UNANSWERED = "unanswered"
 
-# THE FIFTH ROUTE-WRITTEN EVENT (D26): the photo and sidecar at a position were replaced in
+# THE SIXTH ROUTE-WRITTEN EVENT (D26): the photo and sidecar at a position were replaced in
 # place — record untouched, label unchanged, allocator never involved. The old photo is
 # REPLACED, not archived, which D26 states outright; this line is therefore the only trace
 # the first photograph ever existed, and it carries both capture ids so the boundary between
 # the two photographs is in the log the way `removed` is the boundary between two cards at
-# one reused index. Not a state, exactly as the four above are not: the card is the same
+# one reused index. Not a state, exactly as the five above are not: the card is the same
 # card in the same state, and only its picture changed. `retired`, by contrast, IS a state —
 # it lives in `master.STATES`, is logged by `Inventory.retire` through the store's own
 # `_log`, and is deliberately NOT in this tuple: putting it here too would be the exact name
 # collision D26 renamed the state to avoid.
 RESHOT = "reshot"
 
-# THE SIXTH AND SEVENTH ROUTE-WRITTEN EVENTS (D10's three owner rulings, 2026-08-23).
+# THE SEVENTH AND EIGHTH ROUTE-WRITTEN EVENTS (D10's three owner rulings, 2026-08-23).
 #
 #   renumbered   a mid-box delete slid every higher card in one box down one index. Carries
 #                the deleted position, the box, `from` (the deleted index) and `count` —
@@ -587,17 +645,30 @@ RESHOT = "reshot"
 #                same commit.
 #   box_deleted  a whole box left the store (D10, ruling 3): records, photos, sidecars,
 #                queue entries, cache entries and the registry entry, in one write.
-#                Carries the box and the card count. A box-level event like D20's four, so
+#                Carries the box and the card count. A box-level event like D20's five, so
 #                it is the first line `_history` writes with no `position` key — a box is
 #                not at a position, and `Inventory._log` draws the same line.
 RENUMBERED = "renumbered"
 BOX_DELETED = "box_deleted"
 
-# D20's four, and they differ from the three above in WHO APPENDS THEM. The three above are
-# written here, by `_history`, because the store has no opinion about them. These four are
+# THE NINTH ROUTE-WRITTEN EVENT (D34): the operator stated that TCGplayer holds nothing for
+# the SKUs a box's cards belong to, and every listing stage on them was zeroed. Box-level
+# like `box_deleted`, so it carries no `position` — the write is per SKU and the box is only
+# how the operator got there, which is why the line carries the SKU count and the copies
+# given up rather than a list of positions.
+#
+# IT IS THE ONLY TRACE, and that is the whole argument for logging it at all. The counts it
+# zeroes were the store's record of what TCGplayer was holding; after this line there is no
+# other evidence they ever stood, and a box deleted immediately afterwards takes the cards
+# that would have implied them. Not a state, for the ordinary reason: no card moved, and
+# `pushed`/`staged`/`live` are not members of `master.STATES` in the first place.
+LISTINGS_RELEASED = "listings_released"
+
+# D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
+# written here, by `_history`, because the store has no opinion about them. These five are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
-# `close_box` and `reopen_box` — the box routes below call those methods and append nothing
-# themselves. They are named here anyway, and the reason is the paragraph below: this tuple
+# `set_name`, `close_box` and `reopen_box` — the box routes below call those methods and
+# append nothing themselves. They are named here anyway, and the reason is the paragraph below: this tuple
 # is what the disjointness rule is stated over, and an event this server causes but does not
 # spell would be outside it.
 #
@@ -607,11 +678,18 @@ BOX_DELETED = "box_deleted"
 #                 and silent when the edit was.
 #   box_created   a box entered the registry: by POST /boxes, or by `ensure_box` when a
 #                 capture landed in a box nobody had registered.
+#   box_renamed   a box's name was set, changed or cleared. Carries both names, and it is
+#                 `resectioned`'s sibling one scale up: a name is how a box is addressed
+#                 now, so a rename relabels every card IN the box the way a moved divider
+#                 relabels every card behind it. `do_put_box` recorded the absence of this
+#                 event as a known gap while a name was only a label; it is not only a
+#                 label any more.
 #   box_closed    the lid went on and capacity froze at the fill (D20).
 #   box_reopened  the lid came off and capacity went back to unknown, rather than standing
 #                 as a stale fact.
 RESECTIONED = "resectioned"
 BOX_CREATED = "box_created"
+BOX_RENAMED = "box_renamed"
 BOX_CLOSED = "box_closed"
 BOX_REOPENED = "box_reopened"
 
@@ -623,7 +701,7 @@ BOX_REOPENED = "box_reopened"
 # so that a name in this tuple is inert to it. A collision would restore a reversed sale to
 # `resectioned`.
 #
-# The four D20 names are a MIRROR of literals that live inside `store/master.py:_log` calls
+# The five D20 names are a MIRROR of literals that live inside `store/master.py:_log` calls
 # rather than constants imported from it, because that module exports none — so this tuple
 # can drift from the strings actually written, and only a test comparing the two would
 # notice. Recorded rather than worked around: naming them in `store/master.py` is the fix,
@@ -632,12 +710,22 @@ SERVER_EVENTS = (
     CORRECTED,
     REMOVED,
     ANSWERED,
+    # D37's stand-down, in BOTH directions — the close and its reversal write this one name,
+    # distinguished by the payload rather than by a second event. It was defined beside
+    # `ANSWERED` and left out of this tuple, which is a gap in the registry rather than a live
+    # defect: `_state_before_sale` filters POSITIVELY against `master.STATES`, so an unlisted
+    # name was skipped there anyway. What the omission actually cost is the assertion — T7
+    # checks this tuple against `master.STATES`, so `stood_down` was the one route-written
+    # event nothing proved could never be read as a state.
+    STOOD_DOWN,
     UNANSWERED,
     RESHOT,
     RENUMBERED,
     BOX_DELETED,
+    LISTINGS_RELEASED,
     RESECTIONED,
     BOX_CREATED,
+    BOX_RENAMED,
     BOX_CLOSED,
     BOX_REOPENED,
 )
@@ -2368,6 +2456,17 @@ def _listing_hold(
     entry = inventory.listings.get(card.sku)
     if entry is None:
         return []
+    return _stages_held(entry)
+
+
+def _stages_held(entry: master.Listing) -> List[Tuple[str, int]]:
+    """Every non-zero stage on one listing record, or an empty list.
+
+    `_listing_hold`'s second half, lifted out when `do_release_box_listings` needed the same
+    question asked of a SKU rather than of a card. Shared rather than copied for the reason
+    the unreadable-count branch below exists at all: it is a rule about how to read a number
+    on a guard path, and a second copy of it is a second chance to read it the other way.
+    """
     held: List[Tuple[str, int]] = []
     for stage in master.LISTING_STAGES:
         try:
@@ -3055,6 +3154,243 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # The index this box hands out next. After a shift that is the old high-water
         # mark: the top slot emptied, so the box got one position shorter.
         "next_index": released,
+    }
+
+
+def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], dict]:
+    """What a release from this box WOULD do, per SKU. Read-only; the one source for both.
+
+    ONE FUNCTION BECAUSE TWO ROUTES NEED THE SAME ANSWER, and D33 already learned this the
+    expensive way about money: the preflight and the act must be the same arithmetic, or the
+    number on screen is a second implementation that is free to be wrong. `do_box_listings`
+    renders this and `do_release_box_listings` executes it, and neither computes anything the
+    other does not.
+
+    IT SIMULATES BY COPYING THE RECORD AND CALLING THE REAL METHOD. `dataclasses.replace`
+    gives a detached `Listing`; `Listing.release` runs on the copy exactly as it will run on
+    the original. A re-implementation of the least-committed-first walk would be the same
+    second implementation one layer down — this way the preview cannot drift from the write
+    even if that method's ordering rule changes.
+
+    THE BUDGET IS THE BOX'S UNSOLD COPIES, WHICH IS THE OWNER'S RULING OF 2026-08-24.
+    `TERMINAL_STATES` are excluded because a sold or retired copy has already left: a sale
+    decrements `live` where it can (D7), and a departed card is not one of the copies a
+    remaining commitment could be backed by. It is also what the operator counts when they
+    look in the box, which is the number they will check this screen against.
+    """
+    copies_here: Dict[str, int] = {}
+    elsewhere: Dict[str, Dict[int, int]] = {}
+    for card_key, card in inventory.cards.items():
+        if not card.sku:
+            continue
+        at_box = _position_int(card.box, f"box of card {card_key}")
+        if card.state in master.TERMINAL_STATES:
+            continue
+        sku = str(card.sku)
+        if at_box == int(box):
+            copies_here[sku] = copies_here.get(sku, 0) + 1
+        else:
+            elsewhere.setdefault(sku, {})
+            elsewhere[sku][at_box] = elsewhere[sku].get(at_box, 0) + 1
+
+    rows: List[dict] = []
+    for sku in sorted(copies_here):
+        entry = inventory.listings.get(sku)
+        if entry is None or not _stages_held(entry):
+            continue
+        before = {stage: max(0, int(getattr(entry, stage) or 0)) for stage in master.LISTING_STAGES}
+        gave = replace(entry).release(copies_here[sku])
+        after = {stage: before[stage] - gave.get(stage, 0) for stage in master.LISTING_STAGES}
+        rows.append(
+            {
+                "sku": sku,
+                "condition": entry.condition,
+                "copies_here": copies_here[sku],
+                "before": {k: v for k, v in before.items() if v},
+                "releases": gave,
+                "after": {k: v for k, v in after.items() if v},
+                # THE FIELD THE WHOLE PREFLIGHT EXISTS FOR. A shared SKU leaves a remainder,
+                # and a remainder keeps `_listing_hold` non-empty — so the box stays refused
+                # even after a successful release. Discovering that at the press is what the
+                # owner's ruling asked to fix.
+                "still_held": any(after.values()),
+                "also_in_boxes": [
+                    {"box": at, "copies": n}
+                    for at, n in sorted(elsewhere.get(sku, {}).items())
+                ],
+            }
+        )
+
+    totals = {stage: 0 for stage in master.LISTING_STAGES}
+    for row in rows:
+        for stage, count in row["releases"].items():
+            totals[stage] += count
+    reached = sorted({e["box"] for row in rows for e in row["also_in_boxes"]})
+    summary = {
+        "box": int(box),
+        "skus": len(rows),
+        "releases": {stage: count for stage, count in totals.items() if count},
+        "still_held": [row["sku"] for row in rows if row["still_held"]],
+        "also_in_boxes": reached,
+        # Whether the box would actually become deletable. NOT the same as "something was
+        # released": a box every one of whose SKUs is shared can release real copies and stay
+        # refused, which is precisely the case this flag is here to state up front.
+        "frees_box": bool(rows) and not any(row["still_held"] for row in rows),
+    }
+    return rows, summary
+
+
+def do_box_listings(box: int) -> dict:
+    """What this box's SKUs are believed to be holding, and what a release would give up.
+
+    FREE, READ-ONLY, AND THE STEP THAT COMES FIRST. D33's shape one register down: the money
+    route has a preflight that creates no run, and this is the same idea applied to a claim
+    instead of an invoice. The screen draws this on opening the panel, and the control that
+    releases does not exist until it has answered — so the SKUs, the counts and the boxes the
+    release will reach are unavoidably on screen before anything can be pressed.
+
+    IT EXISTS BECAUSE THE FIRST BUILD PUT THE BLAST RADIUS IN THE RECEIPT. `also_in_boxes` was
+    reported honestly and reported too late: an operator releasing from box 1's header learned
+    that box 3 was involved after the write. The owner asked for it moved ahead of the press,
+    and moving it is what turned this into two routes rather than one.
+
+    NO REFUSAL FOR AN EMPTY ANSWER. Unlike the release it feeds, this is a read, and a box
+    holding no listing is a perfectly ordinary thing for a screen to ask about — most boxes
+    are that. It answers with zero rows and the screen draws nothing.
+    """
+    # LOCK-FREE, like `do_boxes` above and for its reason: this is a read, and the plan it
+    # builds is re-computed under the lock by the release itself before anything is written.
+    inventory = Store().read().inventory
+    if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "box_not_found",
+            f"No box {box} — nothing registered under that number and no card names it.",
+        )
+    rows, summary = _release_plan(inventory, box)
+    return {**summary, "listings": rows}
+
+
+def do_release_box_listings(box: int, payload: dict) -> dict:
+    """Give up what this box's copies could account for, on the operator's word. D34.
+
+    THE OTHER HALF OF `box_not_empty_of_commitments`, and it exists because that refusal had
+    two grounds and one door. A box held open by a SOLD or RETIRED card has a way out: `/sold`
+    and `/retire` both reverse, and the refusal names them. A box held open by a LISTING had
+    none — `staged` is drawn down in exactly one place, `cli/cmd_join.py`, by the rise in live
+    quantity a fresh Filtered Export reports, which is the right answer for an import that
+    lands and no answer at all for one that does not. `Listing.release` carries the full
+    account of how that stranded box 1's 53 cards behind 45 records claiming staged copies
+    TCGplayer had not held for two days.
+
+    IT ASSERTS RATHER THAN MEASURES, WHICH DECIDES EVERY OTHER CHOICE HERE. No export this
+    pipeline reads can say "nothing is staged" (see `Listing.release`), so the operator
+    standing in front of TCGplayer is the only available authority — and a route whose whole
+    content is a human's claim owes three things it would not otherwise owe:
+
+      `confirm: true`, required          D33's field and its argument, one register down.
+                                         That route refuses without it because the next thing
+                                         that happens costs money; this one refuses because
+                                         the next thing that happens is a fact being recorded
+                                         on somebody's word.
+      a history line, always             `LISTINGS_RELEASED`. After this write there is no
+                                         other evidence the counts ever stood, and a box
+                                         deleted straight afterwards takes the cards that
+                                         would have implied them.
+      the plan, ahead of the press       `do_box_listings` above, which the screen must draw
+                                         first. Both come from `_release_plan`, so the
+                                         preview and the write are one arithmetic.
+
+    THE BUDGET IS PER BOX, AND THAT IS WHAT THIS ROUTE PROMISES. Each SKU gives up at most the
+    number of unsold copies THIS box holds. A release reached from box 1 therefore cannot give
+    up a commitment only box 3's copies could account for — structurally, not by care. Where
+    that leaves a remainder the box stays refused, `still_held` says so before and after, and
+    that is the honest outcome rather than a failure of the route.
+
+    THIS IS NOT SCOPED TO DELETABLE CARDS in one direction and is scoped in another, which is
+    worth stating because the two look inconsistent and are not. Terminal copies do not COUNT
+    toward the budget — a sold card has left and is not backing anything — but this route does
+    not care whether the box is otherwise deletable, because releasing a stale listing is
+    worth doing on a box nobody is deleting at all.
+
+    `nothing_to_release` RATHER THAN A 200 OF ZEROS. A no-op that answers 200 invites a screen
+    that offers the control when there is nothing to release, and then an operator who presses
+    it and cannot tell whether it worked. The control is drawn from the same plan this refusal
+    is computed from, so in ordinary use it is unreachable — it is here for the replayed
+    request and the stale screen, which is exactly when a cheerful 200 would be a lie.
+
+    NO FILES ARE TOUCHED AND NO RECORD MOVES. Unlike its neighbours in this file this route
+    deletes nothing: it edits counts and appends one line. It is the one destructive-adjacent
+    operation here that a mistake does not make unrecoverable — the counts are re-established
+    by staging again. That is why the screen gates it with a press over a preflight and not
+    with the typed box number the delete demands: the gesture should be as heavy as the act.
+    """
+    _reject_unknown(payload, RELEASE_FIELDS)
+    if payload.get("confirm") is not True:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Releasing a listing hold records your word that TCGplayer is holding none of "
+            "these copies — nothing here can check it. Send `confirm: true`, and show the "
+            "plan from GET /boxes/<box>/listings first.",
+        )
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "box_not_found",
+                f"No box {box} — nothing registered under that number and no card names "
+                f"it. There is nothing here to release.",
+            )
+
+        rows, summary = _release_plan(inventory, box)
+        if not rows:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "nothing_to_release",
+                f"Box {box} holds no listing at any stage: there is nothing to release. If "
+                f"the box is still refusing to delete, what is holding it is a sold or "
+                f"retired card, and those reverse on their own routes.",
+            )
+
+        gave: Dict[str, int] = {stage: 0 for stage in master.LISTING_STAGES}
+        for row in rows:
+            # The SAME budget the plan was computed from, applied to the real record. The
+            # plan ran `Listing.release` on a copy, so this cannot diverge from what the
+            # screen showed unless the store changed under the lock — which it cannot,
+            # because both reads happen inside it.
+            for stage, count in inventory.listings[row["sku"]].release(row["copies_here"]).items():
+                gave[stage] += count
+
+        _history(
+            inventory,
+            LISTINGS_RELEASED,
+            None,
+            box=int(box),
+            skus=len(rows),
+            copies={stage: count for stage, count in gave.items() if count},
+            # Named on the line because it is the half a later reader cannot re-derive: the
+            # counts that remain belong to SKUs this box shares, and without it the log would
+            # say a release happened and not that it was partial.
+            still_held=summary["still_held"] or None,
+        )
+        stages = inventory.listing_counts()
+
+    return {
+        "box": int(box),
+        "released": len(rows),
+        # Every SKU touched, with what each gave up and what it kept. The whole list rather
+        # than a sample: it is what makes the claim checkable against TCGplayer afterwards.
+        "listings": rows,
+        "skus": [row["sku"] for row in rows],
+        "given_up": {stage: count for stage, count in gave.items() if count},
+        "still_held": summary["still_held"],
+        "frees_box": summary["frees_box"],
+        "also_in_boxes": summary["also_in_boxes"],
+        # Store-wide totals after, the same closing line `join` and `reconcile` print.
+        "listings_after": {stage: count for stage, count in stages.items() if count},
     }
 
 
@@ -3747,6 +4083,261 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         }
 
     return body
+
+
+def _clearing_event(events, key: str):
+    """The newest event that CLOSED this position's question, or None. D37.
+
+    `_answer_before`'s scan, generalised to the two events that set `cleared_by_human`:
+    `answered` and `stood_down`. The reversal of either has to know which one it is looking
+    at, because reopening a queue entry is the same store operation for both and the wrong
+    one would take back an answer the operator never meant to touch.
+
+    A `renumbered` LINE THIS POSITION SITS ABOVE IS A HARD STOP, exactly as it is there and
+    for the identical reason (D10, ruling 1): the mid-box delete slides a DIFFERENT physical
+    card into every index above the deleted one, so a clearing line older than the shift
+    belongs to this slot's previous occupant. Reversing it would reopen one card's question
+    against another card's record.
+    """
+    try:
+        at_box, at_index = (int(part) for part in str(key).split("/"))
+    except (TypeError, ValueError):
+        at_box = at_index = None
+    for event in reversed(list(events)):
+        if (
+            at_box is not None
+            and event.get("event") == RENUMBERED
+            and event.get("box") == at_box
+            and isinstance(event.get("from"), int)
+            and at_index >= event["from"]
+        ):
+            return None
+        if event.get("position") != key:
+            continue
+        if event.get("event") in (ANSWERED, STOOD_DOWN):
+            return event
+    return None
+
+
+def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
+    """Close a queued question without answering it, and leave the card alone. D37.
+
+    THE CONTROL docs/DESIGN.md ASKED FOR BY NAME. That file has carried Skip as an OPEN
+    QUESTION since the review screen was built — *"If nothing is ever skipped, delete the
+    control. If most of a queue is, the screen needs a real defer that records a reason, and
+    that is a decision entry rather than a button."* The owner pulled that trigger on
+    2026-08-25, asking for *"a stand down on the flag ... i get that this is a wasted
+    position"*. This is the real defer, and D37 is the decision entry.
+
+    IT IS NOT AN ANSWER AND IT IS NOT A DEPARTURE, which is the whole of what makes it a
+    third thing worth having:
+
+      an answer (D4)      writes a SKU and a condition onto the card. The pipeline is told
+                          what the card IS, and every later join reads it back as rung 0.
+      a retirement (D26)  writes a terminal state. The CARD has left inventory; the record
+                          stays and the gap is permanent.
+      a stand-down        writes NOTHING to the card. It does not move, change, or leave. It
+                          keeps its slot, its photograph and its place in the box walk, and
+                          it stays sellable if it is ever identified properly. What closes is
+                          the QUESTION.
+
+    SO IT SETS `cleared_by_human` AND NOTHING ELSE, and that flag was already exactly this
+    idea. `store/queues.py` was built around it — `Queue.upsert` refuses to re-queue a cleared
+    position, `Queue.release` refuses to drop one, `open_entries` hides it — so the machinery
+    for "stop asking, and keep not asking across every future run" has existed since before
+    the review screen did. Until now the only thing that could set it was an answer, and an
+    answer costs a SKU written onto a real card. That is the gap: the operator who wanted to
+    dismiss a question had to either invent an identification or press Skip, which
+    deliberately writes nothing at all and is forgotten on reload.
+
+    THE REASON IS REQUIRED, AND THAT IS docs/DESIGN.md's WORDING RATHER THAN A PREFERENCE —
+    "a real defer that RECORDS A REASON". Without it the queue file would carry a population
+    of dismissed cards indistinguishable from answered ones, and the instrument that decides
+    whether Skip should exist at all would still not exist. `store/queues.py`'s three reasons
+    are its own vocabulary and not `master.RETIRE_REASONS`, because those four all mean the
+    card is gone.
+
+    BOTH QUEUES ARE CLEARED, for `do_review_answer`'s reason: a position can hold an open
+    entry in each file, and clearing one would leave the screen still showing the card.
+
+    IT GOES BOTH WAYS, and the reversal is `_reverse_stand_down`. Same twenty-second shape
+    the answer and the sale already ship (D28), same dispatch on one path so a stale client
+    cannot reach the reversal without having been told what it reverses.
+
+    NO LISTING HOLD IS CONSULTED, and it is worth saying why this route is not `undo_too_late`'s
+    customer. That guard asks whether a SKU this Mac wrote is already out in an import file.
+    A stand-down writes no SKU, changes no SKU, and moves no listing count — there is nothing
+    downstream that could disagree with anything, in either direction.
+    """
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+    if undo:
+        _reject_unknown(payload, UNDO_FIELDS)
+        return _reverse_stand_down(box, index)
+
+    _reject_unknown(payload, STAND_DOWN_FIELDS)
+    reason = _require_text(
+        payload,
+        "reason",
+        "reason_required",
+        "Send `reason` — why this question is being closed without an answer: "
+        + ", ".join(queues.STAND_DOWN_REASONS),
+    )
+    try:
+        reason = queues.check_stand_down_reason(reason)
+    except queues.UnknownStandDownReason:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "stand_down_reason_invalid",
+            f"{reason!r} is not a stand-down reason. One of: "
+            + ", ".join(queues.STAND_DOWN_REASONS)
+            + ". Never coerced and never defaulted — the reason is the record.",
+        )
+
+    key = master.position_key(box, index)
+
+    with Store().write() as snapshot:
+        holders = [
+            (queue, queue.entries[key])
+            for queue in (snapshot.review, snapshot.parked)
+            if key in queue.entries
+        ]
+        if not holders:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "not_in_queue",
+                f"{key} is in no queue file, so there is no question to stand down from.",
+            )
+        open_holders = [(q, e) for q, e in holders if not e.cleared_by_human]
+        if not open_holders:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "already_cleared",
+                f"{key} has already been settled — answered or stood down. Nothing was "
+                f"written. Reload to see the queue as it stands.",
+            )
+
+        governing = open_holders[0][1]
+        for _, entry in open_holders:
+            entry.cleared_by_human = True
+
+        _history(
+            snapshot.inventory,
+            STOOD_DOWN,
+            key,
+            reason=reason,
+            queue=open_holders[0][0].name,
+            # The QUEUE's reason for asking, beside the operator's reason for declining to
+            # answer. Two different strings that both matter, and the pair is what makes the
+            # log answerable to "which questions get waved off, and why" — which is the
+            # measurement docs/DESIGN.md says has never been taken.
+            queue_reason=governing.reason,
+        )
+
+        return {
+            "position": key,
+            "box": int(box),
+            "index": int(index),
+            "stood_down": True,
+            "undone": False,
+            "reason": reason,
+            "queue_reason": governing.reason,
+            "queues_cleared": [q.name for q, _ in open_holders],
+            # Always reversible on this route: nothing downstream can be holding a stand-down,
+            # because it writes nothing a downstream reader looks at. Stated as a field anyway
+            # so one client shape reads this route and the answer route alike.
+            "reversible": True,
+        }
+
+
+def _reverse_stand_down(box: int, index: int) -> dict:
+    """Put a stood-down question back on the screen. D37, and the answer undo's twin.
+
+    THREE REFUSALS, AND THE MIDDLE ONE IS THE WHOLE REASON THIS IS NOT `_reverse_answer`:
+
+      not_in_queue      no entry in either file. The question is gone — a later run released
+                        it, or the client is asking about another card.
+      not_stood_down    the entry is open (nothing to reverse — which is also what a SECOND
+                        undo gets, exactly as the answer's reversal does), or it was cleared
+                        by an ANSWER rather than a stand-down. That second case is the guard:
+                        reopening it here would take back a real identification through a
+                        control the operator pressed to un-dismiss something.
+      stand_down_origin_unknown
+                        the log cannot say which event closed this question — written by a
+                        server older than this route, or a position sitting above a
+                        `renumbered` line, where the clearing line belongs to the slot's
+                        previous occupant. `answer_origin_unknown`'s exact twin.
+
+    IT PUTS BACK NOTHING BUT THE FLAG, because the flag is all the stand-down wrote. No SKU,
+    no state, no count — so unlike the answer's reversal there is nothing to read out of
+    history and nothing that can have drifted underneath it.
+    """
+    key = master.position_key(box, index)
+    store = Store()
+
+    with store.write() as snapshot:
+        holders = [
+            (queue, queue.entries[key])
+            for queue in (snapshot.review, snapshot.parked)
+            if key in queue.entries
+        ]
+        if not holders:
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "not_in_queue",
+                f"{key} is in no queue file, so there is nothing to put back.",
+            )
+        cleared = [(q, e) for q, e in holders if e.cleared_by_human]
+        if not cleared:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_stood_down",
+                f"{key} is already waiting in its queue — nothing is standing to reverse.",
+            )
+
+        # INSIDE THE LOCK, for `_answer_origin`'s reason unchanged: a history read taken
+        # before the lock is the lost update the lock exists to prevent, and D13 puts a
+        # second device on this store with no session between them. Broad except for the
+        # same reason too — a bad line, an unreadable file and non-UTF-8 bytes are one
+        # condition here ("the log cannot say") with one remedy.
+        try:
+            event = _clearing_event(store.history(), key)
+        except (files.StoreError, OSError, ValueError):
+            event = None
+        if event is None:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "stand_down_origin_unknown",
+                f"the log cannot say what closed {key}'s question, so nothing here will "
+                f"guess. Answer the card instead, or reopen it with a fresh join.",
+            )
+        if event.get("event") != STOOD_DOWN:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_stood_down",
+                f"{key} was closed by an ANSWER, not a stand-down. Take that back on "
+                f"POST /review/{box}/{index}/answer with {{\"undo\": true}} — reversing it "
+                f"here would drop a real identification through the wrong control.",
+            )
+
+        reopened = [q.name for q, _ in cleared if q.reopen(key)]
+
+        _history(
+            snapshot.inventory,
+            STOOD_DOWN,
+            key,
+            undone=True,
+            reason=event.get("reason"),
+        )
+
+        return {
+            "position": key,
+            "box": int(box),
+            "index": int(index),
+            "stood_down": False,
+            "undone": True,
+            "reason": event.get("reason"),
+            "queues_reopened": reopened,
+        }
 
 
 def _reverse_answer(box: int, index: int) -> dict:
@@ -5208,6 +5799,8 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
 
     cards = 0
     sold = 0
+    retired = 0
+    listed = 0
     indices: Set[int] = set()
     for card in inventory.cards.values():
         try:
@@ -5223,6 +5816,13 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
         cards += 1
         if card.state == master.SOLD:
             sold += 1
+        elif card.state == master.RETIRED:
+            retired += 1
+        # `elif` on the states and a SEPARATE `if` here, because they answer different
+        # questions: the two states are exclusive of each other, and a listing hold is a
+        # fact about the SKU that a sold copy has as much as an identified one.
+        if _listing_hold(inventory, card):
+            listed += 1
 
     try:
         layout: Optional[Tuple[int, ...]] = inventory.sections_for(box)
@@ -5254,6 +5854,18 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
         "next_index": next_index,
         "cards": cards,
         "sold": sold,
+        # D34's two, and they are here so the delete panel can name WHICH of
+        # `box_not_empty_of_commitments`'s three grounds is holding a box open before the
+        # operator presses anything. `sold` was already reported and the other two were not,
+        # which left a screen able to say a box has commitments and never which kind — and
+        # the two kinds have different remedies: sold and retired reverse on their own
+        # routes, a listing hold is released (D34) or waited out.
+        #
+        # COUNTED IN THE WALK THAT WAS ALREADY RUNNING, so this costs one comparison and one
+        # dict lookup per card rather than a second pass. `listed` counts CARDS whose SKU
+        # holds a stage, not SKUs and not copies: it is the number the refusal would name.
+        "retired": retired,
+        "listed": listed,
         "sections_detail": detail,
     }
 
@@ -5318,14 +5930,37 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
     which is right for capture — a photo must never be refused because its box is already
     known — and wrong here: a create that quietly succeeded against an existing box would let
     the Boxes screen silently rename box 3 while the operator believed they were adding one.
+
+    `box` IS NO LONGER REQUIRED, AND THAT IS THE POINT OF NAMES. The owner addresses a box by
+    what it is called and does not care what number it carries: *"can't we have that box
+    number primary key be something I don't care about though?"* So a request naming a box
+    and no number gets the lowest free one from `next_box_number`, and the paragraph above
+    about the operator typing a number once, with the existing boxes listed beside it, stops
+    describing the common path — the 33-for-3 typo it guards against cannot be made at all
+    when nobody types a number.
+
+    ONE OF THE TWO IS STILL REQUIRED. A request with neither is not a box, it is an empty
+    body, and inventing both halves of an object nobody described is how a registry fills
+    with rows no one meant to make.
     """
     _reject_unknown(payload, BOX_POST_FIELDS)
-    box = _require_box(payload)
     name = _optional_name(payload)
+    if payload.get("box") is None and name is None:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "box_or_name_required",
+            "Send a box number, a name, or both. A number alone registers an unnamed box "
+            "the way this route always has; a name alone takes the lowest free number.",
+        )
     sections = _optional_sections(payload)
 
     with Store().write() as snapshot:
         inventory = snapshot.inventory
+        # ASSIGNED INSIDE THE LOCK, never before it. `next_box_number` reads the registry and
+        # the cards, and a number chosen outside the write would be a number another request
+        # could take between the read and the write — the same race `allocate_capture` holds
+        # this lock to prevent one scale down.
+        box = _require_box(payload) if payload.get("box") is not None else inventory.next_box_number()
         if inventory.box(box) is not None:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
@@ -5371,13 +6006,21 @@ def do_put_box(box: int, payload: dict) -> dict:
     screen with a dead rename control on it. `box_not_found` is kept for the case it actually
     describes: a number nothing in this store has ever seen.
 
-    A RENAME APPENDS NO HISTORY EVENT, and that is a gap rather than a decision. `set_sections`
-    logs `resectioned`, `close_box` logs `box_closed`, and a name change logs nothing —
-    `store/master.py` has no event for it and inventing an eighth name here would put it in
-    this file's vocabulary instead of the store's, which is the confusion `SERVER_EVENTS`
-    already argues against for the three it does own. What it costs is small: a name is a
-    label, not a claim the pipeline spends money against, which is the test `do_put_card`'s
-    `corrected` event was written to.
+    A RENAME NOW APPENDS `box_renamed`, AND THE PARAGRAPH THIS REPLACES SAID WHY IT DID NOT.
+    It read: "a name is a label, not a claim the pipeline spends money against". That was
+    true while the box NUMBER was the only address — a duplicate or a changed name cost
+    nothing but a confusing row on the Boxes screen. It stopped being true when the capture
+    screen started finding a box by name: a rename relabels every card in the box, exactly
+    as moving a divider relabels every card behind it, and D10 answered that case with a
+    `resectioned` event carrying both layouts rather than by restricting the operation.
+
+    The old paragraph also named the right place to put it, and that is where it went:
+    `store/master.py:set_name` owns the event, so it is in the store's vocabulary rather
+    than this file's — the confusion `SERVER_EVENTS` argues against for the three it does
+    own. This route assigns nothing itself any more; it calls the method that logs.
+
+    A DUPLICATE NAME NOW REFUSES, `name_taken`. Same reason: two boxes answering to one
+    name is an ambiguous physical address the moment the name is how a box is reached.
     """
     _reject_unknown(payload, BOX_PUT_FIELDS)
     name = _optional_name(payload)
@@ -5396,10 +6039,11 @@ def do_put_box(box: int, payload: dict) -> dict:
 
         entry = inventory.ensure_box(box)
         if "name" in payload:
-            # Assigned rather than passed to `ensure_box`, which only ever SETS a name and so
-            # cannot clear one. `{"name": null}` puts the box back to unnamed, which is the
-            # shape a cleared text field sends and a legitimate edit.
-            entry.name = name
+            # Through `set_name` rather than by assignment, which is what buys the
+            # `box_renamed` line and the duplicate check. It takes `None` as "clear the
+            # name" — the shape a cleared text field sends and a legitimate edit — where
+            # `ensure_box`'s keyword only ever SETS one and could not express it.
+            inventory.set_name(box, name)
         if sections is not None:
             inventory.set_sections(box, sections)
 
@@ -5587,6 +6231,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(HTTPStatus.CONFLICT, "box_closed", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
+        # A FOURTH JOINS THEM, for the same reason and with the same shape. `BoxNameTaken`
+        # is a 409 rather than a 400 on the rule the comment above draws: the request was
+        # well-formed and lost to something the STORE knows — another box already answers
+        # to that name — which is exactly `BoxClosed`'s case one field over. Its message
+        # names the incumbent box, so it is answered with its own text.
+        except master.BoxNameTaken as exc:
+            self._fail(HTTPStatus.CONFLICT, "name_taken", str(exc))
         except files.StoreError as exc:
             self._fail(HTTPStatus.SERVICE_UNAVAILABLE, "store_unavailable", str(exc))
         except Exception as exc:  # noqa: BLE001 — 500 is reserved for bugs, and this is one
@@ -5636,6 +6287,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # the two are one refusal, and the code says which to send next.
                 query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
                 return self._json(HTTPStatus.OK, do_search(query[0]))
+            # D34's preflight. Matched BEFORE `_BOXES_ITEM_RE`'s explainer below, which
+            # would otherwise answer a real route with "there is no GET /boxes/<n>" — that
+            # regex is anchored one segment shorter, so it cannot match this path, and the
+            # order here is for the reader rather than for correctness.
+            match = _BOX_LISTINGS_RE.match(path)
+            if match:
+                return self._json(HTTPStatus.OK, do_box_listings(int(match.group(1))))
             match = _BOXES_ITEM_RE.match(path)
             if match:
                 # One box on its own is deliberately NOT a route. `GET /boxes` is a handful
@@ -5705,6 +6363,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
+            match = _REVIEW_STAND_DOWN_RE.match(path)
+            if match:
+                body = do_review_stand_down(
+                    int(match.group(1)), int(match.group(2)), self._body()
+                )
+                return self._json(HTTPStatus.OK, body)
             # Matched after the review route and before the fallthrough. `/inventory/3/17`
             # keeps its own regex, anchored to end there, so this cannot shadow the PUT and
             # DELETE paths — a sale is a different verb on a longer path, not a mode of them.
@@ -5731,6 +6395,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 body = do_remove_card(
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
+                return self._json(HTTPStatus.OK, body)
+            # D34's release, matched before the pipeline block for no reason but that it is
+            # a box route and belongs beside the other ones. It is a POST rather than a PUT
+            # on `/boxes/<box>` because it sets nothing the box carries: `PUT_BOX_FIELDS`
+            # is the box's own record — name, dividers, lid — and a listing count is a fact
+            # about a SKU that this box merely holds copies of.
+            match = _BOX_LISTINGS_RELEASE_RE.match(path)
+            if match:
+                body = do_release_box_listings(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit

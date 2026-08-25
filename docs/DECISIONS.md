@@ -316,6 +316,13 @@ record hands its index straight back to the next capture. That is the correct ou
 not an accident of the implementation: the position was assigned to a photo that no longer
 exists, and burning it would put a permanent hole in a box over a mis-tapped button.
 
+**THE BOX-NUMBER ALLOCATOR IS A DIFFERENT RULE, AND IT IS NOT THIS ONE** (D20, amended
+2026-08-25). `store/master.py:next_box_number` hands out the lowest free integer rather than a
+high-water mark, because a box number names an object on a shelf and nothing about it is a
+position a card was assigned to. Cross-referenced here so the paragraph above is not read as a
+rule about every allocator in the store: this one governs the INDEX inside a box, and that is
+the only thing it governs.
+
 **Undo is the newest capture in a box, never an arbitrary one.** Deleting a record from the
 middle leaves a gap the high-water mark cannot reuse — indistinguishable, later, from the
 permanent gap a sale leaves, and the rule above says those mean different things. Restrict
@@ -849,6 +856,64 @@ The rule, and it turns on which bound is final rather than on the box's lid alon
 full section and a half-empty one is precisely the failure this entry exists to prevent, and
 at section scale it is easier to miss because the number is smaller and the operator is
 already standing at the right box.
+
+**A BOX HAS A NAME, THE NAME IS HOW IT IS ADDRESSED, AND NAMES ARE THEREFORE UNIQUE** (built
+2026-08-25). This entry authored `name` as an optional label and nothing checked it, which was
+right while it was decoration: the number was the identifier, and a second box called
+`commons` cost nothing worse than a confusing row on a screen. The capture screen now finds a
+box BY name — one free-text field searching number and name together — so a duplicate name is
+an ambiguous *physical address*. That moves the ambiguity off the key the operator has stopped
+typing and onto the label they navigate by, which is worse than where it started.
+`store/master.py:_check_name_free` refuses one as `BoxNameTaken`, which
+`server/capture_server.py` answers as 409 `name_taken`.
+
+**FOLDED AND STRIPPED TO COMPARE, STORED VERBATIM.** `Commons`, `commons` and `commons ` are
+one box to a person standing at a shelf, so they collide; what is written down is what was
+typed. It is the same split `pipeline/join.py:number_index_key` draws between a matching form
+and a stored one, for the same reason — a normalised value written back is a value the
+operator cannot correct.
+
+**UNIQUE, NOT REQUIRED, and that boundary was chosen rather than fallen into.** Requiring a
+name would invalidate every box registered before today and would break `BoxOps`' own
+"Name (optional)" create form. Uniqueness is the property that matters once a name is an
+address; existence is not.
+
+**A RENAME APPENDS `box_renamed`, CARRYING BOTH NAMES.** `server/capture_server.py` recorded
+the absence of this event as a known gap and gave the right reason for leaving it — *"a name
+is a label, not a claim the pipeline spends money against"* — and that sentence stopped being
+true the moment the name became the address. A rename relabels every card in the box on every
+screen that draws one, so an unlogged rename leaves no record of what the box used to be
+called. **This is D10's divider argument at box scale, and it resolves the same way**: D10
+chose a `resectioned` event carrying both layouts over restricting the operation, and
+`box_renamed` carries both names for exactly that reason. The trail is the safety, not a
+confirm dialog `docs/DESIGN.md` would ban anyway. `ensure_box`'s silent rename routes through
+`set_name` as well, so a name reached by that path gets the same check and the same line —
+assignment there is what made the name a field two callers could set by different rules.
+
+**THE NAME DOES NOT REACH `Position.label`, AND IT WAS BUILT AND REVERTED TO SETTLE THAT.**
+`app/tests/fulfillment.spec.ts` floors that label at 32px with tabular figures wherever one is
+drawn, and D31 is explicit that the spec stays unweakened. The name already travels as
+`box_name` in the place block and is already drawn beside the label on `CardLocations` and
+`Inventory`, so putting it inside the label bought nothing and spent a hard constraint.
+
+**A BOX NUMBER IS ASSIGNED NOW, NOT TYPED: `next_box_number`, the lowest free integer.**
+`POST /boxes` takes a name with no number and allocates inside the lock; sending neither
+refuses `box_or_name_required`. It reads the CARDS as well as the registry, because a box that
+holds cards and has no registry entry is a real box — `_box_row` renders exactly that case —
+and handing its number out again would put two boxes' photographs in one directory.
+
+**IT IS DELIBERATELY NOT A HIGH-WATER MARK, WHICH IS THE OPPOSITE OF D10's CARD ALLOCATOR, AND
+THE TWO MUST NOT BE MADE TO MATCH.** `next_index` hands a deleted card's index straight back,
+because burning it would put a permanent hole in a box over a mis-tapped button. A box number
+is the other case: it names an object on a shelf, the operator no longer types it, and nothing
+but the store, the disk and the wire reads it — so the lowest free number is the honest answer
+and there is no gap for it to close wrongly.
+
+**What this makes stale, named here because the spec is older than the screen**:
+`docs/specs/capture-app.md` §5.2 said box selection was a list from `GET /status` and that
+"starting a new box is a typed number". Both are overtaken — the field reads `GET /boxes`, and
+the number is allocated rather than typed — and that section is marked accordingly rather than
+rewritten, the same way §5.1 was when Pass D landed.
 
 ## D21 — Game is a per-card claim, not a mode
 
@@ -1519,13 +1584,418 @@ part of the cache identity.
 
 ---
 
-## Deferred — do not build until all gates pass
+## D34 — A listing hold is released against the releasing box's own copies
+
+**BUILT 2026-08-24, and it was found by a box that could not be deleted.** The owner asked why
+box 1 — the 53 Gate B cards — refused `box_not_empty_of_commitments` when nothing in it had
+been sold or retired. It was held by 45 listing records carrying **53 staged copies and one
+live**, written by run `2026-08-22-box1-03`, whose `reconcile.txt` records a real Export From
+Staged confirming the import had landed on TCGplayer. The rows had long since been cleared
+there. The store had no way to know that, and no way to be told.
+
+**THE GATE HAD TWO GROUNDS AND ONE DOOR.** A box held open by a sold or retired card can be
+freed: both states reverse on their own routes, and the refusal names them. A box held open by
+a LISTING could not be, ever. `staged` is written by `reconcile` and drawn down in exactly one
+place — `cli/cmd_join.py`, by the **rise** in live quantity a fresh Filtered Export reports.
+That is the right answer for an import that lands: the copies move to live and the staged count
+follows them down. It has no answer at all for an import that does not. A staged row deleted on
+TCGplayer never becomes live, so live never rises, so the drawdown never runs. The count stands
+forever and the box is permanently undeletable.
+
+`store/master.py:staged_stale` has named exactly this case since D7's amendment — its own
+docstring calls it *"the import nobody finished"* — and until now **nothing anywhere could act
+on the warning**. A diagnostic with no remedy is the shape of this defect.
+
+**THE RELEASE IS BUDGETED BY THE CALLING BOX'S UNSOLD COPIES. It never zeroes a SKU outright,
+and this is the owner's ruling of 2026-08-24 overruling the first build.** That build zeroed
+the record, on the argument that *"TCGplayer holds nothing for this SKU"* is a claim about
+TCGplayer and therefore cannot be scoped to a box. The owner overruled it, and the replacement
+reason is better than the argument it replaced:
+
+> **A release reached from box 1 must never be able to give up commitments that only box 3's
+> copies could account for.**
+
+A budget makes that impossible structurally rather than unlikely by care. Each SKU gives up at
+most the number of unsold copies the calling box holds; `pipeline` and `store` are untouched by
+the distinction because `Listing.release(budget)` is where it lives.
+
+**THE REMAINDER IS DELIBERATE, AND CONFIRMED BY THE OWNER: *"Yes I would like a remainder to
+exist, that's as planned."*** Where a SKU is shared, what is left keeps `_listing_hold`
+non-empty, so **the box stays refused after a release that did exactly what it said**. That is
+the honest state — TCGplayer really is still holding copies of a SKU this box has copies of, and
+D7 makes every copy equally a candidate for being one of them. It is not a failure of the route,
+and the screen's job is to say so before the press rather than let it read as a broken gate.
+
+**LEAST-COMMITTED FIRST: `pushed`, then `staged`, then `live`, against one shared budget.** Not
+`budget` from each stage — two departing cards cannot account for two staged *and* two live
+copies, and per-stage decrements would give up four commitments for two cards. Which stage a
+given copy actually backs is unknowable by construction (D7: the backing is deliberately
+unrecorded), so the order is a rule rather than a lookup, and it is the conservative one:
+`pushed` is a row in a file that may never have been imported, `staged` is a row TCGplayer
+confirmed, `live` is a card actually for sale. Being wrong about `live` costs the most, so it is
+surrendered last.
+
+**A SOLD OR RETIRED COPY DOES NOT COUNT TOWARD THE BUDGET.** It has already left — a sale
+decrements `live` where it can — and it is not one of the copies a remaining commitment could be
+backed by. It is also what the operator counts when they look in the box, which is the number
+they will check the screen against. Such a box is refused by the sold clause anyway, so this
+opens no new dead end.
+
+**`staged_at` clears only where `staged` reaches zero.** `Listing.set` stamps it as
+`staged_at or at`, so a record released to zero and later re-staged would otherwise carry the old
+date forward and read as stale on the day it was staged — a warning firing on success. A record
+with copies REMAINING keeps its stamp, because those copies really have been staged since that
+date and are exactly what the warning exists to find.
+
+**The record survives at zeros rather than being popped**, because `_listing_hold` already reads
+all-zeros as not held.
+
+**IT ASSERTS RATHER THAN MEASURES, AND THAT DECIDES THE REST.** D8 and D11 put the authority
+over these numbers in the export, and **no export this pipeline reads can say "nothing is
+staged"**: a Filtered Export reports live quantity, and an Export From Staged lists the rows that
+*are* there, so absence from it is unbounded — a SKU can be missing because it was never staged.
+The only party who can state that TCGplayer holds nothing is the operator looking at TCGplayer.
+A route whose entire content is a human's claim owes three things:
+
+- **`confirm: true`, required.** D33's field one register down. That route refuses without it
+  because the next thing that happens costs money; this one refuses because the next thing that
+  happens is a fact being recorded on somebody's word.
+- **A history line, always.** `listings_released`, box-level like `box_deleted`, carrying the
+  box, the SKU count, the copies given up **and `still_held`**. The last is the half a later
+  reader cannot re-derive: without it the log would say a release happened and not that it was
+  partial. After the write there is no other evidence the counts ever stood.
+- **The plan, ahead of the press.** `GET /boxes/<box>/listings` — free, read-only, creating
+  nothing.
+
+**TWO ROUTES, AND THE FREE ONE COMES FIRST — D33's PREFLIGHT SHAPE, AND THE OWNER ASKED FOR IT
+BY NAME.** The first build reported the blast radius in the *receipt*: honest, and after the
+write. An operator releasing from box 1's header learned box 3 was involved once it was already
+done. The preflight names every SKU, its copy count, what it would give up, what it would keep,
+which other boxes hold copies, and **`frees_box`** — whether the box would actually become
+deletable. `server/capture_server.py:_release_plan` is the single source for both routes, and it
+simulates by copying the record and calling `Listing.release` itself, so the preview cannot drift
+from the write even if the ordering rule changes.
+
+**The screen fetches the plan on opening the panel, and the control that releases does not exist
+until it has answered** — absent, not disabled, `docs/DESIGN.md`'s rule for the run panel's spend
+button applied for the same reason. No extra press: the fetch runs on open.
+
+**IT REACHES NO OTHER GROUND OF THE REFUSAL.** A sold or retired card still holds its box open
+after every listing in it is released, because those are departures recorded in the store and
+this route says nothing about a departure. T7 asserts the refusal survives.
+
+**ONE PRESS ON THE SCREEN, NOT A TYPED NUMBER.** The whole-box delete demands the box number
+typed because its risk is destroying box 9 while looking at box 95, and a gesture that cannot be
+performed by momentum answers that. This control's risk is a claim that turns out to be wrong,
+and typing digits does not make anyone go and look at TCGplayer. The plan above the button is the
+gate here — numbers a person can actually check. Nothing is destroyed either way: a wrongly
+released count is re-established by staging again.
+
+**Each press is its own assertion, and the cap is per press.** Releasing twice spends the budget
+twice; the route keeps no memory of what a box has released before. That follows from the budget
+being a statement about the copies in front of you rather than a quota.
+
+**`GET /boxes` NOW REPORTS `retired` AND `listed` BESIDE `sold`.** Counted in the walk `_box_row`
+was already running. Without them a screen could say a box has commitments and never which kind,
+and the three kinds have three different remedies — so the delete panel recited the rule and the
+operator learned which clause applied by pressing an irreversible button and reading the error.
+
+**What would reopen this: a staged quantity the pipeline can read.** If `reconcile` were ever
+pointed at a *fresh* Export From Staged and allowed to set `staged` absolutely — absence meaning
+zero — the release would stop being the only way to clear a stale count, and the honest thing
+would be to prefer the measurement over the claim. That is a change to `cli/cmd_reconcile.py`'s
+contract (it currently moves `pushed → staged` and reads no absence), not a change to this entry,
+and it has not been argued.
+
+---
+
+## D35 — A number that cannot be read falls back to the name, and the card still faces a human
+
+**BUILT 2026-08-24, and it was found by the owner asking why the review queue was full of
+cards they did not think needed reviewing.** It held 46 entries, every one `no_catalog_row`,
+every one with **zero candidate rows** — so they could not be answered at all, only skipped:
+`POST /review/<box>/<index>/answer` refuses an entry with no candidates as `no_candidates`.
+
+**The gap was one line, and its comment stated the false assumption outright.**
+`pipeline/join.py:_lookup_number_and_printed_total` fell back, when a card carried no number,
+to `catalog.rows_for_blank_number_name` — an index of **only those export rows whose own
+`Number` cell is blank**. Its comment: *"No collector number on the product (code cards, some
+promos). These are exactly the rows whose `Number` is blank."* That reads `card.number is
+None` as a fact about the PRODUCT when it is a fact about the READ. The two coincide only
+while the photograph is good.
+
+Box 2's 544 cards were cropped by a pad that cut the collector number off the bottom of the
+frame (fixed in `d431afb`, ~35 minutes after that run was submitted). 37 came back with no
+number at all and 9 with a **National Pokedex number read off the artwork strip** — `0326`,
+`0342`, `0934`, `721`. Every one landed on that fallback, found nothing, and queued as
+`no_catalog_row` against an export that held its row the whole time and had already matched
+that row for other copies in the same run.
+
+**Measured against that run's own export, matching by name inside the declared set: 47 cards
+carried an unusable number (38 blank, 9 Pokedex-style misreads); ONE of them — `2/7`,
+`Stonjourner` — has since been deleted from the box, so 46 reach the rung and 45 OF THE 46
+RESOLVE TO EXACTLY ONE CARD, WITH ZERO AMBIGUOUS.** The one that does not is a Mega Signal
+misread as `Mewtwo ex 009/102` — name and number both wrong, so nothing can rescue it, and it
+correctly stays `no_catalog_row`.
+
+**Those are the counts on disk today, and the arithmetic was re-checked on 2026-08-25 rather
+than carried forward.** This entry was written before D36's realign existed and read "46 of the
+47"; the deleted card was still being counted. `inventory/parked.json` holds 45
+`number_unread_name_matched` entries and `inventory/review.json` the single zero-candidate
+`no_catalog_row` — which is the run this paragraph is about, as it actually stands.
+
+**THE NAME IS THE MORE RELIABLE FIELD, WHICH IS THE ARGUMENT FOR THE WHOLE RUNG.** T1's
+recorded misses are `051/197` for `031/197` and `271/167` for `211/167` — confident answers,
+**name right, digits wrong**. `docs/GATES.md` says no confidence threshold fires on those. The
+same shape produced all nine of box 2's wrong numbers. A rung that trusts the name when the
+number finds nothing is not a weaker check; it is the check aimed at the field that survives.
+
+**IT FIRES ONLY ON AN EMPTY RESULT, AND BOTH EMPTINESS CASES COUNT.** A number that matches
+rows is never second-guessed. What was nearly missed is the second case: four of box 2's
+misreads carried a denominator too, so they composed a well-formed key that matched nothing
+and stopped there — so an empty NUMBER lookup falls through as well as a missing one. It
+cannot mislist anything, because it is reached only when the card was bound for
+`no_catalog_row` regardless, and what it produces is a queue entry rather than a listing.
+
+**`CLAUDE.md`'s HARD RULE IS NARROWED, NOT REPEALED**, and this paragraph is the narrowing.
+That file says *"Never join on Product Name — it inconsistently embeds numbers."* It is right,
+and the inconsistency is live in the owner's own data: box 2's export writes `Delibird -
+105/132` and `Nickit` in the same column, and the first pass at the measurement above matched
+raw names and scored 35 of 46 instead of 46 of 47. So: **never as the primary key; permitted
+as a last resort that fires only when the number key finds nothing; folded on both sides by
+`join.name_index_key`, which strips a trailing ` - <n>/<total>` and the case; and never able to
+list a card on its own.** `name_index_key` is `number_index_key`'s twin and exists for the same
+reason — two sources spell one identity differently and neither is wrong.
+
+**A CARD FOUND THIS WAY IS QUEUED, NEVER LISTED, AND THAT IS THE OWNER'S RULING.** Listing was
+offered and declined. Their words: *"I should be able to bulk clear them when the scenario is
+such that I have claimed that they're all a certain set that you have an excel for and that you
+have exact name matches."* The field that tells one card from another is precisely the field
+that could not be read, so the last check is a person looking at the photograph.
+
+**IT COSTS ONE PRESS, NOT ONE PER CARD, AND THAT IS WHY QUEUING IS AFFORDABLE.** Every entry
+from this rung carries **one** candidate — the row the ladder chose — under **one** shared
+reason, and a uniform stack gives **one** shared condition string. That is exactly D29's
+group-answer eligibility, so box 2's 45 are one `G`, one Enter, and one `U` to reverse, over a
+grid of their photographs. No new screen and no new route: `routing.NUMBER_UNREAD_NAME_MATCHED`
+plus a label was the whole client change.
+
+**The lookup string says `name?:` and not `name:`.** A row found because the product prints no
+number and a row found because we could not read one are different facts with different
+remedies, and both are printed on the RUN REPORT (D16 — the machine string stays greppable).
+
+**It does NOT reach the queue entry, and this entry claimed it did until 2026-08-25.**
+`store/queues.py:QueueEntry` has no `lookup` field and `Queue.parse` drops unknown keys, so the
+string lives only in `JoinReport`'s output. The consequence is worth naming rather than
+papering over: a name-inferred card that does NOT resolve cleanly — `set_ambiguous`, or any
+ladder review reason — never reaches the block that stamps `number_unread_name_matched`, so its
+queue entry carries an ordinary reason with nothing recording that the row set was reached by
+name at all. The review screen draws its "matched by name" sentence off that reason code alone,
+so such a card is indistinguishable on screen from one whose number read fine. Carrying the
+lookup onto `QueueEntry` is the fix, and it is a schema change nobody has argued for yet.
+
+**What would reopen this: a name that resolves to two cards in one set.** Measured at zero
+across box 2, but a set with two prints of one name would produce it. The behaviour is already
+correct — two surviving rows means two candidates and an ordinary one-card review — but it has
+never been seen, and the group offer would correctly refuse it as `group_not_uniform`.
+
+---
+
+## D36 — The run says what the model read; the store says which slot it is in
+
+**BUILT 2026-08-24, immediately after D35, because applying D35 exposed it.** A re-join of box
+2 wrote all 47 queue entries **one position off** — every entry carrying the right read with its
+neighbour's slot, photograph and label. On screen: `Wally's Compassion` described over a
+photograph of an Inteleon. It was caught before it was answered; the queue was restored from a
+backup taken minutes earlier.
+
+**Nothing about D35 caused it. Any re-join of that run would have done the same.**
+
+**THE TWO HALVES ARE EACH CORRECT AND THE SEAM BETWEEN THEM WAS NOT.** `cli/runs.py` makes a run
+an immutable input on purpose: it is what lets a Batch outlive the server that started it (D33)
+and what makes a run an auditable record of what was submitted and billed. D10 ruling 1 lets a
+junk capture be deleted from the middle of a box, sliding every higher card down one slot, and
+the store does that completely — records, photographs, sidecars and **both queue files** are
+remapped and a `renumbered` event maps every old index to its new one. Neither is wrong. What
+was wrong is that the run's POSITIONS were then read as truth.
+
+Box 2: card `2/7` was deleted, 537 cards shifted down one, and the run directory — correctly
+unable to be rewritten — still described the box as it had been.
+
+**The owner's reading is the one this is built to, and it is a better diagnosis than the three
+options they were offered:**
+
+> *"It should've gone away and autocorrected all the others too... I don't see how these could've
+> been disconnected."*
+
+**SO THE RUN NO LONGER OWNS THE SLOT NUMBER.** It owns what the model read from a PHOTOGRAPH;
+the store owns which slot that photograph is in. `photo_sha256` is the join between them, it is
+on every run record whose photograph could be read, and it is the only binding that survives a
+renumber (a record whose photograph raised an `ImageError` carries `None`, which is the
+digest-less case below) — a slot number
+is exactly what moved. `cli/resolve.py:realign` runs before anything reads a position out of the
+payload, and the run directory on disk is never touched.
+
+**Measured before it was chosen**: box 2's 543 photographs are 997 MB and hash in **0.56s**, to
+543 distinct digests with no collisions. Reading the photographs is affordable per join and is
+strictly better than trusting the store's identification cache, which is another derived copy a
+future defect could leave stale in the same way.
+
+**FIVE OUTCOMES, REASONED PER BOX, AND THE PER-BOX PART IS NOT A DETAIL.** The first draft
+reasoned over the whole run and declared **all 53 of box 1's cards departed** — because box 1's
+photographs have been deleted from disk while its records live on. That inverts the check:
+absence of photographs is absence of evidence, not evidence of absent cards.
+
+- **moved** — the digest is on disk at a different slot. Re-bound, and named in the report.
+- **departed** — the digest is on no photograph in a box whose *other* photographs are present.
+  The card has left: deleted mid-box or retired. Skipped, because there is nothing to join it
+  to, and **named** — `CLAUDE.md` forbids dropping a card silently, not dropping one at all.
+- **ambiguous** — the digest is on two photographs. That is a question, not a slot, and guessing
+  an identity is forbidden. Refuses the whole run.
+- **collided** — two RECORDS carry one digest, so they re-bind to one slot. **Added 2026-08-25,
+  and it is `ambiguous`'s missing twin**: that outcome checks the DISK for a digest appearing
+  twice, and nothing checked the PAYLOAD. Two records landing on one key overwrote each other in
+  the rebuilt payload — measured at two cards in and one card out, with `departed` empty and
+  nothing printed. A silent drop inside the function written to prevent one. Refuses the whole
+  run and names the contested slot.
+- **unverified** — the box offers nothing to check against: no photographs on disk, no record
+  carrying a digest, or no digest that matches any photograph there. Its records pass through
+  exactly as the run recorded them, and the report says the slots were **not** checked, so an
+  unchecked box cannot read as a verified one. The third case is why this is stated as "nothing
+  to check against" rather than "no photographs": a box whose photographs have all been REPLACED
+  (D26's re-shoot writes new bytes at the same slot) matches none of the run's digests, and
+  calling its cards departed would be the same inversion the paragraph above refuses.
+
+**A RECORD WITH NO DIGEST IS THE FIFTH THING THAT CAN REFUSE, and it is not an outcome of a
+box.** `cli/cmd_identify.py` writes `photo_sha256` as `None` for any card whose photograph
+raised an `ImageError`, so a run written today can carry digest-less records — this is live, not
+merely a guard against payloads older than the field. Such a record is harmless while nothing in
+its box has moved and unplaceable once something has, so it refuses only in the second case.
+
+**A healthy run returns the identical payload object**, which is what keeps its join
+byte-for-byte unchanged — verified against Gate B's box-1 run, which diffs clean.
+
+**What would reopen this: a second binding that outlives a renumber.** `capture_id` is on the
+card record but not on the run record; if it were carried into the run payload it would be a
+cheaper key than hashing a gigabyte, and hashing could become the fallback rather than the
+primary. That is a change to what `identify` writes, not to this entry.
+
+---
+
+## D37 — A queued question can be closed without answering it, and the card is left alone
+
+**BUILT 2026-08-25, and it settles a question this repo has carried open since the review
+screen was built.** `docs/DESIGN.md` has said, in writing, for as long as Skip has existed:
+
+> **Skip is an OPEN QUESTION, not a decision.** … If nothing is ever skipped, delete the
+> control. If most of a queue is, the screen needs a real defer that records a reason, and
+> that is a decision entry rather than a button.
+
+The owner pulled that trigger: *"why can't i mark something as known skip kinda like a stand
+down on the flag i get that this is a wasted position etc ? from the review window itself"*.
+
+**THERE WERE TWO WAYS PAST A CARD AND BOTH WERE WRONG FOR THIS.** An answer writes a SKU onto
+a real card, which the operator must not do to a card they cannot identify — `CLAUDE.md`'s
+hard rule is that ambiguity goes to the queue rather than being guessed. Skip writes nothing
+at all and a reload forgets it, so a card that will never be answerable comes back every
+session, forever. Between "invent an identification" and "be asked again tomorrow" there was
+no third move.
+
+**THE THIRD MOVE IS ONE FLAG, AND THE FLAG ALREADY EXISTED.** `store/queues.py` was built
+around `cleared_by_human`: `Queue.upsert` refuses to re-queue a cleared position,
+`Queue.release` refuses to drop one, `open_entries` hides it. The machinery for "stop asking,
+and keep not asking across every future run" predates the review screen. The only thing that
+could ever SET it was an answer — and an answer costs a SKU. `POST /review/<box>/<index>/
+stand-down` sets the same flag with a reason and nothing else.
+
+**IT IS A THIRD THING, NOT A SOFTER RETIREMENT, AND THE BOUNDARY IS THE ENTRY:**
+
+- an **answer** (D4) writes `sku` and `condition`. The pipeline is told what the card IS, and
+  every later join reads it back as rung 0.
+- a **retirement** (D26) writes a terminal state. The CARD left inventory; the record stays
+  and the gap is permanent.
+- a **stand-down** writes nothing to the card at all. It does not move, change, or leave. It
+  keeps its slot, its photograph and its place in the box walk, and stays sellable if it is
+  ever identified properly. What closes is the QUESTION.
+
+**ITS OWN THREE REASONS RATHER THAN `master.RETIRE_REASONS`.** Those four — `pulled`,
+`damaged`, `lost`, `given_away` — all say the card is gone, and borrowing them would make
+"stop asking me" indexable as "this card has left", which is the one thing it must never
+mean. `queues.STAND_DOWN_REASONS` is `wasted_position | cannot_settle | not_listing`,
+hand-authored in D22's sense and rendered verbatim beneath its human label the way every
+reason code on that screen is.
+
+**THE REASON IS REQUIRED, AND IT IS THE INSTRUMENT `docs/DESIGN.md` SAYS WAS NEVER READ.**
+That file records Gate B's mistake by name: the run produced a real queue, the owner answered
+all of it, and *nothing counted how many were skipped first* — so the control stayed exactly
+as unsettled as it began. A stand-down without a reason would repeat that. With one, the log
+can finally answer which questions get waved off and why, beside `queue_reason`, the queue's
+own reason for asking.
+
+**THE CANONICAL CASE IS REAL AND WAS FOUND THE SAME DAY.** Box 2 position 95 holds a
+photograph whose mean luma is **1.7 out of 255** — a black frame, captured at 3120x4160 where
+every other card in the box is 2160x3840. Haiku was shown nothing and returned `Mewtwo ex
+009/102` at HIGH confidence; it matched no row, so it queued as `no_catalog_row` with zero
+candidates, which `POST /review/.../answer` refuses outright as `no_candidates`. That card
+could not be answered, could not be usefully re-shot, and came back every single session.
+That is `wasted_position`, and it is what this entry is for.
+
+**THE REVERSAL REFUSES AN ANSWERED CARD, WHICH IS THE GUARD WORTH NAMING.** Both directions
+sit on one path (D28's shape, and `do_mark_sold`'s reason: a reversal reachable without going
+through the thing it reverses is a route a stale client finds on its own). Reopening a queue
+entry is the same store operation either way, so `_clearing_event` reads the log to learn
+which event closed the question and refuses `not_stood_down` when it was an ANSWER — taking
+back a real identification through the un-dismiss control is the one thing this route may not
+do. It inherits `_answer_before`'s `renumbered` hard stop for D10 ruling 1's reason: a
+clearing line older than a mid-box shift belongs to the slot's previous occupant.
+
+**NO LISTING HOLD IS CONSULTED, in either direction.** `undo_too_late` asks whether a SKU
+this Mac wrote is already out in an import file. A stand-down writes no SKU, changes no SKU
+and moves no listing count, so nothing downstream can disagree with it.
+
+**THE SCREEN OFFERS RETIREMENT BESIDE IT, AND DELETE DELIBERATELY NOT.** Both were asked for
+in the same breath. `POST /inventory/<box>/<index>/retire` already existed and already had a
+client function; what it lacked was a control on the screen the card is actually on, which is
+`CLAUDE.md`'s route-is-not-a-feature rule in its mildest form. **The mid-box delete stays on
+`#/inventory`** for two reasons that are about this screen rather than about the operation:
+it slides every card behind it down one slot, so pressing it from a worklist would renumber
+the very positions that worklist is drawn from — the defect D36 was written to stop, invited
+back in by hand — and it is the one operation here with no undo at all. The panel says so on
+screen rather than leaving someone to hunt for it.
+
+**ONE PANEL, KEYED, BECAUSE THE DIFFERENCE IS THE HARD PART.** The owner's confusion was not
+about where the buttons are; it was that these are three different acts with three different
+costs, which no button label conveys alone. `X` raises a panel that names what each one does
+to the card, and it owns the keyboard while it is up for the group offer's reason — its
+choices are keyed on digits that mean candidates everywhere else on that screen.
+
+**What would reopen this: the reason counts.** If `wasted_position` dominates, the fix is
+upstream — a capture that can produce a black frame at a different resolution than the rest
+of its box is a rig fault, not a queue fault, and no amount of dismissing is the remedy for
+it. That is the measurement `docs/DESIGN.md` has been asking for since Gate B, and this route
+is what finally takes it.
+
+---
+
+## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
+
+**THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
+CURRENT SINCE 2026-08-23.** All three passed; `CLAUDE.md` and `docs/GATES.md` both say the
+gating system is retired and that nothing is blocked behind one. A list whose whole force came
+from a control that no longer exists reads as either binding or void, and neither is right.
+What actually holds these items back is `CLAUDE.md`'s standing rule — *scope is argued, not
+gated* — so the bar is a decision entry and an argument, not a gate that will never fire.
 
 - PKMNVAULT and anything Supabase/eBay related, **except** the PKMNCODES track, whose
   manual eBay sales are allowed on the shared foundation.
 - Riftbound / One Piece / any non-Pokémon TCG. The architecture already keeps the door
-  open — the catalog join is product-line-agnostic; only the export's Category filter and
-  the finish enum are Pokémon-specific. Expansion later is config plus an enum, so no
+  open — the catalog join partitions by `Product Line` and builds one catalog per game (D25);
+  only the export's Category filter and the finish enum are Pokémon-specific. **This line read
+  "product-line-agnostic" until 2026-08-25 and D25 had already corrected it in as many words:
+  measured, the join was product-line BLIND — the column was declared and read by nothing, so
+  two exports concatenated would have cross-joined in silence. Blind is not agnostic**, and the
+  two words point at opposite properties, which is why the stale one is replaced here rather
+  than left to be read as agreement. Expansion later is config plus an enum, so no
   session redesigns for it early.
 - Perceptual-hash identification layer (v2 accuracy cross-check).
 
@@ -1533,7 +2003,8 @@ part of the cache identity.
 
 ## Someday — worth doing, blocking nothing
 
-Distinct from Deferred above: those are things not to build yet. These are things that can
+Distinct from Deferred above: those need an argument and a decision entry first. These are
+things that can
 be done any time, in any order, that no other work waits on. Nothing here belongs in a plan
 or a gate. If an item starts blocking something, it has stopped being a Someday item and
 needs a decision entry of its own.
@@ -1564,28 +2035,24 @@ needs a decision entry of its own.
   assumption has never been measured on its own — which is exactly what makes it worth an
   experiment rather than an edit.
 
-- **Re-shoot a stored photo in place, long after capture.** Gate B's owner asked for it by
-  name: a bad photo discovered late currently has no remedy, because D10's undo reaches
-  only the newest capture. The operation that fits D10 is not a delete at all — replace
-  the photo and sidecar at the same position, record untouched, position label unchanged,
-  allocator never involved. Needs a route, a screen affordance, and a decision entry
-  ratified by the owner before it is built.
+**THREE ITEMS LEFT THIS LIST BY BEING BUILT, and they are struck here rather than deleted so
+that a later session reading an older copy does not reinstate them as open work.** Each one did
+what this list's own header says it must — *"if an item starts blocking something, it has
+stopped being a Someday item and needs a decision entry of its own"* — and each got one:
 
-- **A `removed` state for cards that leave inventory without a sale.** Sold-in-person is
-  already `mark-sold` — a state, a kept record, a permanent gap that means what it says.
-  What has no representation is a card pulled out, damaged, or given away: today the
-  choices are a sale record that lies or a mid-box delete D10 forbids. The fix is
-  `sold`'s sibling — a terminal state, record kept, gap permanent — not a tombstone in
-  D10's sense, because D10's refusal was about *undo* inventing a third thing the store
-  explains, and `sold` already proved the state-machine shape. Needs a decision entry
-  ratified by the owner; reopens nothing in D10.
-
-- **The owner can't see what a run produced without reading CLI output.** Found at Gate B:
-  emit's import files existed only as filenames in terminal output the owner never saw,
-  because someone else was driving the commands. The app deliberately reads state rather
-  than owning transitions, but a read-only view of a run's outputs and next action —
-  "these files are waiting for Import to Staged" — is reading state too. Design question,
-  not a bolt-on; belongs with whoever next touches the owner-side screens.
+- ~~**Re-shoot a stored photo in place, long after capture.**~~ **BUILT 2026-08-23 — D26.**
+  `POST /inventory/<box>/<index>/photo` replaces the bytes and rebuilds the sidecar with the
+  record untouched and the allocator never involved, exactly as this item asked; the control
+  is on the card detail, and D31 carries the rule that a merge may not drop it.
+- ~~**A `removed` state for cards that leave inventory without a sale.**~~ **BUILT 2026-08-23
+  as `retired` — D26.** Renamed on the way in, and the rename is the finding: `removed` was
+  already a history event name, so a state sharing it would have made months-old undo lines
+  parse as states. Four reasons, reversible, and a sale now refuses a retired card.
+- ~~**The owner can't see what a run produced without reading CLI output.**~~ **BUILT
+  2026-08-24 — D33.** `#/inventory` carries the run panel: every command's stdout verbatim,
+  the import CSVs as downloads, and a money gate that cannot be pressed before the free
+  preflight has answered. This item is quoted by name in `docs/GATES.md`'s "what the gate did
+  not close", which is where it came from.
 
 - **Cross-check the collector number against the local catalog** (needs D15). Not a
   replacement for the model's read — a second, independent derivation of the same fact, the
@@ -1607,7 +2074,8 @@ needs a decision entry of its own.
 ---
 
 Unsorted scanning is **not** deferred: it works today via the optional hints, with more
-review-queue traffic. Just do not optimize for it before Gate C.
+review-queue traffic. Just do not optimize for it ahead of work that has a decision entry.
+(This read "before Gate C" until 2026-08-25; Gate C passed 2026-08-22.)
 
 ---
 
