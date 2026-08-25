@@ -2525,15 +2525,44 @@ function PhotoContent({
   }
 
   return (
-    <img
-      // Remounted per card, so a failed load cannot leave the previous card's broken state
-      // attached to the next one's element.
-      key={row.key}
-      className="review-photo"
-      src={src}
-      alt={`The card photographed at ${entry.label}`}
-      onError={onAbsent}
-    />
+    <>
+      <img
+        // Remounted per card, so a failed load cannot leave the previous card's broken state
+        // attached to the next one's element.
+        key={row.key}
+        className="review-photo"
+        src={src}
+        alt={`The card photographed at ${entry.label}`}
+        onError={onAbsent}
+      />
+      {/* THE 1:1 INSET, AND IT IS THE ONE THING ON THIS SCREEN THAT CHANGES WHAT A HUMAN CAN
+          ACTUALLY SEE RATHER THAN HOW FAR THEY REACH.
+
+          The stored frame is 2160x3840 and draws 415px wide — a 5.2:1 downscale. Both
+          digitization standards this project's capture side already follows require this
+          class of judgement at native resolution: FADGI, that evaluation "shall be conducted
+          while viewing the images at a 1 to 1 pixel ratio or 100% magnification"; Metamorfoze
+          the same, at 100% on a calibrated monitor.
+
+          It is not academic here. The human on this screen is the appeal court for a detector
+          that was wrong on 230 of 544 box-2 cards with the owner supplying ground truth, and
+          19 of 40 frames DISAGREED WITH THEMSELVES between max-edge 900 and 1200 — direct
+          evidence that sheen does not survive a downscale. Asking someone to rule on foil from
+          a 5.2:1 render is asking them to judge on evidence the standards say is gone.
+
+          A background-image rather than a canvas or a second <img>: `background-size: auto`
+          paints the file at its natural size and `background-position: center` picks the
+          middle of it, which IS 1:1 with no arithmetic, no second request — the browser has
+          the bytes already — and nothing to keep in step with the photograph beside it.
+
+          aria-hidden because it is the same photograph at a different magnification; the <img>
+          above carries the alt text, and a screen reader announcing the card twice is noise. */}
+      <span
+        className="review-inset"
+        style={{ backgroundImage: `url(${src})` }}
+        aria-hidden="true"
+      />
+    </>
   )
 }
 

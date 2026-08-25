@@ -489,10 +489,44 @@
    measuring this finds the 26px already explained and does not go looking for a second bug.
 
    It draws nothing of its own — see the note in ReviewQueue.tsx's `Photo`. */
+/* `relative` so the 1:1 inset can sit in its corner. It changes nothing about the
+   reservation: the frame still holds `--photo-cap` whether or not an image loaded. */
 .review-frame {
+  position: relative;
   width: 100%;
   min-height: var(--photo-cap);
 }
+
+/* THE 1:1 SHEEN INSET. `background-size: auto` paints the file at its natural size and
+   `background-position: center` picks the middle of it — that pair IS 1:1, with no scaling
+   arithmetic to get wrong and no second request, because the browser already has the bytes
+   for the photograph beside it.
+
+   240x180 rather than the 400x300 first drawn: at 415px the photograph's own width is the
+   budget, and a 400px inset covers most of the card it is supposed to be a detail OF. This
+   is a loupe, not a second photograph.
+
+   BOTTOM-RIGHT because the card sits centred in a 9/16 frame and its lower right is the
+   emptiest corner of the composition — the same corner the collector number does not occupy.
+   It overlaps the photograph deliberately: a loupe beside the thing it magnifies costs the
+   thing itself width, which is what this whole screen was just widened to stop.
+
+   Pointer-events off. It is evidence, not a control — docs/DESIGN.md bans a list-to-detail
+   loop on this screen and a clickable magnifier is the first step down it. */
+.review-inset {
+  position: absolute;
+  right: var(--s2);
+  bottom: var(--s2);
+  width: 240px;
+  height: 180px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: auto;
+  pointer-events: none;
+}
+
 
 .review-absent {
   width: 100%;
