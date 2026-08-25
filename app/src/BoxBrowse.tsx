@@ -1526,60 +1526,21 @@ export function BoxBrowse({
           </div>
 
           <div className="browse-side">
-            {/* THE BOX HEADER — D31's "box operations live on the box header inside the
-                browse, beside the box they operate on". It is the first thing in the detail
-                column rather than a strip across the top of the walk, and that is a measured
-                choice: `#/boxes` drew this panel for every box at once and cost 1744px of
-                scroll to say four things, so the panel is drawn once, for the box being
-                walked, with its layout table and its controls folded (see BoxOps).
+            {/* THE SELECTED CARD IS FIRST IN THIS COLUMN, AND THAT IS THE WHOLE OF THE FIX.
+                Measured at 1440x900 before the move: the box header (190px), its Layout and
+                controls fold and the Runs fold sat above it, so the photograph of the card the
+                operator had just clicked opened at y=482 of a 900px viewport and ran to y=917 —
+                cut off by the fold. Both folds were correctly collapsed and still cost 266px of
+                vertical rent above the screen's own subject.
 
-                IT NOW TAKES THE TICKED SELECTION, which is what turns a column of checkboxes
-                into a feature: `PUT /inventory/<box>` applies retroactive capture claims over a
-                box or over an explicit list of indices, and the list is the one these ticks
-                build. The scope sentence is written onto the button there, so the widening from
-                "the ticked cards" to "the whole box" is never silent.
+                MOVED IN THE DOM RATHER THAN WITH `order`. A flex `order` would have produced the
+                same picture and left the tab ring and a screen reader walking the column in the
+                old sequence — the card announced last, after the box controls that are now
+                beneath it. The two orders are kept the same on purpose.
 
-                DRAWN ONLY FOR A NUMBERED SHELF THE REGISTRY KNOWS. The pooled and no-box
-                shelves are not boxes and have nothing to rename, seal or delete; a box a card
-                names that `GET /boxes` has not answered for gets no panel rather than an
-                invented one. `onChanged` bumps the same counter the Reload does, which
-                re-reads the registry AND the inventory — a divider edit relabels every card in
-                the box (D10 as amended), so the walk has to be re-read with the panel. */}
-            {shelfBox === null ? null : (
-              <BoxOps
-                record={shelfBox}
-                selection={pickedIndices}
-                onChanged={() => setReloads((n) => n + 1)}
-              />
-            )}
-
-            {/* THE BOX PANEL — beneath the box header, and about the same box. Outside the
-                `selectedRow` guard below, deliberately: what goes here is about the shelf, and
-                a control for the box that vanished when no card was selected would be a
-                control the operator could only find by accident. */}
-            {boxPanel}
-
-            {shelf === 'pooled' ? (
-              <div className="browse-gap">
-                <p className="browse-note-text">
-                  These cards are pooled — a count, not a location (D24). They have no box,
-                  section or card position, so there is no box to name, divide or seal.
-                </p>
-                <p className="browse-machine">located: false</p>
-              </div>
-            ) : null}
-
-            {shelf === 'unplaced' ? (
-              <div className="browse-gap">
-                <p className="browse-note-text">
-                  These records reached the store with a box or an index that is not a number,
-                  so the capture server sent them with no position at all. `GET /status`
-                  reports them; nothing here can name a box for them.
-                </p>
-                <p className="browse-machine">place: absent</p>
-              </div>
-            ) : null}
-
+                What is BELOW it is unchanged and still about the same shelf: the box header, the
+                box panel, and the pooled/unplaced notes. They lost no capability by moving down;
+                they were never what the click was for. */}
             {selectedRow === null ? null : (
               /* TWO COLUMNS, NOT ONE, AND THE MEASUREMENT IS THE ARGUMENT. This panel drew
                  everything in one 420px-wide stack inside an 824px column, so half the width of
@@ -1701,6 +1662,60 @@ export function BoxBrowse({
                 </div>
               </section>
             )}
+            {/* THE BOX HEADER — D31's "box operations live on the box header inside the
+                browse, beside the box they operate on". It is the first thing in the detail
+                column rather than a strip across the top of the walk, and that is a measured
+                choice: `#/boxes` drew this panel for every box at once and cost 1744px of
+                scroll to say four things, so the panel is drawn once, for the box being
+                walked, with its layout table and its controls folded (see BoxOps).
+
+                IT NOW TAKES THE TICKED SELECTION, which is what turns a column of checkboxes
+                into a feature: `PUT /inventory/<box>` applies retroactive capture claims over a
+                box or over an explicit list of indices, and the list is the one these ticks
+                build. The scope sentence is written onto the button there, so the widening from
+                "the ticked cards" to "the whole box" is never silent.
+
+                DRAWN ONLY FOR A NUMBERED SHELF THE REGISTRY KNOWS. The pooled and no-box
+                shelves are not boxes and have nothing to rename, seal or delete; a box a card
+                names that `GET /boxes` has not answered for gets no panel rather than an
+                invented one. `onChanged` bumps the same counter the Reload does, which
+                re-reads the registry AND the inventory — a divider edit relabels every card in
+                the box (D10 as amended), so the walk has to be re-read with the panel. */}
+            {shelfBox === null ? null : (
+              <BoxOps
+                record={shelfBox}
+                selection={pickedIndices}
+                onChanged={() => setReloads((n) => n + 1)}
+              />
+            )}
+
+            {/* THE BOX PANEL — beneath the box header, and about the same box. Outside the
+                `selectedRow` guard below, deliberately: what goes here is about the shelf, and
+                a control for the box that vanished when no card was selected would be a
+                control the operator could only find by accident. */}
+            {boxPanel}
+
+            {shelf === 'pooled' ? (
+              <div className="browse-gap">
+                <p className="browse-note-text">
+                  These cards are pooled — a count, not a location (D24). They have no box,
+                  section or card position, so there is no box to name, divide or seal.
+                </p>
+                <p className="browse-machine">located: false</p>
+              </div>
+            ) : null}
+
+            {shelf === 'unplaced' ? (
+              <div className="browse-gap">
+                <p className="browse-note-text">
+                  These records reached the store with a box or an index that is not a number,
+                  so the capture server sent them with no position at all. `GET /status`
+                  reports them; nothing here can name a box for them.
+                </p>
+                <p className="browse-machine">place: absent</p>
+              </div>
+            ) : null}
+
           </div>
         </div>
       ) : null}
