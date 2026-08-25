@@ -39,24 +39,11 @@
   list-style: none;
 }
 
-.run-head::-webkit-details-marker {
-  display: none;
-}
-
-.run-marker {
-  min-width: 2ch;
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.run-marker::before {
-  content: '\25B8';
-}
-
-.run-panel[open] .run-marker::before {
-  content: '\25BE';
-}
+/* THE DISCLOSURE IS GONE (owner, 2026-08-24), same instruction as BoxOps': the pipeline's
+   controls are on the screen, not one press behind it. D33 argued the fold on the grounds
+   that the panel is ~250px and reached once a box — but once a box IS every box, which is
+   the definition of the primary task, and NN/g prices a collapsed panel at five accumulating
+   substeps before the first click of real work. */
 
 /* What is inside, so the fold does not have to be opened to find out. The pipeline is the
  * biggest thing this product has ever hidden behind no control at all, so it is named in full. */

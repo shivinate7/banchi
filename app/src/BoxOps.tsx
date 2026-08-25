@@ -601,19 +601,15 @@ export function BoxOps({
           hand-rolled toggle is a second implementation of a thing the platform ships. The
           marker is drawn rather than left to the browser, same as that file's, so the render
           `make screenshot` takes matches the browser the owner works in. */}
-      <details className="boxops-more">
-        <summary className="boxops-more-head">
-          <span className="boxops-marker" aria-hidden="true" />
+      <div className="boxops-more">
+        <p className="boxops-more-head">
           <span className="boxops-more-label">Layout and controls</span>
-          {/* The hint names every control behind the fold, because a disclosure that under-sold
-              its contents is exactly how three routes came to have no reachable control. Claims
-              and delete are in there now and they say so. */}
           <span className="boxops-more-hint">
             {record.sections_detail.length === 0
-              ? 'rename · dividers · seal · claims · delete'
-              : `${count(record.sections_detail.length, 'section', 'sections')} · rename · dividers · seal · claims · delete`}
+              ? null
+              : count(record.sections_detail.length, 'section', 'sections')}
           </span>
-        </summary>
+        </p>
 
       {record.sections_detail.length === 0 ? null : (
         <ul className="boxops-sections">
@@ -785,7 +781,7 @@ export function BoxOps({
             below it, nothing beside it, and two presses plus a typed number away from a screen
             that is otherwise for looking at cards. */}
         <DeleteBox record={record} onChanged={onChanged} />
-      </details>
+      </div>
     </section>
   )
 }

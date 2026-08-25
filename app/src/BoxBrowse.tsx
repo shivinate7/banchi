@@ -1681,6 +1681,16 @@ export function BoxBrowse({
                 invented one. `onChanged` bumps the same counter the Reload does, which
                 re-reads the registry AND the inventory — a divider edit relabels every card in
                 the box (D10 as amended), so the walk has to be re-read with the panel. */}
+            {/* THE BOX AND THE RUNS SHARE ONE ROW (owner, 2026-08-24): "i also box and want runs
+                to get in the same space not having to scroll down". Stacked full-width they
+                were ~250px each and the second one was below the fold on a 900px viewport, so
+                reaching the pipeline meant scrolling past the box settings every time. Side by
+                side they cost one panel's height instead of two.
+
+                A grid rather than two flex children, so the two keep equal width whatever
+                either one's content does — a run with a long console must not squeeze the box
+                controls to a column of wrapped words. */}
+            <div className="browse-boxrun">
             {shelfBox === null ? null : (
               <BoxOps
                 record={shelfBox}
@@ -1694,6 +1704,7 @@ export function BoxBrowse({
                 a control for the box that vanished when no card was selected would be a
                 control the operator could only find by accident. */}
             {boxPanel}
+            </div>
 
             {shelf === 'pooled' ? (
               <div className="browse-gap">

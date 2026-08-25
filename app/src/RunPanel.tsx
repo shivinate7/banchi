@@ -435,13 +435,12 @@ export function RunPanel({ scope }: RunPanelProps) {
      * `<details>` and not a hand-rolled toggle, for the reason that file also gives: the
      * platform ships this, including the keyboard behaviour. A live run is what opens it on
      * its own — see `defaultOpen` below, which is deliberately not a persisted setting. */
-    <details className="run-panel" open={live > 0}>
-      <summary className="run-head">
-        <span className="run-marker" aria-hidden="true" />
+    <div className="run-panel">
+      <p className="run-head">
         <span className="run-title">Runs</span>
         <span className="run-hint">{hint}</span>
         <span className="run-scope">{scopeLine}</span>
-      </summary>
+      </p>
 
       {trouble === null ? null : (
         <div className="run-note">
@@ -744,6 +743,6 @@ export function RunPanel({ scope }: RunPanelProps) {
           )}
         </div>
       )}
-    </details>
+    </div>
   )
 }

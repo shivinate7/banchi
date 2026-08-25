@@ -534,6 +534,25 @@
   min-width: 0;
 }
 
+/* The box's own controls and the pipeline, side by side rather than stacked. Both are about
+   the box being walked and neither is what the click was for, so they sit beneath the card
+   and share its width instead of taking a screen each. `1fr 1fr` and not `auto auto`: equal
+   width whatever either one is holding, so a live run's console cannot squeeze the box
+   controls into a column of wrapped words. */
+.browse-boxrun {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s5);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .browse-boxrun {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---- the card ---- */
 
 /* TWO COLUMNS, MEASURED. This was a single 420px-wide stack inside an 824px column: the photo,

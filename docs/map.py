@@ -1036,8 +1036,11 @@ COMPONENTS = [
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
-                                         "screen above it.",
-                                 "governed_by": ["D31"]},
+                                         "screen above it. NOT a fold since 2026-08-24: the owner "
+                                         "asked for the buttons to be present rather than one press "
+                                         "away, so D33's ~250px-reached-once-a-box argument is "
+                                         "superseded and the disclosure rules are deleted.",
+                                 "governed_by": ["D31", "D33"]},
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",

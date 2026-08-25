@@ -361,26 +361,10 @@
   list-style: none;
 }
 
-.boxops-more-head::-webkit-details-marker {
-  display: none;
-}
-
-/* 12px, not the 10px every other utility caption takes — Inventory.css measured that at 10 a
-   marker reads as a speck rather than as the one thing on the row saying the row opens. */
-.boxops-marker {
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--muted);
-  min-width: 2ch;
-}
-
-.boxops-marker::before {
-  content: '\25B8'; /* the triangle */
-}
-
-.boxops-more[open] .boxops-marker::before {
-  content: '\25BE';
-}
+/* THE DISCLOSURE IS GONE (owner, 2026-08-24): "i hate the click-in of the box settings in
+   inventory, the buttons should just be there for me to press". The triangle, its [open]
+   flip and the -webkit marker reset went with it — three rules that can no longer fire,
+   because nothing on this screen carries the classes any more. */
 
 /* A phrase a person reads, so the body face. */
 .boxops-more-label {
