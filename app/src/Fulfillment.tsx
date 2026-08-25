@@ -199,6 +199,15 @@ function pooledCopy(copy: SearchCopy): boolean {
 /** The sentence a card with no name gets, on both ways in. One constant because it is one
  *  sentence: the browse row builds it from `InventoryCard.name` and a search copy builds it
  *  from `SearchGroup.names`, and two spellings of it is two things to proofread. */
+/* HOW MANY ROWS THE DEFAULT LIST DRAWS. Not a token and not a design number — a bound on a
+   list, the same kind of thing UNDO_WINDOW_MS is.
+
+   25 because it is more than one screenful at his floors and far less than a shelf. The list
+   is not his task: an order names a card and he types the name. What the list is FOR is
+   telling him, without a word of instruction, that this screen is about cards he can go and
+   fetch — and 25 rows say that exactly as well as 682 do, at 1/27th of the height. */
+const SHOWN_AT_ONCE = 25
+
 const NO_NAME = 'This card has no name recorded'
 
 /* HOW LONG UNDO STAYS — the second assumption.
@@ -1060,7 +1069,7 @@ export function Fulfillment() {
               </p>
             ) : (
               <ul className="fulfillment-list">
-                {cards.map((card) => (
+                {cards.slice(0, SHOWN_AT_ONCE).map((card) => (
                   <li key={card.key}>
                     {/* The whole row is the target. A row with a button on it has two things to
                         hit and one of them is smaller than the other; this way the smallest
@@ -1080,6 +1089,25 @@ export function Fulfillment() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* THE REST OF THE SHELF IS NOT DRAWN, AND HE IS TOLD SO IN A SENTENCE.
+                Measured before this: the list mapped every sellable card, which at 682 records
+                was a 124,348px scroll — 138 screens — on the one view in this product whose
+                whole design is a floor. app/tests/fulfillment.spec.ts could not see it, because
+                every constraint it asserts is still met on each of the 682 rows; the defect was
+                never a row, it was how many.
+
+                A CAP AND A SENTENCE RATHER THAN SEARCH-ONLY. An empty screen with a box on it
+                is the more fashionable answer and it is the wrong one for this reader: the list
+                is what tells him, without being told, that this screen is about cards he can go
+                and fetch. He keeps enough of it to see that, and the sentence says plainly
+                where the others went and what to do instead. His floors are unchanged — no
+                banned word, nothing smaller than a row, nothing to dismiss. */}
+            {cards.length <= SHOWN_AT_ONCE ? null : (
+              <p className="fulfillment-say">
+                {`These are the first ${SHOWN_AT_ONCE} of ${cards.length} cards. Type a name above to find any of the others.`}
+              </p>
             )}
 
             {/* Counted, never silently dropped — see `sellable`. Reads as a sentence rather
