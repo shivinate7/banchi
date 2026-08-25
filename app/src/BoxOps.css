@@ -347,18 +347,17 @@
   border-top: 1px solid var(--line);
 }
 
+/* NO `cursor: pointer` AND NO `list-style`, AND BOTH WERE LEFT BEHIND FOR ONE COMMIT.
+   This was a `<summary>`; removing the fold made it a `<p>` and the two summary properties
+   stayed, so the heading showed a hand cursor and did nothing when clicked. That is the
+   owner's own reported defect — BoxBrowse.css spends fourteen lines on "hit the text dead
+   centre and it folds, miss by four pixels and it does not" — reintroduced by the fix for
+   something else. A false affordance is worse than a missing one: it costs a click to find
+   out, every time, forever. */
 .boxops-more-head {
   display: flex;
   align-items: baseline;
   gap: var(--s2);
-  cursor: pointer;
-
-  /* The browser's own disclosure triangle, removed in both spellings — the marker below is
-     drawn instead, for Inventory.css's reason: the native one is sized and coloured by the
-     browser, and differs between the one the owner works in and the Chromium
-     `make screenshot` renders. Comparing that render against the reference is the loop
-     docs/DESIGN.md calls mandatory. */
-  list-style: none;
 }
 
 /* THE DISCLOSURE IS GONE (owner, 2026-08-24): "i hate the click-in of the box settings in
@@ -549,6 +548,17 @@
 /* The one button in this app whose press cannot be taken back. Ink border rather than the
    hairline every other control wears — one step of emphasis inside the system, no new token.
    Disabled until the box number has been typed, so its ordinary state is unpressable. */
+/* A destructive control does not share a wrapping row with controls whose labels change
+   width. See the argument at its use site in BoxOps.tsx: a claim button's label grows by
+   ~150px when a tick changes in the other column, and a rewrap moves whatever sits beside it
+   under the cursor. */
+.boxops-actions-lone {
+  flex-wrap: nowrap;
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
 .boxops-plain-danger {
   border-color: var(--ink);
   font-weight: 700;

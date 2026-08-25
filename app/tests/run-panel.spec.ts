@@ -298,41 +298,52 @@ async function open(
  *  `app/tests/inventory.spec.ts:openBoxOps` takes, and for the same reason: a test that wants
  *  a control says so, and the fold test below can still assert the state every other test
  *  starts from. */
+/* THERE IS NOTHING TO OPEN ANY MORE. This helper clicked `.run-head` to unfold the panel;
+ *  the fold was removed on 2026-08-24 at the owner's instruction — "both box and run, i don't
+ *  want click in functionality, i want their buttons just there" — so it now only waits for
+ *  the control every caller was really waiting for. Kept as a function rather than inlined so
+ *  the call sites still read as "get to the point where the pipeline is usable". */
 async function openPanel(page: Page) {
-  await page.locator('.run-head').click()
   await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
 }
 
-// ------------------------------------------------------------------------------ the fold
+// -------------------------------------------------------------- present, not disclosed
 
-test('the panel is shut on arrival, and names all four commands from the outside', async ({
+test('the panel is open on arrival, with all four commands named and reachable', async ({
   page,
 }) => {
   await open(page)
 
-  /* SHUT BY DEFAULT because this screen's question is "where is this card" and the card detail
-     is what answers it. The panel is ~250px and is reached once a box; drawn open it would
-     spend a quarter of the viewport on every arrival. `BoxOps` on this same screen made the
-     identical trade against a measurement. */
-  await expect(page.locator('.run-panel')).not.toHaveAttribute('open', '')
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeHidden()
+  /* THIS ASSERTION IS THE REVERSE OF THE ONE IT REPLACES, AND THE REVERSAL IS THE OWNER'S.
+     It read "the panel is shut on arrival" and argued the trade D33 made: ~250px, reached
+     once a box, so drawn open it spends a quarter of the viewport on every arrival.
 
-  /* AND IT SAYS WHAT IS INSIDE. `BoxOps` states the rule: "a disclosure that under-sold its
-     contents is exactly how three routes came to have no reachable control" — and the pipeline
-     is the largest instance of that failure this repo has had, so all four are named. */
+     The owner overruled it. The counter-argument, now in D33: reached once a box IS every
+     box, which is the definition of the primary task rather than an exception to it, and a
+     collapsed panel costs five accumulating substeps — scroll, scan, decide, target, wait —
+     before the first click of real work. What replaces the fold's saving is the ROW: BoxOps
+     and this panel share one grid row, so the pair costs one panel's height rather than two.
+
+     No `open` attribute is asserted in either direction now, because there is no <details>
+     to carry one. The real question is whether the control is on the screen. */
+  await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
+
+  /* AND IT STILL SAYS WHAT IT HOLDS. `BoxOps` states the rule and it survives the fold:
+     "a disclosure that under-sold its contents is exactly how three routes came to have no
+     reachable control" — the pipeline being the largest instance this repo has had. The hint
+     is no longer a promise about what is behind a press; it is a caption over what is
+     already drawn, and naming all four is still worth the line. */
   await expect(page.locator('.run-hint')).toContainText('identify · join · emit · reconcile')
-
-  await openPanel(page)
-  await expect(page.locator('.run-panel')).toHaveAttribute('open', '')
 })
 
-test('a live run opens the panel on its own, and says one is running', async ({ page }) => {
+test('a live run is announced where the panel already is', async ({ page }) => {
   await open(page, { live: true })
 
-  /* The one thing that opens it without being asked. A batch takes minutes to hours and the
-     operator did not necessarily start it in this tab — D13 puts one truth on one Mac, so a run
-     started from a terminal is this screen's business too. */
-  await expect(page.locator('.run-panel')).toHaveAttribute('open', '')
+  /* This used to assert that a live run OPENS the panel — the one thing that opened it
+     without being asked. With nothing to open, what survives is the half that mattered: a
+     batch takes minutes to hours and the operator did not necessarily start it in this tab
+     (D13 puts one truth on one Mac, so a run started from a terminal is this screen's
+     business too), and the screen has to say so on arrival. */
   await expect(page.locator('.run-hint')).toContainText('1 running')
   await expect(page.locator('.run-phase-identifying').first()).toContainText('running')
 })

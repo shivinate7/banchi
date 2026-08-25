@@ -1057,6 +1057,25 @@ export function BoxBrowse({
   useEffect(() => {
     const previous = cameFrom.current
     cameFrom.current = selected
+    /* THE `previous === null` GUARD WAS REMOVED ON 2026-08-24 AND PUT BACK THE SAME HOUR.
+     * Worth recording, because the argument for removing it is good and still wrong.
+     *
+     * A UI review made this its highest-leverage finding: the guard is what makes the spine
+     * open showing ZERO card rows — N section headers in the quietest type in the product,
+     * no `aria-current` for the scroll effect to find, no "you are here" on the map — and it
+     * argued the click-twice bug had two independent causes with only one fix needed, since
+     * `anyExpanded` reads `some` rather than `every` and therefore already reaches a
+     * collapsed list in one press from any partial state.
+     *
+     * That reasoning is sound and it is not the whole test. D31 rules "collapsed is the
+     * resting state" and "nothing opens on load, on a reload, or on an upstream write", and
+     * `app/tests/inventory.spec.ts` encodes it by name — "the walk arrives fully collapsed,
+     * the planted selection included". Removing the guard turned ten of that file's twenty-one
+     * assertions red, eight of them by timing out on rows that should not have been there.
+     *
+     * So this is a decision to reopen with the owner, not a defect to fix in a stylesheet —
+     * CLAUDE.md: name the entry, say why, and wait. The finding is real and is recorded in
+     * docs/specs/ui-redesign-options.md; the guard stays until D31 is amended. */
     if (previous === null || selected === null || selected === previous) return
     const holding = sections.find((section) => section.rows.some((row) => row.key === selected))
     if (holding === undefined) return
@@ -1541,6 +1560,22 @@ export function BoxBrowse({
                 What is BELOW it is unchanged and still about the same shelf: the box header, the
                 box panel, and the pooled/unplaced notes. They lost no capability by moving down;
                 they were never what the click was for. */}
+            {/* THE RECEIPT SURVIVES AN EMPTY LIST, AND IT DID NOT UNTIL 2026-08-24.
+                `detail` — the receipts, their undo, and the refusal panel — is rendered
+                inside the `selectedRow` guard below, which is right while there IS a selected
+                card. But `selectedRow` is `visible.find(...) ?? null`, so a query that matches
+                nothing makes it null and unmounts the whole detail column: a receipt whose
+                twenty-second undo is still running disappears, and so does a refusal the
+                operator has not read yet.
+
+                That is the exact invariant Inventory.tsx says it fixed — a receipt must not be
+                hidden by moving to another card — arrived at from the other direction, because
+                nothing there considered moving to NO card. Repro: mark a copy sold, then type a
+                query matching nothing inside twenty seconds.
+
+                Rendered here only when the guard below cannot: never twice, always once. */}
+            {selectedRow === null ? detail : null}
+
             {selectedRow === null ? null : (
               /* TWO COLUMNS, NOT ONE, AND THE MEASUREMENT IS THE ARGUMENT. This panel drew
                  everything in one 420px-wide stack inside an 824px column, so half the width of
@@ -2080,8 +2115,18 @@ function CardOps({ row, onChanged }: { row: Row; onChanged: () => void }) {
           <button className="browse-reload" type="button" onClick={() => setOpen('claims')}>
             Correct claims
           </button>
+          {/* THE ENTRY CARRIES THE WEIGHT. `browse-reload` is the page header's Reload button
+              and the re-shoot's, byte for byte — so the control that deletes a record and
+              SLIDES EVERY CARD BEHIND IT DOWN ONE INDEX looked exactly like the one that
+              re-reads the page, with a trailing ellipsis as the only difference. The ink
+              border is the one step of emphasis this palette allows and it was being spent
+              only on the confirm inside the panel, where attention already is. */}
           {terminal || !addressable ? null : (
-            <button className="browse-reload" type="button" onClick={() => setOpen('delete')}>
+            <button
+              className="browse-reload browse-reload-danger"
+              type="button"
+              onClick={() => setOpen('delete')}
+            >
               Remove this card…
             </button>
           )}

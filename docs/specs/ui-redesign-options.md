@@ -632,3 +632,47 @@ than asserted. `join --bypass` currently exists because nobody can measure the l
 frame, the measurement is a few lines against `geometry/`, and that is worth writing only after
 the patch exists — code that reads a target no photograph contains is the shape this repo calls
 built-but-unreachable.
+
+---
+
+## 8. AN ADVERSARIAL UI REVIEW OF `#/inventory`, AND THE ONE FINDING THAT NEEDS A RULING
+
+**Commissioned 2026-08-24 at the owner's instruction**, after they judged the built screen
+against the mockups: *"this is nowhere near the artifact you provided."* A strict UI/UX
+reviewer read all eleven files of that screen and ranked its ten worst faults. Acted on the
+same day: the dead `cursor: pointer` on both un-folded headings (a false affordance I had just
+introduced), the seven-way accent misuse in `RunPanel.css`, the destructive-entry weighting,
+and a live-undo bug. What follows is the one finding NOT acted on, because it reverses a
+settled decision.
+
+### 8.1 The spine shows zero card rows at rest — RECORDED, NOT CHANGED
+
+**The finding, and it is a good one.** `BoxBrowse.tsx`'s `cameFrom` effect refuses to open the
+section holding the loader's own first selection, so every arrival and every box change draws N
+section headers — 10px muted uppercase, the quietest type in the product — and **not one card
+row**. No row carries `aria-current`, so the scroll effect finds nothing and the map has no
+"you are here". For box 2 that is up to 22 indistinguishable index ranges and no content. It is
+also most of why the 380px left column reads as dead space.
+
+**The reviewer's argument that this is free to fix**: the click-twice bug D31 records had TWO
+independent causes and only one fix was needed. `anyExpanded` reads `some` rather than `every`,
+so from any partial state one press already reaches a collapsed list — the guard is
+belt-and-braces on a belt that holds, and it charges the spine its only landmark.
+
+**Why it was tried and reverted within the hour.** The reasoning is sound and it is not the
+whole test. D31 rules *"collapsed is the resting state"* and *"nothing opens on load, on a
+reload, or on an upstream write"* — and `app/tests/inventory.spec.ts` encodes it by name:
+**"the walk arrives fully collapsed, the planted selection included"**. Removing the guard took
+**ten of that file's twenty-one assertions red**, eight of them timing out on rows that should
+not have been there. The decision is not merely written down; it is instrumented.
+
+**So it is the owner's to reopen, and the evidence for reopening is now on the table.** The
+change is one line. What it buys: 25 rows of content in a column that is currently empty below
+y=405, a visible "you are here", and the spine actually being a spine on arrival. What it costs:
+D31's resting-state rule, and a test that has to be rewritten to say the opposite.
+
+**The contrast with the folds is the useful part.** Both were settled decisions with tests
+behind them. The folds were removed because the owner ruled on them in as many words — so the
+tests moved, and D33 was amended to match. This one has no such ruling, so the code stands and
+the finding is written down instead. A test that encodes a decision is the decision; changing
+one to make an argument land is how a settled thing gets unsettled quietly.

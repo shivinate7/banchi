@@ -1393,8 +1393,23 @@ function DeleteBox({
 
   if (!open) {
     return (
-      <div className="boxops-actions">
-        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
+      /* THE ENTRY CARRIES THE WEIGHT, NOT ONLY THE CONFIRM. `boxops-plain-danger` was drawn
+         on the confirm inside this panel and nowhere else — i.e. only once the operator had
+         already decided to look at it — so the button that OPENS an irreversible whole-box
+         delete was byte-identical to Rename and Edit dividers. It is the one step of emphasis
+         this palette allows, and it was being spent where attention already was.
+
+         `boxops-actions-lone` stops it sharing a wrapping row. The claim button beside it
+         carries a state-dependent label — "Set claims on the 12 selected cards" becomes "Set
+         claims on all 544 cards in box 2" — which changes width by ~150px whenever a tick
+         changes in the OTHER column, rewrapping the row and moving this button under the
+         cursor between one glance and the next. Fitts assumes a stationary target. */
+      <div className="boxops-actions boxops-actions-lone">
+        <button
+          className="boxops-plain boxops-plain-danger"
+          type="button"
+          onClick={() => setOpen(true)}
+        >
           Delete box {record.box}…
         </button>
       </div>

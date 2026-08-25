@@ -1476,13 +1476,29 @@ disabled button is one attribute away from pressable and that attribute is what 
 drops without noticing. `docs/DESIGN.md` permits a gate on a genuinely destructive action; the
 cheapest honest gate here is making the number impossible not to have seen.
 
-**The panel sits on `#/inventory` and is folded by default.** D31 collapsed three screens into
-that route on the finding that they were separate instances of one thing, and a run is not a
-different thing again: it is something done to the box being walked, or to the cards just ticked
-in it. A route of its own would re-implement the box strip, the search and the mass-select, and
-would then be free to disagree with them about what is selected. It is folded for `BoxOps`'
-measured reason — it is ~250px, it is reached once a box, and the question this screen answers is
-*where is this card*. A live run opens it on its own; that is the only thing that does.
+**The panel sits on `#/inventory`.** D31 collapsed three screens into that route on the finding
+that they were separate instances of one thing, and a run is not a different thing again: it is
+something done to the box being walked, or to the cards just ticked in it. A route of its own
+would re-implement the box strip, the search and the mass-select, and would then be free to
+disagree with them about what is selected.
+
+**IT IS NO LONGER FOLDED, AND NEITHER IS `BoxOps` (owner, 2026-08-24).** This entry read "folded
+by default", on `BoxOps`' measured reason: ~250px, reached once a box, on a screen whose question
+is *where is this card*. The owner overruled it in three messages, the last unambiguous: *"both
+box and run, i don't want click in functionality, i want their buttons just there."*
+
+The argument the fold rested on has the weaker half of a true premise. Reached once a box IS
+every box, which is the definition of the primary task rather than an exception to it, and NN/g
+prices a collapsed panel at five accumulating substeps — scroll, scan, decide, target, wait —
+before the first click of real work. This repo's own record already made the same point one
+notch further along: three routes shipped with full T7 coverage and no reachable control at all,
+which is where `CLAUDE.md`'s route-is-not-a-feature rule came from. A control behind a fold is
+one step better than that, not a different kind of thing.
+
+**What replaces the fold's saving is the row, not the disclosure.** `BoxOps` and the run panel
+share one grid row beneath the card detail (`.browse-boxrun`, `1fr 1fr`), so the pair costs one
+panel's height rather than two, and both are on screen without a press. `defaultOpen`, the two
+disclosure triangles, their `[open]` flips and both `-webkit` marker resets are deleted.
 
 **Every command's stdout is shown verbatim and nothing summarises one**, which is
 `docs/DESIGN.md`'s copy rule for the owner's screens. The one thing the panel adds on top is the

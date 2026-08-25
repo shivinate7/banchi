@@ -31,12 +31,13 @@
  * removes the platform's own marker so the drawn one is the only one; BoxOps.css does the same
  * and gives the reason — a drawn marker renders identically in `make screenshot` and in the
  * browser the owner works in. */
+/* Neither `cursor: pointer` nor `list-style` — see BoxOps.css's note on the same pair. This
+   was a `<summary>` and is a `<p>`; a heading that offers a hand cursor and answers nothing
+   is a click spent discovering that it is not a control. */
 .run-head {
   display: flex;
   align-items: baseline;
   gap: var(--s2);
-  cursor: pointer;
-  list-style: none;
 }
 
 /* THE DISCLOSURE IS GONE (owner, 2026-08-24), same instruction as BoxOps': the pipeline's
@@ -134,8 +135,14 @@
   color: var(--muted);
 }
 
+/* INK AND WEIGHT, NOT ACCENT. docs/DESIGN.md gives accent two jobs — "the system is unsure"
+   and "there is exactly one thing to do" — and a label reading COSTS MONEY is neither; the
+   thing that IS the second job is the button below it, and a label sharing its colour dilutes
+   the only signal on this panel that has to be unmissable. Emphasis by ink against muted plus
+   weight is how the walk beside this panel marks everything it marks (BoxBrowse.css argues it
+   out at length), so this is the house grammar rather than a new one. */
 .run-step-money {
-  color: var(--accent);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -265,14 +272,23 @@
   background: var(--hover);
 }
 
-/* Focus is drawn once, for every control on the panel, and it is deliberately larger than a
- * hairline: the owner asked for exactly that on the capture screen's chips. */
-.run-panel button:focus-visible,
-.run-panel input:focus-visible,
-.run-panel textarea:focus-visible,
-.run-panel a:focus-visible,
+/* THE FOCUS OVERRIDE IS DELETED, AND IT WAS CONTRADICTED IN WRITING TWICE BEFORE IT WAS
+ * WRITTEN. It drew `3px solid var(--accent)`. base.css sets the app-wide ring to
+ * `2px solid var(--ink)` and says why in its own comment — "the conventional accent ring is
+ * not available here, because docs/DESIGN.md gives accent exactly two jobs and neither of
+ * them is this" — and App.css repeats the argument for the nav.
+ *
+ * What it cost: a keyboard user crossing THIS ONE SCREEN met four different focus rings —
+ * 2px ink at offset +2 (nav, buttons), 2px ink at offset -2 (the walk's list), 3px ink
+ * (the search field), and 3px ACCENT inside this panel. base.css already covers every
+ * control here; the override bought nothing and spent the one colour the rest of the screen
+ * is scrupulously not spending.
+ *
+ * The `.run-upload input + span` case is the only one base.css cannot reach on its own —
+ * the real input is visually hidden and the span is what is seen — so it keeps a rule, in
+ * the house ink. */
 .run-upload input[type='file']:focus-visible + span {
-  outline: 3px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -317,8 +333,11 @@
   color: var(--ink);
 }
 
+/* The estimate. Ink and weight, per `.run-step-money` above — the number is the thing the
+   confirm below is quoting, not a second copy of the confirm. */
 .run-figure-money dd {
-  color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .run-blocked {
@@ -401,11 +420,12 @@
   color: var(--muted);
 }
 
-/* A live run is the one thing on this list worth the eye, and it gets accent at text weight
- * — the "system is working, and it is not finished" reading of docs/DESIGN.md's outline
- * weight. It is never a fill: there is nothing to do about a running batch. */
+/* A live run is the one thing on this list worth the eye. It was drawn in accent on a
+ * "system is working" reading of the outline weight — but docs/DESIGN.md's outline job is
+ * "the system is UNSURE", which a running batch is not, and there is nothing to do about one
+ * either way. Ink and weight, same as every other "this row matters" on this screen. */
 .run-phase-identifying {
-  color: var(--accent);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -440,11 +460,13 @@
   color: var(--ink);
 }
 
+/* A whole sentence, so the body face — and ink, because a sentence in accent is the third
+   job that stops the colour meaning anything. */
 .run-flagged {
   margin: 0;
   font-family: var(--body);
   font-size: 13px;
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .run-step-free {
@@ -458,8 +480,10 @@
   background: var(--surface);
 }
 
+/* A refusal is not an "unsure" and not an "only action" — it is a thing that already
+   happened. Ink border, the same one step of emphasis `.boxops-plain-danger` uses. */
 .run-result-refused {
-  border-color: var(--accent);
+  border-color: var(--ink);
 }
 
 .run-result-head {
