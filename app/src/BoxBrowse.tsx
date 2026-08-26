@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
-import type { BoxRecord, InventoryCard, RemoveResult } from './types'
+import type {
+  BoxRecord,
+  InventoryCard,
+  QueueEntryWire,
+  QueueSnapshot,
+  RemoveResult,
+} from './types'
 import type { Failure } from './server'
 import {
   describeFailure,
   positionLabel,
   placeSentence,
   getBoxes,
+  getQueues,
   getInventory,
   photoUrl,
   removeCardInPlace,
@@ -15,7 +22,8 @@ import {
   updateCard,
   newCaptureId,
 } from './server'
-import { BoxOps, ClaimEditor, RegisterBox, type ClaimPatch } from './BoxOps'
+import { BoxIdentity, BoxOps, ClaimEditor, RegisterBox, type ClaimPatch } from './BoxOps'
+import { reasonLabel } from './reasons'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
 import './BoxBrowse.css'
@@ -312,9 +320,10 @@ type BoxBrowseProps = {
    *  to sit for the screen to be as short as it now is. */
   head?: ReactNode
 
-  /** Rendered in the detail column beside the photograph, under the facts — the copies of the
-   *  selected card, its receipts and its sale controls. Given as a node rather than as a render
-   *  function because the caller already knows which card is selected: it is told below. */
+  /** Rendered in `.browse-under`, the full-width row beneath the photograph-and-facts band, so
+   *  it gets a measure neither of the band's two tracks is — the copies of the selected card, its
+   *  receipts and its sale controls. Given as a node rather than as a render function because the
+   *  caller already knows which card is selected: it is told below. */
   detail?: ReactNode
 
   /** Rendered beneath the box header, for the BOX being walked rather than for a card in it.
@@ -391,7 +400,15 @@ type Detail = { label: string; value: string; mono: boolean }
  * docs/DESIGN.md's mono-carries-all-metadata rule applied one field at a time rather than
  * one panel at a time.
  */
-/** D3 rung 1's finish claim, rendered. A SET since 2026-08-23 and a bare string before it
+/** A SET-VALUED CLAIM, rendered — and it renders BOTH of the panel's two since 2026-08-25:
+ *  D3 rung 1's finish and D23's rarity. One renderer rather than two, because a second
+ *  hand-rolled `' · '` join is a second thing to keep in step with this one for no benefit.
+ *
+ *  THE UNION STAYS WIDER THAN `InventoryCard.rarity_claim`'s DECLARED `string[] | null`, and
+ *  that is deliberate for the same reason it is wider than `metadata_finish`'s: the paragraph
+ *  below applies to both fields.
+ *
+ *  D3 rung 1's finish claim, rendered. A SET since 2026-08-23 and a bare string before it
  *  — both shapes live on disk permanently, because a bare string reads as a one-member set
  *  and there is deliberately no migration.
  *
@@ -401,7 +418,7 @@ type Detail = { label: string; value: string; mono: boolean }
  *  wrong screen; the union on `InventoryCard.metadata_finish` is what makes that a compile
  *  error instead, and this is the answer to it. " · " is the app's separator for metadata,
  *  which is what this row is. */
-function finishClaimText(claim: string | string[] | null): string {
+function claimText(claim: string | string[] | null): string {
   const members = (typeof claim === 'string' ? [claim] : (claim ?? [])).filter(
     (member) => typeof member === 'string' && member.trim() !== '',
   )
@@ -412,22 +429,147 @@ function detailsOf(card: InventoryCard): Detail[] {
   return [
     { label: 'Card', value: card.name ?? 'not identified yet', mono: card.name === null },
     { label: 'Number', value: collectorNumber(card), mono: true },
+    /* THE MODEL'S OWN HEDGE, DIRECTLY UNDER THE READ IT HEDGES. `confidence` qualifies the two
+     * rows above it and nothing else, so it sits against them rather than at the bottom of the
+     * panel — D35's failure mode is a name-and-number pair a human has to judge, and five rows
+     * between the read and the hedge makes that two glances instead of one.
+     *
+     * THE ONLY PLACE A RESOLVED CARD'S CONFIDENCE IS READABLE. `ReviewQueue.tsx` renders this
+     * field too, but only for a card that was QUEUED; box 2's five `medium` reads cleared
+     * routing and are visible on no screen at all today.
+     *
+     * SHOWN FLAT, AND THAT IS DELIBERATE. T1's recorded misses and D35's nine Pokedex misreads
+     * are all CONFIDENT and wrong, so `high` is not reassurance. That is an argument about what
+     * the value MEANS, not about whether to print it, and docs/DESIGN.md's owner-screen rule is
+     * the machine value verbatim. So: a plain mono row like every other — never a chip, never a
+     * colour, never an accent.
+     *
+     * `none recorded` and not `none`, matching `ReviewQueue.tsx`'s rendering of the same field.
+     * Two screens spelling one field's null two ways is the drift types.ts's header rails
+     * against. */
+    { label: 'Confidence', value: card.confidence ?? 'none recorded', mono: true },
     // The record's own game claim, verbatim. Null means written before the field existed
     // — the pipeline reads that as pokemon, and saying "not recorded" is the honest form
     // of the same fact. Earns its line the day boxes are mixed: it is what explains why
     // the panel above says pooled, or does not.
     { label: 'Game', value: card.game ?? 'not recorded', mono: true },
     { label: 'State', value: card.state, mono: true },
-    { label: 'Captured', value: card.captured_at ?? 'not recorded', mono: true },
+    { label: 'Captured', value: capturedText(card.captured_at), mono: true },
     { label: 'Set hint', value: card.set_hint ?? 'none', mono: true },
-    { label: 'Finish', value: finishClaimText(card.metadata_finish), mono: true },
+    { label: 'Finish', value: claimText(card.metadata_finish), mono: true },
+    /* THE TWO CLAIMS THIS PANEL COULD ALREADY OVERWRITE AND NEVER SHOWED. `CardOps` ->
+     * `ClaimEditor` writes FIVE claims — game, set hint, finish, rarity and note — and this list
+     * drew three of them, so the button directly beneath these rows replaced two values that
+     * appeared nowhere on the screen. Worse than silent: `ClaimEditor` opens with those fields
+     * EMPTY and reads armed-and-empty as a clear, so the correction was a blind overwrite.
+     *
+     * `rarity_claim` is set on 543 of 543 records, so this was live rather than latent, and
+     * `BoxOps.tsx` carries the scar from the other end of the same seam — a client function that
+     * "silently omitted `rarity_claim`, which the route had always accepted".
+     *
+     * RARITY RENDERS VERBATIM, and abbreviating it to the box's own `C/UC` is the temptation to
+     * refuse: D22 says "rarity strings render verbatim, the way reason codes do. A second
+     * friendly vocabulary is a thing nothing audits." The box NAME is free text the operator
+     * typed; this is the exact `Rarity` cell `pipeline/games.py` authors and the ladder compares
+     * against, and the two being free to disagree on screen is the point.
+     *
+     * RARITY SITS BESIDE FINISH because they are read together — D23 job 2 makes the rarity
+     * claim narrow the finish chips, so a finish offer that looks wrong is explained by the row
+     * above it. NOTE GOES LAST because it is the one unbounded free-text value here: a note that
+     * wraps grows the panel from the bottom rather than shifting aligned rows under it. That
+     * tail is also `ClaimField`'s own order in the editor beneath, so correcting a claim is a
+     * straight read-down from fact to field.
+     *
+     * NEITHER ROW IS CONDITIONAL, though `note` is null on all 543 today. A row that disappears
+     * leaves "this card has no note" and "this screen does not show notes" indistinguishable,
+     * which is the bug being fixed. D22 makes the note the whole identity of a `misc` card —
+     * "a free-text operator note instead, so it is findable by search" — so the first misc
+     * capture is a card whose only distinguishing field would otherwise be invisible on the
+     * screen named after finding cards. */
+    { label: 'Rarity', value: claimText(card.rarity_claim), mono: true },
+    /* WHICH RUN READ THIS CARD — the join between this panel and the Runs panel one column to
+     * the right, which lists run directories and cannot say which cards each one touched. The
+     * operator's loop is walk the box, find the card, run the pipeline, come back and see what
+     * changed, and until now the last step had nothing to land on. This list's own comment
+     * already promised "the fields a run is debugged with" while omitting the field naming it.
+     *
+     * PER CARD AND NOT PER BOX, even though all 543 records currently carry one string:
+     * `store/master.py` sets `card.run = run or card.run` inside `record_identification`, and
+     * D33 scopes a run to a SELECTION inside a box, so two cards in one box can legitimately
+     * carry different runs. */
+    { label: 'Run', value: card.run ?? 'not identified yet', mono: true },
+    { label: 'Note', value: card.note ?? 'none', mono: card.note === null },
   ]
+}
+
+/* WHEN THIS CARD WAS PHOTOGRAPHED, AS A PERSON SAYS IT. The store keeps
+ * `2026-08-23T18:35:05.621+00:00` and this panel printed it verbatim, where it was by some way
+ * the longest value on the card — ~234px against the ~100px this draws, on a row grid whose
+ * width every other value then had to live inside. The owner's instruction, 2026-08-25: "state
+ * an actual understandable human time like 2pm 9/24".
+ *
+ * LOCAL TIME, NOT THE STORED ZONE. The stamp is UTC and the operator is not; a "human" time
+ * eight hours out is worse than the machine one, because it reads as wrong rather than as
+ * technical. `toLocaleString` asks the browser, which is the owner's own Mac (D13).
+ *
+ * THE PRECISION IS NOT LOST, IT IS ELSEWHERE. `docs/GATES.md`'s cadence measurements come off
+ * `captured_at` at millisecond precision, and every one of them was taken by reading the store
+ * — never by looking at this panel. A screen that answers "where is this card" wants the hour;
+ * `curl /inventory` still has the rest of it.
+ *
+ * A STRING THAT WILL NOT PARSE IS RETURNED VERBATIM rather than rendered as `Invalid Date`. The
+ * field is a free `Optional[str]` in `store/master.py` and nothing validates it, so the honest
+ * failure is to show what is actually stored. */
+function capturedText(stamp: string | null): string {
+  if (stamp === null) return 'not recorded'
+  const at = new Date(stamp)
+  if (Number.isNaN(at.getTime())) return stamp
+
+  const clock = at
+    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    .replace(/\s?([AP])M/i, (_m, half: string) => half.toLowerCase() + 'm')
+  const day = at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  /* The year only when it is not this one — it is the same for every card in the store today,
+     so printing it on all 543 spends width to say nothing. */
+  const year = at.getFullYear()
+  const suffix = year === new Date().getFullYear() ? '' : ` ${year}`
+  return `${clock} · ${day}${suffix}`
 }
 
 /* Shown as the model returned it, unpadded. `pipeline/join.py:join_key` zero-fills to
  * three digits to match the export's `Number` column, and doing that here would put a
  * string on screen that nothing in the run ever said — which is the wrong trade on the
  * screen someone opens to find out what the run actually said. */
+/** The open question about one position, or null — the entry and which queue it is in.
+ *
+ *  BOTH QUEUES ARE SEARCHED AND THE ANSWER SAYS WHICH, because they mean different things to
+ *  the person standing at the box. `review` is worked expensive-first behind a starvation tier;
+ *  `parked` is sub-threshold and, in `server.ts`'s own words, "the low-value queue an
+ *  unidentifiable card may never be worth a tap on". Knowing which one a card is in is most of
+ *  knowing whether to go and answer it. */
+function openQuestion(
+  snapshot: QueueSnapshot | null,
+  row: Row,
+): { entry: QueueEntryWire; queue: 'review' | 'parked' } | null {
+  if (snapshot === null) return null
+  const mine = (entry: QueueEntryWire) =>
+    entry.box === row.card.box && entry.index === row.card.index
+  const inReview = snapshot.review.find(mine)
+  if (inReview !== undefined) return { entry: inReview, queue: 'review' }
+  const inParked = snapshot.parked.find(mine)
+  return inParked === undefined ? null : { entry: inParked, queue: 'parked' }
+}
+
+/** How long an entry has been waiting, in the queue's own terms. */
+function waitingFor(firstSeen: string): string {
+  const at = Date.parse(firstSeen)
+  if (Number.isNaN(at)) return 'unknown age'
+  const days = Math.floor((Date.now() - at) / 86400000)
+  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`
+  const hours = Math.floor((Date.now() - at) / 3600000)
+  return hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'today'
+}
+
 function collectorNumber(card: InventoryCard): string {
   if (card.number === null) return 'none'
   return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
@@ -495,6 +637,22 @@ export function BoxBrowse({
    * card can land after the selection has moved, and a boolean would blame the wrong
    * card for a missing file. */
   const [photoAbsent, setPhotoAbsent] = useState<string | null>(null)
+
+  /* THE OPEN QUESTIONS, READ ONCE FOR THE WHOLE SCREEN. A card can be sitting in the review
+   * queue with nothing this panel says about it — live right now, `2/95` is `no_catalog_row`
+   * with zero candidates and two days old, and walking to it in the box list tells you nothing
+   * is wrong with it. `State: identified` is not merely silent there, it is MISLEADING: `state`
+   * describes how far capture and identify got, and the open question was raised by the JOIN.
+   *
+   * NOT A PER-CARD FETCH. `GET /queues` returns both queues whole — it is what `#/review` reads
+   * on mount — so one read serves every card the walk can land on, and stepping through a box
+   * with the arrow keys costs nothing. Re-read on the same counter every other write here uses.
+   *
+   * FAILS SILENT, DELIBERATELY. This is a decoration on a panel whose job is where the card is;
+   * a queue read that 404s must not put a refusal over a position label. `null` and the block
+   * simply does not draw — which is the same state as "no open question", and that is honest:
+   * both mean this screen has nothing to add. */
+  const [queued, setQueued] = useState<QueueSnapshot | null>(null)
   const [reloads, setReloads] = useState(0)
   /* Each re-shot card's NEW capture id, by row key — the cache nonce PhotoPanel appends
    * after a replacement, and nothing else. The id rather than a counter because it
@@ -717,6 +875,20 @@ export function BoxBrowse({
       live = false
     }
   }, [reloads, reloadToken, onBoxes])
+
+  useEffect(() => {
+    let live = true
+    getQueues()
+      .then((snapshot) => {
+        if (live) setQueued(snapshot)
+      })
+      .catch(() => {
+        // Deliberately nothing — see the `queued` declaration. The panel is whole without it.
+      })
+    return () => {
+      live = false
+    }
+  }, [reloads, reloadToken])
 
   /* THE SHELF FOLLOWS THE FILTER, which is the selection rule one level up and it exists for
    * the same failure: a query matching only box 95 while box 1 is selected would draw an empty
@@ -1242,6 +1414,7 @@ export function BoxBrowse({
                 with the query intact — all SearchField's own rulings, not re-made here. The
                 search-shape argument and the deliberate absence of autoFocus are at the
                 useSearch call above. */}
+            {/* NB: the box strip is below this, and `BoxIdentity` sits under it — see there. */}
             <SearchField value={query} onChange={setQuery} persona="owner" />
 
             {/* THE BOX STRIP — the capture screen's segmented-track idiom, not a row of
@@ -1287,6 +1460,28 @@ export function BoxBrowse({
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* WHAT THIS BOX IS, under the strip that just named it (owner, 2026-08-25) —
+                its name, how full it is, whether it is sealed, and the shape of its sections.
+                Drawn here rather than in a panel across the screen because this column IS the
+                box: the strip above picks it, the walk below is its cards, and the operations
+                at the bottom act on it. See `BoxIdentity`, which was split out of `BoxOps` for
+                exactly this. Nothing for the pooled and no-box shelves, which are not boxes. */}
+            {shelfBox === null ? null : (
+              <BoxIdentity
+                record={shelfBox}
+                /* WHERE THE SELECTED CARD IS, ON THE BOX'S OWN BAR (owner, 2026-08-25). The
+                   server's `fraction`, never `index / box_total` recomputed here — types.ts and
+                   `PositionBar` both make that the rule, because the two disagree across a
+                   sealed box's frozen capacity. Null for a card in another box, a pooled card,
+                   or no selection at all, and the marker simply is not drawn. */
+                at={
+                  selectedRow !== null && selectedRow.card.box === shelfBox.box
+                    ? (selectedRow.card.place?.fraction ?? null)
+                    : null
+                }
+              />
             )}
 
             {/* The search's own failure, in the owner idiom: the sentence, then the
@@ -1504,31 +1699,13 @@ export function BoxBrowse({
               </ul>
             )}
 
-            {/* The deep keys' chips, ON the list rather than in the header — the ruling at
-                SECTION_KEYS: the header advertises window keys, this advertises list keys,
-                and each chip sits where its binding lives. The condition is said out loud
-                because it is the one fact about these keys nobody can guess from the
-                chrome. */}
-            {visible.length < 2 ? null : (
-              <p className="browse-keys browse-listkeys">
-                {SECTION_KEYS.map((step) => (
-                  <kbd className="browse-key" key={step.key}>
-                    {step.label}
-                  </kbd>
-                ))}
-                a section
-                {' · '}
-                {EDGE_KEYS.map((step) => (
-                  <kbd className="browse-key" key={step.key}>
-                    {step.label}
-                  </kbd>
-                ))}
-                the ends
-                {' · '}
-                <kbd className="browse-key">{TICK_KEY.label}</kbd>
-                tick this card · when the list holds focus
-              </p>
-            )}
+            {/* THE LIST-KEYS CHIP ROW IS GONE (owner, 2026-08-25). It drew PgUp/PgDn/Home/End/X
+                with their captions under the walk — 51px of permanent chrome in a sticky column
+                capped at the viewport, which is 51px the walk did not get on every card of every
+                box. The bindings are untouched: SECTION_KEYS, EDGE_KEYS and TICK_KEY still fire,
+                and the header's own chip row still advertises the window keys. What went is the
+                advertisement for the deep ones, which is a thing learned once and then read
+                past for the rest of the day. */}
 
             {/* Register a box before a card goes into it — D20's control, in the column that
                 lists every box it would join, at the bottom of it.
@@ -1541,25 +1718,49 @@ export function BoxBrowse({
                 still beside the strip in the sense D20's own argument needs — every existing
                 box is listed in the same column, which is what makes a mistyped number
                 visible. */}
+            {/* THE BOX'S OWN OPERATIONS, at the bottom of the box's own column and directly
+                above the control that creates one. Rename, re-divide, seal, set claims over the
+                ticked cards, release a listing hold, delete the box — every one of them acts on
+                a BOX, which is what makes this the right neighbour for `RegisterBox` and the
+                wrong one for a card panel.
+
+                BELOW THE WALK RATHER THAN ABOVE IT, and that costs nothing because the walk
+                scrolls inside this column: `.browse-list` is `flex: 0 1 auto` with its own
+                `overflow-y`, so these stay on screen while 543 cards move past them. Above the
+                walk they would push the cards down for every card, to be reached once a box.
+
+                IT TAKES THE TICKED SELECTION, which is what turns a column of checkboxes into a
+                feature: `PUT /inventory/<box>` applies retroactive capture claims over a box or
+                over an explicit list of indices, and the list is the one these ticks build. The
+                scope sentence is written onto the button there, so the widening from "the ticked
+                cards" to "the whole box" is never silent.
+
+                `onChanged` bumps the same counter Reload does, which re-reads the registry AND
+                the inventory — a divider edit relabels every card in the box (D10 as amended),
+                so the walk has to be re-read with the panel. */}
+            {shelfBox === null ? null : (
+              <BoxOps
+                record={shelfBox}
+                selection={pickedIndices}
+                onChanged={() => setReloads((n) => n + 1)}
+              />
+            )}
+
             <RegisterBox onChanged={() => setReloads((n) => n + 1)} />
           </div>
 
           <div className="browse-side">
-            {/* THE SELECTED CARD IS FIRST IN THIS COLUMN, AND THAT IS THE WHOLE OF THE FIX.
-                Measured at 1440x900 before the move: the box header (190px), its Layout and
-                controls fold and the Runs fold sat above it, so the photograph of the card the
-                operator had just clicked opened at y=482 of a 900px viewport and ran to y=917 —
-                cut off by the fold. Both folds were correctly collapsed and still cost 266px of
-                vertical rent above the screen's own subject.
+            {/* THE SELECTED CARD IS THE WHOLE OF THIS COLUMN NOW, which is where two successive
+                fixes to the same complaint arrived. The first, on 2026-08-24, moved the card
+                ABOVE the box header inside one column: measured at 1440x900, the header (190px)
+                and the two folds sat over it, so the photograph of the card just clicked opened
+                at y=482 of a 900px viewport and ran to y=917, cut off. The second, on
+                2026-08-25, moved the box header and the runs OUT — see `.browse-boxrun` below.
+                Ordering them was the cheap fix; not sharing a column with them is the real one.
 
-                MOVED IN THE DOM RATHER THAN WITH `order`. A flex `order` would have produced the
-                same picture and left the tab ring and a screen reader walking the column in the
-                old sequence — the card announced last, after the box controls that are now
-                beneath it. The two orders are kept the same on purpose.
-
-                What is BELOW it is unchanged and still about the same shelf: the box header, the
-                box panel, and the pooled/unplaced notes. They lost no capability by moving down;
-                they were never what the click was for. */}
+                MOVED IN THE DOM RATHER THAN WITH `order`, both times. A flex `order` would have
+                produced the same picture and left the tab ring and a screen reader walking the
+                old sequence. The two orders are kept the same on purpose. */}
             {/* THE RECEIPT SURVIVES AN EMPTY LIST, AND IT DID NOT UNTIL 2026-08-24.
                 `detail` — the receipts, their undo, and the refusal panel — is rendered
                 inside the `selectedRow` guard below, which is right while there IS a selected
@@ -1574,16 +1775,29 @@ export function BoxBrowse({
                 query matching nothing inside twenty seconds.
 
                 Rendered here only when the guard below cannot: never twice, always once. */}
-            {selectedRow === null ? detail : null}
 
             {selectedRow === null ? null : (
-              /* TWO COLUMNS, NOT ONE, AND THE MEASUREMENT IS THE ARGUMENT. This panel drew
+              /* A BAND AND A ROW UNDER IT, AND THE MEASUREMENT IS THE ARGUMENT. This panel drew
                  everything in one 420px-wide stack inside an 824px column, so half the width of
                  the widest thing on screen sat empty beside a photograph while the facts under
-                 it pushed everything else below the fold. The photograph and the things read
-                 ABOUT the card are two different jobs and they now sit side by side; the
-                 headline spans both, because a position label is what the whole panel is for. */
-              <section className="browse-detail">
+                 it pushed everything else below the fold. Splitting it into two columns fixed
+                 that and left a second version of it: the photograph then ran 587px against
+                 204px of facts, so the column that held the facts had ~380px of nothing under
+                 them and everything real was still below the fold.
+
+                 So the split is no longer down the middle of the panel. The photograph and the
+                 seven rows read ABOUT the card are one BAND, the same height because the
+                 photograph now takes its height from the rows (D38); the headline spans both
+                 above it, because a position label is what the whole panel is for; and
+                 `.browse-under` spans both below it, because the copies list and the card's
+                 own writes want a measure and neither of the band's two tracks is one. */
+              <section
+                className={
+                  photoMissing(selectedRow, photoAbsent === selectedRow.key)
+                    ? 'browse-detail is-absent'
+                    : 'browse-detail'
+                }
+              >
                 <div className="browse-headline">
                   {selectedLabel === null && isPooled(selectedRow.card) ? (
                     /* Pooled, not missing — the deliberate case, before the fault below can
@@ -1641,6 +1855,8 @@ export function BoxBrowse({
                   )}
                 </div>
 
+                {/* JUST THE PHOTOGRAPH. The re-shoot moved inside `Correct claims` (owner,
+                    2026-08-25) — see CardOps, which is where the argument for that now lives. */}
                 <div className="browse-shot">
                   <PhotoPanel
                     row={selectedRow}
@@ -1649,19 +1865,13 @@ export function BoxBrowse({
                     onAbsent={() => setPhotoAbsent(selectedRow.key)}
                     nonce={reshot[selectedRow.key] ?? null}
                   />
-
-                  <ReshootControl
-                    row={selectedRow}
-                    busy={reshootBusy === selectedRow.key}
-                    failure={
-                      reshootFailure !== null && reshootFailure.key === selectedRow.key
-                        ? reshootFailure.failure
-                        : null
-                    }
-                    onPick={(file) => beginReshoot(selectedRow, file)}
-                  />
                 </div>
 
+                {/* WHAT THIS CARD IS, THEN WHAT CAN BE DONE TO IT — one column beside the
+                    photograph. `CardOps` is here rather than below the band because the band's
+                    two sides are now different heights, and the ~70px it fills is the air that
+                    would otherwise sit under the facts. Its writes are card-level, like every
+                    row above it, so the column reads as one subject. */}
                 <div className="browse-about">
                   <dl className="browse-facts">
                     {detailsOf(selectedRow.card).map((fact) => (
@@ -1672,75 +1882,104 @@ export function BoxBrowse({
                     ))}
                   </dl>
 
-                  {/* THE COPIES OF THIS CARD, AND THE SALE AND RETIREMENT THAT GO WITH THEM —
-                      D7's SKU -> positions map, handed down by the screen that owns the write.
-                      This is where the merged Find mode went: you search, the walk narrows, you
-                      pick one, and every other copy is right here with its own position and its
-                      own controls. The node belongs to `Inventory.tsx` because the receipts,
-                      the undo windows and the two confirm panels are one flow with twenty
-                      pieces of state, and splitting a flow across two components is how half of
-                      it drifts.
+                  {/* WHETHER THIS CARD HAS AN OPEN QUESTION, which is the fact that ties the
+                      three things this screen is for together: the walk finds the card, this
+                      says whether anything is waiting on it, and the run panel one column over
+                      is what would answer it.
 
-                      IN THIS COLUMN RATHER THAN UNDER THE PHOTOGRAPH, which is a placement with
-                      a measurement behind it: spanning both columns puts it below a ~420px-tall
-                      photograph and off the bottom of a 900px viewport, where a receipt with a
-                      twenty-second undo window would expire unseen. */}
-                  {detail}
+                      IT IS NOT DUPLICATION OF `#/review`, and the distinction matters because
+                      D38 just deleted a duplication one column left. That screen answers "what
+                      is left to do, in worked order"; it cannot be searched by card and has no
+                      deep link, so the walk is the only path from a physical slot to a card.
+                      This is the same fact reached from the other direction, not the same
+                      rendering drawn twice.
 
-                  {/* The card-level writes, last, because two of them change a claim the
-                      pipeline reads and the third deletes a record. See CardOps. */}
+                      OUTSIDE THE `<dl>` ON PURPOSE. `detailsOf` is a pure function of
+                      `InventoryCard` and a queue entry is per-POSITION; a `dt`/`dd` grid row
+                      cannot hold the two-line reason DESIGN.md's reason-code rule requires; and
+                      `app/tests/inventory.spec.ts` measures `.browse-facts` specifically, so
+                      keeping this out of that list leaves D38's assertion honest.
+
+                      The candidate count is load-bearing rather than decoration: zero candidates
+                      is the difference between "go and answer it" and "it cannot be answered as
+                      it stands", and it is what points at the re-shoot icon already on this
+                      panel. `POST /review/<box>/<index>/answer` refuses a candidate-less entry
+                      as `no_candidates`. */}
+                  {(() => {
+                    const open = openQuestion(queued, selectedRow)
+                    if (open === null) return null
+                    const { entry, queue } = open
+                    const answerable = entry.candidates.length > 0
+                    return (
+                      <div className="browse-queued">
+                        <p className="browse-note-text">
+                          Waiting in the {queue === 'review' ? 'review' : 'parked'} queue —{' '}
+                          {reasonLabel(entry.reason)}. {waitingFor(entry.first_seen)}.{' '}
+                          {answerable
+                            ? `${entry.candidates.length} candidate row${entry.candidates.length === 1 ? '' : 's'} to choose from on the review screen.`
+                            : 'No candidate rows, so it cannot be answered as it stands — re-shoot it, or stand it down from the review screen.'}
+                        </p>
+                        {/* A token the sentence does not already say. Never the sentence again:
+                            `.browse-machine`'s own comment records this file making exactly that
+                            mistake — "reads as a stutter and greps to nothing". */}
+                        <p className="browse-machine">
+                          {entry.reason} · {queue} · candidates {entry.candidates.length}
+                        </p>
+                      </div>
+                    )
+                  })()}
+
+                  {/* The card-level writes: two change a claim the pipeline reads and the third
+                      deletes a record. See CardOps. */}
                   <CardOps
                     key={selectedRow.key}
                     row={selectedRow}
                     onChanged={() => setReloads((n) => n + 1)}
+                    /* A SLOT RATHER THAN FOUR THREADED PROPS. The re-shoot's state — which card
+                       is uploading, which refusal belongs to which card, and the cache-busting
+                       nonce per key — already lives up here beside the photo it replaces, and
+                       handing `CardOps` the rendered node keeps it there. */
+                    reshoot={
+                      <ReshootControl
+                        row={selectedRow}
+                        busy={reshootBusy === selectedRow.key}
+                        failure={
+                          reshootFailure !== null && reshootFailure.key === selectedRow.key
+                            ? reshootFailure.failure
+                            : null
+                        }
+                        onPick={(file) => beginReshoot(selectedRow, file)}
+                      />
+                    }
                   />
                 </div>
+
               </section>
             )}
-            {/* THE BOX HEADER — D31's "box operations live on the box header inside the
-                browse, beside the box they operate on". It is the first thing in the detail
-                column rather than a strip across the top of the walk, and that is a measured
-                choice: `#/boxes` drew this panel for every box at once and cost 1744px of
-                scroll to say four things, so the panel is drawn once, for the box being
-                walked, with its layout table and its controls folded (see BoxOps).
+          </div>
 
-                IT NOW TAKES THE TICKED SELECTION, which is what turns a column of checkboxes
-                into a feature: `PUT /inventory/<box>` applies retroactive capture claims over a
-                box or over an explicit list of indices, and the list is the one these ticks
-                build. The scope sentence is written onto the button there, so the widening from
-                "the ticked cards" to "the whole box" is never silent.
+          {/* THE THIRD COLUMN IS THE RUNS, and it used to be the box and the runs. D31 put box
+              operations "on the box header inside the browse, beside the box they operate on",
+              and on 2026-08-25 the owner pointed out that the box's header is now the left
+              column: the strip names it, the walk is its cards, and this panel was re-listing
+              those same sections as inert text a thousand pixels away. So the box went there and
+              the runs came up into the space.
 
-                DRAWN ONLY FOR A NUMBERED SHELF THE REGISTRY KNOWS. The pooled and no-box
-                shelves are not boxes and have nothing to rename, seal or delete; a box a card
-                names that `GET /boxes` has not answered for gets no panel rather than an
-                invented one. `onChanged` bumps the same counter the Reload does, which
-                re-reads the registry AND the inventory — a divider edit relabels every card in
-                the box (D10 as amended), so the walk has to be re-read with the panel. */}
-            {/* THE BOX AND THE RUNS SHARE ONE ROW (owner, 2026-08-24): "i also box and want runs
-                to get in the same space not having to scroll down". Stacked full-width they
-                were ~250px each and the second one was below the fold on a 900px viewport, so
-                reaching the pipeline meant scrolling past the box settings every time. Side by
-                side they cost one panel's height instead of two.
+              WHAT THE PAIR BOUGHT IS STILL BOUGHT. D33 removed two disclosures on the grounds
+              that a `1fr 1fr` row cost one panel's height rather than two; a column beside the
+              card cost the card nothing at all; and this costs it nothing while giving the box
+              back to the box. Nothing folds, which is the half D33 actually settled.
 
-                A grid rather than two flex children, so the two keep equal width whatever
-                either one's content does — a run with a long console must not squeeze the box
-                controls to a column of wrapped words. */}
-            <div className="browse-boxrun">
-            {shelfBox === null ? null : (
-              <BoxOps
-                record={shelfBox}
-                selection={pickedIndices}
-                onChanged={() => setReloads((n) => n + 1)}
-              />
-            )}
-
-            {/* THE BOX PANEL — beneath the box header, and about the same box. Outside the
-                `selectedRow` guard below, deliberately: what goes here is about the shelf, and
-                a control for the box that vanished when no card was selected would be a
-                control the operator could only find by accident. */}
-            {boxPanel}
-            </div>
-
+              THE `selectedRow` GUARD CANNOT REACH IN HERE, and that is worth having structurally
+              rather than by care. The old comment on `{boxPanel}` had to say in prose that it sat
+              outside the guard deliberately — a control about the SHELF that vanished when no
+              card was selected would be one the operator found by accident. It is in a different
+              top-level column from the guard, so no later edit can slide it inside without
+              moving it between columns first. */}
+          <div className="browse-boxrun">
+            {/* WHY THERE IS NO BOX PANEL IN THE LEFT COLUMN, said in the column that has room
+                for the sentence. The pooled and no-box shelves are not boxes and have nothing to
+                rename, divide or seal. */}
             {shelf === 'pooled' ? (
               <div className="browse-gap">
                 <p className="browse-note-text">
@@ -1762,11 +2001,55 @@ export function BoxBrowse({
               </div>
             ) : null}
 
+            {/* THE RUN PANEL — under the box header, and about the same box. */}
+            {boxPanel}
           </div>
+
+          {/* THE COPIES OF THIS CARD, ACROSS COLUMNS 2 AND 3 — D7's SKU -> positions map, handed
+              down by the screen that owns the write. This is where the merged Find mode went:
+              you search, the walk narrows, you pick one, and every other copy is right here with
+              its own position and its own controls. The node belongs to `Inventory.tsx` because
+              the receipts, the undo windows and the two confirm panels are one flow with twenty
+              pieces of state, and splitting a flow across two components is how half of it drifts.
+
+              IT GETS THE PAGE'S SPARE MEASURE RATHER THAN THE CARD COLUMN'S, and the measurement
+              is the argument. In the middle column it was 976px of a 1450px page on the default
+              card and 1713px of 2187px on an eleven-copy one — while the right column ended at
+              y=451 and 778px of viewport sat empty beside a 630px stack of rows. Rebuilt wide
+              and measured: the row goes 144px to 82px and eleven copies go 1598px to 902px, a
+              43% cut with nothing removed. That is `CardLocations.css`'s own recorded complaint
+              answered rather than worked around — that file records these rows being re-cut from
+              a grid to a wrapping flex because a ~460px column shredded the position label.
+
+              RENDERED ONCE, WHICH IS THE SECOND THING THIS BUYS. `detail` used to draw at two
+              mutually exclusive sites so that a receipt whose twenty-second undo was still
+              running would survive a query matching nothing. Out here it is not inside
+              `selectedRow`'s guard at all, so that invariant stops being a prose promise and
+              becomes structural — and the duplication risk `app/tests/inventory.spec.ts` names
+              in its own comment stops existing.
+
+              AFTER `.browse-boxrun` IN THE DOM, NOT BEFORE. This file rules twice that a reorder
+              happens in the DOM rather than with `order`, so the tab ring and a screen reader
+              walk what the eye walks: card, runs, copies is reading order at both breakpoints. */}
+          <div className="browse-under">{detail}</div>
         </div>
       ) : null}
     </section>
   )
+}
+
+/* WHETHER THERE IS A PHOTOGRAPH TO DRAW, asked in one place because two callers need the same
+ * answer and a second copy is how they drift. `PhotoPanel` below branches on exactly these two
+ * conditions to render `.browse-absent` instead of an image, and `BoxBrowse` needs the same fact
+ * one level up to decide whether the shot/facts band can exist at all — a 150px track is right
+ * for a card and wrong for a paragraph, so the band collapses to one column when the panel is a
+ * sentence (see `.browse-detail.is-absent`).
+ *
+ * Written as a predicate rather than lifted state: both facts are already here. `photo === null`
+ * is on the record, and `absent` is the 404 this screen learned about from the <img>'s own
+ * onError. */
+function photoMissing(row: Row, absent: boolean): boolean {
+  return row.card.photo === null || absent
 }
 
 type PhotoPanelProps = {
@@ -1900,6 +2183,14 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
 
   if (row.card.state === 'sold' || row.card.state === 'retired') return null
 
+  /* One string, used as the accessible name, the tooltip, and the refusal panel's heading —
+     so the three cannot drift into describing different controls. */
+  const label = busy
+    ? 'Replacing the photo…'
+    : row.card.photo === null
+      ? 'Add a photo'
+      : 'Re-shoot this photo'
+
   return (
     <div className="browse-reshoot">
       <input
@@ -1915,22 +2206,26 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
           if (file !== undefined) onPick(file)
         }}
       />
-      {/* No accent fill: docs/DESIGN.md reserves the solid fill for a screen with exactly
-          one thing to do, and this screen's one thing is still to be looked at. The label
-          changes with the fact — a card `emit` recorded without a photograph has nothing
-          to re-shoot, and the route's own comment calls that case the first photograph
-          the position has, so the button says so rather than claiming a replacement. */}
+      {/* THE WORDS ARE BACK, AND THE ICON WAS THE RIGHT ANSWER TO A QUESTION THAT NO LONGER
+          EXISTS. It became a 24px glyph on 2026-08-25 when this sat under the photograph and the
+          owner called the button "a text box taking up so much horizontal space" — true of a
+          control living in a column whose width IS the photograph's. It now lives inside
+          `Correct claims`, where there is a panel's width, and a glyph whose meaning has to be
+          recovered from a tooltip is worse than the words when the words fit.
+
+          The label changes with the fact — a card `emit` recorded without a photograph has
+          nothing to re-shoot, and the route's own comment calls that case the first photograph
+          the position has, so this says so rather than claiming a replacement.
+
+          No accent fill: docs/DESIGN.md reserves the solid fill for a screen with exactly one
+          thing to do, and this panel offers five corrections and a cancel. */}
       <button
         className="browse-reload"
         type="button"
         disabled={busy}
         onClick={() => inputRef.current?.click()}
       >
-        {busy
-          ? 'Replacing the photo…'
-          : row.card.photo === null
-            ? 'Add a photo'
-            : 'Re-shoot this photo'}
+        {label}
       </button>
       {failure === null ? null : (
         <div className="browse-note">
@@ -1971,7 +2266,17 @@ function ReshootControl({ row, busy, failure, onPick }: ReshootControlProps) {
  * D10 makes permanent. The claim correction stays, because a note or a set hint on a departed
  * card is still a record somebody may need to fix.
  */
-function CardOps({ row, onChanged }: { row: Row; onChanged: () => void }) {
+function CardOps({
+  row,
+  onChanged,
+  reshoot,
+}: {
+  row: Row
+  onChanged: () => void
+
+  /** The re-shoot control, rendered inside the claims editor. See where it is used. */
+  reshoot?: ReactNode
+}) {
   const [open, setOpen] = useState<'claims' | 'delete' | null>(null)
   const [busy, setBusy] = useState(false)
   const [trouble, setTrouble] = useState<Failure | null>(null)
@@ -2062,16 +2367,37 @@ function CardOps({ row, onChanged }: { row: Row; onChanged: () => void }) {
       )}
 
       {open === 'claims' ? (
-        <ClaimEditor
-          scope="this card"
-          /* The card's OWN game drives the finish and rarity vocabularies (D22), which is the
-             one place this editor can be exact — a box-wide apply has to guess because a box
-             may be mixed (D21), and one card cannot be. */
-          game={row.card.game}
-          busy={busy}
-          onApply={(patch) => void correct(patch)}
-          onCancel={() => setOpen(null)}
-        />
+        <>
+          {/* RE-SHOOT LIVES IN HERE NOW (owner, 2026-08-25): "remove the retake button and
+              instead add it as something you can do if you click into correct claims".
+              D26 put it "on the screen whose whole job is looking at one stored photo beside its
+              position", and it still is — one press further in, on the panel that already exists
+              for correcting what a card claims. That is the better home on its own terms: a
+              re-shoot is a correction, it is the correction the other four cannot make, and the
+              things it sits with are the ones an operator reaches for in the same moment.
+
+              WHAT IT COST WHERE IT WAS. Drawn under the photograph it was a permanent control
+              for an occasional act, in the column whose width is the photograph's — first a
+              ~150px button, then a 24px icon after the owner called the button "a text box
+              taking up so much horizontal space". Neither is free, and both were on screen for
+              every card of every box.
+
+              A LABELLED BUTTON AGAIN, not the icon. The icon existed because the photo column
+              was 150px wide and a sentence did not fit; in here there is a panel's width, and a
+              glyph whose meaning has to be recovered from a tooltip is worse than the words when
+              the words fit. */}
+          {reshoot}
+          <ClaimEditor
+            scope="this card"
+            /* The card's OWN game drives the finish and rarity vocabularies (D22), which is the
+               one place this editor can be exact — a box-wide apply has to guess because a box
+               may be mixed (D21), and one card cannot be. */
+            game={row.card.game}
+            busy={busy}
+            onApply={(patch) => void correct(patch)}
+            onCancel={() => setOpen(null)}
+          />
+        </>
       ) : open === 'delete' ? (
         <div className="browse-danger">
           <p className="browse-note-text">

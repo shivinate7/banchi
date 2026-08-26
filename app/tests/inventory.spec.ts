@@ -64,6 +64,12 @@ function card(input: {
   sectionStart: number
   sectionEnd: number
   captureId?: string | null
+  /** D23's rarity claim, as a set. A list here is the shape `pipeline/games.py` authors. */
+  rarity?: string[] | null
+  /** D22's free-text operator note — the whole identity of a `misc` card. ONE LINE: the band
+   *  assertion in 'the photograph is sized by its column' measures `.browse-facts`, and a note
+   *  that wraps adds a row's height to it. */
+  note?: string | null
   /** D3 rung 1's finish claim as it comes off `inventory.json`. Defaults to the BARE STRING
    *  every record written before the amendment of 2026-08-23 carries — `_card_row` ships
    *  `asdict(card)` raw, so both shapes really do arrive here and the default is the one
@@ -107,8 +113,11 @@ function card(input: {
     set_hint: 'ME01',
     metadata_finish: input.finish === undefined ? 'normal' : input.finish,
     game: 'pokemon',
-    rarity_claim: null,
-    note: null,
+    /* D23's rarity claim and D22's operator note — the two the card panel could overwrite and
+       never displayed until 2026-08-25. Optional inputs so most rows keep the nulls that make
+       the fallbacks assertable, and one row carries real values. */
+    rarity_claim: input.rarity ?? null,
+    note: input.note ?? null,
     captured_at: '2026-08-22T12:34:00+00:00',
     capture_id: input.captureId === undefined ? `cap-${input.index}` : input.captureId,
     name: input.name,
@@ -134,7 +143,11 @@ function card(input: {
  */
 const CARDS = {
   '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
-  '2/2': card({ index: 2, state: 'captured', name: null, sku: null, section: 1, sectionStart: 1, sectionEnd: 3, finish: ['normal', 'reverse_holo'] }),
+  /* THE MISC-SHAPED CARD: no name, no SKU, and the two claims that are the only thing telling it
+     apart. D22 makes exactly this the case the note exists for — "it carries a free-text operator
+     note instead, so it is findable by search" — and it is the row the fixture comment already
+     describes as the part of the store the search cannot reach. */
+  '2/2': card({ index: 2, state: 'captured', name: null, sku: null, section: 1, sectionStart: 1, sectionEnd: 3, finish: ['normal', 'reverse_holo'], rarity: ['Common', 'Uncommon'], note: 'japanese, no english print' }),
   '2/3': card({ index: 3, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
   '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 2, sectionStart: 4, sectionEnd: 5 }),
   '2/5': card({ index: 5, state: 'retired', name: 'Pyroar', sku: '8937372', section: 2, sectionStart: 4, sectionEnd: 5 }),
@@ -277,6 +290,10 @@ function searchAnswer(query: string) {
     query,
     groups: skus.map((sku) => {
       const copies = copiesOf(sku)
+      /* The stand-in for the SKU's listing counts, pulled out of the spread below so `listable`
+         can be derived from the SAME `on_hand` the group reports rather than from a second
+         literal that could disagree with it. */
+      const held = LISTED[sku] ?? { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 }
       return {
         sku,
         names: [
@@ -290,8 +307,12 @@ function searchAnswer(query: string) {
         printed_total: '132',
         set_hint: 'ME01',
         condition: 'Near Mint',
-        ...(LISTED[sku] ?? { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 }),
+        ...held,
         cap: 4,
+        /* D7's `min(cap, on hand)`, mirroring what `capture_server.py` computes — the shelf
+           binds below a playset, which is most of the store. Derived here rather than written
+           as a number so the fixture cannot claim a denominator its own `on_hand` contradicts. */
+        listable: Math.min(4, held.on_hand),
         copies,
       }
     }),
@@ -447,6 +468,41 @@ async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' })
   })
 
+  /* THE CARD PANEL'S QUEUE READ, stubbed like everything else and for the reason at the top of
+     this file: nothing here may touch the real store. It is only a read, but an unstubbed read is
+     a request to whatever is listening on port 8000 — in this repo the owner's actual capture
+     server over their actual inventory — and it would make this suite depend on `make server`.
+
+     ONE ENTRY, ON THE CARD THE WALK SELECTS BY DEFAULT, shaped like the one live in the store
+     right now: `no_catalog_row` with ZERO candidates, which is D37's black-frame card and the
+     case the panel's sentence has to get right. Parked is empty, so a card in neither queue draws
+     nothing — asserted by every other case in this file simply passing. */
+  await page.route(/\/queues$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        review: [
+          {
+            position: 'Box 2 · Section 1 · Card 1',
+            box: 2,
+            index: 1,
+            label: 'Box 2 · Section 1 · Card 1',
+            photo: null,
+            read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
+            confidence: null,
+            reason: 'no_catalog_row',
+            candidates: [],
+            first_seen: new Date(Date.now() - 2 * 86400000).toISOString(),
+            market: null,
+            cleared_by_human: false,
+          },
+        ],
+        parked: [],
+      }),
+    })
+  })
+
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   /* THE SECTION HEADERS AND NOT A CARD ROW, because the walk arrives fully collapsed since
@@ -467,17 +523,17 @@ async function expandAll(page: Page) {
   await expect(page.locator('.browse-row').first()).toBeVisible()
 }
 
-/** Wait for the box header's controls, where every box operation lives.
+/** Wait for the box's controls, which live at the bottom of the walk's own column.
  *
- *  THERE IS NO DISCLOSURE ANY MORE AND THIS HELPER'S CLICK IS INERT (D33, amended). It said
- *  "shut by default" and pressed a `<summary>`; `BoxOps` renders a plain `<div>` now, on the
- *  owner's ruling — "both box and run, i don't want click in functionality, i want their
- *  buttons just there." The click is left in place because it is harmless on a `<p>` and the
- *  `expect` beneath it is the real content of this helper: a sync point that every box-control
- *  test needs anyway, so that a test measuring a control cannot start before the panel has
- *  rendered. Renaming it to `awaitBoxOps` would touch every call site to say the same thing. */
+ *  THE CLICK IS GONE TOO NOW. This helper pressed a `<summary>` until D33 removed the
+ *  disclosure, then went on pressing the `<p>` that replaced it — inert, and left in place
+ *  because it was harmless. The `<p>` itself went on 2026-08-25: it read `Layout and controls`
+ *  and labelled a sections list that was deleted for duplicating the walk beside it.
+ *
+ *  What is left is what this helper was always actually for — a sync point, so a test measuring
+ *  a control cannot start before the controls have rendered. The name is kept because nothing
+ *  opens and nothing ever did; renaming it would touch every call site to say the same thing. */
 async function openBoxOps(page: Page) {
-  await page.locator('.boxops-more-head').click()
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible()
 }
 
@@ -514,9 +570,12 @@ test('selecting a card shows every copy of it, each with both doors out of inven
   await expect(rows.nth(0).getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(rows.nth(0).getByRole('button', { name: 'Retire' })).toBeVisible()
 
-  // The cap comes off the wire (SearchGroup.cap), which is what settled this screen's refusal
-  // to write `of 4` in TypeScript.
-  await expect(page.locator('.card-locations-listed')).toHaveText('listed 1 of 4')
+  /* THE DENOMINATOR IS WHAT D7 PERMITS HERE, NOT THE BARE CAP. Two copies on hand against a
+     cap of 4, so `min(cap, on hand)` is 2 — and this asserted `of 4` until 2026-08-25, which is
+     the string the owner caught on a card they had exactly one of: `listed 0 of 4` claims three
+     copies of headroom the shelf does not hold. Still off the wire (`SearchGroup.listable`),
+     which is what settles this screen's refusal to do the arithmetic in TypeScript. */
+  await expect(page.locator('.card-locations-listed')).toHaveText('listed 1 of 2')
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
@@ -1073,7 +1132,287 @@ test('the receipt repeats that the box is still held rather than implying succes
 
 // ----------------------------------------------------------------- what the merge kept (D26)
 
-test('the re-shoot control came with the merge, as D31 requires', async ({ page }) => {
+test('the re-shoot lives inside Correct claims, and nowhere else on the panel', async ({
+  page,
+}) => {
   await open(page)
+
+  /* D31 requires this control to survive every move of the card panel — it was nearly lost once
+     already. It has moved again (owner, 2026-08-25): out from under the photograph and into
+     `Correct claims`, which is the panel that already exists for correcting what a card claims,
+     and a re-shoot is the correction the other four cannot make.
+
+     THE NEGATIVE HALF FIRST, because that is the half that says it MOVED rather than that it was
+     merely added: it is not on the panel at rest. Under the photograph it was a permanent control
+     for an occasional act, in the column whose width is the photograph's. */
+  await expect(page.getByRole('button', { name: 'Re-shoot this photo' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Correct claims' }).click()
   await expect(page.getByRole('button', { name: 'Re-shoot this photo' })).toBeVisible()
+})
+
+// ------------------------------ three columns, and where the box lives (D38, amended)
+
+/* THE ONLY GEOMETRY ASSERTIONS IN THE REPO, and they are here because nothing else on the commit
+   path can see what they see. Harness, lint, typecheck and docs-audit are blind to layout by
+   construction; `docs/GATES.md` records that as the finding behind CLAUDE.md's
+   route-is-not-a-feature rule, and a column that quietly stops holding what it should is the same
+   class of defect one notch quieter.
+
+   They run at Playwright's own 1280x720, inside the >= 1240 three-column layout. That was a
+   reason for putting the breakpoint at 1240 rather than at the owner's 1440: a layout no test
+   viewport renders is a layout nothing guards. */
+
+test('the sections of a box are drawn once, by the walk that can open them', async ({ page }) => {
+  await open(page)
+
+  /* THE FINDING THAT MOVED THE BOX INTO THIS COLUMN, asserted as the negative it is. Until
+     2026-08-25 `BoxOps` drew `Section 1  #1-#85  85 cards` as inert text in a panel on the far
+     side of the screen while `.browse-secthead` drew the same five rows here, foldable, tickable
+     and walkable. Two renderings of one fact; the inert one is gone.
+
+     A count of zero rather than a snapshot of the walk's own rows: what may not come back is a
+     SECOND list, whatever it is styled as. */
+  await expect(page.locator('.boxops-section')).toHaveCount(0)
+  await expect(page.locator('.boxops-sections')).toHaveCount(0)
+  await expect(page.locator('.browse-secthead').first()).toBeVisible()
+
+  /* And the walk's headers really are the box's sections — the span and the count that the
+     deleted panel used to repeat. */
+  const first = page.locator('.browse-secthead').first()
+  await expect(first).toContainText('Section 1')
+  await expect(first).toContainText('#1')
+})
+
+test('the box lives in the walk\'s column, and the runs have the third to themselves', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* THE STRUCTURAL HALF OF THE MERGE (owner, 2026-08-25): "merge its functionality (so not visual
+     merge, but rebuild type merge) and all exist on the left side". The box's readings sit under
+     the strip that names it and its operations sit at the bottom of the walk, because that column
+     IS the box — the strip picks it, the list is its cards, and `RegisterBox` beside the controls
+     is the other thing that acts on a box rather than on a card. */
+  await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
+  await expect(page.locator('.browse-map .boxops-box')).toHaveCount(1)
+  await expect(page.locator('.browse-map').getByRole('button', { name: 'Rename' })).toBeVisible()
+  await expect(
+    page.locator('.browse-map').getByRole('button', { name: /^Delete box/ }),
+  ).toBeVisible()
+
+  /* The third column is the runs and nothing else. Asserted from both ends so that moving the box
+     back would fail here rather than merely look wrong. */
+  await expect(page.locator('.browse-boxrun .boxops-box')).toHaveCount(0)
+  await expect(page.locator('.browse-boxrun .run-panel')).toHaveCount(1)
+  await expect(page.locator('.browse-side .browse-boxrun')).toHaveCount(0)
+  await expect(page.locator('.browse-body > .browse-boxrun')).toHaveCount(1)
+
+  /* EXACTLY ONE RUN PANEL. `run-panel.spec.ts` guards the money button with `toHaveCount(0)` four
+     times and `toHaveCount(1)` once, so a duplicated panel would pass every assertion in that file
+     but one. Duplication is a real risk here: `{detail}` genuinely does render at two sites. */
+  await expect(page.locator('.run-panel')).toHaveCount(1)
+})
+
+test('the photograph is sized by its column, not by the rows beside it', async ({ page }) => {
+  await open(page)
+
+  const photo = page.locator('.browse-photo')
+  await expect(photo).toBeVisible()
+  const shot = await photo.boundingBox()
+  const rows = await page.locator('.browse-facts').boundingBox()
+  if (shot === null || rows === null) throw new Error('the band did not render')
+
+  /* IT WAS PINNED TO THE ROWS FOR A FEW HOURS AND IS NOT ANY MORE (owner: "more space given to
+     the middle (ie photo gets larger)"). What made that affordable is `capturedText` — the ISO
+     stamp was the widest value on the card at ~234px and now reads `6:35pm · Aug 23`, so the
+     facts need a fraction of the width they did and the photograph takes the rest.
+
+     Asserted as a floor rather than an exact size: the track is a design value that may be
+     re-cut, and what must not come back is a thumbnail. */
+  expect(shot.width).toBeGreaterThan(200)
+
+  /* THIS USED TO ASSERT THE PHOTOGRAPH WAS THE TALLER SIDE, and that stopped being true when the
+     facts grew from seven rows to eleven — which is the four new rows doing exactly what they
+     were proposed to do, closing the ~90px of air that sat under the facts. The air is now ~66px
+     under the PHOTOGRAPH instead, and smaller.
+
+     Which side is taller was never the property worth guarding; it is an accident of how many
+     rows the panel happens to draw, and it has now flipped once. What must hold is that the two
+     are within a band of each other — neither a photograph towering over a short list (the 587
+     against 204 that started all of this) nor a thumbnail beside a long one. */
+  expect(Math.abs(shot.height - rows.height)).toBeLessThan(150)
+
+  /* The ratio is the card's, and it is on the IMAGE — see the next case for why that matters. */
+  expect(shot.height / shot.width).toBeGreaterThan(88 / 63 - 0.05)
+  expect(shot.height / shot.width).toBeLessThan(88 / 63 + 0.05)
+
+  /* Top-aligned with the facts, which is the half of "flush" that survived: the two start
+     together and the photograph is simply taller. */
+  expect(Math.abs(shot.y - rows.y)).toBeLessThanOrEqual(1)
+})
+
+test('a photo the store has lost gets a sentence, never a card-shaped hole', async ({ page }) => {
+  await open(page)
+
+  /* THE DEFECT THIS PREVENTS EXISTED FOR AN HOUR AND IS WORTH THE CASE. While the photograph took
+     its height from the facts, the reservation had to live on a WRAPPER — and the wrapper holds
+     whatever `PhotoPanel` returns, so a card whose file was gone got a 424x592 card-shaped box
+     drawn around a 424x149 sentence and the re-shoot control pushed off the viewport. The ratio
+     is back on the <img>, which cannot reach anything that is not an image.
+
+     Routed rather than fixtured because no card in the real store lacks a photo: this is the 404
+     branch, reached through the <img>'s own onError, which no fixture edit can produce. */
+  await page.route(/\/photo\/\d+\/\d+/, (route) => route.fulfill({ status: 404, body: '' }))
+  await page.reload()
+  await expect(page.locator('.browse-sectfold').first()).toBeVisible()
+
+  const panel = page.locator('.browse-absent')
+  await expect(panel).toBeVisible()
+  await expect(page.locator('.browse-photo')).toHaveCount(0)
+
+  /* The sentence gets a measure to be read at, and no card-shaped box is reserved anywhere for a
+     photograph that is not coming. A card box would be 1.4x taller than it is wide (63:88); this
+     column is WIDER than it is tall, which is the shape of a paragraph. */
+  const box = await panel.boundingBox()
+  const shot = await page.locator('.browse-shot').boundingBox()
+  if (box === null || shot === null) throw new Error('the absent panel did not render')
+  expect(box.width).toBeGreaterThan(300)
+  expect(shot.height).toBeLessThan(shot.width)
+
+  /* And the only thing the column holds beyond the sentence is the re-shoot control — 24px and a
+     gap, not 440px of reserved nothing. */
+  expect(shot.height - box.height).toBeLessThanOrEqual(48)
+
+  /* And the remedy is still reachable, which is what the operator actually loses when a
+     reservation swallows the column. One press further in since the control moved into
+     `Correct claims` — the sentence above points at it, so what matters is that it is there and
+     on screen, not that it is drawn before it is asked for. */
+  await page.getByRole('button', { name: 'Correct claims' }).click()
+  /* Still `Re-shoot this photo` and not `Add a photo`: the record CLAIMS a photo and the file is
+     gone, which is the 404 branch. `Add a photo` is the other absent case — `photo: null`, a card
+     `emit` recorded that was never photographed — and the control tells them apart. */
+  const remedy = page.getByRole('button', { name: 'Re-shoot this photo' })
+  await expect(remedy).toBeVisible()
+  await expect(remedy).toBeInViewport()
+})
+
+test('the box and the runs survive a query that selects no card', async ({ page }) => {
+  await open(page)
+
+  /* Both are about the SHELF, not the selection. Before the merge that was a prose promise on
+     `{boxPanel}`; a query matching nothing is what actually tests it, and it is the same input
+     `.browse-side`'s own comment names as the repro for a receipt vanishing mid-undo. */
+  await page.locator('.search-field-input').fill('zzzz-no-such-card')
+  await expect(page.locator('.browse-detail')).toHaveCount(0)
+
+  await expect(page.locator('.run-panel')).toBeVisible()
+  await expect(page.locator('.browse-map .boxops-box')).toHaveCount(1)
+  await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
+})
+
+test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* THE BUG THIS IS THE RECEIPT FOR: `.browse-map` is sticky and capped at the viewport, so
+     anything past the cap renders below the fold and the page scroll cannot bring it back — the
+     sticky element does not move. Putting the box's operations in this column made that real, and
+     four box-claim cases above failed with "element is outside of the viewport" the moment the
+     claims editor opened. The column scrolls itself now, and the walk keeps a floor so it cannot
+     be squeezed to nothing by an editor below it. */
+  await page.getByRole('button', { name: /^Set claims on/ }).click()
+
+  const apply = page.getByRole('button', { name: /^Apply to/ })
+  await expect(apply).toBeVisible()
+
+  /* THE ESCAPE HATCH EXISTS AND WORKS, which is the property — not that the button happens to
+     land above the fold on this viewport. The column overflows with the editor open, so what has
+     to be true is that it can be scrolled; before the fix `.browse-map` had no scroller and the
+     overflow was unreachable at any scroll position, because a sticky element does not move. */
+  const overflows = await page
+    .locator('.browse-map')
+    .evaluate((el) => el.scrollHeight > el.clientHeight)
+  expect(overflows).toBe(true)
+
+  await apply.scrollIntoViewIfNeeded()
+  await expect(apply).toBeInViewport()
+
+  /* And the walk was not squeezed to nothing to make room for the editor. */
+  const list = await page.locator('.browse-list').boundingBox()
+  if (list === null) throw new Error('the walk did not render')
+  expect(list.height).toBeGreaterThanOrEqual(90)
+})
+
+// ------------------------------- what the panel can overwrite, it now shows (consult, 2026-08-25)
+
+test('the two claims the correction button can overwrite are both on the panel', async ({
+  page,
+}) => {
+  await open(page)
+  await expandAll(page)
+
+  /* THE DEFECT THIS CLOSES. `CardOps` -> `ClaimEditor` writes FIVE claims and the facts list drew
+     three, so `Correct claims` — sitting directly under these rows — replaced two values that
+     appeared nowhere on screen. Worse than silent: the editor opens with those fields EMPTY and
+     reads armed-and-empty as a clear, so the correction was a blind overwrite. `rarity_claim` is
+     set on 543 of 543 real records, so this was live rather than latent. */
+  await page.locator('.browse-row', { hasText: 'captured' }).first().click()
+
+  /* `Common · Uncommon` and never `Common,Uncommon` — the array-coercion guard, identical in kind
+     to the finish case above, and the reason both rows go through one renderer. */
+  const rarity = page.locator('.browse-fact', { hasText: 'Rarity' }).locator('dd')
+  await expect(rarity).toHaveText('Common · Uncommon')
+
+  const note = page.locator('.browse-fact', { hasText: 'Note' }).locator('dd')
+  await expect(note).toHaveText('japanese, no english print')
+
+  /* The fallbacks matter as much as the values: a row that vanished when empty would leave "this
+     card has no note" and "this screen does not show notes" indistinguishable, which is the bug. */
+  await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
+  await expect(page.locator('.browse-fact', { hasText: 'Rarity' }).locator('dd')).toHaveText(
+    'none recorded',
+  )
+  await expect(page.locator('.browse-fact', { hasText: 'Note' }).locator('dd')).toHaveText('none')
+})
+
+test('the card names the run that read it, and the model\'s own hedge', async ({ page }) => {
+  await open(page)
+
+  /* `run` joins this panel to the Runs panel one column right, which lists run directories and
+     cannot say which cards each one touched. `confidence` is the only place a RESOLVED card's
+     hedge is readable — `ReviewQueue.tsx` draws it only for a card that was queued. Both are
+     asserted as their fallbacks here because the fixture leaves them null, which is the half
+     that proves the rows are unconditional. */
+  await expect(page.locator('.browse-fact', { hasText: 'Run' }).locator('dd')).toHaveText(
+    'not identified yet',
+  )
+  await expect(page.locator('.browse-fact', { hasText: 'Confidence' }).locator('dd')).toHaveText(
+    'none recorded',
+  )
+})
+
+test('a card with an open question in the queue says so, and says whether it can be answered', async ({
+  page,
+}) => {
+  /* THE FACT THAT TIES THE SCREEN'S THREE JOBS TOGETHER: the walk finds the card, this says
+     whether anything is waiting on it, and the run panel is what would answer it. Before this a
+     card sitting in `review.json` with zero candidates rendered `State: identified` and nothing
+     else — and `state` there is not merely silent, it is MISLEADING, because it describes how far
+     capture and identify got while the open question was raised by the JOIN. */
+  await open(page)
+
+  const block = page.locator('.browse-queued')
+  await expect(block).toBeVisible()
+  await expect(block.locator('.browse-note-text')).toContainText('Waiting in the review queue')
+  /* The reason's HUMAN label, from the shared map — not the raw code, which is the line below. */
+  await expect(block.locator('.browse-note-text')).toContainText('Not in the export')
+
+  /* ZERO CANDIDATES IS LOAD-BEARING, not decoration: it is the difference between "go and answer
+     it" and "it cannot be answered as it stands", and it is what points at the re-shoot icon
+     already on this panel. `POST /review/<box>/<index>/answer` refuses such an entry outright. */
+  await expect(block.locator('.browse-note-text')).toContainText('cannot be answered')
+  await expect(block.locator('.browse-machine')).toHaveText(
+    'no_catalog_row · review · candidates 0',
+  )
 })

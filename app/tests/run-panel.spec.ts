@@ -147,6 +147,10 @@ async function open(
     detail?: Record<string, unknown>
     /** The run list reports a live run, which is the one state that opens the fold by itself. */
     live?: boolean
+    /** An EMPTY run list, which is the state the panel could not draw its own steps in until
+     *  2026-08-25. Distinct from omitting the option: `[]` means "no runs on disk", where
+     *  `undefined` means "the ordinary one-run fixture". */
+    runs?: unknown[]
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -228,9 +232,9 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        runs: [
-          runRow(options.live ? { live: true, pid: 999, phase: 'identifying' } : {}),
-        ],
+        runs:
+          options.runs ??
+          [runRow(options.live ? { live: true, pid: 999, phase: 'identifying' } : {})],
       }),
     })
   })
@@ -360,14 +364,40 @@ test('the pipeline is on the inventory screen, with all four steps named', async
      first thing in the repo that says a person can reach them. */
   await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
 
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
-
-  /* All four steps are drawn, not just the one the run is waiting for. A screen that showed
-     only the current phase would leave the operator unable to see that emit exists until join
-     had finished — and the four together are what makes D1's two-phase split legible. */
+  /* ALL FOUR STEPS ON ARRIVAL, WITH NOTHING CLICKED — and the click this used to need was the
+     bug. `STEPS` is authored rather than derived from `phase` because "a screen that only drew
+     the current step would leave the operator unable to see that emit exists until join had
+     finished", and that promise was kept against `phase` and broken against `detail`: three of
+     the four rendered only inside the open-run guard, so this test had to open a run before it
+     could assert them, and with no runs at all they existed nowhere. */
   const titles = await page.locator('.run-step-title').allInnerTexts()
   expect(titles).toEqual(['Identify', 'Join', 'Emit', 'Reconcile'])
+
+  /* THE NEGATIVE HALF, which is what stops a later refactor drawing dead controls to fill the
+     column. A step's HEAD says what it is; its CONTROLS need a run to act on, and absent beats
+     disabled for the reason `.run-button`'s own comment gives — a disabled button is one
+     attribute away from being pressable. */
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
+  await expect(page.locator('.run-needs')).toContainText('Pick a run above')
+
+  // And they arrive the moment a run is picked.
+  await page.locator('.run-row').first().click()
+  await expect(page.locator('.run-open')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(1)
+})
+
+test('the four steps exist before any run does', async ({ page }) => {
+  /* THE STATE THE OLD ARRANGEMENT COULD NOT DRAW AT ALL. With no runs on disk, join, emit and
+     reconcile were not merely un-pressable — they were absent from the document, so a first-time
+     operator could not learn the pipeline had four parts until after they had paid for one. */
+  await open(page, { runs: [] })
+  await openPanel(page)
+
+  await expect(page.locator('.run-empty')).toHaveText('No runs yet.')
+  const titles = await page.locator('.run-step-title').allInnerTexts()
+  expect(titles).toEqual(['Identify', 'Join', 'Emit', 'Reconcile'])
+  await expect(page.locator('.run-needs')).toContainText('Identify a box first')
 })
 
 test('which steps cost money is on the heading line, not buried in the prose', async ({
@@ -377,8 +407,6 @@ test('which steps cost money is on the heading line, not buried in the prose', a
   await openPanel(page)
   await expect(page.locator('.run-step-money')).toHaveText('Costs money')
 
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
   /* `allTextContents` and not `allInnerTexts`: the stylesheet uppercases these labels, and
      `innerText` returns what is PAINTED while `textContent` returns what is written. The
      authored string is the claim worth asserting — a casing rule is a design choice this file

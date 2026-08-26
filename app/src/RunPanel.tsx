@@ -60,6 +60,31 @@ import './RunPanel.css'
  *  stops being live, which the server derives from the child's own pid. */
 const POLL_MS = 4000
 
+/** The idle cadence. The only event an idle poll can catch is a person starting a run in a
+ *  TERMINAL (D33 makes a run outlive the tab that started it), which is a human act with a
+ *  human's tolerance. `POLL_MS` is for a screen that must not look frozen while a batch runs,
+ *  which is a different question and a different number. */
+const IDLE_POLL_MS = 20000
+
+/** How long a live run has been going, from its own `created_at`.
+ *
+ *  THE ONE FACT ABOUT A LIVE RUN THAT IS ON NO OTHER PART OF THIS SCREEN. `identify/batch.py`
+ *  logs only when the batch's `processing_status` CHANGES, so the console goes silent for
+ *  minutes to hours and a tail written forty minutes ago is indistinguishable from a hang.
+ *  There is no per-card signal on the wire and none is invented here — elapsed is MEASURED, and
+ *  it is the smallest true thing that separates working from stuck. A progress bar would be a
+ *  guess, and this panel does not draw guesses.
+ *
+ *  LIVE ONLY. On a finished run the same arithmetic is AGE, which is a different fact wearing
+ *  the same shape. Under a minute, and on a run carrying no `created_at`, it reads exactly what
+ *  it read before this existed. */
+function runningFor(row: { created_at?: string | null }): string {
+  const at = row.created_at == null ? NaN : Date.parse(row.created_at)
+  const mins = Number.isNaN(at) ? 0 : Math.max(0, Math.floor((Date.now() - at) / 60000))
+  if (mins < 1) return 'running'
+  return mins < 60 ? `running ${mins}m` : `running ${Math.floor(mins / 60)}h ${mins % 60}m`
+}
+
 /* The steps, in the order they are performed, with the two facts the panel repeats about each:
  * whether it spends, and whether it can be run again. Authored here rather than derived from
  * `phase`, because `phase` answers "what is this run waiting for" and this answers "what are
@@ -101,14 +126,28 @@ const STEPS = [
  *  block can support: an old run genuinely does not record whether it covered the whole box.
  *  The alternative was an em dash, which says nothing about a run whose directory names its
  *  box in plain sight. */
-function scopeOf(row: RunSummary): string {
-  if (row.scope != null) {
-    return row.scope.whole_box
-      ? `box ${row.scope.box}`
-      : `box ${row.scope.box} · ${row.scope.cards ?? '?'} cards`
-  }
+/** Which box a run was over, by the same derivation the row prints.
+ *
+ *  SHARED WITH `scopeOf` ON PURPOSE, so the string a row draws and the group it is sorted into
+ *  can never disagree. It matters immediately rather than in principle: `scope` is written only
+ *  by the route that starts a run from this screen, and NEITHER run this project has actually
+ *  done carries one — so grouping on `row.scope.box` alone would file both of them under "other
+ *  boxes", including the one the panel's own head is naming. */
+function boxOf(row: RunSummary): number | null {
+  if (row.scope != null) return row.scope.box
   const found = /box(\d+)/.exec(row.capture_dir ?? '')
-  return found === null ? '—' : `box ${found[1]}`
+  return found === null ? null : Number(found[1])
+}
+
+function scopeOf(row: RunSummary): string {
+  const box = boxOf(row)
+  if (box === null) return '—'
+  /* The whole-box / N-cards distinction only a real scope block can support — a box parsed out
+     of a capture directory is a derivation, not a claim about what was submitted. */
+  if (row.scope != null) {
+    return row.scope.whole_box ? `box ${box}` : `box ${box} · ${row.scope.cards ?? '?'} cards`
+  }
+  return `box ${box}`
 }
 
 function money(value: number | null | undefined): string {
@@ -218,9 +257,58 @@ export function RunPanel({ scope }: RunPanelProps) {
     }
   }, [])
 
+  /* THE LIST IS RE-READ WHILE THIS PANEL IS ON SCREEN, and the condition is deliberately NOT
+   * "while something is live". A run started in a terminal BEGINS live, so a poll gated on a
+   * snapshot that holds nothing live could never discover the one case D33 says this route
+   * exists for — it would need the operator to reload the page to see their own run. What
+   * varies with liveness is the CADENCE, not whether we look.
+   *
+   * Chained `setTimeout`, never `setInterval`: the detail poll below makes the same choice for
+   * the same reason, which is that a slow answer must not stack requests behind it. No
+   * dependencies, and liveness is read off the response just received rather than off `runs` —
+   * depending on `runs` would tear the timer down and rebuild it on every tick.
+   *
+   * THE FIRST FAILURE IS REPORTED AND EVERY LATER ONE IS SWALLOWED. A dead server on arrival is
+   * worth a sentence; the same sentence rewritten every twenty seconds is a note nobody asked
+   * for, painted over the refusal `emit` printed a minute ago. */
   useEffect(() => {
-    void loadRuns()
-  }, [loadRuns])
+    let cancelled = false
+    let timer = 0
+    let announced = false
+    const tick = async () => {
+      let anyLive = false
+      try {
+        const rows = await getRuns()
+        if (cancelled) return
+        setRuns(rows)
+        anyLive = rows.some((row) => row.live)
+      } catch (err) {
+        if (!cancelled && !announced) setTrouble(describeFailure(err))
+        announced = true
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
+      }
+    }
+    void tick()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  /* PER-RUN STATE BELONGS TO THE RUN IT WAS PRODUCED AGAINST, and none of it was cleared when
+   * the open run changed. Opening run A, pressing Preview, then clicking run B left A's answer
+   * on screen under B — and `saveDecisions` posts the textarea to whatever `openRun` is at the
+   * moment of the press, so A's edited `decisions.json` could be written into B. Rendering a
+   * step's answer inside its own step box makes a stale one MORE believable, not less, which is
+   * what turns this from latent into worth fixing. One effect rather than an edit at each
+   * `setOpenRun` call site, so a later caller cannot forget it. */
+  useEffect(() => {
+    setStepOut(null)
+    setDecisions(null)
+    setDecisionsBad(null)
+  }, [openRun])
 
   /* THE POLL, and it runs only while the open run is live. A run the server says is not live
    * is a directory that is not changing, so polling it would be a request per four seconds
@@ -298,7 +386,13 @@ export function RunPanel({ scope }: RunPanelProps) {
     guard(step, async () => {
       if (openRun === null) return
       const result = await runStep(openRun, step, extra)
-      setStepOut({ step: result.step, ok: result.ok, console: result.console })
+      /* THE STEP WE ASKED FOR, NOT THE ONE THE SERVER ECHOED, now that the answer renders
+         inside its own step box. `result.step` is the echo, and it is demonstrably not the
+         local truth: `app/tests/run-panel.spec.ts` mocks all three routes and returns
+         `step: 'join'` for every one. That was harmless while this rendered unconditionally
+         and would now put an emit result inside the Join box — or, on a real mismatch, make
+         the answer vanish from the screen entirely. */
+      setStepOut({ step, ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       await loadRuns()
     })
@@ -309,7 +403,7 @@ export function RunPanel({ scope }: RunPanelProps) {
       if (chosen.length === 0 || openRun === null) return
       const uploads = await Promise.all(chosen.map(readUpload))
       const result = await runStep(openRun, 'join', { exports: uploads, bypass })
-      setStepOut({ step: result.step, ok: result.ok, console: result.console })
+      setStepOut({ step: 'join', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       await loadRuns()
       if (exportPick.current !== null) exportPick.current.value = ''
@@ -320,7 +414,7 @@ export function RunPanel({ scope }: RunPanelProps) {
       const chosen = stagedPick.current?.files?.[0]
       if (chosen === undefined || openRun === null) return
       const result = await runStep(openRun, 'reconcile', { stagedExport: await readUpload(chosen) })
-      setStepOut({ step: result.step, ok: result.ok, console: result.console })
+      setStepOut({ step: 'reconcile', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       if (stagedPick.current !== null) stagedPick.current.value = ''
     })
@@ -384,7 +478,7 @@ export function RunPanel({ scope }: RunPanelProps) {
       ? `Box ${scope.box} · ${selection} ticked card${selection === 1 ? '' : 's'}`
       : `Box ${scope.box} · the whole box`
 
-  const runRows = runs.map((row) => (
+  const runRow = (row: RunSummary) => (
     <button
       key={row.run}
       type="button"
@@ -394,11 +488,47 @@ export function RunPanel({ scope }: RunPanelProps) {
     >
       <span className="run-row-name">{row.run}</span>
       <span className={`run-phase run-phase-${row.phase}`}>
-        {row.live ? 'running' : row.phase}
+        {row.live ? runningFor(row) : row.phase}
       </span>
       <span className="run-row-scope">{scopeOf(row)}</span>
     </button>
-  ))
+  )
+
+  /* THE RUNS FOR THE BOX YOU ARE STANDING IN, FIRST — AND NOTHING IS EVER FILTERED OUT. D33
+     makes a run outlive the tab that started it, so a live run over another box is exactly the
+     thing this list must not hide; `aria-label="Every run"` stays literally true under a
+     reordering and would become a lie under a filter.
+     
+     PARTITIONED, NOT SORTED. The server already returns newest-first — `sorted(..., reverse=True)`
+     over date-prefixed run names — so walking once and pushing into three buckets keeps each
+     group newest-first for free. Comparing `created_at` would be worse than useless: it is
+     `string | null | undefined`, and a run missing it would sort to an arbitrary end. */
+  const running: RunSummary[] = []
+  const mine: RunSummary[] = []
+  const other: RunSummary[] = []
+  for (const row of runs) {
+    if (row.live) running.push(row)
+    else if (scope.box !== null && boxOf(row) === scope.box) mine.push(row)
+    else other.push(row)
+  }
+
+  /* No box in the walk means no box to group against, so the list is drawn exactly as the
+     server sent it — a distinction with nothing to distinguish is chrome. */
+  const grouped = scope.box === null
+  const runRows = grouped
+    ? [...running, ...mine, ...other].map(runRow)
+    : runs.map(runRow)
+
+  /* ONLY THE THIRD GROUP IS CAPTIONED, and the useful case is when it is the whole list —
+     that is the caption saying none of these runs are about the box you are in. A live row
+     needs no caption: `.run-phase-identifying` already draws `running` in ink at 600, which
+     is this file's own emphasis grammar. */
+  const otherCaption =
+    grouped && other.length > 0 && other.length < runs.length ? (
+      <p className="run-group" key="other-caption">
+        other boxes
+      </p>
+    ) : null
 
   const files = (detail?.files ?? []).filter((file) => file.name !== 'manifest.json')
   const fileRows = files.map((file) => (
@@ -436,14 +566,27 @@ export function RunPanel({ scope }: RunPanelProps) {
      * run, i don't want click in functionality, i want their buttons just there." D33 carries
      * the argument — reached once a box IS every box, which is the definition of the primary
      * task rather than an exception to it, and NN/g prices a collapsed panel at five
-     * accumulating substeps before the first click of real work. What replaces the fold's
-     * saving is the ROW, not the disclosure: `.browse-boxrun` puts this panel and `BoxOps`
-     * side by side at `1fr 1fr`, so the pair costs one panel's height rather than two. */
+     * accumulating substeps before the first click of real work.
+     *
+     * WHAT REPLACES THE FOLD'S SAVING IS THE COLUMN, and that sentence has been rewritten once.
+     * It first said the ROW — `.browse-boxrun` at `1fr 1fr`, this panel beside `BoxOps` beneath
+     * the card, so the pair cost one panel's height rather than two. On 2026-08-25 the owner
+     * moved the pair off the card's column entirely: "put box top right, and runs below it."
+     * Beside the card rather than under it, the pair costs the card's column NOTHING, which is
+     * the same argument at its limit rather than a different one. */
     <div className="run-panel">
+      {/* TITLE, SCOPE, THEN THE HINT — reordered in the DOM on 2026-08-25 rather than with
+          `order`, so the tab ring and a screen reader walk what the eye walks. In the 400px column
+          this panel now lives in, the hint needs ~323px of Martian Mono and can share a line with
+          nothing; ordered between the other two it pushed BOTH onto lines of their own and the
+          head became three. Last, it takes one full-width line and reads on one line, and the
+          title keeps its line with the scope — which is docs/DESIGN.md's rule as written, "the
+          page title shares a line with the screen's controls and counts". Where a panel is wide
+          enough for all three, nothing wraps and this is one line again. */}
       <p className="run-head">
         <span className="run-title">Runs</span>
-        <span className="run-hint">{hint}</span>
         <span className="run-scope">{scopeLine}</span>
+        <span className="run-hint">{hint}</span>
       </p>
 
       {trouble === null ? null : (
@@ -558,20 +701,78 @@ export function RunPanel({ scope }: RunPanelProps) {
       <div className="run-list" aria-label="Every run">
         {runRows.length === 0 ? (
           <p className="run-empty">No runs yet.</p>
-        ) : (
+        ) : otherCaption === null ? (
           runRows
+        ) : (
+          <>
+            {runRows.slice(0, running.length + mine.length)}
+            {otherCaption}
+            {runRows.slice(running.length + mine.length)}
+          </>
         )}
       </div>
 
-      {/* ------------------------------------------- the open run, and the three free steps */}
-      {detail === null ? null : (
+      {/* --------------------------------------------------------- the run the steps act on */}
+      {detail === null ? (
+        /* SAID ONCE, ABOVE THE THREE BOXES IT GOVERNS, rather than three times inside them.
+           The steps below are drawn whatever happens (see the STEPS comment at the top of this
+           file); what they cannot do without a run is act, and this is the sentence that says
+           which of those two states the operator is in. */
+        <p className="run-needs">
+          {runs.length === 0
+            ? 'Identify a box first — join, emit and reconcile all work on a run.'
+            : 'Pick a run above to point these three at it.'}
+        </p>
+      ) : (
         <div className="run-open">
           <div className="run-open-head">
             <span className="run-open-name">{detail.run}</span>
             <span className={`run-phase run-phase-${detail.phase}`}>
-              {detail.live ? 'running' : detail.phase}
+              {detail.live ? runningFor(detail) : detail.phase}
             </span>
           </div>
+
+          {!detail.joined ? null : (
+            /* WHAT CAME OUT OF THE RUN, on the run rather than in a file. Neither run on disk
+               has a `console.log` — `_console_tail` reads a file only the spawned identify
+               child writes, and both existing runs were started from a terminal — so before
+               this an open run drew its name, its phase and its files and NOTHING about its
+               result. `counts` has ridden every poll since `cli/cmd_join.py` wrote it and the
+               panel discarded it. `docs/GATES.md` names exactly this as what Gate B did not
+               close.
+
+               `.run-figures` VERBATIM, and the reuse is the point: that grid's own comment
+               records the measurement that FOUR figures pack a balanced 2x2 at 96px in this
+               column where three per row was a ragged 123px. Four is the measured-good number,
+               which is why `no_market_data` and `sub_threshold` are deliberately not here — a
+               fifth figure is a third row, and emit's note already states that refusal.
+
+               REVIEW AND PARKED ARE TWO FIGURES AND MUST NEVER BE SUMMED. `report.txt` prints
+               them as two lines because they are two facts: main is worked expensive-first
+               behind a starvation tier, parked is sub-threshold and not listed (D9). A combined
+               "46 queued" is a number no log in this repo carries.
+
+               DRAWN ONLY WHEN `joined`, because counts are written by join. Before it there are
+               none, and four em-dashes are chrome that says nothing. */
+            <dl className="run-figures">
+              <div>
+                <dt>Cards in</dt>
+                <dd>{count(detail.counts.cards_in)}</dd>
+              </div>
+              <div>
+                <dt>SKUs</dt>
+                <dd>{count(detail.counts.skus)}</dd>
+              </div>
+              <div>
+                <dt>Review</dt>
+                <dd>{count(detail.counts.queued_main)}</dd>
+              </div>
+              <div>
+                <dt>Parked</dt>
+                <dd>{count(detail.counts.queued_parked)}</dd>
+              </div>
+            </dl>
+          )}
 
           {detail.bypass_detection && (
             /* NAMED ON THE RUN, not only in its log. D3's amendment: a run joined with the
@@ -585,8 +786,23 @@ export function RunPanel({ scope }: RunPanelProps) {
           )}
 
           <Console text={detail.console} label={`What ${detail.run} printed`} />
+        </div>
+      )}
 
-          {STEPS.slice(1).map((step) => (
+      {/* ------------------------------------- the other three steps, drawn in every state */}
+      {/* THE PROMISE AT THE TOP OF THIS FILE, KEPT AT LAST. `STEPS` says it is authored rather
+          than derived from `phase` because "a screen that only drew the current step would
+          leave the operator unable to see that emit exists until join had finished" — and that
+          was true of `phase` and false of `detail`: these three lived inside the open-run guard,
+          so with no run picked the panel drew Identify and nothing else, and with no runs at all
+          they existed nowhere on the screen. `app/tests/run-panel.spec.ts` demonstrated the gap
+          in its own body, having to click a run row before it could assert the four titles.
+
+          THE HEADS AND NOTES ALWAYS DRAW; THE CONTROLS DO NOT. What a step IS does not depend on
+          a run — what it can be pressed against does. Absent rather than disabled, which is the
+          discipline the money gate already keeps two blocks up and for the reason `.run-button`'s
+          own comment gives: a disabled button is one attribute away from being pressable. */}
+      {STEPS.slice(1).map((step) => (
             <div className="run-step run-step-free" key={step.key}>
               <div className="run-step-head">
                 <span className="run-step-title">{step.title}</span>
@@ -594,7 +810,7 @@ export function RunPanel({ scope }: RunPanelProps) {
               </div>
               <p className="run-step-note">{step.note}</p>
 
-              {step.key === 'join' && (
+              {step.key === 'join' && detail !== null && (
                 <>
                   <label className="run-toggle">
                     <input
@@ -649,7 +865,7 @@ export function RunPanel({ scope }: RunPanelProps) {
                 </>
               )}
 
-              {step.key === 'emit' && (
+              {step.key === 'emit' && detail !== null && (
                 <>
                   <div className="run-actions">
                     <button
@@ -709,7 +925,7 @@ export function RunPanel({ scope }: RunPanelProps) {
                 </>
               )}
 
-              {step.key === 'reconcile' && (
+              {step.key === 'reconcile' && detail !== null && (
                 <div className="run-actions">
                   <label className="run-upload">
                     <input
@@ -724,10 +940,18 @@ export function RunPanel({ scope }: RunPanelProps) {
                   </label>
                 </div>
               )}
-            </div>
-          ))}
+          {/* THE ANSWER INSIDE THE STEP THAT PRODUCED IT. It rendered after all three boxes,
+              so pressing Preview under Join put the reply ~300px further down the column than
+              the button that asked for it — and `_run_sync` does not append to `console.log`,
+              only the detached identify child does, which makes this the ONLY place a join,
+              emit or reconcile answer ever appears on this screen.
 
-          {stepOut === null ? null : (
+              MATCHED ON THE STEP THE CLICK REQUESTED, never on the server's echo. `doStep` now
+              records its own `step` argument, so the value is by construction one of these
+              three keys and no orphan fallback can fire. The echo is not the local truth:
+              `app/tests/run-panel.spec.ts` mocks all three routes and returns `step: 'join'`
+              for every one, which was harmless only while this rendered unconditionally. */}
+          {stepOut === null || stepOut.step !== step.key ? null : (
             <div className={`run-result${stepOut.ok ? '' : ' run-result-refused'}`}>
               <p className="run-result-head">
                 {stepOut.step} {stepOut.ok ? 'finished' : 'refused'}
@@ -735,16 +959,16 @@ export function RunPanel({ scope }: RunPanelProps) {
               <Console text={stepOut.console} label={`What ${stepOut.step} printed`} />
             </div>
           )}
+        </div>
+      ))}
 
-          {fileRows.length === 0 ? null : (
-            <div className="run-files">
-              {/* THE WHOLE REASON THE DOWNLOAD EXISTS. docs/GATES.md, on what Gate B did not
-                  close: emit's import files existed only as filenames in terminal output the
-                  owner never saw, because someone else was driving the commands. */}
-              <p className="run-files-head">Files</p>
-              {fileRows}
-            </div>
-          )}
+      {fileRows.length === 0 ? null : (
+        <div className="run-files">
+          {/* THE WHOLE REASON THE DOWNLOAD EXISTS. docs/GATES.md, on what Gate B did not
+              close: emit's import files existed only as filenames in terminal output the
+              owner never saw, because someone else was driving the commands. */}
+          <p className="run-files-head">Files</p>
+          {fileRows}
         </div>
       )}
     </div>

@@ -899,12 +899,20 @@ COMPONENTS = [
                     "its neighbours and the section's gap count. ONE WRITE since 2026-08-23 "
                     "— the re-shoot control (D26, owner's placement ruling): replace a bad "
                     "stored photo from a file, record untouched, allocator never involved. "
-                    "Everything else stays look-only, and the header argues the exception.",
-            "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D24", "D26", "D27", "D30", "D31"]},
+                    "Everything else stays look-only, and the header argues the exception. "
+                    "THREE COLUMNS since D38: the walk, the card, and BoxOps over RunPanel "
+                    "in a track of their own — the box panel is a sibling of the card's "
+                    "column rather than a child of it, which is what puts it structurally "
+                    "outside the selected-card guard.",
+            "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
+                            "D30", "D31", "D33", "D35", "D38"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
-                                  "case base.css's standing ring cannot serve",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31"]},
+                                  "case base.css's standing ring cannot serve. D38's band lives here: the "
+                                  "photograph takes its HEIGHT from the fact rows beside it, through a frame "
+                                  "whose only child is out of flow, so the image cannot size the row that "
+                                  "sizes it.",
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -1013,14 +1021,19 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
+                                "D34", "D36", "D38"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
                         "owner-side end. No accent anywhere in it and no exception — every box "
                         "carries four controls, so a fill would have to pick one and would then "
-                        "mean 'important'. The seal's weight comes from the number on it.",
-                "governed_by": ["D5", "D20", "D22", "D31"],
+                        "mean 'important'. The seal's weight comes from the number on it. NOT A "
+                        "PANEL since D38: it is drawn inside the walk's own column, so it carries "
+                        "no border of its own, and its sections list is DELETED rather than "
+                        "styled — the walk beside it drew the same rows, foldable and tickable, "
+                        "while this drew them as inert text.",
+                "governed_by": ["D5", "D20", "D22", "D31", "D38"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -1091,8 +1104,27 @@ COMPONENTS = [
                                          "screen above it. NOT a fold since 2026-08-24: the owner "
                                          "asked for the buttons to be present rather than one press "
                                          "away, so D33's ~250px-reached-once-a-box argument is "
-                                         "superseded and the disclosure rules are deleted.",
-                                 "governed_by": ["D31", "D33"]},
+                                         "superseded and the disclosure rules are deleted. Since D38 it "
+                                         "has the third column to itself at 370px, so its step titles "
+                                         "drop to 14px body and its controls to 32px — the height "
+                                         "BoxOps gives the same job over in the walk's column. ALL FOUR "
+                                         "STEPS draw in every state now, controls absent until a run is "
+                                         "picked; the list polls at two cadences because a run started "
+                                         "in a terminal begins live.",
+                                 "governed_by": ["D31", "D33", "D38"]},
+            "src/reasons.ts": {
+                "does": "the review queue's fourteen reason codes and their human labels, in one "
+                        "file because TWO screens read them since 2026-08-25 — #/review works "
+                        "them in order, and #/inventory's card panel says whether the selected "
+                        "card has an open question. Extracted rather than copied, and its "
+                        "docstring is the argument: nothing keeps these labels in step with "
+                        "pipeline/variant.py and pipeline/routing.py, and the defence is making "
+                        "that drift VISIBLE rather than silent — a second copy in one app would "
+                        "defeat it, since the two would drift against each other as well and "
+                        "only one would ever be looked at. `reasonLabel`'s `?? reason` fallback "
+                        "is contract, not guard: an unknown code renders as itself.",
+                "governed_by": ["D4", "D16", "D23", "D35", "D37"],
+            },
             "src/SearchField.tsx": {"does": "the debounced query box. Owner gets a `/` hotkey and a key "
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
@@ -1191,8 +1223,13 @@ COMPONENTS = [
                         "folding sections, mass-select, and the FOUR WRITES — box-wide claims, "
                         "per-card claims, the mid-box delete and the whole-box delete — "
                         "asserted at the request boundary against a stubbed server, so a "
-                        "control that draws but sends the wrong body fails here.",
-                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D24", "D26", "D30", "D31", "D33", "D34"],
+                        "control that draws but sends the wrong body fails here. It also carries "
+                        "this file's FIRST geometry assertions (D38): that the photograph is flush "
+                        "with the fact rows beside it, and that the box and the runs are a column "
+                        "beside the card rather than a row beneath it. Nothing on the commit path "
+                        "can see either.",
+                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D30",
+                                "D31", "D33", "D34", "D37", "D38"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

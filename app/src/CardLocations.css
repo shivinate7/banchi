@@ -89,9 +89,15 @@
    truncating a position label or a box name, and both are things somebody carries to a shelf. */
 /* A WRAPPING FLEX ROW, NOT A FOUR-COLUMN GRID, and the change is measured rather than tidy.
    The grid put the place cell in `minmax(0, 17rem)` and gave every spare pixel to the bar, so
-   in the 460px column D31's merge draws this list in, the position label was squeezed to 72px
+   in the ~460px column D31's merge drew this list in, the position label was squeezed to 72px
    and wrapped onto three lines — a 117px row against a ~56px budget, with the one thing
    somebody carries to a shelf as the part that got broken.
+
+   THAT 460px IS THE MEASUREMENT'S OWN WIDTH AND NOT A STANDING FACT ABOUT THIS COLUMN, which is
+   worth saying because the number has moved twice since without this rule needing to change. It
+   dates from the 1240px page cap that `Inventory.css` records deleting; the column has been
+   ~534px since, and ~574px since the three-column rebuild of 2026-08-25 widened the card's own
+   track. The design below is what makes those moves free — see the next paragraph.
 
    Flex fixes the priority as well as the width. The label takes the growth and the bar is
    capped, which is the right order: the label is the payload and the bar is a picture of it.
@@ -134,6 +140,29 @@
 .card-locations-owner .card-locations-row > .position-bar {
   flex: 1 1 100%;
   order: 1;
+}
+
+/* THE BAR JOINS THE ROW INSTEAD OF TAKING A LINE OF ITS OWN, once the row is wide enough to hold
+   all four parts. Measured: the row goes 144px to 82px and eleven copies go 1598px to 902px — a
+   43% cut with nothing removed, every bar still drawn, both captions still one line.
+
+   A CONTAINER QUERY AND NOT A MEDIA QUERY, which is this file's own standing ask: the rule above
+   is a wrapping flex precisely so the component is "honest in the owner's detail column and in
+   the full-width panel it used to have, WITH NO BREAKPOINT TO KEEP IN STEP". Asking the copies
+   node how wide it actually is keeps that promise; asking the viewport would break it the first
+   time the column moved, which it has now done three times in two days.
+
+   860px, NOT the ~940 where all four parts fit on one line. 940 is where the row becomes ideal;
+   860 is where it stops being what it is today and starts being better — and columns 2+3 measure
+   862px at Playwright's 1280, so the branch the owner sees at 1440 is at least rendered by the
+   test viewport. That is the same argument this repo makes for putting the page breakpoint at
+   1240 rather than at the owner's 1440. Between 860 and 940 the row is place+bar, then
+   state+action: two lines, still better than three. */
+@container copies (min-width: 860px) {
+  .card-locations-owner .card-locations-row > .position-bar {
+    flex: 1 1 20rem;
+    order: 0;
+  }
 }
 
 .card-locations-owner .card-locations-row > .card-locations-state,

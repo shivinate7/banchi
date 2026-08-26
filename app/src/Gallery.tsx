@@ -143,6 +143,9 @@ const GROUP: SearchGroup = {
      disagreeing is the contract, not a fixture mistake. */
   on_hand: 3,
   cap: 4,
+  /* min(cap, on_hand) — the fixture exists to draw the case where the SHELF binds rather than
+     the cap, which is most of the store and was the bug: `of 4` on three copies. */
+  listable: 3,
   copies: [
     { key: '3/40', state: 'identified', state_at: null, has_photo: true, place: CLOSED_BOX },
     { key: '7/12', state: 'identified', state_at: null, has_photo: true, place: OPEN_BOX },

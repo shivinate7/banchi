@@ -442,6 +442,138 @@ export function RegisterBox({ onChanged }: { onChanged: () => void }) {
  * is NOT behind the disclosure is the seal's own sentence when it is pressed: D20 requires the
  * number on the button, and it is still on it.
  */
+/* WHAT THIS BOX IS, drawn at the top of the walk rather than in a panel beside it.
+ *
+ * SPLIT OUT OF `BoxOps` ON 2026-08-25, when the box moved into the column that IS the box. The
+ * owner: "merge its functionality (so not visual merge, but rebuild type merge) and all exist on
+ * the left side". A panel headed `Box 2` sitting next to a column headed `BOX [2]`, re-listing
+ * the sections that column already walks, was D31's finding repeating one scale down — two
+ * renderings of one thing, and the inert one was the one with the title.
+ *
+ * So the readings come here, above the walk, where the box strip already names the box; the
+ * OPERATIONS stay in `BoxOps` and go below the walk, beside `Register a box`. Two components
+ * because they sit in two places, not because they are two subjects.
+ *
+ * NO BORDER AND NO PANEL. Everything in this column is part of one column; a bordered card here
+ * would put a second box around the box. The hairline under it is the same separator the rest of
+ * the file uses and the only one this system has. */
+export function BoxIdentity({
+  record,
+  at = null,
+}: {
+  record: BoxRecord
+
+  /** Where the selected card sits in this box, 0..1 — the server's own `fraction`. Null for no
+   *  selection, a card in another box, or a pooled card, and the marker is not drawn. */
+  at?: number | null
+}) {
+  /* The same four readings `BoxOps` takes below, from the same helpers — `CLOSED` rather than
+     the literal, `record.fill` rather than an index arithmetic of our own, and the spans through
+     `spansOf(trackPlace(...))` so this track and that one cannot disagree about a divider. */
+  const sealed = record.state === CLOSED
+  const fill = known(record.fill)
+  const total = denominator(record)
+  const spans = spansOf(trackPlace(record, total), record.sections_detail)
+
+  return (
+    <div className="boxops-identity">
+      {/* NAME AND STATE ON ONE ROW WITH THE FILL, which is three facts in the height the header
+          alone used to take. The box NUMBER is not repeated — `.browse-boxline` directly above
+          this is the box strip, and it is already the answer to "which box". */}
+      <p className="boxops-identity-line">
+        {record.name === null ? null : (
+          <span className="boxops-identity-name">{record.name}</span>
+        )}
+        <span className="boxops-identity-fill">
+          {sealed && record.capacity !== null
+            ? `${record.capacity} sealed`
+            : fill === null
+              ? 'fill unread'
+              : `${fill} so far`}
+        </span>
+        <span className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}>
+          {sealed ? 'sealed' : 'open'}
+        </span>
+      </p>
+
+      {/* THE TRACK IS THE BOX, one segment per section, each as wide as the run of cards it
+          holds. It survives the merge where the section LIST did not, and the difference is that
+          this is not a list: the walk beneath says which sections exist and how many cards are in
+          each, and this says how they are shaped relative to one another.
+
+          IT CARRIES A MARKER NOW, AND THIS COMMENT SAID IT NEVER WOULD (owner, 2026-08-25): "use
+          this bar either via fill or an arrow above it to constantly be indicating where in the
+          box im looking". The old sentence — "a marker means 'this card is here' and the walk
+          owns that" — was true about the walk and wrong about the reader. The walk says which
+          ROW you are on out of eighty-five in one section; it cannot say you are a fifth of the
+          way into the box, because it only ever shows one section's worth of rows at a time.
+          That is the same argument D20 makes for the box object existing at all: a bare index
+          tells you nothing about where to put your thumb, and a fraction does.
+
+          A MARKER AND NOT A FILL, which is the half the owner left open and which this repo has
+          already settled. `PositionBar.tsx` refuses a travelled-distance fill in as many words:
+          there is no token meaning "quiet fill" — `--hover` is documented as row hover only,
+          `--line` is the 1px hairline, and `--accent` has two jobs of which this is neither —
+          and the lesson `--on-accent` taught here is that the answer to "no token means what I
+          mean" is a token argued for in docs/DESIGN.md, never a literal painted at the call
+          site. So: the same 2px ink marker the copy rows already carry, from the same field.
+
+          THE SERVER'S `fraction`, NEVER RECOMPUTED. `PositionBar` states the rule and the reason:
+          `index / box_total` disagrees with it across a sealed box's frozen capacity, and two
+          markers on one screen derived two ways would drift against each other by a pixel or by
+          a section. */}
+      {spans.length === 0 ? null : (
+        <div
+          className="boxops-track"
+          role="img"
+          aria-label={`Box ${record.box}, ${spans.length} sections`}
+        >
+          {spans.map((span) => (
+            <span
+              className="boxops-span"
+              key={`${span.start}-${span.end}`}
+              style={{ flexGrow: span.end - span.start + 1 }}
+            />
+          ))}
+          {at === null ? null : (
+            <span
+              className="boxops-mark"
+              style={{ left: `${Math.min(100, Math.max(0, at * 100))}%` }}
+              aria-hidden="true"
+            />
+          )}
+        </div>
+      )}
+
+      {/* The store's own field names, verbatim, so what is on screen greps to what is in
+          `inventory.json`. `cards` counts records naming this box and `fill` is the high-water
+          mark — they are different numbers and both are wanted, because the gap between them is
+          exactly how many holes the box has.
+
+          `sections 1 86 171 253 394` WAS HERE AND IS NOT, which is a deletion rather than a
+          shortening: the walk below draws every one of those boundaries as a section header you
+          can fold, tick and step into, so this printed the same list a third time on one screen.
+          The field names that remain are still verbatim — the rule this comment states is about
+          not prettifying `next_index`, not about carrying every field regardless of what is
+          already on screen.
+
+          LAST IN THE IDENTITY BLOCK, BETWEEN THE TWO THINGS IT RECONCILES (2026-08-25). `544
+          sealed` is one line above it and the walk's own section counts are directly below, and
+          for box 2 those counts sum to exactly `fill`: 85+85+82+141+150 = 543, against a section
+          5 spanning #394-#544 — 151 slots holding 150 cards, which is the mid-box delete D36 was
+          found by. Down among the operations these four numbers were the LAST reading in a
+          sticky column capped at the viewport, so with the sections open they were not
+          co-visible with `544 sealed` at any scroll position. The rule above says the field
+          names are verbatim so a person can compare them against `inventory.json`; that
+          comparison needs both halves on screen at once. */}
+      <p className="boxops-meta">
+        cards {record.cards} · sold {record.sold} · fill {fill ?? 'unknown'} · next index{' '}
+        {known(record.next_index) ?? 'unknown'}
+      </p>
+    </div>
+  )
+}
+
 export function BoxOps({
   record,
   onChanged,
@@ -502,10 +634,10 @@ export function BoxOps({
   const [proposed, setProposed] = useState<number[] | null>(null)
 
   const sealed = record.state === CLOSED
+  /* Still read here, and only for the SEAL BUTTON'S LABEL — D20 requires the number on the
+     control that freezes it. `capacity`, `total` and the spans moved to `BoxIdentity` with the
+     readings they draw. */
   const fill = known(record.fill)
-  const capacity = known(record.capacity)
-  const total = denominator(record)
-  const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
   const startEdit = (which: 'name' | 'sections' | 'claims') => {
     setRefused(null)
@@ -546,113 +678,20 @@ export function BoxOps({
 
   return (
     <section className="boxops-box">
-      <header className="boxops-box-head">
-        <h2 className="boxops-box-number">Box {record.box}</h2>
-        <span className="boxops-box-name">{record.name ?? 'unnamed'}</span>
-        {/* The lid, said in the store's own word. Outlined rather than filled: docs/DESIGN.md
-            gives the solid accent to a screen with exactly one thing to do, and a state chip is
-            a reading rather than a control. No accent at all here — sealed and open are both
-            ordinary conditions of a box, and neither is the system being unsure. */}
-        <span className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}>
-          {sealed ? 'sealed' : 'open'}
-        </span>
-      </header>
 
-      {/* THE TWO DENOMINATORS ARE DRAWN AS TWO DIFFERENT SENTENCES, which is D20's whole
-          distinction and the thing this screen must not blur. A sealed box divides by a number
-          that is final; an open one divides by how many cards are in it SO FAR, and the same
-          card reads 30% today and 12% next week without having moved. `so far` is doing real
-          work in that sentence and is not filler. */}
-      <p className="boxops-fill">
-        {sealed && capacity !== null ? (
-          <>
-            <span className="boxops-fill-number">{capacity}</span>
-            <span className="boxops-fill-word">cards, sealed</span>
-          </>
-        ) : fill === null ? (
-          <>
-            <span className="boxops-fill-word">how full this box is could not be read</span>
-          </>
-        ) : (
-          <>
-            <span className="boxops-fill-number">{fill}</span>
-            <span className="boxops-fill-word">cards so far</span>
-          </>
-        )}
-      </p>
+      {/* THE READINGS MOVED TO `BoxIdentity`, AT THE TOP OF THE WALK (owner, 2026-08-25).
+          What stood here was the box header, the fill sentence, the segment track, a heading
+          reading `Layout and controls`, and one row per section. The section rows were the
+          reason to act: `.browse-secthead` in the column beside this drew `SECTION 1 · #1–#85`
+          and `85` for every one of them, interactively, while this drew `Section 1 #1–#85 85
+          cards` as inert text. Two renderings of one fact, and deleting the inert one is not a
+          loss — the walk IS the sections list.
 
-      {/* THE TRACK IS THE BOX, one segment per section, each as wide as the run of cards it
-          holds. Every span comes from `sections_detail` through `spansOf` — see `trackPlace`
-          for why nothing here computes a boundary. No marker: a marker means "this card is
-          here" and there is no card on this screen. */}
-      {spans.length === 0 ? (
-        <p className="boxops-machine">This box holds nothing to draw yet.</p>
-      ) : (
-        <div className="boxops-track" role="img" aria-label={`Box ${record.box}, ${spans.length} sections`}>
-          {spans.map((span) => (
-            <span
-              className="boxops-span"
-              key={`${span.start}-${span.end}`}
-              /* flex-grow rather than a width percentage: the segments are siblings in a flex
-                 row, so their proportions are exactly the spans and no rounding has to be
-                 reconciled against 100%. PositionBar.tsx draws its track the same way. */
-              style={{ flexGrow: span.end - span.start + 1 }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* THE LAYOUT AND THE FOUR CONTROLS, AND THEY ARE NOT ONE PRESS DOWN ANY MORE. This
-          comment described a `<details>` disclosure — "closed by default", a drawn marker,
-          the platform's keyboard semantics — and outlived it. What renders is a plain `<div>`
-          with a heading: the controls are on screen with the box they operate on, and the
-          heading is a label rather than a summary.
-
-          D33's amendment is why, in the owner's words: "both box and run, i don't want click
-          in functionality, i want their buttons just there." The measured argument the fold
-          rested on had the weaker half of a true premise — reached once a box IS every box —
-          and this repo's own record already made the point one notch further along, with
-          three routes shipping behind no reachable control at all. A control behind a fold is
-          one step better than that, not a different kind of thing. */}
+          The heading went with the list it named. The fill and the track went UP, to sit with
+          the box strip that already names the box. What is left here is the operations, and
+          they sit at the bottom of the column beside `Register a box`, which is the other
+          control that acts on a box rather than on a card. */}
       <div className="boxops-more">
-        <p className="boxops-more-head">
-          <span className="boxops-more-label">Layout and controls</span>
-          <span className="boxops-more-hint">
-            {record.sections_detail.length === 0
-              ? null
-              : count(record.sections_detail.length, 'section', 'sections')}
-          </span>
-        </p>
-
-      {record.sections_detail.length === 0 ? null : (
-        <ul className="boxops-sections">
-          {record.sections_detail.map((detail) => (
-            <li className="boxops-section" key={detail.section}>
-              <span className="boxops-section-name">Section {detail.section}</span>
-              <span className="boxops-section-span">
-                {/* An open last section has no end, and it is drawn as open rather than filled
-                    in with the box total: the two mean different things, and the second is a
-                    claim about where a divider is. */}
-                {known(detail.end) === null
-                  ? `#${detail.start} onward`
-                  : `#${detail.start}–#${detail.end}`}
-              </span>
-              <span className="boxops-section-count">{count(known(detail.count) ?? 0, 'card', 'cards')}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* The store's own field names, verbatim, so what is on screen greps to what is in
-          `inventory.json`. `cards` counts records naming this box and `fill` is the high-water
-          mark — they are different numbers and both are wanted, because the gap between them is
-          exactly how many holes the box has. */}
-      <p className="boxops-meta">
-        cards {record.cards} · sold {record.sold} · fill {fill ?? 'unknown'} · next index{' '}
-        {known(record.next_index) ?? 'unknown'} · sections{' '}
-        {record.sections.length === 0 ? 'undeclared' : record.sections.join(' ')}
-      </p>
-
       {record.sections.length > 0 && record.sections_detail.length === 0 ? (
         <p className="boxops-machine">
           This box has a declared layout that will not validate, so its sections could not be
@@ -677,18 +716,6 @@ export function BoxOps({
             onClick={() => startEdit('sections')}
           >
             Edit dividers
-          </button>
-          {/* THE ONE CONTROL HERE THAT WRITES CARDS RATHER THAN THE BOX, and its label says so
-              before it is pressed — the same rule the seal follows. A selection narrows it; no
-              selection means the box. `record.cards` counts records naming this box, which is
-              what the route walks. */}
-          <button
-            className="boxops-plain"
-            type="button"
-            disabled={busy}
-            onClick={() => startEdit('claims')}
-          >
-            Set claims on {scope}
           </button>
           {sealed ? (
             <button
@@ -717,6 +744,25 @@ export function BoxOps({
                 : `Seal box — freezes capacity at ${fill}`}
             </button>
           )}
+          {/* THE ONE CONTROL HERE THAT WRITES CARDS RATHER THAN THE BOX, and its label says so
+              before it is pressed — the same rule the seal follows. A selection narrows it; no
+              selection means the box. `record.cards` counts records naming this box, which is
+              what the route walks.
+
+              LAST, AND THE ORDER ABOVE IT IS D20's OWN. Rename, Edit dividers, Seal is what a
+              box is called, where its dividers are, and whether the lid is on — the three
+              things D20 makes a box object for, in that entry's order. This one is not about
+              the box at all, so it is drawn after them rather than wedged between the dividers
+              and the lid. Last is also the only position in a wrapping row where a label that
+              changes width with the selection can rewrap nothing but itself. */}
+          <button
+            className="boxops-plain"
+            type="button"
+            disabled={busy}
+            onClick={() => startEdit('claims')}
+          >
+            Set claims on {scope}
+          </button>
         </div>
       ) : editing === 'claims' ? (
         <ClaimEditor
@@ -789,10 +835,22 @@ export function BoxOps({
 
         <Trouble failure={trouble} />
 
-        {/* LAST IN THE DISCLOSURE, AND THAT IS THE ONLY PLACEMENT ARGUMENT IT NEEDS. Every
-            other control here is reversible or is a reading; this one destroys a box. Nothing
-            below it, nothing beside it, and two presses plus a typed number away from a screen
-            that is otherwise for looking at cards. */}
+        {/* LAST CONTROL IN THIS COMPONENT, AND THAT IS THE ONLY PLACEMENT ARGUMENT IT NEEDS.
+            Every other control here is reversible or is a reading; this one destroys a box.
+            Nothing below it inside `BoxOps`, nothing beside it (`boxops-actions-lone`), and two
+            presses plus a typed number away from a screen that is otherwise for looking at
+            cards.
+
+            IT SAID "LAST IN THE DISCLOSURE" until 2026-08-25, and there has been no disclosure
+            since the owner deleted the fold — BoxOps.css records the three rules that went with
+            it. The placement argument never depended on it; only the thing it is last INSIDE of
+            has a different name.
+
+            WHAT SITS BELOW IT IN THE COLUMN IS `RegisterBox`, AND THAT IS DELIBERATE rather
+            than an erosion of the rule above. It is not a box-2 control at all — it acts on the
+            registry, not on this box — so it is separated by `.boxops-new`'s `--s5`, the single
+            widest gap in this block against the `--s3` every operation above it uses, and it
+            wears the plain hairline where this one wears an ink border. */}
         {/* ABOVE THE DELETE, BECAUSE IT IS WHAT MAKES THE DELETE POSSIBLE. D34's release is
             the answer to one of the three things `box_not_empty_of_commitments` refuses on,
             and the operator meets that refusal at the control below this one. It draws

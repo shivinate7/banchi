@@ -5630,6 +5630,7 @@ def do_search(query: str) -> dict:
     for sku, rank in ranked.items():
         copies = inventory.positions_for_sku(sku)
         listing = inventory.listings.get(sku)
+        on_hand = len(inventory.copies_on_hand(sku))
         groups.append(
             {
                 "sku": sku,
@@ -5647,8 +5648,21 @@ def do_search(query: str) -> dict:
                     stage: (int(getattr(listing, stage)) if listing is not None else 0)
                     for stage in master.LISTING_STAGES
                 },
-                "on_hand": len(inventory.copies_on_hand(sku)),
+                "on_hand": on_hand,
                 "cap": join.LIVE_QUANTITY_CAP,
+                # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
+                # RULE and this is what the rule comes to for THIS SKU, which are different
+                # numbers whenever the shelf holds fewer than a playset — and the screen wants
+                # the second one. `cap` alone was drawn as the denominator of `listed N of ...`
+                # and read as a target: a card the owner has exactly one of said "listed 0 of 4",
+                # claiming three copies of headroom that do not exist. `pipeline/join.py`'s
+                # `add_to_quantity` has always bounded the same way (`min(room, uncommitted)`),
+                # so this reports what the pipeline would do rather than a ceiling above it.
+                #
+                # Computed HERE and not in the browser: `app/src/server.ts` records that the app
+                # is forbidden from computing the live cap, and a `Math.min` over `cap` in
+                # TypeScript is that rule living in two places.
+                "listable": min(join.LIVE_QUANTITY_CAP, on_hand),
                 "copies": [_copy_row(places, card) for card in copies],
                 "_rank": rank,
             }
@@ -5662,6 +5676,11 @@ def do_search(query: str) -> dict:
 
     if loose:
         loose.sort(key=lambda c: (str(c.box), str(c.index)))
+        # Counted here rather than through `copies_on_hand`, which takes a SKU and these have
+        # none. The rule it applies is the one D7 states as amended by D26 — a copy is on hand
+        # because it exists and has not left, by either door — and it is one comparison against
+        # the same tuple that method uses.
+        loose_on_hand = sum(1 for card in loose if card.state not in master.TERMINAL_STATES)
         groups.append(
             {
                 "sku": None,
@@ -5671,14 +5690,12 @@ def do_search(query: str) -> dict:
                 "set_hint": _agreed(card.set_hint for card in loose),
                 "condition": _agreed(card.condition for card in loose),
                 "listed": {stage: 0 for stage in master.LISTING_STAGES},
-                # Counted here rather than through `copies_on_hand`, which takes a SKU and
-                # these have none. The rule it applies is the one D7 states as amended by
-                # D26 — a copy is on hand because it exists and has not left, by either
-                # door — and it is one comparison against the same tuple that method uses.
-                "on_hand": sum(
-                    1 for card in loose if card.state not in master.TERMINAL_STATES
-                ),
+                "on_hand": loose_on_hand,
                 "cap": join.LIVE_QUANTITY_CAP,
+                # The same min as the keyed group above. Zero listing stages and no SKU to list
+                # under, so this can only ever be read as "what it WOULD be worth if identified"
+                # — which is the honest thing for it to say rather than a bare cap.
+                "listable": min(join.LIVE_QUANTITY_CAP, loose_on_hand),
                 "copies": [_copy_row(places, card) for card in loose],
             }
         )

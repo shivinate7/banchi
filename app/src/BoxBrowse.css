@@ -128,16 +128,62 @@
 
 /* THE MAP COLUMN WAS TOO NARROW AND THE DETAIL COLUMN TOO EMPTY, both measured at 1440x900:
    the list was drawn at 320px inside a 1240px page while ~856px sat beside it holding a 420px
-   stack. The map now takes up to 380px — enough that a card name stops being clipped at the
-   third word — and the detail column splits into two beneath the box panel, so the width it
-   was already given gets used. `s5` between them rather than `s6`, which is 8px given back to
-   both. */
+   stack. Widening the map is what that fixed, and it holds — a card name stops being clipped at
+   the third word. The rest of that sentence described the card column splitting in two BENEATH
+   the box panel, which is two layouts ago; what replaced it is below. `s5` between the columns
+   rather than `s6`, which is 8px given back to all three. */
+/* THREE COLUMNS AS OF 2026-08-25 (owner): the walk, the card, and the box-and-runs pair —
+   "with the now empty right third of vertical space, i want you to put box top right, and runs
+   below it". The third column is not new space; it is the space the photograph stopped using.
+   Shrinking the shot to the height of its own fact rows (see .browse-detail) freed ~270px of
+   width beside the facts, which is enough to stand BoxOps and RunPanel in, and standing them
+   there is what takes them out from under the card.
+
+   Measured at 1440x900: the body was 1286px tall in two columns and is ~806px in three, because
+   the pair no longer costs the card's column anything at all. 360 | 600 | 400 at the page's
+   1408px of content — the middle GAINS 40px over the 560px `.browse-about` had.
+
+   The map keeps its own track rather than sharing the middle's `1fr`: it is sticky and scrolls
+   itself, so a track that grew with the card panel would grow a column that is already full.
+
+   THE RIGHT TRACK CAME DOWN FROM 400 TO 370 ON THE OWNER'S "runs goes up, narrower, with more
+   space given to the middle". 370 rather than 340: measured, `.run-hint` needs ~323px and the
+   panel spends 34 on its own padding and border, so below ~360 the head stops being one line and
+   the four command names wrap. The 30px that frees goes to the card. */
+/* FOUR CHILDREN AND TWO ROWS, all placed explicitly rather than left to auto-placement around a
+   spanning item — that is precisely the arrangement a later edit breaks with no visible cause.
+   The declared rows are not optional and this file already says why one query down: `.browse-map`
+   is sticky, a sticky item is confined to its grid AREA, and `1 / -1` with no declared rows
+   silently resolves to line 1 and the map stops sticking. */
 .browse-body {
   display: grid;
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(340px, 370px);
+  grid-template-rows: auto auto;
   gap: var(--s5);
   align-items: start;
   margin-top: var(--s3);
+}
+
+.browse-body > .browse-map {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.browse-body > .browse-side {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.browse-body > .browse-boxrun {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* The copies, across the card's column and the runs' — see BoxBrowse.tsx for the measurement. */
+.browse-body > .browse-under {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  min-width: 0;
 }
 
 /* Sticky and independently scrolled — the whole MAP column now, not the list alone.
@@ -146,10 +192,25 @@
    covers the search, the box strip and the key caption exactly as it covers the rows,
    because a control that narrows the list and then scrolls away from it is a control you
    scroll UP to reach. Rejected then and still: paging the list. */
+/* THE COLUMN SCROLLS WHEN ITS OWN CONTENTS OUTGROW THE VIEWPORT, and that is not belt and
+   braces — without it the box's editors are UNREACHABLE. This column is sticky and capped at the
+   viewport, so anything past the cap renders below the fold and the page scroll cannot bring it
+   back: the sticky element does not move. That was theoretical while the column held a search,
+   a strip and a list, and stopped being theoretical on 2026-08-25 when the box's operations moved
+   in — open the claims editor (thirteen rarity chips, the finish chips, two fields and an Apply)
+   on a 720px-tall window and the button that applies is simply off-screen, forever.
+
+   Caught by `app/tests/inventory.spec.ts` at Playwright's own 1280x720: "element is outside of
+   the viewport", on four box-claim cases at once. Worth recording because the failure looks like
+   a flaky click and is not one.
+
+   The inner `.browse-list` scroller stays, and the two do not fight: the list shrinks first (it
+   is the only `flex: 0 1 auto` child) down to its floor, and only then does this one engage. */
 .browse-map {
   position: sticky;
   top: var(--s4);
   max-height: calc(100vh - var(--s5));
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   /* s2, not s3. This column is sticky and its height is the viewport, so every gap above the
@@ -162,10 +223,14 @@
 /* `flex: 0 1 auto`, never grow: a short list must end where its rows end. Grown, the
    bordered scroller pads itself with empty surface — the looks-like-a-bug the review
    screen's full-width photo panel was rejected for, drawn around a list instead. */
+/* A FLOOR RATHER THAN `min-height: 0`, since the box's operations joined this column. This is
+   the only child that yields, so a tall editor below it would squeeze the walk to nothing and
+   leave the operator editing a box they can no longer see. 6rem is about three rows — enough to
+   stay oriented, small enough that the column reaches its own scroll before it matters. */
 .browse-list {
   list-style: none;
   flex: 0 1 auto;
-  min-height: 0;
+  min-height: 6rem;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -521,12 +586,14 @@
   outline-offset: -2px;
 }
 
-/* The right-hand column: the box panel first, then whatever the walk is pointing at. A column
-   rather than the grid cell it used to be, because there are two things in it now — D31 puts
-   the box operations on the header of the box being walked, and the card detail sits under
-   them. Air between them rather than a hairline: each is already a bordered panel, and stacking
-   two bordered panels flush draws a 2px rule, which is the second separation weight this system
-   does not have. */
+/* THE MIDDLE COLUMN: the card the walk is pointing at, and nothing else. It used to hold the
+   box operations and the run panel too — this was the whole right-hand side of the screen — and
+   both moved out to `.browse-boxrun` in the third column on 2026-08-25. What is left is one
+   subject, which is what makes the column's own order trivial: the selected card, or the
+   receipts that outlive it when the query matches nothing.
+
+   Still a flex column rather than a bare cell, because those two are alternatives that must not
+   both draw at once and the gap belongs to whichever one does. */
 .browse-side {
   display: flex;
   flex-direction: column;
@@ -534,24 +601,81 @@
   min-width: 0;
 }
 
-/* The box's own controls and the pipeline, side by side rather than stacked. Both are about
-   the box being walked and neither is what the click was for, so they sit beneath the card
-   and share its width instead of taking a screen each. `1fr 1fr` and not `auto auto`: equal
-   width whatever either one is holding, so a live run's console cannot squeeze the box
-   controls into a column of wrapped words. */
+/* THE BOX AND THE RUNS, STACKED IN THEIR OWN COLUMN (owner, 2026-08-25): "put box top right,
+   and runs below it". This was `1fr 1fr` beneath the card, and that row was itself the thing
+   that paid for removing the two disclosures — D33's argument was that side by side the pair
+   costs one panel's height rather than two.
+
+   The column is the stronger form of that same argument, not a retreat from it: beside the card
+   the pair costs the card's column NOTHING, where the row still cost it ~515px. Nothing folds,
+   which is the part D33 actually settled, and both sets of buttons are still just there.
+
+   A flex column rather than a one-column grid, and that is load-bearing: `BoxOps` is drawn only
+   for a numbered shelf the registry knows, and a null flex child produces no box and no leading
+   gap. A grid row would reserve the gap for a panel that is not there. */
 .browse-boxrun {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s5);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  align-items: stretch;
   min-width: 0;
 }
 
-@media (max-width: 1100px) {
-  .browse-boxrun {
+/* BELOW 1240 THE THIRD COLUMN GOES BACK UNDER THE CARD, in the arrangement it had until
+   2026-08-25 — the middle would otherwise fall under the measure the facts and the copies list
+   need, and a 300px card panel is worse than a scroll.
+
+   1240 rather than 1440: the owner works at 1440x900, and a cliff at exactly the working size is
+   a cliff you hit by un-maximising a window. It also puts Playwright's 1280x720 INSIDE the new
+   layout, so `make design-check` exercises the three columns rather than only the fallback.
+
+   `grid-template-rows` and the map's `1 / -1` are not decoration. `.browse-map` is `position:
+   sticky` and a sticky item is confined to its GRID AREA; with no explicit rows, `-1` resolves to
+   line 1, the span silently becomes one row, and the map stops sticking the moment row 1 scrolls
+   past. Two rows, spanned, is what keeps it. */
+@media (max-width: 1239px) {
+  .browse-body {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  .browse-map {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .browse-side {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* THREE ROWS, NOT TWO, AND THE OVERLAP IS WHY. `2 / -1` is column 2 at this width — exactly
+     where `.browse-boxrun` sits — and grid permits two items to share a cell and paints them on
+     top of each other. Silent, visual-only, and invisible to every check on the commit path. */
+  .browse-body {
+    grid-template-rows: auto auto auto;
+  }
+
+  .browse-body > .browse-boxrun {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--s5);
+    align-items: start;
+  }
+
+  .browse-body > .browse-under {
+    grid-column: 2;
+    grid-row: 3;
   }
 }
+
+/* THE 1100px QUERY IS GONE, and it is a deletion rather than a move. It collapsed
+   `.browse-boxrun`'s inner `1fr 1fr` to one track, and that grid existed because this held
+   BoxOps AND the run panel side by side. Since D38's amendment it holds the run panel and a
+   shelf note, and the <=1239 block above already gives it a single track — so this rule spent
+   its life turning one column into one column. */
 
 /* ---- the card ---- */
 
@@ -562,26 +686,61 @@
 
    It collapses to one column under 900px, where two columns would leave neither wide enough to
    be worth having. Owner-side and desktop by D13, so this is the only breakpoint in the file. */
-/* THE PHOTOGRAPH GETS A REAL TRACK, AS OF 2026-08-24. It was capped at 280px and drew
-   280x435 — 9.4% of a 1440x900 viewport — while the review queue, doing the same job of
-   looking at a card, gives it 415x736 and 23.6%. Two screens that both exist to show a
-   photograph disagreed by a factor of two and a half about how big one should be, and this
-   was the small one despite being the screen with the whole box beside it.
+/* THE PHOTOGRAPH IS FLUSH WITH ITS OWN FACT ROWS (owner, 2026-08-25): "shrink the preview image
+   from how large it is to now be in line with the rows going from card to finish, those should
+   all occupy the same vertical space".
 
-   The ceiling rises with the page's reclaimed 200px rather than at the facts' expense: the
-   value column beside it still holds its own measure, and the facts are short strings that
-   were never using the width they had. */
+   This reverses a widening made the day before, and the argument it replaces is worth keeping
+   because it was right about the wrong screen. That comment compared this photo to the review
+   queue's 415x736 and called 280px small. But the review queue is the JUDGING screen — its whole
+   job is settling whether the foil matches the toggle, and docs/DESIGN.md spends a section on
+   giving it the largest thing on the page. This screen's question is WHERE IS THIS CARD. The
+   photograph here confirms you are looking at the right slot; it is not the thing being read.
+   Sizing it by the review queue was borrowing a floor from a screen with a different job, which
+   is the same mistake docs/DESIGN.md names when it refuses to draw the Fulfiller's minimums on
+   the owner's screens.
+
+   IT WAS PINNED TO THE ROWS FOR A FEW HOURS AND IS SIZED FOR THE COLUMN AGAIN, and the middle
+   step is worth keeping because it is what made the right size findable. Flush against the facts
+   put the photograph at 150x204 — and then the owner asked for it back: "more space given to the
+   middle (ie photo gets larger)". Those two are only in conflict while the facts are as wide as
+   they were. They are not any more: `Captured` printed a full ISO stamp at ~234px and now reads
+   `6:35pm · Aug 23` at ~100px (see `capturedText`), so the widest value on the card is the card's
+   own name and the facts want ~270px instead of ~426px.
+
+   So the photograph takes the width that frees, and what fills the space beside the facts is
+   `CardOps` — what this card IS, then what can be done to it, in one column. The residual air
+   under it is ~70px rather than the 383px that started this. The copies list moved OUT of that
+   column and under the band, because it is the one thing here that genuinely wants a measure:
+   `CardLocations.css` records its rows being re-cut for a ~460px column, and beside a photograph
+   it would get ~300px and wrap every row to three lines. */
 .browse-detail {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 250px) minmax(0, 1fr);
   gap: var(--s4) var(--s5);
   align-items: start;
   min-width: 0;
 }
 
+/* NO PHOTOGRAPH, NO BAND. `PhotoPanel` draws a sentence and a URL where the image would be —
+   ~200 characters of 15px body plus a `word-break: break-all` path. In a 150px track that is
+   fifteen lines and TALLER THAN THE FACTS, so the shot column would start driving the row height
+   and the band would be a tall thin panel beside seven short rows.
+
+   Collapsing to one column is the shape the <=900px query already produces, reused rather than
+   reinvented. The predicate is `photoMissing` in BoxBrowse.tsx, hoisted so that this class and
+   the panel that triggers it cannot disagree about when a photo is absent. */
+.browse-detail.is-absent {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .browse-headline {
   grid-column: 1 / -1;
   min-width: 0;
+}
+
+.browse-detail.is-absent .browse-headline {
+  grid-column: auto;
 }
 
 .browse-shot,
@@ -592,6 +751,21 @@
   min-width: 0;
 }
 
+/* THE FRAME IS GONE AND `aspect-ratio` IS BACK ON THE IMAGE, which deletes a whole class of
+   defect rather than fixing one. While the photograph took its height from the facts, the
+   reservation had to live on a WRAPPER — and that wrapper holds whatever `PhotoPanel` returns,
+   so a card whose file was missing got a card-shaped box drawn around a paragraph. A reservation
+   on the <img> itself cannot reach anything that is not an image. `.browse-shot`'s
+   `align-self: stretch`, `.browse-frame`, and the <=900px rule that had to be scoped around
+   `.is-absent` are all deleted with it. */
+
+/* The copies of this card, under the band and across the whole middle column. */
+.browse-under {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
 @media (max-width: 900px) {
   .browse-detail {
     grid-template-columns: minmax(0, 1fr);
@@ -600,6 +774,7 @@
   .browse-headline {
     grid-column: auto;
   }
+
 }
 
 /* The payload of the screen: where this card physically is. Utility face because it is a
@@ -628,22 +803,17 @@
   max-width: 420px;
 }
 
-/* Sized to show a blur or a finger on the card, which is what a photo on this screen is
-   for. No 320px floor asserted: that is the Fulfillment pull modal's constraint and 7b's
-   to meet. */
-/* Fills its own column now rather than carrying a 420px cap of its own — the grid decides how
-   wide the photo column is, and a second cap here would leave air inside it. */
-/* aspect-ratio: 63 / 88 reserved, the same reason ReviewQueue.css, Fulfillment.css,
-   CardLocations.css and Inventory.css all set it on their own card photos: 63x88mm is the
-   shape of every card this product will ever hold, so the box is the right shape before the
-   image loads and the panel does not jump when it does. This was the one photo in the app
-   that skipped it — `PhotoPanel` remounts the `<img>` per card (`key={row.key}:{src}`) so a
-   failed load cannot leave the previous card's broken state attached to the new one, which
-   means every arrow-key step tears down the element and mounts a fresh one with no known
-   height until its bytes arrive. Without a reserved box the `.browse-shot` column collapsed
-   toward zero and snapped back on load, a few millimetres of page reflow per photo that
-   arrow auto-repeat (STEPS has no `event.repeat` guard, deliberately) made visible as a
-   shake through the whole page below the sticky `.browse-map`. */
+/* Width from the grid track, height from the ratio — and the ratio is on the image because the
+   image is the only thing it describes. `PhotoPanel` remounts the <img> per card
+   (`key={row.key}:{src}`), so every arrow-key step mounts a fresh element with no known height
+   until its bytes arrive; without a reserved box the column collapsed and snapped back on load,
+   which arrow auto-repeat made visible as a shake through the whole page.
+
+   `object-fit: cover` and not `contain`: the stored photograph is not a card. D32 measured these
+   frames at 2160x3840, aspect 0.5625, with the card filling 80-88% of the width and only 61-72%
+   of the height, so `contain` would letterbox a frame narrower than its box and shrink the card
+   inside it. `cover` scales to the width and crops the desk off the top and bottom, which is the
+   crop you want. `object-position` is the one-line knob if the card should hang from the top. */
 .browse-photo {
   display: block;
   width: 100%;
@@ -674,10 +844,9 @@
   margin-top: var(--s5);
 }
 
-/* The one write on the screen, dressed like the Reload it sits under rather than like an
-   action that wants pressing — the button itself reuses .browse-reload, and the file
-   header has the no-fill argument. The margin is the block's own so a refusal panel
-   rendered inside it hangs together with the button that earned it. */
+/* The one write on the screen, dressed like a reading rather than like an action that wants
+   pressing — the file header has the no-fill argument. The margin is the block's own so a
+   refusal panel rendered inside it hangs together with the control that earned it. */
 .browse-reshoot {
   max-width: 100%;
 }
@@ -761,6 +930,18 @@
 }
 
 /* ---- the card's own operations: correct its claims, or remove it from the box ---- */
+
+/* THE OPEN QUESTION ABOUT THIS CARD, between what it is and what can be done to it. The
+   separation idiom is `.browse-cardops`' own, one node down — a hairline and s3, which is the
+   only separator this system has. No surface, no tint, no panel border and no fill: a reading
+   is not a control, and docs/DESIGN.md reserves the solid accent for a screen with exactly one
+   thing to do. Its two lines reuse `.browse-note-text` and `.browse-machine`, which are already
+   the two registers that file's reason-code rule names. */
+.browse-queued {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
 
 .browse-cardops {
   display: flex;

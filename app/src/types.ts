@@ -1049,6 +1049,20 @@ export type SearchGroup = {
    *  so a screen holding this group may draw the denominator. */
   cap: number
 
+  /** What the cap above comes to for THIS SKU — D7's `min(cap, on hand)`, computed by the
+   *  server.
+   *
+   *  THE DENOMINATOR A SCREEN ACTUALLY WANTS, AND `cap` IS NOT IT. The two differ whenever the
+   *  shelf holds fewer than a playset, and that is most of the store: a card the owner has one
+   *  of was drawn as `listed 0 of 4`, which reads as three copies of headroom that do not
+   *  exist. `cap` is the RULE; this is what the rule permits here.
+   *
+   *  Both are on the wire because they answer different questions and a screen may want either
+   *  — "what is the ceiling" versus "how many of these could be live". Neither is computed in
+   *  the browser: `server.ts` records that the app is forbidden from computing the live cap,
+   *  and a `Math.min` over `cap` here would be that rule kept in two places. */
+  listable: number
+
   copies: SearchCopy[]
 }
 

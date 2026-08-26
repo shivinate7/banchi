@@ -108,11 +108,19 @@
    and the copies. A column with air between rather than hairlines, because each piece is
    already a bordered panel and two bordered panels flush draw a 2px rule — the second
    separation weight this system does not have. */
+/* A QUERY CONTAINER, so the copy rows below can answer to the width THEY get rather than to the
+   viewport. `CardLocations.css` asks for exactly this in as many words — its row is a wrapping
+   flex "so the same component is honest in the owner's detail column and in the full-width panel
+   it used to have, with no breakpoint to keep in step". A container query is that sentence made
+   mechanical; a media query would be the breakpoint it refuses. `container-type: inline-size` is
+   already the idiom here — `app/src/CaptureScreen.css` uses it. */
 .inventory-detail {
   display: flex;
   flex-direction: column;
   gap: var(--s3);
   min-width: 0;
+  container-type: inline-size;
+  container-name: copies;
 }
 
 .inventory-copies {
@@ -156,6 +164,17 @@
 .inventory-lone > .position-bar {
   flex: 1 1 100%;
   order: 1;
+}
+
+/* The same widening the group rows get — see CardLocations.css. A card with no name and no SKU
+   draws THIS panel instead of the group, and that is every card in a freshly shot box, so
+   leaving it out would make two renderings of "one copy and where it is" behave differently at
+   the same width. */
+@container copies (min-width: 860px) {
+  .inventory-lone > .position-bar {
+    flex: 1 1 20rem;
+    order: 0;
+  }
 }
 
 /* A command name or a field name inside a sentence: a machine string, so the utility face at

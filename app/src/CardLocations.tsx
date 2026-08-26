@@ -238,14 +238,20 @@ function OwnerRows({
         </h3>
         <p className="card-locations-meta">{meta.join(' · ')}</p>
 
-        {/* `listed N of CAP` reads the LIVE count against D7's cap, because that entry's cap is
-            a cap on live quantity and nothing else. The other two counts are printed beside it
-            rather than folded into it: `staged` and `live` are two facts about two different
-            things — an import that was staged and never moved live has no live quantity at all
-            — and a single number would hide exactly the box that is not earning. */}
+        {/* `listed N of LISTABLE` reads the LIVE count against what D7 permits for THIS SKU —
+            `min(cap, on hand)`, which the server computes. NOT the bare cap, which this drew
+            until 2026-08-25 and which read as a target the stock could not reach: one copy of a
+            card said `listed 0 of 4`. The cap is a rule about a playset; the denominator of a
+            fraction is a claim about what is achievable here, and D20 spends a whole entry on
+            the difference between those two.
+
+            The other two counts are printed beside it rather than folded into it: `staged` and
+            `live` are two facts about two different things — an import that was staged and never
+            moved live has no live quantity at all — and a single number would hide exactly the
+            box that is not earning. */}
         <p className="card-locations-counts">
           <span className="card-locations-listed">
-            listed {group.listed.live} of {group.cap}
+            listed {group.listed.live} of {group.listable}
           </span>
           <span className="card-locations-onhand">on hand {group.on_hand}</span>
           <span className="card-locations-breakdown">

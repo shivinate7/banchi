@@ -2304,7 +2304,10 @@ def check_join_key_shape(report: Report) -> None:
 
 # ------------------------------------------------------------------- the reason codes
 
-REVIEW_QUEUE_TSX = ROOT / "app" / "src" / "ReviewQueue.tsx"
+# The labels moved out of ReviewQueue.tsx on 2026-08-25, when #/inventory's card panel began
+# saying whether the selected card has an open question. Extracted rather than copied — the
+# vocabulary's own docstring is the argument, and this check is half of what makes it work.
+REVIEW_QUEUE_TSX = ROOT / "app" / "src" / "reasons.ts"
 REASON_MODULES = ("pipeline/variant.py", "pipeline/routing.py")
 
 _REASON_LABELS_RE = re.compile(r"const\s+REASON_LABELS\b[^{]*\{(.*?)\n\}", re.DOTALL)

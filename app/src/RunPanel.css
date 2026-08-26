@@ -34,8 +34,22 @@
 /* Neither `cursor: pointer` nor `list-style` — see BoxOps.css's note on the same pair. This
    was a `<summary>` and is a `<p>`; a heading that offers a hand cursor and answers nothing
    is a click spent discovering that it is not a control. */
+/* WRAPS RATHER THAN CRUSHES, as of 2026-08-25, and the one-line rule above survives it — a rule
+   the CSS was not actually keeping. `.run-scope` was `flex: 0 0 auto`, so `Box 2 · the whole box`
+   held ~176px it never gave back and `.run-hint` absorbed the entire squeeze: in the 400px column
+   this panel now lives in the hint got ~130px and its four command names wrapped to THREE text
+   lines inside it. A 50px head, all of it illegible.
+
+   WRAPPING ALONE MADE THAT WORSE BEFORE IT MADE IT BETTER, and the measurement is kept because the
+   fix is not the obvious one. With the hint still ordered between the title and the scope,
+   `flex-wrap` put all three on lines of their own — 81px. The hint needs ~323px against a 366px
+   column, so it can share a line with nothing; what it must not do is break the line the other two
+   fit on together. It is ordered LAST in the markup for that reason (see RunPanel.tsx), and the
+   result is a 55px head whose hint reads on one line. Five pixels against three lines of shredded
+   mono. */
 .run-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--s2);
 }
@@ -50,6 +64,7 @@
  * biggest thing this product has ever hidden behind no control at all, so it is named in full. */
 .run-hint {
   flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--util);
   font-size: 11px;
   color: var(--muted);
@@ -67,11 +82,11 @@
 }
 
 .run-scope {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--util);
   font-size: 12px;
   color: var(--muted);
-  text-align: right;
 }
 
 /* --------------------------------------------------------------------------- refusals */
@@ -100,11 +115,14 @@
 
 /* ------------------------------------------------------------------------------ steps */
 
+/* s2 vertical, s3 horizontal. The horizontal padding is what keeps a step's text off its own
+   border and is unchanged; the vertical was buying air above a heading that already has a gap
+   under it, four times over in an open run. */
 .run-step {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  padding: var(--s3);
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
   border-radius: var(--r);
 }
@@ -116,9 +134,19 @@
   gap: var(--s2);
 }
 
+/* NOT THE PANEL TITLE'S SIZE, as of 2026-08-25. This was 20px display 700 — identical to
+   `.run-title` — so an open run stacked FOUR headings at the panel heading's own weight and the
+   hierarchy said the steps and the panel were the same rank. 14px body 700 is what BoxOps gives
+   the same job one column over (`.boxops-more-label`), so the two panels in this column now
+   agree about what a section title inside a panel looks like.
+
+   The face changes with the size because it has to: docs/DESIGN.md draws the display face at
+   >= 20px only, and `.run-title`'s comment is exactly right that 20px is its published floor.
+   That floor is an argument about `.run-title`, which keeps it — it makes no claim about a
+   heading nested inside the panel it names. */
 .run-step-title {
-  font-family: var(--display);
-  font-size: 20px;
+  font-family: var(--body);
+  font-size: 14px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -151,6 +179,31 @@
   font-family: var(--body);
   font-size: 13px;
   color: var(--muted);
+}
+
+/* WHAT THE THREE FREE STEPS ARE WAITING FOR, said once above them rather than three times
+   inside them. Same values as `.run-step-note` because it is the same register — a quiet
+   sentence about a control — and reusing them is what keeps a fourth text size off this panel. */
+.run-needs {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The one caption in the run list, over the runs that are NOT about the box being walked. Drawn
+   as a row of the list rather than as a bar across it: docs/DESIGN.md built a tinted panel-header
+   strip, looked at it and rejected it by name, and this is the shape that idea comes back in. So
+   it is the metadata register with the same hairline every other row carries. */
+.run-group {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
 }
 
 .run-step-fine {
@@ -197,8 +250,14 @@
   border-radius: var(--r);
 }
 
+/* 32px, WHICH IS `.boxops-plain`'s HEIGHT. These two panels are stacked in one column now and
+   disagreed about how tall a control is by 17% — this one was padding-driven at 37.5px with no
+   min-height, that one is 32px with one. A min-height rather than padding alone, so a label that
+   wraps to two lines grows the button instead of being clipped by it. Owner-side: the 44px
+   Fulfillment floor governs a different view and none of it is asserted here. */
 .run-button {
-  padding: var(--s2) var(--s3);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
   font-family: var(--body);
   font-size: 13px;
   font-weight: 700;
@@ -255,9 +314,16 @@
   pointer-events: none;
 }
 
+/* THE FILE PICKERS ARE BUTTONS AND MUST MEASURE LIKE ONE. This rule and `.run-button` were
+   written identical, and tightening `.run-button` to 32px on 2026-08-25 left this at 38px — two
+   controls that sit in the SAME `.run-actions` row disagreeing by 6px. `inline-flex` rather than
+   `inline-block` because `min-height` on an inline-block leaves the label at the top of the
+   enlarged box, where a <button> centres its own content: same two declarations, same result. */
 .run-upload span {
-  display: inline-block;
-  padding: var(--s2) var(--s3);
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
   font-family: var(--body);
   font-size: 13px;
   font-weight: 700;
@@ -304,6 +370,12 @@
   border-radius: var(--r);
 }
 
+/* 7rem, AND A NARROWER MINIMUM WAS TRIED AND MEASURED WORSE. The reasoning that briefly put
+   6rem here counted TRACKS and forgot to count ROWS: at the 364px inside `.run-quote` in this
+   panel's 400px column, 7rem packs two 166px tracks and 6rem packs three 108px ones — but there
+   are FOUR preflight figures, so both are two rows. Measured: 6rem is 123px and ragged 3+1 with
+   the labels in narrower cells; 7rem is 96px and a balanced 2x2. The narrower minimum cost 27px
+   to fit a column nothing needed. */
 .run-figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));

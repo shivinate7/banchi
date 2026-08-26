@@ -437,10 +437,17 @@ sentence is drawn before the press and repeated in the receipt.
 surface at the 4–16 end of the scale. This paragraph used to argue the fold on `BoxOps`'
 measured grounds — ~250px, reached once a box, above the card detail on the screen whose
 question is *where is this card* — and the owner overruled it: *"both box and run, i don't
-want click in functionality, i want their buttons just there."* D33 carries the argument, and
-what replaces the fold's saving is the ROW rather than the disclosure: `.browse-boxrun` puts
-the run panel and `BoxOps` side by side at `1fr 1fr`, so the pair costs one panel's height
-instead of two.
+want click in functionality, i want their buttons just there."* D33 carries the argument.
+
+**What replaces the fold's saving is the COLUMN, and this sentence has been rewritten twice.**
+It first read *the ROW*: `.browse-boxrun` put the run panel and `BoxOps` side by side at
+`1fr 1fr` beneath the card, so the pair cost one panel's height instead of two. Then the pair
+stood in a third column beside the card, where it cost the card's column nothing at all. Then
+the BOX left that column for the walk's, because the left column IS the box and the panel was
+re-listing sections the walk already draws (D38). The run panel has the third column to itself
+at 370px, drawn to this section's owner density and tightened to earn the narrower track: its
+step titles are 14px body rather than a second rank of 20px display, and its controls are 32px,
+which is the height `BoxOps` gives the same job over in the walk's column.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
 fourteen strings — seven from the variant ladder in `pipeline/variant.py`

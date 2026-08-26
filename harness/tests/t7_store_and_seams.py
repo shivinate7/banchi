@@ -5513,6 +5513,19 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 "and `cap` is pipeline/join.py's playset imported, never the literal 4 — "
                 "the screen's '2 of 4 live' moves the day D7's cap does",
             )
+            # D7: "listed quantity is min(cap, on hand)". THE SHELF BINDS HERE, WHICH IS THE
+            # WHOLE POINT OF THE FIELD: two copies on hand against a cap of four, so the most
+            # this SKU can ever have live is two. The screen drew the bare `cap` as the
+            # denominator of `listed N of ...` until 2026-08-25, so a card the owner had one of
+            # read `listed 0 of 4` — three copies of headroom that do not exist. Asserted
+            # against the arithmetic rather than the literal 2, so it moves with the cap.
+            checks.equal(
+                group["listable"],
+                min(join.LIVE_QUANTITY_CAP, 2),
+                "and `listable` is what that cap COMES TO for this SKU — min(cap, on hand), "
+                "so the shelf binds it to 2 and the screen cannot promise a playset the "
+                "boxes do not hold",
+            )
             checks.equal(
                 group["listed"],
                 {

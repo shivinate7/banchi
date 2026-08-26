@@ -213,6 +213,20 @@ So the three listing stages moved off the card and onto the SKU:
   sale decrements the SKU's `live` count, floored at zero.
 - Copies on hand is a count of unsold positions; listed quantity is `min(cap, on hand)`.
 
+**THAT LAST `min` REACHED THE PIPELINE AND NOT THE SCREEN, until the owner caught it on
+2026-08-25.** `pipeline/join.py:add_to_quantity` has always bounded by the copies actually held
+(`min(room, uncommitted)`), but `GET /search` sent the bare `LIVE_QUANTITY_CAP` and
+`CardLocations.tsx` drew it as the denominator of `listed N of ...` — so a card the owner had
+exactly one of read **`listed 0 of 4`**, two inches from `on hand 1`. Not wrong about the cap;
+wrong about what a fraction means. A denominator is read as what is achievable, and three of
+those four copies do not exist — which is the failure D20 spends its whole entry on, at SKU
+scale instead of box scale.
+
+`SearchGroup` now carries **both**: `cap` is the rule, `listable` is `min(cap, on hand)` for that
+SKU. Computed server-side, because `app/src/server.ts` records that the app is forbidden from
+computing the live cap and a `Math.min` in TypeScript is that rule kept in two places. T7 asserts
+the arithmetic rather than the literal, so it moves the day the cap does.
+
 **The decrement is an optimistic local estimate, and that is not a weakness of it.** D8 and
 D11 already put the authority in the TCGplayer export's `Total Quantity`, which `join` reads
 on every run — so this number was never a second source of truth competing with the export,
@@ -1560,10 +1574,49 @@ notch further along: three routes shipped with full T7 coverage and no reachable
 which is where `CLAUDE.md`'s route-is-not-a-feature rule came from. A control behind a fold is
 one step better than that, not a different kind of thing.
 
-**What replaces the fold's saving is the row, not the disclosure.** `BoxOps` and the run panel
-share one grid row beneath the card detail (`.browse-boxrun`, `1fr 1fr`), so the pair costs one
-panel's height rather than two, and both are on screen without a press. `defaultOpen`, the two
-disclosure triangles, their `[open]` flips and both `-webkit` marker resets are deleted.
+**What replaces the fold's saving is the COLUMN, not the disclosure** — and that sentence said
+*the row* until 2026-08-25, which is the honest way to record what actually happened. `BoxOps` and
+the run panel first shared one grid row beneath the card detail (`.browse-boxrun`, `1fr 1fr`), so
+the pair cost one panel's height rather than two. `defaultOpen`, the two disclosure triangles,
+their `[open]` flips and both `-webkit` marker resets were deleted then and stay deleted.
+
+**They now stand in a third column of their own, to the right of the card** (the owner, the next
+day: *"put box top right, and runs below it"*). It is the same argument at its limit rather than a
+different one: the row cost the card's column one panel's height, and the column costs it nothing.
+The space came from the card's own photograph, shrunk to the height of the fact rows beside it —
+see D38, which is where that measurement and the rest of the rebuild live. Stacked in that column
+`BoxOps` sits above the run panel, and `.browse-boxrun` is a flex column rather than a grid so the
+shelves that get no box panel produce no leading gap.
+
+**ALL FOUR STEPS ARE ON SCREEN IN EVERY STATE, AND THREE OF THEM WERE NOT UNTIL 2026-08-25.**
+`RunPanel.tsx`'s `STEPS` list is authored rather than derived from `phase`, and says why in its own
+comment: *"a screen that only drew the current step would leave the operator unable to see that
+emit exists until join had finished."* That promise was kept against `phase` and broken against
+`detail` — join, emit and reconcile rendered inside the open-run guard, so with no run picked the
+panel drew Identify and nothing else, and **with no runs at all the pipeline's other three
+quarters existed nowhere in the document**. A first-time operator could not learn the pipeline had
+four parts until after they had paid for one. `app/tests/run-panel.spec.ts` demonstrated the gap in
+its own body: it had to click a run row before it could assert the four titles.
+
+The heads and the notes now always draw; the CONTROLS stay behind a picked run, **absent rather
+than disabled** — the discipline the money gate already keeps, for the reason `.run-button`'s
+comment gives: a disabled button is one attribute away from being pressable. One sentence above the
+three says which state you are in. The panel gained the column when the box left it (D38), and this
+is what it does with it.
+
+**Three defects were fixed alongside, all reachable before and none of them cosmetic.** `stepOut`,
+`decisions` and `decisionsBad` were never cleared when the open run changed — so run A's answer
+rendered under run B, and `saveDecisions` posts the textarea to whatever `openRun` is at the moment
+of the press, which could write A's edited `decisions.json` into B. A step's answer now renders
+inside the step that produced it and is matched on **the step the click requested, never the
+server's echo**; the spec mocks all three routes and returns `step: 'join'` for every one, which
+was harmless only while the answer rendered unconditionally. And the run list is re-read on a
+timer — 4s while anything is live, 20s otherwise — because a run started in a TERMINAL begins live,
+so a poll gated on "something is live" could never discover the one case this route exists for.
+A live run says how long it has been running, from its own `created_at`: `identify/batch.py` logs
+only when the batch's status CHANGES, so a console tail written forty minutes ago is
+indistinguishable from a hang. Elapsed is measured, not estimated — there is no per-card signal on
+the wire and **no progress bar is invented**.
 
 **Every command's stdout is shown verbatim and nothing summarises one**, which is
 `docs/DESIGN.md`'s copy rule for the owner's screens. The one thing the panel adds on top is the
@@ -1974,6 +2027,162 @@ upstream — a capture that can produce a black frame at a different resolution 
 of its box is a rig fault, not a queue fault, and no amount of dismissing is the remedy for
 it. That is the measurement `docs/DESIGN.md` has been asking for since Gate B, and this route
 is what finally takes it.
+
+---
+
+## D38 — The photograph is sized by the rows beside it, and the box and the runs get the third column
+
+**BUILT 2026-08-25.** `#/inventory` drew two columns — the box walk, and one 1004px column holding
+everything else stacked: the card detail, then the copies, then `BoxOps` and the run panel side by
+side.
+
+**Measured at 1440x900, on box 2 card 1 with its six copies, the body went 1878px -> 1396px**, and
+the photograph **420x587 -> 150x204**. Both are off the running store through one instrument: the
+old arrangement was rebuilt in the live DOM, measured, and reloaded away. The saving is
+data-dependent — most of what remains is the copies list, where a `position-bar` takes a line of
+its own by rule — so read 482px as this card, not as every card.
+
+**THE PHOTOGRAPH WAS SIZED AGAINST THE WRONG SCREEN, AND THAT IS THE FINDING.** D33's build gave
+it a `minmax(280px, 420px)` track on 2026-08-24, arguing that 280px was small because the review
+queue gives the same job 415x736. The two screens do not have the same job. The review queue is
+where a card is JUDGED — `docs/DESIGN.md` spends a section on making the photograph the largest
+thing on it, because the question is whether the foil matches the toggle. This screen's question
+is *where is this card*, and its photograph confirms you are looking at the right slot. Borrowing
+a floor from a screen with a different job is the same mistake that file names when it refuses to
+draw the Fulfiller's minimums on the owner's screens.
+
+**So the photograph is sized by the seven fact rows beside it** (the owner: *"shrink the preview
+image ... to now be in line with the rows going from card to finish, those should all occupy the
+same vertical space"*). `.browse-facts` measures 203.5px, and 63:88 at that height is 145.7px
+wide — a 150px track, down from 420.
+
+**IT TOOK ITS HEIGHT FROM THE FACTS FOR A FEW HOURS AND IS SIZED BY ITS COLUMN AGAIN**, and the
+middle step is what made the right size findable. Pinned to the rows the photograph was 150x204;
+the owner then asked for it back — *"more space given to the middle (ie photo gets larger)"* —
+which reads as a contradiction and is not. The two are only in conflict while the facts are as
+wide as they were, and they are not: `Captured` printed a full ISO stamp at ~234px and now reads
+`6:35pm · Aug 23` at ~100px, so the widest value on the card is the card's own NAME and the facts
+want ~270px instead of ~426px. The photograph takes the width that frees. `CardOps` moves up
+beside the facts to fill the air under them, and the re-shoot control becomes a 24px icon with its
+words on `aria-label` rather than a full-width button in the photograph's own column.
+
+**THE FRAME WENT WITH IT, AND THAT DELETED A CLASS OF DEFECT RATHER THAN AN INSTANCE.** While the
+photograph took its height from the facts, the reservation had to live on a WRAPPER — and a
+wrapper holds whatever `PhotoPanel` returns, so a card whose file was missing got a card-shaped
+box drawn around a paragraph (measured: 424x592 around 424x149, with the re-shoot control pushed
+to y=985 of a 900px viewport). `aspect-ratio` is back on the `<img>`, where it cannot reach
+anything that is not an image. **Moving a reservation off the thing it describes and onto a
+wrapper gives it to everything else that wrapper can hold** — that is the lesson, and it is why
+`align-self: stretch`, `.browse-frame` and a `:not(.is-absent)` media rule are all gone.
+
+**`object-fit: cover` STAYS, against the obvious objection.** The frame is no longer guaranteed
+63:88, so `cover` crops by a variable amount and `contain` looks like the honest answer. It is not:
+D32 measured these frames at 2160x3840 with the card filling 80–88% of the width and 61–72% of the
+height, so `contain` would letterbox a frame narrower than its box and shrink the card inside an
+already small photo. `cover` crops the desk off the top and bottom, which is the crop you want.
+
+**THE ~270px THE PHOTOGRAPH GAVE UP IS THE THIRD COLUMN**, and that is the trade rather than a
+consequence. `BoxOps` and the run panel move out of the card's column into one of their own —
+which rewrites the last line of D33: the row cost the card's column one panel's height, and the
+column costs it nothing. Nothing folds. The copies list moves to a full-width row beneath the band,
+where D33's argument for keeping it in the facts column (a 587px photograph would push it off a
+900px viewport) is void.
+
+**THEN THE BOX LEFT THAT COLUMN AGAIN, AND THE SECOND MOVE IS THE ONE WORTH READING** (owner,
+same day): *"merge its functionality (so not visual merge, but rebuild type merge) and all exist
+on the left side"*. The evidence was a duplication nobody had counted: `BoxOps` drew `Section 1
+#1–#85  85 cards` as inert text for every divider, while `.browse-secthead` in the walk drew the
+same five rows — foldable, tickable, walkable — a thousand pixels to the left. **The walk IS the
+sections list.** That is D31's own finding one scale down, and it decides where the box goes: the
+left column is the box (the strip picks it, the list is its cards), so the box's readings and its
+operations belong there and the panel headed `Box 2` was the redundant instance.
+
+`BoxIdentity` is split out of `BoxOps` for it — name, fill, state and the segment track, under the
+strip that names the box. The operations stay in `BoxOps` and sit at the bottom of the walk beside
+`RegisterBox`, the other control that acts on a box rather than on a card. The sections list, its
+`Layout and controls` heading, and the `sections 1 86 171 253 394` clause of the meta line are all
+**deleted rather than moved**: three renderings of one fact on one screen. The third column keeps
+the runs alone and narrows to 370px, and the card takes the difference.
+
+**A REAL DEFECT CAME WITH THAT MOVE AND IS FIXED HERE.** `.browse-map` is sticky and capped at the
+viewport, so anything past the cap renders below the fold and the page scroll cannot bring it back
+— a sticky element does not move. Harmless while the column held a search, a strip and a list;
+not harmless once the box's editors moved in, where opening the claims editor on a 720px-tall
+window put the Apply button permanently off-screen. The column scrolls itself now, and
+`.browse-list` keeps a 6rem floor so an editor below it cannot squeeze the walk to nothing.
+`app/tests/inventory.spec.ts` asserts the escape hatch rather than the button's position.
+
+**THE DENSITY WAS TIGHTENED TO EARN THE NARROWER TRACK, at the owner's instruction** — *"there's a
+lot of wasted space in the runs blurb and box blurb ... tighten its spacing / buttons to be more
+efficient, and then allocate space accordingly."* Two cuts did nearly all of it:
+
+- **`BoxOps` drew one row per section, with no bound at all.** The row is 25.5px, so N dividers
+  cost 25.5N px and nothing stops it — the panel's height was a function of how finely a box
+  happened to be divided, which is not a thing anyone chose. **Be honest about which half of this
+  is measured**: box 2 declares five sections today and the list draws **127px**, so the cap saves
+  nothing at the current layout. What earns it is the other end — D31 records **this same box at
+  22 sections**, ~560px by that row height, more than the rest of the panel put together — and D10
+  makes dividers freely editable from any screen, so that state is one edit away at all times.
+  Capped at six rows and scrolled, with the section total already on the heading beside it so a
+  capped list cannot read as a short one. Its row tracks narrow from 8rem/10rem to 5rem/7rem, which
+  moves the panel's wrap cliff from ~399px to ~280px — the thing that actually decides how narrow
+  the column may be.
+- **The run panel drew four 20px display headings**, the same size as its own panel title, so an
+  open run said the steps and the panel were the same rank. 14px body, matching what `BoxOps`
+  gives the same job one panel down. Its buttons drop to 32px, which is `.boxops-plain`'s height —
+  the two panels in this column disagreed about how tall a control is by 17%.
+
+The column is then **`minmax(340px, 400px)`**, allocated after the cuts rather than before them.
+
+**THREE COLUMNS ARE A >= 1240px LAYOUT and below it the pair goes back under the card.** 1240
+rather than 1440: the owner works at 1440x900, and a breakpoint at exactly the working size is one
+you cross by un-maximising a window. It also puts Playwright's 1280x720 inside the new layout, so
+`make design-check` exercises the three columns rather than only the fallback.
+
+**FOUR THINGS THE CARD PANEL GAINED ON 2026-08-25, from a design consultation the owner asked
+for and an adversarial pass over its proposals.** Recorded together because they are one finding
+in four places: this panel had been drawn for the layout and not for what it must SAY.
+
+- **`Rarity` and `Note` are on it, and `CardOps` could overwrite both without showing either.**
+  `ClaimEditor` writes five claims and the list drew three — and it opens with those fields empty
+  and reads armed-and-empty as a CLEAR, so `Correct claims` was a blind overwrite of two values
+  that appeared nowhere on screen. `rarity_claim` is set on 543 of 543 records, so this was live.
+  Rarity renders verbatim (D22: no second friendly vocabulary), through the same renderer as the
+  finish claim so a second `' · '` join cannot drift from it.
+- **`Run` and `Confidence`.** `run` is on all 543 records and is the join between this panel and
+  the run panel one column right, which lists run directories and cannot say which cards each
+  touched. `Confidence` is the only place a RESOLVED card's hedge is readable — `#/review` draws
+  it only for a card that was queued. Shown FLAT, never as a chip or a colour: T1's and D35's
+  recorded misses are all confident and wrong, so `high` is not reassurance. That is an argument
+  about what the value means, not about whether to print it.
+- **Whether the card has an open question, from `GET /queues`.** A card in the review queue
+  rendered `State: identified` and nothing else — and `state` there is not merely silent, it is
+  MISLEADING, because it describes how far capture and identify got while the question was raised
+  by the JOIN. The candidate count is load-bearing: zero candidates is the difference between "go
+  and answer it" and "it cannot be answered as it stands", which is what points at the re-shoot
+  icon already on this panel. The label map moved to `app/src/reasons.ts` and is IMPORTED by both
+  screens rather than copied — its own docstring says nothing keeps it in step with
+  `pipeline/variant.py`, and the defence is making that drift visible, which a second copy would
+  defeat. `scripts/docs-audit.py`'s reason-codes check follows it there.
+- **The copies list spans the card's column AND the runs'.** Measured: in the middle column it was
+  976px of a 1450px page on the default card and 1713px of 2187px on an eleven-copy one, while
+  778px of viewport sat empty beside it. Wide, the row goes 144px to 82px and eleven copies go
+  1598px to 902px — a 43% cut with nothing removed. That is `CardLocations.css`'s own recorded
+  complaint answered rather than worked around, and it is keyed to a **container query** rather
+  than a breakpoint because that file's promise is to be honest "with no breakpoint to keep in
+  step". It also collapses `detail`'s two render sites into one, which turns the surviving-receipt
+  invariant from a prose promise into a structural fact.
+
+**The four new fact rows closed the band's air and slightly overshot**, which is worth recording
+because a test had to change for it: the facts are now 415px against a 349px photograph, so the
+~90px that sat under the facts is ~66px under the photograph instead. Which side is taller was
+never the property worth guarding — it is an accident of how many rows the panel draws, and it has
+now flipped once. What the assertion checks is that the two stay within a band of each other.
+
+**What would reopen this: a photograph nobody can read.** The band is sized for confirming a slot,
+not for judging a card. If the owner finds themselves opening the review queue to look at a card
+they were already looking at here, the answer is not a bigger photo in this band — it is that this
+screen has quietly acquired the other screen's job, and that is worth naming before it is resized.
 
 ---
 
