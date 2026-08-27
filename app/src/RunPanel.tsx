@@ -117,6 +117,65 @@ const STEPS = [
   },
 ] as const
 
+/* HOW THE CARDS ARE READ, as three named PAIRS and an escape hatch — and the pairing is the
+ * whole reason this is not two controls any more.
+ *
+ * D32's finding is that the crop and the max edge are ONE decision, and that the arithmetic
+ * runs backwards from intuition: `max_edge` normalises the LONG EDGE, not the area, and a card
+ * (aspect 0.72) is a fatter shape than the frame (0.56) — so cropping at an unchanged max edge
+ * sends MORE pixels, not fewer. Measured at +26%. That entry says in as many words that it got
+ * the cost model wrong in public first and recorded the correction so a later session would not
+ * re-derive it the same way; a checkbox sitting beside a free-form number offers precisely that
+ * mistake and says nothing about it. A pair cannot be got wrong.
+ *
+ * EVERY NUMBER BELOW IS A ROW OF D32'S OWN MEASURED FRONTIER over box 2, against a full-frame
+ * @1568 baseline of $0.72. Nothing is invented here and nothing is extrapolated to another box,
+ * which is why each sentence names the box it was measured on rather than quoting a rate.
+ *
+ * `Sharpest · 1400` is deliberately not one of the three. It is the row of that table that is
+ * strictly dearer than the baseline, and three buttons fit the 340px end of this column where
+ * four do not — so it lives behind `Custom`, which reveals the raw controls unchanged. Demoted,
+ * not taken away. */
+const READINGS = [
+  {
+    key: 'measured',
+    label: 'Measured best',
+    crop: true,
+    maxEdge: 1200,
+    says:
+      'Finds the card in each photograph and sends only that, at 1200px on its longest side — ' +
+      'the card, not the desk. Your photographs on disk are never touched. Box 2 measured it: ' +
+      '$0.62 against the whole frame’s $0.72, and sharper on the collector number. One it ' +
+      'cannot find a card in is sent whole; on box 2 that was none of 544.',
+  },
+  {
+    key: 'cheapest',
+    label: 'Cheapest',
+    crop: true,
+    maxEdge: 900,
+    says:
+      'The same crop to the card, sent smaller at 900px. The cheapest row measured on box 2 — ' +
+      '$0.44 — and the softest: about 13% fewer pixels on the collector number than the whole ' +
+      'frame gives. A photograph it cannot find a card in is sent whole.',
+  },
+  {
+    key: 'whole',
+    label: 'Whole frame',
+    crop: false,
+    maxEdge: 1568,
+    says:
+      'Sends the whole photograph, desk and all, at 1568px. This is the command’s own default ' +
+      'and the only setting a run has been through end to end — Gate B’s 53 cards. $0.72 on box 2.',
+  },
+] as const
+
+/* The sentence for the escape hatch, and it carries the warning the presets make unnecessary.
+ * This is where the mistake is reachable again, so this is where it is named. */
+const CUSTOM_SAYS =
+  'Crop and max edge are one decision. Cropping on its own makes the picture BIGGER, not ' +
+  'smaller — a card is a fatter shape than the frame, so a crop at an unchanged 1568 cost 26% ' +
+  'MORE when it was measured. The rig’s useful range runs 900 to 1400.'
+
 /** What a run was over, in the fewest words that are true.
  *
  *  FALLS BACK TO THE CAPTURE DIRECTORY, because `scope` is written by the route that starts a
@@ -214,8 +273,18 @@ export function RunPanel({ scope }: RunPanelProps) {
   const [quote, setQuote] = useState<RunPreflight | null>(null)
   const [ticketScope, setTicketScope] = useState<string>('')
 
+  /* The default is `READINGS[0]` — the measured pair — restated here rather than read off the
+   * table, because `useState` wants a value and a lazy initialiser reading an index would be a
+   * second place the default lives. The CLI's own defaults are the OTHER corner (crop off,
+   * 1568), which is deliberate and is what `Whole frame` selects: this screen states a default
+   * rather than changing what an unflagged terminal run means. */
   const [crop, setCrop] = useState(true)
   const [maxEdge, setMaxEdge] = useState(1200)
+  /* Whether the raw controls are revealed. An ACT rather than a derivation: with the pair set
+   * by the presets, the only way to reach an arbitrary number is to ask for one, and a `custom`
+   * that switched itself on whenever the pair stopped matching a row would leave the operator
+   * unable to see which of the two states they were in. */
+  const [custom, setCustom] = useState(false)
   const [bypass, setBypass] = useState(false)
 
   const [busy, setBusy] = useState<string | null>(null)
@@ -232,17 +301,33 @@ export function RunPanel({ scope }: RunPanelProps) {
    * — and a deep compare written by hand here would be a second answer to a question a key
    * already answers. */
   const scopeKey = useMemo(
-    () => `${scope.box ?? 'none'}:${[...scope.indices].sort((a, b) => a - b).join(',')}`,
-    [scope],
+    () =>
+      `${scope.box ?? 'none'}:${[...scope.indices].sort((a, b) => a - b).join(',')}` +
+      `:${crop ? 'crop' : 'whole'}:${maxEdge}`,
+    [scope, crop, maxEdge],
   )
 
   const scoped = scope.box !== null
   const selection = scope.indices.length
 
+  /* WHICH ROW THE PAIR IS, and the sentence that goes under it. Derived rather than stored, so
+   * the chip that reads as chosen and the values actually sent cannot come apart — the failure
+   * a second piece of state here would eventually produce. `custom` wins the tie: with the raw
+   * controls revealed, the operator is holding the knob whatever the numbers happen to say. */
+  const reading = READINGS.find((row) => row.crop === crop && row.maxEdge === maxEdge) ?? null
+  const readingSays = custom || reading === null ? CUSTOM_SAYS : reading.says
+
   useEffect(() => {
     /* THE QUOTE IS VOID THE MOMENT THE SCOPE MOVES. Not merely stale — void: it is the first
      * step of a two-step confirm, and a confirm whose first step described a different set of
-     * cards is not a confirm at all. Ticking one more card retires the estimate. */
+     * cards is not a confirm at all. Ticking one more card retires the estimate.
+     *
+     * AND THE READING IS PART OF THE SCOPE, which this key did not say until 2026-08-25. The
+     * estimate is computed from the BYTES each card is sent as, and the crop and the max edge
+     * are what decide those — so unticking the crop after Check cost left a stale figure
+     * standing above a live `Spend $0.62 and identify 36 cards` button, describing a send that
+     * was no longer the one about to happen. The rule above already covered it; the key just
+     * named cards where it should also have named bytes. */
     if (ticketScope !== '' && ticketScope !== scopeKey) {
       setQuote(null)
       setTicketScope('')
@@ -606,32 +691,73 @@ export function RunPanel({ scope }: RunPanelProps) {
         </div>
         <p className="run-step-note">{STEPS[0].note}</p>
 
-        <div className="run-controls">
-          <label className="run-toggle">
-            <input
-              type="checkbox"
-              checked={crop}
-              onChange={(event) => setCrop(event.target.checked)}
-            />
-            {/* D32: the crop is local, free and per-run, and it is OFF by default in the CLI
-                because Gate B's only end-to-end run was full-frame. It is on by default here
-                because every run since has used it and the box-2 measurement is what settled
-                the max-edge beside it — a default this screen can state, rather than a change
-                to the flag's own default, which would rewrite what an unflagged run means. */}
-            Crop to the card
-          </label>
-          <label className="run-field">
-            Max edge
-            <input
-              type="number"
-              min={256}
-              max={4096}
-              step={100}
-              value={maxEdge}
-              onChange={(event) => setMaxEdge(Number(event.target.value))}
-            />
-          </label>
+        {/* THE READING, AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above for the
+            measurement that decides it, and for why a checkbox beside a free number was an
+            invitation to spend more by asking for less. */}
+        <div
+          className="run-controls run-readings"
+          role="group"
+          aria-label="How the cards are read"
+        >
+          {READINGS.map((row) => (
+            <button
+              key={row.key}
+              type="button"
+              className="run-button run-reading"
+              aria-pressed={!custom && reading?.key === row.key}
+              onClick={() => {
+                setCustom(false)
+                setCrop(row.crop)
+                setMaxEdge(row.maxEdge)
+              }}
+            >
+              {row.label}
+              <span className="run-reading-edge">{row.maxEdge}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className="run-button run-reading"
+            aria-pressed={custom}
+            onClick={() => setCustom(true)}
+          >
+            Custom
+          </button>
         </div>
+
+        {custom && (
+          /* THE RAW CONTROLS, UNCHANGED AND DEMOTED RATHER THAN DELETED. `Sharpest · 1400` and
+             everything else on D32's frontier is reachable here, and so is every pairing the
+             three rows above refuse to offer — including the wrong one, which is why the
+             sentence beneath this block is the one that names it. */
+          <div className="run-controls">
+            <label className="run-toggle">
+              <input
+                type="checkbox"
+                checked={crop}
+                onChange={(event) => setCrop(event.target.checked)}
+              />
+              Crop to the card
+            </label>
+            <label className="run-field">
+              Max edge
+              <input
+                type="number"
+                min={256}
+                max={4096}
+                step={100}
+                value={maxEdge}
+                onChange={(event) => setMaxEdge(Number(event.target.value))}
+              />
+              px
+            </label>
+          </div>
+        )}
+
+        {/* WHAT THE READING MEANS, BEFORE Check cost IS PRESSED. The command prints its own
+            crop line into the preflight stdout below, and that line is the receipt — but a
+            receipt arrives after the decision, and this is the decision. */}
+        <p className="run-step-note run-step-fine">{readingSays}</p>
 
         <div className="run-actions">
           <button
@@ -668,6 +794,20 @@ export function RunPanel({ scope }: RunPanelProps) {
                 <dd>{money(quote.estimate_usd)}</dd>
               </div>
             </dl>
+
+            {(quote.cache_hits ?? 0) > 0 && (
+              /* WHAT `Already answered` COSTS YOU, said where that figure is drawn. D32 records
+                 it as a known gap kept deliberately: neither the crop nor the max edge is part
+                 of the cache identity, so a box re-read at a different reading serves the
+                 answers it was first read with and reports them as hits. That is safe and it is
+                 not obvious, and the two controls it silently ignores are directly above.
+                 Stated as what it means to the person about to press the button rather than as
+                 a fact about a hash — the panel has no business naming `prompt_fingerprint`. */
+              <p className="run-step-note run-step-fine">
+                Cards already answered keep the answer they were first read with. The reading
+                above only reaches the cards being sent.
+              </p>
+            )}
 
             <Console text={quote.console} label="What the preflight printed" />
 

@@ -598,12 +598,18 @@
 /* Where the card physically is. Utility face because it is a position, 20px because it is
    read against a box across the desk. Not the Fulfillment view's 32px floor — see the file
    header for why this screen does not borrow his numbers. */
+/* TRACKING ONLY, AND THE SIZE DELIBERATELY STAYS 20px. `-0.01em` is the display face's
+   optical correction and does not belong on a fixed-advance mono label — the same copy-paste
+   corrected on `.browse-position` the same day. What is NOT copied across is that rule's
+   move to 24px: this screen's payload is the PHOTOGRAPH, which docs/DESIGN.md spends a
+   section making the largest thing here, so the position label growing would take from the
+   one element that must not shrink. */
 .review-position {
   font-family: var(--util);
   font-size: 20px;
   font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* ---- the reason: human label large, machine string small beneath it ---- */

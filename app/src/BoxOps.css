@@ -316,6 +316,25 @@
   border-top: 1px solid var(--line);
 }
 
+/* ONE HAIRLINE, ONE INTERVAL. `.boxops-more` already spends `--s3` under its own rule, so a
+   first child bringing its own top margin spends it twice — 24px beneath the top hairline
+   against the 12px `.boxops-actions-lone` gives the delete's hairline a hundred pixels
+   further down. Same construction, two different gaps, and neither number is declared
+   anywhere: they are composed, which is how they drifted apart without anyone choosing it.
+
+   THE SECOND RULE IS THE ONE THAT FIXES A VISIBLE FAULT rather than a rhythm. An editor as
+   first child brings its OWN `border-top`, so opening the rename or the claims editor drew
+   two parallel hairlines 25px apart with nothing between them — which reads as a rendering
+   bug, not as a separation. */
+.boxops-more > :first-child {
+  margin-top: 0;
+}
+
+.boxops-more > .boxops-editor:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
 /* THE DISCLOSURE IS GONE (owner, 2026-08-24): "i hate the click-in of the box settings in
    inventory, the buttons should just be there for me to press". The triangle, its [open]
    flip and the -webkit marker reset went with it — three rules that can no longer fire,
@@ -498,9 +517,13 @@
   border-top: 1px solid var(--line);
 }
 
+/* THE INK BORDER IS THE WHOLE OF THE DANGER TREATMENT, and it is the one step this palette
+   allows. `font-weight: 700` was declared here too and could never fire: `.boxops-plain` is
+   already 700 and docs/DESIGN.md locks Atkinson to 400/700, so the rule claimed two steps of
+   emphasis and delivered one. Deleted rather than left — a declaration that cannot change a
+   pixel is a comment that lies about being code. */
 .boxops-plain-danger {
   border-color: var(--ink);
-  font-weight: 700;
 }
 
 .boxops-plain-danger:disabled {

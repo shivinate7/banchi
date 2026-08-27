@@ -151,16 +151,36 @@ function shelfLabel(shelf: Shelf): string {
  * only when something is actually on them — a cell for a condition nothing is in is chrome
  * that has stopped being true, the same rule the key chips follow.
  */
-function shelvesOf(rows: Row[]): Shelf[] {
-  const out: Shelf[] = []
+function shelvesOf(rows: Row[], registry: readonly number[] = []): Shelf[] {
+  const boxes: number[] = []
   let pooled = false
   let unplaced = false
   for (const row of rows) {
     const shelf = shelfOf(row)
     if (shelf === 'pooled') pooled = true
     else if (shelf === 'unplaced') unplaced = true
-    else if (!out.includes(shelf)) out.push(shelf)
+    else if (!boxes.includes(shelf)) boxes.push(shelf)
   }
+  /* AND EVERY BOX THE REGISTRY KNOWS, WHICH IS NOT THE SAME SET AND WAS TREATED AS THOUGH IT
+   * WERE. A box with no cards in it produces no row, so it produced no shelf, so the strip
+   * drew no cell for it — and the strip is the ONLY way to select a shelf. `BoxIdentity` and
+   * `BoxOps` draw for the SELECTED shelf, so an empty box could not be renamed, re-sectioned,
+   * sealed or DELETED from any screen in the product. Measured on the owner's own store: 12 of
+   * 13 boxes were unreachable, including every one they had just created to test with.
+   *
+   * It is `CLAUDE.md`'s route-is-not-a-feature rule caught from the other end — `DELETE
+   * /boxes/<box>` exists, is covered by T7, has a client function AND has a control on screen,
+   * and none of that is worth anything for a box you cannot put the screen on. And it is a
+   * REGRESSION with a commit: `13c397a`, D31's merge, is where both this function and the
+   * strip were written, and it is where `#/boxes` — the route whose whole content was the
+   * registry list — stopped existing. The merge carried over the cards and not the registry.
+   *
+   * Sorted numerically rather than left in row order. Row order was already ascending because
+   * the walk is, so nothing moves for a store with no empty boxes; what it settles is where a
+   * registry-only box lands, which row order cannot answer because it has no row. */
+  for (const box of registry) if (!boxes.includes(box)) boxes.push(box)
+  boxes.sort((a, b) => a - b)
+  const out: Shelf[] = [...boxes]
   if (pooled) out.push('pooled')
   if (unplaced) out.push('unplaced')
   return out
@@ -718,20 +738,6 @@ export function BoxBrowse({
     return rows.filter((row) => matched.has(row.key))
   }, [rows, searching, matched])
 
-  /* The shelves the query still reaches, and then the one shelf being walked. TWO STAGES AND
-   * NOT ONE, because they answer different questions: the strip has to offer every shelf the
-   * query matches (or a match in another box would be invisible with nothing saying so), and
-   * the list has to show one shelf's worth (or the header above it would name a box the rows
-   * do not all belong to). `visible` stays the name every control below already walks. */
-  const shelves = useMemo(() => shelvesOf(inQuery), [inQuery])
-
-  const visible = useMemo(() => {
-    if (shelf === null) return NO_ROWS
-    return inQuery.filter((row) => shelfOf(row) === shelf)
-  }, [inQuery, shelf])
-
-  const sections = useMemo(() => sectionsOf(visible), [visible])
-
   /* IS THE WALK BELOW ACTUALLY A SET OF MATCHES? `searching` alone does not answer that and
    * using it as though it did is a real defect rather than a nicety: it goes true on the first
    * keystroke, while the debounce and the request are still out and `inQuery` is still every
@@ -739,8 +745,35 @@ export function BoxBrowse({
    * rows are never thrown open for the length of a debounce and then mostly thrown away again.
    *
    * A FAILED search reads false here, which is the same answer the walk itself gives: the rows
-   * stay unfiltered under the failure panel, so there is nothing match-shaped to expand. */
+   * stay unfiltered under the failure panel, so there is nothing match-shaped to expand.
+   *
+   * HOISTED ABOVE `shelves`, which now reads it. */
   const filtered = searching && matched !== null
+
+  /* The shelves the query still reaches, and then the one shelf being walked. TWO STAGES AND
+   * NOT ONE, because they answer different questions: the strip has to offer every shelf the
+   * query matches (or a match in another box would be invisible with nothing saying so), and
+   * the list has to show one shelf's worth (or the header above it would name a box the rows
+   * do not all belong to). `visible` stays the name every control below already walks.
+   *
+   * THE REGISTRY IS UNIONED IN ONLY WHEN NOTHING IS BEING SEARCHED FOR, and that boundary is
+   * the whole of the change rather than a caveat on it. The rule this function was written to
+   * — a cell may never lead to an empty list — is right about a QUERY and was wrong as a rule
+   * about the store: under a query an empty cell is a dead end, so a box holding no match stays
+   * out; with no query an empty box's list is empty because the box IS empty, which is not a
+   * dead end but the truth, and it is the only state from which that box can be renamed,
+   * sealed or deleted. */
+  const shelves = useMemo(
+    () => shelvesOf(inQuery, filtered ? [] : boxRecords.map((record) => record.box)),
+    [inQuery, filtered, boxRecords],
+  )
+
+  const visible = useMemo(() => {
+    if (shelf === null) return NO_ROWS
+    return inQuery.filter((row) => shelfOf(row) === shelf)
+  }, [inQuery, shelf])
+
+  const sections = useMemo(() => sectionsOf(visible), [visible])
 
   /* The box row for the shelf being walked, or null — the header draws `BoxOps` only for a
    * NUMBERED shelf that the registry actually knows. A box a card names but `GET /boxes` has
@@ -1350,8 +1383,12 @@ export function BoxBrowse({
           Reload
         </button>
         {rows === null ? null : (
+          /* IT SAYS WHAT IT COUNTS. `rows.length` is a STORE-WIDE total — it never narrows by
+             box and never narrows by search — and it was drawn as a bare `543 cards`,
+             byte-identical to `.boxops-meta`'s `cards 543` two hundred pixels below it, which
+             counts one box. They agreed only because every other box happened to be empty. */
           <span className="browse-count">
-            {rows.length} {rows.length === 1 ? 'card' : 'cards'}
+            {rows.length} {rows.length === 1 ? 'card' : 'cards'} in the store
           </span>
         )}
         {/* "Every choice shows its key" — docs/DESIGN.md, owner-side, where an hour spent
@@ -1369,13 +1406,19 @@ export function BoxBrowse({
             list of one is chrome that has stopped being true, and the empty and failed
             states have no list under it at all. */}
         {rows === null || rows.length < 2 ? null : (
+          /* THE WORDS FIRST, THEN THE CHIPS, and the span itself is pushed to the far edge of
+             the row by `margin-left: auto`. Chips-then-words put two bordered arrow keys
+             twelve pixels from a real bordered button, which is the prev/next affordance
+             itself — see `.browse-keys` for the argument. Reading `step one card ← →` also
+             puts the sentence where a sentence goes and the keys where the eye already
+             expects a pager. */
           <span className="browse-keys">
+            step one card
             {STEPS.map((step) => (
               <kbd className="browse-key" key={step.key}>
                 {step.label}
               </kbd>
             ))}
-            step one card
           </span>
         )}
       </div>
@@ -1571,6 +1614,25 @@ export function BoxBrowse({
                 MORE than the attribute claims; the deep keys and X are bound on this element
                 and deliver exactly. Neither direction over-claims, which is the safe way for
                 the attribute to be imprecise. */}
+            {/* AN EMPTY BOX SAYS SO, because it is now a box you can actually be standing in.
+                Until the strip learned the registry there was no way to select a shelf with no
+                rows, so `visible.length === 0` below could only mean a search that matched
+                nothing — which the status line above already reports — and rendering nothing
+                was right. It can now also mean a real, registered, empty box, and rendering
+                nothing for that is a blank column beside a box header, which reads as a screen
+                that failed rather than a box that is empty.
+
+                `filtered` is what keeps the two apart, and `shelfBox` is what keeps this off
+                the pooled and no-box shelves, which have no registry row and cannot be empty in
+                this sense. The second sentence points at the operations rather than repeating
+                them: they are directly below this, and the reason the owner is here at all is
+                usually to reach one. */}
+            {visible.length === 0 && !filtered && shelfBox !== null ? (
+              <p className="browse-empty">
+                No cards in box {shelfBox.box} yet. Rename, re-section, seal or delete it below.
+              </p>
+            ) : null}
+
             {visible.length === 0 ? null : (
               <ul
                 className="browse-list"

@@ -84,10 +84,15 @@
 
 /* A count is a number, so the utility face. Uppercase and tracked per docs/DESIGN.md's
    rule that mono carries all metadata. */
+/* UPPERCASE, WHICH IS WHAT THE 0.08em ABOVE IT IS FOR. docs/DESIGN.md puts metadata in the
+   utility face "uppercase, tracked", and this was the one metadata label in the header set in
+   mixed case — tracking does its work on capitals and merely loosens lowercase. Uppercased it
+   joins the register `.browse-boxcap`, `.browse-secttitle` and `.browse-fact dt` already use. */
 .browse-count {
   font-family: var(--util);
   font-size: 11px;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
@@ -104,10 +109,17 @@
    Two faces, one line: the chips are keys off a keyboard, which is metadata, so the utility
    face; the words beside them are a sentence a human reads, so the body face. That is
    docs/DESIGN.md's mono-carries-all-metadata rule applied inside a single span. */
+/* PUSHED TO THE FAR EDGE OF THE ROW (2026-08-26). Two adjacent bordered chips carrying an
+   arrow each, sitting 12px from a real 1px-bordered button, ARE the prev/next affordance —
+   this is the only place in the app where `.browse-key` stands free rather than being drawn
+   inside the control it names. `margin-left: auto` leaves one cluster of pressable things at
+   the reading edge and one sentence at the other, which is cheaper than restyling a chip
+   whose look is shared with the capture and review screens. */
 .browse-keys {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
+  margin-left: auto;
   font-family: var(--body);
   font-size: 12px;
   color: var(--muted);
@@ -781,12 +793,28 @@
    position, 20px because it is read against a box across the desk rather than at reading
    distance. Not 32px — that is the Fulfillment floor for a position label, and this is the
    owner's screen; borrowing his floors here would make it look like his view. */
+/* THE SCREEN'S ANSWER, AND IT IS DRAWN LARGER THAN THE SCREEN'S NAME (2026-08-26). It was
+   20px, which is exactly `.inventory-title`'s size — so `Inventory`, a word the nav already
+   supplies 40px higher, was the loudest string on a route whose entire question is WHERE IS
+   THIS CARD, and the answer sat level with it one weight down. 24px settles the rank by
+   intent instead of by coincidence.
+
+   24 AND NOT MORE: `app/tests/fulfillment.spec.ts` floors a position label at 32px and this
+   rule's neighbours refuse to borrow that floor onto an owner screen, so 24 stays a clear
+   step below it rather than creeping up on a number that means something else. At Martian
+   Mono's 0.6em advance the worst realistic label — `Box 100 · Section 12 · Card 543`, 30
+   characters — draws ~432px inside a 630px track, so nothing reflows.
+
+   NO NEGATIVE TRACKING. `-0.01em` is the DISPLAY face's optical correction, copied here from
+   `.inventory-title` and `.boxops-new-head` where it belongs. Martian Mono is fixed-advance
+   and carries every position, price and count in the product precisely so those never shift
+   width; tightening it fights the one property it was chosen for. */
 .browse-position {
   font-family: var(--util);
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* D30's sentence, directly under the position label it makes countable — "between Mantine
@@ -860,6 +888,20 @@
   font-family: var(--body);
   font-size: 15px;
   color: var(--ink);
+}
+
+/* WHAT A REGISTERED BUT EMPTY BOX SAYS WHERE ITS CARDS WOULD BE. Body face because it is a
+   sentence a human reads, muted because it reports an absence rather than a fault, and 13px
+   rather than `.browse-note-text`'s 15px because that one answers for the WHOLE SCREEN ("No
+   cards captured yet") while this one answers for one shelf inside a column that is otherwise
+   working. A screen-scale message drawn at shelf scale reads as an error. */
+.browse-empty {
+  margin: 0;
+  padding: var(--s2) 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, which

@@ -755,14 +755,26 @@ export function BoxOps({
               the box at all, so it is drawn after them rather than wedged between the dividers
               and the lid. Last is also the only position in a wrapping row where a label that
               changes width with the selection can rewrap nothing but itself. */}
-          <button
-            className="boxops-plain"
-            type="button"
-            disabled={busy}
-            onClick={() => startEdit('claims')}
-          >
-            Set claims on {scope}
-          </button>
+          {/* AND NOT DRAWN AT ALL OVER NOTHING. `Set claims on all 0 cards in box 6` was a
+              real string on a real screen the moment empty boxes became reachable — a control
+              offering to write a claim onto no records, whose editor would open, take a
+              vocabulary, and apply to nobody. It is the only control in this panel that acts
+              on CARDS, so it is the only one an empty box can leave with nothing to do; the
+              other three act on the box, which exists.
+
+              Absent rather than disabled, which is this repo's rule wherever the distinction
+              has come up (docs/DESIGN.md, on the run panel's spend button): a disabled button
+              is one attribute away from pressable and states a capability that is not there. */}
+          {selection.length > 0 || record.cards > 0 ? (
+            <button
+              className="boxops-plain"
+              type="button"
+              disabled={busy}
+              onClick={() => startEdit('claims')}
+            >
+              Set claims on {scope}
+            </button>
+          ) : null}
         </div>
       ) : editing === 'claims' ? (
         <ClaimEditor
@@ -838,8 +850,9 @@ export function BoxOps({
         {/* LAST CONTROL IN THIS COMPONENT, AND THAT IS THE ONLY PLACEMENT ARGUMENT IT NEEDS.
             Every other control here is reversible or is a reading; this one destroys a box.
             Nothing below it inside `BoxOps`, nothing beside it (`boxops-actions-lone`), and two
-            presses plus a typed number away from a screen that is otherwise for looking at
-            cards.
+            presses — both of which print the box number — away from a screen that is otherwise
+            for looking at cards. It read "two presses plus a typed number" until 2026-08-26,
+            when the owner traded the typing for a second naming press; see `DeleteBox`.
 
             IT SAID "LAST IN THE DISCLOSURE" until 2026-08-25, and there has been no disclosure
             since the owner deleted the fold — BoxOps.css records the three rules that went with
@@ -848,9 +861,23 @@ export function BoxOps({
 
             WHAT SITS BELOW IT IN THE COLUMN IS `RegisterBox`, AND THAT IS DELIBERATE rather
             than an erosion of the rule above. It is not a box-2 control at all — it acts on the
-            registry, not on this box — so it is separated by `.boxops-new`'s `--s5`, the single
-            widest gap in this block against the `--s3` every operation above it uses, and it
-            wears the plain hairline where this one wears an ink border. */}
+            registry, not on this box — so it is separated by the widest gap in this block, and
+            it wears the plain hairline where this one wears an ink border.
+
+            THAT GAP RENDERS AT 32px AND NO DECLARATION SAYS 32 (corrected 2026-08-26). This
+            comment said `.boxops-new`'s `--s5`, which is 24; the other 8 come from
+            `.browse-map`'s own column `gap`, which fires between every child of that column and
+            therefore stacks on top of the margin. Recorded as composed rather than silently
+            re-tuned, because the two mechanisms are both correct and it is only their SUM that
+            nobody chose. If 24 is ever wanted, the change is `--s5` -> `--s4` at BoxOps.css and
+            not a new value here.
+
+            AND NEVER A `border-top` ON IT. That was proposed and refused: `.boxops-new` sits
+            25px below `.boxops-actions-lone`'s hairline, so a rule there would be drawn
+            identically to this block's own row dividers and would read as one more box-2
+            operation at exactly the point the subject stops being box 2. Leaving
+            `section.boxops-box` is what carries the change of subject; air is the honest
+            marker for it. */}
         {/* ABOVE THE DELETE, BECAUSE IT IS WHAT MAKES THE DELETE POSSIBLE. D34's release is
             the answer to one of the three things `box_not_empty_of_commitments` refuses on,
             and the operator meets that refusal at the control below this one. It draws
@@ -1437,12 +1464,13 @@ function ListingLine({ row }: { row: BoxListingRow }) {
  * is where a card is; a control for a state most boxes are never in is chrome the rest of the
  * time.
  *
- * ONE PRESS, NOT A TYPED NUMBER, and the difference from the delete beneath it is deliberate.
- * The typed box number exists because that control's risk is destroying box 9 while looking at
- * box 95, and a gesture that cannot be performed by momentum is what answers that. This
- * control's risk is a claim that turns out to be wrong, and typing digits does not make anyone
- * check TCGplayer. The preflight above the button is the gate here — the numbers are what a
- * person can actually check.
+ * ONE PRESS, AND THE DELETE BENEATH IT TAKES TWO — a difference that survives the owner's
+ * 2026-08-26 change and is smaller than it was. The delete used to demand the box number TYPED,
+ * because its risk is destroying box 9 while looking at box 95; it now demands a second press
+ * on a control that names the box, for the reason recorded at `DeleteBox`. Either way this one
+ * stays at one press: its risk is a claim that turns out to be wrong, and neither typing digits
+ * nor pressing twice makes anyone go and check TCGplayer. The preflight above the button is the
+ * gate here — the numbers are what a person can actually check.
  */
 function ReleaseListings({
   record,
@@ -1632,11 +1660,29 @@ function ReleaseListings({
  * re-shoot leaves the card in its box. This one has NO undo — the records, the photographs and
  * the sidecars are gone, and unlike capture-undo the cards are not in your hand.
  *
- * TYPING THE NUMBER IS THE GATE, and it is chosen over an "are you sure" for the reason that
- * makes the ban worth having: a yes/no dialog is answered by the same reflex that pressed the
- * button, and this control's whole risk is deleting box 9 while looking at box 95. Typing the
- * box number is a gesture that cannot be performed by momentum, and it names the exact thing
- * being destroyed.
+ * THE GATE IS TWO PRESSES THAT BOTH NAME THE BOX (owner, 2026-08-26). It was a TYPED box
+ * number, and the argument for that is worth keeping because it is most of the argument for
+ * what replaced it: a yes/no dialog is answered by the same reflex that pressed the button,
+ * and this control's whole risk is deleting box 9 while looking at box 95. Typing could not be
+ * done by momentum, and it forced the operator to read which box they were aimed at.
+ *
+ * WHAT THE OWNER MEASURED AGAINST IT was twelve empty spam boxes and twelve typed numbers, the
+ * session after the box strip started showing empty boxes at all — their instruction: "make
+ * deleting boxes just require a confirm click, not type something". A gate whose cost scales
+ * with how many boxes you are tidying up is a gate that gets resented, and a resented gate is
+ * read past rather than read.
+ *
+ * SO THE HALF THAT SURVIVES IS THE HALF THAT WAS DOING THE WORK: naming the target. `Delete
+ * box 6…` opens the panel and `Delete box 6 permanently` fires it, so the number is printed
+ * twice and the second press is on a control that has to be found rather than one sitting
+ * under the pointer. What is given up is the momentum guarantee, deliberately and by the
+ * owner. This is still NOT the "are you sure" the ban is about: that dialog's confirm says
+ * nothing about what it is confirming, and both of these say the box.
+ *
+ * IF THAT TURNS OUT TO BE TOO LITTLE, the fix to reach for first is graduating it by what the
+ * box HOLDS rather than restoring it everywhere — an empty box's delete destroys a name and a
+ * number, and box 2's destroys 543 photographs. That is one condition on `record.cards`, and
+ * it is written down here rather than built because the owner asked for the simple thing.
  *
  * THE REFUSAL IS SHOWN WHOLE. `box_not_empty_of_commitments` names which cards hold the box
  * open; reducing it to "cannot delete" would leave the owner with no way to find them.
@@ -1649,22 +1695,18 @@ function DeleteBox({
   onChanged: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
   const [trouble, setTrouble] = useState<Failure | null>(null)
   const [receipt, setReceipt] = useState<BoxDeleteResult | null>(null)
 
-  const aimed = typed.trim() === String(record.box)
-
   const run = async () => {
-    if (busy || !aimed) return
+    if (busy) return
     setBusy(true)
     setTrouble(null)
     try {
       const result = await deleteBox(record.box)
       setReceipt(result)
       setOpen(false)
-      setTyped('')
       /* The re-read is the caller's, as every write in this file leaves it: the box is gone
        * from `GET /boxes` and its cards are gone from `GET /inventory`, and the walk's own
        * shelf effect falls to the first shelf that still exists. Nothing here patches a
@@ -1749,18 +1791,16 @@ function DeleteBox({
               .filter((part): part is string => part !== null)
               .join(', ')}. Sold and retired cards reverse on their own controls; a listing hold is released above.`}
       </p>
-      <div className="boxops-fields">
-        {/* NO PLACEHOLDER. The label already says which number to type, and a placeholder
-            holding the same digits renders greyed inside the box — the field then LOOKS filled
-            beside a button that is still disabled, which is a gate that reads as a bug. */}
-        <Field label={`Type ${record.box} to confirm`} value={typed} onChange={setTyped} />
-      </div>
       <Trouble failure={trouble} />
+      {/* THE CONFIRM NAMES THE BOX, which is the whole of the gate now that the typed field is
+          gone. `Delete box 6 permanently` rather than `Delete permanently`: a confirm that does
+          not say what it is confirming is the "are you sure" docs/DESIGN.md bans, and the only
+          thing separating this from one is that both presses print the number. */}
       <div className="boxops-actions">
         <button
           className="boxops-plain boxops-plain-danger"
           type="button"
-          disabled={busy || !aimed}
+          disabled={busy}
           onClick={() => void run()}
         >
           {busy ? 'Deleting…' : `Delete box ${record.box} permanently`}
@@ -1770,7 +1810,6 @@ function DeleteBox({
           type="button"
           onClick={() => {
             setOpen(false)
-            setTyped('')
             setTrouble(null)
           }}
         >

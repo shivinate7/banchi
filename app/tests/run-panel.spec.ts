@@ -139,6 +139,10 @@ async function open(
   options: {
     toSend?: number
     estimate?: number
+    /** How many of the box's cards the cache already owns. Its own option because the sentence
+     *  about the cache is drawn ONLY above zero, and a fixture that could not say zero could
+     *  only ever assert the visible half of that. */
+    cacheHits?: number
     busyRun?: string | null
     /** Fields to override on the OPEN run's detail. Passed through here rather than by
      *  registering a competing `page.route` before the call — Playwright matches handlers in
@@ -187,7 +191,7 @@ async function open(
         capture_dir: '/tmp/captures/cards/box9',
         console: PREFLIGHT_CONSOLE,
         photographs: 40,
-        cache_hits: 4,
+        cache_hits: options.cacheHits ?? 4,
         to_send: options.toSend ?? 36,
         estimate_usd: options.estimate ?? 0.42,
         busy_run: options.busyRun ?? null,
@@ -413,6 +417,120 @@ test('which steps cost money is on the heading line, not buried in the prose', a
      has no business freezing, and `toHaveText` above reads textContent for the same reason. */
   const free = await page.locator('.run-step-free .run-step-cost').allTextContents()
   expect(free).toEqual(['Free · re-runnable', 'Free · re-runnable', 'Free · re-runnable'])
+})
+
+// --------------------------------------------------------------------------- the reading
+
+/* WHAT THE OPERATOR IS ACTUALLY DECIDING WHEN THEY DECIDE THE CROP.
+ *
+ * The owner's question was "walk me through how im supposed to understand crop with just this
+ * dialog box", and the honest answer was that they could not: the step drew a checkbox reading
+ * `Crop to the card` and a number reading `Max edge`, and every other user-visible string in
+ * the block was one of those two labels. D32's whole argument — that the two are ONE decision,
+ * and that cropping at an unchanged max edge sends MORE pixels rather than fewer — lived in a
+ * decision entry and a code comment.
+ *
+ * These cases assert the repair where it matters: the pair cannot be split, and the sentence
+ * is on screen BEFORE the press rather than inside the console the press produces. */
+
+test('the reading is explained before Check cost is pressed, not after', async ({ page }) => {
+  await open(page)
+  await openPanel(page)
+
+  /* Nothing has been pressed, so there is no preflight and no console — and the explanation is
+     already there. That ordering is the point: the console's own crop line is a receipt, and a
+     receipt arrives after the decision. */
+  await expect(page.locator('.run-quote')).toHaveCount(0)
+
+  const says = page.locator('.run-step .run-step-fine').first()
+  await expect(says).toContainText('Finds the card in each photograph')
+  await expect(says).toContainText('never touched')
+  /* The measurement, in the house voice this class already uses one step down — the bypass
+     switch's sentence cites box 2's 230 of 544 rather than asserting a rule. */
+  await expect(says).toContainText('$0.62')
+})
+
+test('each reading sends the pair it names, never half of one', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+
+  /* THE FAILURE THIS FORBIDS is the one D32 says it got wrong in public first: a crop at an
+     unchanged 1568, which costs 26% MORE for asking for less. A preset sets both values or it
+     is not a preset, so the assertion reads both out of one body. */
+  await page.getByRole('button', { name: 'Cheapest' }).click()
+  await page.getByRole('button', { name: 'Check cost' }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  const cheap = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  expect(cheap?.body).toMatchObject({ crop: true, max_edge: 900 })
+
+  await page.getByRole('button', { name: 'Whole frame' }).click()
+  await page.getByRole('button', { name: 'Check cost' }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  const whole = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  expect(whole?.body).toMatchObject({ crop: false, max_edge: 1568 })
+})
+
+test('the raw controls are behind Custom, and that is where the mistake is named', async ({
+  page,
+}) => {
+  await open(page)
+  await openPanel(page)
+
+  const box = page.getByRole('checkbox', { name: 'Crop to the card' })
+  await expect(box).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Custom' }).click()
+  await expect(box).toBeVisible()
+  await expect(page.getByRole('spinbutton', { name: 'Max edge' })).toBeVisible()
+
+  /* DEMOTED, NOT DELETED — every pairing the three chips refuse to offer is reachable here,
+     including the wrong one, so the sentence that replaces them has to name it. */
+  const says = page.locator('.run-step .run-step-fine').first()
+  await expect(says).toContainText('one decision')
+  await expect(says).toContainText('BIGGER')
+})
+
+test('changing the reading voids the estimate, because it changes what would be sent', async ({
+  page,
+}) => {
+  await open(page)
+  await openPanel(page)
+  await page.getByRole('button', { name: 'Check cost' }).click()
+  await expect(page.locator('.run-button-money')).toHaveCount(1)
+
+  /* THE MONEY GATE'S OWN RULE, APPLIED TO THE BYTES RATHER THAN TO THE CARDS. `scopeKey` was
+     `box:indices` alone, so unticking the crop after Check cost left a stale figure standing
+     above a live confirm — an estimate for a send that was no longer the one about to happen.
+     Asserted as an ABSENCE for the same reason the case below it is. */
+  await page.getByRole('button', { name: 'Cheapest' }).click()
+  await expect(page.locator('.run-button-money')).toHaveCount(0)
+  await expect(page.locator('.run-quote')).toHaveCount(0)
+})
+
+test('the cache line is drawn only where cards are already answered', async ({ page }) => {
+  await open(page)
+  await openPanel(page)
+  await page.getByRole('button', { name: 'Check cost' }).click()
+
+  /* D32's known cache gap, said as what it means rather than as a fact about a hash: the crop
+     and the max edge are not part of the cache identity, so a box re-read at a different
+     reading serves the answers it was first read with and reports them as hits. */
+  await expect(page.locator('.run-quote .run-step-fine')).toContainText(
+    'keep the answer they were first read with',
+  )
+})
+
+test('nothing was cached, so the cache line says nothing', async ({ page }) => {
+  await open(page, { cacheHits: 0 })
+  await openPanel(page)
+  await page.getByRole('button', { name: 'Check cost' }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  /* THE NEGATIVE HALF, and it is the half worth having. A sentence about answers that already
+     exist, drawn over a box where none do, is a warning that trains the operator to skip it. */
+  await expect(page.locator('.run-quote .run-step-fine')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the money gate

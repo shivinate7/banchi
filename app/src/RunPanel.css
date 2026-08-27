@@ -277,6 +277,66 @@
   cursor: not-allowed;
 }
 
+/* ------------------------------------------------------------------------- the reading
+
+   FOUR CHIPS IN A COLUMN THAT IS 340px AT ITS NARROWEST. `.run-controls` already wraps, so
+   this adds no layout of its own — what it adds is a chip that carries two lines, its name
+   over the max edge it sets, so the pair is legible without a sentence per row.
+
+   `grid` rather than the parent's `flex`, and the reason is the 340px end: four chips of
+   different natural widths wrap into a ragged two-and-two under flex, and the second row
+   inherits none of the first's column edges. Two equal tracks put `Custom` under `Whole
+   frame` and keep every chip the same width, which is what makes the pressed one readable as
+   a selection rather than as a wider button. */
+.run-readings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* STRETCH, OVERRIDING `.run-controls`' `center`. Three of these chips carry two lines and
+     `Custom` carries one, so centred items left it 32px against the others' 41px and the
+     second row read as ragged — a chip that looks like a different KIND of control rather
+     than the fourth answer to the same question. */
+  align-items: stretch;
+}
+
+/* Two lines inside one 32px-floored control, so the button grows rather than clipping — the
+   same reason `.run-button` carries a min-height instead of padding alone. */
+.run-reading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--s1) var(--s2);
+  text-align: left;
+}
+
+/* The number the chip sets, in the utility face because it is a measurement — docs/DESIGN.md's
+   mono-carries-all-metadata rule, which is the one that keeps this panel from reading as prose
+   with numbers in it. */
+.run-reading-edge {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* THE SELECTED CHIP IS AN OUTLINE, NOT A FILL, AND THAT IS A RULE RATHER THAN A PREFERENCE.
+   docs/DESIGN.md reserves the solid accent for "exactly one thing to do", and this panel
+   already spends its one fill on the button that starts a paid run. A reading is one of four
+   answers to a question with no wrong-looking option, so it gets accent at OUTLINE weight —
+   the register that file assigns to a system that is unsure, which is exactly what a chosen
+   default is until the operator confirms it. */
+.run-reading[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.run-reading[aria-pressed='true'] .run-reading-edge {
+  color: var(--accent);
+}
+
 /* THE PANEL'S ONE SOLID FILL. Drawn only after the preflight has answered, which is what
  * makes docs/DESIGN.md's "exactly one thing to do" true of it rather than merely claimed:
  * the count and the estimate are on screen directly above it, and the alternative is to

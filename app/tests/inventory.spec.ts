@@ -983,23 +983,118 @@ test('a sold or retired card is not offered the mid-box delete at all', async ({
   await expect(page.getByRole('button', { name: 'Correct claims' })).toBeVisible()
 })
 
-test('the whole-box delete will not fire until the box number is typed', async ({ page }) => {
+/* AN EMPTY BOX IS A BOX, AND FOR ONE COMMIT IT WAS UNREACHABLE.
+ *
+ * The box strip was built from the CARD ROWS (`shelvesOf`), so a registered box holding no
+ * cards produced no row, therefore no shelf, therefore no cell — and the strip is the only way
+ * to select one. `BoxIdentity` and `BoxOps` draw for the SELECTED shelf, so rename, dividers,
+ * seal and the whole-box DELETE were all unreachable for it. Measured on the owner's own store
+ * the day it was found: 12 of 13 boxes, including every box they had just created to test
+ * with, and `Register a box` made another one you then could not get rid of.
+ *
+ * It is `CLAUDE.md`'s route-is-not-a-feature rule from the far side — the route, the client
+ * function and the on-screen control all existed and all passed — and a regression with a
+ * commit: `13c397a`, D31's merge, wrote this strip and retired `#/boxes`, whose whole content
+ * was the registry list. The merge carried the cards over and not the registry.
+ */
+test('a registered box with no cards is still reachable, and can still be deleted', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    boxes: [
+      ...BOXES.boxes,
+      {
+        box: 6,
+        name: 'asdfkopas',
+        sections: [],
+        state: 'open',
+        capacity: null,
+        fill: 0,
+        next_index: 1,
+        cards: 0,
+        sold: 0,
+        retired: 0,
+        listed: 0,
+        sections_detail: [],
+      },
+    ],
+  })
+
+  /* THE CELL EXISTS. Box 6 owns no card in `CARDS`, so before the fix this count was 1. */
+  await expect(page.locator('.browse-boxcell')).toHaveCount(2)
+  const cell = page.locator('.browse-boxcell', { hasText: /^6$/ })
+  await expect(cell).toBeVisible()
+  await cell.click()
+
+  /* AND SELECTING IT REACHES THE OPERATIONS, which is the half that makes the cell worth
+     having. Asserted through the delete specifically: it is the one this screen could not
+     otherwise perform at all, and the one the owner went looking for. */
+  await expect(page.locator('.browse-empty')).toContainText('No cards in box 6 yet')
+  await expect(page.getByRole('button', { name: /^Delete box 6/ })).toBeVisible()
+
+  /* The claim editor is NOT offered, because it is the one control here that writes CARDS and
+     there are none — `Set claims on all 0 cards in box 6` was a real string on this screen for
+     as long as it took to notice. Absent rather than disabled, per docs/DESIGN.md. */
+  await expect(page.getByRole('button', { name: /^Set claims/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: /^Delete box 6/ }).click()
+  await page.getByRole('button', { name: 'Delete box 6 permanently' }).click()
+  const deleted = wire.find((sent) => sent.method === 'DELETE')
+  expect(deleted?.path).toBe('/boxes/6')
+})
+
+test('a search still hides a box holding no match, which is the rule the fix did not touch', async ({
+  page,
+}) => {
+  await open(page, {
+    boxes: [
+      ...BOXES.boxes,
+      {
+        box: 6, name: 'asdfkopas', sections: [], state: 'open', capacity: null, fill: 0,
+        next_index: 1, cards: 0, sold: 0, retired: 0, listed: 0, sections_detail: [],
+      },
+    ],
+  })
+  await expect(page.locator('.browse-boxcell')).toHaveCount(2)
+
+  /* THE BOUNDARY, AND IT IS THE POINT OF THE FIX RATHER THAN AN EXCEPTION TO IT. `shelvesOf`
+     was written so a cell can never lead to an empty list, and that rule is RIGHT about a
+     query — under one, a cell for a box holding no match is a dead end. It was wrong only as a
+     rule about the STORE, where an empty box's empty list is the truth. So the registry is
+     unioned in when nothing is being searched for, and not when something is. */
+  await page.getByRole('searchbox').fill('Thievul')
+  await expect(page.locator('.browse-boxcell', { hasText: /^6$/ })).toHaveCount(0)
+})
+
+test('the whole-box delete takes two presses, and both of them name the box', async ({
+  page,
+}) => {
   const wire = await open(page)
   await openBoxOps(page)
 
-  await page.getByRole('button', { name: /^Delete box 2/ }).click()
-  const fire = page.getByRole('button', { name: 'Delete box 2 permanently' })
-  await expect(fire).toBeDisabled()
+  /* THE FIRST PRESS FIRES NOTHING, which is the half of the gate that survived the owner's
+     2026-08-26 change. It used to be two presses plus the box number typed into a field; they
+     traded the typing away after meeting eleven empty spam boxes and eleven typed numbers.
+
+     WHAT IS ASSERTED HERE IS THE PART THAT STILL DOES THE WORK: the number is printed on BOTH
+     controls, so neither press can be made without the target on screen. That is what keeps
+     this out of docs/DESIGN.md's ban on "are you sure" — the banned dialog's confirm says
+     nothing about what it is confirming, and both of these say the box. */
+  await expect(page.getByRole('button', { name: /^Delete box 2/ })).toBeVisible()
   expect(wire.filter((sent) => sent.method === 'DELETE')).toHaveLength(0)
 
-  /* Typing the number is the gate, chosen over an "are you sure" for the reason that makes
-     docs/DESIGN.md's ban worth having: a yes/no dialog is answered by the same reflex that
-     pressed the button, and this control's risk is deleting box 9 while looking at box 95. */
-  await page.getByLabel('Type 2 to confirm').fill('9')
-  await expect(fire).toBeDisabled()
+  await page.getByRole('button', { name: /^Delete box 2/ }).click()
+  const fire = page.getByRole('button', { name: 'Delete box 2 permanently' })
+  await expect(fire).toBeVisible()
 
-  await page.getByLabel('Type 2 to confirm').fill('2')
-  await expect(fire).toBeEnabled()
+  /* STILL NOTHING SENT until the second press. A panel that opened and fired in one gesture
+     would be the momentum this control has always been designed against. */
+  expect(wire.filter((sent) => sent.method === 'DELETE')).toHaveLength(0)
+
+  /* Cancel is beside it and is not a no-op: the way out has to be as reachable as the way
+     through, or the panel becomes a trap that the fastest escape from is the delete. */
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
+
   await fire.click()
 
   const deleted = wire.find((sent) => sent.method === 'DELETE')

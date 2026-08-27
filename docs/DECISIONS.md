@@ -929,6 +929,63 @@ and there is no gap for it to close wrongly.
 the number is allocated rather than typed — and that section is marked accordingly rather than
 rewritten, the same way §5.1 was when Pass D landed.
 
+**AN EMPTY BOX IS A BOX, AND FOR ONE COMMIT IT WAS UNREACHABLE** (found and fixed 2026-08-26).
+`#/inventory`'s box strip was built from the CARD ROWS — `BoxBrowse.tsx:shelvesOf` walked the
+cards and collected the boxes they named — so a registered box holding no cards produced no row,
+therefore no shelf, therefore no cell. The strip is the only way to SELECT a shelf, and
+`BoxIdentity` and `BoxOps` draw for the selected one, so rename, dividers, seal and the whole-box
+delete were all unreachable for it. Measured on the owner's store the day it was found: **12 of
+13 boxes**, including every box they had just created to test with. `Register a box` was a loop —
+it made a box that immediately vanished.
+
+**It is `CLAUDE.md`'s route-is-not-a-feature rule caught from the far end.** That rule was written
+for a capability with no control; this is a control, a client function and a tested route, all
+present and all correct, for a box no screen could be put on. Worth recording as its own shape:
+the checklist that rule prescribes — route, client function, control on the screen a human would
+look for it on — was fully satisfied and the feature was still unusable, because nothing in it
+asks whether the OBJECT the control acts on can be selected.
+
+**And it is a regression with a commit.** `13c397a`, D31's merge, wrote both this strip and
+retired `#/boxes`, whose entire content was the registry list. The merge carried the cards over
+and not the registry.
+
+**THE REGISTRY IS UNIONED IN ONLY WHERE NOTHING IS BEING SEARCHED FOR, and that boundary is the
+fix rather than a caveat on it.** `shelvesOf` was written so a cell can never lead to an empty
+list, and that rule is RIGHT about a query: under one, a cell for a box holding no match is a
+dead end. It was wrong only as a rule about the STORE, where an empty box's empty list is not a
+dead end but the truth — and it is the only state from which that box can be renamed, sealed or
+deleted. The walk says so in words rather than rendering a blank column beside a box header.
+
+**The claim editor is not offered over nothing.** `Set claims on all 0 cards in box 6` was a real
+string on a real screen the moment empty boxes became reachable. It is the one control in
+`BoxOps` that writes CARDS rather than the box, so it is the only one an empty box can leave with
+nothing to do. Absent rather than disabled, per `docs/DESIGN.md`.
+
+**THE WHOLE-BOX DELETE IS TWO PRESSES THAT BOTH NAME THE BOX, NOT A TYPED NUMBER** (the owner,
+2026-08-26: *"make deleting boxes just require a confirm click, not type something"*). D10's
+ruling 3 gates this operation as the genuinely destructive action it is, and the gate was a typed
+box number. The argument for typing is worth keeping because it is most of the argument for what
+replaced it: a yes/no dialog is answered by the same reflex that pressed the button, and this
+control's whole risk is deleting box 9 while looking at box 95, so a gesture that could not be
+performed by momentum forced the operator to read which box they were aimed at.
+
+**What it was measured against was eleven empty spam boxes and eleven typed numbers**, in the
+session that made empty boxes reachable at all. A gate whose cost scales with how many boxes you
+are tidying up is a gate that gets resented, and a resented gate is read past rather than read.
+
+**So the half that survives is the half that was doing the work: naming the target.** `Delete box
+6…` opens the panel and `Delete box 6 permanently` fires it, so the number is printed twice and
+the second press is on a control that has to be found rather than one sitting under the pointer.
+What is given up is the momentum guarantee, deliberately and by the owner. **This is still not
+the "are you sure" `docs/DESIGN.md` bans**: that dialog's confirm says nothing about what it is
+confirming, and both of these say the box.
+
+**What would reopen it: a box deleted by mistake.** The fix to reach for first is then graduating
+the gate by what the box HOLDS rather than restoring typing everywhere — an empty box's delete
+destroys a name and a number, and box 2's destroys 543 photographs. That is one condition on
+`record.cards`, and it is named here rather than built because the owner asked for the simple
+thing and no such mistake has happened.
+
 ## D21 — Game is a per-card claim, not a mode
 
 The product expands to four capture choices — `pokemon`, `riftbound`, `one_piece`,
@@ -1499,6 +1556,50 @@ so the two configurations could not read each other's cache. The remedy when it 
 shape `rarity_fingerprint` already established — a sibling hash kept deliberately OUT of
 `prompt_fingerprint`, so recording what an image was read from cannot move `1ef974bf511d`.
 
+**THE SCREEN OFFERS THE PAIR, NOT THE TWO CONTROLS (owner, 2026-08-25).** The run panel drew
+this decision as a checkbox reading `Crop to the card` beside a number reading `Max edge`, and
+those two labels were **every user-visible string in the block**. The owner asked the question
+that settles it: *"walk me through how im supposed to understand crop with just this dialog
+box"*. They could not. Everything above — what the crop does, that the photograph on disk is
+untouched, what a refusal falls back to, and above all that the two are ONE decision — lived in
+this entry and in a code comment.
+
+**The paragraph on getting the cost model wrong in public is what makes this a defect rather
+than a missing sentence.** That correction exists because the arithmetic runs backwards from
+intuition: cropping at an unchanged max edge sends MORE pixels, measured at +26%. A checkbox
+that reads as *send less* beside a number nobody explained is an invitation to do exactly that,
+and the panel had no guard against it — it was one click from the most expensive setting on the
+frontier while appearing to ask for the cheapest.
+
+**So `READINGS` offers three named PAIRS, and a pair cannot be got wrong.** `Measured best ·
+1200`, `Cheapest · 900`, `Whole frame · 1568` — three rows of the measured table above, each
+setting both values, each carrying the sentence that says what it costs and what it buys on the
+box it was measured on. `Sharpest · 1400` is not one of the three: it is the row strictly dearer
+than the baseline, and three chips fit the 340px end of D38's column where four do not. It lives
+behind **`Custom`**, which reveals the old checkbox and number unchanged — demoted, never taken
+away, because a free-form max edge is a real need and this entry's own frontier runs wider than
+three points.
+
+**The warning follows the mistake to where it is still reachable.** `Custom`'s sentence is the
+only one that names the +26%, because `Custom` is the only state that can produce it.
+
+**THE ESTIMATE IS VOID WHEN THE READING MOVES, and that was a hole in D33's money gate rather
+than a copy gap.** `RunPanel.tsx`'s `scopeKey` was `box:indices` alone, so unticking the crop
+after Check cost left a stale figure standing above a live *Spend $0.62 and identify 36 cards*
+button — an estimate for a send that was no longer the one about to happen. The effect's own
+comment already stated the governing rule, *"a confirm whose first step described a different
+set of cards is not a confirm at all"*; it named cards where the estimate is computed from
+BYTES, and the crop and the max edge are what decide those. Both values are in the key now.
+`app/tests/run-panel.spec.ts` asserts the void as an ABSENCE, the same shape as the spend
+button's own case, and it was observed failing against the old key before it was kept.
+
+**The cache gap above is now said on screen, in the words it means rather than the words it
+is.** Where the preflight reports any cache hits, the quote carries one line: *cards already
+answered keep the answer they were first read with, and the reading only reaches the cards
+being sent*. No hash is named — the panel has no business publishing `prompt_fingerprint` — and
+nothing about the gap is closed. Drawn only above zero, because a warning about answers that do
+not exist is the kind an operator learns to skip.
+
 ---
 
 ## D33 — The pipeline is reachable from a screen, and one route can spend
@@ -1737,12 +1838,14 @@ button applied for the same reason. No extra press: the fetch runs on open.
 after every listing in it is released, because those are departures recorded in the store and
 this route says nothing about a departure. T7 asserts the refusal survives.
 
-**ONE PRESS ON THE SCREEN, NOT A TYPED NUMBER.** The whole-box delete demands the box number
-typed because its risk is destroying box 9 while looking at box 95, and a gesture that cannot be
-performed by momentum answers that. This control's risk is a claim that turns out to be wrong,
-and typing digits does not make anyone go and look at TCGplayer. The plan above the button is the
-gate here — numbers a person can actually check. Nothing is destroyed either way: a wrongly
-released count is re-established by staging again.
+**ONE PRESS ON THE SCREEN, WHERE THE WHOLE-BOX DELETE TAKES TWO.** That delete used to demand
+the box number TYPED, on the grounds that its risk is destroying box 9 while looking at box 95
+and a gesture that cannot be performed by momentum answers that; the owner traded the typing for
+a second naming press on 2026-08-26 (D20, amended). The contrast survives and is smaller: this
+control's risk is a claim that turns out to be wrong, and neither typing digits nor pressing
+twice makes anyone go and look at TCGplayer. The plan above the button is the gate here —
+numbers a person can actually check. Nothing is destroyed either way: a wrongly released count
+is re-established by staging again.
 
 **Each press is its own assertion, and the cap is per press.** Releasing twice spends the budget
 twice; the route keeps no memory of what a box has released before. That follows from the budget

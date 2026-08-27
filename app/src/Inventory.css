@@ -67,7 +67,11 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--ink);
-  margin-right: var(--s2);
+  /* NO `margin-right`. It was `--s2`, on top of `.browse-controls`' own `gap: var(--s3)`, so
+     title -> Reload measured 20px against Reload -> count and count -> keys at 12px. 20 is on
+     neither the spacing scale nor in any single declaration, and docs/DESIGN.md's page-chrome
+     rule has the title SHARE the line — a first interval 67% wider than the other two rebuilds
+     the title/toolbar boundary that shared line exists to delete. */
 }
 
 /* ---- notes, and the machine register ---- */

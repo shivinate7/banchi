@@ -1091,7 +1091,12 @@ COMPONENTS = [
                                          "on the panel appear. Join, emit and reconcile beside it, "
                                          "each marked free and re-runnable; every command's stdout "
                                          "shown verbatim; the import CSVs downloadable, which is the "
-                                         "gap docs/GATES.md names as what Gate B did not close.",
+                                         "gap docs/GATES.md names as what Gate B did not close. "
+                                         "The crop is offered as three named PAIRS with a Custom "
+                                         "escape hatch (D32 amended), because the crop and the "
+                                         "max edge are one decision and pairing them wrongly "
+                                         "costs 26% MORE for asking for less; the estimate is "
+                                         "void when either moves.",
                                  # D1 is why one step spawns and three answer in the request. D9 is
                                  # the decisions document this panel edits as text rather than as a
                                  # form. D3 is the finish-claim bypass its join control offers. D31
