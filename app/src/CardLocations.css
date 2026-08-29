@@ -171,6 +171,70 @@
   }
 }
 
+/* BELOW 860 THE CAPTIONS SIT BESIDE THEIR TRACKS INSTEAD OF UNDER THEM (2026-08-29, D40 amended).
+   The rule above is about whether the bar joins the row. This one is about the bar's own shape
+   once it has taken a line of its own, and it is what makes the narrow column affordable.
+
+   THE MEASUREMENT. In the three-column layout the copies column gives this list 586px, and the
+   row came to exactly `8 + place 51 + gap 12 + bar 65 + 8 = 144px`. The bar is four stacked
+   full-width children — box track 16, its caption 14, then the section block's 8px track and its
+   own 14px caption — on lines 570px wide carrying captions that measure ~120px and ~200px. Two
+   thirds of that block was empty. Beside their tracks the same four parts are two rows instead of
+   four: bar 65 -> 34px, row 144 -> 114px, copies visible on landing 3.61 -> 4.56, page 1274 ->
+   1092, and the landing void 26.30% -> 22.32%.
+
+   WHY NOT THE OBVIOUS FIX, AND THIS IS THE HALF WORTH KEEPING. Lowering the 860 threshold so the
+   bar rejoins the row was tried first and REFUSED: it does shorten the row to 129px, and it gets
+   there by squeezing `.card-locations-place` to 231px, which WRAPS THE POSITION LABEL. This file
+   says a few rules up that the label "is the string somebody carries to a shelf and it must not
+   break". A row 15px shorter that lies about where a card is, is not the trade. So the height
+   comes out of the bar's own dead space instead, and the label's line is untouched at 586px.
+
+   BOTH SCALES SURVIVE INTACT, which is the constraint `docs/DESIGN.md` puts on this component:
+   the box track stays 16px and the section track 8px, the section block keeps its indent, and the
+   captions keep their `#` and `Section` prefixes. All three cues that tell the two scales apart
+   are still drawn — what changed is where the words sit, not what they say.
+
+   `white-space: nowrap` ON THE CAPTIONS because they are now in an `auto` track beside a
+   flexible one: without it the grid would shrink the caption to its longest word rather than
+   shrinking the track, and the two-line caption is the thing this rule exists to delete. */
+@container copies (max-width: 859px) {
+  .card-locations-owner .card-locations-row > .position-bar-owner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--s2);
+    row-gap: var(--s1);
+  }
+
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-track {
+    grid-column: 1;
+  }
+
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-text {
+    grid-column: 2;
+    white-space: nowrap;
+  }
+
+  /* The section scale keeps its own row and repeats the pattern one level in, so the indent that
+     distinguishes it from the box scale is preserved rather than flattened into the same line. */
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-zoom {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--s2);
+  }
+
+  .card-locations-owner
+    .card-locations-row
+    > .position-bar-owner
+    > .position-bar-zoom
+    > .position-bar-text {
+    white-space: nowrap;
+  }
+}
+
 .card-locations-owner .card-locations-row > .card-locations-state,
 .card-locations-owner .card-locations-row > .card-locations-gone {
   flex: 0 0 4.5rem;

@@ -2589,6 +2589,30 @@ rows-visible from **3.35 to 3.62** — the rows are taller and there are more of
 because they start 247px higher. The owner's "tighter width wise yet longer height" is what a 144px
 row at 586px IS; it was the goal, not the defect.
 
+**THE REFUSAL ABOVE WAS OF ONE MECHANISM, NOT OF THE GOAL, AND A DIFFERENT ONE SHIPPED THE SAME DAY
+(2026-08-29, the owner: "Yes do the copy row density change").** What is refused, permanently, is
+lowering the 860px container threshold: it buys 15px by squeezing `.card-locations-place` to 231px
+and wrapping the position label, which `CardLocations.css` forbids by name. That paragraph stands.
+
+What was missed while writing it is that the row's dead space is not in its first line at all — it
+is inside the BAR. The bar is four stacked full-width children (box track 16, its caption 14, the
+section block's 8px track and its own 14px caption) on 570px lines carrying captions that measure
+~120px and ~200px. **Beside their tracks instead of under them, the same four parts are two rows
+rather than four**: bar **65 -> 34px**, row **144 -> 114px** at 1440 and **188 -> 158px** at 1280,
+copies visible on landing **3.61 -> 4.56**, page 1274 -> 1092, and the landing void **26.30% ->
+22.32%** — which takes the cut from this file's own 41.99% baseline to **47%**.
+
+**Nothing is given up for it, and that is checked rather than asserted.** The box track is still
+16px, the section track still 8px, the section block keeps its indent, and the captions keep their
+`#` and `Section` prefixes — all three cues `docs/DESIGN.md` names for telling the two scales
+apart. The position label stays on one line at 586px.
+
+**The case that guards it had to be pinned to 1440 to be worth anything**, and that is the finding
+worth keeping: this suite runs at 1280, where the container is 528px and the rejected threshold
+change behaves identically to the shipped one. Written at the default viewport, the case passed
+against the very mutation it exists to catch. It is red at 1440 against that change and green
+against this one, observed both ways.
+
 **WHAT IT COSTS, NAMED RATHER THAN BURIED.** `.boxops-meta` wraps from one line to two — 17px to
 33px — because it needs the full 360px track and now has 299. Measured across 299-360px: it is
 one line at 360 and two below it, with no intermediate. Accepted rather than fixed: it is a
@@ -2615,6 +2639,102 @@ first three and a reader is entitled to count. What moved this time is a 32px st
 container, which three columns cannot give at 1408px of body. If the owner ever works at a width
 where 45% exceeds 860 — a 1920px display puts it at 828, still short — the row improves on its own
 through the container query already there, with no change to this entry.
+
+---
+
+## D41 — The address is a rank, not a list, and the separator is deleted rather than replaced
+
+**BUILT 2026-08-29, from a design pass the owner asked for and then chose from.** Their words:
+*"can you also fix this area? don't just decrease the font, make a new aesthetic design there
+currently i didn't ever like the dot theme to separate would rather have actual shapes or
+something idk"*, and a few minutes later, of the sidebar's own dotted line: *"same with this part
+going into two lines"*. Two designers worked the problem from opposite lenses — shape-led and
+typographic — and six treatments were rendered against the real store. The owner picked the
+**terminal-dominant** address and the **census-triad** meta block.
+
+**IT WAS NOT A FONT-SIZE PROBLEM AND THE ARITHMETIC IS WHY.** `Box 2 · Section 1 · Card 14` is 27
+cells at Martian Mono's measured **0.70em** advance = **453.6px**, in a track that is 448.8px at
+1440 and **387.1px** at 1280. It overflowed by 4.8px and wrapped. Of those 27 cells only **four
+are digits** — 67.2px, **14.8%** — while the words, dots and spaces are **386.4px, 85.2%**. The
+chrome alone is larger than the entire 1280 track: the separator and the labels consumed the
+column before a single number was drawn. Shrinking to fit needs **17px**, and `CardLocations`
+prints the same string at 13px seven rows below on the same screen, so the fix the owner
+pre-emptively refused would have made the answer 4px louder than its own footnotes.
+
+**THE COMMENT THAT JUSTIFIED THE OLD SIZE HAD ALREADY BEEN FALSIFIED BY A LAYOUT CHANGE.**
+`BoxBrowse.css` read: *"The worst realistic label — `Box 100 · Section 12 · Card 543` — draws
+521px inside a 630px track, so nothing reflows."* The px figure is right (520.8). **The 630px
+track no longer exists** — D40 made it 448.8px. A later change deleted the premise and left the
+conclusion standing, which is the exact failure `docs/DESIGN.md` and D16 are both written
+against. Recorded here rather than quietly corrected, because the class of defect matters more
+than this instance.
+
+**THE THREE PARTS ARE NOT EQUAL, AND THE OLD RENDERING CLAIMED THEY WERE.** `Box 2` is the drawer
+you walk to, `Section 1` narrows it, `Card 14` is the slot. On THIS screen the first two are
+already answered everywhere the eye lands — the box strip, the identity block, every section
+header, every copies row. **Measured: the literal string `Box 2` renders nine times in the
+document.** `Card N` is the only part of the address this panel uniquely supplies, so it is the
+only part drawn at size: the path becomes an 11px muted two-line stack and the slot a **44px**
+figure beside it. The payload goes 24px -> 44px, **+83%**, on a screen whose whole question is
+*where is this card*.
+
+**THE SEPARATOR IS GONE, NOT RESTYLED, AND THAT IS THE OWNER'S ASK ANSWERED LITERALLY.** Nothing
+takes the interpunct's place — with the path stacked and the slot beside it there is no seam left
+for a character to mark. `.browse-position-joint` is deleted. That rule was itself only three days
+old (2026-08-26, painting the dots muted so the parts would bind); it treated the joints as the
+thing to quieten, and this treats them as the thing to remove. Both answer the same complaint; the
+owner rejected the first.
+
+**THE SERVER STRING IS UNTOUCHED AND IS STILL THE ACCESSIBLE NAME.** `pipeline/join.py:Position.label`
+emits `Box N · Section N · Card N` and keeps emitting it. `PositionParts` recomposes it into
+key/figure pairs for THIS screen only and carries the original verbatim on `aria-label`, so what
+a screen reader announces is exactly what the store said. That is what makes a client-side split
+a VIEW rather than a quiet edit of the record. `.review-position` and `.card-locations-label`
+draw the same string and are deliberately untouched — taking this to them is a decision about all
+three sites, not a copy of this one.
+
+**`app/tests/fulfillment.spec.ts` IS NOT REACHED AND WAS CHECKED RATHER THAN ASSUMED.** Its 32px
+tabular-figure floor probes `.fulfillment-place` and `.card-locations-place-large` inside
+`view(page)`; `.browse-position` is neither, and no spec selects it. D31's rule that the
+Fulfilment spec stays unweakened is intact.
+
+**THE SIDEBAR LINE IS THE SAME COMPLAINT WITH THE SCARCE AXIS INVERTED.** `cards 543 · sold 0 ·
+fill 543 · next index 544` is 46 cells = **354.2px** in a track that D40 narrowed to 299px at
+1440 and 285px at 1280. It is **not** a digit-count problem — box 1's four-characters-shorter
+line wraps identically — it is four label words and three interpuncts, 277.2px of chrome against
+77.0px of digits. Here horizontal is fixed and **vertical is ~290px of unused height** under the
+column in D31's resting state, so the block flows DOWN instead of across: three census figures at
+16px in a row, `next index` on its own line at the muted register.
+
+**`next index` LEAVES THE ROW BECAUSE IT IS NOT A FOURTH STATISTIC.** `cards`, `sold` and `fill`
+describe what is in the box; `next index` is D10's high-water mark — what the allocator will hand
+out next. Four peers joined by dots was a false claim about them, and the structure is now the
+distinction rather than a sentence explaining it.
+
+**AND `fill` FINALLY SAYS WHICH KIND OF NUMBER IT IS, WHICH DISCHARGES D20.** That entry is
+explicit that a denominator whose meaning switches silently between an open box and a sealed one
+is the failure it exists to prevent — `fill` is a fill-**so far** while the box is open and a
+frozen capacity once **sealed**, and the two were rendered identically for as long as this line
+existed. It carries D20's own two words now.
+
+**FIELD NAMES STAY VERBATIM IN THE DOM.** `BoxOps.tsx` promises that what is on screen greps to
+`inventory.json`; the keys are written lowercase and uppercased by `text-transform` at paint only,
+so a copy out of the DOM still matches the store. `app/tests/inventory.spec.ts` asserts the
+lowercase text, and a `toUpperCase()` in the component — which would look identical on screen —
+takes it red. That mutation was run.
+
+**WHAT IT COSTS, MEASURED.** The address block goes **86px wrapped -> 70px**, so it is shorter
+than the state it replaces. The meta block goes **33px -> 62px**. That height is free in D31's
+resting state and is **not** free once a section is open, where `.browse-map` is at its viewport
+cap and `.browse-list` is the scroller — there it comes out of the walk at 25.5px per card row,
+about 1.2 rows. The ledger variant that was also rendered cost 81px and ~1.9 rows, and was
+declined on that number.
+
+**WHAT WOULD REOPEN THIS: the other two sites.** `.review-position` and `.card-locations-label`
+still draw the dotted string, and the copies list draws it seven times two inches below the new
+address. If the owner wants the dot theme gone screen-wide, the answer is the key/figure colour
+split WITHOUT the shape — a 44px figure repeated seven times in a list would be a different and
+worse defect.
 
 ---
 

@@ -225,6 +225,27 @@ numbers, counts, ages. `Box 3 · Section 2 · Card 17` is built by
 `pipeline/join.py:Position.label` at 25 cards per section, and it must not shift width
 between cards — which a mono gives for free rather than by remembering to set `tnum`.
 
+**THAT STRING IS THE RECORD; HOW A SCREEN DRAWS IT IS A VIEW (D41, 2026-08-29).** The owner:
+*"i didn't ever like the dot theme to separate"*. On `#/inventory` the interpuncts are now
+deleted rather than restyled — the box and section become an 11px muted stack and the card
+number a 44px figure beside them — and `pipeline/join.py` still emits the identical string,
+which travels verbatim on `aria-label`. Two consequences worth stating as rules:
+
+- **A tracked key is a word, never a figure.** The 0.08em on `BOX` / `SECTION` / `CARD` is this
+  file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
+  `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
+  paragraph above exists to prevent.
+- **The three sites that draw this string are decided one at a time.** `.browse-position` is
+  changed; `.review-position` and `.card-locations-label` are not. They sit at 13-16px where the
+  joints are narrow and the complaint was never made, and a 44px figure repeated seven times down
+  a copies list would be a worse defect than the dots. Taking this to them is a decision about
+  all three, not a copy of this one.
+
+**And the same deletion reached `.boxops-meta`**, where four label/value pairs and three
+interpuncts were wrapping a 299px column. Horizontal is scarce there and vertical is not, so it
+flows down instead of across — and `fill` finally says `so far` or `sealed`, which is D20's
+denominator rule discharged on the one line that had never honoured it.
+
 ## What this is not
 
 **Not Collectr, not Discogs, not LibraryThing.** Three cataloguing tools that became

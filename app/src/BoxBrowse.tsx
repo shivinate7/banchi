@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import type {
@@ -625,15 +625,43 @@ function collectorNumber(card: InventoryCard): string {
 function PositionParts({ label }: { label: string }) {
   const parts = label.split(' · ')
   if (parts.length < 2) return <>{label}</>
+
+  /* Each part is `<word...> <number>`, so the LAST space is the seam. `lastIndexOf` rather than
+     a split, because a two-word key (`next index` shape) must stay whole; `at < 1` keeps a part
+     with no space at all renderable rather than producing an empty key. */
+  const split = parts.map((part) => {
+    const at = part.lastIndexOf(' ')
+    return at < 1 ? { key: '', value: part } : { key: part.slice(0, at), value: part.slice(at + 1) }
+  })
+
+  /* THE SLOT IS THE LAST PART, NOT THE THIRD. Anchoring to the end rather than to a fixed index
+     is what keeps a two-part or four-part label honest: whatever the formula ends with is the
+     finest thing said, and that is what this panel uniquely supplies. */
+  const slot = split[split.length - 1]
+  /* `parts.length >= 2` above makes this unreachable, and it is written rather than asserted
+     because the guard costs nothing and a non-null assertion would be the one line here that
+     stops being true if the split ever changes. Same failure mode as the bail above: a label
+     that renders whole and unstyled, never one that vanishes. */
+  if (slot === undefined) return <>{label}</>
+  const path = split.slice(0, -1)
+
   return (
-    <>
-      {parts.map((part, at) => (
-        <Fragment key={part + at}>
-          {at === 0 ? null : <span className="browse-position-joint"> · </span>}
-          {part}
-        </Fragment>
-      ))}
-    </>
+    <span className="browse-position-parts" role="group" aria-label={label}>
+      <span className="browse-position-path">
+        {path.map((part, at) => (
+          <span key={part.key + part.value + at}>
+            {part.key === '' ? null : `${part.key.toUpperCase()} `}
+            <b>{part.value}</b>
+          </span>
+        ))}
+      </span>
+      <span className="browse-position-slot">
+        {slot.key === '' ? null : (
+          <span className="browse-position-key">{slot.key.toUpperCase()}</span>
+        )}
+        <span className="browse-position-num">{slot.value}</span>
+      </span>
+    </span>
   )
 }
 

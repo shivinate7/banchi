@@ -916,7 +916,7 @@ COMPONENTS = [
                     "The box panel is still a sibling of the card's column rather than a child "
                     "of it, which is what puts it structurally outside the selected-card guard.",
             "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
-                            "D30", "D31", "D33", "D35", "D38", "D39"]},
+                            "D30", "D31", "D33", "D35", "D38", "D39", "D41"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -926,7 +926,7 @@ COMPONENTS = [
                                   "column to cap the copies, so the photograph is sized by its COLUMN again "
                                   "and there is nothing beside it to take a height from. The body is three "
                                   "columns at 22/33/45, and the run line moved to the header row.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39"]},
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -1037,7 +1037,7 @@ COMPONENTS = [
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
-                                "D34", "D36", "D38"],
+                                "D34", "D36", "D38", "D41"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -1048,7 +1048,7 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -1099,7 +1099,7 @@ COMPONENTS = [
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
-                                      "governed_by": ["D5", "D7", "D31"]},
+                                      "governed_by": ["D5", "D7", "D31", "D40"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -1315,7 +1315,7 @@ COMPONENTS = [
                         "beside the card rather than a row beneath it. Nothing on the commit path "
                         "can see either.",
                 "governed_by": ["D5", "D7", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D30",
-                                "D31", "D33", "D34", "D37", "D38"],
+                                "D31", "D33", "D34", "D37", "D38", "D40", "D41"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

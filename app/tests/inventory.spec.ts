@@ -1705,6 +1705,186 @@ test('the box and the runs survive a query that selects no card', async ({ page 
   expect(hidden).toBe('none')
 })
 
+test('the address is drawn without a separator, and the server string survives on it', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* THE OWNER'S COMPLAINT, ASSERTED AS AN ABSENCE (2026-08-29): "i didn't ever like the dot theme
+     to separate". `PositionParts` used to paint the interpuncts muted so the parts would bind;
+     the answer that shipped deletes them instead — the path is a stacked muted pair and the slot
+     is a 44px figure beside it, so there is no seam left for a character to mark.
+
+     An absence is the right shape for this case. A positive assertion about the new markup goes
+     green on a treatment that also reintroduces the dots somewhere else in the block. */
+  const position = page.locator('.browse-position')
+  await expect(position).toBeVisible()
+  expect(await position.innerText()).not.toContain('·')
+  await expect(page.locator('.browse-position-joint')).toHaveCount(0)
+
+  /* AND THE SERVER'S OWN STRING IS STILL THE ACCESSIBLE NAME. This is what makes splitting the
+     label client-side legitimate rather than a quiet edit of what the store said: the visual
+     rendering is a view, and `pipeline/join.py:Position.label` is still what is announced.
+     `PositionParts`' own comment scopes the split to this screen for exactly this reason. */
+  const parts = page.locator('.browse-position-parts')
+  await expect(parts).toHaveAttribute('role', 'group')
+  const label = await parts.getAttribute('aria-label')
+  expect(label).toMatch(/^Box \d+ · Section \d+ · Card \d+$/)
+
+  /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
+     address rather than to index 2, so a formula with a different number of parts still puts the
+     finest thing said on the biggest step. */
+  const num = page.locator('.browse-position-num')
+  await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
+})
+
+test('the address holds one line at both widths, including the longest label the store can emit', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* THE DEFECT: 27 cells at Martian Mono's 0.70em advance is 453.6px in a 448.8px track, so the
+     shipped label wrapped — and the comment that justified its size measured it against a 630px
+     track a later layout change had already deleted. The worst label the formula can produce,
+     `Box 100 · Section 12 · Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
+
+     FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
+     checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
+     and the block is measured for a second line. */
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.locator('.browse-position-parts').first().waitFor()
+
+    const oneLine = await page.locator('.browse-position').evaluate((el) => {
+      const shape = el.querySelector('.browse-position-parts') as HTMLElement
+      const slot = el.querySelector('.browse-position-slot') as HTMLElement
+      return shape.getBoundingClientRect().height <= slot.getBoundingClientRect().height + 4
+    })
+    expect(oneLine).toBe(true)
+
+    /* The shape fits its track with the worst label in it. Measured on the SHAPE rather than on
+       `.browse-position`, which is a full-width block and would always "fit". */
+    const fits = await page.evaluate(() => {
+      const path = document.querySelector('.browse-position-path') as HTMLElement
+      const slot = document.querySelector('.browse-position-slot') as HTMLElement
+      const track = document.querySelector('.browse-detail') as HTMLElement
+      path.innerHTML = '<span>BOX <b>100</b></span><span>SECTION <b>12</b></span>'
+      const numEl = slot.querySelector('.browse-position-num') as HTMLElement
+      numEl.textContent = '543'
+      const used = path.getBoundingClientRect().width + slot.getBoundingClientRect().width + 24
+      return used <= track.getBoundingClientRect().width
+    })
+    expect(fits).toBe(true)
+  }
+})
+
+test("the box's census and its forecast are told apart, and the fill says which kind it is", async ({
+  page,
+}) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* SAME COMPLAINT ONE COLUMN OVER, and the same absence. `cards 543 · sold 0 · fill 543 · next
+     index 544` is 46 cells = 354.2px in a 299px track, so it wrapped — and it is not a digit
+     count: box 1's shorter line wraps identically. It is four words and three interpuncts. */
+  const meta = page.locator('.boxops-meta')
+  await expect(meta).toBeVisible()
+  expect(await meta.innerText()).not.toContain('·')
+
+  /* THE FIELD NAMES ARE STILL THE STORE'S, VERBATIM. `BoxOps.tsx` promises that what is on
+     screen greps to `inventory.json`, and the keys are uppercased by `text-transform` at paint
+     only — so the DOM text must still be lowercase. A `toUpperCase()` in the .tsx would look
+     identical on screen and break this. */
+  const keys = await page.locator('.boxops-meta-key').allTextContents()
+  expect(keys).toEqual(['cards', 'sold', 'fill', 'next index'])
+
+  /* NEXT INDEX IS NOT A FOURTH CENSUS FIGURE. `cards`, `sold` and `fill` describe what is in the
+     box; `next index` is D10's high-water mark — what the allocator hands out next. It is out of
+     the row, which is the structural form of that distinction. */
+  await expect(page.locator('.boxops-meta-row .boxops-meta-cell')).toHaveCount(3)
+  await expect(page.locator('.boxops-meta-next')).toHaveCount(1)
+  await expect(page.locator('.boxops-meta-row .boxops-meta-next')).toHaveCount(0)
+
+  /* D20's DENOMINATOR RULE, WHICH THIS LINE NEVER DISCHARGED. That entry is explicit that a
+     number whose meaning switches silently between an open box and a sealed one is the failure
+     it exists to prevent: `fill` is a fill-SO-FAR while the box is open and a frozen capacity
+     once it is closed, and both were rendered identically. */
+  const qual = page.locator('.boxops-meta-qual')
+  if (await qual.count()) {
+    const sealed = await page.locator('.boxops-state, .boxops-identity').first().innerText()
+    await expect(qual).toHaveText(/^(so far|sealed)$/)
+    if (/sealed/i.test(sealed)) await expect(qual).toHaveText('sealed')
+  }
+
+  /* And nothing wraps at either width. */
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    const row = await page.locator('.boxops-meta-row').boundingBox()
+    const cell = await page.locator('.boxops-meta-cell').first().boundingBox()
+    if (row === null || cell === null) throw new Error('the meta block did not render')
+    expect(row.height).toBeLessThan(cell.height * 1.6)
+  }
+})
+
+test('a narrow copies column shortens the bar, never the position label', async ({ page }) => {
+  await open(page)
+
+  /* THE TRADE THIS PROTECTS, AND IT IS THE ONE D40 REFUSED FIRST. In the three-column layout the
+     copies column gives this list ~586px, where the row was 144px: `8 + place 51 + gap 12 + bar
+     65 + 8`. The obvious fix — lowering the 860px container threshold so the bar rejoins the row
+     — does produce a 129px row, and it gets there by squeezing `.card-locations-place` to 231px,
+     which WRAPS THE POSITION LABEL. `CardLocations.css` forbids that by name: the label is the
+     string somebody carries to a shelf and it must not break.
+
+     So the height comes out of the BAR's own dead space instead. This case asserts both halves,
+     because either one alone can be satisfied by the wrong fix. */
+  /* AT 1440, DELIBERATELY, AND THIS SUITE RUNS AT 1280 BY DEFAULT. The container is 528px at
+     1280 and 612px at 1440, and the rejected fix's damage only exists in the second: with the
+     threshold at 560 the narrow branch still applies at 528, so a case left at the default
+     viewport passes against the very mutation it is written to catch. Observed — this case was
+     kept only after it was seen to go red at 1440 and green at 1280 against that change. */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const row = page.locator('.card-locations-row').first()
+  await expect(row).toBeVisible()
+  await page.waitForTimeout(150)
+
+  const geom = await row.evaluate((el) => {
+    const place = el.querySelector('.card-locations-place') as HTMLElement
+    const bar = el.querySelector('.position-bar') as HTMLElement
+    const caps = [...el.querySelectorAll('.position-bar-text')] as HTMLElement[]
+    const boxTrack = el.querySelector('.position-bar-track') as HTMLElement
+    const sect = el.querySelector('.position-bar-sectiontrack') as HTMLElement
+    const label = place.querySelector('*') as HTMLElement
+    return {
+      barH: Math.round(bar.getBoundingClientRect().height),
+      labelLines: label === null ? 1 : label.getClientRects().length,
+      capHeights: caps.map((c) => Math.round(c.getBoundingClientRect().height)),
+      capBesideTrack: caps.length > 0 && boxTrack !== null
+        ? Math.abs(caps[0]!.getBoundingClientRect().top - boxTrack.getBoundingClientRect().top) < 12
+        : false,
+      boxTrackH: Math.round(boxTrack.getBoundingClientRect().height),
+      sectTrackH: sect === null ? null : Math.round(sect.getBoundingClientRect().height),
+    }
+  })
+
+  /* THE LABEL IS ON ONE LINE. This is the half the rejected fix broke. */
+  expect(geom.labelLines).toBe(1)
+
+  /* THE CAPTIONS SIT BESIDE THEIR TRACKS, not under them — which is where the 31px came from.
+     Asserted as a geometric fact rather than by class, so a future rule that re-stacks them
+     while keeping the selector fails. */
+  expect(geom.capBesideTrack).toBe(true)
+  for (const h of geom.capHeights) expect(h).toBeLessThan(20)
+  expect(geom.barH).toBeLessThan(48)
+
+  /* AND BOTH SCALES SURVIVE, which is docs/DESIGN.md's constraint on this component: the box
+     track is 16px and the section track 8px, and their differing heights are one of the three
+     cues that keep the two scales distinguishable at a glance. A "denser" row that flattened
+     them into one would pass every height check above and lose the thing the bar is for. */
+  expect(geom.boxTrackH).toBeGreaterThan(geom.sectTrackH!)
+  expect(geom.sectTrackH).toBeGreaterThan(0)
+})
+
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {
   await open(page)
   await openBoxOps(page)
