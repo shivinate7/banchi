@@ -2026,6 +2026,41 @@ across box 2, but a set with two prints of one name would produce it. The behavi
 correct — two surviving rows means two candidates and an ordinary one-card review — but it has
 never been seen, and the group offer would correctly refuse it as `group_not_uniform`.
 
+**IT WAS A RULE ABOUT POKEMON'S LOOKUP UNTIL 2026-08-29, AND IT WAS WRITTEN AS A RULE ABOUT A
+READ.** This entry argues throughout that the NUMBER is the field that fails and the NAME is
+the field that survives — a claim about photographs and models, with nothing game-specific in
+it. It was nevertheless implemented in `_lookup_number_and_printed_total` alone, so every game
+keyed by a printed identifier (`riftbound`, `one_piece`) returned an empty row set and stopped
+where Pokemon fell through to the name.
+
+**The owner found it from the far end**, asking why cards whose rows are plainly in the export
+were sitting in the review queue as unanswerable. Run `2026-08-29-box1-01`, 133 real Riftbound
+cards: **4 unusable reads, all 4 zero-candidate `no_catalog_row`** — and a zero-candidate entry
+is refused by `POST /review/<box>/<index>/answer` as `no_candidates`, so those cards could not
+be answered at all, only skipped, every session, forever. Three carried a set-code prefix the
+Riftbound prompt forbids in as many words (`UNL • 140/219` for `140/219`, twice with a bullet
+and once with a middot — a model slip at 3 of 133, not a prompt gap), and **all three hold
+exactly one row by name**. One of them, `Hwei, Brooding Painter` at **$2.86**, is above D9's
+threshold: a listable card stuck unanswerable. The fourth read `Wuju Master` for the export's
+`Master Yi, Wuju Master` and correctly stays unmatched — the name it gave is not the name the
+export carries, so nothing can rescue it.
+
+**Nothing about the rung is widened by this.** It still fires only on an empty result, so it is
+reached only by a card already bound for `no_catalog_row`; it still produces a queue entry and
+never a listing; it still answers `name?:` rather than `name:`. What changed is which strategies
+run it. `_lookup_name_only` deliberately does NOT gain it: there the name IS the key, so there is
+no unreadable number to fall back from.
+
+**THE REAL FINDING IS THE SHAPE, AND IT IS NOT FIXED BY THIS ENTRY.** Two strategies each
+re-implemented the same four-step ladder — build a key, look it up, try the blank-number name,
+fall back to the name — differing only in STEP ONE, which is the only genuinely per-game part.
+D35 landed in one copy of that ladder and not the other, and nothing anywhere compared them.
+That is a structural invitation to drift, not an accident, and the honest repair is one shared
+ladder parameterised by a per-game key function. **Recorded here as owed rather than done**: it
+is a change to D25's partitioning shape and wants the owner's ruling before the code moves.
+
+Covered by T3 in both directions, observed failing against the old code first.
+
 ---
 
 ## D36 — The run says what the model read; the store says which slot it is in

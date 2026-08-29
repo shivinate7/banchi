@@ -524,12 +524,43 @@ def _lookup_printed_code(catalog: "Catalog", card: IdentifiedCard):
 
     The blank-`Number` fallback is shared with the strategy above, and deliberately: sealed
     products and promos land in the same rows whatever keys the rest of the export.
+
+    D35's NAME RUNG IS SHARED WITH IT TOO, AS OF 2026-08-29, AND ITS ABSENCE HERE WAS A REAL
+    SILENT GAP. D35 is written as a rule about a READ — "a number that finds nothing is a
+    number we should stop believing" — but it was only ever wired into the strategy above, so
+    every game keyed by a printed code returned an empty row set and stopped. The owner found
+    it from the far end, asking why cards whose rows are plainly in the export were sitting in
+    the review queue as unanswerable.
+
+    Measured on run 2026-08-29-box1-01, 133 Riftbound cards: 4 reads were unusable, and all 4
+    became zero-candidate `no_catalog_row` entries — which `POST /review/<box>/<index>/answer`
+    refuses outright as `no_candidates`, so they could not be answered at all, only skipped.
+    Three of them carried a set-code prefix the prompt explicitly forbids (`UNL • 140/219` for
+    `140/219`, twice with a bullet and once with a middot), and each of those three resolves to
+    EXACTLY ONE row by name. The fourth read `Wuju Master` for `Master Yi, Wuju Master` and
+    still does not resolve, correctly: the name it gave is not the name the export carries.
+
+    THE ARGUMENT IS D35's OWN AND IS NOT WIDENED HERE. It fires only on an empty result, so it
+    is reached only by a card already bound for `no_catalog_row`; it produces a REVIEW entry
+    and never a listing, which `join_batch` enforces rather than this function; and it answers
+    `name?:` rather than `name:` so the run report distinguishes a product that prints no
+    number from a number we could not read.
+
+    `CLAUDE.md`'s "never join on Product Name" is narrowed exactly as far as D35 narrows it and
+    no further: last resort only, folded through `name_index_key` on both sides, never able to
+    list a card on its own.
     """
-    if card.number is not None:
+    if card.number is not None and str(card.number).strip():
         key = str(card.number).strip()
-        if key:
-            return catalog.rows_for_key(key), f"code:{key}"
-    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+        rows = catalog.rows_for_key(key)
+        if rows:
+            return rows, f"code:{key}"
+        # Falls through to the name rung below rather than returning empty — D35.
+    else:
+        rows = catalog.rows_for_blank_number_name(card.name)
+        if rows:
+            return rows, f"name:{card.name}"
+    return catalog.rows_for_name(card.name), f"name?:{card.name}", True
 
 
 def _lookup_name_only(catalog: "Catalog", card: IdentifiedCard):
