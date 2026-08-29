@@ -1944,7 +1944,7 @@ every one with **zero candidate rows** — so they could not be answered at all,
 `POST /review/<box>/<index>/answer` refuses an entry with no candidates as `no_candidates`.
 
 **The gap was one line, and its comment stated the false assumption outright.**
-`pipeline/join.py:_lookup_number_and_printed_total` fell back, when a card carried no number,
+`pipeline/join.py`'s Pokemon lookup fell back, when a card carried no number,
 to `catalog.rows_for_blank_number_name` — an index of **only those export rows whose own
 `Number` cell is blank**. Its comment: *"No collector number on the product (code cards, some
 promos). These are exactly the rows whose `Number` is blank."* That reads `card.number is
@@ -2029,7 +2029,7 @@ never been seen, and the group offer would correctly refuse it as `group_not_uni
 **IT WAS A RULE ABOUT POKEMON'S LOOKUP UNTIL 2026-08-29, AND IT WAS WRITTEN AS A RULE ABOUT A
 READ.** This entry argues throughout that the NUMBER is the field that fails and the NAME is
 the field that survives — a claim about photographs and models, with nothing game-specific in
-it. It was nevertheless implemented in `_lookup_number_and_printed_total` alone, so every game
+it. It was nevertheless implemented in the Pokemon lookup alone, so every game
 keyed by a printed identifier (`riftbound`, `one_piece`) returned an empty row set and stopped
 where Pokemon fell through to the name.
 
@@ -2048,16 +2048,37 @@ export carries, so nothing can rescue it.
 **Nothing about the rung is widened by this.** It still fires only on an empty result, so it is
 reached only by a card already bound for `no_catalog_row`; it still produces a queue entry and
 never a listing; it still answers `name?:` rather than `name:`. What changed is which strategies
-run it. `_lookup_name_only` deliberately does NOT gain it: there the name IS the key, so there is
+run it. `name_only` deliberately does NOT gain it: there the name IS the key, so there is
 no unreadable number to fall back from.
 
-**THE REAL FINDING IS THE SHAPE, AND IT IS NOT FIXED BY THIS ENTRY.** Two strategies each
-re-implemented the same four-step ladder — build a key, look it up, try the blank-number name,
-fall back to the name — differing only in STEP ONE, which is the only genuinely per-game part.
-D35 landed in one copy of that ladder and not the other, and nothing anywhere compared them.
-That is a structural invitation to drift, not an accident, and the honest repair is one shared
-ladder parameterised by a per-game key function. **Recorded here as owed rather than done**: it
-is a change to D25's partitioning shape and wants the owner's ruling before the code moves.
+**THE REAL FINDING WAS THE SHAPE, AND IT IS FIXED — the owner's ruling, same day.** Each game
+had its own `_lookup_*` function, and each re-implemented the same four-step ladder — build a
+key, look it up, try the blank-`Number` name, fall back to the name — differing only in STEP
+ONE, the only genuinely per-game part. D35 landed in one copy and nothing compared them, because
+nothing could: they were three unrelated functions that happened to be parallel.
+
+`pipeline/join.py:_walk` is now the ladder, written once, and `KeyStrategy` is the per-game part
+as a VALUE — a key builder, the lookup label, and whether D35's rung applies. **A rung added to
+`_walk` cannot land in one game and not another**, which is the property the old shape could not
+offer at any level of care.
+
+**THE OWNER ASKED WHETHER THE EXPORTS DIFFER PER GAME, AND THEY DO NOT.** Measured across all
+four committed fixtures — SV09, the wide Pokemon export, Riftbound and One Piece — the 16-column
+header is **byte-identical** (one md5 between them), which is what makes a shared ladder correct
+rather than merely tidy. What is genuinely per-game is the `Product Line` cell, the rarity
+vocabulary, the shape of the `Number` cells, and one import file per game (D25) — none of which
+lives below step one.
+
+**`name_only` KEEPS ITS EXEMPTION, AND IT IS NOT COMPATIBILITY DEBT.** `pokemon_code` has no
+collector number at all and lives inside the Pokemon export as a blank-`Number` row, so
+`rows_for_name` would match it to the NUMBERED card of the same name — a code card listed as the
+card it came with. The rung is for "we could not READ the number"; a product that prints none has
+nothing to fall back from. That is now a declared `name_rung=False` rather than an absence
+somebody has to notice.
+
+**Behaviour-preserving, and checked as such rather than asserted.** `join --dry-run` over both
+real runs — box 1's 133 Riftbound cards and box 2's 544 Pokemon cards — produced **byte-identical
+output** before and after the restructure.
 
 Covered by T3 in both directions, observed failing against the old code first.
 

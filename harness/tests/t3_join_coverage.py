@@ -1620,7 +1620,7 @@ def run() -> Result:
     REAL_NAME, REAL_NUMBER, REAL_TOTAL = "Accelgor", "013", "159"
 
     #
-    # THE RUNG BELOW THE BLANK-NUMBER FALLBACK. `_lookup_number_and_printed_total` used to
+    # THE RUNG BELOW THE BLANK-NUMBER FALLBACK. The Pokemon lookup used to
     # treat "this card has no number" as "this PRODUCT prints no number" and look only at the
     # export's blank-`Number` rows — true for a code card, false for a photograph whose bottom
     # edge was cropped off. Box 2 sent 544 cards through a bad crop: 37 came back with no
@@ -1745,10 +1745,10 @@ def run() -> Result:
 
     # 8. D35 REACHES THE `printed_code` GAMES TOO, AND FOR ONE COMMIT IT DID NOT.
     #
-    #    Every case above exercises `_lookup_number_and_printed_total` — Pokemon. D35 is
+    #    Every case above exercises the Pokemon key — `number_and_printed_total`. D35 is
     #    written as a rule about a READ, not about a game ("a number that finds nothing is a
     #    number we should stop believing"), but it was only ever wired into that one strategy.
-    #    `_lookup_printed_code` returned `rows_for_key` even when EMPTY, so Riftbound and One
+    #    the printed-code lookup returned `rows_for_key` even when EMPTY, so Riftbound and One
     #    Piece stopped at zero candidates where Pokemon fell through to the name.
     #
     #    THE COST IS NOT AN EXTRA TAP, IT IS AN UNANSWERABLE CARD.

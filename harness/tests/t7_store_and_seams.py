@@ -7492,7 +7492,7 @@ def check_printed_code_profiles(checks: Checks) -> None:
         checks.ok(
             "printed_total" not in chosen.schema["properties"],
             "and `printed_total` is absent rather than blank: a game keyed by "
-            "printed_code has no denominator half, and _lookup_printed_code never reads "
+            "printed_code has no denominator half, and _key_printed_code never reads "
             "one in either direction",
             f"properties were {sorted(chosen.schema['properties'])!r}",
         )
