@@ -240,7 +240,16 @@ test('the photograph does not move between cards', async ({ page }) => {
   const before = await page.locator('.review-frame').boundingBox()
 
   await page.locator('.review-action', { hasText: 'Skip' }).click()
-  await expect(page.locator('.review-position')).not.toHaveText(/Card 14$/)
+  /* AGAINST THE `aria-label`, NOT THE RENDERED TEXT, because the rendered text no longer contains
+     the string this was matching. `.review-position`'s innerText is now `BOX 2SECTION 1CARD14` —
+     de-dotted and uppercased by `PositionLabel` — so `/Card 14$/` can never match for ANY card and
+     the assertion would go on passing while detecting nothing. That is the silently-weakened shape
+     D16 forbids, and this case's whole job is to prove the Skip actually advanced. The server
+     string survives verbatim on `aria-label`, which is what makes it the right thing to match. */
+  await expect(page.locator('.review-position .position-parts')).not.toHaveAttribute(
+    'aria-label',
+    /Card 14$/,
+  )
 
   const after = await page.locator('.review-frame').boundingBox()
   /* D28: the frame reserves its height whether or not an image has loaded, so the rows below

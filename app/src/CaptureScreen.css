@@ -125,7 +125,7 @@
      from the frame and whose contents come from a set hint the operator typed. It does not
      wrap at any window this was measured at; it is one long set code away from wrapping at
      a narrow one, and the cost of reserving the line is 16px of photograph. */
-  --stage-chrome: 120px;
+  --stage-chrome: 124px;
 }
 
 /* ---- the two columns ---- */
@@ -1245,13 +1245,25 @@
    so the width cannot shift between cards by someone forgetting to set it. */
 .capture-label {
   font-family: var(--util);
-  font-size: 20px;
-  font-weight: 600;
   color: var(--ink);
+  letter-spacing: 0;
+  --pos-slot: 32px;
+  font-size: var(--pos-slot);
 }
 
 /* Same face, inline in a sentence, at the size of the sentence. */
 .capture-inline-label {
+  font-family: var(--util);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* A COUNT WEARING A POSITION LABEL'S CLASS IS WHAT MAKES A LATER STYLESHEET-ONLY CHANGE WRONG.
+   `swallowed.halted` is a bare integer — how many fires the screen declined — and it sat on
+   `.capture-inline-label` because that class happened to look right. `PositionLabel`'s length bail
+   would have left it alone either way; the rename is so the next person restyling position labels
+   does not silently restyle a tally. Same declarations, different name. */
+.capture-inline-count {
   font-family: var(--util);
   font-weight: 600;
   color: var(--ink);
@@ -1322,8 +1334,10 @@
    an aiming aid beside a thumbnail, in a column a third as wide, where 20px mono wrapped
    `Box 3 · Section 1 · Card 7` across three lines and made the foot taller than the control
    it names. */
+/* THE SIDEBAR IS A SMALLER REGISTER, and this fixes that rule's own recorded complaint that a
+   20px mono label wrapped across three lines: the treated block is 195px against 246px. */
 .capture-undo-target .capture-label {
-  font-size: 13px;
+  --pos-slot: 20px;
 }
 
 /* Small, and still recognisable as the card you just shot. The point is aiming the undo, not

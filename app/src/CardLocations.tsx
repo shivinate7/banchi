@@ -5,6 +5,7 @@ import { photoUrl, placeSentence } from './server'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
 import './CardLocations.css'
+import { PositionLabel } from './PositionLabel'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -306,10 +307,41 @@ function OwnerRows({
                         the rule on `Place.label` and D10 is why it has teeth: Section and Card
                         are a view of the index against the box's current divider layout, and
                         the only formula for it in this repo is `pipeline/join.py:Position`. */}
-                    <span className="card-locations-label">{copy.place.label}</span>
-                    {copy.place.box_name === null ? null : (
-                      <span className="card-locations-boxname">{copy.place.box_name}</span>
-                    )}
+                    {/* SLOT-FIRST HERE, PATH-FIRST EVERYWHERE ELSE, and it is a property of
+                        being a LIST rather than a taste call. Down seven copies the coarse parts
+                        are identical on every row, so path-first would stand seven identical
+                        `BOX 2 / SECTION n` blocks in front of the only thing that differs and
+                        push the figures to a ragged x — the dense-grey-table failure
+                        `docs/DESIGN.md` names by the front door. Slot-first puts them in a hard
+                        column at the cell's left edge. `aria-label` carries the server string
+                        either way, so nothing that is not an eye reads a different order.
+
+                        THE BOX NAME RIDES THE BOX LINE, WHICH IS WHAT MAKES THIS FREE. The
+                        two-line path costs +17px a row over the one-line string, and it repays
+                        exactly that by absorbing `.card-locations-boxname`'s first use — already
+                        a muted sub-line stating a fact about the box. Measured: row 114.19 ->
+                        114.17px, list 813.31 -> 813.20. Without the absorption it is +17px/row,
+                        +119px on a seven-copy list, and copies-visible-on-landing 4 -> 3.
+
+                        SO A BOX WITH NO NAME PAYS THE FULL +17px/ROW. `Place.box_name` is
+                        nullable and D20 made names unique but deliberately NOT required. Every
+                        box in the store is named today, so this is latent rather than live, and
+                        nothing warns. */}
+                    {/* `Place.label` IS NULLABLE AND THE OLD MARKUP HID IT. `{copy.place.label}`
+                        rendered nothing for a null and nobody had to think about it; the
+                        component takes a string, so the case has to be answered out loud. It
+                        answers the same way it always behaved — draw nothing — rather than
+                        inventing a placeholder for a card whose position the server did not
+                        send. */}
+                    <span className="card-locations-label">
+                      {copy.place.label === null ? null : (
+                        <PositionLabel
+                          label={copy.place.label}
+                          lead="slot"
+                          boxNote={copy.place.box_name}
+                        />
+                      )}
+                    </span>
                     {/* D30's digital half, quiet under the label: "between Mantine and
                         Thievul · 2 slots in this section are empty". This row's label names
                         the SLOT, and once the section holds permanent gaps a hand-count

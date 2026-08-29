@@ -1,0 +1,143 @@
+/* app/src/PositionLabel.css — imported once, by PositionLabel.tsx.
+ *
+ * THE SCALE IS ONE DECLARATION PER SITE, AND EVERY OTHER NUMBER IS DERIVED FROM IT.
+ * `--pos-slot` is the slot figure's size, which is the only number a site actually chooses.
+ * `.position-num` is `1em`, so the base IS the figure; the path and the key derive from it.
+ *
+ * PROPORTIONAL SCALING WAS TRIED FIRST AND IS REFUSED, with the arithmetic. Take D41's shipped
+ * ratios as canonical — path 11px against a 44px figure is 0.25em. At the review head's 32px
+ * figure that is 8px and at the copies row's 28px it is 7px, both below anything this product
+ * draws. The four sites were probed independently and all four landed on the SAME path size,
+ * 11px, against four different figures — because the path tracks each screen's own metadata
+ * register (`.review-machine` is 11px, `.card-locations-boxname` is 10px, `.browse-position-path`
+ * is 11px) and the figure tracks its payload register. Two scales, not one. So `--pos-path`
+ * defaults to 11px and is a knob a site may move, rather than a multiple of a figure it has
+ * nothing to do with.
+ *
+ * THE KEY IS ONE EXPRESSION AND NO SITE DECLARES IT. `clamp(var(--pos-path), 0.295em, 13px)`
+ * measures 12.98px at a 44px figure and 11px at 32, 28 and 20 — verified in the browser at all
+ * five settings. That reproduces `#/inventory`'s shipped 13px to within 0.02px and gives every
+ * other site the path's own register, which is right: the key is a muted uppercase word naming a
+ * number, exactly what the path is. It is promoted only where the figure is large enough that an
+ * 11px word beside it detaches, and 0.295em is where that happens on its own.
+ *
+ * THE GAP IS A TOKEN, NEVER A COMPUTATION, because docs/DESIGN.md's spacing scale is 4 8 12 16 24
+ * 32 48 64 and a computed gap lands off it. The rule: `--s5` where the figure is >= 40px, `--s3`
+ * below. Exactly one site is above the line today.
+ *
+ * ── THE FULFILLER FIREWALL ───────────────────────────────────────────────────────────────────
+ * Every selector here is `.position-*`, and those classes exist in the DOM ONLY where
+ * `PositionLabel` rendered them. `Fulfillment.tsx` and `CardLocations.tsx:FulfillerCard` do not
+ * import the component, so no rule in this file can reach a node in `#/fulfillment` — the guard
+ * is the component graph, not a selector prefix, which is why stripping a prefix cannot breach it.
+ *
+ * WHAT HAPPENS IF SOMEBODY LIFTS THE CALL INTO A SHARED RENDER PATH — the breach that would
+ * actually happen — MEASURED rather than reasoned: `.position-path` sets its own 11px, which wins
+ * over `.card-locations-place-large`'s 32px, and `#/fulfillment`'s minimum text size goes 20px ->
+ * 11px with 16 nodes under the floor. `app/tests/fulfillment.spec.ts` fails three ways at once:
+ * BODY_FLOOR (>=20px on every text node), `toHaveText(EISCUE)` (the DOM text becomes
+ * `BOX 2SECTION 19`, uppercased and de-dotted), and the added `.position-parts` count-zero case
+ * below. It cannot fail silently in any direction.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ---- the stacked block ---- */
+
+.position-parts {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pos-gap, var(--s3));
+}
+
+/* THE PATH: coarse-to-fine, stacked, muted, demoted. `align-self: flex-end` sits it on the
+   figure's baseline rather than its cap, which is what makes the two read as one object instead
+   of two panels. The VALUES stay `--ink` while their keys stay `--muted`, so the numbers are
+   still findable at a glance even demoted — a rank change, not a hiding. */
+.position-path {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-end;
+  padding-bottom: 2px;
+  min-width: 0;
+  font-size: var(--pos-path, 11px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* TRACKING LANDS ON THE WORDS AND NEVER ON THE FIGURES, and `letter-spacing: 0` here is a FIX,
+   not tidying. The shipped `.browse-position-path b` sets weight and colour and never resets the
+   inherited 0.08em, so every digit in the path carries 0.88px of drift — 1.76px on a two-digit
+   section — through a face docs/DESIGN.md chose precisely "so the width cannot shift between
+   cards by someone forgetting to set it". Measured: a one-digit value renders 8.586px against
+   7.703px reset. That rule's own comment two lines below claims the tracking is "only ever on an
+   uppercase key"; it was not. */
+.position-path b {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+/* What the owner calls the box, riding the BOX line rather than taking one of its own. Only the
+   copies list passes it. Muted: a label for humans, never an identifier. */
+.position-path-note {
+  margin-left: var(--s1);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.position-slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  flex: 0 0 auto;
+}
+
+.position-key {
+  font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.position-num {
+  font-size: 1em;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.05;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* SLOT-FIRST, AND THE DIGIT RESERVATION COMES WITH IT RATHER THAN AS A KNOB, because both exist
+   for the same reason: this block is in a COLUMN. `3ch` is relative to this element's own size
+   and Martian Mono is fixed-advance (measured 0.70em), so it reserves exactly three digits and
+   every row's path starts at one x. Without it the copies list puts the path at 905.7 / 928.1 /
+   950.5 for Card 7 / 59 / 107 — measured — because mono advance scales the figure box with the
+   digit count. Box 2 tops out at 543; a fourth digit widens its own row only. */
+.position-parts[data-lead='slot'] .position-path { order: 2; }
+.position-parts[data-lead='slot'] .position-slot { order: 1; }
+.position-parts[data-lead='slot'] .position-num { min-width: 3ch; }
+
+/* ---- the run form: the same ranking, laid out in one dimension ---- */
+
+.position-run-path,
+.position-run-key {
+  font-size: 0.8em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.position-run-path { margin-right: var(--s2); }
+.position-run-path b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
+.position-run-key { margin-right: var(--s1); }
+.position-run-num { font-weight: 700; color: var(--ink); letter-spacing: 0; }
+
+/* THE FIVE SITE RULES LIVE IN THEIR OWN STYLESHEETS, not here — `.browse-position` in
+   BoxBrowse.css, `.review-position` in ReviewQueue.css, `.card-locations-label` in
+   CardLocations.css, `.capture-label` and `.capture-inline-label` in CaptureScreen.css. Each one
+   sets `--pos-slot` and almost nothing else. Kept apart deliberately: a site's register belongs
+   beside that site's other type, and gathering all five here would make this file the place a
+   screen's size is changed, which is how a shared component becomes a bottleneck. */

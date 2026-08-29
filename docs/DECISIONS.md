@@ -2973,11 +2973,90 @@ cap and `.browse-list` is the scroller — there it comes out of the walk at 25.
 about 1.2 rows. The ledger variant that was also rendered cost 81px and ~1.9 rows, and was
 declined on that number.
 
-**WHAT WOULD REOPEN THIS: the other two sites.** `.review-position` and `.card-locations-label`
-still draw the dotted string, and the copies list draws it seven times two inches below the new
-address. If the owner wants the dot theme gone screen-wide, the answer is the key/figure colour
-split WITHOUT the shape — a 44px figure repeated seven times in a list would be a different and
-worse defect.
+**THAT REOPENING HAPPENED THE SAME DAY. The owner: "Full treatment for all -- amendment."** The
+paragraph this replaces named `.review-position` and `.card-locations-label` and said taking the
+treatment to them was "a decision about all three sites, not a copy of this one". This is that
+decision, and the count was wrong: the capture screen draws the address in **five** more places,
+three of them inside running sentences. Six owner sites, not three.
+
+**THE STRUCTURE IS UNIVERSAL AND THE SIZE IS PER SITE, WHICH IS WHAT THE OLD PARAGRAPH'S WARNING
+BUYS.** It predicted that "a 44px figure repeated seven times in a list would be a different and
+worse defect", and that is now measured rather than predicted: at 44px the copies row goes
+114.17 -> 126.48px, +86px on a seven-copy list, and copies visible on landing drop 4 -> 3 — on the
+screen whose recorded complaint (D38 twice, D40 again) is that the copies scroll away. So what is
+shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size —
+and each site sets its own figure.
+
+**ONE COMPONENT, `app/src/PositionLabel.tsx`, AND ONE DECLARATION PER SITE.** `--pos-slot` is the
+figure and `.position-num` is `1em`, so a site's whole register is one line in its own stylesheet.
+The key is `clamp(var(--pos-path), 0.295em, 13px)` — 12.98px at a 44px figure and 11px at 32, 28
+and 20 — so `#/inventory` keeps its shipped key to within 0.02px and no other site declares one.
+
+**PROPORTIONAL SCALING WAS TRIED AND REFUSED, WITH THE ARITHMETIC.** D41's shipped ratio is path
+11px against 44px, 0.25em. At the review head's 32px that is 8px and at the copies row's 28px it is
+7px, below anything this product draws. Probed independently, **all four new sites landed on the
+same 11px path against four different figures** — the path tracks each screen's metadata register
+(`.review-machine` 11px, `.card-locations-boxname` 10px) while the figure tracks its payload. Two
+scales, not one; a single multiplier would have claimed these screens are scaled copies of each
+other.
+
+**THE FIGURE IS FREE UP TO 32.3px, AND THAT IS ONE MEASUREMENT NOT FIVE.** The two-line path is
+33.9px, so at `line-height: 1.05` every figure to 32.3px draws the same 33.9–34.0px block: 20, 24,
+28 and 32 cost nothing, 36 costs 4px and 44 costs 12. Three of the four new sites sit on that
+plateau by construction. **It is a property of a THREE-part label** — a two-part label has a
+one-line path and the plateau collapses, which D36 and D24 both contemplate.
+
+**THREE SITES NEEDED A RULE THE BAND DID NOT.**
+
+- **The copies list leads with the SLOT, not the path**, because it is a list. Down seven rows the
+  coarse parts are identical, so path-first stands seven `BOX 2 / SECTION n` blocks in front of the
+  only thing that differs — the dense-grey-table failure `docs/DESIGN.md` names by the front door.
+  It is height-free **only because the two-line path absorbs `.card-locations-boxname`**; a box
+  with no name pays +17px on every row, and D20 made names unique but deliberately NOT required.
+  Latent today, nothing warns.
+- **An in-sentence label gets the RANK without the geometry** — the `run` form. Stacking inside a
+  sentence measured 79px against 23px and orphaned the trailing period onto its own line; at
+  `inline-flex` it rendered `BOX 2` above the baseline as a superscript footnote marker.
+- **A NUMERIC GUARD, which D41's own splitter did not have.** `#/inventory` draws only real
+  positions. `#/review` draws D24's pooled label `Pokémon code cards · pooled`, which the shipped
+  splitter turned into a path reading `POKÉMON CODE cards` and a lowercase word promoted to a
+  300.9px figure. Nothing broke geometrically and no assertion saw it. A promoted slot is a slot
+  NUMBER or the label renders whole.
+
+**THE FULFILLER'S FIREWALL IS THE COMPONENT GRAPH, NOT A SELECTOR.** `Fulfillment.tsx` and
+`CardLocations.tsx:FulfillerCard` do not import the component, so no `.position-*` rule can reach
+his 32px and 36px labels — which is why stripping a class prefix cannot breach it. The breach that
+would actually happen is somebody lifting the call out of `OwnerCard` into a shared render path,
+and `app/tests/fulfillment.spec.ts` now states that as a CAUSE (`.position-parts` count zero)
+rather than leaving it to be diagnosed from a font size. Mutation-tested: the lift takes the
+firewall case red, and eleven other cases with it.
+
+**TWO ASSERTIONS WERE FOUND DEFECTIVE ON THE WAY, BOTH WRITTEN EARLIER THE SAME DAY.**
+`inventory.spec.ts`'s `labelLines` read `getClientRects().length` off a column-flex child, which is
+blockified and returns exactly ONE rect however many lines it holds — measured on the shipped tree,
+the label wraps to 2/3/4 real lines at 200/120/80px and the assertion read 1 every time. Its case
+only ever went red on a different assertion, which hid it. And `review.spec.ts`'s
+`.not.toHaveText(/Card 14$/)` would have gone vacuous the moment the DOM text stopped containing
+that string, passing forever while detecting nothing — the silently-weakened shape D16 forbids.
+Both now assert against `aria-label` or a geometric fact.
+
+**WHAT IS NOT TREATED, AND WHY.** `.review-row-position` (11px, 23 in the rail), `.review-group-pos`
+(10px) and the capture screen's bare-integer consumer keep the plain string: the mechanism is RANK,
+and a 10px caption has no rank to spend — stacking it would cost height in the two lists whose only
+job is to be scannable. The consequence is honest: **`#/review` now renders the address two ways.**
+So does `#/inventory`, where the band's 44px figure and the copies list's 28px sit ~500px apart in
+one idiom; the 1.57 ratio is what keeps the band dominant, and it is the first thing to look at if
+the screen starts feeling noisy.
+
+**ONE SITE IS UNTREATED FOR A STRUCTURAL REASON RATHER THAN A DESIGN ONE.**
+`CaptureScreen.tsx:1931` composes `Note saved on ${target.card.label}.` as a plain STRING inside a
+notice payload — there is no element to style and no JSX to return, so it cannot take even the run
+form without changing the notice type across the component. Named here rather than silently left,
+because it is the one place the owner's "all" is not satisfied.
+
+**WHAT WOULD REOPEN THIS: a two-part label, or a box with no name.** Both collapse a measurement
+this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row.
+Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
 
 ---
 
