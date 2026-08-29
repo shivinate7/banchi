@@ -94,6 +94,63 @@ test('motion that settles on an empty stand is suppressed as no-card', () => {
   expect(events.map((e) => e.event)).toEqual(['fire', 'suppressed:no-card'])
 })
 
+/** A card that fills only PART of the watch region, against a dark surround. `fraction` of
+ *  the cells are card-bright and the rest are desk; the noise is `still`'s so d behaves
+ *  exactly as it does everywhere else in this file. */
+function partial(cardLuma: number, deskLuma: number, fraction: number, phase: number): Float32Array {
+  const cells = still(deskLuma, phase)
+  const bright = Math.round(CELLS * fraction)
+  for (let i = 0; i < bright; i += 1) cells[i] = cardLuma + (((i * 31 + phase * 17) % 7) - 3) * 0.2
+  return cells
+}
+
+test('a card filling part of the watch region is a card — the mean says otherwise', () => {
+  /* THE BUG THIS IS THE RECEIPT FOR, AND IT COST A REAL RUN. The presence gate read the MEAN
+     ROI luma, which is a statement about the whole region rather than about whether a card is
+     in it. On the rig it was tuned against the card FILLED the region, so the mean read ~172
+     and a floor of 90 sat comfortably between card and desk. Point a differently-framed camera
+     at the same feeder and the card occupies part of the region against a dark surround: the
+     mean is then dominated by background and collapses under the floor while the card is
+     plainly there.
+
+     Measured on the owner's second rig from two saved traces — the instrument D19 built for
+     exactly this — an empty stand read mean 27-30 / p90 62-69 and a settled card read mean
+     62-86 / p90 125-236. The floor of 90 sat ABOVE BOTH MEANS, so the gate could not fire at
+     any brightness: twenty cards settled correctly in one session and every one was refused as
+     an empty stand. No amount of relighting would have fixed it, because the failure is
+     geometric rather than photographic.
+
+     THE NUMBERS HERE ARE THAT RIG'S. A third of the region at card brightness against a dark
+     desk gives a mean well under the floor and a bright quantile well over it — which is the
+     whole of the fix, and the reason the constant did not have to move. */
+  const machine = new MotionMachine()
+  const events: MotionEvent[] = []
+  const push = (event: MotionEvent | null) => { if (event !== null) events.push(event) }
+
+  // Dark desk, then a swap, then a card covering a third of the region.
+  for (let i = 0; i < 4; i += 1) push(machine.step(i * F, still(30, i)))
+  push(machine.step(4 * F, still(150, 4))) // the swap: motion above tHi
+  for (let i = 5; i < 12; i += 1) push(machine.step(i * F, partial(200, 30, 1 / 3, i)))
+
+  const frame = partial(200, 30, 1 / 3, 5)
+  const mean = frame.reduce((a, b) => a + b, 0) / frame.length
+  const sorted = Array.from(frame).sort((a, b) => a - b)
+  const p90 = sorted[Math.floor((sorted.length - 1) * 0.9)] as number
+
+  /* The premise, asserted so a later reader does not have to trust the prose: this frame is
+     one the MEAN rejects and the quantile accepts. If the fixture ever drifts so that both
+     agree, the case below stops testing anything and this fails first. */
+  expect(mean).toBeLessThan(DEFAULT_PARAMS.cardLumaFloor)
+  expect(p90).toBeGreaterThan(DEFAULT_PARAMS.cardLumaFloor)
+
+  /* THE WHOLE SEQUENCE, because the order is the claim. The four dark-desk frames at the top
+     ARE an empty stand and are correctly judged so once — that is this file's first case —
+     and what must follow is a FIRE on the partial card rather than a second empty verdict.
+     Asserting the array rather than `toContain('fire')` is what stops the case passing on a
+     machine that fires for some other reason later in the sequence. */
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
+})
+
 test('continuous motion past maxMoveMs reports stalled exactly once, and never fires', () => {
   const machine = new MotionMachine()
   // Alternating bright/dark every frame: d stays huge. 1250ms at 33.3ms/frame is ~38

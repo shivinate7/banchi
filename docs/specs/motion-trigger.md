@@ -58,7 +58,7 @@ Phases: watching → moving → settling → (verdict) → watching, with a defe
 | `stillFrames` | 2 (67 ms) | fire latency (stillFrames+1)·f = 100 ms = 22% of the 458 ms worst observed cycle. The first guess — 6 frames + a blinding 400 ms cooldown — summed past the *mean* cycle: 619.7 − 233 − 400 = −13 ms |
 | refractory | 250 ms, deferring | sized to the <250 ms capture round trip, not the card cycle; a settle inside the window fires at expiry instead of being dropped |
 | `tNovel` | 4.0 | ~11× noise, ~3.5× under the weakest same-card repeat across the Gate B duplicate pairs |
-| `cardLumaFloor` | 90 | card region measures ~172, empty desk/backdrop 30–65 |
+| `cardLumaFloor` | 90 | card region measures ~172, empty desk/backdrop 30–65. **Read as the ROI's bright QUANTILE since 2026-08-29, not its mean — see below.** |
 | `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire (D19 carries both sides of that argument) |
 
 Three gates on a fire, one verdict per settle episode: stillness (synchronisation — fire
@@ -118,6 +118,48 @@ confirmation run. Order matters; each step isolates one parameter family.
 2. **Card-present floor.** Place one card by hand. `luma` should sit near 170 against an
    empty-stand reading near 50; `cardLumaFloor: 90` should split them with margin on both
    sides. A sleeved or dark-art card that reads low is a floor problem — lower it before
+
+### `cardLumaFloor` READS A QUANTILE, NOT A MEAN — and a second rig is what proved it
+
+**The mean is a statement about the whole watch region; the gate needs a statement about
+whether a card is IN it.** Those coincide only while the card fills the region, which is what
+the rig this was tuned against happened to do. Point a differently-framed camera at the same
+feeder and the card occupies part of the region against a dark surround: the mean is dominated
+by background and collapses under the floor while the card is plainly there.
+
+**Measured on the owner's second rig, 2026-08-29, from two saved traces** — the instrument this
+spec's §6 exists for, re-scored offline with no rig trip:
+
+| | mean | bright quantile (p90) |
+|---|---|---|
+| empty stand | 27–30 | 62–69 |
+| settled card | 62–86 | 125–236 |
+
+**The floor of 90 sat ABOVE BOTH MEANS.** The gate could not fire at any brightness, and no
+amount of relighting would have fixed it — the failure is geometric, not photographic. One
+session settled twenty cards correctly and refused every one as an empty stand; a second
+settled fifteen and fired twice, both on a static frame before the feeder started.
+
+**The constant does not move.** 69 against 125 leaves 90 exactly where it was, now with a real
+gap either side, and it stays backward-compatible with the rig it was derived from: a card
+filling the region has a bright quantile at least as high as its mean, so ~172 still passes.
+Re-scored through the fix, the two traces go 2 fires to **15 of 15**, and 0 to 7 on the
+under-lit one, with the empty-stand keyframes still correctly refused.
+
+**`CARD_QUANTILE` is 0.9 rather than the maximum** because a specular highlight off a sleeve, a
+lamp clipping into frame or a single hot pixel all carry a maximum and none of them is a card.
+Asking that roughly a tenth of the watched cells are card-bright is a claim about an object
+being there.
+
+**What this does NOT change**: `tHi`, `tLo`, `stillFrames`, `refractoryMs`, `tNovel` and
+`maxMoveMs` are untouched, and so is every measurement behind them. Motion and settle detection
+were never at fault — both traces show the machine finding every card at the feeder's cadence.
+Only the presence gate was reading the wrong statistic.
+
+**The tuning protocol above gains one step**: read the HUD's `luma` with a card under the lens
+AND with the stand empty, and check the gap rather than the absolute. The HUD now reports the
+quantile, because a screen showing a statistic the machine does not use is how a rig gets
+debugged against the wrong number for two sessions.
    blaming anything else.
 3. **Swap signal.** Hand-swap cards at feeder-ish pace. Every swap should spike `d` past
    `tHi` and every settle should fire exactly once; `same` should stay at zero unless you

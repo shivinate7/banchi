@@ -785,6 +785,35 @@ the 64x36 luma trace offers at a thousandth of the bytes, so the tape is a debug
 instrument for the rig session at most, never a photo source, and deleted once parameters
 sit on a plateau.
 
+**THE CARD-PRESENCE GATE READS A QUANTILE, NOT A MEAN, AND A SECOND RIG IS WHAT PROVED IT
+(2026-08-29).** `cardLumaFloor` was the mean ROI luma, and a mean is a statement about the whole
+watch region rather than about whether a card is in it. Those coincide only while the card
+FILLS the region — which is what the rig this was tuned against happened to do. On the owner's
+new rig the card occupies part of the region against a dark surround, so the mean is dominated
+by background:
+
+    empty stand    mean 27-30    bright quantile 62-69
+    settled card   mean 62-86    bright quantile 125-236
+
+**The floor of 90 sat above both means**, so the gate could not fire at any brightness and no
+relighting would have fixed it — the failure is geometric, not photographic. One session
+settled twenty cards correctly and refused every one; the next settled fifteen and fired twice,
+both on a static frame before the feeder started. **Motion and settle detection were never at
+fault**, which the traces show plainly: every card was found at the feeder's cadence.
+
+**The constant does not move and neither does any other.** 69 against 125 leaves 90 where it
+was, and a card that fills the region has a quantile at least as high as its mean, so Gate B's
+~172 still passes. Re-scored offline through the fix — the traces exist for exactly that — the
+two sessions go 2 fires to 15 of 15, and 0 to 7 on the under-lit one, with the empty stand
+still refused. `CARD_QUANTILE` is 0.9 rather than a maximum because a specular highlight, a
+lamp in shot or one hot pixel all carry a maximum and none is a card.
+
+**This is the paragraph below working as intended, and also its limit.** Every parameter here is
+derived from a measurement — but the measurements came from ONE rig, and what this found is
+that a constant can be right while the STATISTIC it is compared against is wrong. A second rig
+is the only thing that could have shown it, and the trace is what let it be diagnosed and fixed
+without a rig trip.
+
 **Every parameter is derived from a measurement, and the measurements are named where the
 constants live.** Gate B's recovered cadence (median gap 609.5 ms, robust σ 34 ms, floor
 458 ms, the feeder's own ~660 ms), the <250 ms capture round trip, and a worst-case

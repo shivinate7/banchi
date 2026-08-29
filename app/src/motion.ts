@@ -59,6 +59,19 @@ export const ROI_Y0 = Math.round(GRID_H * 0.1)
 export const ROI_Y1 = Math.round(GRID_H * 0.9)
 export const ROI_CELLS = (ROI_X1 - ROI_X0) * (ROI_Y1 - ROI_Y0)
 
+/* HOW BRIGHT THE BRIGHTEST TENTH OF THE WATCH REGION IS — the card-present statistic.
+ *
+ * 0.9 rather than the mean, for the reason `cardLumaFloor` gives at length: a card that
+ * fills the region and a card that occupies a third of it against a dark surround are the
+ * same card, and only one of them has a usable mean. Measured across two rigs, the tenth
+ * percentile from the top separates an empty stand (62-69) from a settled card (125-236)
+ * with the constant unchanged.
+ *
+ * 0.9 rather than 0.99 or the max: a specular highlight off the sleeve, a lamp clipping into
+ * frame or one hot pixel all carry a maximum, and none of them is a card. Asking that ~106
+ * of the 1064 watched cells are card-bright is a claim about an object being there. */
+export const CARD_QUANTILE = 0.9
+
 /* ------------------------------------------------------------------------- parameters */
 
 export type MotionParams = {
@@ -98,10 +111,33 @@ export type MotionParams = {
    *  a false pass is a visible duplicate undo fixes, a false suppression is a silent
    *  §5.5 loss. */
   tNovel: number
-  /** Mean ROI luma below which a settled scene is an empty stand, not a card. The Gate B
-   *  frames measure the card region at ~172 and the empty desk/backdrop at 30-65. NOT
-   *  geometry/detect.py's tone segmentation, which was measured at 0/53 on this rig —
-   *  a brightness floor over a fixed region needs none of that method's premises. */
+  /** ROI BRIGHT-QUANTILE below which a settled scene is an empty stand, not a card. The
+   *  Gate B frames measure the card region at ~172 and the empty desk/backdrop at 30-65.
+   *  NOT geometry/detect.py's tone segmentation, which was measured at 0/53 on this rig —
+   *  a brightness gate over a fixed region needs none of that method's premises.
+   *
+   *  IT WAS THE MEAN UNTIL 2026-08-29 AND THE MEAN IS A RIG-GEOMETRY TRAP. On the rig this
+   *  was tuned against, the card filled the watch region, so its mean read ~172 and a floor
+   *  of 90 sat comfortably between card and desk. Point a differently-framed camera at the
+   *  same feeder and the card occupies PART of the region against a dark surround — the
+   *  mean is then dominated by the background and collapses below the floor while the card
+   *  is plainly there. Measured on the owner's second rig, from two traces:
+   *
+   *      empty stand   mean 27-30    p90  62-69
+   *      card settled  mean 62-86    p90 125-236
+   *
+   *  The floor of 90 sits ABOVE BOTH MEANS, so the gate could never fire at any brightness
+   *  and no amount of relighting would have fixed it: the failure is geometric, not
+   *  photographic. Twenty cards in one session settled correctly and every one was refused.
+   *
+   *  THE QUANTILE SEPARATES WHAT THE MEAN CANNOT, and the constant does not move: 69 against
+   *  125 leaves 90 exactly where it was, now with a real gap either side. It is also
+   *  backward-compatible with the rig it was derived from — a card filling the region has a
+   *  bright quantile at least as high as its mean, so Gate B's ~172 still passes.
+   *
+   *  WHY A QUANTILE RATHER THAN A MAXIMUM: one specular highlight, a lamp in shot or a
+   *  single hot pixel would carry a max. `CARD_QUANTILE` asks that roughly a tenth of the
+   *  watch region is card-bright, which a glint cannot fake and a card cannot fail. */
   cardLumaFloor: number
   /** Continuous motion this long without settling is a jam or a hand — surfaced as
    *  `stalled`, and the machine does NOT fire. Firing anyway was argued (never silently
@@ -142,7 +178,10 @@ export type MotionDiagnostics = {
    *  against. On screen so the noise floor and the swap signal can be SEEN during tuning
    *  instead of inferred afterwards. */
   d: number
-  /** Mean ROI luma of the last frame — the card-present signal. */
+  /** The last frame's ROI bright quantile — the card-present signal, and the number
+   *  `cardLumaFloor` is set against. Reported rather than the mean BECAUSE it is what the
+   *  gate reads: a HUD showing a statistic the machine does not use is how a rig gets
+   *  debugged against the wrong number for two sessions. */
   luma: number
   frames: number
   fires: number
@@ -190,9 +229,11 @@ export class MotionMachine {
   step(nowMs: number, cells: Uint8ClampedArray | Float32Array): MotionEvent | null {
     this.diag.frames += 1
 
-    let luma = 0
-    for (let i = 0; i < cells.length; i += 1) luma += cells[i] as number
-    luma /= cells.length
+    /* THE CARD-PRESENT STATISTIC, and it is a quantile rather than a mean since 2026-08-29 —
+       `cardLumaFloor` carries the measurements and the reason. Selected with a partial sort
+       rather than a full one: this runs on every delivered frame at up to 30fps beside the
+       diff loop below, and `quantileOf` is O(n) average against O(n log n). */
+    const luma = quantileOf(cells, CARD_QUANTILE)
     this.diag.luma = luma
 
     if (this.prev === null) {
@@ -280,6 +321,42 @@ export class MotionMachine {
 }
 
 /* ---------------------------------------------------------------------- the DOM half */
+
+/* The value at `q` through the sorted cells, without sorting them.
+ *
+ * QUICKSELECT, AND IT COPIES FIRST. The caller's `cells` is the sampler's reused buffer —
+ * `step`'s own docstring is about exactly this hazard — and partitioning in place would
+ * scramble the frame the diff loop below is about to read. The copy is 1064 floats.
+ *
+ * Ties and short buffers fall out of the loop rather than being special-cased: `lo === hi`
+ * returns that element, and an empty buffer cannot reach here because `step` is only called
+ * with the ROI. */
+function quantileOf(cells: Uint8ClampedArray | Float32Array, q: number): number {
+  const values = Float32Array.from(cells)
+  const target = Math.min(values.length - 1, Math.max(0, Math.floor((values.length - 1) * q)))
+  let lo = 0
+  let hi = values.length - 1
+  while (lo < hi) {
+    const pivot = values[(lo + hi) >> 1] as number
+    let i = lo
+    let j = hi
+    while (i <= j) {
+      while ((values[i] as number) < pivot) i += 1
+      while ((values[j] as number) > pivot) j -= 1
+      if (i <= j) {
+        const swap = values[i] as number
+        values[i] = values[j] as number
+        values[j] = swap
+        i += 1
+        j -= 1
+      }
+    }
+    if (target <= j) hi = j
+    else if (target >= i) lo = i
+    else break
+  }
+  return values[target] as number
+}
 
 /* Rec.601 luma from RGBA, integer arithmetic. */
 function toLuma(rgba: Uint8ClampedArray, out: Float32Array): void {
