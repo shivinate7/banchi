@@ -1,0 +1,217 @@
+/* THE RUNS SCREEN — page chrome, and a box picker. Everything below the picker is
+ * `RunPanel.css`, which is unchanged by the move: this file draws the two things a route of its
+ * own has to draw for itself and nothing else.
+ *
+ * DOCS/DESIGN.MD'S PAGE-CHROME NUMBERS, LITERALLY. 16px of outer padding on all four sides; the
+ * title in the display face at 20px, which is that face's own published floor rather than a size
+ * picked to be small, sharing its line with the scope and the controls; a lede of ONE line at
+ * the metadata size; and the first row of real content — the box strip — inside 150px of the top
+ * of the viewport with the nav included. Measured in a browser at 1440x900 against the owner's
+ * store: the head is one line, the lede is one line at 20px, and the strip's first chip sits
+ * at **y=142**.
+ *
+ * AND `Check cost` SITS AT y=431, which is the number the move was actually for. On
+ * `#/inventory` this panel was the last row of the content column, so the pipeline's first
+ * press was a page-scroll below the card — D33 as amended records that cost, and D39 is what
+ * spent it.
+ *
+ * THE SHAPE IS `ReviewQueue.css`'s HEAD, DELIBERATELY REUSED RATHER THAN REDERIVED. That file
+ * worked out `display: contents` on the control group with `margin-left: auto` on its first
+ * child, and the wrap behaviour that keeps a long control from squeezing its neighbours instead
+ * of moving to a second line. Two owner screens with the same header problem should not have two
+ * answers to it; where this file differs from that one, it is because the content differs and
+ * not because the rule does.
+ */
+
+.runs {
+  padding: var(--s4);
+
+  /* NO `max-width` AND NO CENTRING, matching `.inventory`. docs/DESIGN.md requires the nav to
+     share the page's reading edge — App.css pads the strip to this same 16px so the first route
+     name sits directly above this screen's heading — and centring the page breaks that
+     alignment at every width except the one where the two happen to agree. The panel below
+     wants the measure as well: `RunPanel.css` records that at 1024px the head stops wrapping
+     four command names and the free steps unwrap with it. */
+}
+
+/* ---- the head ---- */
+
+.runs-head {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* `wrap`, and the worst case is what makes it safe: if the scope, the handoff escape and the
+   Reload cannot fit beside the title they wrap onto a second line, nothing is clipped, and the
+   header is still one block rather than the title-block-over-toolbar stack docs/DESIGN.md
+   measured at 240px on the inventory screen. */
+.runs-head-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.runs-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* `contents`, so the children are flex items of `.runs-head-top` and the wrap happens BETWEEN
+   controls rather than inside this group. `margin-left: auto` on the first child collects the
+   line's slack between the heading and the controls, which is App.css's own
+   `.app-nav-group-aside` mechanism. */
+.runs-controls {
+  display: contents;
+}
+
+.runs-controls > :first-child {
+  margin-left: auto;
+}
+
+/* Each of these is one indivisible thing — a scope sentence, a button — so the row wraps at the
+   gaps and never inside one. Without it the controls squeeze and a two-word button breaks over
+   three lines, which is the defect ReviewQueue.css records having rendered and fixed. */
+.runs-controls > * {
+  flex: none;
+}
+
+/* THE SCOPE IS A NUMBER AND A COUNT, so the utility face — docs/DESIGN.md gives every position,
+   count and price in the product to Martian Mono, and this line is two of the three. It is also
+   the one thing on this screen that decides what the money button below will spend against,
+   which is why it sits on the title's line rather than inside the panel. */
+.runs-scope {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* `BoxOps`' control, to the pixel. Two owner panels on two screens disagreeing about how tall a
+   button is was a real finding on 2026-08-26 — the run panel's were 17% taller than the box
+   operations' one panel down — and the answer then was to make them agree. This screen is new
+   ground and inherits the settled value rather than picking a third. */
+.runs-plain {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  cursor: pointer;
+}
+
+.runs-plain:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.runs-plain:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.runs-lede {
+  color: var(--muted);
+  margin-top: var(--s1);
+  font-size: 13px;
+}
+
+/* ---- a refusal from `GET /boxes` ---- */
+
+.runs-note {
+  max-width: 560px;
+  margin-top: var(--s3);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.runs-note-text {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  max-width: 76ch;
+}
+
+/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, so that
+   what you saw on screen is greppable against the server's own log. */
+.runs-machine {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  word-break: break-all;
+}
+
+/* ---- the box picker ---- */
+
+/* A WRAPPING STRIP OF CHIPS, WHICH IS `#/inventory`'s OWN IDIOM ONE SCREEN OVER. The walk picks
+   a shelf from a strip; this picks a box from one. A `<select>` was the other candidate and
+   loses on the fact the chips carry for free: the card count sits on every chip at once, so the
+   box worth running is visible without opening anything. Thirteen boxes fit one line at 1440
+   and wrap without a breakpoint below it. */
+.runs-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+/* NO FILL ON THE SELECTED CHIP, and this is docs/DESIGN.md's rule rather than a preference: the
+   solid accent means "there is exactly one thing to do", and this screen's one fill is the spend
+   button inside the panel below. A picker with thirteen choices is the definition of a screen
+   with more than one answer, so the selected state is carried by the ground and the border —
+   `--hover` is a declared text ground and every token on it clears 7:1. */
+.runs-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+  text-align: left;
+}
+
+.runs-box:hover {
+  background: var(--hover);
+}
+
+.runs-box-on {
+  background: var(--hover);
+  border-color: var(--ink);
+}
+
+.runs-box-name {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.runs-box-cards {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.runs-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The panel keeps its own margins internally; this is the gap between the picker and it. */
+.runs .run-panel {
+  margin-top: var(--s4);
+}

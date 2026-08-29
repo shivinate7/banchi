@@ -211,7 +211,21 @@
 .browse-body {
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
+  /* `1fr` ON THE LAST ROW, AND IT IS THE STICKY MAP THAT NEEDS IT — added 2026-08-29, when the
+     run panel left this screen and the content column stopped being the tall one.
+
+     `.browse-map` spans `1 / -1`, and a grid item spanning several AUTO tracks has its height
+     distributed across them. That was invisible while the console lived in row 3 at 625-1143px,
+     because row 3 alone already exceeded the map's viewport cap and there was nothing left to
+     distribute. With a 50px status line there instead, the map's ~700px went into rows 1 and 2 —
+     measured, a query matching no card put the runs row at y=266 with nothing above it. A
+     flexible track is excluded from that distribution, so the excess lands in row 3, where
+     `align-items: start` leaves the item itself exactly where it was.
+
+     THE SYMPTOM WAS THE ONE THIS FILE ALREADY HAD A TEST FOR, which is how it was caught: the
+     "box and runs survive a query that selects no card" case asserts the runs row within 24px of
+     the body's top, and it went red the moment the console left. */
+  grid-template-rows: auto auto 1fr;
   /* COLUMN GAP ON THE GRID, ROW GAP ON THE ITEMS, and the difference is what a hidden item does
      with it. `grid-template-rows` is declared explicitly (see above — the sticky map needs it),
      so the rows exist whether or not anything is in them, and a `row-gap` is drawn between

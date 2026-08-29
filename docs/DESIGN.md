@@ -439,10 +439,12 @@ makes the fill mean two different things on two screens. Reserving it for single
 screens means its meaning never has to be learned twice, and it is why the Fulfiller's
 pull-confirm is the loudest thing he ever sees.
 
-**THE THIRD FILL IN THE PRODUCT IS THE RUN PANEL'S SPEND BUTTON** (D33, 2026-08-24), and it
-is listed here so a later session reading the rule does not find it as an unexplained
-exception. `app/src/RunPanel.tsx` draws exactly one solid fill: the control that starts a
-paid identification run. It satisfies the rule literally rather than by argument — the
+**THE THIRD FILL IN THE PRODUCT IS THE RUN PANEL'S SPEND BUTTON** (D33, 2026-08-24; on
+`#/runs` since D39), and it is listed here so a later session reading the rule does not find it
+as an unexplained exception. `app/src/RunPanel.tsx` draws exactly one solid fill: the control
+that starts a paid identification run. **The screen around it draws none** — `Runs.css` says so
+in its own comment, because a box picker with thirteen chips is the definition of a screen with
+more than one answer. It satisfies the rule literally rather than by argument — the
 button **does not exist** until the free preflight has answered, and at the moment it is
 drawn the card count and the estimate are on screen directly above it and the only remaining
 action is to spend or not to. Every other control on that panel is an outline, including all
@@ -488,9 +490,23 @@ rewrites had checked.** A grid row is as tall as its tallest cell, and this pane
 the card while the card's own copies were row 2 — so the copies began wherever the console ended:
 y=938 with it closed and **y=1599 with a run picked**, 1039px of white below the card on a 2214px
 page. The answer to *where is this card* was positioned by a panel about something else, at an
-unbounded height. The panel is the last row of the content column now, at the full width, and it
-draws **625px closed against 799** and **1143px open against 1461** — no code change, because
-1024px unwraps its head, its notes and its free steps.
+unbounded height. The panel became the last row of the content column, at the full width, drawing
+**625px closed against 799** and **1143px open against 1461** — no code change, because 1024px
+unwraps its head, its notes and its free steps.
+
+**AND THEN THE PANEL LEFT THE SCREEN (D39, 2026-08-29), WHICH IS WHERE FOUR RELOCATIONS INSIDE
+ONE ROUTE WERE ALWAYS HEADED.** The owner gave the pipeline `#/runs`. Every measurement above
+stands as evidence about the days it was taken and none of it is rewritten; what it adds up to is
+the finding — the tallest thing this product draws was being fitted into a column whose question
+is *where is this card*, and each fix moved it somewhere that was better on one axis. What
+remains here is `BoxRuns`: one row saying whether anything is running over this box, and the
+control that hands the ticked selection over. **It must never become two rows**, for the reason
+the whole sequence above documents.
+
+**One rule of this section moved with it and one did not.** The page-chrome numbers now govern
+`#/runs` as a route of its own — 16px of padding, a 20px display title sharing its line with the
+scope, a one-line lede, first content inside 150px — and `app/src/Runs.css` draws them literally.
+The density paragraph below is unchanged and still describes the panel.
 
 **The density this section describes is kept and is no longer forced.** 14px step titles rather
 than a second rank of 20px display, 32px controls matching what `BoxOps` gives the same job — all

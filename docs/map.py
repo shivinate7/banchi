@@ -597,8 +597,11 @@ COMPONENTS = [
                 # D5 is what the list is for: five owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
-                # drop it and a render is named after one view and shows another.
-                "governed_by": ["D5", "D13", "D31"],
+                # drop it and a render is named after one view and shows another. D39 added
+                # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
+                # render that draws no stored capture photo, so the `views exposure` question
+                # the others raise does not arise for it.
+                "governed_by": ["D5", "D13", "D31", "D39"],
             },
         },
     },
@@ -786,14 +789,18 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: five hash routes since D31 merged #/boxes and #/pull "
-                                    "into #/inventory, one ROUTES table driving both "
+            "src/App.tsx": {"does": "the shell: SIX hash routes — five after D31 merged #/boxes and "
+                                    "#/pull into #/inventory, plus #/runs, which D39 gave the "
+                                    "pipeline on 2026-08-29 between Capture and the review queue. "
+                                    "Its chord key is `r` and the review queue moved to `q`, which "
+                                    "makes it the one route here whose key is not its initial. "
+                                    "One ROUTES table driving both "
                                     "the nav and the render, and the persona field that decides "
                                     "the Fulfiller's view gets no chrome at all. #/boxes WAS "
                                     "the seventh, registered with D20's screen rather than after "
                                     "it; D31 deleted the route and kept the screen — the "
                                     "registration rule stands, the route does not.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
@@ -976,7 +983,8 @@ COMPONENTS = [
                         "for with a data-integrity bug. The live cap it once declined to draw "
                         "comes off the wire now (SearchGroup.cap), which is the condition its "
                         "own comment named as what would settle it.",
-                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31"],
+                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31",
+                                "D33", "D39"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -1085,9 +1093,70 @@ COMPONENTS = [
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
                                       "governed_by": ["D5", "D7", "D31"]},
+            # ---- the runs screen (D39, 2026-08-29) ----
+            #
+            # The pipeline moved off #/inventory onto a route of its own at the owner's
+            # instruction. RunPanel.tsx did not change shape for it: these three files are the
+            # scope it used to get from the walk, answered where there is no walk.
+            "src/Runs.tsx": {"does": "#/runs: the page chrome and the box picker, with RunPanel "
+                                     "beneath them. Owns the SCOPE and nothing else — a strip of "
+                                     "boxes from GET /boxes, and the ticked selection handed over "
+                                     "from #/inventory through runHandoff.ts, validated against "
+                                     "the registry on arrival so a deleted box falls through to "
+                                     "the picker. NOTHING IS SCOPED ON ARRIVAL and it refuses to "
+                                     "default: a box chosen for the operator is a box they did "
+                                     "not read, and the next press after it spends money.",
+                             # D33 is the panel and its money gate; D39 is the move and the
+                             # handoff. D20 is the box object the picker draws. D27 is the
+                             # sessionStorage carve-out the handoff rides. D10 is cards-not-
+                             # high-water on the chip, D32 the crop pair whose estimate the
+                             # scope key voids, D38 the layout this left behind.
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38",
+                                             "D39"]},
+            "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
+                                     "on all four sides, a 20px display title sharing its line "
+                                     "with the scope and the controls, a one-line lede, and the "
+                                     "box strip as the first real content inside 150px of the top. "
+                                     "No fill on the selected chip — the solid accent is reserved "
+                                     "for a screen with exactly one thing to do, and this screen's "
+                                     "one fill is the spend button inside the panel.",
+                             "governed_by": ["D5", "D33", "D38", "D39"]},
+            "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
+                                        "line saying whether anything is running over this box, "
+                                        "and the control that hands the ticked selection to "
+                                        "#/runs. NO STEP, NO CONSOLE, NO FIGURES AND NOTHING THAT "
+                                        "SPENDS — D33's money gate is two presses that must both "
+                                        "happen where the estimate is on screen. Polls GET "
+                                        "/pipeline/runs on the panel's own 4s/20s cadence, "
+                                        "because a run started in a terminal begins live.",
+                                # D39 is why it exists at all; D33 is the gate it must not
+                                # become a second door to; D7 is the fungible-copy model the
+                                # ticked selection writes against; D13 is one truth on one Mac,
+                                # which is why a run this tab did not start still shows here.
+                                "governed_by": ["D5", "D7", "D13", "D33", "D39"]},
+            "src/BoxRuns.css": {"does": "one row, and the rule that it must stay one — the whole "
+                                        "argument for the panel leaving this screen was its "
+                                        "625-1143px height in a column whose question is 'where "
+                                        "is this card'. No fill; the control is drawn at "
+                                        "BoxOps' own 32px so the two panels in this screen agree "
+                                        "about how tall a control is.",
+                                "governed_by": ["D5", "D33", "D39"]},
+            "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
+                                          "carried from #/inventory to #/runs — key "
+                                          "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
+                                          "BEING READ, because a reload during a live run is "
+                                          "ordinary and a read-once handoff would silently widen "
+                                          "what the next press pays for; cleared by the operator, "
+                                          "by picking a box, and by arriving with nothing ticked. "
+                                          "Validates field by field and falls through to no "
+                                          "handoff at all rather than guessing.",
+                                  # D3 for the fall-through-rather-than-guess rule its validation
+                                  # copies; D13 for the browser-storage ban D27 carves out of.
+                                  "governed_by": ["D3", "D13", "D27", "D33", "D39"]},
             "src/RunPanel.tsx": {"does": "THE PIPELINE, ON A SCREEN. The four commands of batch "
-                                         "script v2 in the detail column of #/inventory, scoped to "
-                                         "the box the walk is in or the cards ticked in it. A two-step "
+                                         "script v2, on #/runs since D39 and in #/inventory's "
+                                         "content column before it, scoped to the box its picker "
+                                         "names or the cards handed over from the walk. A two-step "
                                          "money gate with no typing: Check cost prints the command's "
                                          "own preflight, and only then does the one solid accent fill "
                                          "on the panel appear. Join, emit and reconcile beside it, "
@@ -1102,9 +1171,12 @@ COMPONENTS = [
                                  # D1 is why one step spawns and three answer in the request. D9 is
                                  # the decisions document this panel edits as text rather than as a
                                  # form. D3 is the finish-claim bypass its join control offers. D31
-                                 # is why it is a panel on #/inventory and not a seventh route. D32
-                                 # is the crop and the max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32", "D33"]},
+                                 # is why it WAS a panel on #/inventory rather than a route; D39 is
+                                 # the owner overruling that, and this file is unchanged by it — the
+                                 # scope arrives as a prop either way. D32 is the crop and the
+                                 # max-edge beside it.
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32", "D33",
+                                                 "D39"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "

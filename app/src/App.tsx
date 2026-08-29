@@ -3,13 +3,14 @@ import { isEditableTarget } from './keys'
 import type { ComponentType } from 'react'
 
 import { CaptureScreen } from './CaptureScreen'
+import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
 
-/* The app shell: five routes across two personas, and the chrome that moves between them.
+/* The app shell: six routes across two personas, and the chrome that moves between them.
  *
  * IT WAS SEVEN UNTIL 2026-08-23 AND D31 TOOK TWO. `#/boxes` and `#/pull` rendered the same 767
  * records `#/inventory` renders, and the owner named the result: they "read as separate
@@ -81,8 +82,11 @@ type Route = {
  * three, and it is what made removing two of them a two-line edit rather than a hunt.
  *
  * ORDERED THE WAY THE OWNER WORKS, which is what a nav built from this table is read as: shoot
- * a box, answer what the run could not, then look up what is in the boxes — walk one, check a
- * position against its photo, and sell a copy out of it, all three now being one screen. The
+ * a box, run the pipeline over it, answer what the run could not, then look up what is in the
+ * boxes — walk one, check a position against its photo, and sell a copy out of it, all three
+ * now being one screen. `#/runs` took its place in the middle of that sentence on 2026-08-29,
+ * which is where the work actually happens: it was inside `#/inventory` — the `look` row — and
+ * the four commands are the loop, not a lookup. The
  * Fulfiller's view and the component sheet sit after that run of three because neither is a
  * step in it. `group` now says that out loud rather than leaving it to the order alone, which
  * is a fact the reader had to already know to see.
@@ -97,13 +101,31 @@ type Route = {
  */
 const ROUTES: readonly Route[] = [
   { path: '/', label: 'Capture', view: CaptureScreen, persona: 'owner', group: 'run', hotkey: 'c' },
+  /* THE PIPELINE, ON ITS OWN ROUTE SINCE 2026-08-29 (D39, the owner's ruling). It was a panel on
+   * `#/inventory` from D33 until then, and D33's argument for putting it there was about SCOPE:
+   * a run is done to a box or to cards ticked in one, and that screen is where both are chosen.
+   * `Runs.tsx` is what answers that argument rather than what ignores it — the box is picked
+   * again by a strip of its own, and the ticked selection is HANDED OVER from the one
+   * mass-select in the product (see `runHandoff.ts`), so nothing here re-implements the walk
+   * and there is still exactly one place a selection can be made.
+   *
+   * `group: 'run'` AND THE MIDDLE OF IT. The four commands are the loop of a session, and the
+   * table's own definition of `look` — "reached when asked, not on a rhythm" — is what the
+   * panel's old address said about them and what nobody had noticed it was saying. */
+  { path: '/runs', label: 'Runs', view: Runs, persona: 'owner', group: 'run', hotkey: 'r' },
   {
     path: '/review',
     label: 'Review queue',
     view: ReviewQueue,
     persona: 'owner',
     group: 'run',
-    hotkey: 'r',
+    /* `q` FOR QUEUE, AND IT IS THE ONE ROUTE HERE WHOSE KEY IS NOT ITS INITIAL. `r` went to
+     * `#/runs` on 2026-08-29 at the owner's instruction, and the reason it went there rather
+     * than the reverse is that `Runs` has no second word to fall back on and this route does.
+     * The mapping stays memorable for the reason the LEADER comment gives — a letter out of the
+     * route's own name, not an arbitrary slot — and the comment now says so instead of claiming
+     * every key is an initial. */
+    hotkey: 'q',
   },
   {
     path: '/inventory',
@@ -223,9 +245,16 @@ function hasChrome(route: Route | undefined): boolean {
  * rather than unlikely. While the leader is armed the next keydown is consumed here and
  * delivered nowhere else (see the capture-phase listener below), so a route key may be a
  * letter another screen has already bound: `,` then `c` reaches the capture screen and does
- * not also take a photograph. Every route therefore gets its own initial, which is the only
- * mapping with nothing to memorise. A scheme where Capture had to be some other letter because
- * `c` was taken would be a scheme the owner has to learn.
+ * not also take a photograph. Every route therefore gets a letter out of its own NAME, which is
+ * the only mapping with nothing to memorise. A scheme where Capture had to be some other letter
+ * because `c` was taken would be a scheme the owner has to learn.
+ *
+ * THAT READ "its own initial" UNTIL 2026-08-29, and the weaker claim is the true one. `#/runs`
+ * arrived and took `r`; the review queue moved to `q`, for queue. Two routes here start with
+ * the same letter and the tie has to break somewhere — what keeps it learnable is that the key
+ * is still a letter the owner would say out loud when naming the screen, which `q` is and a
+ * free slot like `x` would not have been. If a third `r` route ever arrives, this is the
+ * paragraph that says what the rule actually is.
  *
  * PUNCTUATION FOR THE LEADER, DELIBERATELY. Every contested key in the paragraph above is a
  * letter or a digit, because every one of them is a mnemonic for something on its screen. `,`
@@ -234,7 +263,7 @@ function hasChrome(route: Route | undefined): boolean {
  * this — was rejected precisely because it IS a mnemonic: the picker arriving on the capture
  * screen is a game and rarity picker, and `g` is the first letter it will reach for.
  *
- * WHAT IS BOUND AND WHAT IS NOT: the five routes of the run and the lookups, none of the
+ * WHAT IS BOUND AND WHAT IS NOT: the four routes of the run and the lookups, none of the
  * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
  *
  * MODIFIERS ARE NEVER PART OF IT. A held Cmd, Ctrl or Alt returns before anything else

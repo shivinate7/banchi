@@ -19,7 +19,7 @@ import {
   undoSale,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
-import { RunPanel } from './RunPanel'
+import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PullConfirm } from './PullConfirm'
@@ -661,18 +661,25 @@ export function Inventory() {
         onBoxes={setBoxRecords}
         onScope={setRunScope}
         reloadToken={reloads}
-        /* THE PIPELINE, BESIDE THE BOX IT RUNS OVER. D31 collapsed three screens into this one
-           on the finding that they were separate instances of one thing, and a run is not a
-           different thing again — it is something you do to the box you are looking at, or to
-           the cards you have just ticked in it. A route of its own would have to re-implement
-           the box strip, the search and the mass-select, and would then be free to disagree
-           with them about what is selected.
+        /* THE PIPELINE IS NO LONGER HERE, AND THIS IS WHAT IT LEFT BEHIND (D39). Until 2026-08-29
+           this slot held `RunPanel` whole, on D33's reasoning — a run is something you do to
+           the box you are looking at, or to the cards you have just ticked in it, and a route
+           of its own would have to re-implement the box strip, the search and the mass-select.
+           The owner moved it anyway; `#/runs` answers the box half with a picker of its own and
+           the SELECTION half by taking it from here, which is the one place in the product a
+           selection can be made.
+
+           SO WHAT STAYS IS THE HANDOFF AND THE ONE FACT WORTH A LINE — is anything running over
+           this box. `BoxRuns.tsx` carries both arguments; what matters at this call site is that
+           it is one row and can never become two.
 
            `boxPanel` AND NOT `detail`, and the difference is not cosmetic: `detail` is drawn
-           only when a card is selected. This went there first and vanished whenever the walk
-           had nothing picked, which made starting a run require choosing a card in the box —
-           a step with no reason behind it that a person could have worked out. */
-        boxPanel={<RunPanel scope={runScope} />}
+           only when a card is selected. The run panel went there first and vanished whenever
+           the walk had nothing picked, which made starting a run require choosing a card in the
+           box — a step with no reason behind it that a person could have worked out. The same
+           trap is live for the handoff, which is about the BOX and the ticks, never about a
+           card. */
+        boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
       />
 
       {pending === null ? null : (

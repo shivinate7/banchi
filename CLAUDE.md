@@ -80,12 +80,18 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
   in the comments beside the two keys.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
-- **The pipeline is reachable from a screen as of 2026-08-24** (D33). `#/inventory` carries a
-  Runs panel — not folded (D33, amended): a free preflight, a two-step money gate with no typing, the three free
-  steps, every command's stdout verbatim, and the import CSVs as downloads. `server/
-  pipeline_routes.py` is its own module because it is the one part of the server that can cause
-  money to be spent — one route does, it is named for it, and it refuses without an explicit
-  `confirm`. Everything else there is free and re-runnable.
+- **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
+  since 2026-08-29** (D39). Not folded (D33, amended): a free preflight, a two-step money gate
+  with no typing, the three free steps, every command's stdout verbatim, and the import CSVs as
+  downloads. `server/pipeline_routes.py` is its own module because it is the one part of the
+  server that can cause money to be spent — one route does, it is named for it, and it refuses
+  without an explicit `confirm`. Everything else there is free and re-runnable.
+
+  **A run's scope is a box, or cards ticked inside one, and only ONE of those is answered on
+  `#/runs`.** The box has a picker there. The ticked selection has no second mass-select and
+  never will: `#/inventory` keeps the only one and hands it over through
+  `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
+  the disagreement D33 named and D39 was built to avoid.
 - **A BOX IS ADDRESSED BY ITS NAME, AND NAMES ARE UNIQUE** (D20, amended 2026-08-25). The
   capture screen's Box field is ONE free-text control searching number and name together, and a
   new box is created by name — `store/master.py:next_box_number` allocates the lowest free
@@ -95,10 +101,13 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
   mark** — that rule governs the card index inside a box and nothing else. The name never
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
-- **The app has five screens and five routes** — four the owner's, one the Fulfiller's. It
-  said six and six while `app/src/App.tsx` carried seven, and D31 then merged two away:
-  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — browse the boxes,
-  or find a card. The components survive as `BoxOps` and `BoxBrowse`; only the routes went.
+- **The app has six screens and six routes** — five the owner's, one the Fulfiller's. It
+  said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
+  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — and D39 added
+  `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
+  the review queue. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  went. **The two movements are not in tension**: the merge deleted two routes rendering one
+  thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
   forbids any route *out* of it, and the owner's nav would fail four other rows of the same
   table on its own. Not-rendered rather than hidden: not focusable, not reachable by a screen

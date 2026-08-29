@@ -29,8 +29,14 @@ import { test, expect, type Page } from '@playwright/test'
  * at the Stop hook; this starts a browser. `make design-check` runs it.
  */
 
-const VIEW_ROUTE = '/#/inventory'
-const VIEW = 'main.inventory'
+/* `#/runs` SINCE 2026-08-29, AND IT WAS `#/inventory` FOR EVERY ASSERTION IN THIS FILE BEFORE
+ * THAT. The owner gave the pipeline a route of its own between Capture and the review queue;
+ * `Runs.tsx` is the screen and `RunPanel` is unchanged inside it. What moved in this file is
+ * two constants and one new step in `open` — the box is picked from a strip here instead of
+ * being whatever shelf the walk happened to land on, which is the visible half of the trade
+ * D33 argued against and the owner accepted. */
+const VIEW_ROUTE = '/#/runs'
+const VIEW = 'main.runs'
 
 /** What `identify --dry-run` prints, cut to the lines the panel parses out of it.
  *
@@ -299,7 +305,26 @@ async function open(
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   await expect(page.locator('.run-panel')).toBeVisible()
+
+  /* SCOPED BEFORE ANYTHING ELSE, because on this route nothing is scoped on arrival and the
+     spend gate reads `scope.box !== null`. On `#/inventory` the walk picked a shelf by itself
+     and every test in this file inherited a box without asking for one; here the box is a
+     deliberate press, which is what `Runs.tsx` chose — "a box chosen for the operator is a box
+     they did not read, and the next press after it spends money". The unscoped state is worth
+     a test of its own rather than a state every other test tiptoes around: see below. */
+  await pickBox(page)
   return wire
+}
+
+/** Picks box 9 out of the strip.
+ *
+ *  SCOPED TO `.runs-boxes`, AND THE FIRST DRAFT WAS NOT — `getByRole('button', {name: 'Box 9'})`
+ *  matched the chip AND a run row whose accessible name ends `box 9`, and Playwright's strict
+ *  mode caught it as an ambiguity rather than clicking the wrong one. Worth a helper rather than
+ *  a longer locator repeated twice: this is the one press that turns an unscoped screen into a
+ *  scoped one, and every test in this file depends on it having happened. */
+async function pickBox(page: Page) {
+  await page.locator('.runs-boxes').getByRole('button', { name: /^Box 9/ }).click()
 }
 
 /** Open the fold, where every pipeline control lives.
@@ -348,10 +373,11 @@ test('the panel is open on arrival, with all four commands named and reachable',
 
   /* AND IT STILL SAYS WHAT IT HOLDS. `BoxOps` states the rule and it survives the fold:
      "a disclosure that under-sold its contents is exactly how three routes came to have no
-     reachable control" — the pipeline being the largest instance this repo has had. The hint
-     is no longer a promise about what is behind a press; it is a caption over what is
-     already drawn, and naming all four is still worth the line. */
-  await expect(page.locator('.run-hint')).toContainText('identify · join · emit · reconcile')
+     reachable control" — the pipeline being the largest instance this repo has had. It was
+     `.run-hint` inside the panel until 2026-08-29 and is the page's lede now: on a route of its
+     own the four command names are what the screen IS, not a caption on a panel inside it. The
+     assertion follows the string rather than the element, which is the half that matters. */
+  await expect(page.locator('.runs-lede')).toContainText('identify · join · emit · reconcile')
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
@@ -362,13 +388,13 @@ test('a live run is announced where the panel already is', async ({ page }) => {
      batch takes minutes to hours and the operator did not necessarily start it in this tab
      (D13 puts one truth on one Mac, so a run started from a terminal is this screen's
      business too), and the screen has to say so on arrival. */
-  await expect(page.locator('.run-hint')).toContainText('1 running')
+  await expect(page.locator('.run-list-head')).toContainText('1 running')
   await expect(page.locator('.run-phase-identifying').first()).toContainText('running')
 })
 
 // ------------------------------------------------------------------- reachable at all
 
-test('the pipeline is on the inventory screen, with all four steps named', async ({ page }) => {
+test('the pipeline is on its own screen, with all four steps named', async ({ page }) => {
   await open(page)
   await openPanel(page)
 
@@ -682,4 +708,38 @@ test('a bypassed run says so on the run itself, not only in its log', async ({ p
   /* The owner's choice, in their words: "resolved by the claim, and the run report says so."
      A count that appeared only in a file nobody opened would not be that. */
   await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
+})
+
+// ------------------------------------------------------ the state the old address never had
+
+test('nothing is scoped on arrival, and the free preflight refuses until a box is picked', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* A STATE THAT DID NOT EXIST BEFORE 2026-08-29 AND NOW DOES, which is the honest cost of the
+     move and the reason it is asserted rather than mentioned. On `#/inventory` the walk had
+     always picked a shelf by the time this panel drew, so `scope.box` was never null in
+     practice; on a route of its own the first thing an operator sees is a picker with nothing
+     picked.
+
+     `Runs.tsx` REFUSES TO DEFAULT IT, and that is the behaviour under test: a box chosen for
+     the operator is a box they did not read, and the next press after it is the one that
+     spends money. So the screen says `Pick a box.` and the preflight — free, and the first
+     step of the money gate — is not pressable.
+
+     DISABLED RATHER THAN ABSENT, DELIBERATELY, and it is the one control on this screen that
+     gets to be. docs/DESIGN.md's absent-not-disabled rule is about the control that COMMITS —
+     the spend button, which still does not exist until the preflight has answered, asserted
+     above. This one is free, it is the next thing to press, and a control that vanishes until
+     an unrelated press elsewhere brings it back is a screen that looks broken. */
+  await page.reload()
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.runs-scope')).toContainText('Pick a box.')
+  await expect(page.getByRole('button', { name: 'Check cost' })).toBeDisabled()
+
+  // And it is one press away, with the scope said out loud before anything can be spent.
+  await pickBox(page)
+  await expect(page.locator('.runs-scope')).toContainText('Box 9 · the whole box')
+  await expect(page.getByRole('button', { name: 'Check cost' })).toBeEnabled()
 })

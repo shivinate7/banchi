@@ -22,13 +22,25 @@ import './RunPanel.css'
  * `CLAUDE.md`'s route-is-not-a-feature rule was written for, committed in the same session that
  * wrote the rule.
  *
- * WHY IT SITS ON `#/inventory` RATHER THAN ON A ROUTE OF ITS OWN. D31 collapsed three screens
- * into this one on the finding that they were separate instances of one thing, and a run is not
- * a different thing again: a run is something you do TO a box, or to the cards you have just
- * ticked inside one. The scope this panel offers is the scope the walk is already showing, which
- * is only true because they are the same screen — a separate route would have to re-implement
+ * IT SAT ON `#/inventory` UNTIL 2026-08-29 AND NOW HAS A ROUTE OF ITS OWN — `#/runs`, the
+ * owner's ruling, recorded as D39, with `Runs.tsx` as the screen. D33's argument for the old
+ * address was about SCOPE, and it is worth having in full because it is the specification D39
+ * had to satisfy rather than a prediction it disproved: a run is something you do TO a box, or
+ * to the cards you have just ticked inside one, so "a separate route would have to re-implement
  * the box strip, the search and the mass-select, and would then be free to disagree with them
- * about what "the selection" is.
+ * about what the selection is".
+ *
+ * THAT COST WAS PAID RATHER THAN WAIVED, AND THE SPLIT IS WHAT THIS FILE CARES ABOUT. The box is
+ * re-answered by a strip of its own, which is cheap and cannot disagree with anything. The
+ * SELECTION is not re-implemented at all: `#/inventory` keeps the one mass-select in the product
+ * and HANDS the ticked indices over (`runHandoff.ts`), so there is still exactly one place a
+ * selection can be made. What the move buys is that the four commands stopped being housed on
+ * the route `App.tsx`'s own table calls `look` — "reached when asked, not on a rhythm" — while
+ * being the loop a session actually is.
+ *
+ * THIS FILE IS GIVEN A SCOPE AND OWNS EVERYTHING ELSE. The picker, the handoff and the page
+ * chrome are `Runs.tsx`'s; every figure, console, poll and the whole money gate are this
+ * component's and did not move. That is the same split `BoxBrowse` and `Inventory.tsx` keep.
  *
  * THE FOUR STEPS ARE DRAWN IN ORDER AND ONLY ONE OF THEM SPENDS. That is D1's two-phase split
  * made visible: identify is slow, costs money and is spawned; join, emit and reconcile are free,
@@ -78,7 +90,7 @@ const IDLE_POLL_MS = 20000
  *  LIVE ONLY. On a finished run the same arithmetic is AGE, which is a different fact wearing
  *  the same shape. Under a minute, and on a run carrying no `created_at`, it reads exactly what
  *  it read before this existed. */
-function runningFor(row: { created_at?: string | null }): string {
+export function runningFor(row: { created_at?: string | null }): string {
   const at = row.created_at == null ? NaN : Date.parse(row.created_at)
   const mins = Number.isNaN(at) ? 0 : Math.max(0, Math.floor((Date.now() - at) / 60000))
   if (mins < 1) return 'running'
@@ -192,7 +204,7 @@ const CUSTOM_SAYS =
  *  by the route that starts a run from this screen, and NEITHER run this project has actually
  *  done carries one — so grouping on `row.scope.box` alone would file both of them under "other
  *  boxes", including the one the panel's own head is naming. */
-function boxOf(row: RunSummary): number | null {
+export function boxOf(row: RunSummary): number | null {
   if (row.scope != null) return row.scope.box
   const found = /box(\d+)/.exec(row.capture_dir ?? '')
   return found === null ? null : Number(found[1])
@@ -557,12 +569,6 @@ export function RunPanel({ scope }: RunPanelProps) {
 
   /* ------------------------------------------------------------------------------- render */
 
-  const scopeLine = !scoped
-    ? 'Pick a box in the walk to run it.'
-    : selection > 0
-      ? `Box ${scope.box} · ${selection} ticked card${selection === 1 ? '' : 's'}`
-      : `Box ${scope.box} · the whole box`
-
   const runRow = (row: RunSummary) => (
     <button
       key={row.run}
@@ -628,17 +634,24 @@ export function RunPanel({ scope }: RunPanelProps) {
     </a>
   ))
 
-  /* WHAT IS BEHIND THE FOLD, NAMED ON THE OUTSIDE OF IT. `BoxOps` on this same screen states
-   * the rule in its own comment — "a disclosure that under-sold its contents is exactly how
-   * three routes came to have no reachable control" — and the pipeline is the largest instance
-   * of that failure this repo has had, so the hint names all four commands and the live count. */
+  /* THE LIVE COUNT, WHICH USED TO RIDE THE PANEL'S OWN HEAD BESIDE THE FOUR COMMAND NAMES.
+   * That head is gone: on `#/runs` the page draws the title and the scope, and a panel titled
+   * `Runs` under a page titled `Runs` is one of them saying nothing. The four command names
+   * moved to the page's lede, where they are the sentence that says what this screen is.
+   *
+   * THE COUNT MOVED ONTO THE LIST INSTEAD OF DYING WITH THE HEAD, and it belongs there better
+   * than it did on the head: it is a caption for the rows directly beneath it, and `live` is the
+   * one figure on this screen that changes without anybody pressing anything. */
   const live = runs.filter((row) => row.live).length
-  const hint = [
-    'identify · join · emit · reconcile',
-    live > 0 ? `${live} running` : runs.length > 0 ? `${runs.length} run${runs.length === 1 ? '' : 's'}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const tally =
+    runs.length === 0
+      ? null
+      : [
+          `${runs.length} run${runs.length === 1 ? '' : 's'}`,
+          live > 0 ? `${live} running` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
 
   return (
     /* NOT FOLDED, AND THE COMMENT THAT USED TO SIT HERE SAID OTHERWISE FOR LONGER THAN THE
@@ -660,20 +673,12 @@ export function RunPanel({ scope }: RunPanelProps) {
      * Beside the card rather than under it, the pair costs the card's column NOTHING, which is
      * the same argument at its limit rather than a different one. */
     <div className="run-panel">
-      {/* TITLE, SCOPE, THEN THE HINT — reordered in the DOM on 2026-08-25 rather than with
-          `order`, so the tab ring and a screen reader walk what the eye walks. In the 400px column
-          this panel now lives in, the hint needs ~323px of Martian Mono and can share a line with
-          nothing; ordered between the other two it pushed BOTH onto lines of their own and the
-          head became three. Last, it takes one full-width line and reads on one line, and the
-          title keeps its line with the scope — which is docs/DESIGN.md's rule as written, "the
-          page title shares a line with the screen's controls and counts". Where a panel is wide
-          enough for all three, nothing wraps and this is one line again. */}
-      <p className="run-head">
-        <span className="run-title">Runs</span>
-        <span className="run-scope">{scopeLine}</span>
-        <span className="run-hint">{hint}</span>
-      </p>
-
+      {/* NO HEAD. It drew `Runs`, the scope and the four command names while this was a panel on
+          somebody else's screen and had to say what it was; on a route of its own the page says
+          all three above it, and a second title under the first is the drift docs/DESIGN.md's
+          page-chrome rule exists to stop — a title block over a toolbar, measured at 240px on
+          this product's worst screen. `Runs.tsx` carries the three pieces: title, scope on its
+          line, command names in the lede. */}
       {trouble === null ? null : (
         <div className="run-note">
           <p className="run-note-text">{trouble.message}</p>
@@ -838,6 +843,7 @@ export function RunPanel({ scope }: RunPanelProps) {
       </div>
 
       {/* ------------------------------------------------------------------ the run list */}
+      {tally === null ? null : <p className="run-list-head">{tally}</p>}
       <div className="run-list" aria-label="Every run">
         {runRows.length === 0 ? (
           <p className="run-empty">No runs yet.</p>
@@ -903,13 +909,45 @@ export function RunPanel({ scope }: RunPanelProps) {
                 <dt>SKUs</dt>
                 <dd>{count(detail.counts.skus)}</dd>
               </div>
+              {/* THE TWO QUEUE FIGURES ARE THE WAY INTO THE QUEUE, and until 2026-08-29 they
+                  were the only numbers on this screen that named a place the app could not
+                  reach: join writes a queue and the panel reported its depth with no route out
+                  of the report. That is `CLAUDE.md`'s route-is-not-a-feature rule in miniature —
+                  a capability with a screen, a screen with no way to it — and it cost one anchor
+                  each.
+
+                  BOTH GO TO `#/review`, which is the one screen that holds either. The parked
+                  queue is not a second route: `ReviewQueue.tsx` draws both files and its reason
+                  chips filter between them, so a link that promised otherwise would be
+                  promising a screen that does not exist.
+
+                  `aria-label` BECAUSE THE LINK TEXT IS A BARE NUMBER. "46" is a fine thing to
+                  read beside its `dt` and a useless accessible name on its own, and a screen
+                  reader announcing links out of context is exactly the case this attribute is
+                  for. */}
               <div>
                 <dt>Review</dt>
-                <dd>{count(detail.counts.queued_main)}</dd>
+                <dd>
+                  <a
+                    className="run-figure-link"
+                    href="#/review"
+                    aria-label={`Answer ${count(detail.counts.queued_main)} in the review queue`}
+                  >
+                    {count(detail.counts.queued_main)}
+                  </a>
+                </dd>
               </div>
               <div>
                 <dt>Parked</dt>
-                <dd>{count(detail.counts.queued_parked)}</dd>
+                <dd>
+                  <a
+                    className="run-figure-link"
+                    href="#/review"
+                    aria-label={`See ${count(detail.counts.queued_parked)} parked in the review queue`}
+                  >
+                    {count(detail.counts.queued_parked)}
+                  </a>
+                </dd>
               </div>
             </dl>
           )}

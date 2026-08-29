@@ -1,0 +1,60 @@
+/* The run status line on `#/inventory`, in the slot the run panel occupied until 2026-08-29.
+ *
+ * ONE ROW, AND IT MUST STAY ONE. The whole argument for the panel leaving this screen was that
+ * it was 625px closed and 1143px with a run picked, in a column whose question is "where is this
+ * card". Anything that grows here re-creates that. There is no state in this component that can
+ * add a line: the sentence is one sentence and the link is one link. */
+.boxruns {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  margin-top: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A box number and a duration, so the utility face — docs/DESIGN.md gives every count and
+   position in the product to Martian Mono, and this line is both. */
+.boxruns-said {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly one thing to do,
+   and this screen has a walk, a card, its copies and the box's own operations. It is drawn as
+   `.boxops-plain` is drawn one column over — same face, same size, same 32px — because the two
+   panels on this screen agreeing about how tall a control is was a finding worth keeping. */
+.boxruns-go {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  text-decoration: none;
+}
+
+.boxruns-go:hover {
+  background: var(--hover);
+}
+
+/* `aria-disabled` RATHER THAN A MISSING href, and it is drawn as what it is. There is no box to
+   run before a shelf is picked, and this state lasts exactly as long as the first read of the
+   walk — absent-rather-than-disabled is the rule for a control that COMMITS something (the
+   spend button, the release), and this one navigates to a screen that is perfectly reachable
+   from the nav two lines up. */
+.boxruns-go[aria-disabled='true'] {
+  color: var(--muted);
+  pointer-events: none;
+}

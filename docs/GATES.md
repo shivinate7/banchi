@@ -803,11 +803,18 @@ served by whatever was true when you started it.
     that started it, which is what makes `GET /pipeline/runs` able to show a run somebody
     started in a terminal.
 
-    `app/src/RunPanel.tsx` draws it UNFOLDED on `#/inventory` — sharing one `.browse-boxrun`
-    row with `BoxOps`, the owner having overruled the fold on 2026-08-24 (D33, amended) — and
-    `app/tests/run-panel.spec.ts` is the check the hard rule says does not exist — 13 cases,
-    of which the strongest is negative: **before the free preflight has answered, the control
-    that spends does not exist.** Absent, not disabled.
+    `app/src/RunPanel.tsx` draws it UNFOLDED, the owner having overruled the fold on 2026-08-24
+    (D33, amended), and `app/tests/run-panel.spec.ts` is the check the hard rule says does not
+    exist — the strongest of its cases being negative: **before the free preflight has answered,
+    the control that spends does not exist.** Absent, not disabled.
+
+    **THE PANEL'S ADDRESS MOVED TWICE AFTER THIS STEP AND THIS PARAGRAPH NAMED THE FIRST ONE.**
+    It read "on `#/inventory` — sharing one `.browse-boxrun` row with `BoxOps`", which D38
+    superseded within a day and D39 superseded outright: the pipeline has its own route, `#/runs`,
+    as of 2026-08-29. Corrected rather than left standing, because this is a build-order note
+    about what exists and not a measurement of a run — the numbers in the gate sections above are
+    what this file never rewrites. The case count went with it for the same reason `docs/DESIGN.md`
+    stopped publishing its assertion total: `npx playwright test` owns it.
 
     **What this step did NOT do**: no run has been started from the app. The panel's preflight
     and its three free steps have been exercised against the real store — a real `join` of box

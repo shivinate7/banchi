@@ -1300,6 +1300,21 @@ card.
 can enforce the boundary. Session scope is the point: a new tab is a new session, and nothing
 about a shift survives closing the browser.
 
+**A SECOND USE JOINED THE CARVE-OUT ON 2026-08-29, AND IT IS A HANDOFF RATHER THAN A MEMORY
+(D39).** `pkmnscan.run-scope` carries a box and the cards ticked in it from `#/inventory` to
+`#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product
+did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, and not
+a fact about where a card IS — and it is `sessionStorage` for the same reason everything else
+here is: a tick list that outlived the browser would be a filter over a spend button that nobody
+alive remembered setting.
+
+**It differs from the four above in what a reload means, which is why it is worth naming
+separately.** Those exist so a reload does not lose the shift. This one exists so a reload does
+not silently WIDEN what the next press pays for — and it is cleared deliberately on three
+routes rather than expiring: the operator's control, picking a box, and arriving from
+`#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or
+writes it.
+
 `useCamera.ts` already argues this carve-out informally for the device id and the rotation chip;
 this entry generalises what that file worked out and makes it checkable.
 
@@ -1471,8 +1486,15 @@ has broken D26.
 **`CLAUDE.md`'s "six screens and six routes" was already wrong before this entry and is
 rewritten by it.** The table in `app/src/App.tsx` carried SEVEN — the gallery makes the
 seventh, and that file's own comment says "it matters more at seven routes than it did at
-three" while `CLAUDE.md` still said six. Five remain: capture, review, inventory,
-fulfillment, gallery. The count is restated in `CLAUDE.md`, `docs/map.py` and
+three" while `CLAUDE.md` still said six. Five remained: capture, review, inventory,
+fulfillment, gallery.
+
+**It is SIX again as of 2026-08-29, and the sixth is `#/runs` (D39).** Recorded here because
+this is the entry that owns the count and because the direction matters: this merge deleted two
+routes that rendered one thing, and that ruling is untouched by a route being added for
+something no route rendered at all. `#/inventory` still holds the walk, the card, its copies and
+the box's operations; what left it is the pipeline, which was never one of the three screens
+this entry merged. The count is restated in `CLAUDE.md`, `docs/map.py` and
 `scripts/views.txt`, and the not-rendered-rather-than-hidden rule for the Fulfiller's nav is
 untouched — it was never about how many owner routes there are.
 
@@ -1656,11 +1678,19 @@ disabled button is one attribute away from pressable and that attribute is what 
 drops without noticing. `docs/DESIGN.md` permits a gate on a genuinely destructive action; the
 cheapest honest gate here is making the number impossible not to have seen.
 
-**The panel sits on `#/inventory`.** D31 collapsed three screens into that route on the finding
-that they were separate instances of one thing, and a run is not a different thing again: it is
-something done to the box being walked, or to the cards just ticked in it. A route of its own
-would re-implement the box strip, the search and the mass-select, and would then be free to
-disagree with them about what is selected.
+**The panel sat on `#/inventory` UNTIL 2026-08-29 AND NOW HAS A ROUTE — see D39, which is where
+that argument was overruled and how.** The reasoning here is unchanged and is what D39 was built
+against: D31 collapsed three screens into that route on the finding that they were separate
+instances of one thing, and a run is not a different thing again — it is something done to the
+box being walked, or to the cards just ticked in it. A route of its own would re-implement the
+box strip, the search and the mass-select, and would then be free to disagree with them about
+what is selected.
+
+**What D39 does with that is split it.** The box IS re-answered, by a picker of its own, which
+is cheap and cannot disagree with anything. The SELECTION is not: `#/inventory` keeps the one
+mass-select in the product and hands the ticked indices over, so there is still exactly one
+place a selection can be made. Read the paragraph above as the specification that build had to
+satisfy rather than as a placement this file still asserts.
 
 **IT IS NO LONGER FOLDED, AND NEITHER IS `BoxOps` (owner, 2026-08-24).** This entry read "folded
 by default", on `BoxOps`' measured reason: ~250px, reached once a box, on a screen whose question
@@ -2344,6 +2374,118 @@ now flipped once. What the assertion checks is that the two stay within a band o
 not for judging a card. If the owner finds themselves opening the review queue to look at a card
 they were already looking at here, the answer is not a bigger photo in this band — it is that this
 screen has quietly acquired the other screen's job, and that is worth naming before it is resized.
+
+---
+
+## D39 — The pipeline gets a route, and the selection is handed to it
+
+**BUILT 2026-08-29, and it reverses D33's placement on the owner's instruction after a design
+consultation they asked for.** The question put to that consultation was narrow — should the
+runs panel stay on `#/inventory`, move to `#/review`, or take a route of its own — and the
+recommendation was to keep it where it was. The owner overruled it: *"I want to give runs its
+own tab for now, put it between capture and review queue."* `#/runs` is the route,
+`app/src/Runs.tsx` is the screen, and `RunPanel.tsx` is unchanged inside it.
+
+**THE ARGUMENT AGAINST IS D33's AND IT IS RECORDED HERE RATHER THAN DELETED, because it names
+the one thing that could go wrong.** D33 put the panel on `#/inventory` because a run is
+something you do TO a box, or to the cards you have just ticked inside it, and that screen is
+where both are chosen: *"a route of its own would have to re-implement the box strip, the search
+and the mass-select, and would then be free to disagree with them about what is selected."* That
+sentence is still true, and it is the specification this build was written against rather than a
+prediction it disproved.
+
+**THE BOX IS RE-ANSWERED AND THE SELECTION IS NOT RE-IMPLEMENTED, WHICH IS THE WHOLE OF THE
+DESIGN.** The two halves of a scope have different costs and the answer splits on that:
+
+- **A box picker is cheap and cannot disagree with anything.** `#/runs` draws its own strip
+  from `GET /boxes` — thirteen chips carrying a card count each, the same idiom the walk's shelf
+  strip already uses. There is no second source of truth about which boxes exist.
+- **A ticked selection is expensive and would.** `BoxBrowse`'s mass-select is the ONLY one in
+  the product, and it is also what a box-wide claim correction reaches, so two of them would be
+  two answers to what "the selection" means. So there is still exactly one, and `#/inventory`
+  HANDS IT OVER: `app/src/runHandoff.ts` carries the box and its indices through
+  `sessionStorage`, and `#/runs` draws what it was handed with a control that says where it came
+  from and one that gives it back.
+
+**THE HANDOFF IS D27's CARVE-OUT AND NOT A NEW ONE.** That entry opens session storage to state
+that is device-local and meaningless anywhere else, against `CLAUDE.md`'s ban — a ban D13
+imposes so two devices cannot disagree about where a card IS. A tick list is not where a card is.
+The key is `pkmnscan.run-scope`, it is declared in one module, and every reader and writer in the
+app goes through that module's three functions.
+
+**IT IS NOT CLEARED BY BEING READ, AND IT IS CLEARED BY EVERY OTHER ROUTE INTO THE SCREEN.** A
+reload during a live run is ordinary — the panel polls, and an identify run takes minutes to
+hours — so a read-once handoff would silently drop the operator from "36 ticked cards" to "the
+whole box", which is a change to what the next press spends money on. What clears it: the
+operator's own control, picking any box on `#/runs`, and **arriving from `#/inventory` with
+nothing ticked**. That last one is the case that is easy to miss and the reason the control on
+`#/inventory` writes on every press rather than only when there is something to write — without
+it, ticking cards, going over, coming back and pressing again would restore yesterday's
+selection from storage.
+
+**A CARRIED BOX THAT NO LONGER EXISTS IS DROPPED WHOLE**, checked against the registry on
+arrival, because `runHandoff.ts` can validate a shape and only the screen knows which boxes are
+real. Falls through to the picker, which is where the operator would have been had nothing been
+handed over — D3 rung 0's rule one register down.
+
+**NOTHING IS SCOPED ON ARRIVAL, AND THAT IS A STATE THE OLD ADDRESS NEVER HAD.** On `#/inventory`
+the walk had always picked a shelf by the time the panel drew, so `scope.box` was never null in
+practice. `Runs.tsx` refuses to default it: a box chosen for the operator is a box they did not
+read, and the next press after it is the one that spends money. The free preflight is disabled
+until a box is picked — **disabled rather than absent, and it is the one control on this screen
+that gets to be.** `docs/DESIGN.md`'s absent-not-disabled rule is about the control that
+COMMITS; the spend button still does not exist until the preflight has answered. This one is
+free, it is the next thing to press, and a control that vanishes until an unrelated press brings
+it back is a screen that looks broken.
+
+**WHAT THE MOVE BUYS, and it is the half D33 could not.** `App.tsx`'s own route table calls
+`#/inventory` a `look` route — "reached when asked, not on a rhythm" — and housed the four
+commands there, which are the loop a session actually is. The panel is also the tallest thing
+this product draws (625px closed, 1143px with a run picked), and on `#/inventory` it was the
+last row of the content column, which put `Check cost` a page-scroll below the card. Neither was
+going to be answered by a fourth relocation inside one screen; D38 records the three that were
+already tried.
+
+**`,R` REACHES IT AND THE REVIEW QUEUE MOVED TO `,Q`** (the owner's instruction, in those
+terms). `App.tsx` said every route's chord key is its own INITIAL, and that claim is now false
+and is rewritten there rather than left standing: two routes start with `r`, `#/runs` has no
+second word to fall back on and the review queue does. What survives is the rule that actually
+makes it learnable — the key is a letter the owner would say out loud naming the screen.
+
+**WHAT STAYS ON `#/inventory` IS ONE ROW, AND IT MUST NEVER BECOME TWO.** `app/src/BoxRuns.tsx`
+sits in the slot the panel vacated and does exactly two things: it says whether anything is
+running over the box in front of you, and it is the handoff. **No step, no console, no figures,
+and above all no control that spends** — D33's money gate is two presses that must both happen
+where the estimate is on screen, and a spend reachable from a screen that never drew a preflight
+is precisely what that gate exists to prevent.
+
+**The live-run line is there because it is the one fact whose latency matters.**
+`identify/batch.py` logs only when a batch's status CHANGES, so a console written forty minutes
+ago is indistinguishable from a hang — which is why a run row says how long it has been running
+rather than inventing a progress bar. Whether the box you are standing at has one going is worth
+a line on the screen you are standing on; everything else about a run is a page away and should
+be.
+
+**A GRID DEFECT CAME WITH THE MOVE AND IS FIXED HERE, and it was caught by this repo's own
+test.** `.browse-map` spans `grid-row: 1 / -1`, and a grid item spanning several AUTO tracks has
+its height distributed across them. That was invisible while the console sat in row 3 at
+625–1143px, because row 3 alone exceeded the sticky map's viewport cap. With a 50px status line
+there instead, the map's ~700px went into rows 1 and 2 — measured, a query matching no card put
+the runs row at y=266 with nothing above it. The last row is `1fr` now, which excludes it from
+that distribution. The case that went red is the one D38 wrote for the opposite defect, which is
+the argument for having written it as a measurement rather than as a class name.
+
+**THE TWO QUEUE FIGURES BECAME THE WAY INTO THE QUEUE.** `join` writes a review queue and the
+panel reported its depth with no route out of the report — a capability with a screen, and a
+screen with no way to it, which is `CLAUDE.md`'s route-is-not-a-feature rule in miniature. Both
+`Review` and `Parked` link to `#/review`; parked is not a second route, because
+`ReviewQueue.tsx` draws both files and its reason chips filter between them.
+
+**WHAT WOULD REOPEN THIS: the handoff going unused.** If runs are never started from a ticked
+selection, the mass-select coupling this entry spends most of its length preserving is
+decorative, and the honest simplification is to delete `BoxRuns`' handoff and leave the status
+line. The measurement is `scope.cards` being non-null on any run in `runs/`, and
+`docs/GATES.md` step 15 still records that no run has ever been started from the app at all.
 
 ---
 

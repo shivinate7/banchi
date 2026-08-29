@@ -25,68 +25,43 @@
   border-radius: var(--r);
 }
 
-/* The summary row: marker, title, what is inside, and the scope — one line, which is
- * docs/DESIGN.md's page-chrome rule ("the page title shares a line with the screen's controls
- * and counts") applied to a panel heading. `list-style: none` plus the ::-webkit- rule is what
- * removes the platform's own marker so the drawn one is the only one; BoxOps.css does the same
- * and gives the reason — a drawn marker renders identically in `make screenshot` and in the
- * browser the owner works in. */
-/* Neither `cursor: pointer` nor `list-style` — see BoxOps.css's note on the same pair. This
-   was a `<summary>` and is a `<p>`; a heading that offers a hand cursor and answers nothing
-   is a click spent discovering that it is not a control. */
-/* WRAPS RATHER THAN CRUSHES, as of 2026-08-25, and the one-line rule above survives it — a rule
-   the CSS was not actually keeping. `.run-scope` was `flex: 0 0 auto`, so `Box 2 · the whole box`
-   held ~176px it never gave back and `.run-hint` absorbed the entire squeeze: in the 400px column
-   this panel now lives in the hint got ~130px and its four command names wrapped to THREE text
-   lines inside it. A 50px head, all of it illegible.
+/* THE PANEL HAS NO HEAD, AND FOUR RULES DIED WITH IT ON 2026-08-29 — `.run-head`,
+ * `.run-title`, `.run-scope` and `.run-hint`. Recorded rather than deleted silently, because
+ * their comments carried two measurements worth keeping and one argument that has moved.
+ *
+ * WHY THEY WENT. The panel moved to a route of its own (`Runs.tsx`), where the PAGE draws the
+ * title, the scope and the four command names. A panel titled `Runs` sitting under a page
+ * titled `Runs` is one of them saying nothing, and a title block stacked over a control bar is
+ * the exact shape docs/DESIGN.md's page-chrome rule measures at 240px on this product's worst
+ * screen. What was a panel heading is now page chrome, which is where that rule wanted it.
+ *
+ * WHAT THE OLD COMMENTS MEASURED, kept because both are about wrapping in a narrow column and
+ * both will be needed again by whatever next has to fit in one. In the 370px track this panel
+ * used to live in, `.run-scope` at `flex: 0 0 auto` held ~176px it never gave back and the hint
+ * absorbed the whole squeeze — four command names shredded over three lines, a 50px head, all
+ * of it illegible. Wrapping alone made it worse before it made it better: with the hint ordered
+ * between the other two, `flex-wrap` put all three on lines of their own at 81px. The hint needs
+ * ~323px, so it can share a line with nothing; ordering it LAST gave a 55px head that read.
+ * On its own route the panel has the page's full measure and none of that binds.
+ *
+ * `.run-title`'s 20px WAS THE DISPLAY FACE'S PUBLISHED FLOOR, and that argument did not die
+ * with the rule — it moved to `.runs-title` in Runs.css, where it is now a page title rather
+ * than a panel heading and the floor means what docs/DESIGN.md wrote it to mean.
+ *
+ * THE DISCLOSURE IS STILL GONE (owner, 2026-08-24), same instruction as BoxOps': the
+ * pipeline's controls are on the screen, not one press behind it. Nothing here folds, and
+ * `app/tests/run-panel.spec.ts` asserts that as an absence — `<details>` and `<summary>` at
+ * zero inside the panel — which is the one form of the ruling no relocation can falsify. */
 
-   WRAPPING ALONE MADE THAT WORSE BEFORE IT MADE IT BETTER, and the measurement is kept because the
-   fix is not the obvious one. With the hint still ordered between the title and the scope,
-   `flex-wrap` put all three on lines of their own — 81px. The hint needs ~323px against a 366px
-   column, so it can share a line with nothing; what it must not do is break the line the other two
-   fit on together. It is ordered LAST in the markup for that reason (see RunPanel.tsx), and the
-   result is a 55px head whose hint reads on one line. Five pixels against three lines of shredded
-   mono. */
-.run-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-/* THE DISCLOSURE IS GONE (owner, 2026-08-24), same instruction as BoxOps': the pipeline's
-   controls are on the screen, not one press behind it. D33 argued the fold on the grounds
-   that the panel is ~250px and reached once a box — but once a box IS every box, which is
-   the definition of the primary task, and NN/g prices a collapsed panel at five accumulating
-   substeps before the first click of real work. */
-
-/* What is inside, so the fold does not have to be opened to find out. The pipeline is the
- * biggest thing this product has ever hidden behind no control at all, so it is named in full. */
-.run-hint {
-  flex: 1 1 auto;
-  min-width: 0;
+/* THE RUN LIST'S CAPTION, which is where the live count went when the head went. It is a
+   caption for the rows directly beneath it rather than a heading of its own: no display face,
+   no rank, the same utility face and 11px every other count in this panel is drawn in. */
+.run-list-head {
   font-family: var(--util);
   font-size: 11px;
+  letter-spacing: 0.08em;
   color: var(--muted);
-}
-
-/* 20px is the display face's own published floor, so this is as small as it is allowed to be
- * drawn rather than a size picked to be small — docs/DESIGN.md's page-chrome rule, applied to
- * a panel heading. It shares its line with the scope, which is that rule's other half. */
-.run-title {
-  margin: 0;
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.run-scope {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--muted);
+  margin-bottom: calc(var(--s3) * -1 + var(--s1));
 }
 
 /* --------------------------------------------------------------------------- refusals */
@@ -147,9 +122,11 @@
   gap: var(--s2);
 }
 
-/* NOT THE PANEL TITLE'S SIZE, as of 2026-08-25. This was 20px display 700 — identical to
-   `.run-title` — so an open run stacked FOUR headings at the panel heading's own weight and the
-   hierarchy said the steps and the panel were the same rank.
+/* NOT THE TITLE'S SIZE, as of 2026-08-25. This was 20px display 700 — identical to the panel's
+   own heading — so an open run stacked FOUR headings at that weight and the hierarchy said the
+   steps and the panel were the same rank. (The heading it matched was `.run-title`, deleted
+   2026-08-29 when the panel got a route and the page took over the title; the rank argument is
+   unchanged and now runs against `.runs-title` in Runs.css.)
 
    13px BODY 700, WHICH IS `.boxops-op-label`'s, AND THE NUMBER MOVED ONCE MORE ON 2026-08-26.
    It was 14, matching `.boxops-plain` — the chip the box's operations used to be. Those became
@@ -159,9 +136,9 @@
    rebuild deleted it and this reference outlived it.)
 
    The face changes with the size because it has to: docs/DESIGN.md draws the display face at
-   >= 20px only, and `.run-title`'s comment is exactly right that 20px is its published floor.
-   That floor is an argument about `.run-title`, which keeps it — it makes no claim about a
-   heading nested inside the panel it names. */
+   >= 20px only, and 20px is that face's published floor. That floor is an argument about the
+   PAGE title, which keeps it — it makes no claim about a heading nested three levels inside
+   the panel that page draws. */
 .run-step-title {
   font-family: var(--body);
   font-size: 13px;
@@ -521,6 +498,27 @@
 }
 
 /* ------------------------------------------------------------------------- the run list */
+
+/* THE TWO QUEUE FIGURES ARE LINKS, and they are drawn as the numbers they are rather than as
+   buttons — the figure grid's rhythm is four numbers in a 2x2 and a control in one cell would
+   break it. What marks them is an underline the ink already carries, which is the web's own
+   convention for "this goes somewhere" and needs no colour of its own: the accent is reserved
+   for a screen with exactly one thing to do (docs/DESIGN.md), and a run with a queue has at
+   least two.
+
+   `inherit`, SO A COUNT NEVER CHANGES SIZE BY BECOMING REACHABLE. `.run-figures dd` sets the
+   face and the size for all four cells; two of them being anchors must not make those two read
+   differently from `Cards in` and `SKUs` beside them. */
+.run-figure-link {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.run-figure-link:hover {
+  text-decoration-thickness: 2px;
+}
 
 .run-list {
   display: flex;

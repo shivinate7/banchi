@@ -1405,15 +1405,16 @@ test('the box lives in the walk\'s column, and the runs come after the copies', 
   await expect(page.getByRole('button', { name: /^Register/ })).toHaveCount(0)
   await expect(page.locator('.boxops-new')).toHaveCount(0)
 
-  /* THE RUNS HAD A THIRD COLUMN UNTIL 2026-08-26 AND NOW HAVE THE LAST ROW. Every assertion in
-     this block is the one it always was — the box is not in the run panel, the run panel is not
-     inside the card's guard, and there is exactly one of it as a direct child of the body — and
-     all four hold under either arrangement, which is why the ordering below is asserted as a
-     MEASUREMENT rather than as a class name. A class assertion goes green the moment somebody
-     reintroduces a tall sibling in row 1 under a different name, and a tall sibling in row 1 is
-     the entire defect this layout was rebuilt to remove. */
+  /* THE RUNS HAD A THIRD COLUMN UNTIL 2026-08-26, THE LAST ROW UNTIL 2026-08-29, AND NOW A ROUTE.
+     The slot survives and what sits in it is one status line — `BoxRuns`, which says whether
+     anything is running over this box and hands the ticked selection to `#/runs`. Every
+     assertion here is the one it always was, re-pointed: the box is not in that slot, the slot
+     is not inside the card's guard, and it is a direct child of the body. The ordering below
+     stays a MEASUREMENT rather than a class name, because a class assertion goes green the
+     moment somebody reintroduces a tall sibling in row 1 under a different name, and a tall
+     sibling in row 1 is the entire defect this layout was rebuilt to remove. */
   await expect(page.locator('.browse-boxrun .boxops-box')).toHaveCount(0)
-  await expect(page.locator('.browse-boxrun .run-panel')).toHaveCount(1)
+  await expect(page.locator('.browse-boxrun .boxruns')).toHaveCount(1)
   await expect(page.locator('.browse-side .browse-boxrun')).toHaveCount(0)
   await expect(page.locator('.browse-body > .browse-boxrun')).toHaveCount(1)
 
@@ -1422,10 +1423,13 @@ test('the box lives in the walk\'s column, and the runs come after the copies', 
   if (copies === null || runs === null) throw new Error('the content column did not render')
   expect(runs.y).toBeGreaterThanOrEqual(copies.y + copies.height - 1)
 
-  /* EXACTLY ONE RUN PANEL. `run-panel.spec.ts` guards the money button with `toHaveCount(0)` four
-     times and `toHaveCount(1)` once, so a duplicated panel would pass every assertion in that file
-     but one. Duplication is a real risk here: `{detail}` genuinely does render at two sites. */
-  await expect(page.locator('.run-panel')).toHaveCount(1)
+  /* AND NO RUN PANEL AT ALL, WHICH IS THE 2026-08-29 HALF. It moved to `#/runs`; this asserts it
+     did not leave a copy behind. `run-panel.spec.ts` guards the money button with `toHaveCount(0)`
+     four times and `toHaveCount(1)` once on ITS route, so a second panel rendered here would be
+     invisible to that file entirely — and a spend control on a screen that never showed a
+     preflight is what D33's money gate exists to prevent. */
+  await expect(page.locator('.run-panel')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Check cost' })).toHaveCount(0)
 
   /* AND THE COPIES ARE A BODY CHILD RATHER THAN A CARD CHILD. `.browse-under` renders `{detail}`,
      which carries a receipt whose twenty-second undo may still be running, and the whole reason
@@ -1436,7 +1440,7 @@ test('the box lives in the walk\'s column, and the runs come after the copies', 
   await expect(page.locator('.browse-side .browse-under')).toHaveCount(0)
 })
 
-test('the copies of a card are not positioned by the pipeline console', async ({ page }) => {
+test('the copies of a card cannot be positioned by the pipeline console', async ({ page }) => {
   await open(page)
 
   /* THE DEFECT THIS PREVENTS SHIPPED BECAUSE NOTHING ASSERTED IT (found by the owner, 2026-08-26:
@@ -1448,80 +1452,24 @@ test('the copies of a card are not positioned by the pipeline console', async ({
      Measured on the owner's store before the fix: y=938 with the console closed, 378px of white
      below the card; y=1599 with a run PICKED, 1039px of white on a 2214px page.
 
-     THE PICKED RUN IS LOAD-BEARING AND IS NOT SET DRESSING. The console is 799px closed and
-     1461px open, so a fixture that never opened one would pass against the code that has the bug
-     at less than half its real size. This clicks a run first, which is also the state the panel's
-     own 4s/20s poll leaves an operator in.
+     THIS TEST WAS REWRITTEN ON 2026-08-29 AND THE MEASUREMENT IS THE SAME ONE INVERTED. It used
+     to mock a run, click it, and assert the console was TALLER than the card — because that is
+     what made the old grid's failure reachable at full size. The console is not on this screen
+     any more (the owner gave it `#/runs`), so the fixture is gone and what is asserted instead
+     is that the thing left in its slot is SHORTER than the card band. That is the property the
+     old row order was fighting for, stated directly.
 
-     ASSERTED AS A GAP AND AS A VIEWPORT, because the two failures are different: a gap catches
-     the console coming back into row 1, and `toBeInViewport` catches anything else growing
-     between the band and the copies. */
-  /* THE CONSOLE IS MADE TALL ON PURPOSE, and this file's own run-list stub is empty because the
-     run panel belongs to `run-panel.spec.ts`. Registered AFTER `open()` so it wins: Playwright
-     matches handlers in reverse registration order, which `run-panel.spec.ts` records as having
-     silently defeated a test that looked correct. */
-  await page.route(/\/pipeline\/runs$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        runs: [
-          {
-            run: '2026-08-24-box2-01',
-            path: '/tmp/runs/2026-08-24-box2-01',
-            capture_dir: '/tmp/captures/cards/box2',
-            scope: { box: 2, whole_box: true, cards: null },
-            live: false,
-            pid: null,
-            phase: 'emit',
-            batch_ids: [],
-            collected: true,
-            joined: true,
-            counts: {},
-            bypass_detection: false,
-            bypassed: null,
-            usage: {},
-          },
-        ],
-      }),
-    })
-  })
-  await page.route(/\/pipeline\/runs\/[^/]+$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        run: '2026-08-24-box2-01',
-        path: '/tmp/runs/2026-08-24-box2-01',
-        capture_dir: '/tmp/captures/cards/box2',
-        scope: { box: 2, whole_box: true, cards: null },
-        live: false,
-        pid: null,
-        phase: 'emit',
-        batch_ids: [],
-        collected: true,
-        joined: true,
-        counts: {},
-        bypass_detection: false,
-        bypassed: null,
-        usage: {},
-        console: 'identified      543/543',
-        files: [{ name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true }],
-        manifest: {},
-      }),
-    })
-  })
-  await page.reload()
-  await expect(page.locator('.browse-sectfold').first()).toBeVisible()
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
+     THE OLD FIXTURE IS NOT MISSED AND THE OLD GUARANTEE IS NOT WEAKER. A console that cannot be
+     rendered here cannot set this row's height; `run-panel.spec.ts` owns everything about the
+     panel's own layout on its own route. What stays here is the gap and the viewport, because
+     those catch ANYTHING growing between the band and the copies — including whatever is put in
+     this slot next. */
+  await expect(page.locator('.run-panel')).toHaveCount(0)
 
-  /* The console really is the taller thing now, which is what makes the assertion below mean
-     something: under the old grid it would set row 1's height and push the copies past it. */
   const console_ = await page.locator('.browse-boxrun').boundingBox()
   const card = await page.locator('.browse-side').boundingBox()
   if (console_ === null || card === null) throw new Error('the content column did not render')
-  expect(console_.height).toBeGreaterThan(card.height)
+  expect(console_.height).toBeLessThan(card.height)
 
   const band = await page.locator('.browse-detail').boundingBox()
   const copies = await page.locator('.browse-under').boundingBox()
@@ -1529,6 +1477,38 @@ test('the copies of a card are not positioned by the pipeline console', async ({
   expect(copies.y - (band.y + band.height)).toBeLessThan(48)
 
   await expect(page.locator('.card-locations-row').first()).toBeInViewport()
+})
+
+test('the ticked selection is handed to the runs screen, and never lost silently', async ({
+  page,
+}) => {
+  await open(page)
+  /* COLLAPSED IS THE RESTING STATE (D31), so there are no rows to tick until the sections are
+     open. The same two lines every mass-select case in this file opens with. */
+  await expandAll(page)
+
+  /* THE CAPABILITY THIS PROTECTS IS OLDER THAN THE SCREEN IT NOW CROSSES. `RunPanel` can scope a
+     run to a ticked subset — a real server route that builds a symlink directory — and the ONE
+     mass-select in the product is on this screen. When the panel moved to `#/runs` on 2026-08-29
+     that capability was one edit away from being reachable from nowhere, which is exactly
+     `CLAUDE.md`'s route-is-not-a-feature rule pointing at the change that caused it.
+
+     ASSERTED AT THE SEAM RATHER THAN END TO END, deliberately: what `#/runs` does with a handoff
+     is `run-panel.spec.ts`'s subject, and what this file owns is that the selection leaves here
+     with the right box and the right count on it. */
+  const first = page.locator('.browse-rowtick').first()
+  await expect(first).toBeVisible()
+  await first.check()
+
+  const go = page.locator('.boxruns-go')
+  await expect(go).toContainText('ticked card')
+  await expect(go).toHaveAttribute('href', '#/runs')
+
+  /* AND UNTICKING PUTS THE WHOLE BOX BACK ON THE CONTROL. The label is the only place the scope
+     of the next run is stated on this screen, so a stale count here is a person pressing a link
+     that says 1 card and arriving at a screen that says the whole box — or worse, the reverse. */
+  await first.uncheck()
+  await expect(go).toContainText('Run box')
 })
 
 test('the photograph is sized by its column, not by the rows beside it', async ({ page }) => {
@@ -1639,7 +1619,7 @@ test('the box and the runs survive a query that selects no card', async ({ page 
   await page.locator('.search-field-input').fill('zzzz-no-such-card')
   await expect(page.locator('.browse-detail')).toHaveCount(0)
 
-  await expect(page.locator('.run-panel')).toBeVisible()
+  await expect(page.locator('.boxruns')).toBeVisible()
   await expect(page.locator('.browse-map .boxops-box')).toHaveCount(1)
   await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
 

@@ -39,6 +39,13 @@ capture       http://localhost:5173/#/
 review        http://localhost:5173/#/review
 inventory     http://localhost:5173/#/inventory
 
+# The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason
+# every other line here has one: it is a screen a human looks at, and with the capture server
+# down it draws its own refusal rather than the box picker — which is a real state and the
+# wrong one to judge the layout by. It draws no stored capture photo at all, so the `views
+# exposure` question the other owner routes raise does not arise here.
+runs          http://localhost:5173/#/runs
+
 # The Fulfiller's, and the one render where the absence of something is the point: no nav
 # strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
 # not what enforces it — it is what lets a person see the view the assertions describe, at the
