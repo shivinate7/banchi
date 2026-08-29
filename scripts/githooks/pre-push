@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Nothing pushes to main. The remote half of the guard beside this file.
+#
+# WHY THIS EXISTS SEPARATELY FROM reference-transaction. That hook stops main moving in this
+# clone. It says nothing about `git push origin HEAD:main`, which never touches refs/heads/main
+# locally and lands the commit on GitHub anyway — and that is not hypothetical: origin/main's
+# reflog shows five consecutive `update by push`, two of them while sessions were mid-task on
+# branches cut from it.
+#
+# THIS IS THE SUBSTITUTE FOR BRANCH PROTECTION, NOT A BELT-AND-BRACES ADDITION TO IT.
+# GitHub refuses both rulesets and classic branch protection on this repository — free plan,
+# private repo, HTTP 403 "Upgrade to GitHub Pro or make this repository public". Public is
+# forbidden by the repo-wide opsec rule about code cards, so the server-side gate is not
+# available at any price short of Pro, and this hook is what stands in for it. It is weaker in
+# one specific way worth naming rather than glossing: it lives on this machine, so it protects
+# this clone and not the repository. A push from anywhere else is unguarded.
+#
+# Git passes the remote name as $1 and its URL as $2, and one
+# `<local ref> <local sha> <remote ref> <remote sha>` line per ref on stdin.
+#
+# Refuses ONLY on a line whose REMOTE ref is main. A push of a branch is untouched, which is
+# the case this workflow runs on constantly, and anything unparseable is allowed — the same
+# fail-open rule its sibling states at length.
+
+set -uo pipefail
+
+[ "${PKMNSCAN_MAIN:-}" = "off" ] && exit 0
+
+remote="${1:-origin}"
+
+while IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do
+  [ "${remote_ref:-}" = "refs/heads/main" ] || continue
+
+  echo "" >&2
+  echo "REFUSED: nothing pushes to main." >&2
+  echo "" >&2
+  echo "  $remote  ${local_ref:-<deleting>} -> refs/heads/main" >&2
+  echo "" >&2
+  echo "  main advances by merging a pull request on GitHub, never by a push from a" >&2
+  echo "  session. Two sessions pushed straight to it today; both moved main under" >&2
+  echo "  worktrees that were cut from it." >&2
+  echo "" >&2
+  echo "  Push your branch instead and open one:" >&2
+  echo "" >&2
+  echo "    git push -u origin \$(git branch --show-current)" >&2
+  echo "    gh pr create --fill" >&2
+  echo "" >&2
+  echo "  Escape hatch, deliberate and loud:   PKMNSCAN_MAIN=off git push ..." >&2
+  echo "" >&2
+  exit 1
+done
+
+exit 0

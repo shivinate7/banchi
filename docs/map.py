@@ -391,10 +391,11 @@ COMPONENTS = [
         "status": "built",
         "does": "the gate machinery and the tools around it: the pre-commit hook, the docs "
                 "audit it runs, the opsec guard that is that hook's disabled PreToolUse "
-                "twin, the Stop hook, the PostToolUse typecheck hook, D17's "
+                "twin, D42's two-hook guard over main and the throwaway-repo self-test that "
+                "proves it, the Stop hook, the PostToolUse typecheck hook, D17's "
                 "decision-context hook, `make status`, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
-        "governed_by": ["D14", "D16", "D17", "D18"],
+        "governed_by": ["D14", "D16", "D17", "D18", "D42"],
         # What the orphan rule covers here, and the one hole no declaration can close.
         # Declaring the key is also what makes the scan recursive, which is the only way
         # scripts/githooks/ is reached at all.
@@ -416,6 +417,15 @@ COMPONENTS = [
         # docs/DEBTS.md rather than worked around: the limit is in scripts/docs-audit.py,
         # and inventing a second key in this file to route around it would put the
         # workaround inside the thing the rule audits.
+        #
+        # THE HYPOTHETICAL IN THAT PARAGRAPH CAME TRUE ON 2026-08-29 AND IT NAMED THE FILE
+        # CORRECTLY. D42 added `githooks/reference-transaction` and `githooks/pre-push`, and
+        # the orphan rule was silent for both exactly as predicted — they are listed below by
+        # hand, and nothing would have failed had the author forgotten. What DID catch a
+        # missing entry that day was `githooks-selftest.sh`, one directory up and carrying a
+        # declared suffix, which failed the commit until it was described. The two outcomes
+        # from one change are the clearest statement of this hole available, so they are
+        # recorded here rather than only in docs/DEBTS.md.
         "source_suffixes": [".py", ".sh", ".txt"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
@@ -450,6 +460,49 @@ COMPONENTS = [
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; unprotected, "
                         "so a sibling hook's arrival would not be.",
+            },
+            "githooks/reference-transaction": {
+                "does": "D42's local half: refuses any move of refs/heads/main from any "
+                        "worktree of this clone — commit, fast-forward, merge, rebase, "
+                        "reset, `branch -f`, `update-ref`, delete. Allows exactly one thing, "
+                        "a move to a commit origin/main already carries, which is what "
+                        "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
+                        "visible escape hatch, and every refusal prints it.",
+                # A ref hook rather than a commit hook because the incident that produced it
+                # created no commit: a fast-forward moves a ref and runs no commit hook. D42
+                # carries that argument and the measured reason the payload's `old` column is
+                # ignored — git reports zeros for it whenever the caller stated no expected
+                # value, so `old == new` is what a DELETION looks like. D18 governs the shape
+                # rather than the content: this file is on the path that decides whether a
+                # commit proceeds, so it reads and refuses and never writes.
+                "governed_by": ["D18", "D42"],
+                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
+                        "case the comment above this modules block predicted by name.",
+            },
+            "githooks/pre-push": {
+                "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
+                        "the ref hook beside it cannot see because `git push origin HEAD:main` "
+                        "never touches refs/heads/main locally. This is what stands in for "
+                        "branch protection, which GitHub answers 403 on for a private repo on "
+                        "the free plan.",
+                # Same escape hatch and the same fail-open discipline. Weaker than the thing it
+                # substitutes for in one way D42 names outright: it guards this clone, not the
+                # repository.
+                "governed_by": ["D42"],
+                "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
+            },
+            "githooks-selftest.sh": {
+                "does": "builds an origin and a clone in a temp directory, points "
+                        "core.hooksPath at the real hook files, and runs the gestures against "
+                        "them: nineteen cases over what is refused, what stays open, the "
+                        "legitimate pull, the escape hatch and a fresh clone. A refusal must "
+                        "carry the hook's own marker to count, because git declines some of "
+                        "these by itself and two cases were green on that before the check "
+                        "existed.",
+                # D18 is why it is in `make check` and never in the git hook: it writes. It has
+                # a second reason the audit's self-test does not — it exercises the guard by
+                # violating it, so wired into the commit path it would refuse its own commits.
+                "governed_by": ["D18", "D42"],
             },
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "

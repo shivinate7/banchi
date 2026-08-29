@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
+.PHONY: help status harness check docs-audit audit-self-test githooks-selftest audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -28,12 +28,13 @@ help:
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
-	@echo "  make hooks        arm the opsec pre-commit   (once, and again after every clone)"
+	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
-	@echo "  make check        harness + docs-audit + its self-test + lint + typecheck"
+	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
+	@echo "  make check        harness + docs-audit + both self-tests + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -121,10 +122,24 @@ worktree-setup:
 #
 # The chmod is not padding. git skips a non-executable hook WITHOUT A WORD, so a correct
 # hooksPath over a non-executable file is the same silent failure by another route.
+# THE PATH IS ABSOLUTE, AND RESOLVED TO THE MAIN WORKTREE RATHER THAN TO WHEREVER YOU RAN
+# THIS. core.hooksPath lives in the common .git dir, so ONE value governs every worktree of
+# this clone — and git resolves a relative one against each worktree's own root. Left
+# relative, a worktree checked out from a commit before the main guard existed finds no
+# `reference-transaction` file and runs unguarded, which is the exact population the guard is
+# for: concurrent sessions on branches cut from an older main. Absolute, main's copy governs
+# all of them whatever commit they sit on. Resolved through `git worktree list` rather than
+# $(CURDIR) so that running this FROM a worktree does not point the whole clone at a
+# checkout that is about to be deleted.
 hooks:
-	@git config core.hooksPath scripts/githooks
-	@chmod +x scripts/githooks/pre-commit
-	@echo "opsec hook armed: core.hooksPath = $$(git config --get core.hooksPath)"
+	@root="$$(git worktree list --porcelain | sed -n '1s/^worktree //p')"; \
+	  [ -n "$$root" ] || root="$$(pwd)"; \
+	  git config core.hooksPath "$$root/scripts/githooks"; \
+	  chmod +x "$$root"/scripts/githooks/*; \
+	  echo "hooks armed: core.hooksPath = $$(git config --get core.hooksPath)"; \
+	  echo "  pre-commit             fixtures, code-card opsec, docs audit"; \
+	  echo "  reference-transaction  main does not move locally"; \
+	  echo "  pre-push               nothing pushes to main"
 
 
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
@@ -168,12 +183,21 @@ check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:
 	@python3 scripts/docs-audit.py --self-test
+
+# HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
+# its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
+# that writes may run on the path that decides whether a commit proceeds. The second is that
+# it exercises the guard by VIOLATING it, so a version wired into the commit path would be
+# refusing its own commits.
+githooks-selftest:
+	@bash scripts/githooks-selftest.sh
 
 # Foreground and blocking, like `server` below — background it from an agent session, or
 # the Stop hook's harness run never gets to happen.

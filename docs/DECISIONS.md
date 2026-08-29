@@ -2794,6 +2794,110 @@ worse defect.
 
 ---
 
+## D42 — main moves by pull request, and the guard is local because the server-side one is not for sale
+
+**BUILT 2026-08-29, after main moved under live worktrees twice in one day.** `637e2e4` was
+authored on one session's branch and fast-forwarded into main while three others were working
+on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that
+wrote this entry, which is how the second half of the guard got specified. `origin/main`'s
+reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may
+not do that, and nothing checked.
+
+**BRANCH PROTECTION WAS THE OBVIOUS ANSWER AND IT IS NOT AVAILABLE ON THIS REPOSITORY.**
+Measured rather than assumed — both surfaces answer 403:
+
+    GET repos/shivinate7/pkmnscan/rulesets                   403
+    GET repos/shivinate7/pkmnscan/branches/main/protection   403
+    "Upgrade to GitHub Pro or make this repository public to enable this feature."
+
+Free plan, private repo. The second half of that sentence is not an option: `CLAUDE.md`'s
+repo-wide opsec rule makes a live unredeemed code card a bearer instrument, and this tree
+carries the enforcement for it. So the server-side gate costs a Pro subscription, and the
+owner chose the local guard instead.
+
+**AND IT WOULD NOT HAVE CLOSED THIS ON ITS OWN, WHICH IS THE PART WORTH KEEPING IF THE PLAN
+EVER CHANGES.** Branch protection bites at `git push`. Both incidents moved main **locally**
+first, under worktrees that share this clone — by which point every session cut from main is
+already sitting on a different history than the one it started from. A gate at the remote
+would have caught the second incident and been silent through the first.
+
+**TWO HOOKS, BECAUSE THERE ARE TWO WAYS OUT, AND NEITHER COVERS THE OTHER.**
+
+- `scripts/githooks/reference-transaction` — main does not move in this clone. It is a ref
+  hook and not a commit hook **because the first incident created no commit**: a fast-forward
+  merge moves a ref and runs no commit hook, and `git rebase`, `git reset --hard`,
+  `git branch -f` and `git update-ref` are the same shape. Underneath they are all one ref
+  update, so the ref update is the only place that catches all of them and the only one that
+  cannot be routed around by reaching for a different porcelain command.
+- `scripts/githooks/pre-push` — nothing pushes to main. `git push origin HEAD:main` never
+  touches `refs/heads/main` locally and lands the commit on GitHub anyway, so the first hook
+  is blind to it. This is the piece standing in for branch protection, and it is weaker in one
+  nameable way: it lives on this machine, so it protects this clone rather than the repository.
+
+**THE ONE LEGITIMATE MOVE IS TO A COMMIT ORIGIN ALREADY HAS.** That is the whole allow rule,
+and it is what makes the pair a workflow rather than a wall: a PR is merged on GitHub,
+`git pull` fast-forwards, and the commit was on the remote before it was ever on your main.
+It cannot be forged from inside a session, because a local commit is not on origin until
+something pushes it, and pushing to main is what the second hook refuses.
+
+**THE `old` COLUMN OF A reference-transaction PAYLOAD IS NOT EVIDENCE, AND BELIEVING IT SHIPPED
+TWO HOLES BEFORE THE SELF-TEST FOUND THEM.** The format is `<old> <new> <ref>`, so the obvious
+rules are *allow a no-op* (`old == new`) and *allow a creation* (`old` all zeros). Both are
+wrong. Measured on git 2.39.3:
+
+    git branch -D main              0000000... 0000000... refs/heads/main
+    git branch -f main feature      0000000... 3f5f2cd... refs/heads/main
+    git update-ref refs/heads/main  0000000... 8f06f47... refs/heads/main
+
+Git reports zeros for the old value **whenever the caller did not state an expected one**, even
+where main exists at a real commit. So a deletion is indistinguishable from a no-op, and
+`branch -f` is indistinguishable from a creation — the first draft waved both through, and main
+was genuinely deleted in the test rig. The hook now decides on `new` alone and asks git for the
+pre-update value itself when it wants one.
+
+**IT FAILS OPEN ON ITS OWN BUGS, AND THAT IS A TRADE RATHER THAN A WEAKNESS.** This hook runs on
+every ref update in every worktree of the clone. A version that exits non-zero when it did not
+mean to does not block one commit; it breaks git for every concurrent session at once. So the
+only non-zero exit in the file is the deliberate refusal, and an unknown phase, an unparseable
+line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for
+itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
+
+**`core.hooksPath` IS ABSOLUTE AND RESOLVED TO THE MAIN WORKTREE, WHICH IS A FIX AND NOT A
+FORMATTING CHOICE.** That setting lives in the common `.git` dir, so one value governs every
+worktree of this clone — and git resolves a **relative** one against each worktree's own root.
+Left relative, a worktree checked out from a commit before this entry finds no hook file and
+runs unguarded, which is precisely the population the guard exists for. `make hooks` resolves
+it through `git worktree list` rather than the current directory, so running it from inside a
+worktree cannot point the whole clone at a checkout that is about to be deleted.
+
+**THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
+`PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
+a guard with no visible way past it gets disarmed at the config instead — and a disarmed
+`core.hooksPath` takes the three opsec rules with it, which is the trade D16 already refused to
+make for the docs audit.
+
+**`make githooks-selftest` IS THE EVIDENCE, AND IT RUNS IN `make check` AND NEVER IN THE GIT
+HOOK.** D18's rule: it writes — a bare repo, a clone, commits, pushes — and nothing that writes
+may run on the path that decides whether a commit proceeds. It has a second reason of its own
+that the docs audit's self-test does not: it exercises the guard by **violating** it, so a
+version wired into the commit path would be refusing its own commits. Nineteen cases, and two
+of them were green for the wrong reason until the harness was made to check whose refusal it
+was: git declines to delete the branch you are standing on and declines to push what is already
+up to date, both without consulting a hook. A refusal now has to carry the hook's own marker to
+count.
+
+**WHAT IT DOES NOT COVER, stated so a green self-test is not misread.** It is one machine's
+clone. A push from anywhere else, a commit made in a different clone, and the GitHub web
+editor are all outside it. That is the exact gap branch protection would close, which is why
+the next paragraph is short.
+
+**What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets
+available, and the honest response is to add one requiring a pull request on main and keep both
+hooks — the server gate for what reaches the repository, these for what reaches this clone's
+main. Not either/or: the two incidents that produced this entry were one of each.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
