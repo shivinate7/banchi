@@ -58,3 +58,38 @@
   color: var(--muted);
   pointer-events: none;
 }
+
+
+/* ============================================================================
+   IN THE HEADER ROW (2026-08-29)
+
+   `BoxBrowse` draws this component as a header item between the store count and the key hint.
+   There it is a run of text and a link on a line that already has three of those, so its own
+   panel chrome — surface, border, radius, padding, leading — would draw a box around one item
+   in an unboxed row and make the header two ranks deep.
+
+   `flex-wrap: nowrap` IS THE HALF THAT MATTERS, and it is D39's "it must never become two rows"
+   made structural rather than promised. In the old full-width slot wrapping was harmless; on a
+   shared line a wrap pushes the whole header to two rows and moves every other screen element
+   down. Measured, the widest realistic content is 487px into 905px of free header, so nowrap
+   never truncates at either 1440 or 1280 — but if a future string does overrun, a clipped
+   duration is the correct failure and a silently two-row header is not.
+
+   `margin-left: auto` COMES OFF `.boxruns-go`. In the panel it pushed the link to the far edge
+   of a full-width row; in the header that same declaration would shove the key hint off the
+   end, because the hint uses the identical trick to reach the right edge. Two `auto` margins on
+   one line is one too many.
+   ========================================================================== */
+.browse-controls > .boxruns {
+  flex-wrap: nowrap;
+  gap: var(--s3);
+  margin-top: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.browse-controls > .boxruns > .boxruns-go {
+  margin-left: 0;
+}

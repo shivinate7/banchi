@@ -908,9 +908,21 @@ test('ticking rows narrows what a box-wide claim will reach, and says so on the 
      with the selection, which is what `boxops-actions-lone` existed to keep off the delete's
      row; a full-measure row cannot, and only the detail moves. Asserted because it is the
      property that let that guard be retired. */
+  /* THE LITERAL 360 WENT WHEN THE WALK'S TRACK DID (2026-08-29). It was the map column's width,
+     and that column is now `minmax(285px, 22fr)` — 299px at 1440 and 285px at the 1280 this
+     suite runs at. Pinning the number again would pin the RATIO to this case, so what is
+     asserted is the property the number was standing in for: the row is a full measure, and it
+     does not resize when the selection changes. That is stronger than the literal was, because a
+     literal goes green on a row that happens to be 360px for a different reason. */
   const width = (await claims.boundingBox())?.width
-  await expect(page.locator('.boxops-op').first()).toHaveJSProperty('offsetWidth', 360)
-  expect(width).toBe(360)
+  const opWidth = await page.locator('.boxops-op').first().evaluate((el: HTMLElement) => el.offsetWidth)
+  expect(width).toBe(opWidth)
+
+  /* THE STABILITY HALF, WHICH IS WHAT THE OLD LITERAL ACTUALLY BOUGHT. The label used to grow
+     and shrink by ~150px with the selection; only `.boxops-op-detail` may move now. */
+  await page.locator('.browse-rowtick').nth(2).uncheck()
+  await expect(page.locator('.boxops-op').first()).toHaveJSProperty('offsetWidth', opWidth)
+  await page.locator('.browse-rowtick').nth(2).check()
 
   /* A fold may hide a row but must never hide what a bulk write would reach, so the section
      header carries its own share of the count. */
@@ -1375,7 +1387,7 @@ test('the sections of a box are drawn once, by the walk that can open them', asy
   await expect(first).toContainText('#1')
 })
 
-test('the box lives in the walk\'s column, and the runs come after the copies', async ({
+test('the box lives in the walk\'s column, and the run line lives in the header', async ({
   page,
 }) => {
   await open(page)
@@ -1413,15 +1425,28 @@ test('the box lives in the walk\'s column, and the runs come after the copies', 
      stays a MEASUREMENT rather than a class name, because a class assertion goes green the
      moment somebody reintroduces a tall sibling in row 1 under a different name, and a tall
      sibling in row 1 is the entire defect this layout was rebuilt to remove. */
+  /* THE RUN LINE LEFT THE CONTENT COLUMN FOR THE HEADER ON 2026-08-29, and the assertion moves
+     with it rather than being dropped. What it guarded was that the line is about the SHELF and
+     is not a sibling the card can push around; in the header that is structural — its y is set
+     by the header, which is the same on every card. The old ordering check (`runs` after
+     `copies`) is replaced by the stronger one the move buys: the line is ABOVE the card band, so
+     nothing about the selection can move it at all. */
   await expect(page.locator('.browse-boxrun .boxops-box')).toHaveCount(0)
-  await expect(page.locator('.browse-boxrun .boxruns')).toHaveCount(1)
+  await expect(page.locator('.browse-controls .boxruns')).toHaveCount(1)
+  await expect(page.locator('.browse-boxrun .boxruns')).toHaveCount(0)
   await expect(page.locator('.browse-side .browse-boxrun')).toHaveCount(0)
   await expect(page.locator('.browse-body > .browse-boxrun')).toHaveCount(1)
 
   const copies = await page.locator('.browse-under').boundingBox()
-  const runs = await page.locator('.browse-boxrun').boundingBox()
-  if (copies === null || runs === null) throw new Error('the content column did not render')
-  expect(runs.y).toBeGreaterThanOrEqual(copies.y + copies.height - 1)
+  const runs = await page.locator('.boxruns').boundingBox()
+  const band0 = await page.locator('.browse-detail').boundingBox()
+  if (copies === null || runs === null || band0 === null) throw new Error('the content column did not render')
+  expect(runs.y + runs.height).toBeLessThanOrEqual(band0.y)
+
+  /* AND IT CLEARS `docs/DESIGN.md`'s OWN FIRST-CONTENT FLOOR, which is the number that
+     authorised the move: "the first row of real content sits within 150px of the top of the
+     viewport". It missed that floor by 1014-1422px in the content column. */
+  expect(runs.y).toBeLessThan(150)
 
   /* AND NO RUN PANEL AT ALL, WHICH IS THE 2026-08-29 HALF. It moved to `#/runs`; this asserts it
      did not leave a copy behind. `run-panel.spec.ts` guards the money button with `toHaveCount(0)`
@@ -1466,15 +1491,20 @@ test('the copies of a card cannot be positioned by the pipeline console', async 
      this slot next. */
   await expect(page.locator('.run-panel')).toHaveCount(0)
 
-  const console_ = await page.locator('.browse-boxrun').boundingBox()
-  const card = await page.locator('.browse-side').boundingBox()
-  if (console_ === null || card === null) throw new Error('the content column did not render')
-  expect(console_.height).toBeLessThan(card.height)
+  /* REWRITTEN AGAIN ON 2026-08-29, AND THIS TIME THE DEFECT IS STRUCTURALLY UNREACHABLE. The
+     copies are in a COLUMN of their own beside the card, not a row beneath it, so no sibling's
+     height can set their y — which is what every earlier version of this case was measuring in a
+     roundabout way. `.browse-boxrun` is `display: none` on a numbered shelf now (it holds only
+     the pooled/unplaced note), so it has no box to measure and the old height comparison would
+     throw rather than pass.
 
+     WHAT IS ASSERTED INSTEAD IS THE PROPERTY ITSELF: the copies start level with the band, not
+     below it. A regression that put anything back above them in their own column fails this,
+     and so does one that restores the stacked row order. */
   const band = await page.locator('.browse-detail').boundingBox()
   const copies = await page.locator('.browse-under').boundingBox()
   if (band === null || copies === null) throw new Error('the card panel did not render')
-  expect(copies.y - (band.y + band.height)).toBeLessThan(48)
+  expect(copies.y).toBeLessThanOrEqual(band.y + 24)
 
   await expect(page.locator('.card-locations-row').first()).toBeInViewport()
 })
@@ -1536,7 +1566,23 @@ test('the photograph is sized by its column, not by the rows beside it', async (
      rows the panel happens to draw. What must hold is that the two stay within reach of each
      other — neither a photograph towering over a short list (the 587 against 204 that started all
      of this) nor a thumbnail beside a long one. */
-  expect(Math.abs(shot.height - rows.height)).toBeLessThan(150)
+  /* THE BAND COMPARISON IS RETIRED, NOT WEAKENED, BECAUSE THE TWO ARE NO LONGER A BAND. The
+     facts left this column on 2026-08-29 to cap the copies; the photograph now takes the whole
+     middle third, so "the two stay within reach of each other" is a question about two different
+     columns and answering it would pin the ratio to this case.
+
+     WHAT REPLACES IT IS THE PROPERTY THAT ACTUALLY MATTERS NOW: the photograph FILLS its column.
+     That is what the owner asked for ("the photo takes up more of the page") and it is what a
+     regression would take away — a height cap, a max-width, or a re-introduced sibling track
+     would all leave slack here. Measured at the time: 449px of a 449px track at 1440. */
+  const mid = await page.locator('.browse-detail').boundingBox()
+  if (mid === null) throw new Error('the card column did not render')
+  expect(mid.width - shot.width).toBeLessThan(8)
+
+  /* AND THE FACTS ARE STILL ON SCREEN, in their new home, which is the half of the move the
+     owner asked for by name. Two columns at 1440 and one at 1280 — so this asserts presence and
+     that no pair was split across a column break, never the count. */
+  await expect(page.locator('.browse-under .browse-facts')).toHaveCount(1)
 
   /* DEFECT 1, ASSERTED AT THE VIEWPORT design-check ACTUALLY RUNS. The facts' value track was
      `1fr`, so it was 260px at 1440 — 96 to 224px of trailing white on every one of eleven rows,
@@ -1560,9 +1606,20 @@ test('the photograph is sized by its column, not by the rows beside it', async (
   expect(shot.height / shot.width).toBeGreaterThan(88 / 63 - 0.05)
   expect(shot.height / shot.width).toBeLessThan(88 / 63 + 0.05)
 
-  /* Top-aligned with the facts, which is the half of "flush" that survived: the two start
-     together and the photograph is simply taller. */
-  expect(Math.abs(shot.y - rows.y)).toBeLessThanOrEqual(1)
+  /* TOP-ALIGNED IS NOW A STATEMENT ABOUT THE TWO COLUMNS, not about the photograph and the rows
+     inside one. The facts moved to the head of the copies column on 2026-08-29, so they start at
+     the body's top while the photograph starts below the card's headline — 58px lower, by
+     design. Comparing those two would pin the headline's height into this case.
+
+     What "flush" means here is that the card column and the copies column begin together, which
+     is the grid property a regression would break (a stray margin, a row assignment, an
+     `align-items` change). */
+  const under = await page.locator('.browse-under').boundingBox()
+  if (under === null) throw new Error('the copies column did not render')
+  expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)
+
+  /* And the facts are inside that column rather than merely near it. */
+  expect(rows.x).toBeGreaterThan(mid.x + mid.width)
 })
 
 test('a photo the store has lost gets a sentence, never a card-shaped hole', async ({ page }) => {
@@ -1632,10 +1689,20 @@ test('the box and the runs survive a query that selects no card', async ({ page 
 
      24 RATHER THAN 0, and that is the console's own margin — one interval, which is what any
      first item on this page sits below. */
-  const runs = await page.locator('.browse-boxrun').boundingBox()
+  /* THE ROWS THEY LEAVE BEHIND STILL COST NOTHING, and the check is re-pointed rather than
+     dropped: the run line is in the header now, so what has to be true is that it sits ABOVE the
+     body entirely and that the empty content rows collapse. `.browse-boxrun` is `display: none`
+     when it holds no pooled/unplaced note, which is every numbered shelf — so it has no box, and
+     asking for one is how this case would silently stop testing anything. */
+  const runs = await page.locator('.boxruns').boundingBox()
   const body = await page.locator('.browse-body').boundingBox()
   if (runs === null || body === null) throw new Error('the body did not render')
-  expect(runs.y - body.y).toBeLessThanOrEqual(24)
+  expect(runs.y + runs.height).toBeLessThanOrEqual(body.y)
+
+  const hidden = await page
+    .locator('.browse-body > .browse-boxrun')
+    .evaluate((el) => getComputedStyle(el).display)
+  expect(hidden).toBe('none')
 })
 
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {

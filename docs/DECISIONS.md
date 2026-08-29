@@ -2489,6 +2489,106 @@ line. The measurement is `scope.cards` being non-null on any run in `runs/`, and
 
 ---
 
+## D40 — The screen is three columns: the box, the card, and where its copies are
+
+**BUILT 2026-08-29, on the owner's own layout.** Their words, after being shown the two-column
+screen: *"I know for a fact that Box 2 Run Box at the bottom, and then the amount of whitespace to
+the right of card photo and description are seriously triggering me"* — and then the design
+itself: *"Think rule of thirds. The left 1/3 sidebar stays put. The middle 1/3 gets the photo,
+then the buttons correct claims remove this card and then the description (vertical) and then the
+right gets the card locations. Maybe it's like 20% 35% 45%."*
+
+**THE TWO COMPLAINTS WERE ONE DEFECT, THREE DAYS OLD.** `2ec06f8` deleted the body's third column
+(D38, amended) and re-created it one level down as `.browse-detail`'s third track — `minmax(0, 1fr)`,
+a RESIDUAL track, so it absorbed every spare pixel in a 1024px content column and held two buttons
+in 408 of them. Measured: 408x374 of track holding 408x32 of content, **91% empty**, and that track
+was 40% of the content column's width. The stacked full-width copies list below it was the other
+half of the same problem — a band that could not fill 1024px, stacked on a list that needed it.
+
+**THE FILE HAD ALREADY CONFESSED IT AND BET ON A JUSTIFICATION THAT DID NOT HOLD.** `BoxBrowse.css`
+called the space "THE RESIDUAL, NAMED RATHER THAN DRESSED UP" and defended it as "the rail's
+declared growth room" for the open-question block. Measured on the owner's store the day this
+changed: **both queue files were empty**, so that block drew on **0 of 543 cards**. The same comment
+also asserted "that is not the space the owner named" — it guessed the complaint was the
+photo-facts gap. The owner has now named it, and it was the rail.
+
+**THE RATIO IS 22 / 33 / 45 AND ONLY THE FIRST NUMBER IS DERIVED.** At 1440 the body is 1408px and
+two 24px gaps leave 1360, so the owner's 20% is 272px — **8px inside the ~280px wrap cliff**
+`BoxOps.css` was tuned to clear (D38). 22% is 299px. A 285px floor holds it above the cliff at
+1280, where 22% of 1200 would be 264. `fr` rather than percentages, because percentages plus two
+gaps overflow a container that has no slack to absorb it — `.browse-map` is sticky and would be the
+thing clipped.
+
+**THE DESCRIPTION LEFT THE MIDDLE COLUMN, AND THAT IS THE ONE PLACE THIS DEPARTS FROM THE OWNER'S
+SPEC — AT THEIR OWN SUGGESTION.** They asked for photo, then buttons, then description, stacked. It
+was built that way and measured, and the arithmetic refuses it: the middle column has 715px above a
+900px fold, and photo + buttons + eleven fact rows needs ~1050. Capping the photo to fit costs it
+twice — **311x435 (1.35x today) AND 165px of dead slack beside it**, because a height-capped
+photograph that keeps 63:88 gets NARROWER than its track. The owner then proposed the answer
+themselves: *"I think you'd be able to fit the description as some sort of aesthetic thing at the
+top of the locations on the right third too though."* That is what shipped.
+
+**WHAT IT BUYS, MEASURED AT 1440x900 ON BOX 2, CARD 1:**
+
+| | before | after |
+|---|---|---|
+| photograph | 268x374 | **449x627**, aspect 0.716, **2.81x area** |
+| description | 300x318, one column, in the band | 578x171, **two columns**, capping the copies |
+| run line | y=1164, 264px below the fold | **y=62**, in the header |
+| copies, first row | y=626, 82px rows, 3.35 visible | y=379, 144px rows, **3.62 visible** |
+| ink / void | 33.34% / 41.99% | **47.97% / 26.30%** |
+| page | 1230 | 1273 |
+
+**VOID IS A MEASURED NUMBER AND THE TARGET WAS MISSED.** The owner asked for "less than a fifth" of
+the whitespace. Against an instrument that rasterises every text and image rect at 8px and keeps
+only empty area more than 24px from any ink — so normal line-leading does not count and real holes
+do — the honest result is **41.99% -> 26.30%, a 37% cut, not 80%**. Recorded as a miss rather than
+rounded up, because the owner's own rule is that a number is evidence. What binds it is the copies
+rows: the largest surviving void component is inside them.
+
+**THE COPY-ROW RE-TUNE WAS ASKED FOR AND IS REFUSED, ON THE FILE'S OWN RULE.** The owner approved
+narrowing the row toward D38's measured 83px. At the 586px this column gives it, the row is
+`8 + place 51 + gap 12 + bar 65 + 8 = 144`, and line one already uses **583 of 586px** — so the
+position bar genuinely cannot join it. Lowering `CardLocations.css`'s 860px container threshold to
+560 does shorten the row to 129px, and it does it by squeezing `.card-locations-place` to 231px,
+which **wraps the position label**. That file forbids exactly this: *"the position label is the
+string somebody carries to a shelf and it must not break."* A row that is 15px shorter and lies
+about where a card is, is not a trade this repo makes.
+
+**And the re-tune turned out not to be needed for its stated purpose.** The column move alone takes
+rows-visible from **3.35 to 3.62** — the rows are taller and there are more of them on screen,
+because they start 247px higher. The owner's "tighter width wise yet longer height" is what a 144px
+row at 586px IS; it was the goal, not the defect.
+
+**WHAT IT COSTS, NAMED RATHER THAN BURIED.** `.boxops-meta` wraps from one line to two — 17px to
+33px — because it needs the full 360px track and now has 299. Measured across 299-360px: it is
+one line at 360 and two below it, with no intermediate. Accepted rather than fixed: it is a
+metadata line, not a control, in a sticky column that has ~290px of unused height at the owner's
+size, and holding 360px for it would cost the description its second column.
+
+**THE RUN LINE IS IN THE HEADER, WHICH IS D39's RULE HELD RATHER THAN SPENT.** `BoxRuns` is
+box-scope content that was living in the content column, so its y was set by the copy count and by
+whether the claims editor was open — measured, **y=1164 on a six-copy card and y=1572 on an
+eleven-copy one**, both below the fold. `docs/DESIGN.md` authorises the header directly ("the page
+title ... shares a line with the screen's controls and counts"), and it was the one item on this
+screen missing that file's own "first row of real content within 150px" floor, by 1014-1422px.
+D39's *"it must never become two rows"* stops being a promise in a comment and becomes structural:
+on a shared line it cannot. The left column — where D38's "the left column IS the box" would point
+— is **rejected by measurement**, not preference: its content box is ~334px and the ordinary ticked
+state is 428px, so it would wrap to two lines the moment anything is ticked.
+
+**THIS IS THE FIFTH RELOCATION OF THAT SLOT IN FOUR DAYS** (third column, row 3 of the content
+column, `#/runs` for the panel, row 3 for the line, header). Said plainly because D38 records the
+first three and a reader is entitled to count. What moved this time is a 32px status line, not the
+625-1143px panel that made the earlier moves expensive.
+
+**WHAT WOULD REOPEN THIS: a copies column wide enough for an 83px row.** That needs ~860px of
+container, which three columns cannot give at 1408px of body. If the owner ever works at a width
+where 45% exceeds 860 — a 1920px display puts it at 828, still short — the row improves on its own
+through the container query already there, with no change to this entry.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

@@ -503,6 +503,16 @@ remains here is `BoxRuns`: one row saying whether anything is running over this 
 control that hands the ticked selection over. **It must never become two rows**, for the reason
 the whole sequence above documents.
 
+**AND ON 2026-08-29 IT MOVED AGAIN, TO THE HEADER ROW, WHICH IS THIS FILE'S OWN RULE APPLIED TO
+IT (D40).** The page-chrome section above says the title "shares a line with the screen's controls
+and counts" and that "the first row of real content sits within 150px of the top of the viewport".
+A box's run state and a link to `#/runs` are a count and a control, and in the content column that
+line was missing this file's floor by 1014-1422px — its y was set by the copy count and by whether
+the claims editor happened to be open, measured at 1164 on a six-copy card and 1572 on an
+eleven-copy one. In the header it is at y=62 on every card, and the never-two-rows rule stops
+being a promise and becomes structural: on a shared line it cannot wrap without moving the whole
+page, so `BoxRuns.css` sets `flex-wrap: nowrap` there and says why.
+
 **One rule of this section moved with it and one did not.** The page-chrome numbers now govern
 `#/runs` as a route of its own — 16px of padding, a 20px display title sharing its line with the
 scope, a one-line lede, first content inside 150px — and `app/src/Runs.css` draws them literally.

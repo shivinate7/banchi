@@ -907,19 +907,26 @@ COMPONENTS = [
                     "— the re-shoot control (D26, owner's placement ruling): replace a bad "
                     "stored photo from a file, record untouched, allocator never involved. "
                     "Everything else stays look-only, and the header argues the exception. "
-                    "THREE COLUMNS since D38: the walk, the card, and BoxOps over RunPanel "
-                    "in a track of their own — the box panel is a sibling of the card's "
-                    "column rather than a child of it, which is what puts it structurally "
-                    "outside the selected-card guard.",
+                    "THREE COLUMNS since 2026-08-29, and they are NOT D38's three: the walk, "
+                    "the card, and the copies — where D38's third track held BoxOps over "
+                    "RunPanel. The run panel left for #/runs (D39) and the box panel moved "
+                    "into the walk's column, so what stands beside the card now is its own "
+                    "copies, capped by the eleven fact rows. The photograph takes the whole "
+                    "middle third at 63:88; the facts are two columns at 1440 and one at 1280. "
+                    "The box panel is still a sibling of the card's column rather than a child "
+                    "of it, which is what puts it structurally outside the selected-card guard.",
             "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
-                            "D30", "D31", "D33", "D35", "D38"]},
+                            "D30", "D31", "D33", "D35", "D38", "D39"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
                                   "photograph takes its HEIGHT from the fact rows beside it, through a frame "
                                   "whose only child is out of flow, so the image cannot size the row that "
-                                  "sizes it.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38"]},
+                                  "sizes it. THAT BAND IS GONE since 2026-08-29: the facts left the card's "
+                                  "column to cap the copies, so the photograph is sized by its COLUMN again "
+                                  "and there is nothing beside it to take a height from. The body is three "
+                                  "columns at 22/33/45, and the run line moved to the header row.",
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #

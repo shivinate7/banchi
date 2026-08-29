@@ -210,7 +210,23 @@
    silently resolves to line 1 and the map stops sticking. */
 .browse-body {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  /* THREE COLUMNS: THE BOX, THE CARD, WHAT IS KNOWN ABOUT IT AND WHERE ITS COPIES ARE
+     (2026-08-29, the owner's ratio). Two columns put the card band and the copies in one
+     1024px track, one above the other, and the band could not fill it — `.browse-detail`'s
+     third track was `1fr` and took 408px to hold two buttons, 91% empty. Stacking a
+     full-width copies list under a band that cannot use the width is what produced BOTH of
+     the owner's complaints at once.
+
+     THE RATIO IS 22 / 33 / 45, and only the first number is derived rather than chosen. The
+     owner asked for 20 / 35 / 45; at 1440 the body is 1408px and two 24px gaps leave 1360, so
+     20% is 272px — 8px INSIDE the ~280px wrap cliff `BoxOps.css` was tuned to clear. 22% is
+     299px at 1440. The 285px floor holds it above the cliff at 1280, where 22% of 1200 would
+     otherwise be 264.
+
+     `fr` RATHER THAN PERCENTAGES so the gaps come out of the tracks rather than out of the
+     page: percentages of the container plus two gaps overflow, and this grid has no room to
+     absorb that — `.browse-map` is sticky and would be the thing clipped. */
+  grid-template-columns: minmax(285px, 22fr) minmax(0, 33fr) minmax(0, 45fr);
   /* `1fr` ON THE LAST ROW, AND IT IS THE STICKY MAP THAT NEEDS IT — added 2026-08-29, when the
      run panel left this screen and the content column stopped being the tall one.
 
@@ -225,7 +241,12 @@
      THE SYMPTOM WAS THE ONE THIS FILE ALREADY HAD A TEST FOR, which is how it was caught: the
      "box and runs survive a query that selects no card" case asserts the runs row within 24px of
      the body's top, and it went red the moment the console left. */
-  grid-template-rows: auto auto 1fr;
+  /* TWO ROWS NOW, NOT THREE, because the copies moved out of the content column and into a
+     column of their own — so the card and the copies share row 1 instead of stacking. The
+     `1fr` on the LAST row is untouched and is still load-bearing for exactly the reason the
+     paragraph below gives: `.browse-map` spans `1 / -1`, and a spanning item distributes its
+     height across AUTO tracks. A flexible last track is excluded from that distribution. */
+  grid-template-rows: auto 1fr;
   /* COLUMN GAP ON THE GRID, ROW GAP ON THE ITEMS, and the difference is what a hidden item does
      with it. `grid-template-rows` is declared explicitly (see above — the sticky map needs it),
      so the rows exist whether or not anything is in them, and a `row-gap` is drawn between
@@ -237,7 +258,9 @@
   margin-top: var(--s3);
 }
 
-.browse-body > .browse-under,
+/* ONLY THE BOXRUN ROW KEEPS THIS. `.browse-under` was directly beneath the card and needed
+   the leading; it is now BESIDE the card in row 1 and must align with its top, so a margin
+   here would drop the copies 24px below the photograph for no reason a reader could see. */
 .browse-body > .browse-boxrun {
   margin-top: var(--s5);
 }
@@ -257,14 +280,26 @@
    >= 940px of container, 115px at 864, 127px at 860 and 159px at 630. The copies were already
    this wide; what changes is what they are underneath. */
 .browse-body > .browse-under {
-  grid-column: 2;
-  grid-row: 2;
+  grid-column: 3;
+  grid-row: 1;
   min-width: 0;
 }
 
+/* AN EMPTY BOXRUN ROW STILL COSTS ITS LEADING, which is the defect this file already records
+   one rule up for `.browse-side` and `.browse-under` — and the run line leaving for the header
+   is what made this node empty on every numbered shelf. Measured: 24px of `margin-top` under
+   the copies on a shelf that has no pooled or unplaced note to draw, which is all of them.
+   `display: none` takes the item out of the grid and its margin with it. */
+.browse-body > .browse-boxrun:empty {
+  display: none;
+}
+
+/* SPANS THE TWO CONTENT COLUMNS. What is left in this node is the pooled / unplaced shelf
+   note — a sentence, which wants a measure rather than a third of one. The run line that used
+   to sit here is in the header now (see `.browse-controls`). */
 .browse-body > .browse-boxrun {
-  grid-column: 2;
-  grid-row: 3;
+  grid-column: 2 / -1;
+  grid-row: 2;
 }
 
 /* A ROW GAP IS DRAWN FOR A ZERO-HEIGHT ITEM, so a query matching no card paid 48px of leading
@@ -284,9 +319,15 @@
    hidden only while it holds nothing at all, so a standing receipt is never the thing collapsed —
    which is the case `app/tests/inventory.spec.ts` covers by marking a copy sold and then typing a
    query that matches nothing. */
+/* THE THIRD SELECTOR GAINED A `:not()` WHEN THE FACTS MOVED IN, and without it this rule
+   hides the description. It asks "is the copies wrapper empty" as a proxy for "is this whole
+   column empty", which was exact while `.inventory-detail` was the only child. It is not any
+   more: with no copies standing but a card selected, `.browse-about` is real content in a node
+   this rule would have collapsed — the description would vanish on precisely the cards that
+   have one copy and no receipt. Ask about the column, not about one of its children. */
 .browse-body > .browse-side:empty,
 .browse-body > .browse-under:empty,
-.browse-body > .browse-under:has(> .inventory-detail:empty) {
+.browse-body > .browse-under:not(:has(> .browse-about)):has(> .inventory-detail:empty) {
   display: none;
 }
 
@@ -849,10 +890,24 @@
    That is not the space the owner named — the photograph and its facts are 24px apart with the
    void between them gone — and it is the rail's declared growth room: the queued block is
    0-110px, and four fact rows arrived on 2026-08-25 with nowhere budgeted for them. */
+/* ONE COLUMN AS OF 2026-08-29, AND THE THREE-TRACK ARGUMENT ABOVE IS SPENT RATHER THAN WRONG.
+   Every measurement in it stands; what changed is the container. The band no longer has 1024px
+   to fill, it has the middle third — so there is no surplus for a `1fr` rail to absorb, which
+   is the defect the paragraph above named and budgeted for as "growth room". Measured on the
+   owner's store the day this changed: both queue files were EMPTY, so the open-question block
+   that growth room was reserved for drew on 0 of 543 cards while the rail held 45px of content
+   in a 408px track.
+
+   THE FACTS LEFT THE BAND ENTIRELY — they cap the copies column now (see `.browse-under`), on
+   the owner's reading: "fit the description as some sort of aesthetic thing at the top of the
+   locations on the right third". That is what buys the photograph its size, and the arithmetic
+   is why it had to leave rather than move down. Keeping the facts under the photo in this
+   column caps the photo at 311x435 (1.35x) AND opens 165px of slack beside it, because a
+   height-capped photograph that keeps 63:88 gets NARROWER than its track. Measured, both. */
 .browse-detail {
   display: grid;
-  grid-template-columns: minmax(0, 268px) minmax(0, 300px) minmax(0, 1fr);
-  gap: var(--s4) var(--s5);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
   align-items: start;
   min-width: 0;
 }
@@ -873,16 +928,12 @@
 
    `justify-content: start` so the two remaining tracks keep their measures and the shortfall
    lands at the trailing edge, rather than the facts inflating back to a 436px value track. */
-@media (max-width: 1239px) {
-  .browse-detail {
-    grid-template-columns: minmax(0, 268px) minmax(0, 300px);
-    justify-content: start;
-  }
-
-  .browse-ops {
-    grid-column: 2;
-  }
-}
+/* THE 1239px QUERY IS DELETED, not narrowed, and it is worth saying which argument goes with
+   it. It existed to drop the ops RAIL back under the facts below 1240 — a rule about a
+   three-track band. There is one track at every width now, so the rule has nothing to say, and
+   a query that restates the default is the kind a later session spends an hour proving inert.
+   D38's reason for choosing 1240 over 1440 (it puts Playwright's 1280 inside the wide layout
+   rather than only the fallback) now lands on the copies row instead — see CardLocations.css. */
 
 /* NO PHOTOGRAPH, NO BAND. `PhotoPanel` draws a sentence and a URL where the image would be —
    ~200 characters of 15px body plus a `word-break: break-all` path. In a 150px track that is
@@ -1142,11 +1193,37 @@
 
 /* ---- facts ---- */
 
+/* TWO COLUMNS WHERE THERE IS ROOM FOR TWO, BY COLUMN-WIDTH RATHER THAN COLUMN-COUNT, and the
+   distinction is the whole safety of it. `column-count: 2` would split the list at EVERY width
+   and hand each half 252px at 1280 — under the 300px measure this file derives one screen up
+   (84 label + 12 gap + 204 value), so every long value would wrap. `column-width` asks for a
+   measure and takes as many columns as fit.
+
+   260px, AND THE FIRST NUMBER TRIED WAS 288 WHICH SILENTLY GAVE ONE COLUMN. The panel's own
+   border and padding take 34px, so the list has 578px inside a 612px track, not 612 — and
+   `floor((578 + 24) / (288 + 24))` is 1. The measured widths that matter: two columns need
+   `2w + 24 <= 578`, so w <= 277. At 260 the list takes two columns of 277px at 1440 and ONE at
+   1280, where the track is 540px and holds 506px of list.
+
+   277px IS UNDER THE 300px MEASURE THIS FILE DERIVES AND THAT IS FINE, because 300 was 260 of
+   ink plus 40 of slack: the widest label ink is 80px in an 84px track and the widest value ink
+   is 164px, so 84 + 12 + 164 = 260 is the real requirement and 277 clears it by 17.
+   The list is 318px tall in one column and 198px in two, which is what puts it wholly on screen
+   above the copies at the owner's size.
+
+   `break-inside: avoid` ON THE ROW is not optional: a fact is a `dt`/`dd` pair and a column
+   break through the middle of one puts a label at the foot of one column and its value at the
+   head of the next, which is a false statement rather than a loose layout. */
 .browse-facts {
-  display: flex;
-  flex-direction: column;
+  display: block;
+  column-width: 260px;
+  column-gap: var(--s5);
   border-top: 1px solid var(--line);
   min-width: 0;
+}
+
+.browse-fact {
+  break-inside: avoid;
 }
 
 /* TIGHTENED FROM s2 TO s1, WHICH IS 16px OF THE SEVEN ROWS. Measured before: a fact row was
@@ -1242,4 +1319,31 @@
 
 .browse-reload-danger {
   border-color: var(--ink);
+}
+
+
+/* ============================================================================
+   THE DESCRIPTION, CAPPING THE COPIES COLUMN (2026-08-29)
+
+   The owner's words: "fit the description as some sort of aesthetic thing at the top of the
+   locations on the right third". It is drawn as a surface panel rather than as bare rows so
+   that it reads as a HEADER for the column it sits on rather than as the first copy in the
+   list — the two are eleven label/value pairs and a list of label-bearing rows, and at a
+   glance in one column they are the same shape.
+
+   WHY IT IS HERE AND NOT UNDER THE PHOTOGRAPH, in one line, because the next session will ask:
+   this is what lets the photograph keep the whole middle third. See `.browse-detail`.
+   ========================================================================== */
+.browse-under > .browse-about {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s3);
+}
+
+/* The list already draws its own top hairline; inside a bordered panel that reads as a double
+   rule six pixels under the panel's own edge. */
+.browse-under > .browse-about .browse-facts {
+  border-top: 0;
 }

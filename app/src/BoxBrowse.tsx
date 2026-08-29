@@ -1447,6 +1447,23 @@ export function BoxBrowse({
             Drawn only with two cards to step between. A hint offering to move you through a
             list of one is chrome that has stopped being true, and the empty and failed
             states have no list under it at all. */}
+        {/* THE RUN LINE, BETWEEN THE STORE COUNT AND THE KEY HINT (2026-08-29). `docs/DESIGN.md`
+            authorises exactly this: "the page title ... shares a line with the screen's controls
+            and counts", and a box's run state plus a link to `#/runs` is a count and a control.
+            It was the one item on this screen missing that file's OWN first-content floor — "the
+            first row of real content sits within 150px of the top of the viewport" — by
+            1014-1422px.
+
+            IT CANNOT BECOME TWO ROWS HERE, which is D39's standing rule about this component, and
+            in a shared header line that stops being a promise in a comment and becomes structural.
+            Measured with the real faces: the widest realistic pair is 487px against 905px of empty
+            header, so it fits at 1440 with 418px spare and at 1280 with 246px.
+
+            REJECTED: the left column, where D38's "the left column IS the box" would point. Its
+            track is 285-360px and the content box is ~334px at the wide end; the ordinary ticked
+            state measures 428px, so it would wrap to two lines the moment anything is ticked —
+            the one thing D39 forbids. That is a measurement, not a preference. */}
+        {boxPanel}
         {rows === null || rows.length < 2 ? null : (
           /* THE WORDS FIRST, THEN THE CHIPS, and the span itself is pushed to the far edge of
              the row by `margin-left: auto`. Chips-then-words put two bordered arrow keys
@@ -1984,16 +2001,12 @@ export function BoxBrowse({
                     band and this one has three: the writes get a track, and the facts get a
                     measure cut to their own ink rather than a `1fr` that was 260px at 1440 and
                     100px at 1280. See `.browse-detail` in the stylesheet for both numbers. */}
-                <div className="browse-about">
-                  <dl className="browse-facts">
-                    {detailsOf(selectedRow.card).map((fact) => (
-                      <div className="browse-fact" key={fact.label}>
-                        <dt>{fact.label}</dt>
-                        <dd className={fact.mono ? 'is-util' : undefined}>{fact.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
+                {/* THE FACTS ARE NOT DRAWN HERE ANY MORE — they cap the copies column, in
+                    `.browse-under` below. Left as a marker rather than deleted silently, because
+                    this is the second time in four days that something moved out of this band and
+                    a reader arriving at `.browse-detail` should be told where it went rather than
+                    inferring it from an absence. `BoxBrowse.css`'s `.browse-detail` comment carries
+                    the measurement that decided it. */}
 
                 {/* WHAT CAN BE DONE TO THIS CARD, in a track of its own (2026-08-26). These two
                     blocks were the tail of `.browse-about`, under the eleven fact rows, and the
@@ -2111,7 +2124,28 @@ export function BoxBrowse({
               walk what the eye walks. That rule is unchanged; what it now produces is card,
               copies, runs — the old comment here said "card, runs, copies is reading order at
               both breakpoints", and that sentence moved with the rows rather than being kept. */}
-          <div className="browse-under">{detail}</div>
+          {/* THE DESCRIPTION CAPS THIS COLUMN, ABOVE THE COPIES (2026-08-29, the owner's ask).
+              It is guarded on `selectedRow` rather than living inside `.browse-side`'s guard,
+              because this node must keep rendering when no card is selected — a standing
+              mark-sold receipt with a live twenty-second undo lives in `{detail}` and the
+              paragraph above is the whole reason it is out here. So the two children have
+              DIFFERENT conditions on purpose: the facts follow the selection, the receipt does
+              not, and `.browse-under`'s hide rule in the stylesheet asks about both. */}
+          <div className="browse-under">
+            {selectedRow === null ? null : (
+              <div className="browse-about">
+                <dl className="browse-facts">
+                  {detailsOf(selectedRow.card).map((fact) => (
+                    <div className="browse-fact" key={fact.label}>
+                      <dt>{fact.label}</dt>
+                      <dd className={fact.mono ? 'is-util' : undefined}>{fact.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            {detail}
+          </div>
 
           {/* THE RUNS, LAST IN THE CONTENT COLUMN — and until 2026-08-26 this was a third column
               beside the card. D31 put box operations "on the box header inside the browse", D38
@@ -2162,8 +2196,11 @@ export function BoxBrowse({
               </div>
             ) : null}
 
-            {/* THE RUN PANEL — under the box header, and about the same box. */}
-            {boxPanel}
+            {/* THE RUN LINE IS IN THE HEADER NOW — see `.browse-controls` above. It is
+                box-scope content and this node is in the content columns, so its y-position was
+                being set by the copy count and by whether the claims editor happened to be open:
+                measured, y=1164 on a six-copy card and y=1572 on an eleven-copy one, both below
+                a 900px fold. Nothing about it varies with the selected card. */}
           </div>
 
         </div>
