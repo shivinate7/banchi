@@ -158,13 +158,30 @@
    node how wide it actually is keeps that promise; asking the viewport would break it the first
    time the column moved, which it has now done three times in two days.
 
+   880px SINCE 2026-08-29, AND 860 HAD BECOME A CLIFF POINTING THE WRONG WAY. The paragraph below
+   is the reasoning as it stood when the bar took four stacked full-width lines; the rule beneath
+   this one now folds each caption beside its track, so the NARROW branch is 114px and the
+   crossing has to beat that rather than the 144px it was written against. Measured across the
+   container sweep after that change: 820 -> 114px, **860 -> 126px**, 880 -> 85px, 900+ -> 82px.
+   At 860 the wide branch was making the row TWELVE PIXELS TALLER at the exact width it engaged.
+
+   BE HONEST THAT THIS IS UNREACHABLE TODAY. The copies container is 612px at 1440 and 528px at
+   1280, so `min-width` needs roughly a 1980px viewport to fire at all. 860 was chosen because
+   "columns 2+3 measure 862px at Playwright's 1280" — a layout D40 deleted — so the number was
+   inherited from a dead premise, which is the same defect the position label's own comment was
+   found to have. Fixed rather than left, because a threshold that is wrong and dormant is worse
+   than one that is wrong and visible: nothing will fail while it waits.
+
+   The original argument, kept because its SHAPE is still right — pick the width where the branch
+   starts being better, not the width where it becomes ideal:
+
    860px, NOT the ~940 where all four parts fit on one line. 940 is where the row becomes ideal;
    860 is where it stops being what it is today and starts being better — and columns 2+3 measure
    862px at Playwright's 1280, so the branch the owner sees at 1440 is at least rendered by the
    test viewport. That is the same argument this repo makes for putting the page breakpoint at
    1240 rather than at the owner's 1440. Between 860 and 940 the row is place+bar, then
    state+action: two lines, still better than three. */
-@container copies (min-width: 860px) {
+@container copies (min-width: 880px) {
   .card-locations-owner .card-locations-row > .position-bar {
     flex: 1 1 20rem;
     order: 0;
@@ -198,7 +215,7 @@
    `white-space: nowrap` ON THE CAPTIONS because they are now in an `auto` track beside a
    flexible one: without it the grid would shrink the caption to its longest word rather than
    shrinking the track, and the two-line caption is the thing this rule exists to delete. */
-@container copies (max-width: 859px) {
+@container copies (max-width: 879px) {
   .card-locations-owner .card-locations-row > .position-bar-owner {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
