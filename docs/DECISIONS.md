@@ -596,6 +596,27 @@ reconstructions of both historical false positives, and fails open on its own bu
 `--no-verify` no longer switches off the only opsec layer, and the commit-time rules are
 again the backstop rather than the whole guard.
 
+**A GIT WORKTREE INSIDE THE TREE IS ANOTHER BRANCH, AND THE AUDIT DOES NOT WALK ONE** (added
+2026-08-29). Concurrent sessions check worktrees out under `.claude/worktrees/<name>/`, which is a
+full source tree of a DIFFERENT branch sitting inside this one. The walk found them, so the audit
+was checking one branch's prose against another branch's code and reporting the disagreement as a
+defect in yours. Observed: a worktree's `CLAUDE.md` documented a `worktree-setup` target, real on
+its own branch, and the make-targets check failed a commit on `main`, which has no such target.
+**Two branches are allowed to disagree; that is what a branch is.**
+
+**It is pruned twice, by name and by asking git, and the two cover different things.** `worktrees`
+in `SKIP_DIRS` catches the convention and keeps working when git does not answer. `nested_worktrees()`
+reads `git worktree list --porcelain` and prunes any checkout under the repo root whatever it is
+called — verified against a worktree named `zz-scratch-wt`, which no name rule could guess: zero
+files walked, audit clean. It fails open exactly as `ignored_paths` does, because a discovery
+helper that can abort the audit is worse than one that occasionally walks too much.
+
+**This is not the gitignore filter and neither subsumes the other.** That filter stops a finding
+being *reported* for local state; this stops a foreign tree being *enumerated*. The finding here
+was against the make-targets check, which never consults the filter. `--self-test` covers the staged path;
+the on-disk path needs a real repository with a real worktree in it and was verified by hand, which
+that case says in as many words rather than implying coverage it does not have.
+
 **Nothing on the audit path can write.** The script opens, compares, prints, and sets an
 exit code; it parses with `ast` rather than importing, so it does not even run project code.
 Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
@@ -2669,6 +2690,23 @@ change behaves identically to the shipped one. Written at the default viewport, 
 against the very mutation it exists to catch. It is red at 1440 against that change and green
 against this one, observed both ways.
 
+**AND THE FOLD EXPOSED A CLIFF POINTING THE WRONG WAY, WHICH IS FIXED HERE (860 -> 880).**
+`CardLocations.css` switches the bar into the row at a container threshold, and 860 was chosen
+against a 144px narrow row. Once the narrow row was 114px the wide branch was producing **126px at
+the exact width it engaged**: measured across the sweep, 820 -> 114, **860 -> 126**, 880 -> 85,
+900+ -> 82. Crossing into the better branch made the row twelve pixels taller.
+
+**It was dormant rather than invisible, and that is the worse condition.** The copies container is
+612px at 1440 and 528px at 1280, so `min-width` needs roughly a **1980px viewport** to fire at all
+— nothing in the suite and nothing on the owner's display would ever have rendered it. 860 was
+picked because "columns 2+3 measure 862px at Playwright's 1280", a layout this very entry deleted,
+so the number was inherited from a dead premise. That is the same defect D41 found in the position
+label's own comment, in a rule that had no way to fail while it waited.
+
+**The assertion is the PROPERTY, not the new number**: a container that grows may never make a row
+taller. Pinning 880 would go green on any later change that moves the cliff somewhere else, which
+is exactly how this one survived.
+
 **WHAT IT COSTS, NAMED RATHER THAN BURIED.** `.boxops-meta` wraps from one line to two — 17px to
 33px — because it needs the full 360px track and now has 299. Measured across 299-360px: it is
 one line at 360 and two below it, with no intermediate. Accepted rather than fixed: it is a
@@ -2767,11 +2805,22 @@ describe what is in the box; `next index` is D10's high-water mark — what the 
 out next. Four peers joined by dots was a false claim about them, and the structure is now the
 distinction rather than a sentence explaining it.
 
-**AND `fill` FINALLY SAYS WHICH KIND OF NUMBER IT IS, WHICH DISCHARGES D20.** That entry is
-explicit that a denominator whose meaning switches silently between an open box and a sealed one
-is the failure it exists to prevent — `fill` is a fill-**so far** while the box is open and a
-frozen capacity once **sealed**, and the two were rendered identically for as long as this line
-existed. It carries D20's own two words now.
+**AND D20's TWO WORDS ARE ON SCREEN ONCE, ON THE IDENTITY LINE.** That entry is explicit that a
+denominator whose meaning switches silently between an open box and a sealed one is the failure it
+exists to prevent — `fill` is a fill-**so far** while the box is open and a frozen capacity once
+**sealed**.
+
+**THE QUALIFIER WAS PUT ON `.boxops-meta`'s FILL AND TAKEN OFF AGAIN ONE COMMIT LATER**, and the
+correction is worth recording because the first version made a duplication EXACT that had until
+then only been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`;
+adding the same two words to the meta line put the identical string on screen twice, nine words
+apart. Measured on the owner's store, both before and after.
+
+**The field stays and only the qualifier goes**, which is the half that matters: `BoxOps.tsx`
+promises these key names grep to `inventory.json`, so dropping `fill` outright — the other option
+considered — would have broken one promise to keep another. D20 is discharged either way, because
+its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site that
+draws it.
 
 **FIELD NAMES STAY VERBATIM IN THE DOM.** `BoxOps.tsx` promises that what is on screen greps to
 `inventory.json`; the keys are written lowercase and uppercased by `text-transform` at paint only,

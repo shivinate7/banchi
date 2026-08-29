@@ -1885,6 +1885,68 @@ test('a narrow copies column shortens the bar, never the position label', async 
   expect(geom.sectTrackH).toBeGreaterThan(0)
 })
 
+test('a wider copies column never makes its rows taller', async ({ page }) => {
+  await open(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.locator('.card-locations-row').first().waitFor()
+
+  /* THE DEFECT THIS CLOSES, AND IT WAS DORMANT RATHER THAN INVISIBLE. `CardLocations.css` switches
+     the position bar into the row at a container threshold. That threshold was 860px, chosen when
+     the bar took four stacked full-width lines and the narrow row was 144px. Folding each caption
+     beside its track took the narrow row to 114px — and left the WIDE branch producing 126px at
+     the exact width it engaged. Measured: 820 -> 114, 860 -> 126, 880 -> 85, 900 -> 82. Crossing
+     into the "better" branch made the row twelve pixels taller.
+
+     IT COULD NOT BE SEEN. The copies container is 612px at 1440 and 528px at 1280, so `min-width`
+     needs roughly a 1980px viewport to fire at all — nothing in this suite or on the owner's
+     display would ever have rendered it. A threshold that is wrong and dormant is worse than one
+     that is wrong and visible, because nothing fails while it waits.
+
+     SO THE ASSERTION IS THE PROPERTY, NOT THE NUMBER. Whatever the threshold is, a container that
+     grows must never make a row taller — that is what "this branch is better" means, and it is
+     the claim a future re-tune has to keep. Pinning 880 instead would go green on any later change
+     that moves the cliff somewhere else. */
+  const heights = await page.evaluate(() => {
+    const host = document.querySelector('.browse-under') as HTMLElement
+    const previous = host.style.cssText
+    const out: { width: number; row: number }[] = []
+    for (const width of [560, 640, 760, 820, 860, 870, 880, 900, 940, 1024]) {
+      host.style.width = `${width}px`
+      host.getBoundingClientRect()
+      const row = document.querySelector('.card-locations-row') as HTMLElement
+      out.push({ width, row: Math.round(row.getBoundingClientRect().height) })
+    }
+    host.style.cssText = previous
+    return out
+  })
+
+  const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
+  expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
+
+  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
+     deleting the threshold and never switching at all. */
+  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+})
+
+test('the box fill is qualified once, on the identity line', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* D41 put D20's `so far` / `sealed` on `.boxops-meta`'s fill, and `BoxIdentity` sixteen pixels
+     above already carried it — so for one commit `133 so far` rendered twice on one screen. D20's
+     rule is that the number is unambiguous on screen, not that it is annotated at every site.
+
+     THE FIELD STAYS AND ONLY THE QUALIFIER GOES, which is the half worth asserting: `BoxOps.tsx`
+     promises these key names grep to `inventory.json`, so a fix that dropped `fill` outright would
+     have broken a different promise to keep this one. */
+  await expect(page.locator('.boxops-meta-qual')).toHaveCount(0)
+  const keys = await page.locator('.boxops-meta-key').allTextContents()
+  expect(keys).toContain('fill')
+
+  const identity = await page.locator('.boxops-identity').innerText()
+  expect(identity).toMatch(/so far|sealed/)
+})
+
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {
   await open(page)
   await openBoxOps(page)

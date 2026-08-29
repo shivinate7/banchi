@@ -567,12 +567,15 @@ export function BoxIdentity({
           </span>
           <span className="boxops-meta-cell">
             <span className="boxops-meta-key">fill</span>
-            <span className="boxops-meta-num">
-              {fill ?? 'unknown'}
-              {fill === null ? null : (
-                <i className="boxops-meta-qual">{sealed ? 'sealed' : 'so far'}</i>
-              )}
-            </span>
+            {/* NO QUALIFIER HERE, AND IT WAS HERE FOR ONE COMMIT (2026-08-29). D41 put D20's
+                `so far` / `sealed` on this number, correctly — and `BoxIdentity` sixteen pixels
+                above already carries it, so the effect was to make an approximate duplication
+                EXACT: `133 so far` rendered twice on one screen, nine words apart. D20's rule is
+                that the number is unambiguous on screen, not that it is annotated at every site,
+                and the identity line is the better host because that is where the box's state is
+                already being read. The field stays, so `BoxOps.tsx`'s promise that these names
+                grep to `inventory.json` is untouched. */}
+            <span className="boxops-meta-num">{fill ?? 'unknown'}</span>
           </span>
         </p>
         <p className="boxops-meta-next">
