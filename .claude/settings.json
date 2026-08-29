@@ -8,11 +8,11 @@
       "Bash(make screenshot)",
       "Bash(npm run lint)",
       "Bash(git status)",
+      "Bash(git push:*)",
       "Bash(git diff:*)"
     ],
     "deny": [
       "Read(./.env)",
-      "Bash(git push:*)",
       "Write(./fixtures/**)",
       "Edit(./fixtures/**)"
     ]
