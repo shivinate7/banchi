@@ -232,10 +232,21 @@ function OwnerRows({
 
   return (
     <section className="card-locations card-locations-owner">
+      {/* NO CARD NAME ON THE OWNER'S HEAD SINCE 2026-08-26, and it is a deletion rather than a
+          demotion. This drew the name at 20px display while the card panel's own first fact row
+          — `Card: Volcanion` — carries it a few hundred pixels directly above, on the same
+          screen, about the same card. D38 deleted a whole panel over "two renderings of one fact
+          on one screen"; this is the same finding at header scale, and it only became visible
+          when the copies moved up under the band and the two ended up 24px apart.
+
+          IT PAID FOR A COPY ROW. Measured: the head goes 84px -> 30px, which is most of an 83px
+          row, and the rows are what this section is for.
+
+          THE FULFILLER'S NAME IS UNTOUCHED. His skin renders its own `<h2>` in a different
+          branch below, at 32px, and it is the payload of his screen rather than a restatement —
+          nothing on `#/fulfillment` draws a fact list. `meta` stays here on both: `sku` and the
+          condition string appear nowhere else on this route. */}
       <header className="card-locations-head">
-        <h3 className="card-locations-name">
-          {group.names.length === 0 ? 'Not identified yet' : group.names.join(' / ')}
-        </h3>
         <p className="card-locations-meta">{meta.join(' · ')}</p>
 
         {/* `listed N of LISTABLE` reads the LIVE count against what D7 permits for THIS SKU —

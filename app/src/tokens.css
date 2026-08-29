@@ -72,6 +72,26 @@
      value the house rule against raw hex cannot be enforced against. */
   --on-accent: #ffffff;
 
+  /* THE BOUNDARY OF SOMETHING YOU TYPE INTO, and the only token in this file that exists for a
+     contrast criterion rather than for the interview.
+
+     `--line` is 1.24:1 on surface. That is deliberate for a separator — the walk draws a
+     hairline under all 543 of its rows and it is supposed to disappear behind the cards — and
+     it is wrong for the edge of a control, which WCAG 1.4.11 puts at 3:1 because the edge is
+     the only thing identifying it. An empty text input IS its rectangle: at 1.24:1 you find it
+     by its placeholder. A button at the same contrast is found by the ink label inside it at
+     19.9:1, which is why this is not a button token.
+
+     DARKENING `--line` ITSELF WAS BUILT AND RENDERED FIRST. At a true 3:1 (~#8c8c8c) the
+     section list reads as a spreadsheet grid — the one failure docs/DESIGN.md names by product
+     — and `BoxOps.css`'s box track, which PAINTS with `--line` rather than bordering with it,
+     goes from the quietest visible mark in the palette to something reading as ink.
+
+     NAMED FOR THE ONE JOB IT HAS, so it cannot grow one. `--edge` or `--control` would have
+     been taken by a button border within a session, and that is the weight this product just
+     spent a rebuild removing from the box operations. */
+  --field: #8c8c8c;
+
   /* ---- type. Three faces, each with exactly one job. ---- */
   --display: 'Cabinet Grotesk', sans-serif; /* 700/800 only, and only at >= 20px */
   --body: 'Atkinson Hyperlegible', sans-serif; /* 400/700. Drawn for low vision — a

@@ -18,12 +18,18 @@
 }
 
 /* The box, not the input. The border lives out here so the key chip can sit inside it and the
-   whole thing reads as one control — an input with a chip floating beside it is two things. */
+   whole thing reads as one control — an input with a chip floating beside it is two things.
+
+   --field, NOT --line, AND THIS IS THE STRONGEST CASE FOR THAT TOKEN. An empty search field is
+   a rectangle and nothing else; at the hairline's 1.24:1 the only thing locating it was the
+   placeholder inside it. It is also the one input in the product BOTH personas touch, and the
+   Fulfiller is the one who benefits most — his view's whole design is about being findable at
+   reading distance. Nothing in app/tests/fulfillment.spec.ts measures a border. */
 .search-field-box {
   display: flex;
   align-items: center;
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field);
   border-radius: var(--r);
 }
 

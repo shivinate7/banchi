@@ -118,13 +118,26 @@
 /* s2 vertical, s3 horizontal. The horizontal padding is what keeps a step's text off its own
    border and is unchanged; the vertical was buying air above a heading that already has a gap
    under it, four times over in an open run. */
+/* A STEP IS A ROW IN A LIST, NOT A CARD IN A PANEL (owner, 2026-08-26). It was a bordered
+   rounded box with its own padding, four of them stacked inside `.run-panel`, which is itself a
+   bordered rounded box — four boxes in a box, and the enclosure said "these four are separate
+   objects" when the only true statement about them is that they run in order.
+
+   THE SAME PASS THE BOX'S OPERATIONS TOOK, ONE COLUMN LEFT, and the owner asked for it in those
+   terms once they had seen that one. `--line` separates and does not enclose, which is
+   BoxOps.css's header rule and this file's own everywhere else; the hairline over each step is
+   the separator and the panel's border is the only enclosure left.
+
+   IT ALSO GIVES BACK 26px OF MEASURE PER STEP. The step's own 12px of side padding sat inside
+   the panel's 16px, so a 13px note was being read at 310px inside a 370px column. Flush with the
+   panel, the notes and the console below them take the full measure — which is the width this
+   column was narrowed to 370 for. */
 .run-step {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
 }
 
 .run-step-head {
@@ -136,9 +149,14 @@
 
 /* NOT THE PANEL TITLE'S SIZE, as of 2026-08-25. This was 20px display 700 — identical to
    `.run-title` — so an open run stacked FOUR headings at the panel heading's own weight and the
-   hierarchy said the steps and the panel were the same rank. 14px body 700 is what BoxOps gives
-   the same job one column over (`.boxops-more-label`), so the two panels in this column now
-   agree about what a section title inside a panel looks like.
+   hierarchy said the steps and the panel were the same rank.
+
+   13px BODY 700, WHICH IS `.boxops-op-label`'s, AND THE NUMBER MOVED ONCE MORE ON 2026-08-26.
+   It was 14, matching `.boxops-plain` — the chip the box's operations used to be. Those became
+   13px rows the same day, so 14 here would have left the two columns disagreeing by a pixel
+   about what a control's label is, which is the drift this comment was written to close in the
+   first place. (The class it used to name, `.boxops-more-label`, no longer exists; D38's
+   rebuild deleted it and this reference outlived it.)
 
    The face changes with the size because it has to: docs/DESIGN.md draws the display face at
    >= 20px only, and `.run-title`'s comment is exactly right that 20px is its published floor.
@@ -146,7 +164,7 @@
    heading nested inside the panel it names. */
 .run-step-title {
   font-family: var(--body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -246,7 +264,8 @@
   font-size: 13px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
+  /* --field: a boundary you type inside. See tokens.css. */
+  border: 1px solid var(--field);
   border-radius: var(--r);
 }
 
@@ -601,9 +620,9 @@
   color: var(--ink);
 }
 
-.run-step-free {
-  background: var(--surface);
-}
+/* NOTHING LEFT TO PAINT. This repainted `--surface` onto a bordered card that already sat on
+   `--surface`; with the border gone a step is a row on the panel's own ground and a fill here
+   would be the one thing that made the four look enclosed again. */
 
 .run-result {
   padding: var(--s2);
@@ -641,7 +660,9 @@
   line-height: 1.5;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
+  /* --field: a boundary you type inside — and this one holds `decisions.json`, which D33 keeps
+     as text rather than as a form precisely so it is edited by hand. See tokens.css. */
+  border: 1px solid var(--field);
   border-radius: var(--r);
   resize: vertical;
 }

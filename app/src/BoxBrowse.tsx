@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import type {
@@ -22,7 +22,7 @@ import {
   updateCard,
   newCaptureId,
 } from './server'
-import { BoxIdentity, BoxOps, ClaimEditor, RegisterBox, type ClaimPatch } from './BoxOps'
+import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
@@ -593,6 +593,48 @@ function waitingFor(firstSeen: string): string {
 function collectorNumber(card: InventoryCard): string {
   if (card.number === null) return 'none'
   return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
+}
+
+/**
+ * The position label, with its separators drawn quieter than its parts.
+ *
+ * THE STRING IS THE SERVER'S AND IS NOT TOUCHED — every character it sent is rendered, in the
+ * order it sent them, and nothing here composes, pads or reformats a label.
+ * `pipeline/join.py:Position` is still the only label formula in the repo, and this is the same
+ * distinction `PositionBar` draws when it refuses to derive a section from an index: reading a
+ * string to decide what COLOUR to paint it is not deriving it.
+ *
+ * WHY IT IS WORTH A COMPONENT. Martian Mono's advance is 0.70em, measured at this size and
+ * weight, so ` · ` is three full cells — about 50px at 24px — and the label was reading as
+ * three separate pools of white rather than as one address. The parts carry the meaning and the
+ * joints carry none, so the joints are the half that gives way. Nothing moves: every glyph is
+ * exactly where it was, which is what makes this cheaper than the two alternatives (tightening
+ * the tracking on a fixed-advance face, or dropping the size that was set deliberately on
+ * 2026-08-26).
+ *
+ * DEFENSIVE ABOUT THE SEPARATOR IT DOES NOT FIND. A label that does not split — a formula
+ * change, a pooled fallback, an older server — renders whole and unstyled rather than as an
+ * empty node. The failure mode of a mis-guessed separator is a label that looks like it always
+ * did, never one that vanishes.
+ *
+ * SCOPED TO THIS SCREEN ON PURPOSE. `.review-position` and `.card-locations-label` draw the
+ * same string and are untouched: this is the one drawn at 24px, where the joints are widest and
+ * the complaint was made. If it reads better here it is worth taking to the other two, and that
+ * is a decision about all three rather than a copy of this one.
+ */
+function PositionParts({ label }: { label: string }) {
+  const parts = label.split(' · ')
+  if (parts.length < 2) return <>{label}</>
+  return (
+    <>
+      {parts.map((part, at) => (
+        <Fragment key={part + at}>
+          {at === 0 ? null : <span className="browse-position-joint"> · </span>}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  )
 }
 
 export function BoxBrowse({
@@ -1769,22 +1811,28 @@ export function BoxBrowse({
                 advertisement for the deep ones, which is a thing learned once and then read
                 past for the rest of the day. */}
 
-            {/* Register a box before a card goes into it — D20's control, in the column that
-                lists every box it would join, at the bottom of it.
+            {/* `RegisterBox` STOOD HERE AND IS DELETED (owner, 2026-08-26: "delete register a
+                new box from inventory screen"). It offered a box number, a name and dividers,
+                and made an empty box.
 
-                UNDER THE WALK RATHER THAN OVER IT, and the reason is measured. This column is
-                sticky and its height is the viewport, so everything above the list is height
-                the list does not get: drawn between the strip and the walk this control cost
-                44px of rows, permanently, to offer an action taken a handful of times a year.
-                Below, it costs nothing until the list is short enough to leave room. It is
-                still beside the strip in the sense D20's own argument needs — every existing
-                box is listed in the same column, which is what makes a mistyped number
-                visible. */}
-            {/* THE BOX'S OWN OPERATIONS, at the bottom of the box's own column and directly
-                above the control that creates one. Rename, re-divide, seal, set claims over the
-                ticked cards, release a listing hold, delete the box — every one of them acts on
-                a BOX, which is what makes this the right neighbour for `RegisterBox` and the
-                wrong one for a card panel.
+                THE CAPABILITY IS NOT LOST, WHICH IS THE ONLY THING THAT MADE THE DELETION SAFE.
+                `CaptureScreen.tsx:createOfferedBox` calls the same `POST /boxes` from the Box
+                field: an entry matching no box offers to create it, by name or by number, and
+                the box it makes holds nothing until a photograph lands in it. That is D20's
+                "the box that holds nothing is the point", served from the screen a person is
+                standing at when they reach for a new drawer rather than from the one they use
+                to look up where a card already is.
+
+                WHAT WENT WITH IT is the argument for its placement — it sat UNDER the walk
+                rather than over it, because this column is sticky and viewport-capped, so a
+                44px control between the strip and the list was 44px of rows the walk never got.
+                That reasoning is worth keeping as a rule about this column even though the
+                control it was written for is gone: anything added above `.browse-list` is paid
+                for out of the cards. */}
+            {/* THE BOX'S OWN OPERATIONS, and now the last thing in the box's own column.
+                Rename, re-divide, seal, set claims over the ticked cards, release a listing
+                hold, delete the box — every one of them acts on a BOX, which is what makes this
+                the wrong neighbour for a card panel.
 
                 BELOW THE WALK RATHER THAN ABOVE IT, and that costs nothing because the walk
                 scrolls inside this column: `.browse-list` is `flex: 0 1 auto` with its own
@@ -1807,8 +1855,6 @@ export function BoxBrowse({
                 onChanged={() => setReloads((n) => n + 1)}
               />
             )}
-
-            <RegisterBox onChanged={() => setReloads((n) => n + 1)} />
           </div>
 
           <div className="browse-side">
@@ -1901,7 +1947,9 @@ export function BoxBrowse({
                        and sized up because it is the one thing being checked against a physical
                        box across the desk. */
                     <>
-                      <p className="browse-position">{selectedLabel}</p>
+                      <p className="browse-position">
+                        <PositionParts label={selectedLabel} />
+                      </p>
                       {/* D30's sentence, quiet, directly under the label it makes countable:
                           "between Mantine and Thievul · 2 slots in this section are empty".
                           `Card 17` is the seventeenth SLOT, and once the section has permanent
@@ -1929,11 +1977,13 @@ export function BoxBrowse({
                   />
                 </div>
 
-                {/* WHAT THIS CARD IS, THEN WHAT CAN BE DONE TO IT — one column beside the
-                    photograph. `CardOps` is here rather than below the band because the band's
-                    two sides are now different heights, and the ~70px it fills is the air that
-                    would otherwise sit under the facts. Its writes are card-level, like every
-                    row above it, so the column reads as one subject. */}
+                {/* WHAT THIS CARD IS — the eleven fact rows, and nothing else since 2026-08-26.
+                    `CardOps` and the open-question block sat under them here, on the argument
+                    that the band's two sides were different heights and the ~70px they filled was
+                    air that would otherwise sit under the facts. That was true of a two-track
+                    band and this one has three: the writes get a track, and the facts get a
+                    measure cut to their own ink rather than a `1fr` that was 260px at 1440 and
+                    100px at 1280. See `.browse-detail` in the stylesheet for both numbers. */}
                 <div className="browse-about">
                   <dl className="browse-facts">
                     {detailsOf(selectedRow.card).map((fact) => (
@@ -1943,7 +1993,18 @@ export function BoxBrowse({
                       </div>
                     ))}
                   </dl>
+                </div>
 
+                {/* WHAT CAN BE DONE TO THIS CARD, in a track of its own (2026-08-26). These two
+                    blocks were the tail of `.browse-about`, under the eleven fact rows, and the
+                    move is what takes the band from 445px to 420px on its own — a card-level
+                    write does not want the 300px measure a definition list wants.
+
+                    THE ORDER IS UNCHANGED AND SO IS THE DOM SEQUENCE: what is waiting on this
+                    card, then what can be done about it. Moved in the DOM rather than with
+                    `order`, this file's standing rule, so the tab ring and a screen reader walk
+                    what the eye walks. */}
+                <div className="browse-ops">
                   {/* WHETHER THIS CARD HAS AN OPEN QUESTION, which is the fact that ties the
                       three things this screen is for together: the walk finds the card, this
                       says whether anything is waiting on it, and the run panel one column over
@@ -2020,24 +2081,62 @@ export function BoxBrowse({
             )}
           </div>
 
-          {/* THE THIRD COLUMN IS THE RUNS, and it used to be the box and the runs. D31 put box
-              operations "on the box header inside the browse, beside the box they operate on",
-              and on 2026-08-25 the owner pointed out that the box's header is now the left
-              column: the strip names it, the walk is its cards, and this panel was re-listing
-              those same sections as inert text a thousand pixels away. So the box went there and
-              the runs came up into the space.
+          {/* THE COPIES OF THIS CARD, DIRECTLY UNDER IT — D7's SKU -> positions map, handed down
+              by the screen that owns the write. This is where the merged Find mode went: you
+              search, the walk narrows, you pick one, and every other copy is right here with its
+              own position and its own controls. The node belongs to `Inventory.tsx` because the
+              receipts, the undo windows and the two confirm panels are one flow with twenty
+              pieces of state, and splitting a flow across two components is how half of it drifts.
 
-              WHAT THE PAIR BOUGHT IS STILL BOUGHT. D33 removed two disclosures on the grounds
-              that a `1fr 1fr` row cost one panel's height rather than two; a column beside the
-              card cost the card nothing at all; and this costs it nothing while giving the box
-              back to the box. Nothing folds, which is the half D33 actually settled.
+              IT MOVED UP PAST THE CONSOLE ON 2026-08-26, and the reason is in `BoxBrowse.css`'s
+              `.browse-body` comment: a grid row is as tall as its tallest cell, so while the card
+              and the run panel shared row 1 these began at y=938 — or y=1599 with a run picked,
+              1039px of white below the card on a 2214px page. The answer to "where is this card"
+              was positioned by a panel about something else, at an unbounded height.
 
-              THE `selectedRow` GUARD CANNOT REACH IN HERE, and that is worth having structurally
-              rather than by care. The old comment on `{boxPanel}` had to say in prose that it sat
-              outside the guard deliberately — a control about the SHELF that vanished when no
-              card was selected would be one the operator found by accident. It is in a different
-              top-level column from the guard, so no later edit can slide it inside without
-              moving it between columns first. */}
+              IT KEEPS THE FULL MEASURE, which was never the problem and is not negotiable:
+              `CardLocations.css`'s container query cuts the row 159px -> 83px as the container
+              crosses ~940, so the copies get the content column's whole width exactly as they got
+              columns 2+3 before. 1024px at 1440, and the same 864px at 1280 they have today.
+
+              RENDERED ONCE, WHICH IS THE SECOND THING THIS BUYS. `detail` used to draw at two
+              mutually exclusive sites so that a receipt whose twenty-second undo was still
+              running would survive a query matching nothing. Out here it is not inside
+              `selectedRow`'s guard at all, so that invariant is structural rather than a prose
+              promise — and `.browse-body > .browse-under:empty` hides only a node with no
+              children, so a standing receipt is never the thing collapsed.
+
+              BEFORE `.browse-boxrun` IN THE DOM, NOT AFTER. This file rules twice that a reorder
+              happens in the DOM rather than with `order`, so the tab ring and a screen reader
+              walk what the eye walks. That rule is unchanged; what it now produces is card,
+              copies, runs — the old comment here said "card, runs, copies is reading order at
+              both breakpoints", and that sentence moved with the rows rather than being kept. */}
+          <div className="browse-under">{detail}</div>
+
+          {/* THE RUNS, LAST IN THE CONTENT COLUMN — and until 2026-08-26 this was a third column
+              beside the card. D31 put box operations "on the box header inside the browse", D38
+              moved the box into the walk's column and left the runs a 370px track of their own,
+              and this is the third move in that sequence: the track is gone and the panel is a
+              full-width band under the copies.
+
+              WHY, IN ONE SENTENCE: its height, not its width, was the defect. A grid row is as
+              tall as its tallest cell, so a 799px console — 1461px with a run picked — decided
+              where the card's own copies began. `BoxBrowse.css`'s `.browse-body` comment carries
+              the measurements and the trade.
+
+              NOTHING FOLDS, WHICH IS THE HALF D33 ACTUALLY SETTLED, and it is untouched: no
+              disclosure, no cap, no internal scroller, every step head and note drawn in every
+              state, the spend button still absent-until-preflight rather than disabled. What
+              changed is where the panel sits in the reading order, not whether it is drawn — and
+              it draws SHORTER here than it did in the column, because 1024px unwraps its head,
+              its notes and its free steps: 799 -> 625 closed, 1461 -> 1143 open, with no code
+              change at all.
+
+              THE `selectedRow` GUARD STILL CANNOT REACH IN HERE. It is a `.browse-body` child in
+              its own grid row, and the guard lives inside `.browse-side` — so a control about the
+              SHELF cannot be slid inside a card's guard without first being moved between rows,
+              which is the structural version of a promise this comment used to make in prose.
+              `app/tests/inventory.spec.ts` asserts `.browse-side .run-panel` is never rendered. */}
           <div className="browse-boxrun">
             {/* WHY THERE IS NO BOX PANEL IN THE LEFT COLUMN, said in the column that has room
                 for the sentence. The pooled and no-box shelves are not boxes and have nothing to
@@ -2067,33 +2166,6 @@ export function BoxBrowse({
             {boxPanel}
           </div>
 
-          {/* THE COPIES OF THIS CARD, ACROSS COLUMNS 2 AND 3 — D7's SKU -> positions map, handed
-              down by the screen that owns the write. This is where the merged Find mode went:
-              you search, the walk narrows, you pick one, and every other copy is right here with
-              its own position and its own controls. The node belongs to `Inventory.tsx` because
-              the receipts, the undo windows and the two confirm panels are one flow with twenty
-              pieces of state, and splitting a flow across two components is how half of it drifts.
-
-              IT GETS THE PAGE'S SPARE MEASURE RATHER THAN THE CARD COLUMN'S, and the measurement
-              is the argument. In the middle column it was 976px of a 1450px page on the default
-              card and 1713px of 2187px on an eleven-copy one — while the right column ended at
-              y=451 and 778px of viewport sat empty beside a 630px stack of rows. Rebuilt wide
-              and measured: the row goes 144px to 82px and eleven copies go 1598px to 902px, a
-              43% cut with nothing removed. That is `CardLocations.css`'s own recorded complaint
-              answered rather than worked around — that file records these rows being re-cut from
-              a grid to a wrapping flex because a ~460px column shredded the position label.
-
-              RENDERED ONCE, WHICH IS THE SECOND THING THIS BUYS. `detail` used to draw at two
-              mutually exclusive sites so that a receipt whose twenty-second undo was still
-              running would survive a query matching nothing. Out here it is not inside
-              `selectedRow`'s guard at all, so that invariant stops being a prose promise and
-              becomes structural — and the duplication risk `app/tests/inventory.spec.ts` names
-              in its own comment stops existing.
-
-              AFTER `.browse-boxrun` IN THE DOM, NOT BEFORE. This file rules twice that a reorder
-              happens in the DOM rather than with `order`, so the tab ring and a screen reader
-              walk what the eye walks: card, runs, copies is reading order at both breakpoints. */}
-          <div className="browse-under">{detail}</div>
         </div>
       ) : null}
     </section>

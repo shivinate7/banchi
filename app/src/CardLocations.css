@@ -35,23 +35,29 @@
   padding: var(--s3);
 }
 
+/* A ROW, NOT A COLUMN, since the card name left it (2026-08-26). What is left is two metadata
+   lines — `sku …` and the three counts — and stacking two 17px lines under a deleted heading
+   spent 84px to say what fits on one. Measured: 84px -> 30px, which is most of an 83px copy row.
+
+   `space-between` so the identity reads from the left and the counts from the right, which is
+   the same left-label / right-detail shape the box operations took the same day. It wraps rather
+   than shrinking either: at 864px they still share a line, and below that the counts drop under
+   the sku instead of the two colliding.
+
+   THE DISPLAY-FACE RULE THAT LIVED HERE IS GONE WITH THE ELEMENT. It argued that a card name is
+   the one thing on an owner-side row that is a name rather than a number — correct, and now
+   carried by `.browse-fact dd` in the band above, which is body face at 15px. The Fulfiller's
+   `.card-locations-name` at 32px display is a different rule further down this file and is
+   untouched. */
 .card-locations-owner .card-locations-head {
   display: flex;
-  flex-direction: column;
-  gap: var(--s1);
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s5);
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--line);
-}
-
-/* Display face, at the bottom of the range docs/DESIGN.md allows it: 700/800 only, and only at
-   >= 20px. A card name is the one thing on an owner-side row that is a name rather than a
-   number, so it is the one thing here that is not mono. */
-.card-locations-owner .card-locations-name {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
 }
 
 /* Mono carries all metadata — reason codes, set and collector number, counts, positions. The

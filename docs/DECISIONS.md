@@ -1675,6 +1675,18 @@ notch further along: three routes shipped with full T7 coverage and no reachable
 which is where `CLAUDE.md`'s route-is-not-a-feature rule came from. A control behind a fold is
 one step better than that, not a different kind of thing.
 
+**What replaces the fold's saving has been rewritten three times, and the third is the panel's own
+MEASURE (2026-08-26).** The column is gone: its HEIGHT was setting the grid row that positioned the
+card's copies (D38, amended), so the panel moved to the last row of the content column and got the
+full width instead. Given 1024px it draws **625px closed and 1143px open**, against 799 and 1461 in
+a 370px track, with no code change — the head stops wrapping four command names and the step notes
+and free steps unwrap with it. Nothing folds, nothing is capped, nothing scrolls internally, and
+every control this entry protects is still drawn unconditionally; what moved is reading order.
+`app/tests/run-panel.spec.ts` now asserts that as an absence — `<details>` and `<summary>` at zero
+inside the panel — which is the one form of this ruling no future relocation can falsify.
+
+The two earlier answers, kept because the sequence is the argument:
+
 **What replaces the fold's saving is the COLUMN, not the disclosure** — and that sentence said
 *the row* until 2026-08-25, which is the honest way to record what actually happened. `BoxOps` and
 the run panel first shared one grid row beneath the card detail (`.browse-boxrun`, `1fr 1fr`), so
@@ -2191,6 +2203,33 @@ column costs it nothing. Nothing folds. The copies list moves to a full-width ro
 where D33's argument for keeping it in the facts column (a 587px photograph would push it off a
 900px viewport) is void.
 
+**"THE COLUMN COSTS IT NOTHING" WAS TRUE ABOUT WIDTH AND FALSE ABOUT HEIGHT, AND THE THIRD COLUMN
+IS GONE (owner, 2026-08-26: *"solve the dead pixel space in inventory between the card and its
+details, and then the location data that scrolls away after whitespace"*).** This paragraph
+checked one axis. A grid row is as tall as its tallest cell, and the card and the run panel shared
+row 1 while the copies were row 2 — so the copies began wherever the console ended. Measured on
+the owner's store, box 2:
+
+    console closed             799px  ->  copies at y=938,  378px of white,  page 1552
+    console with a run PICKED  1461px ->  copies at y=1599, 1039px of white, page 2214
+
+Picking a run is an ordinary act and the panel polls its own list on a 4s/20s timer, so the second
+row is a resting state — which means the answer to *where is this card* was positioned by
+something that is not about the card, at a height with no cap. A fix that closed 378px would have
+closed the best case only.
+
+`.browse-body` is now two columns and three rows: the walk, then the card, the copies and the
+console stacked in the content column. **The console pays for its own move** — widened from 370px
+to 1024px it draws 625px closed and 1143px open with no code change at all, because its head stops
+wrapping four command names and its notes and free steps unwrap with it. **What this entry got
+right and the rebuild keeps**: the box belongs in the walk's column, the runs are not the card's
+neighbour, and nothing folds.
+
+**What it costs, stated because it is the whole price**: `Check cost` was at viewport y=495 and is
+now a page down, below the copies. Identifying is done once per box; the copies answer the
+per-card question this route was merged to ask. If that trade is ever wrong the fix is to swap the
+last two rows, **never to restore the column** — the column is the mechanism.
+
 **THEN THE BOX LEFT THAT COLUMN AGAIN, AND THE SECOND MOVE IS THE ONE WORTH READING** (owner,
 same day): *"merge its functionality (so not visual merge, but rebuild type merge) and all exist
 on the left side"*. The evidence was a duplication nobody had counted: `BoxOps` drew `Section 1
@@ -2201,8 +2240,12 @@ left column is the box (the strip picks it, the list is its cards), so the box's
 operations belong there and the panel headed `Box 2` was the redundant instance.
 
 `BoxIdentity` is split out of `BoxOps` for it — name, fill, state and the segment track, under the
-strip that names the box. The operations stay in `BoxOps` and sit at the bottom of the walk beside
-`RegisterBox`, the other control that acts on a box rather than on a card. The sections list, its
+strip that names the box. The operations stay in `BoxOps` and sit at the bottom of the walk. They
+sat there *beside `RegisterBox`* until 2026-08-26, when the owner deleted that control from this
+screen outright — nothing is lost by it, because `CaptureScreen.tsx:createOfferedBox` calls the
+same `POST /boxes` from the Box field and makes the same empty box, which is where a person
+reaching for a new drawer already is. The operations are now the last thing in the column. The
+sections list, its
 `Layout and controls` heading, and the `sections 1 86 171 253 394` clause of the meta line are all
 **deleted rather than moved**: three renderings of one fact on one screen. The third column keeps
 the runs alone and narrows to 370px, and the card takes the difference.
@@ -2242,6 +2285,12 @@ rather than 1440: the owner works at 1440x900, and a breakpoint at exactly the w
 you cross by un-maximising a window. It also puts Playwright's 1280x720 inside the new layout, so
 `make design-check` exercises the three columns rather than only the fallback.
 
+**THE NUMBER SURVIVED THE COLUMNS (2026-08-26).** There is no three-column body any more and the
+body has no breakpoint at all — one arrangement at every width, which deleted the `@media
+(max-width: 1239px)` block and the two-rows-versus-three overlap hazard that block spends a
+paragraph documenting. 1240 now governs the CARD BAND's third track, and the reason above transfers
+without a word changed: Playwright's 1280 renders three tracks rather than only the fallback.
+
 **FOUR THINGS THE CARD PANEL GAINED ON 2026-08-25, from a design consultation the owner asked
 for and an adversarial pass over its proposals.** Recorded together because they are one finding
 in four places: this panel had been drawn for the layout and not for what it must SAY.
@@ -2275,6 +2324,15 @@ in four places: this panel had been drawn for the layout and not for what it mus
   than a breakpoint because that file's promise is to be honest "with no breakpoint to keep in
   step". It also collapses `detail`'s two render sites into one, which turns the surviving-receipt
   invariant from a prose promise into a structural fact.
+
+  **Amended 2026-08-26: the copies span the CONTENT COLUMN, which is the same width by another
+  name.** With the third column gone they take 1024px at 1440 and 864px at 1280 — the exact widths
+  they had spanning columns 2 and 3 — so every measurement above is untouched. The container query
+  is what makes the width non-negotiable and it was re-measured on the way past: a row is 83px at
+  >= 940px of container, 115px at 864, 127px at 860 and 159px at 630. **The 860 threshold is
+  therefore mis-set** — it buys a 127px row, not the one-line 83px one — and it is left alone
+  deliberately, because raising it to 940 without guaranteeing the container is that wide would
+  drop 1280 from a 115px row to a 159px one. Recorded as the sharpest known defect in this area.
 
 **The four new fact rows closed the band's air and slightly overshot**, which is worth recording
 because a test had to change for it: the facts are now 415px against a 349px photograph, so the

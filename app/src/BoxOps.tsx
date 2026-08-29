@@ -14,7 +14,6 @@ import type {
 import type { Failure } from './server'
 import {
   applyBoxClaims,
-  createBox,
   deleteBox,
   describeFailure,
   getBoxListings,
@@ -32,9 +31,11 @@ import './BoxOps.css'
  * into a box's contents at all, while `#/pull` walked a box's cards with photographs and could
  * say nothing about the box itself. The owner named it: three routes over one set of 767
  * records that "read as separate instances of one thing". So the route is gone, `BoxOps` below
- * draws onto the box header inside `BoxBrowse.tsx`'s walk, and `RegisterBox` sits beside the
- * strip that selects a box. Nothing about what a box IS changed — every paragraph below is
- * D20's argument unaltered, and the only thing this file lost is a `<main>`.
+ * draws onto the box header inside `BoxBrowse.tsx`'s walk. Nothing about what a box IS
+ * changed — every paragraph below is D20's argument unaltered, and the only thing this file
+ * lost in that move is a `<main>`. (It lost a second thing on 2026-08-26: `RegisterBox`, which
+ * used to sit beside the strip that selects a box and is now deleted — see the note above
+ * `BoxOpsPanel` for where creating a box lives instead.)
  *
  * WHY THAT MOVE IS THE RIGHT ONE AND NOT MERELY SMALLER: every control here names one box, and
  * on the old screen the box it named was a heading four hundred pixels above a divider field.
@@ -182,6 +183,61 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
 }
 
+/**
+ * One box operation, drawn as a row rather than as a chip.
+ *
+ * TWO REGISTERS ON ONE LINE, and the split is docs/DESIGN.md's own: the label is what the
+ * press does, in the body face because it is language; the detail is a value or a quantity, in
+ * the utility face because that file gives every number in the product to Martian Mono. Before
+ * this, `543` and `544` were set in bold Atkinson inside a sentence on a button, an inch under
+ * a `.boxops-meta` line drawing the identical numbers in mono.
+ *
+ * THE DETAIL IS INSIDE THE BUTTON, so it is part of the accessible name — "Seal box, freezes at
+ * 543" — rather than a caption a screen reader reaches separately or not at all. That is what
+ * lets D20's number-on-the-control rule survive the move off the label: the value is still
+ * announced by the thing you press.
+ *
+ * AND THE COMMA IS THE REASON FOR THE `aria-label`. The two spans are grid items with no text
+ * node between them, so the computed name concatenates to `Set claims543 cards` — measured, not
+ * assumed. A literal space between them would become an anonymous THIRD grid item and open a
+ * column. The label restates exactly what is on screen, in the visible order, so WCAG 2.5.3's
+ * label-in-name holds: what a person reads is what a screen reader says, plus a comma.
+ *
+ * IT MAY BE ABSENT AND THE ROW DOES NOT MIND. Rename edits a name that `BoxIdentity` already
+ * draws at the top of this column, and repeating it here to fill a cell would be the
+ * duplication D38 deleted a whole panel over. `max-content` on the second track means an empty
+ * detail costs nothing and the label simply takes the row.
+ *
+ * `busy` RATHER THAN `disabled`, so that every caller spells the same word. The panel's writes
+ * all share one in-flight flag and the seal adds its own condition to it; naming the prop after
+ * the state rather than after the attribute is what stops a call site passing one and meaning
+ * the other.
+ */
+function Op({
+  label,
+  detail,
+  busy,
+  onClick,
+}: {
+  label: string
+  detail?: string
+  busy: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      className="boxops-op"
+      type="button"
+      aria-label={detail === undefined ? label : `${label}, ${detail}`}
+      disabled={busy}
+      onClick={onClick}
+    >
+      <span className="boxops-op-label">{label}</span>
+      {detail === undefined ? null : <span className="boxops-op-detail">{detail}</span>}
+    </button>
+  )
+}
+
 /** A number off the wire, or null for anything that is not one.
  *
  *  `GET /boxes` answers `fill`, `next_index` and `capacity` as null on purpose — a box with no
@@ -323,110 +379,26 @@ function reached(record: BoxRecord, from: number): { sections: number[]; cards: 
   }
 }
 
-/* Register a box before a card goes into it — D20's whole reason for existing.
+/* WHY THERE IS NO `RegisterBox` HERE ANY MORE (owner, 2026-08-26: "delete register a new box
+ * from inventory screen").
  *
- * THE BOX THAT HOLDS NOTHING IS THE POINT. Before this route the first thing that declared box
- * 4 was a photograph landing in it, so a typo like 33 for 3 was a valid integer, a real photo
- * and eventually a real listing. Typing the number once, on a screen, with every existing box
- * listed underneath it, is the fix.
+ * IT WAS DELETED RATHER THAN HIDDEN, AND THE CAPABILITY DID NOT GO WITH IT — which is the
+ * only thing that made the deletion safe to take. `CaptureScreen.tsx:createOfferedBox` calls
+ * the same `POST /boxes`: an entry in the Box field that matches no box offers to create it,
+ * by name when the entry is a name and by number when it is a number, and the box it makes
+ * holds nothing until a photograph lands in it. D20's whole reason for the control — "the box
+ * that holds nothing is the point", a box registered before a card goes into it — is still
+ * served, from the screen where a person is standing when they reach for a new drawer.
  *
- * NO CAPACITY FIELD, EVER. D20: nobody knows a box's capacity when they start filling it, and
- * a number accepted here would be a guess that every fraction later drawn from the box
- * inherits. It is not omitted for brevity; the route does not accept one.
+ * WHAT IS ACTUALLY GIVEN UP IS ONE STEP, NAMED SO NOBODY RE-DERIVES IT AS A LOSS. This form
+ * took dividers at creation time and the capture screen's offer does not, so a box that wants
+ * a declared layout is now created there and divided here with `Edit dividers`. D10 makes
+ * dividers freely editable from any screen and relabels on every edit, so the two-step form
+ * costs a press and nothing else.
  *
- * IT SITS BESIDE THE STRIP THAT SELECTS A BOX (D31), which is where "with every existing box
- * listed underneath it" now literally holds: the strip IS that list, one cell per box, and the
- * typo this control exists to prevent is visible as a cell that is not there.
- */
-export function RegisterBox({ onChanged }: { onChanged: () => void }) {
-  const { busy, trouble, write } = useBoxWrite(onChanged)
-  const onCreate = (input: { box: number; name?: string; sections?: number[] }) =>
-    write(() => createBox(input))
-  const [open, setOpen] = useState(false)
-  const [number, setNumber] = useState('')
-  const [name, setName] = useState('')
-  const [dividers, setDividers] = useState('')
-  const [refused, setRefused] = useState<string | null>(null)
-
-  const submit = async () => {
-    const box = readIndices(number)
-    /* Exactly one number, and it is a box number rather than a divider list — the same reader
-     * because the question is the same one (is this text a whole number), and the check here is
-     * that there is precisely one of them. */
-    if (box === null || box.length !== 1 || box[0] === undefined) {
-      setRefused('A box number is a whole number, like 3.')
-      return
-    }
-    const sections = readIndices(dividers)
-    if (sections === null) {
-      setRefused('Dividers are the card number each section starts at, like 1, 31, 56.')
-      return
-    }
-    setRefused(null)
-
-    const ok = await onCreate({
-      box: box[0],
-      ...(name.trim() === '' ? {} : { name: name.trim() }),
-      /* Omitted when blank rather than sent as `[]`, and the two are different requests: `[]`
-       * declares the box undeclared and omitting leaves its layout alone. On a box being
-       * created they land in the same place, and sending the honest one keeps the history
-       * event off a layout nobody typed. */
-      ...(sections.length === 0 ? {} : { sections }),
-    })
-    if (ok) {
-      setNumber('')
-      setName('')
-      setDividers('')
-      setOpen(false)
-    }
-  }
-
-  if (!open) {
-    return (
-      <div className="boxops-new">
-        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
-          Register a box
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="boxops-new boxops-new-open">
-      <p className="boxops-new-head">Register a box</p>
-      <div className="boxops-fields">
-        <Field label="Box number" value={number} onChange={setNumber} placeholder="3" />
-        <Field label="Name (optional)" value={name} onChange={setName} placeholder="SV commons" />
-        <Field
-          label="Dividers (optional)"
-          value={dividers}
-          onChange={setDividers}
-          placeholder="1, 31, 56"
-        />
-      </div>
-      <p className="boxops-hint">
-        Dividers are the card number each section starts at, so the first is always 1. Leave it
-        blank and the box uses the default divider size until you say otherwise. Capacity is not
-        asked for here and never will be — it is frozen when the box is sealed.
-      </p>
-      {refused === null ? null : <p className="boxops-machine">{refused}</p>}
-      <Trouble failure={trouble} />
-      <div className="boxops-actions">
-        <button
-          className="boxops-plain"
-          type="button"
-          disabled={busy}
-          onClick={() => void submit()}
-        >
-          Register
-        </button>
-        <button className="boxops-plain" type="button" onClick={() => setOpen(false)}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
+ * THE COMMENTS BELOW THAT USED TO NAME IT AS A NEIGHBOUR ARE CORRECTED, not left pointing at
+ * a component that is gone — see the delete's placement argument, which used to lean on
+ * "nothing below it inside `BoxOps`" and on this control being what sat under it. */
 
 /* One box: what it holds, how it is divided, and the four things that can be done to it.
  *
@@ -451,8 +423,8 @@ export function RegisterBox({ onChanged }: { onChanged: () => void }) {
  * renderings of one thing, and the inert one was the one with the title.
  *
  * So the readings come here, above the walk, where the box strip already names the box; the
- * OPERATIONS stay in `BoxOps` and go below the walk, beside `Register a box`. Two components
- * because they sit in two places, not because they are two subjects.
+ * OPERATIONS stay in `BoxOps` and go below the walk, beside `Register a new box`. Two
+ * components because they sit in two places, not because they are two subjects.
  *
  * NO BORDER AND NO PANEL. Everything in this column is part of one column; a bordered card here
  * would put a second box around the box. The hairline under it is the same separator the rest of
@@ -689,7 +661,7 @@ export function BoxOps({
 
           The heading went with the list it named. The fill and the track went UP, to sit with
           the box strip that already names the box. What is left here is the operations, and
-          they sit at the bottom of the column beside `Register a box`, which is the other
+          they sit at the bottom of the column beside `Register a new box`, which is the other
           control that acts on a box rather than on a card. */}
       <div className="boxops-more">
       {record.sections.length > 0 && record.sections_detail.length === 0 ? (
@@ -700,51 +672,76 @@ export function BoxOps({
       ) : null}
 
       {editing === null ? (
-        <div className="boxops-actions">
-          <button
-            className="boxops-plain"
-            type="button"
-            disabled={busy}
-            onClick={() => startEdit('name')}
-          >
-            Rename
-          </button>
-          <button
-            className="boxops-plain"
-            type="button"
-            disabled={busy}
+        /* FOUR ROWS, NOT SIX CHIPS (owner, 2026-08-26: "throw me a pass of the box operations
+           cuz its fucking ugly right now"). What stood here was a wrapping row of
+           shrink-to-fit bordered buttons — 79 / 110 / 109 / 267px on a sealed box, three rows
+           and 260 / 267 on an open one — inside a 360px column where the list, the meta line
+           and both hairlines run the full measure. Six different widths against one hard edge,
+           and the block was the heaviest type in a column whose real content is the walk.
+
+           THE GRAMMAR IS THE WALK'S OWN, one element up in the same column: `.browse-row` is a
+           full-measure borderless button with a hairline under it and `--hover` on hover, and
+           these are the same thing. That is what makes this a repair rather than a new look —
+           the column stops speaking two languages, and the raggedness goes because a row has
+           nowhere ragged to end.
+
+           THE NUMBER STAYS ON THE CONTROL AND IS EASIER TO READ THAN IT WAS. D20 requires the
+           seal to name the fill it freezes and this component requires the claim to name its
+           scope, both before the press. A row carries them as a right-aligned detail in the
+           utility face, so the promise is kept twice over: the value is still on the control a
+           press lands on, and it is now in the register docs/DESIGN.md gives every number in
+           the product instead of set as bold body text inside a sentence. The accessible name
+           carries both halves — "Seal box, freezes at 543" — because the detail is inside the
+           button.
+
+           IT ALSO STEADIES THE GEOMETRY, which the old row could not. `Set claims`' label used
+           to grow by ~150px when a tick changed in another column and `Seal box — freezes
+           capacity at 543` is 151px wider than `Re-open box`, so the block re-wrapped and the
+           delete moved under the cursor between one glance and the next. Every row is now the
+           full measure whatever it says, and only the detail changes width. */
+        <div className="boxops-ops">
+          <Op label="Rename" busy={busy} onClick={() => startEdit('name')} />
+          <Op
+            label="Edit dividers"
+            /* What the control edits, which is the fact the deleted sections list used to
+               carry. `sections_detail` is the server's own rendering of the layout and an
+               undeclared box has none — that is not zero sections, it is no declared layout,
+               and D10 makes the 25-rule render it. */
+            detail={
+              record.sections.length === 0
+                ? 'not declared'
+                : count(record.sections_detail.length, 'section', 'sections')
+            }
+            busy={busy}
             onClick={() => startEdit('sections')}
-          >
-            Edit dividers
-          </button>
+          />
           {sealed ? (
-            <button
-              className="boxops-plain"
-              type="button"
-              disabled={busy}
+            /* THE MIRROR OF THE SEAL'S PROMISE, AND IT IS NEW INFORMATION RATHER THAN A NUMBER
+               REPEATED. `store/master.py:reopen_box` sets `capacity = None` — D20's rule that
+               re-opening must not leave a stale number standing — so the honest detail names
+               what goes, not what survives. It carries no figure because there is none to
+               carry: the fill is already two rows up in `BoxIdentity`. */
+            <Op
+              label="Re-open box"
+              detail="capacity clears"
+              busy={busy}
               onClick={() => void onWrite({ state: 'open' })}
-            >
-              Re-open box
-            </button>
+            />
           ) : (
-            /* THE NUMBER IS ON THE BUTTON, and that is the requirement rather than a nicety.
+            /* THE NUMBER IS ON THE CONTROL, and that is the requirement rather than a nicety.
                Sealing freezes capacity at the fill and every fraction in the product then
                divides by it — a control reading "Seal box" alone would take a permanent
-               decision against a denominator the owner would have to go and find. Disabled when
-               the fill could not be read, because the honest label cannot be written and a seal
-               against an unknown number is exactly what this rule exists to prevent. */
-            <button
-              className="boxops-plain"
-              type="button"
-              disabled={busy || fill === null}
+               decision against a denominator the owner would have to go and find. Disabled
+               when the fill could not be read, because the honest detail cannot be written and
+               a seal against an unknown number is exactly what this rule exists to prevent. */
+            <Op
+              label="Seal box"
+              detail={fill === null ? 'fill unreadable' : `freezes at ${fill}`}
+              busy={busy || fill === null}
               onClick={() => void onWrite({ state: 'closed' })}
-            >
-              {fill === null
-                ? 'Seal box — the fill could not be read'
-                : `Seal box — freezes capacity at ${fill}`}
-            </button>
+            />
           )}
-          {/* THE ONE CONTROL HERE THAT WRITES CARDS RATHER THAN THE BOX, and its label says so
+          {/* THE ONE CONTROL HERE THAT WRITES CARDS RATHER THAN THE BOX, and its detail says so
               before it is pressed — the same rule the seal follows. A selection narrows it; no
               selection means the box. `record.cards` counts records naming this box, which is
               what the route walks.
@@ -753,8 +750,13 @@ export function BoxOps({
               box is called, where its dividers are, and whether the lid is on — the three
               things D20 makes a box object for, in that entry's order. This one is not about
               the box at all, so it is drawn after them rather than wedged between the dividers
-              and the lid. Last is also the only position in a wrapping row where a label that
-              changes width with the selection can rewrap nothing but itself. */}
+              and the lid.
+
+              THE DETAIL IS THE SHORT FORM AND `scope` IS THE LONG ONE, deliberately two
+              strings. `ClaimEditor`'s heading is read on its own once the editor is open and
+              still says "all 543 cards in box 2"; a row read at a glance beside three other
+              rows wants the quantity and nothing else. Both are composed from the same two
+              numbers, so neither can claim a scope the other does not. */}
           {/* AND NOT DRAWN AT ALL OVER NOTHING. `Set claims on all 0 cards in box 6` was a
               real string on a real screen the moment empty boxes became reachable — a control
               offering to write a claim onto no records, whose editor would open, take a
@@ -766,14 +768,16 @@ export function BoxOps({
               has come up (docs/DESIGN.md, on the run panel's spend button): a disabled button
               is one attribute away from pressable and states a capability that is not there. */}
           {selection.length > 0 || record.cards > 0 ? (
-            <button
-              className="boxops-plain"
-              type="button"
-              disabled={busy}
+            <Op
+              label="Set claims"
+              detail={
+                selection.length > 0
+                  ? `${selection.length} ticked`
+                  : count(record.cards, 'card', 'cards')
+              }
+              busy={busy}
               onClick={() => startEdit('claims')}
-            >
-              Set claims on {scope}
-            </button>
+            />
           ) : null}
         </div>
       ) : editing === 'claims' ? (
@@ -859,25 +863,19 @@ export function BoxOps({
             it. The placement argument never depended on it; only the thing it is last INSIDE of
             has a different name.
 
-            WHAT SITS BELOW IT IN THE COLUMN IS `RegisterBox`, AND THAT IS DELIBERATE rather
-            than an erosion of the rule above. It is not a box-2 control at all — it acts on the
-            registry, not on this box — so it is separated by the widest gap in this block, and
-            it wears the plain hairline where this one wears an ink border.
+            NOTHING SITS BELOW IT IN THE COLUMN AT ALL, as of 2026-08-26, and that makes the
+            rule above literal rather than argued. `RegisterBox` used to — separated by the
+            widest gap in the block, wearing the plain hairline where this one wears an ink
+            border, because it acted on the registry rather than on this box. It is deleted, so
+            the last thing on this screen's left column is now the one control that destroys
+            something, with air under it and nothing to be confused with.
 
-            THAT GAP RENDERS AT 32px AND NO DECLARATION SAYS 32 (corrected 2026-08-26). This
-            comment said `.boxops-new`'s `--s5`, which is 24; the other 8 come from
-            `.browse-map`'s own column `gap`, which fires between every child of that column and
-            therefore stacks on top of the margin. Recorded as composed rather than silently
-            re-tuned, because the two mechanisms are both correct and it is only their SUM that
-            nobody chose. If 24 is ever wanted, the change is `--s5` -> `--s4` at BoxOps.css and
-            not a new value here.
-
-            AND NEVER A `border-top` ON IT. That was proposed and refused: `.boxops-new` sits
-            25px below `.boxops-actions-lone`'s hairline, so a rule there would be drawn
-            identically to this block's own row dividers and would read as one more box-2
-            operation at exactly the point the subject stops being box 2. Leaving
-            `section.boxops-box` is what carries the change of subject; air is the honest
-            marker for it. */}
+            THREE PARAGRAPHS THAT ARGUED ABOUT THAT NEIGHBOUR ARE DELETED WITH IT rather than
+            kept as history: a 32px gap that no declaration stated, and a `border-top` proposed
+            for it and refused. Both were reasoning about the boundary between two controls, and
+            there is one control now. What is worth carrying forward is the shape of the finding
+            rather than its measurements — a gap rendering at a number nothing declares is
+            composed from a margin and a parent's `gap`, and this file met that once. */}
         {/* ABOVE THE DELETE, BECAUSE IT IS WHAT MAKES THE DELETE POSSIBLE. D34's release is
             the answer to one of the three things `box_not_empty_of_commitments` refuses on,
             and the operator meets that refusal at the control below this one. It draws
@@ -1744,24 +1742,42 @@ function DeleteBox({
 
   if (!open) {
     return (
-      /* THE ENTRY CARRIES THE WEIGHT, NOT ONLY THE CONFIRM. `boxops-plain-danger` was drawn
-         on the confirm inside this panel and nowhere else — i.e. only once the operator had
-         already decided to look at it — so the button that OPENS an irreversible whole-box
-         delete was byte-identical to Rename and Edit dividers. It is the one step of emphasis
-         this palette allows, and it was being spent where attention already was.
+      /* THE ENTRY CARRIES THE WEIGHT, NOT ONLY THE CONFIRM. The ink border was drawn on the
+         confirm inside this panel and nowhere else — i.e. only once the operator had already
+         decided to look at it — so the button that OPENS an irreversible whole-box delete was
+         byte-identical to Rename and Edit dividers. It is the one step of emphasis this
+         palette allows, and it was being spent where attention already was.
 
-         `boxops-actions-lone` stops it sharing a wrapping row. The claim button beside it
-         carries a state-dependent label — "Set claims on the 12 selected cards" becomes "Set
-         claims on all 544 cards in box 2" — which changes width by ~150px whenever a tick
-         changes in the OTHER column, rewrapping the row and moving this button under the
-         cursor between one glance and the next. Fitts assumes a stationary target. */
-      <div className="boxops-actions boxops-actions-lone">
+         A BAR, AND IT IS THE ONLY BORDERED THING IN THE BOX'S OPERATIONS (2026-08-26). The
+         four settings above are borderless rows now, so an ink-outlined full-measure control
+         under them is a bigger step than it was when it sat as one bordered chip among six.
+         Full measure rather than shrink-to-fit for the reason the detail supplies: `no undo`
+         is right-aligned against the far edge, so the bar is a line of information rather than
+         a 121px label with 220px of white beside it — which is the look `.browse-list` refuses
+         by name and the reason a full-bleed control was wrong for the rows above.
+
+         `no undo` IS THE HONEST WAY TO MAKE IT LOUD, which is this file's own rule: weight
+         comes from saying what the control does, never from colour. It is also the one fact
+         the confirm panel spends a whole paragraph on, said before the panel is opened.
+
+         `boxops-actions-lone`'s NO-REWRAP JOB IS DISCHARGED rather than dropped. It existed
+         because the claim button beside it carried a state-dependent label — "Set claims on
+         the 12 selected cards" becomes "Set claims on all 544 cards in box 2" — that changed
+         width by ~150px whenever a tick changed in the OTHER column, rewrapping the row and
+         moving this button under the cursor between one glance and the next. Nothing shares a
+         row with it now and nothing above it can change width, so the target is stationary by
+         construction instead of by a `nowrap` guarding it. */
+      <div className="boxops-actions-lone">
         <button
-          className="boxops-plain boxops-plain-danger"
+          className="boxops-bar"
           type="button"
+          /* `Op`'s rule, and the same measured reason: two grid items with no text node between
+             them compute to `Delete box 2…no undo`. */
+          aria-label={`Delete box ${record.box}…, no undo`}
           onClick={() => setOpen(true)}
         >
-          Delete box {record.box}…
+          <span className="boxops-op-label">Delete box {record.box}…</span>
+          <span className="boxops-op-detail">no undo</span>
         </button>
       </div>
     )

@@ -52,6 +52,16 @@ Both were invisible while the tokens were prose and a drawing. That is the argum
 build-order step 6 existing at all, and it is worth knowing that the step paid out on its
 first component.
 
+- **`locked.html` predates `field`, added to the palette 2026-08-26.** This is a MISSING token
+  rather than a disagreeing one, which is a different kind of staleness and worth naming
+  separately: the two entries above are places the sheet is WRONG and the doc wins, and this is
+  a place the sheet is INCOMPLETE. `field` is `#8C8C8C`, the boundary of a control you type
+  into, and it is the only colour in the palette that exists for a contrast criterion rather
+  than for the interview — `docs/DESIGN.md` carries the argument and the render that refused
+  the whole-palette version of it. Nothing audits these sheets, by the rule at the top of this
+  file, so this line is what stops the omission being discovered by someone drawing a field
+  from the wrong reference.
+
 ## Two constraints that shaped them
 
 **No card photographs.** `scripts/githooks/pre-commit` blocks any image staged outside

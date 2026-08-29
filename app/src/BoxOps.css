@@ -26,6 +26,51 @@
  * own field names. The body face carries the sentences a person reads, which are the hints
  * under the fields and the relabel warning. That split is the one rule doing the most work in
  * this file.
+ *
+ * THE CONTROLS WERE REVIEWED AS A BLOCK ON 2026-08-26 AND REBUILT, and the two halves of that
+ * day are worth keeping in order because the second overturned the first.
+ *
+ * The morning's pass read this cluster against docs/DESIGN.md through four lenses and refused
+ * every structural change, on rules already written down: full-measure controls were called the
+ * Fulfiller's silhouette, and `.browse-list`'s own comment refuses a bordered surface padding
+ * itself with empty white. Both objections are about a BORDERED, FILLED, CENTRED button — which
+ * is what Fulfillment.css draws and what a full-bleed `.boxops-plain` would have been. Neither
+ * is about a row.
+ *
+ * The owner then overruled the premise outright — "i'm totally unopposed to going against our
+ * docs for something that looks better ... its fucking ugly right now" — and the answer that
+ * came out of taking that seriously turns out to break no rule in the file at all:
+ *
+ *   the ragged edge   Gone, and not by stretching the chips. The four settings are ROWS in
+ *                     `.browse-row`'s grammar — the walk's own card row, one element up in this
+ *                     same column: full measure, no border, hairline under, `--hover` on hover,
+ *                     13px. A row has nowhere ragged to end. The column stopped speaking two
+ *                     languages, which is the actual defect the six widths were a symptom of.
+ *   the sentences     `Set claims on all 543 cards in box 2` was a 267px paragraph in a box and
+ *                     `Seal box — freezes capacity at 543` was 260. The label and the number are
+ *                     two registers now — body left, mono right — so D20's number-on-the-control
+ *                     rule is kept in the face docs/DESIGN.md gives every number in the product,
+ *                     instead of being kept in bold Atkinson an inch under `.boxops-meta` doing
+ *                     the same job properly.
+ *   the geometry      A label that grew ~150px with the ticked selection used to rewrap the row
+ *                     and move the delete under the cursor. Rows are the full measure whatever
+ *                     they say, so `.boxops-actions-lone`'s `flex-wrap: nowrap` retired: the
+ *                     target is stationary by construction rather than by a guard.
+ *   the weight        14px/700 chips with borders were the heaviest thing in a column whose real
+ *                     content is the cards. Borderless 13px rows are not.
+ *
+ * WHAT IT DID NOT DO IS SPEND A RULE. No colour, no tint, no shadow, no accent, no new radius,
+ * no off-scale value; separation is still the hairline and nothing else; the Fulfillment floors
+ * are still his. The one thing it moved is a habit — that an owner-side control is a chip —
+ * which was never written down anywhere as a rule.
+ *
+ * NO PRESSED STATE IS AVAILABLE IN THIS PALETTE, recorded because it looks like an omission.
+ * The three legal moves are a no-op (`:active { background: var(--hover) }` — hover already
+ * painted that ground), the ink border (which would make a momentary press identical to the
+ * permanent danger treatment on the bar below), and `--muted` as a third border weight in a
+ * system that has two. The last is a change to docs/DESIGN.md's separator rule argued on its
+ * own terms, and it is an app-wide question — `.run-button` one column right has the identical
+ * state set.
  */
 
 /* ---- the quiet control, which is every control on this screen ---- */
@@ -41,6 +86,14 @@
   min-height: 32px;
   padding: var(--s1) var(--s3);
   cursor: pointer;
+  /* NOT DEAD, THOUGH IT LOOKS IT. These are shrink-to-fit flex items, so the equal horizontal
+     padding centres every label and this declaration cannot move a pixel while each one fits —
+     which is exactly how a useful rule gets tidied away. It is what keeps a WRAPPED label on
+     the column's reading edge: `.boxops-actions` items keep the default `flex-shrink: 1`, and
+     the long ones left in this class — `Release the listing hold on 45 cards…`, `Apply to all
+     543 cards in box 2` — wrap rather than overflow once `.browse-map`'s track approaches its
+     300px minimum. The claim and seal labels that used to be the widest of them are rows now
+     and no longer test it; these two still do. */
   text-align: left;
 }
 
@@ -57,9 +110,19 @@
    2px ink, offset +2px so it clears the 4px radius instead of clipping it — and this file used
    to override it with `outline-offset: -2px`, which draws the ring INSIDE the button's own
    border and reads as a second border rather than as focus. The owner called the inset rings
-   ugly and they were removed repo-wide; nothing here clips its own overflow, so there is no
-   reason for this file to be an exception. The exception that survives is `BoxBrowse.css`'s
-   list, which does clip. */
+   ugly and they were removed repo-wide, and that is still the answer here.
+
+   THE SENTENCE THAT USED TO CARRY THIS SAID "nothing here clips its own overflow", AND IT WAS
+   FALSE FROM 2026-08-25 (corrected the next day). D38 moved these controls into `.browse-map`,
+   which is `overflow-y: auto` and therefore a scroll container on both axes, and every control
+   in this component sits flush at its content edge — so the outset ring lost its inline-start
+   stroke on Rename, Set claims, Delete box N… and every field in the editors. The remedy is in
+   `BoxBrowse.css` on the column that clips, where it costs this file nothing and moves no
+   control: 4px of inline padding cancelled by a negative margin. Fixing it HERE would have
+   meant the inset ring, on a bordered 32px button, which is the look that was removed.
+
+   The other exception that survives is `BoxBrowse.css`'s list, which clips tightly enough that
+   the inset ring is the right answer for its rows. */
 
 .boxops-actions {
   display: flex;
@@ -67,6 +130,127 @@
   align-items: center;
   gap: var(--s2);
   margin-top: var(--s3);
+}
+
+/* ---- the box's operations, as rows ---- */
+
+/* THE COLUMN STOPS SPEAKING TWO LANGUAGES (owner, 2026-08-26). These four were a wrapping row
+   of shrink-to-fit bordered chips at 79 / 110 / 109 / 267px inside a 360px track, under a list,
+   a meta line and two hairlines that all run the full measure. Six widths against one hard
+   edge, and the heaviest type in the column spent on the controls rather than on the cards.
+
+   THE MEASUREMENTS ARE `.browse-row`'s, ONE ELEMENT UP IN THIS SAME COLUMN, and that is the
+   whole argument: the walk's card row is a full-measure borderless button with a hairline
+   under it, transparent ground, `--s1 --s2` of padding and `--hover` on hover. So is this. A
+   row cannot end raggedly, so the raggedness is not styled away — it has nowhere to happen.
+
+   WHAT THIS DOES NOT DO IS BORROW THE FULFILLER'S SILHOUETTE, which is the objection a full
+   measure invites and which is about a different object. Fulfillment.css's controls are
+   `width: 100%` FILLED buttons, centred, 24px type, 44px tall. These are 13px hairline-
+   separated rows with no border and no fill, at the 4-16 end of the scale — the owner's
+   density, in the idiom the column beside them already uses.
+
+   NO PER-ROW BORDER AND NO RADIUS. A row is not a chip: `--line` separates, it does not
+   enclose, which is this file's header rule. The rounded 4px box comes back one element down
+   on `.boxops-bar`, where being enclosed is the point. */
+/* NO `border-top` HERE. `.boxops-more` already opens this block with one and
+   `.boxops-more > :first-child` zeroes the margin, so the block's own rule IS this list's top
+   edge — adding a second would draw the two-parallel-hairlines-12px-apart that this file
+   already names as reading like a rendering bug rather than a separation. The margin survives
+   for the degraded case, where the unvalidatable-layout warning renders above the list. */
+.boxops-ops {
+  margin-top: var(--s3);
+}
+
+.boxops-op {
+  /* `max-content` on the detail, so a row with none costs nothing and the label takes the
+     whole measure — Rename has no detail on purpose, see `Op` in the .tsx. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: var(--s2);
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  /* `--s3` HORIZONTAL, WHICH IS THE BORDERED CONTROLS' AND NOT THE WALK'S. Measured: a row at
+     `--s2` put its label at x=24 while `.boxops-bar` (12 + a 1px border) and `.boxops-plain`
+     put theirs at 29, so this block had three left edges five pixels apart in a column 360px
+     wide. At `--s3` the rows land at 28 and the difference is 1px. The walk's own rows sit at
+     25 for the same reason in reverse — they are inside a bordered list that spends the extra
+     pixel — and aligning this block to itself matters more than aligning it through a border
+     it does not share. */
+  padding: var(--s1) var(--s3);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* Row hover, which is the only thing --hover is for. */
+.boxops-op:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+/* The whole row recedes, detail included — the rule below hands the detail its own muted value
+   back, so a disabled row does not read as one live half and one dead one. Only the seal can
+   reach this state, and only when the fill will not read. */
+.boxops-op:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.boxops-op:disabled .boxops-op-label {
+  color: var(--muted);
+}
+
+/* What the press does. Body face because it is language, and the same 13px/700 the box's own
+   name takes two rows up — these are the two things in this column a person reads rather than
+   scans. */
+.boxops-op-label {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The value or the quantity the row is about: `5 sections`, `freezes at 543`, `543 cards`,
+   `no undo`. Mono and muted, which is `.boxops-meta`'s register two rows up and every other
+   number in the product — and it is where the counts that used to sit in bold body type inside
+   a sentence went. Right-aligned by the grid, so the details form their own column and the
+   labels form theirs. */
+.boxops-op-detail {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* THE ONE BORDERED CONTROL IN THE BOX'S OPERATIONS, which is what the ink is spent on now that
+   nothing beside it wears a border at all. Same row geometry as `.boxops-op` — the label left,
+   the detail right — so it reads as the end of the same list rather than as a different kind of
+   object, and the far-right `no undo` is what keeps a full-measure bordered control from being
+   a short label with 220px of white next to it. */
+.boxops-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: var(--s2);
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  /* The same `--s3` inline as the rows above, so the label column runs straight through the
+     list and out the other side of the bar — 28 against 29, the pixel being this control's own
+     border. Taller than a row on purpose: it is the one enclosed thing here. */
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.boxops-bar:hover {
+  background: var(--hover);
 }
 
 /* ---- notes, and the machine register ---- */
@@ -111,33 +295,10 @@
   margin-top: var(--s2);
 }
 
-/* ---- register a box ---- */
-
-.boxops-new {
-  margin-top: var(--s5);
-}
-
-.boxops-new-open {
-  padding: var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.boxops-new-head {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-.boxops-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-  margin-top: var(--s3);
-}
+/* THE `register a box` BLOCK IS DELETED (owner, 2026-08-26). `.boxops-new`, `.boxops-new-open`,
+   `.boxops-new-head` and `.boxops-fields` went with `RegisterBox` — see BoxOps.tsx for where
+   creating a box lives now, and for the one step that move costs. The FIELD rules below stay:
+   the rename, dividers and claims editors all draw them. */
 
 /* ---- a field ---- */
 
@@ -167,7 +328,10 @@
   font-size: 13px;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  /* --field, not --line: this is a boundary you type inside rather than a separation. An empty
+     Name or Dividers field is a rectangle and nothing else, so at the hairline's 1.24:1 it was
+     findable only by its placeholder. See tokens.css. */
+  border: 1px solid var(--field);
   border-radius: var(--r);
   min-height: 32px;
   padding: var(--s1) var(--s2);
@@ -506,15 +670,17 @@
 /* The one button in this app whose press cannot be taken back. Ink border rather than the
    hairline every other control wears — one step of emphasis inside the system, no new token.
    Disabled until the box number has been typed, so its ordinary state is unpressable. */
-/* A destructive control does not share a wrapping row with controls whose labels change
-   width. See the argument at its use site in BoxOps.tsx: a claim button's label grows by
-   ~150px when a tick changes in the other column, and a rewrap moves whatever sits beside it
-   under the cursor. */
+/* AIR, NOT A THIRD HAIRLINE. This carried `border-top` and `padding-top` while the delete was
+   a chip in a wrapping row and needed a rule to be lifted out of it. The row list above now
+   closes on its last row's own `border-bottom`, so a rule here would be the second of two 25px
+   apart — and the bar below wears a full ink border of its own, which is a stronger edge than
+   any hairline. What is left to say is "this is not one of the four", and `--s4` says it.
+
+   The `flex-wrap: nowrap` went with the flex: the target this component kept stationary by
+   forbidding a rewrap is now stationary because nothing shares its row and nothing above it
+   changes width. See `DeleteBox` for that argument in full. */
 .boxops-actions-lone {
-  flex-wrap: nowrap;
-  margin-top: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
+  margin-top: var(--s4);
 }
 
 /* THE INK BORDER IS THE WHOLE OF THE DANGER TREATMENT, and it is the one step this palette

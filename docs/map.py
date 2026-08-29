@@ -1078,8 +1078,10 @@ COMPONENTS = [
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
-                                              "off the SKU rather than counted from the copies.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31"]},
+                                              "off the SKU rather than counted from the copies. The "
+                                              "owner's head carries no card name: the band above it "
+                                              "prints one (D38, two renderings of one fact).",
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
                                       "governed_by": ["D5", "D7", "D31"]},

@@ -331,12 +331,20 @@ test('the panel is open on arrival, with all four commands named and reachable',
      The owner overruled it. The counter-argument, now in D33: reached once a box IS every
      box, which is the definition of the primary task rather than an exception to it, and a
      collapsed panel costs five accumulating substeps — scroll, scan, decide, target, wait —
-     before the first click of real work. What replaces the fold's saving is the ROW: BoxOps
-     and this panel share one grid row, so the pair costs one panel's height rather than two.
+     before the first click of real work.
 
-     No `open` attribute is asserted in either direction now, because there is no <details>
-     to carry one. The real question is whether the control is on the screen. */
+     WHAT REPLACES THE FOLD'S SAVING HAS BEEN REWRITTEN THREE TIMES AND THIS IS THE THIRD: a
+     shared grid ROW with BoxOps, then a COLUMN of its own, and since 2026-08-26 the panel's own
+     MEASURE. Given the content column's full width it draws 799px rather than 1461px with a run
+     open, because 1024px unwraps its head, its step notes and its free steps — no code change,
+     no disclosure, no cap. The column went because its HEIGHT set the grid row that positioned
+     the card's copies; `BoxBrowse.css` carries that measurement.
+
+     ASSERTED AS AN ABSENCE, WHICH IS THE ONE FORM NO RELOCATION CAN FALSIFY. `toBeVisible` on a
+     control is a claim about this arrangement; `<details>`/`<summary>` at zero is D33's actual
+     ruling — nothing is behind a press — and it stays true wherever the panel is put next. */
   await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
+  await expect(page.locator('.run-panel details, .run-panel summary')).toHaveCount(0)
 
   /* AND IT STILL SAYS WHAT IT HOLDS. `BoxOps` states the rule and it survives the fold:
      "a disclosure that under-sold its contents is exactly how three routes came to have no

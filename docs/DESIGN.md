@@ -31,6 +31,9 @@ Color      #FCFCFD  bg        the page. Everything sits on this.
                               neither can serve as a hover state for the other.
                               A GROUND THAT CARRIES TEXT: check text tokens against it.
            #17348F  pressed   accent, pressed. White on it: 10.9:1.
+           — and one boundary the hairline was too quiet to draw —
+           #8C8C8C  field     the border of something you TYPE INTO. Nowhere else.
+                              3.36:1 on surface, 3.28:1 on bg, 3.08:1 on hover.
            — and one token that names a value already in use —
            #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
 
@@ -124,6 +127,40 @@ record for contrast: `scripts/docs-audit.py` compares hex values between this fi
 `app/src/tokens.css` and cannot see a padding, and the Playwright specs measure the
 Fulfillment view, which is the one route this section does not govern. A screen that drifts
 back to a 32px page header will do it silently.
+
+**`field` is a SECOND line colour, and it exists because one number was checked and the other
+was not** (added 2026-08-26, on the owner's instruction to decide it). Every token that carries
+text clears 7:1 here and always has. Nothing ever asked what `line` measures, and the answer is
+**1.24:1 on surface** — so every border, separator and input outline in the product sits far
+under WCAG 1.4.11's 3:1 for the boundary of a control. All of the text passed; none of the
+edges did.
+
+**The whole-palette fix was built, rendered and refused.** `line` at a true 3:1 is about
+`#8C8C8C`, and the render answers the question on its own: the walk's five section rows become a
+spreadsheet grid, which is the failure the section below names by name and by product; and
+`app/src/BoxOps.css`'s box track is *painted* with `line` rather than bordered by it, so its
+segments go from the quietest visible mark in the palette to something that reads as ink. A
+criterion aimed at people who cannot find a border is not worth the one thing this design says
+it must not become.
+
+**So the split is by JOB, and the job is narrow enough to be checkable.** `line` separates and
+fills, and stays exactly as quiet as it was. `field` draws the boundary of a control you type
+into — `app/src/SearchField.css`'s box, `app/src/BoxOps.css`'s fields, the run panel's number
+input and its `decisions.json` textarea — and nowhere else. That is the case where the low
+contrast genuinely bites: an empty text input is a rectangle and nothing else, so a border at
+1.24:1 leaves it findable only by its placeholder, while a button at the same contrast is
+findable by the ink label inside it at 19.9:1.
+
+**It is deliberately not `edge`, `border` or `control`.** A token named for a general job grows
+one, and the first thing that would have taken it is a button border — which is the weight this
+product spent a whole session removing from the box operations. Named for the one thing it is
+for, it cannot creep without someone renaming it.
+
+**It reaches the Fulfiller's search field too, through the shared `SearchField`, and that is
+right rather than an accident.** His view's floors are about making things findable at reading
+distance with reading glasses, and a field he can actually see the edge of is on that side of
+the argument. No assertion in `app/tests/fulfillment.spec.ts` measures a border; every one of
+them measures text, which is untouched.
 
 **Light only, everywhere. There is no dark theme and no theme switcher.** Not a deferral:
 building one means defining every token twice and running every contrast assertion twice,
@@ -439,15 +476,31 @@ measured grounds — ~250px, reached once a box, above the card detail on the sc
 question is *where is this card* — and the owner overruled it: *"both box and run, i don't
 want click in functionality, i want their buttons just there."* D33 carries the argument.
 
-**What replaces the fold's saving is the COLUMN, and this sentence has been rewritten twice.**
-It first read *the ROW*: `.browse-boxrun` put the run panel and `BoxOps` side by side at
-`1fr 1fr` beneath the card, so the pair cost one panel's height instead of two. Then the pair
-stood in a third column beside the card, where it cost the card's column nothing at all. Then
-the BOX left that column for the walk's, because the left column IS the box and the panel was
-re-listing sections the walk already draws (D38). The run panel has the third column to itself
-at 370px, drawn to this section's owner density and tightened to earn the narrower track: its
-step titles are 14px body rather than a second rank of 20px display, and its controls are 32px,
-which is the height `BoxOps` gives the same job over in the walk's column.
+**What replaces the fold's saving is the panel's own MEASURE, and this sentence has now been
+rewritten three times.** It first read *the ROW*: `.browse-boxrun` put the run panel and `BoxOps`
+side by side at `1fr 1fr` beneath the card, so the pair cost one panel's height instead of two.
+Then the pair stood in a third COLUMN beside the card, where it cost the card's column nothing at
+all. Then the BOX left that column for the walk's, because the left column IS the box and the
+panel was re-listing sections the walk already draws (D38).
+
+**Then the column itself went (2026-08-26), and the reason is the one axis none of the three
+rewrites had checked.** A grid row is as tall as its tallest cell, and this panel shared row 1 with
+the card while the card's own copies were row 2 — so the copies began wherever the console ended:
+y=938 with it closed and **y=1599 with a run picked**, 1039px of white below the card on a 2214px
+page. The answer to *where is this card* was positioned by a panel about something else, at an
+unbounded height. The panel is the last row of the content column now, at the full width, and it
+draws **625px closed against 799** and **1143px open against 1461** — no code change, because
+1024px unwraps its head, its notes and its free steps.
+
+**The density this section describes is kept and is no longer forced.** 14px step titles rather
+than a second rank of 20px display, 32px controls matching what `BoxOps` gives the same job — all
+of it was right on its own terms, and none of it was only a consequence of a 370px track.
+
+**Nothing folds, which is the half the owner ruled on.** No disclosure, no cap, no internal
+scroller; every step head and note draws in every state and the spend button is still absent
+rather than disabled until its preflight has answered. What changed is reading order, and
+`app/tests/run-panel.spec.ts` asserts the ruling as an absence — `<details>` and `<summary>` at
+zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
 fourteen strings — seven from the variant ladder in `pipeline/variant.py`
