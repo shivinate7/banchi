@@ -390,6 +390,38 @@ def module_attributes(path: Path) -> Set[str]:
     return names
 
 
+def _git_path(text: str) -> Path:
+    """A `.git/...` reference, resolved where git actually keeps it.
+
+    IN A LINKED WORKTREE `.git` IS A FILE, NOT A DIRECTORY, so `ROOT / ".git/config"`
+    resolves to nothing and a perfectly true sentence reads as a broken path. Measured
+    2026-08-29: `README.md`'s `core.hooksPath` lives in `.git/config` — the line that
+    explains why `make hooks` exists — failed this check in a worktree and passed in the
+    main clone, which is the shape of finding this script exists to prevent, pointing at
+    itself.
+
+    The file holds one line, `gitdir: <path>/.git/worktrees/<name>`, and the config a
+    worktree shares lives two levels up from that. Read rather than shelled out to: this
+    script does not run project code, and `git rev-parse --git-common-dir` would be a
+    subprocess where a 140-byte read answers the same question.
+
+    Falls back to the literal path on anything unexpected, so a malformed pointer reports
+    the missing file it always did rather than raising inside the audit.
+    """
+    dot_git = ROOT / ".git"
+    if dot_git.is_dir():
+        return ROOT / text
+    try:
+        pointer = dot_git.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ROOT / text
+    if not pointer.startswith("gitdir:"):
+        return ROOT / text
+    gitdir = Path(pointer.split(":", 1)[1].strip())
+    common = gitdir.parent.parent if gitdir.parent.name == "worktrees" else gitdir
+    return common / text[len(".git/"):]
+
+
 def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optional[Path]:
     """Repo path for a candidate, or None when it is not ours to check.
 
@@ -410,6 +442,8 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     first = text.split("/", 1)[0]
     if first not in tops:
         return None
+    if first == ".git":
+        return _git_path(text)
     return ROOT / text
 
 

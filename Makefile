@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv hooks
+.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -27,6 +27,7 @@ help:
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
+	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
 	@echo "  make hooks        arm the opsec pre-commit   (once, and again after every clone)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
@@ -53,6 +54,60 @@ venv:
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
 	@echo "venv ready: $$(.venv/bin/python -V)"
 	@echo "T1 also needs ANTHROPIC_API_KEY in the environment."
+
+# A GIT WORKTREE GETS THE TRACKED FILES AND NOTHING ELSE, which is the whole of the problem
+# this target exists for. Three things `make harness` needs are gitignored by deliberate
+# decision and therefore do not travel: `.venv/` (D15's requirements are installed, not
+# committed), `harness/.cache/` (T1's banked responses), and `.env` (the key). A fresh
+# worktree fails T1, T6 and T7 on day one, and none of the three failures says "you are in
+# a worktree" — T6 says `No module named 'numpy'` and T7 raises an AttributeError from
+# deep inside a fixture. Measured 2026-08-29: that is exactly how it presented, and it cost
+# a session to diagnose from those symptoms.
+#
+# THE CACHE IS THE ONE THAT MATTERS, and it is not a convenience. Without it T1's cache
+# lookup misses, and a miss used to mean a fresh submission of ~150 images — under the Stop
+# hook, at the end of every turn. `harness/tests/t1_id_eval.py` now refuses that outright,
+# so the failure is loud and free rather than silent and billed; this target is what makes
+# the refusal easy to answer instead of merely correct.
+#
+# THE CACHE IS COPIED AND THE IMAGES ARE SYMLINKED, and the split is not arbitrary. A
+# shared cache would let a `PKMNSCAN_RERUN_T1=1` in either tree rewrite what the other
+# scores against, and the two trees are meant to be able to disagree — that is why one is
+# a worktree. It is 90 KB, so copying costs nothing. The eval images are 133 MB and are
+# immutable: `fixtures.load` only ever adds a missing file keyed by card id, so sharing
+# them cannot make two trees score differently. Without them T1 still passes — by
+# downloading 151 images from pokemontcg.io, which is slow, rate-limited without a key,
+# and fails outright offline.
+#
+# `.env` IS DELIBERATELY NOT COPIED. It is the API key, copying secrets around a disk is
+# how they end up somewhere nobody is tracking, and T1 does not need it once the cache is
+# warm. Named here so its absence reads as a decision rather than an oversight.
+worktree-setup:
+	@main="$$(dirname "$$(git rev-parse --git-common-dir)")"; \
+	here="$$(pwd)"; \
+	if [ "$$main" = "$$here" ]; then \
+		echo "This IS the main working tree — nothing to copy into it."; \
+		echo "  Fix: make venv"; \
+		exit 1; \
+	fi; \
+	$(MAKE) --no-print-directory venv; \
+	if [ -d "$$main/harness/.cache" ]; then \
+		mkdir -p harness/.cache; \
+		cp -R "$$main/harness/.cache/." harness/.cache/; \
+		echo "harness/.cache copied from $$main"; \
+	else \
+		echo "NOTE: $$main has no harness/.cache — T1 will refuse until a run is banked there."; \
+	fi; \
+	if [ ! -e harness/images ] && [ -d "$$main/harness/images" ]; then \
+		ln -s "$$main/harness/images" harness/images; \
+		echo "harness/images linked (133 MB, shared — immutable and additive-only)"; \
+	fi
+	@[ -d app/node_modules ] || { \
+		echo "NOTE: app/ dependencies are not installed either — also gitignored, also"; \
+		echo "      does not travel. \`make harness\` does not need them; lint, typecheck"; \
+		echo "      and design-check do, so \`make check\` will stop at lint until you run:"; \
+		echo "        npm --prefix app install"; }
+	@echo "worktree ready. \`make harness\` should now be green without spending anything."
 
 # core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
 # clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and

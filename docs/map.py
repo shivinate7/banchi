@@ -491,6 +491,22 @@ COMPONENTS = [
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
+            "worktree-guard.sh": {
+                "does": "the SessionStart hook: provisions a git worktree's UNTRACKED state "
+                        "before any work starts. A worktree gets the tracked files and "
+                        "nothing else, so .venv/, harness/.cache/ and app/node_modules/ do "
+                        "not travel — and the three failures that causes (numpy missing, a "
+                        "fixture AttributeError, an empty T1 cache) never mention a "
+                        "worktree. Copies the cache, builds the venv, and only REPORTS the "
+                        "80 MB npm install. Fails open on every path, including its own bugs.",
+                # D18 is the one that decides where this may run rather than what it does.
+                # It WRITES — a venv and a cache copy — so it belongs at session start and
+                # must never be moved onto the commit path or into `make check`. D16 is
+                # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
+                # a hook that can break a session gets disabled, and a disabled hook guards
+                # nothing, so every failure exits 0.
+                "governed_by": ["D16", "D18"],
+            },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
                         "the turn end on a failure. Arms itself on the absence of the last "
@@ -769,12 +785,26 @@ COMPONENTS = [
             "index.html": {"does": "the single page: the #root main.tsx mounts into, and the "
                                    "three font faces from their two hosts",
                            "governed_by": ["D5", "D13"]},
-            "vite.config.ts": {"does": "the dev server on :5173, strictPort — a busy port fails "
+            "devPort.ts": {"does": "the ONE dev port for this checkout, imported by both "
+                                   "vite.config.ts and playwright.config.ts so they cannot "
+                                   "disagree. The main tree keeps 5173; a linked worktree "
+                                   "derives its own from a hash of its path, because both "
+                                   "configs hardcoding 5173 is what let design-check attach "
+                                   "to the MAIN tree's server from a worktree and assert "
+                                   "DESIGN.md's floors against code the branch never had — "
+                                   "green, and meaningless. Detects a worktree the way "
+                                   "scripts/worktree-guard.sh does: `.git` is a file",
+                           "governed_by": ["D5", "D13"]},
+            "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
-                                       "Makefile and scripts/views.txt would all three be wrong",
+                                       "Makefile and scripts/views.txt would all three be wrong. "
+                                       "The port comes from devPort.ts: :5173 in the main tree, "
+                                       "per-worktree elsewhere",
                                "governed_by": ["D13"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
-                                             "Vite it starts for itself",
+                                             "Vite it starts for itself. reuseExistingServer stays "
+                                             "ON and is safe only because devPort.ts makes the port "
+                                             "per-checkout",
                                      "governed_by": ["D5"]},
 
             # ---- the ground: what everything else reads ----
