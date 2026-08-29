@@ -37,6 +37,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -111,6 +112,12 @@ SOURCES = (
         "kind": "file",
         "requires": (),
         "why": "read by decision_gists()",
+    },
+    {
+        "path": "scripts/githooks/pre-commit",
+        "kind": "file",
+        "requires": (),
+        "why": "the opsec hook core.hooksPath must point at — read by hooks() below",
     },
     {
         "path": "inventory",
@@ -546,6 +553,42 @@ def repo() -> List[str]:
     return out
 
 
+def hooks() -> List[str]:
+    """Whether THIS clone's opsec pre-commit is actually armed.
+
+    `core.hooksPath` is local git config and is never pushed, so the hook being present in
+    the tree proves nothing — a fresh clone has the file with nothing pointing at it, and
+    CLAUDE.md's bearer-instrument rule is unenforced on the first commit. Only the config
+    proves it, and only this script is in a position to look.
+
+    Reported here because it is the one setup step that cannot be committed, and `make
+    status` is what README.md and CLAUDE.md tell a cold session to run first.
+
+    Three ways to be unarmed and they are kept distinct, because they have three different
+    fixes: no config at all, a config aimed somewhere else, and a hook git will skip for
+    being non-executable. The last is the one worth naming — git says nothing about it.
+    """
+    found = resolve("scripts/githooks/pre-commit")  # records MISSING if the hook itself is gone
+    configured = git("config", "--get", "core.hooksPath")
+
+    if configured is None:
+        return [
+            field("Opsec hook", "NOT ARMED — core.hooksPath is unset, commits are unchecked"),
+            cont("Fix: make hooks"),
+        ]
+    if (ROOT / configured).resolve() != (ROOT / "scripts" / "githooks").resolve():
+        return [
+            field("Opsec hook", f"NOT ARMED — core.hooksPath points at {configured}"),
+            cont("Fix: make hooks"),
+        ]
+    if found and not os.access(found[0], os.X_OK):
+        return [
+            field("Opsec hook", "NOT ARMED — pre-commit is not executable; git skips it silently"),
+            cont("Fix: make hooks"),
+        ]
+    return [field("Opsec hook", f"armed via {configured}")]
+
+
 def store() -> List[str]:
     out = []
     for name, absent in (("inventory", "nothing captured yet"), ("runs", "no identify run yet")):
@@ -574,7 +617,7 @@ def render() -> str:
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
-    lines += ["", "REPO"] + repo()
+    lines += ["", "REPO"] + repo() + hooks()
     lines += ["", "STORE"] + store()
 
     if MISSING:

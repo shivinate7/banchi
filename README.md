@@ -41,9 +41,17 @@ inventory/                 the master store on disk. Real, local, never in git.
 
 ```
 cd pkmnscan
+make hooks
 make status
 claude
 ```
+
+`make hooks` once per clone, and it is the one step here that cannot be automated away.
+`core.hooksPath` lives in `.git/config`, which is never pushed — so a fresh clone carries
+`scripts/githooks/pre-commit` as a tracked file with nothing pointing at it, and the opsec
+rules it enforces are off. That failure is silent: nothing prints, nothing exits 1, and the
+commit that leaks a live code looks like every commit before it. `make status` prints an
+`Opsec hook` line so an unarmed clone says so, rather than being found out by a leak.
 
 `make status` first, especially after time away: it prints the next build-order step, the
 last T1 score and the branch — all read from the repo, none of it written

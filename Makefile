@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv
+.PHONY: help status harness check docs-audit audit-self-test audit-history dev server screenshot design-check lint typecheck venv hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -27,6 +27,7 @@ help:
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
+	@echo "  make hooks        arm the opsec pre-commit   (once, and again after every clone)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
@@ -52,6 +53,24 @@ venv:
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
 	@echo "venv ready: $$(.venv/bin/python -V)"
 	@echo "T1 also needs ANTHROPIC_API_KEY in the environment."
+
+# core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh
+# clone carries scripts/githooks/pre-commit as a tracked file with NOTHING POINTING AT IT, and
+# CLAUDE.md's bearer-instrument rule is unenforced on the first commit. It fails silently,
+# which is the only way an opsec rule can fail badly: nothing is printed, nothing exits 1, and
+# the commit that leaks a live code looks exactly like every commit before it.
+#
+# This is the one setup step that cannot itself be committed, so it cannot be made automatic —
+# `make status` reports the unarmed state instead, which is why that target grew an Opsec hook
+# line. Idempotent: running it on an armed clone is free.
+#
+# The chmod is not padding. git skips a non-executable hook WITHOUT A WORD, so a correct
+# hooksPath over a non-executable file is the same silent failure by another route.
+hooks:
+	@git config core.hooksPath scripts/githooks
+	@chmod +x scripts/githooks/pre-commit
+	@echo "opsec hook armed: core.hooksPath = $$(git config --get core.hooksPath)"
+
 
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
 # tool. Exits non-zero if any declared source is missing — it prints MISSING rather than

@@ -20,6 +20,7 @@ tree.** What was retired is the gate as a *control*: the blocking, the sequencin
 ## Commands
 
 ```
+make hooks          # arm the opsec pre-commit. Once per clone — core.hooksPath never travels.
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make dev            # Vite app on :5173. Blocks — background it.
