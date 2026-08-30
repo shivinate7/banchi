@@ -2832,7 +2832,61 @@ routinely pointed at a refreshed export, so a bare `$5.47` claims a currency the
 support. What the age measures is the JOIN: `GET .../pricing` answers `written_at`, the mtime of
 `pricing.json`, because the export is a CSV the operator downloaded from TCGplayer at an earlier
 moment nothing on this machine can see. The freshest honest sentence is when the pipeline last
-looked at it, so the row reads `$0.34 · read 3 days ago`.
+looked at it, so the row reads `$0.34 · read 3d`.
+
+**IT READ `$0.34 · read 3 days ago` UNTIL 2026-08-30, AND IT WRAPPED ONTO TWO LINES ON EVERY
+PRICED CARD** (the owner, with a screenshot: *"this line in inventory needs to be only one
+line"*). Measured at their own 1440: `.browse-facts` is 578px at `column-width: 260px`, which
+takes **two columns of 277px** and leaves a **181px value track** at 9.1px per character — a
+budget of **19 characters**. `$0.34 · read 9 hours ago` is 218.4px. Six of the row's twelve
+outcomes were over the line, so this was the ordinary state of the row rather than a bad case.
+
+**IT WAS NEVER A COPY PROBLEM, AND THAT IS WHY THE CUT IS WHERE IT IS.** The figure is
+variable-width, so no wording holds: `$30.81 · read 9h ago`, with the age already at its
+shortest, measures **182px — one pixel over**. Widening cannot rescue it either, because two
+columns of 277px is what 578 gives; shrinking the label track to its actual ink (80px,
+`CONFIDENCE`) and the gap to `--s2` buys 8px against the 47 needed. The row asks for ~230px in a
+181px track, so something in the string has to go.
+
+**`ago` GOES AND `read` STAYS, WHICH IS THE TRADE RATHER THAN AN ABBREVIATION.** `read` is what
+the paragraph above spends itself establishing — the age is the JOIN's, not the price's — and
+without it `$0.34 · 12d` could as easily be read as twelve days on the market. `ago` is the
+redundant one, since `read` is already past tense, and it is the wider of the two: 45.5px
+against 36.4px. Measured headroom for the figure, which is the number that decides between the
+candidates: `· read 12d` leaves **8 characters** (`$1234.56` fits), `· 12d ago` leaves 9 but
+spends the verb, and the full `· read 12 days ago` leaves **none at all**.
+
+**AND THE WORDS WERE UNBOUNDED WHERE THE COMPACT FORM IS NOT.** `N days ago` grows with N, so a
+year-old join renders `read 400 days ago` — the row got wider the longer it went unattended,
+which is the opposite of what a staleness reading should do. `Nd` is four characters until 2036.
+
+**THE COMPACT FORM IS A SECOND RENDERING OF `sinceText` AND NOT A SECOND VOCABULARY.** That
+function's own comment forbids "two spellings of 'two days' sixteen pixels apart", and this
+panel draws both ages — the queue's wait and the join's age — within one screen of each other.
+So the thresholds, the rounding and the `today` floor stay in one function and only the spelling
+is a parameter; a private helper beside `marketText` would have been the same rule written
+twice. **The queue age keeps its words**: it is drawn in `.browse-queued` below the list, which
+is full-width and has never been short of room.
+
+**REJECTED: AN ABSOLUTE DATE.** `$0.34 · Aug 29` leaves 10 characters and touches `sinceText`
+not at all, reusing `capturedText`'s house form two rows up — structurally the cheapest option
+on the table. It loses on what the row is FOR: an absolute date answers *when* and the question
+is *how stale*, and it reads as the `as of` this entry refuses by name.
+
+**REJECTED: SPLITTING THE AGE ONTO A `READ` ROW OF ITS OWN.** It is the only option that shrinks
+nothing — every wording fits a 181px track standalone — and it costs 9px of list height,
+measured. The owner chose the one line.
+
+**THE GUARD MEASURES THE ROW AND DOES NOT PIN THE STRING, and it has to pin the VIEWPORT.**
+`app/tests/inventory.spec.ts` already asserted what this row says, in five places, and every one
+of them was green through the whole defect — because a sentence written past the track does not
+fail an assertion about its text, it silently takes a second line. So the new case counts the
+lines the value draws, which goes red on any future wording that overflows and stays green on
+any that does not. **The suite's default 1280 cannot see it**: at that width the list is 506px
+and takes ONE column with a 410px track, where every string this row has ever drawn fits. The
+whole defect lives at a width nothing in that file had rendered, which is how it shipped, so
+1440x900 is the case rather than an incidental setting. Mutation-tested — the old wording takes
+it red at 2 lines and the compact form green at 1.
 
 **THE MTIME RATHER THAN A `joined_at` INSIDE THE TABLE.** A field written into the file would be
 better data and would be absent from every run already on disk — which is precisely the runs a
@@ -2846,13 +2900,23 @@ the live mtime is VACUOUS — the test joins immediately before the request, so 
 **FIVE OUTCOMES, FIVE SENTENCES, AND THE ROW IS NEVER CONDITIONAL** — the rule `Rarity` and `Note`
 above it already follow, for the reason stated there: a row that disappears leaves *this card has
 no price* and *this screen does not show prices* indistinguishable. No run on the card is `not
-joined yet`; a run with no table is `no pricing table — join this run`, which is the one refusal
-worth telling apart because its remedy is a join rather than a look at the server; a position the
-table does not hold is `no row matched by this run`, which is `no_catalog_row` and the review
-queue's business rather than a missing price; and a **blank Market cell is `no_market_data`**,
+joined yet`; a run with no table is `join this run`, which is the one refusal worth telling
+apart because its remedy is a join rather than a look at the server; a position the table does
+not hold is `no row in this run`, which is `no_catalog_row` and the review queue's business
+rather than a missing price; and a **blank Market cell is `no_market_data`**,
 verbatim and underscore and all, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
 D9 is emphatic that a missing price is an UNKNOWN price rather than a low one. Rendering that as
 `$0.00` is what hands a chase card away at the floor.
+
+**THREE OF THOSE SENTENCES WERE CUT TO THE SAME 181px, and the refusal lost half of itself.**
+`no row matched by this run` was 236.6px and `no pricing table — join this run` 291.2px — the
+second one wider than any price this row can draw, so it wrapped in the one state an operator
+cannot reproduce by looking at a card. Only one half of it fits, and **the remedy is the half
+that survives**: `MARKET: join this run` already says a table is what is missing, and the
+sentence it is being told apart FROM — `could not be read` — names no remedy at all, so the pair
+still reads as two different failures. `no age` replaces `age unknown` on the same grounds and
+joins `none` and `not recorded` further up the list, which is the register this panel already
+uses for a fact it does not have.
 
 **The underscore is a ruling rather than an oversight.** Spelled `no market data` it is neither
 the machine string nor a human label — the second vocabulary D22 refuses and D16 exists to catch
