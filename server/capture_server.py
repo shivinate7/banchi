@@ -212,7 +212,11 @@ import binascii
 import json
 import os
 import re
+import signal
 import sys
+import threading
+import time
+import uuid
 from bisect import bisect_left, bisect_right
 from dataclasses import asdict, replace
 from http import HTTPStatus
@@ -242,6 +246,17 @@ from server import pipeline_routes  # noqa: E402
 from server import ports  # noqa: E402
 
 HOST = "0.0.0.0"
+
+# One identity per process, reported by `GET /status` so the app can tell a restart from a
+# reload. Computed at import, which is exactly the point: it changes when, and only when, this
+# module is loaded again.
+BOOT_ID = uuid.uuid4().hex[:12]
+STARTED_AT = time.time()
+
+# On every response as well as in `GET /status`, so the app notices a restart on traffic it was
+# making anyway rather than on a poll of its own. Must be listed in `Access-Control-Expose-Headers`
+# or it is present on the wire and unreadable from JavaScript — see `_cors_headers`.
+BOOT_HEADER = "X-Pkmnscan-Boot"
 
 # DERIVED PER CHECKOUT, NOT A CONSTANT (D46). It was `8000` here while `store/files.py:home()`
 # already defaulted to the checkout the code runs from — so every worktree served a DIFFERENT
@@ -1918,6 +1933,18 @@ def do_status() -> dict:
     problems: List[str] = []
 
     body = {
+        # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server when a watched
+        # Python file changes, and a restart is otherwise invisible from the app — the port is
+        # the same, the store is the same, and the only symptom of NOT having restarted is the
+        # one docs/GATES.md records: whole-second timestamps written hours after the
+        # millisecond fix landed, because the process predated it.
+        #
+        # A uuid rather than a pid or a start time. A pid is recycled and a clock can go
+        # backwards; the only question the client asks is "is this the same process as last
+        # time", and identity is the honest answer to it. `started_at` is beside it for the
+        # human reading the JSON, and nothing compares it.
+        "boot_id": BOOT_ID,
+        "started_at": STARTED_AT,
         "captures_root": str(captures_root()),
         "store": str(files.inventory_dir()),
         "store_exists": files.inventory_dir().is_dir(),
@@ -6548,6 +6575,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
             ("Access-Control-Allow-Origin", origin if known else "*"),
             ("Access-Control-Allow-Methods", ", ".join(methods)),
             ("Access-Control-Allow-Headers", "Content-Type"),
+            # WITHOUT THIS THE BOOT HEADER IS INVISIBLE TO THE APP. A cross-origin response
+            # exposes only the handful of CORS-safelisted headers to JavaScript; every other
+            # one is present on the wire, visible in the network tab, and simply absent from
+            # `Response.headers`. The app is served from the dev port and the server answers on
+            # its own, so every request it makes is cross-origin — the header would have been
+            # there and unreadable, which is the worst way for this to fail: nothing errors and
+            # the notice silently never fires.
+            ("Access-Control-Expose-Headers", BOOT_HEADER),
             ("Vary", "Origin"),
         )
 
@@ -6555,6 +6590,18 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self.send_response(int(status))
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        # WHICH PROCESS ANSWERED, ON EVERY RESPONSE — the same `boot_id` `GET /status` reports,
+        # here so the app can notice a restart WITHOUT ASKING. `make up` restarts this server on
+        # every Python edit (D50), and the alternative was a client that polled `/status` on a
+        # timer: it worked, and it made every owner-side screen issue a request nothing had
+        # asked for, in every Playwright spec, against whatever real server is listening —
+        # which is the hazard `app/tests/inventory.spec.ts` documents in its own comment. A
+        # header rides traffic the app already generates, so it costs no request at all.
+        #
+        # It is also the honest semantics. An idle app learns nothing, and it does not need to:
+        # a stale server harms nothing until the next request, and the next request is exactly
+        # what carries this.
+        self.send_header(BOOT_HEADER, BOOT_ID)
         for header, value in self._cors_headers():
             self.send_header(header, value)
         self.end_headers()
@@ -6610,6 +6657,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         methods would be four places to remember; putting it here means a mutating route
         cannot be written that skips it.
         """
+        _inflight_enter()
         try:
             # BEFORE THE BODY IS READ, let alone before the lock is taken. A page that is not
             # allowed to write should not get to make this process allocate a 24 MB buffer
@@ -6684,6 +6732,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 "server_error",
                 f"{type(exc).__name__}: {exc}. This is a bug — check the server log.",
             )
+        finally:
+            _inflight_leave()
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -6979,6 +7029,76 @@ class CaptureHandler(BaseHTTPRequestHandler):
         print(f"  {self.command:6} {fmt % args}")
 
 
+# --------------------------------------------------------------------------- graceful drain
+
+# IN-FLIGHT REQUESTS, NOT THREADS, AND THE DIFFERENCE IS THE WHOLE DESIGN.
+#
+# The obvious drain is to let `server_close()` join the handler threads, and it cannot work
+# here for two independent reasons, both measured rather than assumed:
+#
+#   1. `ThreadingHTTPServer` sets `daemon_threads = True`, and `socketserver._Threads.append`
+#      DISCARDS a daemon thread instead of recording it — so `_threads` is always empty and
+#      the join inside `server_close()` is already a no-op. It looks like a drain and is not.
+#   2. Setting `daemon_threads = False` does not fix it either. `protocol_version` is
+#      HTTP/1.1, so a handler thread lives for the whole keep-alive CONNECTION rather than for
+#      one request, and `BaseHTTPRequestHandler.timeout` is None — so the join would block
+#      forever on an idle browser tab sitting on the review queue.
+#
+# Counting at `_dispatch` is the version that terminates. It is entered after the request line
+# is parsed and before the body is read, so it counts a request being served and never an idle
+# connection waiting for the next one.
+#
+# WHAT IT IS FOR: `scripts/serve.py` restarts this process whenever a watched Python file
+# changes, which is many times a day rather than once. `store/session.py:Store.write()` replaces
+# four JSON files in sequence — each atomic on its own, none atomic as a set — so a kill landing
+# between them leaves a torn store. That risk exists today at Ctrl-C frequency; auto-restart
+# would multiply it, and this is what pays for it.
+_inflight_lock = threading.Condition()
+_inflight = 0
+
+
+def _inflight_enter() -> None:
+    global _inflight
+    with _inflight_lock:
+        _inflight += 1
+
+
+def _inflight_leave() -> None:
+    global _inflight
+    with _inflight_lock:
+        _inflight -= 1
+        _inflight_lock.notify_all()
+
+
+def inflight() -> int:
+    """For the harness. Reading it needs the lock; asserting on it should not need the lock."""
+    with _inflight_lock:
+        return _inflight
+
+
+def drain(timeout: float) -> bool:
+    """Wait for in-flight requests to finish. True if they all did.
+
+    The caller must have stopped accepting first, or this races a new arrival forever.
+    """
+    deadline = time.monotonic() + timeout
+    with _inflight_lock:
+        while _inflight > 0:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            _inflight_lock.wait(remaining)
+    return True
+
+
+# DERIVED FROM THE LOCK TIMEOUT, NEVER CHOSEN. `files.LOCK_TIMEOUT_SECONDS` is 30, and a
+# capture posted while `./pkmnscan identify` holds the store lock legitimately takes that long
+# before it answers `store_busy`. A shorter drain would convert a true refusal — a request that
+# is behaving correctly and is about to say so — into a killed socket, which is the same
+# argument `app/src/server.ts` makes one process over for having no client timeout below 30s.
+DRAIN_SECONDS = files.LOCK_TIMEOUT_SECONDS + 5
+
+
 class CaptureServer(ThreadingHTTPServer):
     """`ThreadingHTTPServer` with a listen backlog big enough for the real client.
 
@@ -7002,7 +7122,33 @@ class CaptureServer(ThreadingHTTPServer):
 def serve(host: str = HOST, port: int = PORT) -> None:
     root = captures_root()
     root.mkdir(parents=True, exist_ok=True)
-    httpd = CaptureServer((host, port), CaptureHandler)
+    try:
+        httpd = CaptureServer((host, port), CaptureHandler)
+    except OSError as exc:
+        # `allow_reuse_address` is SO_REUSEADDR, which does not let a second process listen on
+        # a port that is already bound — so this is what a stray `make server` beside a running
+        # `make up` produces, and `errno 48` on its own is not a fix anybody can guess.
+        print(f"cannot listen on {host}:{port} — {exc}")
+        print("  Something is already serving this port. `make status` says who.")
+        print("  If it is your own supervisor: `make down`, or just use the one that is up.")
+        raise SystemExit(1)
+
+    # SIGTERM RAISES THE INTERRUPT THE CTRL-C PATH ALREADY HANDLES, so there is one shutdown
+    # and not two. Without this the default disposition terminates the process outright — no
+    # `server_close()`, no drain — which makes an unhandled SIGTERM strictly WORSE than Ctrl-C
+    # for a store that commits four files in sequence.
+    #
+    # Guarded because `signal.signal` only works on the main thread: T7 constructs
+    # `CaptureServer` in-process on an ephemeral port and never calls this function, but a
+    # future caller that does should get a working server rather than a ValueError.
+    def _term(_signum, _frame):
+        raise KeyboardInterrupt
+
+    try:
+        signal.signal(signal.SIGTERM, _term)
+    except ValueError:
+        pass
+
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")
     print(f"  store     {files.inventory_dir()}")
@@ -7017,9 +7163,21 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nstopped.")
-    finally:
+        # CLOSE FIRST, THEN DRAIN. In the other order the drain races arrivals it has no way
+        # to refuse and can never reach zero on a busy server; closing the listener is what
+        # makes the wait below finite.
+        print()
         httpd.server_close()
+        waiting = inflight()
+        if waiting and drain(DRAIN_SECONDS):
+            print(f"stopped — {waiting} request(s) finished first.")
+        elif waiting:
+            # LOUD, because this is the one path that can still tear the store: `Store.write()`
+            # replaces four JSON files in sequence and a kill between them leaves a torn set.
+            print(f"STOPPED WITHOUT DRAINING — {inflight()} request(s) were cut after "
+                  f"{DRAIN_SECONDS:.0f}s. If the store looks wrong, check history.jsonl.")
+        else:
+            print("stopped.")
 
 
 if __name__ == "__main__":

@@ -4198,6 +4198,182 @@ answer. The measurement is whether the same SKU is withheld in two runs over one
 
 ---
 
+## D50 — One link, always live, and the restart discipline becomes machinery
+
+**BUILT 2026-08-30, from the owner asking to stop running the project the way it had always
+been run.** Their words: *"ideally i just in my browser go to a link and it's the live version
+of my app connected to my local storage, and if we edit something in the code we dont need to
+do the whole remember to restart server shennanigan it just reloads yanno?"*
+
+**THE RESTART SHENANIGAN IS A RECORDED DEFECT, NOT AN INCONVENIENCE.** `docs/GATES.md` holds
+the measurement: `store/master.py:now()` was changed to milliseconds at 20:16, box 95's run at
+22:08 still wrote whole-second stamps, and the cause was not the code — *"the server process
+serving it had been started before 20:16 and was holding the old code in memory, which no
+commit can reach."* That file files it as a restart discipline. A discipline is what you have
+instead of a guard, and this repo has been here before: D42 exists because *"it already was a
+line nobody had written"* and main moved under three live worktrees twice in one day.
+`scripts/serve.py` is that lesson applied to the server.
+
+**`make server` AND `make dev` ARE UNTOUCHED.** This is additive. A session that wants a
+foreground server in a terminal it is watching still has one, and that one still does not watch
+files — so `docs/GATES.md`'s discipline goes on governing it, and that paragraph is amended
+rather than deleted.
+
+**REJECTED, AND IT WAS THE LEADING OPTION UNTIL THE OWNER ANSWERED: building the app to `dist`
+and serving it from the capture server.** It genuinely collapses two processes into one, and
+`app/package.json` has carried an unused `build` script the whole time. It is the wrong answer
+to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in
+exchange for removing one. Vite stays, and it was already the half of the problem that worked.
+
+**THE DRAIN IS COUNTED ON REQUESTS, NEVER ON THREADS, AND THE OBVIOUS IMPLEMENTATION IS A NO-OP
+THAT LOOKS LIKE IT WORKS.** Both halves measured on this machine's Python:
+
+- `ThreadingHTTPServer` sets `daemon_threads = True`, and `socketserver._Threads.append`
+  **discards a daemon thread** rather than recording it — so `_threads` is always empty and the
+  join inside `server_close()` already does nothing. A version that trusted it would pass every
+  smoke test and lose requests.
+- Setting `daemon_threads = False` does not fix it either. `protocol_version` is HTTP/1.1, so a
+  handler thread lives for the whole keep-alive CONNECTION rather than for one request, and
+  `BaseHTTPRequestHandler.timeout` is None — the join would block forever on an idle browser tab.
+
+So a counter wraps `_dispatch`, which every verb already funnels through and which is entered
+after the request line is parsed and before the body is read. **`server_close()` first, then
+drain** — in the other order the wait races arrivals it cannot refuse and never reaches zero.
+
+**WHY IT IS WORTH BUILDING: `store/session.py:Store.write()` replaces four JSON files in
+sequence.** Each is atomic alone and none is atomic as a set, so a kill between them leaves a
+torn store. That risk exists today at Ctrl-C frequency and auto-restart multiplies it — which is
+why the drain is a PREREQUISITE for the watcher rather than a refinement of it, and why the two
+were built and verified in that order.
+
+**`DRAIN_SECONDS` IS DERIVED FROM THE LOCK TIMEOUT AND WAS NEVER CHOSEN.**
+`files.LOCK_TIMEOUT_SECONDS` is 30, and a capture posted while `./pkmnscan identify` holds the
+store lock legitimately waits that long before answering `store_busy`. A shorter drain would cut
+a request that was behaving correctly and about to say so — the same argument `app/src/server.ts`
+makes one process over for having no client timeout below 30s. T7 asserts the arithmetic rather
+than the number, so it moves the day the lock timeout does.
+
+**AN UNHANDLED SIGTERM WAS STRICTLY WORSE THAN CTRL-C**, which is what made the handler necessary
+rather than tidy: with no handler the default disposition terminates the process with no
+`server_close()` at all. **The hard kill survives and is loud** — after the grace period the
+supervisor sends SIGKILL, because an unkillable wedged server is worse than a cut request, and it
+names `history.jsonl` as where to look.
+
+**THE WATCHER REFUSES TO RESTART INTO CODE THAT DOES NOT PARSE.** Auto-restart *guarantees* the
+watcher observes half-written code: an editor saves mid-keystroke and a formatter writes again a
+beat later. Changed files are `compile()`d first, and on failure the last code that parsed keeps
+running while the log names the file and line.
+
+**Its limit is stated where it is implemented: it catches PARSE errors only.** An `ImportError`,
+a module-scope `NameError` or a bad constant still kills the new child with no rollback. The
+containment is the fast-failure cap — after five quick deaths the supervisor **stops respawning
+and keeps running, still watching**, so a broken commit cannot make it spin and cannot make it
+die (which under launchd would flap it forever). The next save retries.
+
+**The fingerprint is a `{path: (mtime, size)}` dict rather than a digest so the log can NAME the
+file that caused the restart** — the only thing connecting a restart the operator did not ask for
+to the save they just made.
+
+**Mtime polling rather than `watchdog`, for two reasons.** The Makefile's invariant is that the
+capture server must never NEED `make venv`. And FSEvents coalesces and delivers directory-level
+events with its own latency, so the debounce would still be needed — the dependency buys nothing.
+
+**THE LAN HALF WAS NEVER THE SERVER. `HOST = "0.0.0.0"` HAS BEEN THERE SINCE IT WAS WRITTEN**, so
+the capture server has been reachable from the network the whole time and this adds no new
+listener. **The client was the broken half**: `app/devPort.ts` composes
+`http://localhost:${CAPTURE_PORT}` and `vite.config.ts` bakes it into the bundle, and on a phone
+`localhost` IS THE PHONE.
+
+**So only the PORT is baked and the host is resolved at runtime** from `window.location`. It
+keeps every property the injected URL had — the port still comes from the same slot as the Vite
+port, so a worktree's UI still cannot be answered by another tree's server (D43) — and adds the
+one it lacked: it follows the address bar.
+
+**This HONOURS `VITE_CAPTURE_SERVER` rather than overriding it.** That knob's comment says it
+exists so *"the Fulfiller's device can be pointed at this Mac by address"*, which was necessary
+only because the default could not follow the address bar. It still wins, and is still the answer
+for pointing a device at a DIFFERENT machine.
+
+**THE ORIGIN ALLOWLIST NEEDED NO CODE CHANGE.** `PKMNSCAN_ALLOWED_ORIGINS` already existed, is
+documented, is read fresh per request, and **extends the defaults rather than replacing them** —
+and `*` is compared as an exact string, so it refuses everything rather than reopening the hole
+(T7 asserts this). The supervisor composes the value from this Mac's Bonjour name and
+`PKMNSCAN_LAN_NAME`. `scripts/serve.py` may not import the capture server, so it lifts
+`ORIGINS_ENV` with `ast` — the docs audit's own idiom; the alternative was a second hand-written
+spelling whose only symptom when it drifted would be writes silently 403ing from the LAN.
+
+**WHAT IS GENUINELY WIDENED, STATED PLAINLY: writes from a LAN origin are now accepted.** Reads
+always were. This is the point — D5 puts the Fulfiller on his own device — and it is still a real
+change to what a machine on the same network can do. Verified both ways before it was kept: a
+write from the named host answers 201, one from an unknown origin still answers 403.
+
+**`PKMNSCAN_LAN_NAME` LIVES IN `.env`, NOT A SHELL PROFILE**, and D47's amendment is why: an
+export in `~/.zshenv` fixes an interactive shell and does nothing for a process launchd starts,
+which reads no profile at all.
+
+**The owner's DNS is theirs and this repo does not touch it.** A DHCP reservation and a local DNS
+record on their UniFi map `pkmnscan.lan` to this Mac. Nothing in the code knows or cares what the
+name is, which is the property the runtime host resolution buys.
+
+**THE LAUNCH AGENT IS GENERATED, WRITTEN OUTSIDE THE REPO, AND REFUSED IN A WORKTREE.** A plist
+names an absolute path on one Mac; a tracked one would be D47's failure verbatim. `~/Library` is
+strictly better than gitignoring it — there is then no file in the tree to commit by accident at
+all — and `plistlib.dump` rather than a here-doc for `make launch-config`'s recorded reason: a
+hand-built plist is one escaping mistake from a file that presents as *"the app does not start"*
+rather than as a syntax error. `server/ports.py:agent_label` derives the label from the same slot
+as the ports, so two checkouts cannot install one label and silently replace each other.
+
+**Main tree only, and the refusal is the design.** A worktree is deleted routinely and its plist
+would outlive it, leaving launchd retrying a path that is gone. `up`, `down`, `restart` and
+`status` work in every tree; only login-persistence is refused.
+
+**`KeepAlive: {SuccessfulExit: false}` AND NOT `true`, WHICH IS WHAT LETS `make down` WIN.** A
+process terminated by a signal is an *unsuccessful* exit to launchd, so `true` would restart the
+very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, `make
+down` prefers `launchctl bootout` when a plist exists, and it says — before the operator finds
+out tomorrow morning — that the agent will start it again at the next login.
+**`EnvironmentVariables.PATH` is baked because launchd gives an agent a minimal PATH and `npm` is
+otherwise not found**, so the app half never starts while the capture server looks fine. If npm
+comes from nvm, an `nvm install` moves it and the agent needs regenerating.
+
+**`make status` REPORTS LIVENESS, WHICH IT NEVER HAS.** `ports_and_store()` prints which ports
+this tree WOULD use and has never known who holds them. **The third branch is what earns it: a
+port that answers while no pidfile in THIS checkout claims it** — D43's fault made visible for the
+first time, and previously undetectable from inside the tree it was happening to.
+
+**THE PID GUARD COMPARES THE FULL PATH AND NOT THE BASENAME, AND THE FIRST VERSION DID NOT.**
+`pipeline_routes.py:_live_pid` is the house pattern and only ever READS, so a recycled pid there
+is a run wrongly reported busy. `make down` SIGNALS a process group, so the same mistake kills an
+unrelated process tree — and here it is not hypothetical, because every checkout runs a file
+called `capture_server.py` and an `npm run dev` under a directory called `app`. A basename check
+answers *"yes, that's ours"* for another tree's server. Found by reasoning about a main-tree
+server that died during this build, exonerated by the timestamps, and fixed anyway.
+
+**WHAT THIS COSTS, NAMED RATHER THAN DESIGNED AWAY:**
+
+- **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing.
+  Inherent to D13, written down now rather than found as a bug in three weeks.
+- **An agent session restarts the owner's live server.** With the agent on the main tree, any
+  session editing `store/` or `server/` bounces the server the owner may be capturing with. That
+  is what was asked for, and a further argument for main-tree-only.
+- **A request accepted but not yet inside `_dispatch` is uncounted.** Microseconds; closing it
+  means reimplementing `handle_one_request`. Recorded in `docs/DEBTS.md`.
+- **The swap gap.** Tens of milliseconds of `ECONNREFUSED` between children, which the client
+  surfaces as `unreachable` because it deliberately has no retry. The fix, named and NOT built:
+  the supervisor holds the listening socket and passes it to the child. Rejected for v1 because it
+  turns a fast honest refusal into a hang when the new child fails to boot.
+
+**D13 IS NOT REOPENED.** The store, the photographs and the truth stay on this Mac. LAN reach is
+the tunnel case D13 already names as needing no code change, and the owner deferred off-site
+access to its own decision rather than folding it in here.
+
+**WHAT WOULD REOPEN THIS: the watcher restarting during real capture work.** If the server bounces
+under the owner mid-box because a session saved a file, the answer is not to weaken the drain — it
+is that the agent and an active feeder run should not share a tree, which is one condition on
+`is_linked_worktree` away from what is already built.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
@@ -4274,6 +4450,33 @@ stopped being a Someday item and needs a decision entry of its own"* — and eac
   the import CSVs as downloads, and a money gate that cannot be pressed before the free
   preflight has answered. This item is quoted by name in `docs/GATES.md`'s "what the gate did
   not close", which is where it came from.
+
+- **Back the photographs up to the NAS.** Asked and answered on 2026-08-30: the owner has a NAS
+  and asked whether the photos and the store should live on it. **They should not, and the
+  reasons are different for the two halves.**
+
+  **The store would break, not merely slow down.** `store/files.py` rests on `fcntl.flock`
+  (chosen, per its own docstring, *because* a process that dies holding one releases it — a
+  kernel-local guarantee, and frequently a silent no-op over SMB) and on `os.replace`, whose own
+  comment already states the constraint: *"only atomic within one filesystem."* `inventory.json`
+  is 558 KB rewritten whole on every capture, at the feeder's 623 ms cadence, on primitives that
+  do not hold. **D44 and D47 are this repo paying for that lesson twice already** — on iCloud, an
+  in-place overwrite left Python's import machinery running old bytes while `read()` returned the
+  new ones.
+
+  **The photographs would be slow, and the slowness lands where it hurts.** 1.2 GB across 716
+  files. D36's realign hashes every photograph in a box on **every join** — 0.56 s locally, ~9 s
+  over gigabit and worse over wifi, which is what this Mac is on. D19 budgets a capture
+  round-trip under 250 ms, and a contended wifi hop mid-feeder-run is a silently missed card.
+
+  **What IS worth doing is the backup, and it is a real gap.** Those photographs exist in exactly
+  one place. Unlike D15's eval mirror — derived, re-downloadable, and which D47 records being
+  rescued by iCloud version history in what that entry itself calls *"luck wearing the clothes of
+  a backup"* — **a capture photo cannot be regenerated**: the card is back in a box. Lose the disk
+  and D36's realign has nothing to bind to and D26's re-shoot has nothing to compare against.
+  Either Time Machine to the NAS (no code at all) or a scheduled `rsync` of `inventory/` and
+  `captures/`. If it is the second, it needs a line in `make status` saying when it last ran and
+  whether it worked — a backup nobody checks is not a backup.
 
 - **Cross-check the collector number against the local catalog** (needs D15). Not a
   replacement for the model's read — a second, independent derivation of the same fact, the

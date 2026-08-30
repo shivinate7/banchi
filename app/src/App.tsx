@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { isEditableTarget } from './keys'
 import type { ComponentType } from 'react'
 
+import { ServerReloaded } from './ServerReloaded'
 import { CaptureScreen } from './CaptureScreen'
 import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
@@ -576,6 +577,15 @@ export function App() {
       ) : null}
 
       {route === undefined ? <NoSuchView path={path} /> : <route.view />}
+
+      {/* "The capture server reloaded" (D50), and it hangs off `chrome` — the SAME condition
+          the nav does — rather than off a route test of its own. That is not tidiness: the
+          Fulfiller's view would fail three rows of docs/DESIGN.md's constraints table at once
+          if this drew there. It is 11px against a 20px floor on every text node, it says
+          "server", which is on that table's banned-word list, and D31 keeps that spec
+          unweakened. Reusing `hasChrome` means a route added to the Fulfiller's side of the
+          product cannot acquire this by being forgotten about. */}
+      {chrome ? <ServerReloaded /> : null}
     </>
   )
 }

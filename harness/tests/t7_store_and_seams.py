@@ -838,6 +838,21 @@ def check_server_routes(checks: Checks) -> None:
         checks.equal(report["next_index"]["3"], 4, "and reports the next index per box")
         checks.ok("problem" not in report, "and reports no problem on a healthy store")
 
+        # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server whenever a
+        # watched Python file changes, and the app tells a restart from a reload by watching
+        # this value — the failure it exists for is docs/GATES.md's box 95, where whole-second
+        # timestamps were written two hours after the millisecond fix landed because the
+        # process predated it and nothing on any screen could say so.
+        checks.ok(
+            isinstance(report.get("boot_id"), str) and report["boot_id"],
+            "GET /status names the process answering it, so a stale server can be seen",
+        )
+        checks.equal(
+            report["boot_id"],
+            capture_server.BOOT_ID,
+            "and it is this process's own id rather than a value recomputed per request",
+        )
+
         # GET /inventory decorates every row with its rendered position. Asserted against
         # `join.Position` itself and never against a literal string: the whole point of the
         # decoration is that ONE renderer draws a position label, and a literal here would
@@ -9994,6 +10009,63 @@ def check_open_section(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_drain(checks: Checks) -> None:
+    """The shutdown seam `scripts/serve.py` restarts through.
+
+    Its own block and not part of `check_server_routes`, because it asserts nothing about a
+    route: it is about what happens to a request that is ALREADY RUNNING when the process is
+    told to stop. `store/session.py:Store.write()` replaces four JSON files in sequence — each
+    atomic alone, none atomic as a set — so a kill landing between them leaves a torn store.
+    That risk exists at Ctrl-C frequency today and the supervisor multiplies it, which is what
+    makes this seam worth an assertion rather than a comment.
+
+    THE OBVIOUS IMPLEMENTATION CANNOT WORK AND THAT IS WHY THIS IS TESTED. `ThreadingHTTPServer`
+    sets `daemon_threads = True`, and `socketserver._Threads.append` discards a daemon thread —
+    so the join inside `server_close()` is already a no-op and looks exactly like a drain that
+    works. A version that counted threads would pass a smoke test and lose requests in
+    production.
+    """
+    checks.note("")
+    checks.note("GRACEFUL DRAIN — server/capture_server.py")
+
+    checks.equal(capture_server.inflight(), 0, "nothing is in flight at rest")
+    checks.ok(capture_server.drain(0.2), "and a drain over an idle server returns at once")
+
+    # DERIVED, NOT A LITERAL. A capture posted while `./pkmnscan identify` holds the store lock
+    # legitimately waits `LOCK_TIMEOUT_SECONDS` before answering `store_busy`, so a drain
+    # shorter than that would cut a request that was behaving correctly. Asserting the
+    # arithmetic rather than the number means it moves the day the lock timeout does.
+    checks.equal(
+        capture_server.DRAIN_SECONDS,
+        files.LOCK_TIMEOUT_SECONDS + 5,
+        "the drain outlasts the store lock, so a legitimate store_busy is never cut short",
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def occupy() -> None:
+        capture_server._inflight_enter()
+        entered.set()
+        release.wait(10)
+        capture_server._inflight_leave()
+
+    worker = threading.Thread(target=occupy, daemon=True)
+    worker.start()
+    entered.wait(5)
+
+    checks.equal(capture_server.inflight(), 1, "a request in flight is counted")
+    checks.ok(
+        not capture_server.drain(0.3),
+        "and a drain REFUSES to return while it is still running — the whole point",
+    )
+
+    release.set()
+    worker.join(5)
+    checks.equal(capture_server.inflight(), 0, "the counter falls when the request finishes")
+    checks.ok(capture_server.drain(0.5), "and the drain then returns true")
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -10004,6 +10076,7 @@ def run() -> Result:
     check_boxes_and_listings(checks)
     check_store(checks)
     check_server_routes(checks)
+    check_drain(checks)
     check_undo(checks)
     check_remove_and_box_delete(checks)
     check_queues(checks)

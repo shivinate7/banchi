@@ -19,6 +19,12 @@
 # trailing slash buys is worth nothing here — nothing else in this tree is called `.venv`.
 node_modules
 dist/
+
+# `make up`'s pidfiles and logs. Bare name for the rule stated at the top of this file: this
+# is a path a worktree can create, so the pattern may not care what kind of thing is at it.
+# Per-checkout by construction — it lives inside the checkout, so a worktree's supervisor
+# state dies with the worktree, which is the same property that makes the ports safe (D43).
+.serve
 .claude/settings.local.json
 __pycache__/
 *.pyc

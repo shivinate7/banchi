@@ -687,6 +687,31 @@ COMPONENTS = [
             },
 
             # ---- diagnostics. Neither may grow an exit code a gate could read ----
+            "serve.py": {
+                "does": "`make up` / `make down` / `make restart` / `make launch-agent`. One "
+                        "supervisor over two children — the capture server and Vite — with a "
+                        "pidfile each under `.serve/`, so a supervisor killed with -9 leaves "
+                        "orphans that can still be found and swept. It watches the Python "
+                        "trees the capture server imports and restarts THAT child when they "
+                        "change, which is the machinery replacing the restart discipline "
+                        "docs/GATES.md records as a defect: a long-running `make server` "
+                        "outlives the fix written for it. Stdlib only, because the Makefile's "
+                        "invariant is that the capture server must never NEED `make venv`; it "
+                        "may import store.files and server.ports and may never import "
+                        "capture_server, whose ORIGINS_ENV it lifts with `ast` instead. "
+                        "`report()` is read-only and is what `make status` asks. "
+                        "`make server` and `make dev` are untouched and still work.",
+                # D50 is the entry that argues all of it. D43 because every port and the
+                # agent label come from server/ports.py rather than a constant — a second
+                # spelling here is the cross-tree failure that entry exists to close, and the
+                # pid-ownership check compares the FULL argv path for the same reason: every
+                # checkout runs a file called capture_server.py. D18 because none of these
+                # targets may reach `make check` or the git hook, and launch-agent writes to
+                # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
+                # tunnel case that entry already names.
+                "governed_by": ["D13", "D18", "D43", "D47", "D50"],
+                "status": "built",
+            },
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
@@ -852,7 +877,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D50"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -992,11 +1017,35 @@ COMPONENTS = [
                                     "the seventh, registered with D20's screen rather than after "
                                     "it; D31 deleted the route and kept the screen — the "
                                     "registration rule stands, the route does not.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D50"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
                             "governed_by": ["D5", "D10", "D49"]},
+            "src/ServerReloaded.tsx": {"does": "says once when the capture server has restarted "
+                                               "under it (D50). SUBSCRIBES, NEVER POLLS: "
+                                               "`server.ts` reads a boot header off responses "
+                                               "the screens were already fetching, so this "
+                                               "generates no traffic at all — the first build "
+                                               "polled `/status` every 5s and gave every "
+                                               "owner-side SPEC an unstubbed call to whatever "
+                                               "real server was listening, which is the hazard "
+                                               "inventory.spec.ts names. Never speaks on first "
+                                               "sight, expires by itself, demands nothing — "
+                                               "docs/DESIGN.md bans an acknowledgement to "
+                                               "dismiss. Rendered on `hasChrome`, the same gate "
+                                               "as the nav, because at 11px and using the word "
+                                               "'server' it would fail three rows of the "
+                                               "Fulfillment constraints table at once. NO "
+                                               "AUTOMATED CASE — docs/DEBTS.md carries why, and "
+                                               "what was verified by hand instead.",
+                                       "governed_by": ["D5", "D31", "D50"]},
+            "src/ServerReloaded.css": {"does": "that notice: fixed bottom-left so it costs no "
+                                               "layout on screens whose recorded complaint "
+                                               "(D38, D40) is content pushed below the fold, "
+                                               "pointer-events none, accent as an outline dot "
+                                               "and never a fill",
+                                       "governed_by": ["D5", "D38", "D40", "D50"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
@@ -1005,11 +1054,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D50"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D50"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "

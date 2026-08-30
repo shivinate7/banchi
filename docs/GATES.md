@@ -609,6 +609,23 @@ restart discipline, not a bug, and it belongs beside the money rules: restart th
 server after any change under `store/` or `server/`, or the run you are about to do is
 served by whatever was true when you started it.
 
+**THE DISCIPLINE IS MACHINERY AS OF 2026-08-30, FOR ONE OF THE TWO WAYS TO START A SERVER
+(D50).** `make up` runs the server under a supervisor that watches `server/`, `store/`,
+`pipeline/`, `cli/`, `identify/` and `geometry/` and restarts it when they change, and
+`GET /status` now carries a `boot_id` so a stale process is visible rather than inferred.
+Re-scored against this section's own case: the millisecond change would have been picked up
+in about a second, and the 22:08 run would have written the stamps the 20:16 commit intended.
+
+**`make server` is untouched and the paragraph above still governs it in full.** It does not
+watch anything, by choice — a foreground server in a terminal somebody is looking at is a
+different tool from one that starts at login. So the rule is now: under `make up` the restart
+is automatic, and under `make server` it is still yours to remember.
+
+**None of the numbers above move.** They are evidence about a run on a date, and this file's
+own rule is that evidence is never rewritten to match a later tree. Box 95's 85 records still
+read `T03:08:22+00:00` with no fractional part, and the cadence figures still come off APFS
+`st_birthtime`.
+
 ---
 
 ## Build order
