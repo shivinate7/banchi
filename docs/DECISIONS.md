@@ -3658,6 +3658,32 @@ it. The failure mode this replaces is the worse kind: not a check that misses so
 check that **reports a defect in a file nobody touched**, which is what sends a session
 investigating the wrong doc.
 
+**MOVING THE MIRROR BROKE THE PROVISIONER, AND THE PROVISIONER SAID NOTHING** (found 2026-08-30,
+by a Stop hook that failed T1 in a worktree whose main checkout was healthy). This entry moved
+the mirror out of iCloud behind `PKMNSCAN_IMAGE_MIRROR` and did not look at the one script whose
+job is to give a worktree that mirror. `scripts/worktree-guard.sh` and `make worktree-setup` both
+read `[ -d "$main/harness/images" ]` and linked THAT path — and after the move the main checkout
+has no `harness/images` at all, so the precondition went false and both blocks were skipped
+whole. **Neither printed anything**: the only failure message sat on the `ln`, and the `ln` was
+never reached. A fresh worktree then downloaded 151 images at its first `make harness`, which is
+the exact cost the guard's own header says that line exists to avoid.
+
+**THE FIX IS TO ASK RATHER THAN TO ASSUME, AND THE THING ASKED IS THE ONE RESOLUTION.** Both call
+sites now run the MAIN checkout's own `harness/eval/fixtures.py` and link to whatever
+`IMAGES_DIR` answers — env var, then that checkout's `.env`, then its in-repo default. Re-deriving
+that precedence in shell is how the two drift apart a second time, and `fixtures.py` is stdlib-only
+at module scope so a bare `python3` can answer it. The script never reads `.env` itself; `envfile`
+does, and the only thing crossing the pipe is a path. Where there is no mirror to link, it now
+SAYS so — the silent skip was the defect, not the missing link.
+
+**AND THE PATH BELONGS IN `.env`, NOT IN A SHELL PROFILE.** Tried and reverted the same day: an
+export in `~/.zshenv` fixes an interactive session and does nothing for the Stop hook, which runs
+`scripts/stop-gate.sh` under **bash** — a shell that reads no zsh profile and, spawned from an app
+started before the export existed, inherits nothing either. `.env` is what every reader of this
+repo already consults regardless of shell, and `envfile.get` still lets a real environment
+variable win. Two records of one path is also the drift this file dislikes: a stale export would
+outrank a corrected `.env` and point at a mirror that had moved.
+
 **WHAT WOULD REOPEN THIS: a third provisioned path.** The guard is general — it refuses by mode
 and by target, not by name — so a new link is covered the day it is added. What is not covered is
 the reverse direction: a path that ought to be ignored and is not, which is what let the first

@@ -28,7 +28,10 @@
 #   harness/.cache/  COPIED. Local, ~90 KB, no network. It is also the SAFETY one: without
 #                    it T1 has nothing to replay, and T1's refusal is what stands between a
 #                    cold cache and a paid submission at the end of every turn.
-#   harness/images/  SYMLINKED, and the difference from the line above is the point. 133 MB
+#   harness/images/  SYMLINKED TO WHEREVER THE MAIN TREE'S MIRROR ACTUALLY IS — asked for, not
+#                    assumed, since D47 moved it out of iCloud and this line went on pointing at
+#                    the old place in silence. The difference from the line above is the point:
+#                    133 MB
 #                    is too much to duplicate per worktree, and unlike the cache these are
 #                    immutable: `fixtures.load` only ever ADDS a missing file, keyed by card
 #                    id, so two trees sharing them cannot make each other score differently.
@@ -83,9 +86,30 @@ if [ ! -d harness/.cache ] && [ -d "$main/harness/.cache" ]; then
 fi
 
 # Symlinked rather than copied — 133 MB, immutable, additive-only. See the header.
-if [ ! -e harness/images ] && [ -d "$main/harness/images" ]; then
-  if mkdir -p harness 2>/dev/null && ln -s "$main/harness/images" harness/images 2>/dev/null; then
-    echo "worktree-guard: linked harness/images (T1 scores without downloading 151 files)."
+#
+# THE SOURCE IS ASKED FOR, NEVER ASSUMED, AND D47 IS WHY. This read `[ -d "$main/harness/images" ]`
+# and linked that path. D47 then moved the mirror out of iCloud behind `PKMNSCAN_IMAGE_MIRROR`,
+# so on a tree that sets it the main checkout has no `harness/images` at all — the precondition
+# went false, the whole block was skipped, and NOTHING WAS PRINTED, because the only failure
+# message here is on the `ln` and the `ln` was never reached. A fresh worktree then downloaded
+# 151 images at the first `make harness`, which is the exact cost the header says this line
+# exists to avoid. Observed 2026-08-30, from a Stop hook that failed T1 in a worktree whose
+# main tree was healthy.
+#
+# So the main tree's own harness is asked where its images are. `fixtures.IMAGES_DIR` is the ONE
+# resolution — env var, then that checkout's `.env`, then its in-repo default — and re-deriving
+# that precedence in shell is how the two drift apart again. Stdlib-only at module scope, so a
+# bare `python3` answers; `.env` is read by `envfile` and never by this script, and the only
+# thing that crosses the pipe is a path.
+mirror="$(cd "$main" 2>/dev/null && python3 -c 'import sys; sys.path.insert(0, "."); from harness.eval import fixtures; print(fixtures.IMAGES_DIR)' 2>/dev/null)"
+[ -n "$mirror" ] || mirror="$main/harness/images"
+
+if [ ! -e harness/images ]; then
+  if [ ! -d "$mirror" ]; then
+    # Said out loud rather than skipped. The silent skip is the defect above.
+    echo "worktree-guard: no image mirror at $mirror — T1 will re-download 151 images."
+  elif mkdir -p harness 2>/dev/null && ln -s "$mirror" harness/images 2>/dev/null; then
+    echo "worktree-guard: linked harness/images -> $mirror (T1 scores without downloading 151 files)."
     did_something=1
   else
     echo "worktree-guard: could not link harness/images — T1 will re-download them."

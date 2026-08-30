@@ -578,15 +578,19 @@ COMPONENTS = [
                         "nothing else, so .venv/, harness/.cache/ and app/node_modules/ do "
                         "not travel — and the three failures that causes (numpy missing, a "
                         "fixture AttributeError, an empty T1 cache) never mention a "
-                        "worktree. Copies the cache, builds the venv, and only REPORTS the "
-                        "80 MB npm install. Fails open on every path, including its own bugs.",
+                        "worktree. Copies the cache, builds the venv, links the eval-image "
+                        "mirror, and only REPORTS the 80 MB npm install. The mirror source is "
+                        "ASKED FOR — the main checkout's own fixtures.IMAGES_DIR — rather than "
+                        "assumed to be its harness/images, which D47 emptied when it moved the "
+                        "mirror out of iCloud; the old assumption skipped in silence and cost a "
+                        "151-file download. Fails open on every path, including its own bugs.",
                 # D18 is the one that decides where this may run rather than what it does.
                 # It WRITES — a venv and a cache copy — so it belongs at session start and
                 # must never be moved onto the commit path or into `make check`. D16 is
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43"],
+                "governed_by": ["D16", "D18", "D43", "D47"],
             },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "

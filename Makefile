@@ -128,9 +128,15 @@ worktree-setup:
 	else \
 		echo "NOTE: $$main has no harness/.cache — T1 will refuse until a run is banked there."; \
 	fi; \
-	if [ ! -e harness/images ] && [ -d "$$main/harness/images" ]; then \
-		ln -s "$$main/harness/images" harness/images; \
-		echo "harness/images linked (133 MB, shared — immutable and additive-only)"; \
+	mirror="$$(cd "$$main" 2>/dev/null && python3 -c 'import sys; sys.path.insert(0, "."); from harness.eval import fixtures; print(fixtures.IMAGES_DIR)' 2>/dev/null)"; \
+	[ -n "$$mirror" ] || mirror="$$main/harness/images"; \
+	if [ -e harness/images ]; then \
+		:; \
+	elif [ -d "$$mirror" ]; then \
+		ln -s "$$mirror" harness/images; \
+		echo "harness/images linked -> $$mirror (133 MB, shared — immutable and additive-only)"; \
+	else \
+		echo "NOTE: no image mirror at $$mirror — T1 will re-download 151 images."; \
 	fi
 	@[ -d app/node_modules ] || { \
 		echo "NOTE: app/ dependencies are not installed either — also gitignored, also"; \
