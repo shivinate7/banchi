@@ -1059,9 +1059,13 @@ COMPONENTS = [
                     "copies, capped by the eleven fact rows. The photograph takes the whole "
                     "middle third at 63:88; the facts are two columns at 1440 and one at 1280. "
                     "The box panel is still a sibling of the card's column rather than a child "
-                    "of it, which is what puts it structurally outside the selected-card guard.",
+                    "of it, which is what puts it structurally outside the selected-card guard. "
+                    "ONE INBOUND PROP since 2026-08-29 (D45): `goTo` walks to a card by store "
+                    "key, which is how a copy row on the right reaches the box on the left. It "
+                    "drops the search filter rather than letting it swallow the jump, and opens "
+                    "the landing's section itself so the scroll has a rendered row to find.",
             "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
-                            "D30", "D31", "D33", "D35", "D38", "D39", "D41"]},
+                            "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1120,7 +1124,9 @@ COMPONENTS = [
                         "carries the four writes that had no client half at all until the same "
                         "day: box-wide and per-card claim corrections, the mid-box delete, and "
                         "the whole-box delete. No cache: there is one place inventory lives and "
-                        "it is not here.",
+                        "it is not here. It also holds the one request that goes the OTHER way "
+                        "(D45): a press on a copy's position asks the walk to go there, which is "
+                        "the only thing this file tells BoxBrowse to do.",
                 "note": "IT WRITES NOW, AND ITS HEADER OVERTURNS ITS OWN OBJECTION IN PLACE "
                         "rather than deleting it. The file argued at length that a sold button "
                         "here would be 'the same irreversible-looking write with neither guard, "
@@ -1136,7 +1142,7 @@ COMPONENTS = [
                         "comes off the wire now (SearchGroup.cap), which is the condition its "
                         "own comment named as what would settle it.",
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31",
-                                "D33", "D39"],
+                                "D33", "D39", "D45"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -1240,11 +1246,19 @@ COMPONENTS = [
                                               "unsold copy is offered, and the listed quantity is read "
                                               "off the SKU rather than counted from the copies. The "
                                               "owner's head carries no card name: the band above it "
-                                              "prints one (D38, two renderings of one fact).",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38"]},
+                                              "prints one (D38, two renderings of one fact). The "
+                                              "owner's position label is a CONTROL where the caller "
+                                              "offers `onGoTo` (D45): pressing it walks the box "
+                                              "browse to that copy. A transparent button around "
+                                              "PositionLabel, not a second treatment; the label "
+                                              "and not the row, because the row already holds an "
+                                              "action.",
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D45"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
-                                              "card with a photo; the owner's is a row.",
-                                      "governed_by": ["D5", "D7", "D31", "D40", "D41"]},
+                                              "card with a photo; the owner's is a row. The walk-to "
+                                              "wrapper takes the button chrome back off and shows "
+                                              "its affordance on hover and focus only (D45).",
+                                      "governed_by": ["D5", "D7", "D31", "D40", "D41", "D45"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's

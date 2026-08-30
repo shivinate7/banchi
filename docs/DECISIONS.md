@@ -3377,6 +3377,95 @@ is correct on its own terms and stays regardless.
 
 ---
 
+## D45 — The copies list is a way back into the walk, and the filter yields to the jump
+
+**BUILT 2026-08-29, from the owner's question**: *"on the inventory tab, would it be easy on the
+preview of copies, for clicking that to redirect me to that copy's photo (thereby switching the
+box im viewing etc) essentially a backroad way of getting around?"*
+
+**D7's MAP WAS A READ-ONLY ANSWER, AND THAT IS THE WHOLE OF WHAT THIS CHANGES.** Every copy of a
+card sits at its own position and `CardLocations` has drawn them since the order flow — three
+copies, three boxes, three position labels — with no way to get to any of them but reading the
+box number off the row and pressing that cell on the strip. The walk already draws the
+photograph, the facts, the queue block and the box operations for whatever it points at, so
+moving the mark is the ONLY thing a press has to do; everything the owner asked for follows for
+free.
+
+**THE LABEL IS THE CONTROL AND THE ROW IS NOT.** The row already holds `Mark sold` and the
+retire door, and a button inside a button is invalid markup — which is the same constraint that
+put `aria-current` on the `<li>` rather than on anything pressable. The label is also the better
+target on its own terms: `Box 7 · Section 1 · Card 40` is both the affordance and the statement
+of where the press is about to go. It renders through the identical class in both branches, so a
+walkable row is not louder than a look-only one; what the button adds is `cursor`, an underline
+on hover and focus, and `Walk to <position>` as its accessible name.
+
+**IT IS ABSENT ON THE CURRENT COPY AND ON A POOLED ONE.** The first is where the walk already
+stands. The second is D24: a code card is a count rather than a location, so there is no slot to
+walk to and that cell is carrying the pooled fact instead of a position.
+
+**`BoxBrowse` GAINS ONE INBOUND PROP, WHICH IS THE MIRROR OF `onSelect`.** `goTo: { key, at }`.
+The two shapes declined: an imperative ref handle, which hides a state change inside a method
+call; and lifting `selected` into `Inventory.tsx`, which hands a page the walk's own bookkeeping
+— the four effects that keep the mark inside the filter, the shelf and the fold. The counter is
+there because the same copy can be asked for twice — walk to it, arrow away, press it again —
+and because a request already answered must not be replayed by a re-render of the caller.
+
+**THE FILTER IS THE FAILURE THIS ENTRY IS MOSTLY ABOUT, AND IT WAS MEASURED RATHER THAN
+REASONED.** Under a query the walk holds only matches, and the two follows-the-filter effects
+move the mark to the first visible row whenever the selection is not among them. So a jump to a
+card the query does not reach lands on **whatever card is first**, under its own photograph,
+with nothing on screen saying the wrong one was reached. Observed, by removing the guard and
+running the case: pressing `Walk to Box 7 · Section 1 · Card 40` drew `Box 2 · Section 1 ·
+Card 1`.
+
+**IT IS REACHABLE FOR ONE REASON AND THE REASON IS WORTH KEEPING.** `do_search` renders a SKU's
+group WHOLE — every copy, including ones that did not match the query — so a copy of a matched
+SKU is always inside the walk's own filter. **The `sku: null` group is the exception**: it is
+built from the cards that matched THEMSELVES, and a named, never-emitted card is most of this
+store today. Two copies of one name in two boxes and a query that reached only one of them is
+the live case.
+
+**SO THE QUERY IS DROPPED RATHER THAN THE JUMP.** The owner pressed a position; the filter was a
+way of finding it, and it has been found. Clearing re-runs the landing with the whole walk to
+land in, which is why the request is held in state rather than answered in one pass.
+
+**THE JUMP OPENS THE LANDING'S SECTION ITSELF, and that is not what the
+mark-is-never-hidden rule already does.** That effect runs a commit later and the scroll's
+dependencies do not include the folds, so a jump that left the opening to it lands on a row the
+scroller never scrolls to. Measured on a forty-card box: viewport ratio 0. The landing effect is
+declared AFTER both fold effects for the same class of reason — clearing a query fires the
+collapse-everything effect in the same pass, and last means the open is the final word.
+
+**WHAT IT COSTS IS THE TICKS, NAMED RATHER THAN DESIGNED AWAY.** A shelf change clears the
+mass-select (D31: the selection is box-scoped because the write it feeds is), so walking to a
+copy in another box discards a selection that may have been on its way to `#/runs` via D39's
+handoff. It is the same cost a box-chip press already carries; what is new is that the gesture
+looks like a click on a row rather than a click on a box. The mitigation is the control itself —
+the thing pressed prints the box it is going to.
+
+**A KEY THE WALK DOES NOT HOLD DOES NOTHING.** The copies come from `GET /search` on every
+selection and the walk from `GET /inventory` at mount, so a card deleted from another device
+sits in one and not the other until a Reload. Naming it would need a refusal channel out of a
+component that reports three things upward and takes one back; the press doing nothing and the
+Reload beside the list being the remedy is the honest cheap answer.
+
+**IT DOES NOT REACH THE FULFILLER, and that is D31's downstream rule rather than an omission.**
+`onGoTo` is optional and owner-skin only; his view has no walk to move. The gallery passes
+nothing. The lone-copy fallback passes nothing either — that copy IS the card the walk is
+standing on.
+
+**D41 IS UNTOUCHED.** That entry rules that the three sites drawing `Position.label` are decided
+one at a time, and this changes none of them: `.card-locations-label` renders the same string
+through the same class at the same size, and only becomes pressable. `pipeline/join.py:Position`
+still composes the string and it still travels verbatim.
+
+**WHAT WOULD REOPEN THIS: the same affordance asked for elsewhere.** If walking to a position
+becomes how the owner navigates generally, `#/review`'s position and the Fulfiller's copy cards
+are the next two — and per D41 that is a decision about all of them rather than a copy of this
+one.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

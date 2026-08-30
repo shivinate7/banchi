@@ -486,3 +486,53 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* THE WALK-TO, WHERE THE CALLER OFFERS ONE (`onGoTo`, D45). A TRANSPARENT WRAPPER AROUND
+   `PositionLabel` AND NOT A SECOND TREATMENT OF THE ADDRESS — that component owns every pixel of
+   the string at all six owner sites, and a rule here that touched its size, its colour or its
+   two ranks would make the copies list a seventh. So this takes the button chrome back off and
+   states nothing about the label: `font: inherit` because a button does not inherit one, and
+   `--pos-slot` and the site rule on `.card-locations-label` above reach the component through
+   it unchanged.
+
+   `display: block` and a full width because `.position-parts` is a flex box and the cell it
+   lays out in is `.card-locations-place`'s column. An inline-block would shrink-wrap the row
+   and put the slot figure and the path on a measure neither was tuned at.
+
+   THE AFFORDANCE IS HOVER AND FOCUS, WHICH IS THE ONE THING DEFENSIBLE HERE. A persistent
+   underline down a column of positions would be the newspaper-link register docs/DESIGN.md
+   rejects, and an accent fill is reserved for a screen with exactly one thing to do. The row
+   already lights on hover — this adds the underline that says the address itself is the target,
+   and `:focus-visible` gives the keyboard the same fact rather than leaving it to the ring
+   alone.
+
+   ON THE SLOT AND NOT ON THE WHOLE BLOCK, which was looked at and is the louder of the two. The
+   stacked address is three lines — the figure, and the two muted path lines under `slot` lead —
+   so underlining the parts drew three rules through a block whose own design demotes two of
+   them. `PositionLabel` already says which part is the anchor; the affordance follows it.
+   Under `.card-locations-goto` so it cannot reach the same component at the five sites that
+   offer no walk-to, and on the parts' own child so it tracks the text rather than the
+   full-width box — an underline running the width of the cell reads as a rule, not a link. */
+
+/* `text-align: left` because a button centres its text and every other line in this cell is
+   ragged-right against the same edge. */
+.card-locations-owner .card-locations-goto {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.card-locations-owner .card-locations-goto:hover .position-slot,
+.card-locations-owner .card-locations-goto:focus-visible .position-slot {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
