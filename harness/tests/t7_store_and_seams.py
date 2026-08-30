@@ -207,7 +207,7 @@ from pipeline import (  # noqa: E402
     tcgcsv,
     variant,
 )
-from server import capture_server, pipeline_routes, ports  # noqa: E402
+from server import capture_server, pipeline_routes, ports, tcg_export  # noqa: E402
 from store import files, master, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
@@ -11228,13 +11228,29 @@ def check_export_fetch(checks: Checks) -> None:
     # an export that has quietly narrowed. Real fixture rows throughout — `write_export`
     # builds them out of the committed SV09 file — because the guard counts SKUs and condition
     # rows per number, and invented rows would be testing the fixture.
-    stub = {"mode": "csv", "body": b"", "seen": []}
+    stub = {
+        "mode": "csv",
+        "body": b"",
+        "seen": [],
+        "posted": [],
+        # One set, so a hint can resolve to exactly it and the positive check has something
+        # to be positive about. `0` is the portal's own "all" row and is never a set.
+        "filters": {
+            "Sets": [
+                {"Text": "All Set Names", "Value": "0"},
+                {"Text": "SV09: Journey Together", "Value": "4242"},
+            ],
+            "Rarities": [{"Text": "All Rarities", "Value": "0"}],
+            "Conditions": [{"Text": "All Conditions", "Value": "0"}],
+            "Printings": [{"Text": "All Printings", "Value": "0"}],
+        },
+    }
 
     class Portal(http.server.BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # noqa: A003
             pass
 
-        def do_GET(self):  # noqa: N802
+        def _serve(self):
             stub["seen"].append(self.headers.get("Cookie"))
             mode = stub["mode"]
             if mode == "logon":
@@ -11261,13 +11277,37 @@ def check_export_fetch(checks: Checks) -> None:
             if body:
                 self.wfile.write(body)
 
+    # THE MODULE MAKES TWO CALLS AND THE STUB ANSWERS BOTH (D65). `getjsonfilters` is a GET
+    # returning the category's vocabulary; the export is a POST whose body carries the scope.
+    # The POST body is RECORDED, because the assertion worth making is not that a request
+    # happened but that the scope the run implies is the scope that went out.
+    def _do_GET(self):  # noqa: N802
+        if "getjsonfilters" in self.path:
+            stub["seen"].append(self.headers.get("Cookie"))
+            body = json.dumps(stub["filters"]).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self._serve()
+
+    def _do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length") or 0)
+        stub["posted"].append(self.rfile.read(length).decode("utf-8", "replace"))
+        self._serve()
+
+    Portal.do_GET = _do_GET
+    Portal.do_POST = _do_POST
+
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
     portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
     portal_thread.start()
 
     cookie = "TCGAuthTicket_Production=t7-not-a-real-session"
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
-        f"http://127.0.0.1:{portal.server_address[1]}/Admin/Pricing/DownloadMyExportCSV"
+        f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
     os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
     os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
@@ -11702,6 +11742,124 @@ def check_export_fetch(checks: Checks) -> None:
                     before,
                     "and that refusal keeps nothing either",
                 )
+                # --------------------------- THE VOCABULARY THE CAPTURE SCREEN OFFERS
+                #
+                # `GET /tcg/sets` (D65). The capture screen is the RIG, and D19 measures its
+                # cadence in milliseconds — so the property worth asserting is not that this
+                # answers, but that it answers 200 WITH AN EMPTY LIST when it cannot, rather
+                # than refusing. A hint field that would not open because an autocomplete
+                # failed would be a worse product than one with no autocomplete.
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=pokemon")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("game")),
+                    (200, "pokemon"),
+                    "the set vocabulary answers 200 for a game that has a category",
+                )
+                checks.equal(
+                    [row["name"] for row in body.get("sets") or []],
+                    ["SV09: Journey Together"],
+                    "and it drops the portal's `All Set Names` row, which is a filter option "
+                    "rather than a set and would be offered as one",
+                )
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=misc")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("sets"), body.get("reason")),
+                    (200, [], "no_category"),
+                    "a game with no TCGplayer category answers 200 with an empty list and a "
+                    "reason — never a refusal, because this is drawn on the rig's own screen "
+                    "and a capture must not stop for a missing convenience",
+                )
+
+                # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
+                #
+                # `match_sets` DIRECTLY, because it is pure and the interesting inputs are the
+                # ones the store does not happen to hold. Two vocabularies name one set: the
+                # operator types the community code and TCGplayer publishes its own name, and
+                # NO STRING RULE BRIDGES THEM — `MEG` is not a prefix, an initialism or a
+                # colon-token of `ME01: Mega Evolution`. Measured against the live category
+                # list before the alias table existed: `OGN`, `MEG`, `TEF` and `JTG` all
+                # resolved to nothing and silently widened to every set in the category.
+                catalog_sets = [
+                    {"Text": "All Set Names", "Value": "0"},
+                    {"Text": "SV09: Journey Together", "Value": "4242"},
+                    {"Text": "Origins", "Value": "77"},
+                    {"Text": "Origins: Proving Grounds", "Value": "78"},
+                ]
+                aliases = {"JTG": "SV09"}
+                for hint, expected, label in (
+                    (
+                        "SV09",
+                        (4242,),
+                        "a TCGplayer-style code resolves by SHAPE and needs no alias — the "
+                        "name's own token before the colon",
+                    ),
+                    (
+                        "JTG",
+                        (4242,),
+                        "and the community code resolves only through the table, which is "
+                        "why the table exists rather than a cleverer rule",
+                    ),
+                    (
+                        "Origins",
+                        (77,),
+                        "an exact name beats the prefix it shares with its own sub-set — "
+                        "`Origins` against `Origins: Proving Grounds`, which is why "
+                        "substring is not one of the rules",
+                    ),
+                ):
+                    got, _ = tcg_export.match_sets([hint], catalog_sets, aliases)
+                    checks.equal(got, expected, label)
+
+                widened_ids, widened_missed = tcg_export.match_sets(
+                    ["ZZZ"], catalog_sets, aliases
+                )
+                checks.equal(
+                    (widened_ids, widened_missed),
+                    ((), ("ZZZ",)),
+                    "a hint nothing matches resolves to NO set and is reported unresolved, "
+                    "so the fetch widens to the whole category — slower, larger and correct, "
+                    "where guessing a set the box is not in would not be",
+                )
+
+                # ------------------------------ THE SCOPE THE RUN IMPLIES IS THE SCOPE SENT
+                #
+                # D65's whole claim in one assertion. The export is no longer whatever the
+                # portal's saved filter last was: this process NAMES a category and a set,
+                # and what makes the file complete within scope by construction is that the
+                # request said so. Read off the POST body the stub recorded, because a
+                # response that merely looks right proves nothing about what was asked for.
+                stub["mode"] = "csv"
+                stub["body"] = whole.read_bytes()
+                stub["posted"] = []
+                fetch({"accept_narrower": True, "accept_unverified": True})
+                sent = json.loads(
+                    urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
+                ) if stub["posted"] else {}
+                checks.equal(
+                    sent.get("CategoryId"),
+                    "3",
+                    "the run's game decides the category, and it travels as the STRING the "
+                    "portal wants — an integer here answers `System Error`, a 200 carrying "
+                    "an HTML page that reads exactly like a rejected cookie",
+                )
+                checks.equal(
+                    sent.get("SetNameIds"),
+                    ["0"],
+                    "a box whose cards carry no set hint widens to the whole category, and "
+                    "`0` is the portal's own all-sets row rather than an empty list — the "
+                    "empty list is the one that fails, and widening is the safe direction",
+                )
+                checks.equal(
+                    (sent.get("MyInventory"), sent.get("PrintingIds")),
+                    (False, ["0"]),
+                    "and two fields are never negotiable: the CATALOG rather than the "
+                    "operator's current listings, and All Printings — a number stocked in "
+                    "several finishes must arrive with all of them or D3 rung 2 decides it "
+                    "from whichever survived",
+                )
+
                 # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
                 #
                 # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the

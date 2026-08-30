@@ -8,6 +8,7 @@
 [Aa]llowlist
 [Aa]rrivable
 [Aa]uditable
+[Aa]utocomplete
 [Aa]utocorrected
 another's
 Archivo
@@ -30,8 +31,10 @@ Canonicalization
 [Cc]onfig
 Cmd
 Collectr
+cron
 CSVs
 [Dd]ataclass
+[Dd]atalist
 [Dd]ebounce
 [Dd]ebounced
 [Dd]edup
@@ -45,6 +48,7 @@ CSVs
 [Dd]rawdown
 Dev
 Discogs
+downloadexportcsv
 [Ee]lse
 [Ee]mit
 [Ee]num
@@ -59,12 +63,14 @@ ETag
 Evelynn
 [Ff]ocusable
 [Ff]ootgun
-[Ff]ulfiller
 [Ff]ULFILLER
+[Ff]ulfiller
+finalizeexportcsv
 Fontshare
 Fraunces
 FSEvents
 Galio
+getjsonfilters
 [Gg]itignored
 [Gg]itignoring
 [Gg]reppable
@@ -86,6 +92,7 @@ Idempotence
 [Ii]node
 [Ii]nterpunct
 [Ii]nterpuncts
+initializeexportcsv
 Inteleon
 Kha'Zix
 [Kk]eyless
@@ -146,6 +153,7 @@ Pyroars
 [Qq]uantile
 Rengar
 Repo
+rollbackexportcsv
 [Rr]asterizes
 [Rr]ealpath
 [Rr]ebase
@@ -157,6 +165,7 @@ Repo
 [Rr]enderers
 [Rr]eopener
 [Rr]eplayable
+[Rr]eprices
 [Rr]esolver
 [Rr]espawning
 [Rr]estamp
@@ -186,6 +195,7 @@ Someday
 [Ss]tylesheet
 [Ss]ubcommand
 [Ss]ubsteps
+[Ss]ubstring
 [Ss]uperset
 Thievul
 Thievuls
@@ -200,6 +210,8 @@ Thievuls
 [Tt]ruthy
 [Tt]ypecheck
 Unimodal
+Unleashed
+uploadexportcsv
 [Uu]nasserted
 [Uu]nbuilt
 [Uu]nclaimable
@@ -222,6 +234,7 @@ Unimodal
 [Uu]nrepaired
 [Uu]nreviewed
 [Uu]nrun
+[Uu]nscoped
 [Uu]nselectable
 [Uu]nstubbed
 [Uu]nticking

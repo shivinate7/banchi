@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 
 import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
 import {
+  getTcgSets,
   ServerError,
   capture,
   createBox,
@@ -731,6 +732,32 @@ export function CaptureScreen() {
   // (`name_taken`). This gates the entry's Enter so a double press cannot post twice.
   const [boxBusy, setBoxBusy] = useState(false)
   const [setHint, setSetHint] = useState(readSessionSetHint)
+
+  /* D65's whitelist: the real set names for the claimed game, offered in the hint field.
+   *
+   * WHY THE HINT NEEDED A VOCABULARY AT ALL. A hint typed free-hand is matched against
+   * TCGplayer's set names later, and the two disagree — `OGN` is the community code for the
+   * set TCGplayer calls `Origins`, and a hint that resolves to nothing widens the export to
+   * every set in the category. Offering the real names makes the stored hint exact.
+   *
+   * LAZY, CACHED AND UNABLE TO FAIL LOUDLY. Loaded when the field is first opened rather than
+   * at mount, because most sessions never touch it; kept per game; and a failure leaves the
+   * list empty so the control is the plain text input it has always been. The rig does not
+   * stop for an autocomplete. */
+  const [tcgSets, setTcgSets] = useState<Record<string, string[]>>({})
+  const loadSets = useCallback(
+    (forGame: string) => {
+      if (!forGame || tcgSets[forGame] !== undefined) return
+      void getTcgSets(forGame)
+        .then((answer) => {
+          const names = answer.sets.map((row: { name: string }) => row.name)
+          const codes = Object.keys(answer.aliases ?? {})
+          setTcgSets((prev) => ({ ...prev, [forGame]: [...codes, ...names] }))
+        })
+        .catch(() => setTcgSets((prev) => ({ ...prev, [forGame]: [] })))
+    },
+    [tcgSets],
+  )
   // EMPTY, not ['normal']. See NO_CLAIM_LABEL above: the default has to be "the operator
   // has said nothing", or D3's rungs 2 and 3 are dead for every card this rig ever sees.
   // A SET since the amendment of 2026-08-23 — any number of members is legal, including all
@@ -1304,8 +1331,15 @@ export function CaptureScreen() {
 
   useEffect(() => {
     if (openField === 'box') boxEntryRef.current?.focus()
-    else if (openField === 'set') hintRef.current?.focus()
-  }, [openField])
+    else if (openField === 'set') {
+      hintRef.current?.focus()
+      /* THE VOCABULARY FOLLOWS THE FIELD BEING OPEN, not the row being tapped. `H` opens it
+         from the key handler and never touches the row's `onToggle`, so hanging the load off
+         the tap left the list empty for every operator who uses the keyboard — which on this
+         screen is all of them. Keyed on the effect that already fires for both paths. */
+      if (game !== null) loadSets(game)
+    }
+  }, [openField, game, loadSets])
 
   /* WHAT THE BOX FILTER SHOWS. Substring on the box number — `9` keeps 9, 19, 95 and 99,
    * which is the mockup's own worked example — capped at nine rows, and the reason for the
@@ -2949,9 +2983,19 @@ export function CaptureScreen() {
                     type="text"
                     placeholder="sv09"
                     aria-label="Set hint"
+                    list="capture-set-names"
                     value={setHint}
                     onChange={(event) => setSetHint(event.target.value)}
                   />
+                  {/* A DATALIST AND NOT A SELECT, which is the whole reason this is safe to
+                      add to the rig's own screen. It suggests without constraining: free text
+                      still works, an empty list is indistinguishable from the control before
+                      D65, and nothing here can refuse a capture. */}
+                  <datalist id="capture-set-names">
+                    {(game === null ? [] : tcgSets[game] ?? []).map((name: string) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
                 </form>
               </OpenField>
             ) : (
