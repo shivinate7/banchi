@@ -86,6 +86,8 @@ function card(input: {
    *  `asdict(card)` raw, so both shapes really do arrive here and the default is the one
    *  the store is mostly still full of. A row that passes a list is the new shape. */
   finish?: string | string[] | null
+  /** D58's box-wide count, where it differs from `index`. Omit for a box nothing has left. */
+  at?: number
 }) {
   const box = input.box ?? 2
   const boxTotal = input.boxTotal ?? 5
@@ -97,30 +99,68 @@ function card(input: {
      and a fixture that never diverged could not tell a right answer from a wrong one for
      anything reading `card`. Checked against the live store: index 26 of box 1 comes back as
      `Section 2 · Card 1`, section_start 26. */
-  const slot = input.index - input.sectionStart + 1
+  /* `at` IS THE BOX-WIDE COUNT AND `index` IS THE STORE KEY (D58), and they diverge for every
+     card behind a departed one. The server sends both — `Place.slot` and `Place.index` — so a
+     fixture that conflated them could not tell a right answer from a wrong one for anything
+     reading either. Defaulted to `index` so a box nothing has left is written exactly as it
+     was before D58, which is also what the server answers for one. */
+  const at = input.at ?? input.index
+  const slot = at - input.sectionStart + 1
+  const label = `Box ${box} · Section ${input.section} · Card ${slot}`
+
+  /* A DEPARTED CARD IS IN NO SLOT (D58), and the fixture has to say so or it is asserting
+     against a shape the server cannot produce: the number it used to hold belongs to the card
+     that closed up behind it. `join.departed_label` is the one composer of this string. */
+  const gone = input.state === 'sold' || input.state === 'retired'
+  const place = gone
+    ? {
+        located: true,
+        label: `Box ${box} · departed`,
+        box,
+        index: input.index,
+        slot: null,
+        /* THE NUMBERS GO AND THE SECTION STAYS. A departed record belongs to a real part of
+           a real box and the walk groups by it, so nulling `section` would file every sold
+           card under a heading that is not a section. */
+        section: input.section,
+        card: null,
+        box_name: input.boxName ?? 'ME01 commons',
+        section_start: input.sectionStart,
+        section_end: input.sectionEnd,
+        box_total: boxTotal,
+        box_closed: false,
+        fraction: null,
+        neighbors: null,
+        gaps_in_section: 0,
+      }
+    : {
+        located: true,
+        label,
+        box,
+        index: input.index,
+        slot: at,
+        section: input.section,
+        card: slot,
+        box_name: input.boxName ?? 'ME01 commons',
+        section_start: input.sectionStart,
+        section_end: input.sectionEnd,
+        box_total: boxTotal,
+        box_closed: false,
+        fraction: (at - 1) / boxTotal,
+        neighbors: null,
+        gaps_in_section: 0,
+      }
 
   return {
     box,
     index: input.index,
-    label: `Box ${box} · Section ${input.section} · Card ${slot}`,
+    label: place.label,
+    /* `section` STAYS AND `card` GOES for a departed record — `_flat_place` in the server
+       omits the number and keeps the section, because the walk groups by the section and
+       `rowSlot` tests `card !== undefined`. */
     section: input.section,
-    card: slot,
-    place: {
-      located: true,
-      label: `Box ${box} · Section ${input.section} · Card ${slot}`,
-      box,
-      index: input.index,
-      section: input.section,
-      card: slot,
-      box_name: input.boxName ?? 'ME01 commons',
-      section_start: input.sectionStart,
-      section_end: input.sectionEnd,
-      box_total: boxTotal,
-      box_closed: false,
-      fraction: input.index / boxTotal,
-      neighbors: null,
-      gaps_in_section: 0,
-    },
+    ...(gone ? {} : { card: slot }),
+    place,
     photo: `photos/${box}/${input.index}.jpg`,
     set_hint: 'ME01',
     metadata_finish: input.finish === undefined ? 'normal' : input.finish,
@@ -145,13 +185,25 @@ function card(input: {
   }
 }
 
-/* FIVE CARDS ACROSS TWO SECTIONS, chosen so that every branch this screen draws has a row.
+/* SEVEN RECORDS ACROSS TWO SECTIONS, FIVE OF THEM STILL IN THE BOX, chosen so that every
+ * branch this screen draws has a row.
  *
  *   1, 3   one SKU, two copies — D7's map, and the two doors out of inventory on each
  *   2      captured, no name and no SKU — the 22% of the store the search cannot reach, and
  *          the case the lone-copy fallback exists for
  *   4      sold, 5 retired — the terminal states, which draw a word instead of the controls
  *          and which the mid-box delete must not offer itself on
+ *   6, 7   section 2's live cards
+ *
+ * IT WAS FIVE RECORDS AND BOTH DEPARTURES WERE IN SECTION 2, WHICH D58 MADE UNTESTABLE. Once
+ * a card's number counts the cards in the box, a section holding only departed records holds
+ * nothing — so the three cases below that assert the SECTION scale had no section to assert
+ * against, and the honest repair is to give the box live cards there rather than to weaken
+ * what they check. Every string those cases expect is unchanged by this: the two departures
+ * moved from section 2 to section 1, so the counts they land on are the same numbers.
+ *
+ * The divergence between `index` and `at` is the point of the shape: cards 6 and 7 are the
+ * fourth and fifth cards in the box, and their store keys are 6 and 7.
  */
 /** Whatever `GET /inventory` is answering with for one test — the default five, or a map a
  *  jump test hands in. Loose in its keys so a second box can be added without the default map's
@@ -166,8 +218,10 @@ const CARDS: Cards = {
      describes as the part of the store the search cannot reach. */
   '2/2': card({ index: 2, state: 'captured', name: null, sku: null, section: 1, sectionStart: 1, sectionEnd: 3, finish: ['normal', 'reverse_holo'], rarity: ['Common', 'Uncommon'], note: 'japanese, no english print' }),
   '2/3': card({ index: 3, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
-  '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 2, sectionStart: 4, sectionEnd: 5 }),
-  '2/5': card({ index: 5, state: 'retired', name: 'Pyroar', sku: '8937372', section: 2, sectionStart: 4, sectionEnd: 5 }),
+  '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  '2/5': card({ index: 5, state: 'retired', name: 'Mantine', sku: '8937372', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  '2/6': card({ index: 6, at: 4, state: 'identified', name: 'Inteleon', sku: '8937373', section: 2, sectionStart: 4, sectionEnd: 5 }),
+  '2/7': card({ index: 7, at: 5, state: 'identified', name: 'Pyroar', sku: '8937374', section: 2, sectionStart: 4, sectionEnd: 5 }),
 }
 
 const BOXES = {
@@ -178,9 +232,13 @@ const BOXES = {
       sections: [1, 4],
       state: 'open',
       capacity: null,
-      fill: 5,
-      next_index: 6,
-      cards: 5,
+      /* `fill` AND `next_index` ARE THE ALLOCATOR'S AND `on_hand` IS THE SCREEN'S (D58). Seven
+         records, two of them departed, so the box holds five — and `sections_detail` counts
+         and bounds in that same space, which is what the dividers editor seeds from. */
+      fill: 7,
+      next_index: 8,
+      cards: 7,
+      on_hand: 5,
       sold: 1,
       retired: 1,
       listed: 0,
@@ -1268,7 +1326,11 @@ test('expand all opens every section and collapse all shuts them', async ({ page
   await open(page)
 
   await page.getByRole('button', { name: 'expand all' }).click()
-  await expect(page.locator('.browse-row')).toHaveCount(5)
+  /* SEVEN ROWS AND FIVE CARDS ON HAND (D58). The walk draws every RECORD the box holds,
+     departed ones included — a sold card is still findable, still reversible past its
+     twenty-second window, and still where the operator remembers it. What it does not draw
+     for one is a number. */
+  await expect(page.locator('.browse-row')).toHaveCount(7)
 
   /* COLLAPSE ALL SHUTS EVERY SECTION, INCLUDING THE ONE HOLDING THE SELECTION.
    *
@@ -1287,7 +1349,7 @@ test('expand all opens every section and collapse all shuts them', async ({ page
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'expand all' }).click()
-  await expect(page.locator('.browse-row')).toHaveCount(5)
+  await expect(page.locator('.browse-row')).toHaveCount(7)
   await page.getByRole('button', { name: 'collapse all' }).click()
 
   /* ONE PRESS FROM A PARTIAL STATE, which is the other half of the owner's report and the half
@@ -1321,8 +1383,8 @@ test('a search opens every section holding a match, and clearing it gives the wa
   const folds = page.locator('.browse-sectfold')
   await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'true')
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'true')
-  // Four matches — card 2 carries no SKU, so it is in no group — every one on screen, no press.
-  await expect(page.locator('.browse-row')).toHaveCount(4)
+  // Six matches — card 2 carries no SKU, so it is in no group — every one on screen, no press.
+  await expect(page.locator('.browse-row')).toHaveCount(6)
 
   /* AND THE EXPANSION BELONGS TO THE QUERY. Cleared, the walk is back to the state it opens in
      rather than a half-open shape nobody chose — one resting state to learn instead of two. */
@@ -1420,6 +1482,92 @@ test('the card with no group gets both depths too — it is most of the store', 
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
 })
 
+test('a departed card draws no number, and the cards behind it count past it', async ({
+  page,
+}) => {
+  await open(page)
+  await expandAll(page)
+
+  /* D58 ON THE SCREEN. The fixture box holds seven records and two of them have left — card 4
+   * sold, card 5 retired — so the box holds five cards and the numbers count those five.
+   *
+   * THE PAIR IS THE ASSERTION. A departed card must not draw the number it held, because that
+   * number now belongs to the card that closed up behind it: draw both and the operator has
+   * two `Card 3`s in one box and a way to open the wrong slot. So this reads the left cell of
+   * every row in order — the number, or the departed fact where there is no number — and the
+   * whole list is the claim rather than any one row of it. */
+  const slots = page.locator('.browse-row .browse-row-position')
+  await expect(slots).toHaveCount(7)
+  await expect(slots).toHaveText([
+    '1',
+    '2',
+    '3',
+    'Box 2 · departed',
+    'Box 2 · departed',
+    '1',
+    '2',
+  ])
+
+  /* AND THE SECTION KEEPS THEM. A departed record belongs to a real part of a real box, so it
+   * sits in the section it sat in rather than under a third heading that is not a section —
+   * five rows in section 1, two in section 2. */
+  await expect(page.locator('.browse-sectfold')).toHaveCount(2)
+
+  /* THE STORE KEY IS UNTOUCHED AND IS WHAT EVERY WRITE STILL AIMS BY, which is the half of
+   * D58 that is invisible on screen and load-bearing everywhere else: the sixth row draws
+   * `Card 1` of section 2 and its photograph is still `/photo/2/6`. Nothing was renamed. */
+  await page.locator('.browse-row').nth(5).click()
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute(
+    'aria-label',
+    'Box 2 · Section 2 · Card 1',
+  )
+
+  /* A departed card's own panel says where the record belongs and that there is no slot —
+   * `join.departed_label`'s string, and the one composer of it. The position bar cannot draw
+   * a card that is in no place, so it is absent rather than drawn at zero. */
+  await page.locator('.browse-row').nth(3).click()
+  /* Read as TEXT and not through `.position-parts`, which is the assertion rather than a
+     workaround: `PositionLabel` promotes the last part of a label only when it is a slot
+     NUMBER (D41's numeric guard), so a departed card is rendered whole and there is no
+     figure to promote. A version that split this string would draw the word `departed` at
+     44px as though it were a slot. */
+  await expect(page.locator('.browse-position')).toHaveText('Box 2 · departed')
+  await expect(page.locator('.browse-position .position-parts')).toHaveCount(0)
+  await expect(page.locator('.browse-band .position-bar')).toHaveCount(0)
+})
+
+test('the census greps to the store, and the identity line says what the box holds', async ({
+  page,
+}) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* A LIVE DEFECT THIS CATCHES, FOUND BY LOOKING AT THE SCREEN AND BY NOTHING ELSE. D58 moved
+   * the identity line onto `on_hand` — what the box holds — and the two readings shared one
+   * local called `fill`, so the CENSUS moved with it: box 3 drew `FILL 29` beside
+   * `NEXT INDEX 40` over a store whose `fill` is 39. `BoxOps.tsx` promises in its own comment
+   * that these key names grep to `inventory.json`, and 29 is under no key in that file.
+   *
+   * SO THE PAIR IS THE ASSERTION, on one screen at one moment: the census is the store's own
+   * three numbers verbatim, and the identity line is the one the screen divides by. They are
+   * equal until a card leaves the box, which is exactly why one variable could serve both and
+   * why only a box with a departure can tell them apart. */
+  const census = page.locator('.boxops-meta')
+  await expect(census.locator('.boxops-meta-cell').nth(0)).toHaveText('cards7')
+  await expect(census.locator('.boxops-meta-cell').nth(1)).toHaveText('sold1')
+  await expect(census.locator('.boxops-meta-cell').nth(2)).toHaveText('fill7')
+  await expect(census.locator('.boxops-meta-next')).toHaveText('next index8')
+
+  /* Five, not seven: two of the seven records have left. */
+  await expect(page.locator('.boxops-identity-fill')).toHaveText('5 so far')
+
+  /* And the control that freezes capacity names the ALLOCATOR's number, because that is what
+     `close_box` writes — D20's rule, and the one denominator D58 deliberately left alone. */
+  const seal = page.getByRole('button', { name: /^Seal box/ })
+  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
+})
+
 // ------------------------------------------------------- the box's operations, as rows (D20)
 
 test('the seal names the number it will freeze, on the control that freezes it', async ({
@@ -1432,7 +1580,10 @@ test('the seal names the number it will freeze, on the control that freezes it',
      (`Seal box — freezes capacity at 5`) and not before it. Sealing freezes capacity at the
      fill and every fraction in the product then divides by it, so a control reading `Seal box`
      alone would take a permanent decision against a denominator the owner would have to go and
-     find. The fixture box is open with `fill: 5`.
+     find. The fixture box is open with `fill: 7` — the ALLOCATOR's high-water mark, which is
+     what `close_box` freezes and is deliberately not the five cards the box holds. D58 moved
+     every denominator the screens divide by onto the cards on hand and left this one alone,
+     because `capacity` records how full the box got rather than what is in it.
 
      THE NUMBER MOVED OFF THE LABEL AND ONTO THE ROW'S DETAIL on 2026-08-26 and this case is
      written to the promise rather than to the string, which is why it reads the two spans and
@@ -1440,8 +1591,8 @@ test('the seal names the number it will freeze, on the control that freezes it',
      thing you press and is announced by it. */
   const seal = page.getByRole('button', { name: /^Seal box/ })
   await expect(seal.locator('.boxops-op-label')).toHaveText('Seal box')
-  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 5')
-  await expect(seal).toHaveAttribute('aria-label', 'Seal box, freezes at 5')
+  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
+  await expect(seal).toHaveAttribute('aria-label', 'Seal box, freezes at 7')
 
   /* An open box offers no re-open, and the two never both draw — one slot, one lid. */
   await expect(page.getByRole('button', { name: /^Re-open box/ })).toHaveCount(0)
@@ -1507,8 +1658,11 @@ test('ticking rows narrows what a box-wide claim will reach, and says so on the 
      tree is half a promise, and the number-on-the-control rule is D20's. */
   const claims = page.getByRole('button', { name: /^Set claims/ })
   await expect(claims.locator('.boxops-op-label')).toHaveText('Set claims')
-  await expect(claims.locator('.boxops-op-detail')).toHaveText('5 cards')
-  await expect(claims).toHaveAttribute('aria-label', 'Set claims, 5 cards')
+  /* SEVEN, not the five on hand: the sweep is over RECORDS, and a departed card's claim is
+     as correctable as any other — D58 changed which cards a NUMBER counts, not which cards a
+     write reaches. */
+  await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
+  await expect(claims).toHaveAttribute('aria-label', 'Set claims, 7 cards')
 
   await page.locator('.browse-rowtick').nth(0).check()
   await page.locator('.browse-rowtick').nth(2).check()
@@ -1538,8 +1692,13 @@ test('ticking rows narrows what a box-wide claim will reach, and says so on the 
   await page.locator('.browse-rowtick').nth(2).check()
 
   /* A fold may hide a row but must never hide what a bulk write would reach, so the section
-     header carries its own share of the count. */
-  await expect(page.locator('.browse-sectcount').nth(0)).toHaveText('2/3')
+     header carries its own share of the count.
+     `2/5` AND NOT `2/3`: the denominator counts RECORDS, and section 1 holds five of them —
+     three cards and two departures. It is deliberately not the on-hand count, because what
+     it is a share of is what the button beside it would write to, and a claim on a sold
+     card is as correctable as any other (D58 moved which cards carry a NUMBER, not which
+     cards a write reaches). */
+  await expect(page.locator('.browse-sectcount').nth(0)).toHaveText('2/5')
 })
 
 test('the box claim sends only the ticked fields, over only the ticked indices', async ({

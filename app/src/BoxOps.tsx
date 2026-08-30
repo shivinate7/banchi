@@ -294,9 +294,24 @@ function readIndices(text: string): number[] | null {
 }
 
 /** The declared layout as a field's worth of text. Blank for an undeclared box, which is what
- *  the field means: leave it blank and the default rule renders the box. */
+ *  the field means: leave it blank and the default rule renders the box.
+ *
+ *  OFF `sections_detail`, NOT `sections` (D58). The stored list is in INDEX space — the
+ *  allocator's numbering, which no screen has drawn since a card's number began counting the
+ *  cards in the box — and seeding from it would put an operator in front of a field asking
+ *  them to edit numbers that appear nowhere else in the product. `sections_detail[].start` is
+ *  the server's own rendering of the same dividers in the space every other number on this
+ *  screen is in, and `do_put_box` maps what comes back through `join.divider_index` before the
+ *  store sees an index. Type what you can see; the store keeps what it always kept.
+ *
+ *  It falls back to the raw list where the server could not render the detail — a layout that
+ *  will not validate — because a field that went blank would read as "no dividers" and one
+ *  press would delete a layout the operator can still see beside it in `sections`. */
 function writeIndices(record: BoxRecord): string {
-  return record.sections.join(', ')
+  if (record.sections.length > 0 && record.sections_detail.length === 0) {
+    return record.sections.join(', ')
+  }
+  return record.sections_detail.map((detail) => detail.start).join(', ')
 }
 
 /**
@@ -305,9 +320,11 @@ function writeIndices(record: BoxRecord): string {
  * THIS IS A VEHICLE AND NOT A POSITION CLAIM, which is the distinction types.ts draws on
  * `Place` and the reason this function has a comment at all. `spansOf(place, sections)` reads
  * exactly two things off the place when a section list is supplied — `box_total`, to clamp
- * against, and `index`, to decide which span the card is in — and computes every span from the
- * server's `sections_detail`. There is no card here, so `index` is 0: outside every span, so
- * no segment comes back `current`, which is correct for a drawing of a whole box.
+ * against, and `slot`, to decide which span the card is in — and computes every span from the
+ * server's `sections_detail`. There is no card here, so `slot` is 0: outside every span, so
+ * no segment comes back `current`, which is correct for a drawing of a whole box. It is `slot`
+ * and not `index` since D58, because the spans count cards; 0 is outside either way, and the
+ * field has to be the one `spansOf` actually reads.
  *
  * The forbidden thing is section arithmetic — deriving a boundary from an index and a divider
  * size — and none happens: `sections_detail` is the server's own rendering and this hands it
@@ -319,6 +336,7 @@ function trackPlace(record: BoxRecord, total: number): Place {
     label: '',
     box: record.box,
     index: 0,
+    slot: 0,
     section: 0,
     card: 0,
     box_name: record.name,
@@ -330,12 +348,20 @@ function trackPlace(record: BoxRecord, total: number): Place {
   }
 }
 
-/** The denominator this box is drawn against: its frozen capacity if it has one, else its fill
- *  so far. `server/capture_server.py:_denominator` makes the same choice for every `place`
- *  block in the product, and the two must agree — a box reading "40 of 250" on one screen and
- *  "40 of 53" on another is the second-renderer failure with a number instead of a label. */
+/** The denominator this box is drawn against: the cards it holds (D58).
+ *
+ *  IT WAS `capacity ?? fill` AND `server/capture_server.py:_denominator` WAS ITS TWIN. Both
+ *  moved together: a card's number now counts the cards in the box, so a count over a frozen
+ *  capacity draws a card at a percentage of a box it is not at, drifting further wrong with
+ *  every sale. The two must still agree — a box reading "40 of 250" on one screen and "40 of
+ *  53" on another is the second-renderer failure with a number instead of a label — and the
+ *  server now computes it from the walk it already runs, which is why this reads one field
+ *  rather than choosing between two.
+ *
+ *  `?? 0` FOR AN UNCOUNTABLE BOX, not for an empty one, and the difference is invisible here
+ *  because `spansOf` refuses a non-positive total either way. */
 function denominator(record: BoxRecord): number {
-  return known(record.capacity) ?? known(record.fill) ?? 0
+  return known(record.on_hand) ?? 0
 }
 
 /**
@@ -443,7 +469,13 @@ export function BoxIdentity({
      the literal, `record.fill` rather than an index arithmetic of our own, and the spans through
      `spansOf(trackPlace(...))` so this track and that one cannot disagree about a divider. */
   const sealed = record.state === CLOSED
-  const fill = known(record.fill)
+  /* NAMED `holds` AND NOT `fill`, WHICH IS THE WHOLE OF WHY THIS COMMENT IS HERE (D58). What
+   * the box HOLDS is `on_hand` and is what every figure on this screen divides by; `fill` is
+   * the allocator's high-water mark and still greps to `inventory.json` down in the census
+   * block. They are the same number until a card leaves the box, and calling this one `fill`
+   * is how the census came to draw `FILL 29` over a store whose `fill` is 39 — caught by
+   * looking at the screen, not by any check. Two facts, two names. */
+  const holds = known(record.on_hand)
   const total = denominator(record)
   const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
@@ -457,11 +489,19 @@ export function BoxIdentity({
           <span className="boxops-identity-name">{record.name}</span>
         )}
         <span className="boxops-identity-fill">
+          {/* A SEALED BOX SAYS BOTH NUMBERS SINCE D58, and it has to. `capacity` is what the
+              box froze at and is no longer what anything divides by; the cards it holds is.
+              `543 sealed` beside a bar reading `#40 of 542` would be the second-renderer
+              failure with two numbers instead of one, so the line carries the pair and the
+              preposition says which is which. They are equal until something is sold, which
+              is the ordinary state of a box on the day it is sealed. */}
           {sealed && record.capacity !== null
-            ? `${record.capacity} sealed`
-            : fill === null
+            ? holds === null || holds === record.capacity
+              ? `${record.capacity} sealed`
+              : `${holds} of ${record.capacity} sealed`
+            : holds === null
               ? 'fill unread'
-              : `${fill} so far`}
+              : `${holds} so far`}
         </span>
         <span className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}>
           {sealed ? 'sealed' : 'open'}
@@ -575,7 +615,14 @@ export function BoxIdentity({
                 and the identity line is the better host because that is where the box's state is
                 already being read. The field stays, so `BoxOps.tsx`'s promise that these names
                 grep to `inventory.json` is untouched. */}
-            <span className="boxops-meta-num">{fill ?? 'unknown'}</span>
+            {/* `record.fill` AND NOT THE HEADLINE'S NUMBER (D58). The identity line above
+                reads `on_hand` now — what the box holds — and this row is the store's own
+                `fill`, the allocator's high-water mark, which is what is in `inventory.json`
+                under that key. They were the same number until a card left the box, and
+                reading one variable for both was a live defect: box 3 drew `FILL 29` beside
+                `NEXT INDEX 40` over a store whose `fill` is 39, which is the one thing this
+                block's own promise says it may not do. */}
+            <span className="boxops-meta-num">{known(record.fill) ?? 'unknown'}</span>
           </span>
         </p>
         <p className="boxops-meta-next">
@@ -677,7 +724,10 @@ export function BoxOps({
   const proposeSections = () => {
     const indices = readIndices(draft)
     if (indices === null) {
-      setRefused('Dividers are the card number each section starts at, like 1, 31, 56.')
+      setRefused(
+        'Dividers are the card number each section starts at, counting the cards in the ' +
+          'box — like 1, 31, 56.',
+      )
       return
     }
     setRefused(null)

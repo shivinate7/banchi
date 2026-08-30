@@ -64,6 +64,7 @@ has already failed to decide.
 
 from __future__ import annotations
 
+import bisect
 import re
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
@@ -93,8 +94,8 @@ class EmptyCatalog(Exception):
 
 @dataclass(frozen=True)
 class Position:
-    """D10 — sequential, assigned at capture. Sold cards leave permanent gaps; positions
-    are never renumbered.
+    """D10 — sequential, assigned at capture. Sold cards leave permanent gaps IN THE INDEX;
+    indices are never renumbered. Since D58 the LABEL closes over one — see below.
 
     THE INDEX IS THE IDENTITY; THE LABEL IS A VIEW OF THE BOX'S CURRENT LAYOUT. `sections`
     is the box's divider indices — `(1, 31, 56)` means section 2 starts at card 31 — and
@@ -116,6 +117,27 @@ class Position:
     `section_end` is None: an undeclared box's one section runs to wherever the box stops,
     which is D20's own reason for that None and not a new rule.
 
+    A CARD'S NUMBER COUNTS THE CARDS IN THE BOX, NOT THE SLOTS (D58, 2026-08-30). `occupied`
+    is every ON-HAND index in this box, ascending — the cards a person would count if they
+    opened it — and where it is given, every number below is rendered in that space instead
+    of in index space. `Card 17` is then the seventeenth card you can count rather than the
+    seventeenth slot, which is the distinction `docs/specs/order-flow.md` §10.4 spends its
+    length on and D30 was waiting on a physical marker to explain.
+
+    THE INDEX STILL NEVER MOVES, AND THAT IS WHAT MAKES THIS CHEAP. D10 as amended already
+    draws this seam — *"positions are never renumbered" governs the INDEX; the label is a
+    view* — so nothing here writes anything: no photograph is renamed, no queue entry is
+    re-keyed, no history line changes subject. `index` remains the store key, the route
+    path and what every write aims by.
+
+    AN EMPTY `occupied` MEANS INDEX SPACE, WHICH IS EXACTLY WHAT THIS CLASS DID BEFORE.
+    Every caller that has no inventory to consult — T3, T4 and T5 all build a bare
+    `Position(box, index)` — renders byte-identically to the day before this landed. That
+    is the compatibility guarantee, and it is also the hazard: a caller that COULD consult
+    the store and does not renders a second spelling of one address. T7 asserts the server
+    and `cli/resolve.py` agree on the label for one card, which is the only guard against
+    it.
+
     THIS IS THE ONLY LABEL FORMULA IN THE REPO (`docs/specs/capture-server.md` §6.3). The
     TypeScript side receives rendered strings and never computes a section.
     """
@@ -123,11 +145,51 @@ class Position:
     box: int
     index: int
     sections: Tuple[int, ...] = ()
+    # Every on-hand index in this box, ascending, or `()` for "render in index space".
+    # A TUPLE because this dataclass is frozen, for `IdentifiedCard.metadata_finish`'s
+    # reason: a frozen carrier of a mutable member is a hashability bug waiting for its
+    # first `set()`.
+    #
+    # `None` AND `()` ARE OPPOSITE FACTS AND THE SENTINEL HAS TO BE `None`. An empty tuple
+    # is a box with nothing on hand — every card in it has sold — and that box's cards must
+    # still render as departed rather than reverting to slot numbers. `None` is the caller
+    # saying it has no inventory to consult at all.
+    occupied: Optional[Tuple[int, ...]] = None
+    # The box's terminal indices, ascending — the cards that have LEFT. Only ever read
+    # together with `occupied`, and only to tell the part of the box that exists from the
+    # part that does not: see `high_water`.
+    departed: Tuple[int, ...] = ()
+
+    @property
+    def consolidated(self) -> bool:
+        """Whether this label counts cards (D58) or slots (the shape before it)."""
+        return self.occupied is not None
+
+    @property
+    def slot(self) -> Optional[int]:
+        """This card's number among the cards actually in the box, or None where it has
+        none: a card that has left (`sold`, `retired`) is in no slot at all.
+
+        None rather than the slot it used to hold, because that number belongs to the card
+        that closed up behind it — handing it to a departed record would send a person to
+        the wrong card. `departed_label` is what a screen draws instead, on the same
+        argument `pooled_label` makes one paragraph down for a card that never had a slot.
+
+        In index space every card has a slot and it is its index, departed or not, which is
+        what keeps the pre-D58 rendering intact.
+        """
+        if not self.consolidated:
+            return self.index
+        occupied = self.occupied or ()
+        at = bisect.bisect_left(occupied, self.index)
+        if at < len(occupied) and occupied[at] == self.index:
+            return at + 1
+        return None
 
     @property
     def layout(self) -> Tuple[int, ...]:
-        """The dividers this label is rendered against: the box's own, or the implicit one
-        at the front of an undeclared box.
+        """The dividers this label is rendered against, in the same space as `slot`: the
+        box's own, or the implicit one at the front of an undeclared box.
 
         The three properties below all read THIS rather than `sections`, so the undeclared
         case is stated once instead of being re-decided three times — which is what the old
@@ -135,34 +197,89 @@ class Position:
         stays exactly as it was given, because "has this box declared a layout" is a real
         question with real callers (`BoxOps` draws `undeclared` from it) and normalising it
         here would answer that question wrongly for all of them.
+
+        CONSOLIDATED, EACH DIVIDER MOVES TO THE COUNT OF CARDS IN FRONT OF IT, WHICH IS
+        WHAT MAKES `Card M` COUNTABLE TOO (D58). A divider declared at index `s` sits in
+        front of the first card still on hand at or above `s`, so its number is the count
+        of cards below `s`, plus one. Both `slot` and `section_start` then move by the same
+        amount for a departure in an earlier section, and `card` — their difference — does
+        not: a sale in section 1 leaves every number in section 3 alone, and only a sale in
+        section 3 and in front of the card moves it. That is the whole point of mapping the
+        dividers rather than only the cards.
+
+        DUPLICATES ARE KEPT RATHER THAN DEDUPED, so an emptied section keeps its NUMBER.
+        Two dividers with no card left between them map to one value, and collapsing them
+        would renumber every section behind — sending a person to the wrong divider, which
+        is still physically in the box. `section` counts dividers, so the empty one keeps
+        its ordinal and simply holds nothing.
         """
-        return self.sections or (1,)
+        declared = self.sections or (1,)
+        if not self.consolidated:
+            return declared
+        return tuple(self._divider(start) for start in declared)
+
+    @property
+    def high_water(self) -> int:
+        """The highest index this box has reached, departed cards included, or 0.
+
+        The seam between the box that EXISTS and the box that does not yet. Below it every
+        slot has been allocated, so counting cards is the whole answer; above it nothing has
+        been captured, so a declared divider up there is a plan and the slots between are
+        waiting to be filled.
+        """
+        return max(
+            self.occupied[-1] if self.occupied else 0,
+            self.departed[-1] if self.departed else 0,
+        )
+
+    def _divider(self, start: int) -> int:
+        """One declared divider's number, in `slot`'s space.
+
+        THE COUNT OF CARDS THAT WILL BE IN FRONT OF IT, PLUS ONE. Inside the box that is
+        the cards on hand below it; past the box's end it is those plus one for each slot
+        the operator has declared and not yet filled — which is what keeps a layout typed in
+        before the box was filled saying what was typed. `[1, 51]` on a five-card box means
+        section 2 starts at the fifty-first CARD, and answering "the fifth" instead would
+        quietly delete a plan.
+
+        The two agree everywhere below `high_water`, so this correction is invisible on
+        every box that has grown into its own dividers.
+        """
+        ahead = bisect.bisect_left(self.occupied or (), start)
+        unfilled = max(0, start - 1 - self.high_water)
+        return ahead + unfilled + 1
 
     @property
     def section(self) -> int:
+        at = self.slot
+        if at is None:
+            # A departed card is in no section. `label` never asks — it answers with
+            # `departed_label` first — and a caller that reaches here anyway gets the
+            # section its slot would have fallen in rather than an exception.
+            at = bisect.bisect_left(self.occupied or (), self.index) + 1
         count = 0
         for start in self.layout:
-            if self.index >= start:
+            if at >= start:
                 count += 1
             else:
                 break
-        # An index before the first divider cannot happen with a validated layout (it starts
-        # at 1), but clamping beats returning 0 for a hand-edited file.
+        # A number before the first divider cannot happen with a validated layout (it
+        # starts at 1), but clamping beats returning 0 for a hand-edited file.
         return max(1, count)
 
     @property
     def section_start(self) -> int:
-        """The index this card's section begins at."""
+        """The number this card's section begins at, in `slot`'s space."""
         return self.layout[self.section - 1]
 
     @property
     def section_end(self) -> Optional[int]:
-        """The last index in this card's section, or None when it is the final one.
+        """The last number in this card's section, or None when it is the final one.
 
         None rather than a guess: the final section runs to wherever the box ends, and only
-        a sealed box knows where that is (D20). The caller holding the capacity fills it in.
-        An undeclared box has exactly one section, so it takes this None on its first card —
-        correctly, and for the same reason.
+        the caller holding the box's total knows where that is (D20). An undeclared box has
+        exactly one section, so it takes this None on its first card — correctly, and for
+        the same reason.
         """
         layout = self.layout
         if self.section < len(layout):
@@ -170,12 +287,19 @@ class Position:
         return None
 
     @property
-    def card(self) -> int:
-        return self.index - self.section_start + 1
+    def card(self) -> Optional[int]:
+        """This card's number within its section, or None for a card that has left."""
+        at = self.slot
+        if at is None:
+            return None
+        return at - self.section_start + 1
 
     @property
     def label(self) -> str:
-        return f"Box {self.box} · Section {self.section} · Card {self.card}"
+        at = self.card
+        if at is None:
+            return departed_label(self.box)
+        return f"Box {self.box} · Section {self.section} · Card {at}"
 
 
 # --------------------------------------------------------------- pooled, not located
@@ -219,6 +343,97 @@ def pooled_label(game: str) -> str:
     return f"{display} · pooled"
 
 
+@dataclass(frozen=True)
+class BoxView:
+    """One box's label coordinates, and the one way to build a `Position` against them.
+
+    D58 gave `Position` two more inputs, and both are facts about the BOX rather than about
+    the card — so a caller rendering a whole box would otherwise pass the same two tuples to
+    every position it built, and a caller rendering one card would have to remember that
+    they exist at all. This is that pair with a name, and `at()` is the constructor every
+    consolidated call site goes through.
+
+    AN EMPTY `BoxView()` IS INDEX SPACE, which is what a caller with no inventory to consult
+    gets — and it is `Position`'s own default said once instead of at every call.
+
+    IT IS NOT A CACHE AND HOLDS NO DENOMINATOR. `on_hand` is derived, so a `BoxView` cannot
+    come to disagree with the list it was built from; a stored total is exactly the second
+    copy D20 refuses to put on the wire.
+    """
+
+    sections: Tuple[int, ...] = ()
+    occupied: Optional[Tuple[int, ...]] = None
+    departed: Tuple[int, ...] = ()
+
+    @property
+    def on_hand(self) -> int:
+        """How many cards are in this box — the denominator every number here counts to."""
+        return len(self.occupied or ())
+
+    def at(self, box: int, index: int) -> "Position":
+        return Position(int(box), int(index), self.sections, self.occupied, self.departed)
+
+
+def divider_index(
+    ordinal: int, occupied: Sequence[int], departed: Sequence[int] = ()
+) -> int:
+    """`Position._divider` run backwards: the index a divider drawn at `ordinal` sits at.
+
+    THE EDITOR SPEAKS THE NUMBERS ON THE SCREEN AND THE STORE KEEPS INDICES (D58). A box's
+    dividers are stored in index space and always will be — the same argument the index
+    itself gets, and D56's: a layout rewritten every time a card sells is an answer that can
+    drift and that nobody can correct. But `sections_detail` renders them in count space, so
+    an operator typing "section 3 starts at the 168th card" is typing a number they can see,
+    and this is what turns it back into the 171 the store holds.
+
+    IT ANSWERS THE INDEX OF THE CARD THE SECTION STARTS AT, which is what `open_section`
+    already stores when the operator presses `S` at the box: that route takes no index and
+    writes `next_index`, the slot the next card will land in. So a divider typed into the
+    editor and a divider put in at the feeder come out at the same kind of number, and the
+    forward map sends both to the same ordinal.
+
+    The forward map is not injective — every index in a run of departed slots counts the
+    same cards in front of it — so this picks one, and it picks the one `open_section`
+    would have written. **Ordinal 1 is always index 1**, even where card 1 itself has sold:
+    `check_sections` requires a layout to start at 1 because there is no card before the
+    front of a box, and that is a fact about the box rather than about its contents.
+
+    PAST THE LAST CARD IT COUNTS SLOTS, mirroring `_divider`'s own unfilled-tail term: a
+    divider beyond everything captured so far is a plan, and each slot between here and
+    there will hold one card.
+    """
+    if ordinal <= 1:
+        return 1
+    if ordinal <= len(occupied):
+        return int(occupied[ordinal - 1])
+    high = max(
+        int(occupied[-1]) if occupied else 0,
+        int(departed[-1]) if departed else 0,
+    )
+    return high + (ordinal - len(occupied))
+
+
+def departed_label(box: int) -> str:
+    """What a screen shows where a position label would have gone, for a card that has left.
+
+    D58: once a box's numbers count the cards in it, a departed card is in no slot — the
+    number it used to hold belongs to the card that closed up behind it. So it gets the
+    box it belongs to and the word `departed`, never `Box N · Section N · Card N`.
+
+    IT NAMES NO DOOR, AND THAT IS DELIBERATE. `sold` and `retired` are different departures
+    with different reversals, and both are already on the record beside this string — every
+    screen that draws a copy draws its `state`. Threading the state in here would put a
+    second spelling of it inside the one label formula, and this is the same answer
+    `pooled_label` gives one paragraph up: a label names a place, and the reason there is
+    no place is a different field.
+
+    A RECEIPT IS UNAFFECTED AND MUST STAY SO. `Inventory.tsx` and `Fulfillment.tsx` both
+    snapshot the label BEFORE the write, so "Sold Box 3 · Section 1 · Card 7" still names
+    where the operator just was. This string is for the record afterwards, not the moment.
+    """
+    return f"Box {int(box)} · departed"
+
+
 def place_text(game: str, position: Position) -> str:
     """The one line a list prints for where a card is: its label, or the pooled fact.
 
@@ -239,9 +454,13 @@ def where_phrase(game: str, position: Position) -> str:
     slot, a pooled card is IN a pool, and "at Pokémon code cards · pooled" is a sentence
     that has stopped meaning anything.
     """
-    if is_located(game):
-        return f"at {position.label}"
-    return f"in the {game} pool ({position.box}/{position.index})"
+    if not is_located(game):
+        return f"in the {game} pool ({position.box}/{position.index})"
+    if position.card is None:
+        # D58 — a departed card is at nothing. "at Box 3 · departed" is the same sentence
+        # that stopped meaning anything for a pooled card two lines up.
+        return f"in box {position.box}, departed ({position.box}/{position.index})"
+    return f"at {position.label}"
 
 
 @dataclass(frozen=True)

@@ -1526,7 +1526,9 @@ class _Places:
 
     def __init__(self, inventory: master.Inventory):
         self._inventory = inventory
-        self._cache: Dict[int, Tuple[Optional[master.Box], Tuple[int, ...], int]] = {}
+        self._cache: Dict[
+            int, Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]
+        ] = {}
         # D30's walk, one scan per instance, lazily: box -> (occupants, gaps), where
         # `occupants` is every located, non-terminal record as (index, name) sorted by
         # index, and `gaps` is the sorted indices of the located TERMINAL records — the
@@ -1540,8 +1542,14 @@ class _Places:
             Dict[int, Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]]
         ] = None
 
-    def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int]:
-        """`(registry entry or None, validated layout, denominator)` for one box."""
+    def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
+        """`(registry entry or None, validated layout, denominator, on-hand indices)`.
+
+        `occupied` is D58's counting space: every located, non-terminal index in this box,
+        ascending — the cards a person opening it would count. It is `None`, not `()`, when
+        the walk could not be made, and the two mean opposite things: an empty box has no
+        cards to count and a degraded walk cannot count the cards it has.
+        """
         number = int(box)
         cached = self._cache.get(number)
         if cached is None:
@@ -1567,16 +1575,31 @@ class _Places:
             # fraction" — and costs nobody their position. `BadSections` is NOT caught: a
             # layout that will not validate means the section and card numbers themselves
             # are unknown, and that is the one case where no label is the honest answer.
-            try:
-                total = _denominator(entry, self._inventory.box_fill(number))
-            except master.BadPosition:
-                total = 0
-            cached = (entry, layout, int(total or 0))
+            #
+            # THE DENOMINATOR IS THE CARDS ON HAND SINCE D58, AND `capacity` NO LONGER
+            # FEEDS IT. Forced rather than chosen: the numerator is now a count of cards
+            # (`Position.slot`), and a count of cards over a frozen capacity computes a
+            # fraction that drifts further wrong with every sale — on a 543-card box that
+            # has sold 200, `#100 of 543` would put a thumb a third of the way from where
+            # the card is. `capacity` keeps its D20 job of recording how full the box got,
+            # and `GET /boxes` still reports it; it is simply not what anything divides by.
+            #
+            # ONE WALK, BOTH RENDERERS. `_box_row` reads `occupied` from this same
+            # instance, so the `place` block and the box row cannot come to disagree about
+            # the denominator — the property `_denominator` used to buy by being one
+            # function, now held structurally by being one scan.
+            walked = self._walk(number)
+            occupied = tuple(i for i, _ in walked[0]) if walked is not None else None
+            total = len(occupied) if occupied is not None else 0
+            cached = (entry, layout, int(total), occupied)
             self._cache[number] = cached
         return cached
 
     def total(self, box) -> int:
         return self.view(box)[2]
+
+    def occupied(self, box) -> Optional[Tuple[int, ...]]:
+        return self.view(box)[3]
 
     def game_entry(self, box, index) -> Optional[dict]:
         """The registry entry for the card at this position, or None when it cannot be known.
@@ -1695,6 +1718,7 @@ class _Places:
                 "label": None,
                 "box": number,
                 "index": at,
+                "slot": None,
                 "section": None,
                 "card": None,
                 "box_name": None,
@@ -1713,8 +1737,37 @@ class _Places:
                 "game_display": str(game["display"]),
             }
 
-        entry, layout, total = self.view(number)
-        position = join.Position(number, at, layout)
+        entry, layout, total, occupied = self.view(number)
+
+        # D58 — THE LABEL COUNTS THE CARDS IN THE BOX, and this is the one line that puts
+        # it in that space. `occupied` is None only when the walk met a record it could not
+        # read, and then there IS no honest label: the numbers are a count of cards, and
+        # the cards could not be counted. Answering the index-space label instead would put
+        # a second numbering system on the screen with nothing saying which one it is,
+        # which is the failure this change exists to remove. Same call `BadSections` makes
+        # four lines below in `view` — a layout that will not validate means the section
+        # and card numbers are unknown, and no label is the honest answer.
+        if occupied is None:
+            return {
+                "located": True,
+                "label": None,
+                "box": number,
+                "index": at,
+                "slot": None,
+                "section": None,
+                "card": None,
+                "box_name": entry.name if entry is not None else None,
+                "section_start": None,
+                "section_end": None,
+                "box_total": 0,
+                "box_closed": bool(entry.closed) if entry is not None else False,
+                "neighbors": None,
+                "section_gaps": None,
+                "fraction": None,
+            }
+
+        position = join.Position(number, at, layout, occupied)
+        slot = position.slot
 
         # `Position.section_end` IS None FOR THE FINAL DECLARED SECTION, on purpose: it runs
         # to wherever the box ends, and only the box knows where that is. This is the caller
@@ -1733,7 +1786,16 @@ class _Places:
         if end is None:
             end = total or None
 
-        neighbors, section_gaps = self._company(number, at, position.section_start, end)
+        # D30's decoration is still read in INDEX space, and must be: `_company` bisects the
+        # walk's own index lists to find the nearest cards either side, which is a question
+        # about what is physically next to this one. `section_start`/`end` are now counts,
+        # so they are mapped back to indices for it — `section_gaps` then counts the
+        # departed records between the same two cards. It answers zero for a box where
+        # nothing has left, and `placeSentence` already draws no gap phrase at zero, so the
+        # sentence quietly stops carrying a clause that D58 made structurally empty.
+        first = occupied[position.section_start - 1] if occupied else at
+        last = occupied[end - 1] if (end is not None and 0 < end <= len(occupied)) else None
+        neighbors, section_gaps = self._company(number, at, first, last)
 
         return {
             # True by construction on this path: the pooled branch above already answered
@@ -1743,9 +1805,24 @@ class _Places:
             "label": position.label,
             "box": number,
             "index": at,
+            # D58 — this card's number among the cards in the box, which is what every
+            # rendered number on the screen counts in. `index` above it is the STORE KEY:
+            # the route path, the photo filename and what every write aims by. They differ
+            # by the number of departed cards in front of this one, and both are on the
+            # wire because they answer different questions.
+            "slot": slot,
+            # THE CARD HAS NO NUMBER; ITS SECTION STILL EXISTS. A departed record belongs to
+            # a real part of a real box — the one it sat in — and the walk groups by this, so
+            # nulling it would file every sold card under a third heading that is not a
+            # section. `Position.section` answers where its index falls, which is that fact.
+            # What is null is `slot` and `card`: the NUMBERS, which now belong to the card
+            # that closed up behind it.
             "section": position.section,
             "card": position.card,
             "box_name": entry.name if entry is not None else None,
+            # Bounds of the SECTION rather than of the card, for the reason above: the walk
+            # draws a section header from whichever row it meets first, and a departed one
+            # must describe the same section its neighbours do.
             "section_start": position.section_start,
             "section_end": end,
             "box_total": total,
@@ -1763,7 +1840,11 @@ class _Places:
             #
             # Raw, unrounded. Formatting it to "16%" is the app's, and rounding here would
             # decide a precision for every screen that reads it.
-            "fraction": ((at - 1) / total) if total else None,
+            #
+            # OFF `slot`, NOT `index` (D58). The denominator counts cards, so the numerator
+            # must too, or the bar draws a card at a percentage of a box it is not at. A
+            # departed card has no fraction for the same reason it has no label.
+            "fraction": ((slot - 1) / total) if (total and slot is not None) else None,
         }
 
 
@@ -1862,8 +1943,15 @@ def _card_summary(inventory: master.Inventory, card: master.Card, *, created: bo
         "box": int(card.box),
         "index": int(card.index),
         "key": card.key,
+        # NON-NULL BY CONTRACT — the capture screen prints this out loud, and a screen
+        # that prints nothing after a capture reads as a capture that did not land. A
+        # pooled card answers the pooled fact; a card the walk could not count answers its
+        # store key, which is the only handle left and is what `place_text` already falls
+        # back to for the same reason.
         "label": (
-            place["label"] if place["located"] else join.pooled_label(str(place["game"]))
+            (place["label"] or f"{int(card.box)}/{int(card.index)}")
+            if place["located"]
+            else join.pooled_label(str(place["game"]))
         ),
         "section": place["section"],
         "card": place["card"],
@@ -1877,6 +1965,34 @@ def _card_summary(inventory: master.Inventory, card: master.Card, *, created: bo
         "photo": card.photo,
         "capture_id": card.capture_id,
     }
+
+
+def _flat_place(place: dict) -> dict:
+    """The three flat decorations a located row carries beside its `place` block.
+
+    ONE COMPOSER FOR TWO ROW BUILDERS (`_card_row` and `do_inventory`), which had the same
+    four lines written out twice and now have a rule that cannot drift between them.
+
+    A KEY IS OMITTED RATHER THAN SENT NULL, and `app/src/types.ts` types all three optional
+    for it. `server.ts:positionLabel` answers null on an absent label, and
+    `BoxBrowse.tsx:rowSlot` tests `card !== undefined` — so a null there would render the
+    string `null` in the walk's left cell, where an absent one correctly falls through to
+    the label.
+
+    WHAT EACH ABSENCE MEANS, since there are now three and they are not the same fact:
+      no `label`   the walk could not count this box, so no number is knowable (D58)
+      no `card`    this card has left the box, so it is in no slot — but `section` stays,
+                   because the section it sat in is still a real part of a real box and is
+                   what the walk groups by
+      no block     a pooled card, which never had a slot at all (D24); the caller answers
+                   that one, since it has the `located` flag in hand
+    """
+    if place["label"] is None:
+        return {}
+    flat: dict = {"label": place["label"], "section": place["section"]}
+    if place["card"] is not None:
+        flat["card"] = place["card"]
+    return flat
 
 
 def _card_row(
@@ -1917,9 +2033,7 @@ def _card_row(
     # card must answer null there exactly as an inventory row does. The pooled fact rides
     # inside `place` (`game_display`), where the screens that may show it go looking.
     if place["located"]:
-        row["label"] = place["label"]
-        row["section"] = place["section"]
-        row["card"] = place["card"]
+        row.update(_flat_place(place))
     row["place"] = place
     return row
 
@@ -2160,9 +2274,7 @@ def do_inventory() -> dict:
         # and the game's display name, so a screen can tell the design fact from the
         # coerce-failure above, which leaves a row with no `place` at all.
         if place["located"]:
-            record["label"] = place["label"]
-            record["section"] = place["section"]
-            record["card"] = place["card"]
+            record.update(_flat_place(place))
         record["place"] = place
     return payload
 
@@ -3653,7 +3765,9 @@ def do_delete_box(box: int) -> dict:
 # ------------------------------------------------------------------------ standing queues
 
 
-def _queue_row(entry: queues.QueueEntry) -> dict:
+def _queue_row(
+    entry: queues.QueueEntry, places: "Optional[_Places]" = None
+) -> dict:
     """One waiting card, as the review screen reads it.
 
     `asdict` WHOLE rather than a hand-picked subset, for the reason `app/src/types.ts` gives
@@ -3679,6 +3793,35 @@ def _queue_row(entry: queues.QueueEntry) -> dict:
     """
     row = asdict(entry)
     row["age_days"] = entry.age_days
+    # BOX 0 MEANS "NO POSITION" (`cli/resolve.py:failure_entry` — D10 starts at 1), and
+    # such an entry keeps the label the join gave it. There is no box to count and nothing
+    # to re-render against; asking anyway would answer `Box 0 · departed`, which is a claim
+    # about a card that has left rather than about one that never had a slot.
+    try:
+        addressable = int(entry.box) >= 1 and int(entry.index) >= 1
+    except (TypeError, ValueError):
+        addressable = False
+    if places is not None and addressable:
+        # THE LABEL IS RE-RENDERED AT READ TIME AND THE STORED ONE IS NEVER SERVED (D58,
+        # on D56's rule). `QueueEntry.label` is written once by `cli/resolve.py` at join
+        # time and never recomputed, so it is a snapshot of a rendering — and every rule
+        # that moves a rendering leaves it behind. Measured on the owner's real store the
+        # day this landed: 15 of 92 entries carried a label drawn against
+        # `CARDS_PER_SECTION = 25`, the divider rule D10's amendment DELETED on 2026-08-29.
+        # Box 1 declares no dividers at all and its queue held both
+        # `Box 1 · Section 1 · Card 108` and `Box 1 · Section 5 · Card 18` — a section that
+        # does not exist, on the screen the owner answers cards from.
+        #
+        # D56 states the rule for exactly this shape one register up, about a run's box
+        # name: never write down an answer nobody can correct; join it when it is read. The
+        # entry keeps its stored `label` on disk so nothing already written moves, and no
+        # route serves it.
+        place = places.of(entry.box, entry.index)
+        row["label"] = (
+            place["label"]
+            if place["located"]
+            else join.pooled_label(str(place.get("game") or games.DEFAULT_GAME))
+        )
     return row
 
 
@@ -3708,9 +3851,13 @@ def do_queues() -> dict:
     answered. This route answers "what is left to do", and an answered card is not that.
     """
     snapshot = Store().read()
+    # One walk for both queues and every entry in them, the same instance `do_inventory`
+    # renders 5,000 rows against — so a card's label on the review screen and its label on
+    # the inventory screen are the same string by construction rather than by care.
+    places = _Places(snapshot.inventory)
     return {
-        "review": [_queue_row(entry) for entry in snapshot.review.open_entries],
-        "parked": [_queue_row(entry) for entry in snapshot.parked.open_entries],
+        "review": [_queue_row(entry, places) for entry in snapshot.review.open_entries],
+        "parked": [_queue_row(entry, places) for entry in snapshot.parked.open_entries],
     }
 
 
@@ -6145,23 +6292,24 @@ def do_search(query: str) -> dict:
 # --------------------------------------------------------------------------------- boxes
 
 
-def _denominator(entry: Optional[master.Box], fill: Optional[int]) -> Optional[int]:
-    """D20's denominator: a sealed box's frozen capacity, or an open box's fill so far.
-
-    One function because two places need the same answer — every card's `place` block and
-    every row of `GET /boxes` — and a box that said "40 of 250" on one screen and "40 of 53"
-    on the other would be the second-renderer failure with a number instead of a label.
-
-    `capacity` is checked for None rather than trusted off `closed` alone. `close_box` always
-    sets it, so the two disagree only in a hand-edited file; the fill is the honest fallback.
-    """
-    if entry is not None and entry.closed and entry.capacity is not None:
-        return max(0, int(entry.capacity))
-    return fill
+# `_denominator` WAS HERE AND IS NOT (D58). It answered D20's question — a sealed box's
+# frozen capacity, or an open box's fill so far — and existed as one function because two
+# renderers needed the same answer, a box that said "40 of 250" on one screen and "40 of 53"
+# on the other being the second-renderer failure with a number in it instead of a label.
+#
+# THE ANSWER IS NOW THE CARDS ON HAND, FOR AN OPEN BOX AND A SEALED ONE ALIKE, and that is
+# forced by the numerator rather than chosen: `Position.slot` counts cards, so dividing it
+# by a frozen capacity draws a card at a percentage of a box it is not at, drifting further
+# wrong with every sale. `capacity` keeps its D20 job of recording how full the box got.
+#
+# The property the function bought is now held structurally instead, which is stronger:
+# `_Places.view` computes it from the walk it already runs, and `_box_row` reads it off the
+# SAME `_Places` instance rather than deriving its own. Two renderers, one scan, nothing to
+# keep in step.
 
 
 def _section_spans(
-    box: int, layout: Tuple[int, ...], total: int, indices: Set[int]
+    box: int, layout: Tuple[int, ...], total: int, occupied: Tuple[int, ...]
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
 
@@ -6183,20 +6331,29 @@ def _section_spans(
     grown into yet, with a count of zero — a box whose layout was typed in before it was
     filled should show the layout that was typed in.
 
-    `count` COUNTS RECORDS, SOLD ONES INCLUDED. A sold card leaves a permanent gap (D10) and
-    keeps its position; the section still holds it as far as the physical box is concerned,
-    and a section count that fell when a card sold would disagree with what is in the plastic.
+    `count` COUNTS THE CARDS ON HAND, AND THIS SENTENCE USED TO SAY THE OPPOSITE. It read
+    "counts records, sold ones included", on the argument that a sold card keeps its
+    position and the section still holds it as far as the physical box is concerned. D58
+    retires that argument at its root: the box closes up behind a departure, so the section
+    does NOT still hold it, and a count including it would disagree with what a person
+    counts — which is the one thing every number in this walk now promises.
+
+    EVERY NUMBER HERE IS IN `Position.slot`'s SPACE (D58), which is what keeps the dividers
+    editor honest: it seeds from `start` and posts in the same space, and `do_put_box` maps
+    it back through the same `occupied` before the store sees an index.
     """
     per_section: Dict[int, int] = {}
-    for index in indices:
-        section = join.Position(box, index, layout).section
+    for index in occupied:
+        section = join.Position(box, index, layout, occupied).section
         per_section[section] = per_section.get(section, 0) + 1
+
+    mapped = join.Position(box, 1, layout, occupied).layout
 
     spans: List[dict] = []
     seen: Set[int] = set()
     at = 1
     while at <= total:
-        position = join.Position(box, at, layout)
+        position = join.Position(box, occupied[at - 1], layout, occupied)
         end = position.section_end
         spans.append(
             {
@@ -6211,14 +6368,14 @@ def _section_spans(
             break
         at = end + 1
 
-    for ordinal, start in enumerate(layout, start=1):
+    for ordinal, start in enumerate(mapped, start=1):
         if ordinal in seen:
             continue
         spans.append(
             {
                 "section": ordinal,
                 "start": start,
-                "end": layout[ordinal] - 1 if ordinal < len(layout) else None,
+                "end": mapped[ordinal] - 1 if ordinal < len(mapped) else None,
                 "count": per_section.get(ordinal, 0),
             }
         )
@@ -6227,7 +6384,9 @@ def _section_spans(
     return spans
 
 
-def _box_row(inventory: master.Inventory, box: int) -> dict:
+def _box_row(
+    inventory: master.Inventory, box: int, places: "Optional[_Places]" = None
+) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
     ONE RENDERER FOR THREE ROUTES, so a box that was just created and a box read back a
@@ -6249,21 +6408,34 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
     to null while `cards` and `sold` still count what could be read.
 
     `cards` COUNTS RECORDS THAT NAME THIS BOX AND `fill` IS THE HIGH-WATER MARK — they are
-    different numbers and both are wanted. Sold cards leave permanent gaps, so a box with 53
-    records can have a fill of 60, and the difference is exactly how many holes are in it.
+    different numbers and both are wanted. Sold cards leave permanent gaps IN THE INDEX, so
+    a box with 53 records can have a fill of 60, and the difference is exactly how many holes
+    the allocator has left behind it.
+
+    `on_hand` IS THE THIRD NUMBER AND IT IS THE ONE ON THE SCREEN (D58). It counts located
+    records that have not left by either door — the cards a person opening the box would
+    count — and it is what every rendered number divides by now. The other two stay verbatim
+    because `BoxOps` promises its census greps to `inventory.json` and they still do; what
+    changed is that neither of them is the denominator any more.
+
+    IT TAKES A `_Places` SO THE TWO RENDERERS CANNOT DISAGREE. `on_hand` and `sections_detail`
+    both come off that instance's one walk, which is the same walk every `place` block on the
+    screen was rendered from — the property `_denominator` used to buy by being one function,
+    held structurally instead. `do_boxes` passes one instance down its whole list, so a
+    thirteen-box read costs one scan rather than thirteen.
     """
     entry = inventory.box(box)
+    view = (places or _Places(inventory)).view(box)
+    occupied = view[3]
 
     cards = 0
     sold = 0
     retired = 0
     listed = 0
-    indices: Set[int] = set()
     for card in inventory.cards.values():
         try:
             if int(card.box) != int(box):
                 continue
-            indices.add(int(card.index))
         except (TypeError, ValueError):
             # Skipped rather than refused, unlike `next_index`, and the difference is the
             # question being asked. That method refuses because it is about to hand out an
@@ -6292,10 +6464,13 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
     except (master.BadPosition, TypeError, ValueError):
         fill = next_index = None
 
-    total = _denominator(entry, fill)
+    # D58: the denominator and the spans both come off the walk. A walk that degraded says
+    # so with a null `on_hand` — not a zero, which would claim an empty box — and takes the
+    # spans with it, exactly as an invalid layout already does one line down.
+    on_hand: Optional[int] = len(occupied) if occupied is not None else None
     detail = (
-        _section_spans(int(box), layout, total, indices)
-        if layout is not None and total is not None
+        _section_spans(int(box), layout, len(occupied), occupied)
+        if layout is not None and occupied is not None
         else []
     )
 
@@ -6310,6 +6485,11 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
         "fill": fill,
         "next_index": next_index,
         "cards": cards,
+        # D58 — what the box holds now, and the denominator of every number on the screen.
+        # `cards` counts records and `fill` is the allocator's high-water mark; this counts
+        # what a person would count, which is none of the same thing once anything has been
+        # sold, retired or captured as a pooled card.
+        "on_hand": on_hand,
         "sold": sold,
         # D34's two, and they are here so the delete panel can name WHICH of
         # `box_not_empty_of_commitments`'s three grounds is holding a box open before the
@@ -6325,6 +6505,14 @@ def _box_row(inventory: master.Inventory, box: int) -> dict:
         "listed": listed,
         "sections_detail": detail,
     }
+
+
+def _same_box(card: master.Card, box: int) -> bool:
+    """Does this record name this box? Never raises; an unreadable record names none."""
+    try:
+        return int(card.box) == int(box)
+    except (TypeError, ValueError):
+        return False
 
 
 def _box_holds_cards(inventory: master.Inventory, box: int) -> bool:
@@ -6365,7 +6553,8 @@ def do_boxes() -> dict:
         except (TypeError, ValueError):
             continue
 
-    return {"boxes": [_box_row(inventory, box) for box in sorted(numbers)]}
+    places = _Places(inventory)
+    return {"boxes": [_box_row(inventory, box, places) for box in sorted(numbers)]}
 
 
 def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
@@ -6502,6 +6691,28 @@ def do_put_box(box: int, payload: dict) -> dict:
             # `ensure_box`'s keyword only ever SETS one and could not express it.
             inventory.set_name(box, name)
         if sections is not None:
+            # THE BODY SPEAKS COUNT SPACE AND THE STORE KEEPS INDICES (D58). `sections_detail`
+            # renders every divider as the card number it stands in front of, and the editor
+            # seeds from that — so an operator who types "section 3 starts at 168" is typing
+            # the number they can see on the screen, and this is the one line that turns it
+            # back into the 171 the store holds. `join.divider_index` is `Position._divider`
+            # run backwards, beside it in the same file so the two cannot drift.
+            #
+            # THE FRONT OF THE BOX IS INDEX 1 WHATEVER HAS SOLD OUT OF IT, which is what
+            # keeps `check_sections`' own rule — a layout starts at 1, because there is no
+            # card before the front of a box — true when card 1 itself has left.
+            occupied = _Places(inventory).occupied(box)
+            if occupied is not None:
+                gone = tuple(
+                    sorted(
+                        int(card.index)
+                        for card in inventory.cards.values()
+                        if _same_box(card, box) and card.state in master.TERMINAL_STATES
+                    )
+                )
+                sections = master.check_sections(
+                    [join.divider_index(k, occupied, gone) for k in sections]
+                )
             inventory.set_sections(box, sections)
 
         # THE LID IS MOVED LAST, after any layout change in the same request, so a box that

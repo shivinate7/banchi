@@ -131,6 +131,18 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   never will: `#/inventory` keeps the only one and hands it over through
   `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
   the disagreement D33 named and D39 was built to avoid.
+- **A CARD'S NUMBER COUNTS THE CARDS IN THE BOX, NOT THE SLOTS** (D58). Sell card 17 and the
+  card behind it becomes card 17, on every screen and in every report — the box closes up, and
+  the section boundaries move with it so `Section N · Card M` is countable on both axes. **The
+  STORED index never moves**: it is the `/inventory/<box>/<index>` path, the `<index>.jpg` the
+  photograph is named after, and what every write aims by, and `next_index` is the high-water
+  mark D10 has always made it. `Place.slot` is the number a person counts to and `Place.index`
+  is the key; they differ by the cards that have left in front of this one. A departed card is
+  in no slot and renders `join.departed_label` — `Box 3 · departed` — rather than the number
+  that now belongs to its successor. `pipeline/join.py:Position` is still the only label
+  formula; what it gained is the box's occupancy. **The dividers editor speaks the same space**
+  and `do_put_box` maps it back through `join.divider_index` before the store sees an index.
+
 - **THERE IS NO AUTOMATIC SECTIONING, AND `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
   nothing else: an undeclared box renders as ONE section, `card` is the index, and

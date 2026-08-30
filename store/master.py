@@ -40,7 +40,10 @@ index, so there is no parameter through which a caller's stale read can enter a 
 cards they did not allocate — that is a seam to watch rather than a guarantee, and the
 safety is that the capture server never calls it.
 
-Positions are never renumbered and sold cards leave permanent gaps (D10). Nothing in this
+Positions are never renumbered and sold cards leave permanent gaps IN THE INDEX (D10).
+That is a rule about this module's allocator and not about what a screen draws: since D58 a
+card's NUMBER counts the cards in the box, so a departure closes up behind it everywhere it
+is rendered while every index here stays exactly where it was assigned. Nothing in this
 module deletes a card record; `sold` is a state, not a removal.
 
 T7 REACHES THIS FILE, as of 2026-08-13. `harness/tests/t7_store_and_seams.py` imports this

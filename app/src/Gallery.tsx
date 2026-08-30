@@ -68,6 +68,7 @@ function place(over: Partial<Place>): Place {
     label: 'Box 3 · Section 2 · Card 15',
     box: 3,
     index: 40,
+    slot: 40,
     section: 2,
     card: 15,
     box_name: 'ME01 commons',

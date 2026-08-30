@@ -162,7 +162,10 @@ would be a guess, and every fraction drawn from that box would inherit it. `POST
 accepts no such field and never will.
 
 **Sold cards do not shrink a box.** D10 makes their gaps permanent and `next_index` is a
-high-water mark, so a sealed box's capacity never falls as its contents sell. Re-opening sets
+high-water mark, so a sealed box's capacity never falls as its contents sell. **`capacity`
+stopped being the denominator on 2026-08-30 (D58): a card's number counts the cards in the
+box, so what every screen divides by is the cards on hand. This paragraph is still true of
+`capacity`, and no longer true of the number anybody reads.** Re-opening sets
 `capacity` back to `None` rather than leaving a stale number standing — an unsealed box with a
 remembered capacity would be the worst of both, a denominator that looks frozen and is not.
 
@@ -209,6 +212,12 @@ to say which one it had always meant. **The index is assigned once, survives a s
 permanent gap, and nothing renumbers it.** Section and Card are a *rendering* of that index
 against the box's current divider layout, so moving a divider relabels every card behind it
 without touching a single index.
+
+**D58 TOOK THAT SEAM TO ITS END ON 2026-08-30.** The rendering counts the cards in the box
+rather than the slots, so a departure closes up behind it and `Card 17` is the seventeenth
+card you can count. The index still never moves — that is what makes it a rendering — and
+the section boundaries are mapped into the same space, so both halves of the label stay
+countable.
 
 `CARDS_PER_SECTION = 25` used to survive in `pipeline/join.py` as the default a box that had
 declared no layout rendered with — kept because it made every label written before boxes
@@ -714,6 +723,11 @@ write over cards a human has not actually compared, which is what D4 exists to p
 write still shows the photographs it is about to answer for.
 
 ### 10.4 — D30's gap convention
+
+**AND THE WHOLE SECTION IS OVERTAKEN BY D58 (2026-08-30):** a card's number counts the cards
+in the box now, so there is no gap left to leave a marker in and the physical half never had
+to be chosen. The digital half stays built and is unchanged. Read what follows as the
+argument that produced it rather than as an open item.
 
 **THE DIGITAL HALF IS BUILT (2026-08-23, later the same day):** every located `place` block
 carries `neighbors` (nearest non-terminal records, so a sold card is never named as a

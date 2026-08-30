@@ -941,10 +941,20 @@ export type Place = {
 
   box: number
 
-  /** The card's sequential position in the box — D10's allocator number, 1-based, and the
-   *  numerator of the `#40 of 250` sentence. Not the slot within a section; that is `card`.
+  /** The card's sequential position in the box — D10's allocator number, 1-based. THE STORE
+   *  KEY: the `/inventory/<box>/<index>` path every write aims by, the `<index>.jpg` the
+   *  photograph is named after, and half of `key`. It stopped being the numerator of the
+   *  `#40 of 250` sentence with D58 — `slot` is — and the two differ by the number of cards
+   *  that have left the box in front of this one.
    *  On a pooled block it is the KEY's second half, not a position — see `located`. */
   index: number
+
+  /** This card's number among the cards ACTUALLY IN THE BOX (D58), 1-based, and the
+   *  numerator of `#40 of 250`. Null for a card that has left by either door and for one the
+   *  server could not count — in both cases `label`, `section` and `card` are null too, and
+   *  a screen must draw the absence rather than fall back to `index`, which counts in the
+   *  numbering system D58 replaced. */
+  slot: number | null
 
   section: number | null
   card: number | null
@@ -1170,6 +1180,14 @@ export type BoxRecord = {
   fill: number
   next_index: number
   cards: number
+
+  /** Cards this box HOLDS: located records that have not left by either door (D58). The
+   *  denominator of every number the screens draw for this box, and none of the three above
+   *  it — `cards` counts records including departed ones, `fill` is the allocator's
+   *  high-water mark, and `capacity` is what the box froze at when it was sealed. Null when
+   *  the server could not count the box, which is not zero: an empty box holds none, and an
+   *  uncountable one is not known to. */
+  on_hand: number | null
   sold: number
 
   /** Cards in this box that are `retired` (D26), and cards whose SKU holds a listing stage
