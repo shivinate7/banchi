@@ -293,7 +293,7 @@ def render(findings: Sequence[Finding], clean: str) -> int:
 
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(
-        description="Guards for a prose rewrite of the @-loaded docs (D60).",
+        description="Guards for the four docs CLAUDE.md names (D60).",
     )
     parser.add_argument(
         "--structure",
