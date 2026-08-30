@@ -43,7 +43,7 @@ Everything past it is confirmed by something outside this pipeline — see `pkmn
 from __future__ import annotations
 
 from cli import resolve, runs
-from pipeline import decisions, join, tcgcsv
+from pipeline import decisions, join, pricing, tcgcsv
 from store import master
 from store.session import Store
 
@@ -83,12 +83,24 @@ def _scoped(dispositions, report):
     return {sku: d for sku, d in dispositions.items() if sku in report.matches}
 
 
-def _game_only(report):
-    """(listed, sub_threshold) SKU sets for one game's report — emit's two files."""
+def _game_only(report, withheld=()):
+    """(listed, sub_threshold) SKU sets for one game's report — emit's two files.
+
+    WITHHELD SKUs ARE SUBTRACTED HERE AND NOT LEFT TO `import_rows`, AND THE DIFFERENCE IS A
+    FILE ON DISK. `prices_for` leaves a held SKU out of the price mapping and `import_rows`
+    then skips its row, which is correct — but `_write` below decides whether to write a file
+    AT ALL from whether `only` is empty, and `tcgcsv.render` emits the header before it
+    iterates rows. So a game whose every listable SKU was held produced a header-only
+    `import-listed.csv`, reported as `listed 0 row(s), 0 card(s)`.
+
+    That is the Gate B shape exactly — `docs/GATES.md` records its `import-listed.csv` as
+    header-only — and it is the file an operator would then import.
+    """
+    held = set(withheld)
     listed = {m.sku for m in report.matches.values() if m.listable} | {
         m.sku for m in report.no_market_data
     }
-    return listed, set(report.below_threshold.skus)
+    return listed - held, set(report.below_threshold.skus) - held
 
 
 def _write(game_join, path, only, choice, say, label):
@@ -102,6 +114,11 @@ def _write(game_join, path, only, choice, say, label):
         sub_threshold=choice.sub_threshold,
         sku_dispositions=_scoped(choice.dispositions(), game_join.report),
         no_market_data=choice.no_market_data,
+        # UNSCOPED, deliberately, where `sku_dispositions` beside it is scoped: `prices_for`
+        # refuses a disposition naming a SKU this game's report does not hold, and has no such
+        # check on this set — see the comment at the skip. So a run-wide set is harmless here
+        # and scoping it would be machinery guarding nothing.
+        withheld=set(choice.withheld()),
         only=only,
     )
     written = tcgcsv.parse(data)
@@ -124,24 +141,46 @@ def run(args, say) -> int:
         say(f"no {runs.DECISIONS} in this run — run `pkmnscan join` first")
         return 1
 
+    # ------------------------------------------------------- READ BEFORE RESOLVING, AND WHY
+    #
+    # THE PRICING ANSWER IS ONE FILE, AND THIS BLOCK USED TO SIT BELOW `resolve.load`. That
+    # ordering is what made `decisions.json`'s `rule` and `basis` INERT: the resolve above read
+    # them from the run MANIFEST, `prices_for` prices from `SkuMatch.rule` which the resolve
+    # sets, and this file's `rule` reached exactly one consumer — the `pricing` line printed a
+    # few lines down. So an operator editing `"rule": "undercut:5"` here got a run that PRINTED
+    # `rule=undercut:5` and priced every row at market, with nothing anywhere saying they
+    # disagreed.
+    #
+    # The owner's instruction, on being shown it: "I don't understand this it seems like some
+    # stuff is in conflict and it shouldn't be, resolve this." One source of truth, and it is
+    # this file — which is what `pipeline/decisions.py`'s own docstring has claimed since it was
+    # written: *"the pricing decision, as a file rather than as a flag"*. The manifest keeps
+    # `rule`/`basis` as the RECORD of what the join was run with (`report.txt` prints them), and
+    # a record is not an authority.
+    #
+    # `UnknownRule` and `UnknownBasis` are caught here as well as `MalformedDecisions`, and that
+    # is not tidiness: they are `ValueError`s and NOT `MalformedDecisions` (pipeline/pricing.py),
+    # nothing above `cli/__main__.py` caught them, and `PUT /pipeline/runs/<name>/decisions`
+    # writes this document with no validation at all — so a screen could put a run into a state
+    # where `emit` answered with a traceback instead of a sentence.
+    try:
+        choice = decisions.Decisions.read(decisions_path)
+    except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
+        say(f"{runs.DECISIONS} is unusable: {exc}")
+        return 1
+
     try:
         resolved = resolve.load(
             run_dir,
             plan.by_game,
-            rule=run_dir.manifest.get("rule", args.rule),
-            basis=run_dir.manifest.get("basis", args.basis),
+            rule=choice.rule,
+            basis=choice.basis,
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
-        return 1
-
-    try:
-        choice = decisions.Decisions.read(decisions_path)
-    except decisions.MalformedDecisions as exc:
-        say(f"{runs.DECISIONS} is unusable: {exc}")
         return 1
 
     store = Store()
@@ -184,6 +223,10 @@ def run(args, say) -> int:
     # a partial emit that looks complete. So every game is priced and gated first, and
     # only a run that will fully succeed writes anything.
     multi = len(resolved.joins) > 1
+    # BOUND ONCE FOR THE WHOLE RUN. Held SKUs are run-wide — `decisions.json` is one document
+    # per run and a SKU is TCGplayer-global — and unlike `dispositions` they are never scoped
+    # per game, because nothing refuses on an unknown one.
+    withheld = set(choice.withheld())
     say("")
     try:
         unknown = set(choice.dispositions()) - set(resolved.matches)
@@ -205,6 +248,7 @@ def run(args, say) -> int:
                 sub_threshold=choice.sub_threshold,
                 sku_dispositions=_scoped(choice.dispositions(), report),
                 no_market_data=choice.no_market_data,
+                withheld=withheld,
             )
 
         listed_skus = []
@@ -213,7 +257,7 @@ def run(args, say) -> int:
             game = game_join.game
             if multi:
                 say(f"[{game}]")
-            listed, sub = _game_only(game_join.report)
+            listed, sub = _game_only(game_join.report, withheld)
             listed_skus += _write(
                 game_join,
                 run_dir.path(runs.import_listed_name(game)),
@@ -255,8 +299,28 @@ def run(args, say) -> int:
     pushed_skus = 0
     with store.write() as writable:
         for match in resolved.matches.values():
-            if match.sku not in emitted:
-                continue
+            # IDENTITY IS WRITTEN FOR EVERY MATCHED SKU; ONLY THE COUNT WAITS FOR A FILE.
+            #
+            # This was one `continue` doing two jobs, and it was right for exactly as long as
+            # "reached an import file" and "we know what this card is" meant the same thing.
+            # A withhold (D49) splits them for the first time: the join resolved the card to a
+            # catalog row, so the identity is known — and nothing was pushed, so the count must
+            # not move. Skipping both left a held card wearing `state: captured` with no `sku`,
+            # invisible to `GET /search` and every SKU-keyed surface until the hold was lifted
+            # and the run re-emitted. The owner's question, on being shown that: "Wait i want to
+            # be able to find it, why can't it be emitted?" It can.
+            #
+            # IT ALSO FIXES AN OLDER INSTANCE OF THE SAME BUG. A `no_market_data` SKU answered
+            # `"unlisted"` has never been stamped either, for this identical reason, since D9
+            # gave that field its `unlisted` answer. Fixing only the withhold would have left
+            # the same defect one door down.
+            #
+            # WHAT MUST NOT MOVE, and why this loop is worth reading twice: `pushed` is a
+            # commitment that a CSV was written, `docs/GATES.md` records a real post-import
+            # re-emit that double-counted staged copies, and `cli/resolve.py:_committed_keys`
+            # reads `pushed + staged` back as `committed` — which is where this command's
+            # idempotence actually lives. The bump below is gated on `emitted` and the stamp
+            # above it is not.
             copies = 0
             for position in match.live_positions:
                 key = master.position_key(position.box, position.index)
@@ -287,7 +351,7 @@ def run(args, say) -> int:
                     run=run_dir.name,
                 ):
                     copies += 1
-            if copies:
+            if copies and match.sku in emitted:
                 # Incremented, not set: two runs can push copies of one SKU, and the second
                 # must not erase the first. Re-emitting the SAME run adds nothing because
                 # `cli/resolve.py` reads these counts back as `committed`, so those copies

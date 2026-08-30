@@ -125,11 +125,19 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   mark** — that rule governs the card index inside a box and nothing else. The name never
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
-- **The app has six screens and six routes** — five the owner's, one the Fulfiller's. It
+- **The app has seven screens and seven routes** — six the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
-  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — and D39 added
+  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
-  the review queue. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  the review queue, and D49 added `#/pricing` on 2026-08-30, which is where a listing price is
+  set by hand.
+
+  **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
+  CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
+  published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
+  not load-bearing prose. That argument holds for a number in a report and does not hold here,
+  where the sentence is what a session reads to learn the shape of the product. It was false
+  from D39 until D49 in FIVE places at once, none of which failed a check. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table

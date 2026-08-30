@@ -1539,14 +1539,29 @@ seventh, and that file's own comment says "it matters more at seven routes than 
 three" while `CLAUDE.md` still said six. Five remained: capture, review, inventory,
 fulfillment, gallery.
 
-**It is SIX again as of 2026-08-29, and the sixth is `#/runs` (D39).** Recorded here because
+**It is SEVEN as of 2026-08-30: `#/runs` (D39) and `#/pricing` (D49).** Recorded here because
 this is the entry that owns the count and because the direction matters: this merge deleted two
-routes that rendered one thing, and that ruling is untouched by a route being added for
-something no route rendered at all. `#/inventory` still holds the walk, the card, its copies and
-the box's operations; what left it is the pipeline, which was never one of the three screens
-this entry merged. The count is restated in `CLAUDE.md`, `docs/map.py` and
-`scripts/views.txt`, and the not-rendered-rather-than-hidden rule for the Fulfiller's nav is
-untouched — it was never about how many owner routes there are.
+routes that rendered one thing, and that ruling is untouched by routes being added for things no
+route rendered at all. `#/inventory` still holds the walk, the card, its copies and the box's
+operations; what left it is the pipeline, which was never one of the three screens this entry
+merged, and what joined it is hand-pricing, which no screen has ever offered. The count is
+restated in `CLAUDE.md`, `docs/map.py`, `README.md`, `app/src/App.tsx` and `scripts/views.txt`,
+and the not-rendered-rather-than-hidden rule for the Fulfiller's nav is untouched — it was never
+about how many owner routes there are.
+
+**AND THE COUNT WAS FALSE IN FIVE PLACES FOR THE WHOLE OF D39's LIFE, WHICH IS THE FINDING
+WORTH MORE THAN THE NUMBER.** `#/runs` landed and `README.md` went on saying five screens,
+`docs/map.py` five routes, and `app/src/App.tsx`'s own header — the file that HOLDS the table —
+`Five now`. None of it failed a check, because `scripts/docs-audit.py` reconciles no count of
+anything: D18 deleted the last published one deliberately, on the argument that a verifiable
+fact nobody can disagree with is not load-bearing prose.
+
+That argument is right about a number in a report and wrong here, and the difference is worth
+naming. A count of routes is what a session reads to learn the SHAPE of the product before it
+edits anything, and a wrong one sends it looking for a screen that does not exist or building
+one that does. It is still not mechanically checked — a check would have to decide what counts
+as a screen, and this entry is not opening that — so the defence is that this paragraph exists
+and that D31 is named in every file that restates the number.
 
 **THE FULFILLER'S SURFACE IS DOWNSTREAM AND IS NOT A COUNTERPOINT.** Recorded because it was
 argued the wrong way round and the owner corrected it: *"do not concern yourself with
@@ -3689,6 +3704,330 @@ and by target, not by name — so a new link is covered the day it is added. Wha
 the reverse direction: a path that ought to be ignored and is not, which is what let the first
 one through. `git check-ignore` over the provisioned set, run somewhere off the commit path,
 would close that half.
+
+**IT REOPENED THE SAME DAY, BY THE REVERSE DIRECTION THIS PARAGRAPH NAMED, AND THE OTHER HALF IS
+NOW BUILT (2026-08-30).** Two of the four provisioned paths kept their directory-only patterns —
+`harness/.cache/` and `.venv/` — on the reasoning that `scripts/worktree-guard.sh` COPIES the
+first and BUILDS the second, so neither is ever a link. That reasoning is sound about the script
+and says nothing about the path. A session that provisioned a worktree by hand linked both, and
+got this entry's own state straight back: **untracked rather than ignored**, one `git add -A`
+from committing an absolute path into one Mac.
+
+**It also broke something this entry did not predict.** `scripts/docs-audit.py`'s ignore filter
+exists so a gitignored path is not reported as a dangling reference — and it had nothing to
+match, so every doc reference to `harness/.cache/` read as a broken path and the pre-commit hook
+blocked a commit over two of them. That is the audit being right for the wrong reason: the
+reference was fine and the ignore was not.
+
+**So the rule is about the PATH and not about today's provisioning.** All four patterns are
+type-agnostic now. The precision a trailing slash buys is worth nothing on a name nothing else
+in the tree bears, and it is worth less than nothing when it silently depends on a script's
+current behaviour staying what it is.
+
+**AND `make ignore-check` IS THE GUARD THIS ENTRY ASKED FOR**, doing exactly what the paragraph
+above specified: `git check-ignore` over the provisioned set, asserting each is ignored **as a
+file, as a directory and as a symlink**. It is in `make check` and deliberately NOT in the git
+hook — D18's rule, and a second reason of its own: what it checks is a property of the local
+worktree's provisioning, so a fresh clone with none of these paths present would fail a commit
+over something that is not wrong. Off the commit path is where a check about local state belongs.
+
+---
+
+## D48 — A send is a cart of boxes; a run is still one box
+
+**BUILT 2026-08-29, on the owner's instruction after being told what the pipeline could and
+could not already do.** Their words: *"I want to be able to multi select and have them all send
+at one time"*, and then, when the first answer proposed one run spanning several boxes,
+*"why couldn't the bypasses be at a per box level, and then they join a 'queue to Haiku' and
+then there's a further button that batch sends all the individualized boxes at the same time?"*
+
+**THE OWNER'S SHAPE WAS BETTER THAN THE ONE PROPOSED TO THEM, AND THE CORRECTION IS THE USEFUL
+PART.** The first recommendation was ONE RUN over several boxes, on the argument that `join`
+already reasons per box (D36's realign does), that `sidecar.scan` already parses `box3-0017.jpg`,
+and that emit aggregating across boxes gives one import file per game instead of several. Every
+one of those facts is true and none of them is the deciding one. What decides it is that a run
+carries a **reading**, a `--bypass` ruling and a `decisions.json`, and all three are properties
+of what is IN the drawer — so one run across three boxes forces one answer to three questions
+that deserve three. The owner's word for it was *"individualized"*, and it is the right one.
+
+**SO THE CART IS THE REQUEST AND THE RUN IS UNCHANGED.** `POST /pipeline/identify` takes
+`scopes: [{box, indices?, crop?, max_edge?}, ...]` and spawns one detached child per box. Every
+box gets its own run directory, its own manifest scope, its own queue, its own join and its own
+pricing answer. Nothing downstream learns a new shape, and that is the property worth protecting:
+`cli/runs.py`, `join`, `emit` and `reconcile` were not touched by this entry at all.
+
+**ONE ROUTE STILL SPENDS, WITH ONE `confirm` AND ONE TOTAL.** Two alternatives were declined for
+the same reason. A second route beside the first would double the surface D33 spent a whole entry
+putting behind one door. N calls from the screen would be N confirms for one operator decision,
+which is the two-step money gate satisfied in letter and broken in substance. One press, one
+request, one `confirm`, one estimate on screen above it.
+
+**THE TOTAL IS SUMMED ON THE SERVER, AND A MISSING FIGURE POISONS ITS SUM.** `app/src/server.ts`
+already records that the app may not compute rules the pipeline owns, and this is the sharpest
+case: the total is the number the operator agrees to spend. `_parse_preflight` answers `None`
+where a line did not appear — deliberately, so a changed preflight shows as a missing figure
+rather than a confident zero — and a sum that skipped a `None` would undo that at the one moment
+it matters, by understating what a press is about to buy.
+
+**A BARE `box` READS AS A CART OF ONE, AND NOTHING EVER WRITES ONE.** The read-side widening D3's
+amendment gives the finish claim and D21 gives `game`, for the same reason and with the same
+boundary: the harness, a terminal, and every request written before today resolve down the
+identical path with no migration and no second spelling on the wire. The RESPONSE is always a
+list too — a shape that changed with the request would make every reader ask which one it got
+before it could ask anything else.
+
+**EVERY LEG IS RESOLVED BEFORE ANY IS ACTED ON, AND A REFUSAL TEARS DOWN WHAT IT BUILT.** D29's
+validate-everything-then-write-everything with an invoice instead of a queue answer: a bad flag
+on the fourth box refuses the whole send rather than leaving three boxes identifying. Because
+`_resolve_scope` creates a symlink directory per ticked selection, a refusal also removes the
+ones earlier legs had already made — T7 asserts, in as many words, that no scope directory
+survives a refusal, and a cart could otherwise leave one per mis-typed send in the one directory
+`identify` walks recursively.
+
+**THE ONE THING THAT CANNOT BE PRE-CHECKED IS REPORTED RATHER THAN HIDDEN.** `Popen` can fail on
+the fourth leg after three have started. The response names what STARTED and what did not, and
+the screen draws the failures: a partial send reported honestly is recoverable by pressing again
+for the boxes that did not go, and one reported as a success is an invoice nobody can account
+for. Recorded here because the tempting alternative — refusing the whole response — would throw
+away the names of runs that are already costing money.
+
+**THE DOUBLE-CLICK GUARD NOW COMPARES BOXES, WHICH CLOSED A HOLE THAT HAD NO GUARD AT ALL.**
+`_busy_run` resolved the incoming capture directory against each live run's recorded one. That
+works for a whole box — `captures/cards/box3` both times — and cannot work for a ticked
+selection, because `_scope_dir` builds a fresh `.scopes/box3-<n>-<timestamp>` on every press. Two
+presses over one selection were two different paths, neither saw the other, and **the subset path
+was therefore unguarded from the day it was built**. It compares box numbers now, read from the
+manifest's scope first and from the capture directory's name second — and the second half is not
+a fallback for old files, it is the only thing that can see a run started in a TERMINAL, because
+`scope` is written by the route and by nothing else.
+
+**It narrows what is allowed, deliberately.** Two live runs over DISJOINT selections in one box
+are now refused as well. That is the case an operator cannot tell apart from a double-click at
+the moment of the press, and the refusal names the run, so the answer is one click away rather
+than one invoice away. Two runs over DIFFERENT boxes stay legal and unblocked — the Batch API
+takes them in parallel and the cache keys them apart, which is the whole reason a cart is one
+send rather than a queue.
+
+**THE LEGS PREFLIGHT AT ONCE, AND THAT IS A LATENCY FIX RATHER THAN AN OPTIMISATION.** A
+preflight decodes and crops every photograph in its box — measured at about a minute for 544
+cards — so five boxes in series is a request held open for five minutes with nothing on screen.
+They are separate read-only processes over a lock-free snapshot and `--dry-run` writes nothing at
+all, which is the property that makes this safe rather than merely fast. Bounded at four workers,
+and the cart itself at sixteen boxes: each leg is a detached child, so an unbounded list is an
+unbounded number of processes started by one request. The bound is a guard against a malformed
+client, not a judgement about how many boxes an operator may send.
+
+**D39's HANDOFF RULE IS NARROWED RATHER THAN WEAKENED.** That entry drops the ticked selection
+whenever a box is picked on `#/runs`, because *"a tick list that survived the operator
+deliberately choosing a box is a filter they did not re-consent to, sitting over the control that
+spends"*. Under a single-select every press REPLACED the scope, so every press was a re-consent
+question. Adding box 7 to a cart does not touch what box 3 means, so the rule now scopes to the
+carried box: un-ticking it drops the handoff, and toggling any other box leaves it alone. There
+is still exactly one mass-select in the product and `#/inventory` still owns it.
+
+**A DEFECT WAS FOUND IN THE RUN LIST ON THE WAY PAST AND IS FIXED HERE.** `RunPanel.tsx` computed
+a three-way partition — live, this box, other boxes — and then rendered it only when
+`scope.box === null`, which is precisely when `mine` is empty by construction. So a screen with a
+box selected threw the grouping away and drew the server's order, and a screen with none drew the
+groups and could caption a section `other boxes` with no box to be other than. Both halves
+backwards at once, which is why neither looked wrong on its own.
+
+**What would reopen this: a cart that is never used with more than one box.** The whole cost of
+this entry is the list shape on the wire and the per-box reading state; if every send is one box
+forever, the honest simplification is a single-box request again. The measurement is whether any
+`POST /pipeline/identify` carries more than one scope.
+
+---
+
+## D49 — The pricing answer is one file, and a card can be held back on purpose
+
+**BEING BUILT 2026-08-29, from an interview the owner asked for.** They had never been asked what
+they wanted a listing price to BE — `match` on `market` was the CLI default running by accident
+through every run this project has done. Their answer: *"I want all the data from the CSV shown
+when I make the decision, but I actually intend to be hand-pricing for now."* And on volume, which
+inverts every measurement taken before it: *"almost everything coming next is all above 0.40."*
+
+**WHAT THAT LAST SENTENCE OVERTURNS, because a build was nearly aimed at the opposite.** Measured
+across the two Pokemon runs on disk — 596 cards, 153 SKUs — the total value of every per-item
+pricing decision available was **zero**: box 2's export tops out at $0.74 and stocks no Near Mint
+row at or above the threshold, and Gate B's `import-listed.csv` is header-only. The honest reading
+of that history is a screen whose job is to report that there is nothing to do. The owner says the
+next boxes are the other thing, and the export bears out the mechanism: Near Mint **normal** is
+9.5% listable, **reverse holo** 40.6%, **holo 76.2%**. The exception rate is a function of the
+finish claim made at capture, so it is predictable before a run starts and it is about to go up.
+
+---
+
+**PART ONE — `decisions.json` DECIDES, AND THE MANIFEST RECORDS.** Two bugs in one seam, and the
+owner's instruction on being shown them was *"I don't understand this it seems like some stuff is
+in conflict and it shouldn't be, resolve this."*
+
+- **`emit` priced from the run MANIFEST and printed the rule from `decisions.json`.** So an
+  operator who set `"rule": "undercut:5"` in the file got a run that printed `rule=undercut:5` and
+  wrote every row at market. The file's own module docstring has called it *"the pricing decision,
+  as a file rather than as a flag"* since it was written, and `rule` was the one thing in it that
+  decided nothing.
+- **`join` assigned `choice.rule` and `choice.basis` back from the run** immediately after printing
+  *"merging into existing decisions.json — your edits are kept"*. Measured: `markup:100` on `low`
+  reverted to `match` on `market` on a plain re-join while `sub_threshold` beside it survived — so
+  the file looked merged and was not. `join` is free and re-runnable and is re-run routinely, so
+  this was not an edge case.
+
+**The file is the authority; the manifest keeps `rule`/`basis` as the RECORD of what a join ran
+with**, which `report.txt` prints. A record of what happened and the answer to what should happen
+are different facts and only one of them may be authoritative. `--rule` still seeds the file on the
+FIRST join, because a document that cannot answer its own question is not a document.
+
+**Both commands now refuse `UnknownRule` and `UnknownBasis` with a sentence.** They are `ValueError`
+subclasses and NOT `MalformedDecisions`, nothing above `cli/__main__.py` caught them, and
+`PUT /pipeline/runs/<name>/decisions` writes this file with no validation at all — so a screen could
+put a run into a state where `emit` answered with a traceback. T7's `check_pricing_authority` block
+holds all of it, and both halves were **observed failing against the old code** before they were
+kept.
+
+---
+
+**PART TWO — A CARD CAN BE WITHHELD, AND THE HOLD SAYS WHY.** The owner: *"say i'm bullish on the
+price going up, and don't want to list any right now"*, and then *"definitely want someway of
+flagging that i'm intentionally holding this card // am bullish maybe even price threshold etc"*.
+
+Before this there was no way to say it. `overrides` demanded a price, `"unlisted"` was accepted only
+under `no_market_data`, and a card with a market price had no representation for *not this run*.
+
+**`overrides` gains two shapes and every existing shape stays byte-identical.** A scalar is a price.
+The bare string `"unlisted"` is a hold with no reason — the spelling a terminal user types, and the
+one `no_market_data` has accepted since D9. An object is a hold **with** a reason, which is what the
+screen writes:
+
+    "9114773": {"withheld": "bullish", "watch_above": "12.00", "note": "waiting on rotation"}
+
+**A strict widening, not a new failure mode**: before this a dict reached `_price`,
+`Decimal(str({...}))` raised, and it was already a clean `MalformedDecisions` rather than a
+traceback.
+
+**`withheld` AND NOT `held`, WHICH IS D26's RENAME FOR D26's REASON.** `store/master.py:Listing.held`
+already means copies **TCGplayer** is holding — the opposite direction — and `_listing_hold` in the
+capture server means a box may not be deleted. D26 renamed `removed` to `retired` because a state
+sharing a word with an existing one makes both unreadable; this is the same call.
+
+**THE VOCABULARY IS DISJOINT FROM THE TWO IT COULD BE CONFUSED WITH, and no word appears twice.**
+`WITHHOLD_REASONS` is `bullish | keeping | next_batch`, against D26's `pulled | damaged | lost |
+given_away` (the CARD left inventory) and D37's `wasted_position | cannot_settle | not_listing` (the
+QUESTION was closed). `next_batch` rather than the obvious `not_yet`, because `not_listing` is
+already a stand-down reason and the two read as one word at the 10px a machine string is drawn at.
+
+**A WITHHOLD IS NONE OF THE THREE THINGS IT SITS BESIDE.** Not a retirement: the card does not move,
+does not change state, keeps its slot and its photograph, and is sellable the moment the hold is
+lifted. Not a stand-down: nothing is asking — the card resolved cleanly, with a catalog row and a
+market price, and what is refused is the *listing*. Not a sale: no count at `pushed`, `staged` or
+`live` moves. What is withheld is one run's import row, and nothing else.
+
+**HOLDS ARE ABSENT FROM `dispositions()`, AND THAT IS THE SURVIVAL GUARANTEE RATHER THAN TIDINESS.**
+`emit` refuses the whole run when that mapping names a SKU the batch does not hold, and
+`prices_for` refuses again per game. A withheld SKU is precisely the one most likely to fall out of
+a later run — it was withheld *because* it is not being listed — so letting holds reach those checks
+would mean the act of holding a card back eventually breaks `emit` for the entire run, with no
+control anywhere able to clear it. For the same reason `prices_for`'s `withheld` set carries
+**no unknown-key check**, unlike the dispositions beside it.
+
+**A HEADER-ONLY IMPORT FILE WAS ONE LINE AWAY AND IS CLOSED HERE.** `prices_for` leaving a SKU out
+and `import_rows` skipping its row is correct — but `emit` decides whether to write a file AT ALL
+from whether its SKU set is empty, and the writer emits the header before it iterates rows. A game
+whose every listable SKU was held would have written a header-only `import-listed.csv` and reported
+`listed 0 row(s)`. That is the Gate B shape exactly, and `_game_only` subtracts the holds instead.
+
+**THE PRICE THRESHOLD IS BUILT, NOT DEFERRED, and the argument that nearly deferred it was wrong in
+an instructive way.** A watch looked pointless on the grounds that it can only fire while somebody
+is already looking at the price. They are not: a re-join is driven from `#/runs` (D39), and `join`
+is free and re-runnable precisely so it can be pointed at a **refreshed export** — which is the only
+moment a market price has moved and therefore the only moment a watch has anything to say.
+`Decisions.watches(matches)` is a method rather than a `warnings` entry because `warnings` is a
+zero-argument property and cannot see a price.
+
+**A HOLD LIVES IN ITS RUN AND DIES WITH IT.** `decisions.json` is per-run, so a hold survives every
+re-join of its own run — which is where it does its work, since a box is identified once and
+re-joined many times — and a **second** run over the same box starts with none. That is a real limit
+and the screen says so in words rather than implying it. A durable per-SKU home outside the run
+directory — beside `Listing` in the store, or a standing `holds.json` beside the queue files — is
+**recorded and deferred**: it is a schema change, a route and a client function, and scope is argued.
+
+**A second cost, named because nothing else would say it.** `emit` writes a card's identity only for
+SKUs that reached a file, so a withheld SKU's copies keep `state: captured` and carry no `sku` —
+invisible to `GET /search` and every SKU-keyed surface until the hold is lifted and the run
+re-emitted.
+
+---
+
+---
+
+**PART THREE — THE SCREEN, BUILT 2026-08-30.** `#/pricing` is the seventh route, and it is where
+the owner sets by hand what every SKU a run matched will list at. One row per SKU, sorted market
+descending, carrying every export column that holds data — *"I want all the data from the CSV
+shown when I make the decision"*. It draws no photograph on the row, no price type-size bands and
+no solid accent fill; the box, the cart and the money gate stay on `#/runs`, and **nothing here
+spends**.
+
+**AFTER THE REVIEW QUEUE AND NOT BEFORE IT**, which is the owner's ruling and reverses what the
+first design pass proposed. Answering the queue changes what the next join resolves, so pricing
+before the queue is worked prices a set that is about to move.
+
+**THE SUGGESTION WRITES NOTHING, AND THAT IS THE LOAD-BEARING DECISION OF THE WHOLE SCREEN.**
+The run's rule prefills every row as a visible suggestion; the first digit typed clears it, Enter
+commits and advances, and `m`/`d`/`l`/`s` snap the price to a named export column. But an
+untouched row writes no key at all — because an override is layer 1 of the ladder and beats the
+rule at layer 4, so a screen that wrote its hundred suggestions would produce a run where
+**changing the preset silently changed nothing**. That failure has no symptom. `pipeline/
+decisions.py` states the rule it rests on in one line: *"Nothing here is ever defaulted on your
+behalf — that is the entire point."* If a later session finds itself wanting a *write all
+suggestions* button, that button is this defect.
+
+**THE KEYBOARD WORKS WITH THE HANDS IN A FIELD, WHICH NO OTHER SCREEN HERE DOES.** Every other
+handler in the app returns on `isEditableTarget`; on this one the hands are in a price field
+essentially always, so that rule would make every letter dead. What makes it safe is that the
+field's alphabet is CLOSED — `[0-9.]`, one dot, two decimals, enforced at `beforeinput` — so a
+letter is unambiguously a command and there is nothing to disambiguate. That closure is the
+entire safety argument and may not be widened without taking the keyboard with it.
+
+**A PRESET PRICES WHAT IT CAN AND NAMES WHAT IT COULD NOT** (the owner's ruling, over refusing the
+whole press). Measured: 394 of 2,476 listable rows in the wide export carry no `TCG Low Price`,
+so a Low-based preset genuinely cannot price every row, and `SkuMatch.list_price` is `None` there
+— which `tcgcsv.set_writable` would turn into an import row carrying a quantity and no price.
+The three presets and their numbers are the owner's: match market, market −5%, TCG Low −1%.
+
+**THE RUN COMES FROM A PICKER OR FROM THE URL, AND NEVER FROM STORAGE.** D39's handoff exists
+because `#/inventory`'s mass-select is the only one in the product and a second would be two
+answers to *which cards*. A run name has no such property — `GET /pipeline/runs` reads the runs
+directory and is the single source — so a picker here cannot disagree with anything, and `#/runs`
+links a specific run as `#/pricing?run=<name>`. A link, not a handoff: no second `sessionStorage`
+key and no clearing rules. **The hash router did not strip a query until this landed**, so the
+link matched no route and rendered `NoSuchView` — a defect invisible from either the route table
+or the screen, and fixed in `currentPath`.
+
+**THE PHOTOGRAPH IS ON DEMAND, TOGGLED BY ONE KEY, AND NAMES WHICH COPY IT IS DRAWING.** The
+owner asked the question that settles it: *"if multiple captures/cards of the same exist, how
+would that resolve?"* A SKU averages five copies with five photographs, they are the same card by
+construction, and **there is no quality signal worth trusting** — confidence is the tempting one
+and is exactly wrong here, since T1's recorded misses are confident answers with the digits
+wrong. So the pick is the first in box-walk order, captioned with its real position and `1 of N`,
+and steppable. The stepping is what makes an arbitrary pick safe, and it earns a second job:
+five photographs answer *are these actually the same card*, and if they are not, the
+identification was wrong.
+
+**`scripts/docs-audit.py` GAINS A `withhold reasons` ROW**, reconciling `WITHHOLD_REASONS` across
+`pipeline/decisions.py` and `app/src/holds.ts`. Blocking, because a mismatch is provably wrong —
+and it matters more here than for the review vocabulary, since `PUT .../decisions` validates
+nothing and the screen's only defence against writing an unparseable file is that the two
+declarations agree. Mutation-tested in both directions before it was kept.
+
+**WHAT IS NOT BUILT, named rather than left to be discovered**: no durable home for a hold
+outside the run directory; no cross-run view of what is being held; no search or sort control,
+because the sort is the hierarchy and a re-sort under a finger is D28's defect; and no `Custom`
+preset — any other rule or basis is typed into `decisions.json` on `#/runs`, in the text editor
+D33 chose, and a re-join regenerates the suggestions.
+
+**WHAT WOULD REOPEN THIS: a hold nobody lifts.** If holds accumulate across runs and are re-set by
+hand every time, the per-run home is the wrong one and the deferred durable store becomes the
+answer. The measurement is whether the same SKU is withheld in two runs over one box.
 
 ---
 

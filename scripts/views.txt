@@ -46,6 +46,14 @@ inventory     http://localhost:5173/#/inventory
 # exposure` question the other owner routes raise does not arise here.
 runs          http://localhost:5173/#/runs
 
+# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter,
+# so what a person sees here is the run picker — the state the screen opens in when it is
+# reached by its chord rather than by the link from `#/runs`, and the one whose chrome the
+# page-chrome numbers govern. It draws no stored capture photo in that state; the photo panel
+# is opened per row, on demand, and cannot be in a render taken with nothing selected. So the
+# `views exposure` question the other owner routes raise does not arise here either.
+pricing       http://localhost:5173/#/pricing
+
 # The Fulfiller's, and the one render where the absence of something is the point: no nav
 # strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
 # not what enforces it — it is what lets a person see the view the assertions describe, at the

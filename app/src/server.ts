@@ -28,6 +28,8 @@ import type {
   CropPreview,
   CsvUpload,
   RunDetail,
+  PricingPayload,
+  RunLeg,
   RunPreflight,
   RunStarted,
   RunStepResult,
@@ -1344,22 +1346,27 @@ export async function releaseBoxListings(box: number): Promise<ListingReleaseRes
  * command's own preflight stdout rather than recomputed anywhere, so the figure on the
  * screen and the figure in the run's log are the same string produced by the same code.
  */
-export async function preflightRun(input: {
-  box: number
-  indices?: number[]
-  crop?: boolean
-  maxEdge?: number
-}): Promise<RunPreflight> {
+export async function preflightRun(cart: readonly RunLeg[]): Promise<RunPreflight> {
   return (await request('/pipeline/preflight', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      box: input.box,
-      indices: input.indices,
-      crop: input.crop,
-      max_edge: input.maxEdge,
-    }),
+    body: JSON.stringify({ scopes: cart.map(onTheWire) }),
   })) as RunPreflight
+}
+
+/** One cart row in the shape the route reads. Named rather than inlined because BOTH
+ *  functions below send it and the money one must not be able to send a different shape from
+ *  the one that was quoted — a preflight and a confirm describing different sends is the
+ *  exact failure the two-step gate exists to prevent. */
+function onTheWire(leg: RunLeg): Record<string, unknown> {
+  return {
+    box: leg.box,
+    // Absent rather than empty, because those mean different things to the route: absent is
+    // the whole box and `[]` is refused outright rather than read as one.
+    indices: leg.indices !== undefined && leg.indices.length > 0 ? leg.indices : undefined,
+    crop: leg.crop,
+    max_edge: leg.maxEdge,
+  }
 }
 
 /**
@@ -1410,25 +1417,32 @@ export async function cropPreview(input: {
  * cards — two batches over one box is two invoices), and every scope refusal the preflight
  * would have shown first.
  */
-export async function startRun(input: {
-  box: number
-  indices?: number[]
-  crop?: boolean
-  maxEdge?: number
-  label?: string
-}): Promise<RunStarted> {
+export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
   return (await request('/pipeline/identify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      confirm: true,
-      box: input.box,
-      indices: input.indices,
-      crop: input.crop,
-      max_edge: input.maxEdge,
-      label: input.label,
-    }),
+    body: JSON.stringify({ confirm: true, scopes: cart.map(onTheWire) }),
   })) as RunStarted
+}
+
+/**
+ * The per-SKU pricing table for one run, with this run's answers and the last run's
+ * sub-threshold choice. FREE and read-only: it creates nothing and prices nothing.
+ *
+ * TWO FILES IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE. `pricing.json` and
+ * `decisions.json` are both downloadable through `GET .../file` already, so a screen could
+ * fetch them separately and need no server change at all — but two fetches can straddle a
+ * re-join, and a table describing one join beside answers written against another is a
+ * screen quietly pricing the wrong set of cards.
+ *
+ * Refusals worth branching on: `pricing_not_written` (the run predates the file, or has not
+ * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
+ */
+export async function getPricing(name: string): Promise<PricingPayload> {
+  return (await request(
+    `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
+    NO_CACHE,
+  )) as PricingPayload
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

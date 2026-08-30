@@ -247,11 +247,22 @@ COMPONENTS = [
         "modules": {
             "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
-            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, --bypass trusts the finish claim", "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36"], "tested_by": ["T4", "T7"]},
-            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered", "governed_by": ["D9", "D25"], "tested_by": ["T7"]},
+            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, "
+                                    "--bypass trusts the finish claim. SEEDS decisions.json on the "
+                                    "first join and never touches its rule again (D49) — the two "
+                                    "lines that did ran under the sentence promising your edits "
+                                    "were kept.",
+                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49"], "tested_by": ["T4", "T7"]},
+            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
+                                    "from decisions.json rather than from the run manifest (D49), "
+                                    "and subtracts withheld SKUs BEFORE deciding whether a file is "
+                                    "written at all — the writer emits a header before it iterates "
+                                    "rows, so a game whose listable SKUs were all held would "
+                                    "otherwise leave a header-only import file on disk.",
+                            "governed_by": ["D9", "D25", "D49"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49"], "tested_by": ["T7"]},
         },
     },
     {
@@ -266,7 +277,7 @@ COMPONENTS = [
                           # CANONICAL_HEADER and read by nothing since the file was written,
                           # which makes the join product-line BLIND rather than agnostic.
                           # D22 is the registry that will read the pair.
-                          "governed_by": ["D11", "D22", "D25"], "tested_by": ["T2"],
+                          "governed_by": ["D11", "D22", "D25", "D49"], "tested_by": ["T2"],
                           "note": "real CSV library only — v1 bug 2 was a naive split(\",\")"},
             # Pure literals, importing nothing from this repo, so scripts/docs-audit.py can
             # read it with ast.literal_eval the way it reads this file. D21/D23/D24 are
@@ -300,7 +311,7 @@ COMPONENTS = [
                                  "entry is right — the values are byte-identical to the literals "
                                  "it replaced."},
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35", "D49"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -313,8 +324,18 @@ COMPONENTS = [
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
                            "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
-            "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag",
-                             "governed_by": ["D9"]},
+            "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
+                                     "and as of D49 the AUTHORITY for rule and basis rather than "
+                                     "a copy of them. `overrides` holds a price OR a `Withheld`: "
+                                     "the bare string \"unlisted\" or an object carrying a reason, "
+                                     "an optional note and an optional `watch_above` that `join` "
+                                     "reports when a refreshed export clears it. Withholds are "
+                                     "deliberately absent from `dispositions()` so a held SKU "
+                                     "falling out of a later run cannot refuse the whole emit.",
+                             # D16 for the drift a second vocabulary would be; D26 and D37 are the
+                             # two states `withheld` is deliberately not, and whose reason words it
+                             # may not reuse; D39 for the route the watch line surfaces on.
+                             "governed_by": ["D9", "D16", "D26", "D37", "D39", "D49"]},
         },
     },
     {
@@ -519,6 +540,21 @@ COMPONENTS = [
                 # git hook.
                 "governed_by": ["D18", "D44"],
             },
+            "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
+                                        "a worktree provisions, asserting each is ignored WHATEVER "
+                                        "kind of thing is at it. That entry's own reopening "
+                                        "condition named this check and did not build it, and the "
+                                        "condition fired the same day — `harness/.cache/` and "
+                                        "`.venv/` kept directory-only patterns on the reasoning "
+                                        "that the guard copies one and builds the other, which is "
+                                        "true of the script and silent about the path. Asks the "
+                                        "BARE name only: the trailing-slash form means traversing "
+                                        "the path, and git refuses it exactly when a symlink is "
+                                        "there, which is the case being guarded. In `make check` "
+                                        "and never in the git hook (D18) — it asks about local "
+                                        "provisioning, so a fresh clone would fail a commit over "
+                                        "nothing.",
+                                "governed_by": ["D18", "D47"]},
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -551,7 +587,7 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -705,7 +741,7 @@ COMPONENTS = [
                 # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
                 # render that draws no stored capture photo, so the `views exposure` question
                 # the others raise does not arise for it.
-                "governed_by": ["D5", "D13", "D31", "D39"],
+                "governed_by": ["D5", "D13", "D31", "D39", "D49"],
             },
         },
     },
@@ -802,7 +838,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D12", "D46"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -816,12 +852,17 @@ COMPONENTS = [
                         ".../decisions (D9's sub-threshold answer, which gates emit alone). "
                         "Its own module because it is the one part of this server that can "
                         "cost money: everything in capture_server.py still holds no key, "
-                        "opens no socket and starts no child.",
+                        "opens no socket and starts no child. A SEND IS A CART OF BOXES "
+                        "(D48): both money routes take `scopes: [{box, indices?, crop?, "
+                        "max_edge?}]`, a bare `box` reads as a cart of one, the response is "
+                        "always a list, the total is summed here rather than on the screen, "
+                        "and identify spawns one detached child PER BOX — so a run is still "
+                        "one box and nothing downstream learns a new shape.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D21", "D25", "D32"],
+                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D21", "D25", "D29", "D32", "D48"],
                 "tested_by": ["T7"],
             },
         },
@@ -834,8 +875,9 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "step": 10,
-        "does": "the web app. FIVE routes behind a hand-written hash router, four of them the "
-                "owner's — the capture screen that Gate B runs on, the review queue, the one "
+        "does": "the web app. SEVEN routes behind a hand-written hash router, six of them the "
+                "owner's — the capture screen that Gate B runs on, the runs screen the "
+                "pipeline lives on, the review queue, the pricing worklist, the one "
                 "inventory view (D31 folded the box walk and the pull preview into it) and "
                 "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. Two "
@@ -920,22 +962,27 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: SIX hash routes — five after D31 merged #/boxes and "
-                                    "#/pull into #/inventory, plus #/runs, which D39 gave the "
-                                    "pipeline on 2026-08-29 between Capture and the review queue. "
-                                    "Its chord key is `r` and the review queue moved to `q`, which "
-                                    "makes it the one route here whose key is not its initial. "
+            "src/App.tsx": {"does": "the shell: SEVEN hash routes — five after D31 merged #/boxes "
+                                    "and #/pull into #/inventory, plus #/runs, which D39 gave the "
+                                    "pipeline on 2026-08-29 between Capture and the review queue, "
+                                    "and #/pricing, which D49 gave hand-pricing on 2026-08-30 "
+                                    "AFTER the review queue — answering the queue changes what "
+                                    "the next join resolves, so pricing before it prices a set "
+                                    "that is about to move. `#/runs`'s chord is `r` and the review "
+                                    "queue moved to `q`; `#/pricing` took `p`, which D31 retired "
+                                    "with `#/pull` and this file's own comment said was never "
+                                    "reassigned — amended there in the same commit. "
                                     "One ROUTES table driving both "
                                     "the nav and the render, and the persona field that decides "
                                     "the Fulfiller's view gets no chrome at all. #/boxes WAS "
                                     "the seventh, registered with D20's screen rather than after "
                                     "it; D31 deleted the route and kept the screen — the "
                                     "registration rule stands, the route does not.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, and why this nav may never render on the "
                                     "Fulfillment view",
-                            "governed_by": ["D5", "D10"]},
+                            "governed_by": ["D5", "D10", "D49"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
@@ -944,11 +991,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D32", "D33", "D34", "D37", "D46"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1297,6 +1344,49 @@ COMPONENTS = [
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39"]},
+            # ---- the pricing screen (D49, 2026-08-30) ----
+            #
+            # The owner hand-prices and had never been asked what they wanted a listing price
+            # to BE — `match` on `market` was the CLI default running by accident through
+            # every run. This is where that decision is made, per SKU, with every export cell
+            # in front of it.
+            "src/Pricing.tsx": {"does": "#/pricing: the hand-pricing worklist. One row per SKU a "
+                                        "run matched, sorted market-descending, carrying ALL "
+                                        "fourteen export columns that hold data — the owner's "
+                                        "\"all the data from the CSV shown when I make the "
+                                        "decision\". The run's rule PREFILLS every row as a "
+                                        "visible suggestion that writes nothing; the first digit "
+                                        "typed clears it, Enter commits and advances, and m/d/l/s "
+                                        "snap the price to a named export column. A hold (D49) "
+                                        "keeps every copy of a SKU out of this run's import file "
+                                        "with a reason, a note and an optional watch price. "
+                                        "NOTHING HERE SPENDS: the box, the cart and the money "
+                                        "gate stay on #/runs.",
+                                # D9 is the threshold, the floor and the rule that nothing is
+                                # defaulted on the operator's behalf; D7 is why this is SKU-scoped
+                                # and never card-scoped; D28 is the list-must-not-move rule its
+                                # invariant row height exists to honour; D39 is the picker-not-a-
+                                # handoff argument; D49 is the screen.
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
+                                                "D37", "D39", "D41", "D49", "D35", "D48"]},
+            "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
+                                        "the caption AND every row, so the two cannot drift; a "
+                                        "row height invariant across every state, because the "
+                                        "note lands in a second grid row every zone but the card "
+                                        "leaves empty; right-aligned tabular money, so decimal "
+                                        "alignment carries magnitude and no guessed type band "
+                                        "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
+                                        "this screen is a choice among prices, which is the "
+                                        "definition of more than one thing to do.",
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49"]},
+            "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
+                                     "reasons, their human labels and their panel keys. Declared "
+                                     "ONCE, the way src/reasons.ts declares the review vocabulary, "
+                                     "and reconciled against pipeline/decisions.py by "
+                                     "scripts/docs-audit.py so the drift is visible rather than "
+                                     "hoped against. Letters and not digits, because the digits on "
+                                     "that screen are price entry.",
+                             "governed_by": ["D16", "D22", "D26", "D37", "D49"]},
             "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
                                         "line saying whether anything is running over this box, "
                                         "and the control that hands the ticked selection to "
@@ -1351,8 +1441,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32",
-                                                 "D33", "D39"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D49", "D48"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1368,8 +1457,10 @@ COMPONENTS = [
                                          "in a terminal begins live. Carries the crop preview under the "
                                          "reading chips: a 200px frame with the cut drawn over it, and the "
                                          "collector-number strip at 1:1 because a band scaled to the column "
-                                         "makes 1200 and 900 look identical.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40"]},
+                                         "makes 1200 and 900 look identical. Since D48 the chips are drawn "
+                                         "once per box in the cart, capped so they stay chip-sized on a "
+                                         "full-width route rather than spanning it.",
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1456,6 +1547,15 @@ COMPONENTS = [
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
             },
+            "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
+                                              "can see it. Its strongest cases are ABSENCES: a "
+                                              "suggested row writes no key to decisions.json, a "
+                                              "Tab across one writes nothing, a snap onto a blank "
+                                              "column writes nothing and says so, and the screen "
+                                              "draws no solid accent fill at all. Not a harness "
+                                              "test — it starts a browser; `make design-check` "
+                                              "runs it.",
+                                      "governed_by": ["D9", "D28", "D33", "D49"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -1467,7 +1567,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32", "D33"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32", "D33", "D39", "D48"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

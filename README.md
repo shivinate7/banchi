@@ -28,9 +28,9 @@ geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
-app/                       the web app. Vite + React + TS. Five screens — capture, review
-                           queue, inventory, Fulfillment, component gallery — all five
-                           routed. See "The app" below.
+app/                       the web app. Vite + React + TS. Seven screens — capture, runs,
+                           review queue, pricing, inventory, Fulfillment, component
+                           gallery — all seven routed. See "The app" below.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.

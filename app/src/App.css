@@ -87,6 +87,18 @@
   display: flex;
   align-items: stretch;
   gap: var(--s5);
+
+  /* THE GROUPS WRAP TOO, AND THE STRIP'S OWN WRAP WAS NEVER ENOUGH ON ITS OWN. `.app-nav`
+     has wrapped since 2026-08-24, which lets it break BETWEEN groups — and a group is itself
+     a non-wrapping flex row, so a group too wide for the viewport still pushed the page
+     sideways with nothing able to break it.
+
+     Latent until D49: the run group held three links and fitted. A fourth (`Pricing`) took
+     `app/tests/review.spec.ts`'s no-sideways-scroll case red at 375px by 45px — the same
+     assertion, on the same screen, that found the outer defect a fourth link earlier.
+     Nothing about the desktop changes: at any width that fits, a wrapping flex row lays out
+     identically to a non-wrapping one. */
+  flex-wrap: wrap;
 }
 
 /* `:not(.app-nav-group-aside)` rather than a rule below that undoes this one for the aside.
