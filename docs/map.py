@@ -829,14 +829,22 @@ COMPONENTS = [
                         "151-file download. The mirror came back to that default on 2026-08-29 "
                         "with the repo leaving iCloud, which is what asking makes irrelevant: "
                         "the answer moved twice and this code did not. Fails open on every "
-                        "path, including its own bugs.",
+                        "path, including its own bugs. AND IT REPORTS THE OPPOSITE TREE "
+                        "TOO (D42): the MAIN checkout left on a feature branch after that "
+                        "branch merged. That tree is the live rig — the real store, the ports "
+                        "every doc names, the server the launch agent starts — and it drifted "
+                        "70 commits on 2026-08-30 while `make status` said so and nobody read "
+                        "it. Reports and never switches: `git switch` is the operator's to "
+                        "type, and what this can do is say whether it is safe, which turns on "
+                        "AHEAD being zero rather than on how far behind it is. A worktree on a "
+                        "feature branch is correct and is never reported.",
                 # D18 is the one that decides where this may run rather than what it does.
                 # It WRITES — a venv and a cache copy — so it belongs at session start and
                 # must never be moved onto the commit path or into `make check`. D16 is
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18", "D43", "D47"],
+                "governed_by": ["D16", "D18", "D43", "D47", "D42"],
             },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "

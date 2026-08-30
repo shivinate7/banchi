@@ -1417,6 +1417,18 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
+### The main checkout going stale
+
+**The SessionStart hook reports the main working tree left on a feature branch after that branch merged.** Added 2026-08-30. Everything above governs how main MOVES; this is the tree that holds it drifting a different way.
+
+**Measured that day: 70 commits behind, on a branch merged in PR #43, serving the owner's real store.** Nothing was lost, because the branch was fully merged. What it cost was the live rig running behind four merged PRs while `make status` reported `0 ahead of main, 70 behind it` and nobody read it.
+
+**`scripts/worktree-guard.sh` carries it because that runs unasked.** D43 puts the ports there for the same reason rather than in a target somebody has to remember.
+
+**It reports and never switches.** `git switch` is the operator's to type, and a hook that moved the branch under a running server would be deciding for them.
+
+**Ahead is the number that decides, not behind.** Zero ahead with a clean tree means the branch holds nothing main does not, so switching can lose nothing. Anything else says so and points at `make status`. A worktree on a feature branch is correct and is never reported.
+
 ### The word
 
 **It comes from the owner in the conversation, and it is per-instruction.** Not a standing grant, not a mode, never inferred. It is the same shape as D33's `confirm` field one register down — that route refuses without an explicit field because the next thing that happens costs money, and this refuses without an explicit instruction because the next thing that happens is the branch every other session is cut from.
