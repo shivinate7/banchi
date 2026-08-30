@@ -199,9 +199,16 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
-- **MAIN MOVES BY PULL REQUEST. A SESSION NEVER COMMITS TO IT, MERGES INTO IT, OR PUSHES IT.**
-  Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and the owner
-  merges it on GitHub. `main` then advances in this clone by `git pull` and no other way.
+- **MAIN MOVES BY PULL REQUEST. A SESSION NEVER COMMITS TO IT AND NEVER PUSHES IT.**
+  Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
+  GitHub. `main` then advances in this clone by `git pull` and no other way.
+
+  **A SESSION MAY RUN `gh pr merge` ONLY WHEN THE OWNER SAYS THE WORD** (D42, amended
+  2026-08-30). Explicit and per-instruction: "merge to main" is the word, and "ship it",
+  "land it", "looks good" and an approving review are not. It costs nothing because
+  `gh pr merge` moves a ref on GitHub and not in this clone — `main` still arrives here by
+  `git pull`, which is what the hook already allows. **`PKMNSCAN_MAIN=off` is not what a
+  session reaches for to do this**; a session typing that variable is doing something else.
 
   **This is enforced, not asked for** (D42): `scripts/githooks/reference-transaction` refuses
   any local move of `refs/heads/main` and `scripts/githooks/pre-push` refuses any push to it,
