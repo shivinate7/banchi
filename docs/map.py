@@ -1302,26 +1302,37 @@ COMPONENTS = [
                         "here would be 'the same irreversible-looking write with neither guard, "
                         "and a second place to perform one action'. Both halves are answered "
                         "where they were made: the guards were never Fulfillment PROPERTIES, "
-                        "only asserted there, so this screen brings them — a photo-confirm "
+                        "only asserted there, so this screen brought them — a photo-confirm "
                         "panel showing the copy's own stored photo at its position before "
-                        "anything is written (D6), and a per-sale receipt with a twenty-second "
+                        "anything was written (D6), and a per-sale receipt with a twenty-second "
                         "undo, offered only when markSold's `restores_to` says a reversal will "
                         "work. The race is the server's to refuse and it does: `already_sold` "
                         "is drawn as a receipt with no undo, the reading Fulfillment.tsx paid "
                         "for with a data-integrity bug. The live cap it once declined to draw "
                         "comes off the wire now (SearchGroup.cap), which is the condition its "
-                        "own comment named as what would settle it.",
+                        "own comment named as what would settle it. "
+                        "THE SALE IS ONE PRESS SINCE 2026-08-30 (D57): the owner ruled the "
+                        "photo-confirm redundant against the card band D38 draws two inches "
+                        "from the row, so that panel is deleted and the copy row's own slot "
+                        "becomes `Undo` for the window. The receipt KEEPS its undo beside it, "
+                        "because the rows are unmounted by stepping the walk and by a failed "
+                        "re-read while the clock runs. The retirement is untouched — its four "
+                        "reasons are the write's only input, not an acknowledgement — and "
+                        "#/fulfillment is untouched, its two-step being a displacement guard a "
+                        "real double-tap sale earned.",
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31",
-                                "D33", "D39", "D45"],
+                                "D33", "D38", "D39", "D45", "D57"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
                         "densities — the search field, the found groups, the receipts, and the "
-                        "confirm panel. Accent appears exactly once in it, in that panel, which "
-                        "is the one thing on the screen with exactly one thing to do; its "
-                        "header used to say no accent appeared at all and records why that "
-                        "stopped being true.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31"],
+                        "retire panel. ACCENT APPEARS NOWHERE IN IT, and its header has now "
+                        "said that twice with the opposite in between: no accent, then exactly "
+                        "once in the sale's photo-confirm, then none again once D57 deleted "
+                        "that panel on 2026-08-30. The scrim and the confirm rules survive it "
+                        "because the retirement inherited them, and a choice between four "
+                        "reasons has never been a screen with one thing to do.",
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D57"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -1803,10 +1814,14 @@ COMPONENTS = [
                         "Market row draws its price with the age of the join that read it, by "
                         "POSITION rather than by `card.sku` — the fixture's priced card carries "
                         "no SKU on its record, which is the case a SKU-keyed lookup loses (D7, "
-                        "D8, D9, D49).",
+                        "D8, D9, D49). AND THE SALE ITSELF, FROM 2026-08-30 (D57) — this file "
+                        "asserted that `Mark sold` was VISIBLE and never pressed it, so the "
+                        "whole write, its receipt, its undo window and the `already_sold` path "
+                        "were unasserted while the control changed what one press does to a "
+                        "real card. Six cases now cover it, three of them mutation-tested.",
                 "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24",
-                                "D26", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41",
-                                "D45", "D49"],
+                                "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40",
+                                "D41", "D45", "D49", "D57"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

@@ -299,6 +299,16 @@ permanently, while mark-sold — which is reversible — had a photo to confirm 
 two-step control and a twenty-second window. The reversible action carried three guards and
 the irreversible one carried none.
 
+**AND THE OTHER HALF OF THAT CORRECTION LANDED ON 2026-08-30 (D57), WHICH IS WHY THE SENTENCE
+ABOVE IS PAST TENSE ON THE OWNER'S SCREEN.** D28 gave the irreversible action an undo and left
+the reversible one carrying three guards, because taking a press off mark-sold was not what it
+was asked to do. The owner asked for it directly: *"single tap immediately marks it as sold,
+with the button changing to undo afterwards."* On `#/inventory` the sale writes on one press
+now, and the way back is an `Undo` in the copy row plus the receipt that outlives it — which is
+this rule as written, applied at last to the most reversible write in the product. The
+photograph it used to confirm against is on the same screen, in the card band, at 449x627.
+**`#/fulfillment` keeps all three guards**, and the table below still asserts its undo.
+
 D28 fixes the premise rather than the rule: the review answer gets the same twenty-second
 undo, and the candidate list stops moving between cards so the slip is rarer to begin with.
 
@@ -489,6 +499,12 @@ spent.
 - *Outline and text weight* — the system is unsure. The reason chip, and each of the two
   conflicting claims in the sentence. This is the common case.
 - *Solid fill* — there is exactly one thing to do. Pull-confirm, mark-sold.
+
+**Read that second example as the FULFILLER's mark-sold since 2026-08-30 (D57).** His is a
+`PullConfirm` and still carries the fill; the owner's writes on one press from a quiet row
+control, and `#/inventory` draws no solid fill at all now that its confirm panel is gone. That is
+this rule satisfied rather than bent — it says where a fill MAY go, never that a screen must have
+one, and `#/runs` has drawn none since it existed.
 
 **A screen with two answers gets no fill.** This is the rule, and it exists because every
 alternative is biased. Filling the pricier candidate teaches the queue to drift toward
@@ -775,6 +791,14 @@ contract in `docs/GATES.md` is seven Python tests run at turn end, and this runs
 
 Default view on the Fulfiller's device. Sorted in box-walk order. Photo-confirm before each
 pull. One-tap mark-sold.
+
+**"One-tap mark-sold" has been the written spec since this file existed and the OWNER's screen
+only became it on 2026-08-30 (D57).** Recorded here rather than left as a coincidence, because
+the sentence reads as a Fulfilment-only line and is not: it is this section's own no-confirm
+rule stated for the write it applies to hardest. His view reaches it by a different road — his
+one tap is the SECOND step, after `Pull`, and the two are measured apart in
+`app/tests/fulfillment.spec.ts` because a double-tap once sold a card whose photo he never saw.
+That two-step is not the confirm dialog the rule bans; it is a displacement guard, and it stays.
 
 ## Step 6 — done 2026-08-12
 
