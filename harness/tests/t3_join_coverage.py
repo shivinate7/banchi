@@ -1783,18 +1783,41 @@ def run() -> Result:
     by_name = rift_catalog.rows_for_name(RIFT_NAME)
     c.ok(len(by_name) > 0, "D35/printed_code: the name index holds this game's rows too")
 
-    # The live shape: a real identifier with the set code glued on, which matches nothing.
+    # THE LIVE SHAPE, AND IT IS RECOVERED BY THE NUMBER RATHER THAN THE NAME. A set code glued
+    # to the identifier is noise the model added on top of digits it read correctly, so the
+    # honest repair is to strip the noise — an exact join on the field that tells one card from
+    # another — not to fall back to the name, which is a weaker signal that only ever queues.
+    # `_strip_set_code` is licensed by a measurement: no export cell anywhere carries a bullet
+    # or a middle dot.
     rift_prefixed = rift_catalog.candidates(_rift(810, RIFT_NAME, "UNL \u2022 " + RIFT_NUMBER))
     c.ok(
-        rift_prefixed.name_inferred,
-        "D35/printed_code: a code that matches NO row falls through to the name rung",
+        not rift_prefixed.name_inferred,
+        "set code: a prefixed identifier is recovered by NUMBER, not rescued by name",
     )
     c.ok(
-        rift_prefixed.lookup.startswith("name?:"),
+        rift_prefixed.lookup.startswith("code:"),
+        "set code: and the lookup says `code:`, because that is what it matched on",
+    )
+    c.equal(
+        {r[tcgcsv.NUMBER_COLUMN] for r in rift_prefixed.rows},
+        {RIFT_NUMBER},
+        "set code: and it lands on the exact row the bare identifier would have",
+    )
+
+    # THE NAME RUNG IS STILL REACHED, by a code that is well-formed and simply wrong — which is
+    # the case D35 exists for and which no strip can repair. Kept alongside the case above so a
+    # future change cannot quietly delete the rung by making every bad code recoverable.
+    rift_unread = rift_catalog.candidates(_rift(813, RIFT_NAME, "999/219"))
+    c.ok(
+        rift_unread.name_inferred,
+        "D35/printed_code: a code that matches NO row still falls through to the name rung",
+    )
+    c.ok(
+        rift_unread.lookup.startswith("name?:"),
         "D35/printed_code: and says `name?:`, so the report can tell it from a blank-number row",
     )
     c.equal(
-        {r[tcgcsv.SKU_COLUMN] for r in rift_prefixed.rows},
+        {r[tcgcsv.SKU_COLUMN] for r in rift_unread.rows},
         {r[tcgcsv.SKU_COLUMN] for r in by_name},
         "D35/printed_code: and finds the rows the export held the whole time",
     )
