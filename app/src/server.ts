@@ -269,56 +269,81 @@ export function positionLabel(card: { label?: string }): string | null {
   return typeof label === 'string' && label.trim() !== '' ? label : null
 }
 
-/**
- * D30's sentence, or null when there is nothing true to say — never a guess.
+/** D30's neighbours, as records rather than as substrings of an English sentence.
  *
- * "between Mantine and Thievul · 2 slots in this section are empty". `Card 17` is the
- * seventeenth SLOT, not the seventeenth card you can count, and once a section has permanent
- * gaps (every sale and retirement makes one — D10) the two stop being the same number. The
- * neighbours make the label countable by hand again without anyone learning that rule; the
- * gap count says why a hand-count came out short.
+ * `Card 19` is the nineteenth card in the box, and the neighbours are what let a hand count
+ * to it without anyone learning that rule. `prev` is the card in front of this one and `next`
+ * the card behind it; either is null past the box's ends, and both null together when the
+ * server sent no decoration (an older server) or nulled it — a record in the store whose
+ * position will not read, the same event that nulls the denominator. A sentence naming a
+ * possibly-wrong neighbour would send a hand to the wrong slot, which is the one thing a
+ * position claim may never do, so that case renders nothing at all.
  *
- * ONE COMPOSER, BESIDE `positionLabel` AND FOR ITS REASON: two screens draw this sentence
- * (the pull preview's detail panel and `CardLocations`' copy rows), and two compositions of
- * one wire fact are the drift this module's one-owner rule exists to prevent. It lives here
- * rather than in either screen because the third screen is predictable, and the threshold
- * `describeFailure` was held to was met by the second copy never being written.
+ * `said` IS THE SAME FACT JOINED, AND IT IS COMPOSED IN THIS BODY SO THE TWO CANNOT DISAGREE.
+ * The Fulfiller's card draws it verbatim at `.card-locations-say`, and the owner's ranked
+ * block carries it on `aria-label` — so what a screen reader announces is one sentence even
+ * where the eye is given two rows. That is `PositionLabel`'s split against `Position.label`,
+ * one line down: the renderer takes GEOMETRY and never VOCABULARY.
  *
- * WHAT IT REFUSES TO SAY, in order: nothing for a pooled card (no slot, no neighbours);
- * nothing when the server sent no decoration (an older server) or nulled it (a record in the
- * store whose position will not read — the same event that nulls the denominator, and a
- * sentence naming a possibly-wrong neighbour would send a hand to the wrong slot, the one
- * thing a position claim may never do); no gap phrase at zero, because a countable section
- * needs no explaining and the sentence is meant to be quiet. A neighbour nothing has
- * identified degrades to its index — `#41`, a slot a hand can count to — never to a blank.
+ * WHY PARTS AT ALL. The connectives are the separators and the names are the payload, and a
+ * screen cannot rank what it can only read as a run of words. Splitting `said` in the
+ * renderer was the alternative and is worse: `PositionLabel` may parse `Position.label`
+ * because that string comes off the WIRE, and this one is composed here — parsing your own
+ * output is a second author of the same words wearing a regex.
  *
- * At the box's ends there is one neighbour, and the sentence says which side it is on
- * (`after Mantine` / `before Thievul`) rather than pretending a between. The one card whose
- * box holds nothing else says nothing at all — a sentence with no neighbours and no gaps has
- * no content, and null lets the screen render nothing rather than chrome.
- */
-export function placeSentence(place: Place | undefined): string | null {
+ * THE GAP CLAUSE IS GONE (owner, 2026-08-30). It read "2 slots in this section are empty",
+ * counted from `Place.section_gaps`, and D58 already claimed it was structurally empty:
+ * "`section_gaps` is structurally zero for a consolidated box and `placeSentence` already
+ * omits the phrase at zero". It is not zero — `_company` counts the terminal records between
+ * the section's bounds — so box 1, which has sold two, drew the clause on EVERY card in it.
+ * Under D58 the box closes up, so `Card 19` really is the nineteenth card a hand can count
+ * to, and the clause's one stated job in D30 — saying why a hand-count came out short — is
+ * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
+ * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
+ *
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS INDEX — `#41`, never a blank. Known
+ * hazard, recorded rather than fixed here: `PlaceNeighbor.index` is the STORE key and D58
+ * made the drawn number a count of cards, so on a box with departures those diverge and the
+ * `#41` can name something that is not the slot you would count to. It is wrong the same way
+ * it was before this change; widening it is a decision about what the server sends. */
+export type PlaceParts = {
+  prev: PlaceNeighbor | null
+  next: PlaceNeighbor | null
+  said: string
+}
+
+export function placeParts(place: Place | undefined): PlaceParts | null {
   if (place === undefined || place.located === false) return null
 
-  const said: string[] = []
+  const neighbors = place.neighbors
+  if (neighbors === undefined || neighbors === null) return null
+
+  const { prev, next } = neighbors
   const name = (side: PlaceNeighbor): string => side.name ?? `#${side.index}`
 
-  const neighbors = place.neighbors
-  if (neighbors !== undefined && neighbors !== null) {
-    const { prev, next } = neighbors
-    if (prev !== null && next !== null) said.push(`between ${name(prev)} and ${name(next)}`)
-    else if (prev !== null) said.push(`after ${name(prev)}`)
-    else if (next !== null) said.push(`before ${name(next)}`)
-  }
+  let said: string
+  if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`
+  else if (prev !== null) said = `after ${name(prev)}`
+  else if (next !== null) said = `before ${name(next)}`
+  /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
+     screen render nothing rather than chrome. */
+  else return null
 
-  const gaps = place.section_gaps
-  if (typeof gaps === 'number' && gaps > 0) {
-    said.push(
-      gaps === 1 ? '1 slot in this section is empty' : `${gaps} slots in this section are empty`,
-    )
-  }
+  return { prev, next, said }
+}
 
-  return said.length === 0 ? null : said.join(' · ')
+/** The joined sentence, for the caller that wants one.
+ *
+ * `#/fulfillment` renders this at `.card-locations-say` — 20px body, one size, no muted
+ * variant — and `app/tests/fulfillment.spec.ts` floors it, so the string form is load-bearing
+ * and may not be deleted in favour of the parts. It is also every ranked block's
+ * `aria-label`. Kept as its own export rather than inlined at the call sites: it is the shape
+ * three screens have imported since 2026-08-13.
+ *
+ * At the box's ends there is one neighbour and it says which side (`after Mantine` /
+ * `before Thievul`) rather than pretending a between. */
+export function placeSentence(place: Place | undefined): string | null {
+  return placeParts(place)?.said ?? null
 }
 
 // ------------------------------------------------------------------------------ the wire
