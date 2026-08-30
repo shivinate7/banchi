@@ -1302,6 +1302,17 @@ export type PricingPayload = {
    *  forbids defaulting this on the operator's behalf, so this removes the time spent
    *  deciding and not the press. */
   remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
+  /** When `pricing.json` was last written, as a UNIX SECOND — `cli/cmd_join.py` rewrites it on
+   *  every join, so this is the moment a join last read an export and therefore the age of
+   *  every figure under `snap`.
+   *
+   *  IT IS NOT WHEN TCGPLAYER PRICED THE CARD. The export is a file the operator downloaded at
+   *  some earlier moment nothing on this machine can see, so a screen drawing this says READ
+   *  rather than AS OF — `BoxBrowse.tsx:marketText` is the one that does.
+   *
+   *  Optional, because a server older than 2026-08-29 answers without it and this type is cast
+   *  rather than validated. */
+  written_at?: number
 }
 
 /** What a run was scoped to. `whole_box` is the common case and costs no temporary

@@ -2769,6 +2769,96 @@ not for judging a card. If the owner finds themselves opening the review queue t
 they were already looking at here, the answer is not a bigger photo in this band — it is that this
 screen has quietly acquired the other screen's job, and that is worth naming before it is resized.
 
+**A TWELFTH ROW ARRIVED ON 2026-08-29 AND IT IS THE FIRST FACT ON THIS PANEL THAT IS NOT ON THE
+RECORD.** The owner: *"if a join has happened on that set, can I get the TCG Market Price as part
+of the data summary on the top right of the card (with a note of how stale/fresh that data is?)"*.
+
+**THE STORE HOLDS NO PRICE, AND THAT IS D8 RATHER THAN A GAP.** Every figure in this product comes
+out of the TCGplayer Filtered Export, and `store/master.py` has not one field shaped like money —
+so *what is this card worth* was answerable on `#/pricing` and on no screen the operator is
+actually standing at when they ask it. The eleven rows above are `asdict(card)`; this one is a
+join.
+
+**THE EDGE IS D46'S, REUSED RATHER THAN REBUILT: card -> `run` -> that run's `pricing.json`.**
+`cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND
+every position holding a copy, so a position resolves to a SKU and to a Market cell with **no new
+route, no new field on the wire and no schema change anywhere**. `GET /pipeline/runs/<name>/
+pricing` is free, read-only and creates nothing, which is what makes it safe to open from a screen
+that is not about running anything.
+
+**KEYED BY POSITION AND NEVER BY `card.sku`, which is the one decision here that could be silently
+wrong.** That field is written by `emit`, for SKUs that reached an import file — so a
+sub-threshold card, a card withheld under D49, and every card in a run that was joined but never
+emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and would look
+correct on the cards it happened to reach. The position is on both sides of the join and is
+written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`,
+which is the case that fails the wrong implementation.
+
+**ONE READ PER RUN, CACHED BY RUN NAME.** `pricing.json` is per-run and every card in a box
+normally names one run, so walking a whole box costs ONE read — the argument `queued` beside it
+already makes, and it matters more here because a real table is ~80KB for 50 SKUs. Keyed by RUN
+and not by box, because a run is what wrote the file: D33 scopes a run to a SELECTION inside a
+box, so two cards on one shelf can carry two tables read at two different moments, which is
+exactly the staleness this row exists to report.
+
+**THE AGE IS NEVER OPTIONAL, AND `read` IS NEVER `as of`.** `join` is free, re-runnable and
+routinely pointed at a refreshed export, so a bare `$5.47` claims a currency the file cannot
+support. What the age measures is the JOIN: `GET .../pricing` answers `written_at`, the mtime of
+`pricing.json`, because the export is a CSV the operator downloaded from TCGplayer at an earlier
+moment nothing on this machine can see. The freshest honest sentence is when the pipeline last
+looked at it, so the row reads `$0.34 · read 3 days ago`.
+
+**THE MTIME RATHER THAN A `joined_at` INSIDE THE TABLE.** A field written into the file would be
+better data and would be absent from every run already on disk — which is precisely the runs a
+screen is opened over. The mtime needs no re-join and cannot drift from the bytes it describes.
+What it does not survive is the run directory being copied; nothing in this repo copies one.
+T7 backdates the file and requires the route to report the backdate, because asserting against
+the live mtime is VACUOUS — the test joins immediately before the request, so a route stamping
+`time.time()` answers the same integer. That version was written, mutated to a clock, and
+**observed passing**.
+
+**FIVE OUTCOMES, FIVE SENTENCES, AND THE ROW IS NEVER CONDITIONAL** — the rule `Rarity` and `Note`
+above it already follow, for the reason stated there: a row that disappears leaves *this card has
+no price* and *this screen does not show prices* indistinguishable. No run on the card is `not
+joined yet`; a run with no table is `no pricing table — join this run`, which is the one refusal
+worth telling apart because its remedy is a join rather than a look at the server; a position the
+table does not hold is `no row matched by this run`, which is `no_catalog_row` and the review
+queue's business rather than a missing price; and a **blank Market cell is `no_market_data`**,
+verbatim and underscore and all, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
+D9 is emphatic that a missing price is an UNKNOWN price rather than a low one. Rendering that as
+`$0.00` is what hands a chase card away at the floor.
+
+**The underscore is a ruling rather than an oversight.** Spelled `no market data` it is neither
+the machine string nor a human label — the second vocabulary D22 refuses and D16 exists to catch
+— and it greps to nothing on the day somebody holds this screen against `decisions.json`'s own
+`no_market_data` block, which is where such a card is actually priced by hand. So the row splits:
+**plain English where THIS SCREEN has nothing** (the shape every other fallback in this list
+takes), and **the pipeline's own word where the PIPELINE said something**.
+
+**A RELOAD RE-READS IT, AND LEAVING THAT OUT WAS A LIVE BUG found by pressing the button against
+the real store.** The cache is cleared on the reload counter and the READ was keyed on the run
+NAME alone, which does not change when a box is re-read — so the cleared entry was never
+re-fetched and the row sat on `reading…` permanently. A clear and its re-read are one gesture and
+must be triggered by the same thing. It matters more than an ordinary staleness bug would: Reload
+is pressed *after* something downstream changed, and a join is the thing that rewrites a price.
+
+**BENEATH `Run` AND ABOVE `Note`.** The same placement argument `Confidence` gets for sitting
+under the read it hedges: the price is not a property of the card, it is what one join found in
+one export, and the age beside it is that join's age — so provenance is a straight read-down
+rather than two glances. Both rows would be inexplicable apart, since `Run` names a directory and
+cannot say what it found, and a price with no run named is a number from nowhere.
+
+**WHAT THIS DOES NOT DO: it does not put pricing on this screen.** No preset, no override, no
+snap, nothing writable — `#/pricing` is where a price is DECIDED (D49) and this is where one is
+READ, on the screen whose question is where a card is. The other four price columns, the
+presets and `decisions.json` stay there. If this row starts growing controls, it has acquired
+that screen's job, which is the failure the paragraph above already names for the photograph.
+
+**What would reopen this: a box whose cards span many runs.** The one-read-per-run cache is sized
+for the ordinary case of a box identified in one go; a box assembled from a dozen ticked
+selections would fetch a dozen tables while the arrow keys walk it. The measurement is how many
+distinct `run` values a single box's records carry — two today, across the whole store.
+
 ---
 
 ## D39 — The pipeline gets a route, and the selection is handed to it
@@ -3765,6 +3855,65 @@ a decision about a shared component rather than about three copies of a treatmen
 cheaper to take and easier to take carelessly. **The Fulfiller is not on that list at all**:
 `PositionLabel`'s own header records that his screens never import it, `app/tests/fulfillment.spec.ts`
 floors his position at >=32px plain, and D31 keeps that spec unweakened.
+
+**THE JUMP WAS SCROLLING THE PAGE RATHER THAN THE WALK, AND IT COST THE TOP OF THE SCREEN
+(the owner, 2026-08-29: *"picking from a copy of a card moves the screen down a little to where
+it hides the top bars"*).** The landing effect above ends by scrolling the landed row into view,
+and it did that with `Element.scrollIntoView` — an API that scrolls EVERY scrollable ancestor,
+the document included.
+
+**ON A STICKY COLUMN THAT MOVES THE PAGE WITHOUT MOVING THE ROW, which is why the press cost
+something and bought nothing.** `.browse-map` is `position: sticky`, so a row inside it does not
+change its viewport position when the document scrolls; the browser computes a delta from the
+row's current geometry all the same, spends it on the page, and the row stays exactly where it
+was. Measured at 1280x720 with the page at rest: **`window.scrollY` 0 -> 280, the document's
+whole range**, putting the nav at y=-280 and this screen's own header at y=-218. The landing was
+already going to be visible — the walk's own scroller had done that work — so the entire effect
+of the page scroll was losing the nav, the title row, the search field and the box strip.
+
+**THE FIX IS A CEILING, NOT A FLAG: `BoxBrowse.tsx:scrollWithin`.** It adjusts `scrollTop` by
+hand on each scrollable ancestor from the row up to `.browse-map` inclusive and stops, so the
+document scroller is unreachable **by construction**. `scroll-margin-top` is read off the row
+rather than ignored, because `.browse-row` sets 28px to clear its own sticky section header and a
+hand-rolled scroll that dropped it would park every landing underneath that header. The innermost
+scroller takes `start` and every outer one takes `nearest`: `start` is a statement about where the
+row sits in the LIST, and asking the same of the column outside it would drag the search field and
+the box strip off the top of a column that is only ever scrolled to reach the box's editors.
+
+**THE CEILING HOLDS WITH THE BOUNDARY MISSING, and that is a separate line rather than a null
+check.** The walk stops at `document.body`/`documentElement` before it consults the boundary at
+all, so a ref that has not mounted yet cannot let the walk past — a ceiling that depends on a ref
+being non-null is not a ceiling, and the symptom would have reappeared nowhere near the check
+that failed.
+
+**IT REACHES EVERY GESTURE THAT MOVES THE MARK, not just the walk-to**, because they all land in
+one effect: arrow keys, PageUp/PageDown, Home/End, a box-chip press and a search landing. Verified
+against the owner's own store — a walk-to across 133 real cards moves `.browse-list` 1242px and
+the page zero, and a box-chip press from y=5 leaves the page at y=5.
+
+**`focus()` IS THE SAME DEFECT'S SECOND DOOR AND IS SHUT WITH IT.** Two presses hand the keys to
+the walk, and `HTMLElement.focus()` scrolls the focused element into view by default — the
+document included. Measured, neither fires today: the column is sticky at the top of the viewport,
+so the list it holds is already on screen whenever these run. Latent rather than live, closed for
+one object, and recorded here so it is not read as belt and braces: `scrollWithin` owns where this
+component scrolls and nothing else in it may.
+
+**A COMMENT THAT ARGUED FOR THE DEFECT IS CORRECTED RATHER THAN DELETED.** The landing effect
+ended *"and the page scroll this brings with it is wanted here: the copies list is below the card
+band, and the photograph is what was asked for."* The intention was right and what happened was
+its opposite — the scroll came from the landed ROW, so it moved the page DOWN, away from the card
+band. Kept in the file with that account attached, because a comment that reasons its way to the
+wrong behaviour is more useful than a missing one.
+
+**Asserted as a MEASUREMENT rather than as a class name**: `app/tests/inventory.spec.ts` reads
+`window.scrollY` and the nav's own `top` before and after the press and requires both unchanged,
+AND requires the landed row in the viewport — either alone is satisfiable by doing the wrong
+thing, since a screen that scrolled nothing and landed nowhere would pass the first and the old
+code passed the second. Observed red against `scrollIntoView` before it was kept.
+
+**One trap on the way, worth keeping because it wasted the first attempt.** Playwright's own
+`.click()` scrolls its target into view first, so the first version of this measurement read 280
+both before and after and proved nothing. The case dispatches the press instead.
 
 ---
 

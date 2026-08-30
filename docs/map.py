@@ -1166,9 +1166,20 @@ COMPONENTS = [
                     "ONE INBOUND PROP since 2026-08-29 (D45): `goTo` walks to a card by store "
                     "key, which is how a copy row on the right reaches the box on the left. It "
                     "drops the search filter rather than letting it swallow the jump, and opens "
-                    "the landing's section itself so the scroll has a rendered row to find.",
-            "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
-                            "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45"]},
+                    "the landing's section itself so the scroll has a rendered row to find. "
+                    "IT SCROLLS ITS OWN COLUMN AND NEVER THE PAGE since 2026-08-29 "
+                    "(`scrollWithin`): scrollIntoView reaches the document scroller, and on a "
+                    "sticky column that moves the page without moving the row — measured at the "
+                    "document's whole range, which took the nav and this screen's own header "
+                    "off the top. A MARKET PRICE on the card panel the same day: card -> `run` "
+                    "-> that run's pricing.json (D49), indexed by POSITION because `card.sku` "
+                    "is written by emit and is null on every sub-threshold and withheld card. "
+                    "The store holds no price at all (D8), so this is the only place one can "
+                    "come from, and the age of the reading is drawn with it because `join` is "
+                    "re-run against refreshed exports.",
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
+                            "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39",
+                            "D41", "D45", "D46", "D49"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1696,9 +1707,16 @@ COMPONENTS = [
                         "this file's FIRST geometry assertions (D38): that the photograph is flush "
                         "with the fact rows beside it, and that the box and the runs are a column "
                         "beside the card rather than a row beneath it. Nothing on the commit path "
-                        "can see either.",
-                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D30",
-                                "D31", "D33", "D34", "D37", "D38", "D40", "D41"],
+                        "can see either. TWO MORE MEASUREMENTS since 2026-08-29: that a walk-to "
+                        "moves the page by nothing at all (D45's jump was scrolling the document "
+                        "to the end of its range and taking the top bars with it), and that the "
+                        "Market row draws its price with the age of the join that read it, by "
+                        "POSITION rather than by `card.sku` — the fixture's priced card carries "
+                        "no SKU on its record, which is the case a SKU-keyed lookup loses (D7, "
+                        "D8, D9, D49).",
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24",
+                                "D26", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41",
+                                "D45", "D49"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
