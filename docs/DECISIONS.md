@@ -15,26 +15,13 @@ Never merge them: speed, cost, and reliability all favor the split.
 
 ## D2 — Identification is Claude Haiku vision, owned end to end
 
-OCR was researched and rejected (~85–90% accuracy). Perceptual hashing is deferred to v2
-as a cross-check. Haiku costs ~$5–15 per 10k cards via the Batch API, which is negligible.
-The set hint is an optional accelerator recorded in the capture app: identification works
-without it, better with it.
+**Identification is Claude Haiku vision over the Batch API, owned end to end.** OCR was researched and rejected at ~85–90% accuracy. Perceptual hashing is deferred to v2 as a cross-check. Haiku costs ~$5–15 per 10k cards via the Batch API, which is negligible. The set hint is an optional accelerator recorded in the capture app: identification works without it, better with it.
 
-**TCGplayer Scan & Identify was evaluated and rejected as a pipeline component.** It is
-UI-only with no API contract, inserts a manual browser step into an autonomous flow, does
-not guarantee per-image→position mapping, and couples identification to one platform. No
-integration code is written, ever.
+**TCGplayer Scan & Identify was evaluated and rejected as a pipeline component.** It is UI-only with no API contract, inserts a manual browser step into an autonomous flow, does not guarantee per-image to position mapping, and couples identification to one platform. No integration code is written, ever.
 
-**It is also not a precondition for anything** (changed 2026-08-03). It was previously the
-required next step whenever T1 scored below the floor, which put a manual browser session
-on the critical path between a red harness and any attempt to fix it — the tail wagging the
-dog. A sub-floor T1 is now worked directly. S&I is parked in the Someday list below as an
-optional reference point: it answers "is this task hard, or is our prompt weak?", which is
-worth knowing eventually and worth nothing urgently.
+**It is also not a precondition for anything** (changed 2026-08-03). It was previously the required next step whenever T1 scored below the floor, which put a manual browser session on the critical path between a red harness and any attempt to fix it — the tail wagging the dog. A sub-floor T1 is now worked directly. Scan & Identify is parked in the Someday list as an optional reference point: it answers *is this task hard, or is our prompt weak?*, which is worth knowing eventually and worth nothing urgently.
 
-Evaluate any future third-party integration on: API or UI? Does it return the data the core
-depends on? Does the cost it replaces matter? Does it add a manual step? Does it couple us
-to one platform?
+Evaluate any future third-party integration on: API or UI? Does it return the data the core depends on? Does the cost it replaces matter? Does it add a manual step? Does it couple us to one platform?
 
 ## D3 — Variant resolution ladder
 
@@ -390,38 +377,20 @@ Read this entry as naming what the data is *for*, not as authorizing a call to t
 
 ## D9 — Threshold and floor are both $0.40
 
-Both configurable, both derived from the $60/hr labor bar: a marginal pull is ~20s, and
-0.8675 × $0.40 clears it.
+**Threshold and floor are both $0.40, and both are derived from the $60/hr labor bar** rather than picked: a marginal pull is ~20s, and 0.8675 x $0.40 clears it. Both configurable.
 
-- **Threshold**: market ≥ $0.40 earns a listing.
-- **Floor**: listed price = `max(pricing-rule output, $0.40)` — clamps undercut rules in
-  collapsing markets. TCGplayer's own seller guidance is to set the floor where a sale
-  loses money including labor, and always price above it.
+- **Threshold**: market >= $0.40 earns a listing.
+- **Floor**: listed price = `max(pricing-rule output, $0.40)`, clamping undercut rules in collapsing markets. TCGplayer's own seller guidance is to set the floor where a sale loses money including labor, and always price above it.
 
 Pricing rules: match / undercut % / markup %.
 
-**Sub-threshold disposition is a per-run choice, never a constant in the code.** The owner
-picks one default for the run — flat at the floor, or a flat price set for that run — and
-can name individual SKUs to override it. Output is suppressed until that choice is made: a
-card under the threshold is not quietly listed and not quietly dropped.
+**Sub-threshold disposition is a per-run choice, never a constant in the code.** The owner picks one default for the run — flat at the floor, or a flat price set for that run — and can name individual SKUs to override it. Output is suppressed until that choice is made: a card under the threshold is not quietly listed and not quietly dropped.
 
-**A row with a blank or $0.00 market price is `no_market_data`, and is not sub-threshold.**
-A missing price is an unknown price, not a low one, so it gets no disposition at all — not
-the flat price, not the floor, not the bulk lot. It is priced by hand in `decisions.json`
-or explicitly left unlisted, and `emit` refuses to write while one is still unanswered.
-Recorded because the tempting "fix" is to sweep these into the sub-threshold bucket, where
-the whole point of the bands above is that they describe cards whose value is *known* to be
-small. The failure that prevents: handing away a $40 chase card at the $0.40 floor because
-its market cell happened to be empty.
+**A row with a blank or $0.00 market price is `no_market_data`, and is not sub-threshold.** A missing price is an unknown price, not a low one, so it gets no disposition at all — not the flat price, not the floor, not the bulk lot. It is priced by hand in `decisions.json` or explicitly left unlisted, and `emit` refuses to write while one is unanswered. Recorded because the tempting fix is to sweep these into the sub-threshold bucket, whose whole point is describing cards whose value is *known* to be small. The failure that prevents: handing away a $40 chase card at the $0.40 floor because its market cell happened to be empty.
 
-The join preserves the sub-threshold price distribution in bands rather than lumping it,
-because "everything under $0.40" hides the difference between a $0.38 rare and a $0.01
-code card, and that difference is what decides later which of them are worth a bulk lot.
-Bands are cut as fractions of the threshold, so they follow it if it moves.
+The join preserves the sub-threshold price distribution in bands rather than lumping it, because *everything under $0.40* hides the difference between a $0.38 rare and a $0.01 code card, and that difference decides later which of them are worth a bulk lot. Bands are cut as fractions of the threshold, so they follow it if it moves.
 
-TCGplayer's native Bulk Lots category (Level 4, Pricing tab) remains the exit for whatever
-is not listed — selected against that distribution, not sorted into blindly at emit time.
-No eBay needed.
+TCGplayer's native Bulk Lots category (Level 4, Pricing tab) remains the exit for whatever is not listed — selected against that distribution, not sorted into blindly at emit time. No eBay needed.
 
 ## D10 — Inventory model
 
@@ -632,31 +601,13 @@ the `TCGplayer Id` SKU, which is never modified.
 
 ## D12 — Scope
 
-Modern era only (SWSH/SV), English, all Near Mint (hardcoded). Vintage/WOTC condition
-strings (1st Edition, Shadowless, Unlimited) are a spec change, not a parameter.
+**Modern era only (SWSH/SV), English, all Near Mint (hardcoded).** Vintage and WOTC condition strings — 1st Edition, Shadowless, Unlimited — are a spec change, not a parameter.
 
-**Those two sentences went missing between 2026-08-13 and 2026-08-23** — dropped by the
-motion-trigger commit, not by any decision — leaving an entry titled "Scope" that stated no
-scope, two paragraphs referring to "the two blocks named above" and "the parenthetical" with
-nothing above them to name, and the Vintage/WOTC rule spliced onto the end of an unrelated
-paragraph. D15 and D26 both cite this entry as though it said what it says again now.
-Restored verbatim from `e955afd` rather than rewritten, because the surrounding argument was
-built against that exact wording.
+**Those two sentences went missing between 2026-08-13 and 2026-08-23**, dropped by the motion-trigger commit rather than by any decision, leaving an entry titled *Scope* that stated no scope, two paragraphs referring to blocks and a parenthetical with nothing above them to name, and the Vintage/WOTC rule spliced onto an unrelated paragraph. D15 and D26 both cite this entry as though it said what it says again now. Restored verbatim from `e955afd` rather than rewritten, because the surrounding argument was built against that exact wording.
 
-**Gate B ran entirely outside the two blocks named above, and nothing noticed.** The 53
-cards of 2026-08-22 were `ME01: Mega Evolution`, a block later than SV, and they went
-through capture, identification, join, emit, import to Staged and reconcile without a
-scope question arising — because nothing in the tree enforces the parenthetical. The only
-code that cites this entry for scope is `pipeline/variant.py`'s `CONDITION_BY_FINISH`,
-which hardcodes the Near Mint strings; there is no set or era filter anywhere. Read
-`(SWSH/SV)` as the blocks that existed the day this was written, not as an allowlist.
+**Gate B ran entirely outside the two blocks named above, and nothing noticed.** The 53 cards of 2026-08-22 were `ME01: Mega Evolution`, a block later than SV, and they went through capture, identification, join, emit, import to Staged and reconcile without a scope question arising — because nothing in the tree enforces the parenthetical. The only code citing this entry for scope is `pipeline/variant.py`'s `CONDITION_BY_FINISH`, which hardcodes the Near Mint strings; there is no set or era filter anywhere. Read `(SWSH/SV)` as the blocks that existed the day this was written, not as an allowlist.
 
-**Whether "modern era" is open at the top end is unsettled, and it is the owner's call.**
-Recorded rather than answered, because a passing gate is evidence that nothing broke, not
-a decision that every future block is in scope. It matters in one place today: D15's
-mirror-scope paragraph reads this entry as the enumeration `SWSH/SV` when it sizes a
-narrowed image mirror at ~4.8 GB, so narrowing the mirror on that basis would exclude the
-only era this project has ever run against. Settle both lines together or neither.
+**Whether modern era is open at the top end is unsettled, and it is the owner's call.** Recorded rather than answered, because a passing gate is evidence that nothing broke rather than a decision that every future block is in scope. It matters in one place today: D15's mirror-scope paragraph reads this entry as the enumeration `SWSH/SV` when it sizes a narrowed image mirror at ~4.8 GB, so narrowing the mirror on that basis would exclude the only era this project has ever run against. Settle both lines together or neither.
 
 ## D13 — Stack
 
@@ -1337,29 +1288,13 @@ thing and no such mistake has happened.
 
 ## D21 — Game is a per-card claim, not a mode
 
-The product expands to four capture choices — `pokemon`, `riftbound`, `one_piece`,
-`pokemon_code` — and the picker sits on the **capture screen** beside Box, Set hint and Finish,
-not on the app shell.
+**The game is a per-card claim made on the capture screen, never a mode set on the app shell.** Four capture choices — `pokemon`, `riftbound`, `one_piece`, `pokemon_code` — and the picker sits beside Box, Set hint and Finish.
 
-**`game` joins the claim family and behaves exactly like the others**: client state, resent with
-every capture, written to the record and the sidecar. **Mixed boxes are therefore legal.** That
-is not a concession — it is what makes the claim a claim. A shell-level mode would make the game
-a property of the *session*, and the first time a Riftbound card turned up in a Pokémon box the
-operator would have to either lie or stop.
+**`game` joins the claim family and behaves exactly like the others**: client state, resent with every capture, written to the record and the sidecar. **Mixed boxes are therefore legal**, which is not a concession but what makes the claim a claim. A shell-level mode would make the game a property of the *session*, and the first time a Riftbound card turned up in a Pokemon box the operator would have to either lie or stop.
 
-**`game` is required and defaults to `pokemon`, and D3's null-means-no-claim does not transfer.**
-Worth stating because the two look identical and are not. `FinishClaim`'s `null` is meaningful
-because there is a **ladder underneath it** that infers a finish from evidence — catalog rows,
-detection, a human. **There is no ladder that infers a game.** A missing game is not "no claim";
-it is "no export", and every consumer below would have nothing to join against. So the field is
-required, and the default is a read-side backfill for records written before the field existed —
-never a write-side default.
+**`game` is required and defaults to `pokemon`, and D3's null-means-no-claim does not transfer.** Worth stating because the two look identical and are not. `FinishClaim`'s `null` is meaningful because there is a **ladder underneath it** that infers a finish from evidence — catalog rows, detection, a human. **There is no ladder that infers a game.** A missing game is not *no claim*; it is *no export*, and every consumer below would have nothing to join against. So the field is required, and the default is a read-side backfill for records written before the field existed — never a write-side default.
 
-**This does not discharge D14.** D14's mode toggle is the *track* axis — singles versus codes,
-two schemas, two sales channels, two fulfilment stories sharing one rig. `game` is the *product*
-axis inside a track. `pokemon_code` sits at the intersection and is the reason both axes have to
-exist: it is a Pokémon product line, captured on the singles rig, and disposed of down the codes
-track (D24).
+**This does not discharge D14.** That entry's mode toggle is the *track* axis — singles versus codes, two schemas, two sales channels, two fulfilment stories sharing one rig. `game` is the *product* axis inside a track. `pokemon_code` sits at the intersection and is why both axes have to exist: a Pokemon product line, captured on the singles rig, disposed of down the codes track (D24).
 
 ## D22 — Taxonomies are hand-authored per game, and audited so they cannot drift
 
@@ -1551,39 +1486,19 @@ render can contain a code card.
 
 ## D25 — The join partitions by game, and `Product Line` becomes a real reader
 
-**BUILT 2026-08-23, with the acceptance test this entry implies passed literally**: a
-single-export Pokemon run was captured before the change and re-run after, and every output —
-join stdout, emit stdout, report, both import files, decisions.json — diffed byte-identical.
-One addition beyond this entry, flagged rather than slipped in: an `--export` file whose
-`Product Line` cells match no registered game refuses by name, because accepting and silently
-not using a file is the silent-drop shape the hard rules forbid.
+**The catalog join partitions by game, reading each export's `Product Line` column rather than inferring anything from a filename.** Built 2026-08-23, with the acceptance test this entry implies passed literally: a single-export Pokemon run was captured before the change and re-run after, and every output — join stdout, emit stdout, report, both import files, `decisions.json` — diffed byte-identical. One addition beyond this entry, flagged rather than slipped in: an `--export` file whose `Product Line` cells match no registered game refuses by name, because accepting and silently not using a file is the silent-drop shape the hard rules forbid.
 
-`--export` is repeatable. **Never infer the game from a filename**: read each file's
-`Product Line` column, map file → games, then invert to game → files, which must be exactly one.
+`--export` is repeatable. **Never infer the game from a filename**: read each file's `Product Line` column, map file to games, then invert to game to files, which must be exactly one.
 
-**This corrects a claim this file used to make.** The Deferred entry said the catalog join was
-"product-line-agnostic". Measured, it was product-line **blind** — `Product Line` was declared in
-`CANONICAL_HEADER` and read by nothing, so two exports concatenated would have cross-joined in
-silence. Blind is not agnostic.
+**This corrects a claim this file used to make.** The Deferred entry said the catalog join was *product-line-agnostic*. Measured, it was product-line **blind** — `Product Line` was declared in `CANONICAL_HEADER` and read by nothing, so two exports concatenated would have cross-joined in silence. Blind is not agnostic.
 
-**Catalogs are built per game and never merged.** A merged `_by_number` would report cross-*game*
-collisions through `colliding_keys` as though they were the cross-*set* collisions that report is
-actually about — different faults with different remedies, since a set hint fixes one and nothing
-fixes the other.
+**Catalogs are built per game and never merged.** A merged `_by_number` would report cross-*game* collisions through `colliding_keys` as though they were the cross-*set* collisions that report is actually about — different faults with different remedies, since a set hint fixes one and nothing fixes the other.
 
-`Catalog.from_export` filters to the game's `product_line` and, where set, its
-`product_line_rarities`, **reports the drop count, and refuses if the filter leaves zero rows** —
-which means the wrong file, and is the one case where continuing is worse than stopping.
+`Catalog.from_export` filters to the game's `product_line` and, where set, its `product_line_rarities`, **reports the drop count, and refuses if the filter leaves zero rows** — which means the wrong file, and is the one case where continuing is worse than stopping.
 
-**One import file per game.** Nobody has established whether TCGplayer's Import to Staged accepts
-a file spanning two `Product Line`s, and `fixtures/staged-import-accepted.csv` proves it for one
-line only. Per-game files are correct under either answer, so the question does not need settling
-first.
+**One import file per game.** Nobody has established whether TCGplayer's Import to Staged accepts a file spanning two `Product Line`s, and `fixtures/staged-import-accepted.csv` proves it for one line only. Per-game files are correct under either answer, so the question does not need settling first.
 
-**Refusals exit 1, write nothing, touch no queue, and never prompt.** Two cases: two files
-claiming one game, and a game present in the run with no export — the second names up to eight
-positions and points at the `PUT` correction route. The check runs before any catalog is built, so
-a run that will refuse costs nothing.
+**Refusals exit 1, write nothing, touch no queue, and never prompt.** Two cases: two files claiming one game, and a game present in the run with no export — the second names up to eight positions and points at the `PUT` correction route. The check runs before any catalog is built, so a run that will refuse costs nothing.
 
 ## D26 — A card leaves inventory by a state — `retired` — and a bad photo is replaced in place
 
@@ -1636,150 +1551,69 @@ is precisely the one copy that is *not* interchangeable.
 
 ## D27 — Session state is device-local and may be persisted
 
-`CLAUDE.md`'s ban on browser storage is about **inventory** — D13 puts one truth on the Mac so two
-devices cannot disagree about where a card is. It was never about the capture screen's own
-scratch state, and reading it that way costs a real thing.
+**The capture screen's own scratch state may live in `sessionStorage`, because `CLAUDE.md`'s ban on browser storage is about inventory.** D13 puts one truth on the Mac so two devices cannot disagree about where a card is. It was never about the capture screen's scratch state, and reading it that way costs a real thing.
 
-**Box number, set hint, finish claim, rarity claim and the in-flight `capture_id` are device-local
-and meaningless anywhere else.** They are `useState` today, so a reload loses all of them — and
-the last one matters most: a reload during a halt makes a lost-response ambiguity permanently
-unresolvable, and D10's high-water mark hands the burned position straight to the next physical
-card.
+**Box number, set hint, finish claim, rarity claim and the in-flight `capture_id` are device-local and meaningless anywhere else.** They are `useState` today, so a reload loses all of them — and the last one matters most: a reload during a halt makes a lost-response ambiguity permanently unresolvable, and D10's high-water mark hands the burned position straight to the next physical card.
 
-**`sessionStorage`, never `localStorage`**, and the permitted keys are named here so a lint rule
-can enforce the boundary. Session scope is the point: a new tab is a new session, and nothing
-about a shift survives closing the browser.
+**`sessionStorage`, never `localStorage`**, and the permitted keys are named here so a lint rule can enforce the boundary. Session scope is the point: a new tab is a new session, and nothing about a shift survives closing the browser.
 
-**A SECOND USE JOINED THE CARVE-OUT ON 2026-08-29, AND IT IS A HANDOFF RATHER THAN A MEMORY
-(D39).** `pkmnscan.run-scope` carries a box and the cards ticked in it from `#/inventory` to
-`#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product
-did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, and not
-a fact about where a card IS — and it is `sessionStorage` for the same reason everything else
-here is: a tick list that outlived the browser would be a filter over a spend button that nobody
-alive remembered setting.
+**A second use joined the carve-out on 2026-08-29, and it is a handoff rather than a memory** (D39). `pkmnscan.run-scope` carries a box and the cards ticked in it from `#/inventory` to `#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, not a fact about where a card IS — and it is `sessionStorage` for the same reason everything else here is: a tick list that outlived the browser would be a filter over a spend button that nobody alive remembered setting.
 
-**It differs from the four above in what a reload means, which is why it is worth naming
-separately.** Those exist so a reload does not lose the shift. This one exists so a reload does
-not silently WIDEN what the next press pays for — and it is cleared deliberately on three
-routes rather than expiring: the operator's control, picking a box, and arriving from
-`#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or
-writes it.
+**It differs from the four above in what a reload means.** Those exist so a reload does not lose the shift. This one exists so a reload does not silently WIDEN what the next press pays for, and it is cleared deliberately on three routes rather than expiring: the operator's control, picking a box, and arriving from `#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or writes it.
 
-`useCamera.ts` already argues this carve-out informally for the device id and the rotation chip;
-this entry generalises what that file worked out and makes it checkable.
+`useCamera.ts` already argues this carve-out informally for the device id and the rotation chip; this entry generalizes what that file worked out and makes it checkable.
 
-**Trigger mode is explicitly NOT covered.** D19 keeps arming an act, and an armed machine that
-survives a reload is exactly the automatic-anything that entry refuses.
+**Trigger mode is explicitly NOT covered.** D19 keeps arming an act, and an armed machine that survives a reload is exactly the automatic-anything that entry refuses.
 
 ## D28 — The review answer gets an undo window, and the list stops moving under it
 
-The review queue's irreversible action has fewer guards than the product's reversible one, and
-that is backwards.
+**The review answer gets a twenty-second undo, and the candidate list stops moving between cards.** The review queue's irreversible action had fewer guards than the product's reversible one, which is backwards.
 
-Pressing a digit writes a SKU and a condition onto a real card. `store/queues.py:Queue.upsert`
-refuses to re-queue a position a human has cleared — deliberately, so an answer outlives the
-question — so there is no undo, no confirm and no acknowledgement. Meanwhile mark-sold, which is
-reversible, gets a photo to confirm against, a two-step control, a twenty-second undo and a
-pre-checked `restores_to`.
+Pressing a digit writes a SKU and a condition onto a real card. `store/queues.py:Queue.upsert` refuses to re-queue a position a human has cleared — deliberately, so an answer outlives the question — so there was no undo, no confirm and no acknowledgement. Meanwhile mark-sold, which is reversible, got a photo to confirm against, a two-step control, a twenty-second undo and a pre-checked `restores_to`.
 
-**THAT SENTENCE DESCRIBED THE OWNER'S SCREEN UNTIL 2026-08-30 AND NOW DESCRIBES THE FULFILLER'S
-(D57).** Kept as written because it is the MEASUREMENT this entry was built from and nothing
-about the repair depends on it still being current — but a later reader would otherwise go
-looking for a photo-confirm on `#/inventory` and find none. D57 finished the correction from the
-other end: this entry gave the irreversible action its undo, and that one took the redundant
-press off the reversible write, so the sale is one press with `Undo` in the row and on the
-receipt. `#/fulfillment` keeps all four.
+**That sentence described the owner's screen until 2026-08-30 and now describes the Fulfiller's** (D57). Kept as written because it is the MEASUREMENT this entry was built from, and nothing about the repair depends on it still being current — but a later reader would otherwise go looking for a photo-confirm on `#/inventory` and find none. D57 finished the correction from the other end: this entry gave the irreversible action its undo, and that one took the redundant press off the reversible write, so the sale is one press with `Undo` in the row and on the receipt. `#/fulfillment` keeps all four.
 
 **Two fixes, because there are two halves.**
 
-1. **The list stops moving.** The photo has no reserved dimensions, so answering one card can
-   shift the candidate rows by most of a screen — under a finger already travelling toward a
-   number. Reserve the photo's height and prefetch the next card's image. This removes the cause
-   of most mis-taps and costs no keystroke.
-2. **A twenty-second undo**, the shape the product already ships. `Queue.upsert`'s refusal stands
-   for everything outside that window; the window is a hole punched in it on purpose, not a
-   softening of the rule.
+1. **The list stops moving.** The photo has no reserved dimensions, so answering one card can shift the candidate rows by most of a screen — under a finger already travelling toward a number. Reserve the photo's height and prefetch the next card's image. This removes the cause of most mis-taps and costs no keystroke.
+2. **A twenty-second undo**, the shape the product already ships. `Queue.upsert`'s refusal stands for everything outside that window; the window is a hole punched in it on purpose, not a softening of the rule.
 
-**This reopens `docs/DESIGN.md`'s no-acknowledgement rule for this one screen, and the grounds are
-in the rule itself.** That rule is justified by "Undo covers the mistake" — and on this screen undo
-does not exist, so the rule leans on something that is not there. Fixing the premise is the honest
-repair; adding a confirm dialog would have doubled the keystrokes on the screen the owner spends
-the most hours in, which is the thing the rule was written to prevent.
+**This reopens `docs/DESIGN.md`'s no-acknowledgement rule for this one screen, and the grounds are in the rule itself.** That rule is justified by *undo covers the mistake* — and on this screen undo did not exist, so the rule leaned on something that was not there. Fixing the premise is the honest repair; adding a confirm dialog would have doubled the keystrokes on the screen the owner spends the most hours in, which is what the rule was written to prevent.
 
-**Rejected: requiring a modifier or an Enter to confirm.** Considered and declined for the reason
-above — one key per card is the property worth keeping.
+**Rejected: requiring a modifier or an Enter to confirm.** Declined for the reason above — one key per card is the property worth keeping.
 
 ## D29 — A homogeneous queue may be answered as a group
 
-**BUILT 2026-08-23.** The reading that shipped, enforced server-side: each entry offers
-exactly ONE candidate — its own — under one shared reason and one shared condition string. A
-shared SKU is deliberately not required and cannot be what "same single candidate" means:
-sixteen cards are sixteen catalog rows, and answering card A with card B's SKU would be
-corruption wearing a reading. Validate-everything-then-write-everything in one store session
-(`group_entry_refused` / `group_not_uniform` exit with zero edits); every position gets its
-own `answered` line tagged `group: N`; the group confirm is the review screen's first solid
-accent fill, ruled legal because the eligibility conditions are precisely what reduce the
-state to one action; and the undo reverses per position through the single route, reporting a
-partial reversal honestly rather than pretending atomicity it does not have.
+**A queue whose entries share one reason code and offer one identical candidate may be answered as a group.** Built 2026-08-23, enforced server-side: each entry offers exactly ONE candidate — its own — under one shared reason and one shared condition string.
 
-Reopens D4's one-card-at-a-time, narrowly, on evidence D4 did not have.
+**A shared SKU is deliberately not required and cannot be what *same single candidate* means**: sixteen cards are sixteen catalog rows, and answering card A with card B's SKU would be corruption wearing a reading. Validate-everything-then-write-everything in one store session (`group_entry_refused` / `group_not_uniform` exit with zero edits); every position gets its own `answered` line tagged `group: N`; the group confirm is the review screen's first solid accent fill, ruled legal because the eligibility conditions are precisely what reduce the state to one action; and the undo reverses per position through the single route, reporting a partial reversal honestly rather than pretending atomicity it does not have.
 
-Gate B's queue was 16 of 53, **every one the same reason code**, and detection agreed with itself
-across every duplicate pair — both Thievuls, both Eiscues, both Pyroars. One systematic fact about
-the rig's lighting, sixteen identical taps. The discarded pre-rotation run queued 45 with one
-shared cause.
+**This reopens D4's one-card-at-a-time, narrowly, on evidence D4 did not have.** Gate B's queue was 16 of 53, **every one the same reason code**, and detection agreed with itself across every duplicate pair — both Thievuls, both Eiscues, both Pyroars. One systematic fact about the rig's lighting, sixteen identical taps. The discarded pre-rotation run queued 45 with one shared cause.
 
-**Grouping and filtering, always. A group write only under both conditions:** every entry in the
-group shares a reason code, **and** every entry offers the same single candidate. Anything looser
-is a bulk write over cards a human has not actually compared, which is what D4 exists to prevent.
+**Grouping and filtering, always. A group write only under both conditions:** every entry shares a reason code, **and** every entry offers the same single candidate. Anything looser is a bulk write over cards a human has not actually compared, which is what D4 exists to prevent.
 
-D4's "digital-only, one-tap choice beside the photo" is unchanged for every card that does not
-meet both conditions — and a group write still shows the photographs it is about to answer for.
+D4's digital-only, one-tap choice beside the photo is unchanged for every card that does not meet both conditions — and a group write still shows the photographs it is about to answer for.
 
 ## D30 — The physical convention for a gap
 
-**CLOSED BY D58 ON 2026-08-30, AND NOT BY THE MARKER THIS ENTRY WAS WAITING FOR.** The
-problem below is real and is stated better here than anywhere else in this file — *"`Card 17`
-is the seventeenth slot, not the seventeenth card you can count"* — and the answer turned out
-to be upstream of both halves: a card's number now counts the cards in the box, so selling one
-makes the card behind it take its number and every label stays countable by hand. There is no
-gap to put a marker in.
+**Closed by D58 on 2026-08-30, and not by the marker this entry was waiting for.** The problem below is real and is stated better here than anywhere else in this file — *`Card 17` is the seventeenth slot, not the seventeenth card you can count* — and the answer turned out to be upstream of both halves: a card's number now counts the cards in the box, so selling one makes the card behind it take its number and every label stays countable by hand. There is no gap to put a marker in.
 
-**The digital half stays built and is not deleted.** `neighbors` is still drawn and still
-worth having for confirming a slot; `section_gaps` is structurally zero for a consolidated box
-and `placeSentence` already omits the phrase at zero, so the sentence quietly stops carrying a
-clause D58 made empty rather than needing a change.
+**The digital half stays built and is not deleted.** `neighbors` is still drawn and still worth having for confirming a slot; `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero, so the sentence quietly stops carrying a clause D58 made empty rather than needing a change.
 
-**The physical half is void rather than answered**, which is why the owner never had to choose
-a marker: the retroactivity problem this entry names — *"a convention adopted after fifty gaps
-exist cannot be applied to them"* — is what made a marker unworkable, and it is exactly the
-problem a rendering does not have. Every existing gap closed the day D58 landed.
+**The physical half is void rather than answered**, which is why the owner never had to choose a marker: the retroactivity problem this entry names — *a convention adopted after fifty gaps exist cannot be applied to them* — is what made a marker unworkable, and it is exactly the problem a rendering does not have. Every existing gap closed the day D58 landed.
 
-**The box audit is easier and still not built.** What is physically in a section and what the
-record says are the same count again, which is what that check compares.
+**The box audit is easier and still not built.** What is physically in a section and what the record says are the same count again, which is what that check compares.
 
+---
 
-D10 makes a sold position a permanent gap, and the Fulfiller creates one per order. Nothing has
-ever told him to leave anything behind in the slot, and nothing teaches anyone to read a position
-label — `Card 17` is the **seventeenth slot**, not the seventeenth card you can count. Once a
-section has holes those two stop being the same number, and every label in that section becomes
-uncountable by hand.
+The problem as it stood: D10 makes a sold position a permanent gap, and the Fulfiller creates one per order. Nothing has ever told him to leave anything behind in the slot, and nothing teaches anyone to read a position label. Once a section has holes, the slot number and the countable card number stop being the same, and every label in that section becomes uncountable by hand.
 
-**This is retroactive, which is why it wants settling before more sales happen.** A convention
-adopted after fifty gaps exist cannot be applied to them.
+**This is retroactive, which is why it wanted settling before more sales happened.** Two halves, and only one was code:
 
-Two halves, and only one is code:
+- **Physical**: the operator leaves a marker in the slot a pulled card came out of. Which marker was the owner's call.
+- **Digital, and free**: a position renders with its neighbours and its section's gap count — *Card 17, between Mantine and Thievul · 2 slots in this section are empty*. Neighbours make a label countable again without anyone learning the rule, and the gap count says why the count came out short.
 
-- **Physical**: the operator leaves a marker in the slot a pulled card came out of. Which marker
-  is the owner's call and belongs in this entry once made.
-- **Digital, and free**: a position renders with its neighbors and its section's gap count —
-  "Card 17, between Mantine and Thievul · 2 slots in this section are empty". Neighbors make a
-  label countable again without anyone learning the rule, and the gap count says why the count
-  came out short.
-
-**A box audit is the check that closes this loop** — count what is physically in section 2 and
-compare it to what the record says. Nothing has ever compared a physical box against the record,
-and D20's `box_fill` and `sections_for` are what make it computable.
+**A box audit is the check that closes this loop** — count what is physically in section 2 and compare it to what the record says. Nothing has ever compared a physical box against the record, and D20's `box_fill` and `sections_for` are what make it computable.
 
 ---
 
@@ -2966,187 +2800,63 @@ through the container query already there, with no change to this entry.
 
 ## D41 — The address is a rank, not a list, and the separator is deleted rather than replaced
 
-**BUILT 2026-08-29, from a design pass the owner asked for and then chose from.** Their words:
-*"can you also fix this area? don't just decrease the font, make a new aesthetic design there
-currently i didn't ever like the dot theme to separate would rather have actual shapes or
-something idk"*, and a few minutes later, of the sidebar's own dotted line: *"same with this part
-going into two lines"*. Two designers worked the problem from opposite lenses — shape-led and
-typographic — and six treatments were rendered against the real store. The owner picked the
-**terminal-dominant** address and the **census-triad** meta block.
+**A position renders as a rank: a muted two-line path with the card number beside it at size, and no separator at all.** Built 2026-08-29, from a design pass the owner asked for and then chose from — they had never liked the dot theme, and the sidebar's own dotted line was going to two lines. Two designers worked it from opposite lenses and six treatments were rendered against the real store; the owner picked the **terminal-dominant** address and the **census-triad** meta block.
 
-**IT WAS NOT A FONT-SIZE PROBLEM AND THE ARITHMETIC IS WHY.** `Box 2 · Section 1 · Card 14` is 27
-cells at Martian Mono's measured **0.70em** advance = **453.6px**, in a track that is 448.8px at
-1440 and **387.1px** at 1280. It overflowed by 4.8px and wrapped. Of those 27 cells only **four
-are digits** — 67.2px, **14.8%** — while the words, dots and spaces are **386.4px, 85.2%**. The
-chrome alone is larger than the entire 1280 track: the separator and the labels consumed the
-column before a single number was drawn. Shrinking to fit needs **17px**, and `CardLocations`
-prints the same string at 13px seven rows below on the same screen, so the fix the owner
-pre-emptively refused would have made the answer 4px louder than its own footnotes.
+### It was not a font-size problem
 
-**THE COMMENT THAT JUSTIFIED THE OLD SIZE HAD ALREADY BEEN FALSIFIED BY A LAYOUT CHANGE.**
-`BoxBrowse.css` read: *"The worst realistic label — `Box 100 · Section 12 · Card 543` — draws
-521px inside a 630px track, so nothing reflows."* The px figure is right (520.8). **The 630px
-track no longer exists** — D40 made it 448.8px. A later change deleted the premise and left the
-conclusion standing, which is the exact failure `docs/DESIGN.md` and D16 are both written
-against. Recorded here rather than quietly corrected, because the class of defect matters more
-than this instance.
+`Box 2 · Section 1 · Card 14` is 27 cells at Martian Mono's measured 0.70em advance = **453.6px**, in a track that is 448.8px at 1440 and **387.1px** at 1280. It overflowed by 4.8px and wrapped. Of those 27 cells only **four are digits** — 67.2px, **14.8%** — while the words, dots and spaces are **386.4px, 85.2%**. The chrome alone is larger than the entire 1280 track. Shrinking to fit needs **17px**, and `CardLocations` prints the same string at 13px seven rows below on the same screen, so the fix the owner pre-emptively refused would have made the answer 4px louder than its own footnotes.
 
-**THE THREE PARTS ARE NOT EQUAL, AND THE OLD RENDERING CLAIMED THEY WERE.** `Box 2` is the drawer
-you walk to, `Section 1` narrows it, `Card 14` is the slot. On THIS screen the first two are
-already answered everywhere the eye lands — the box strip, the identity block, every section
-header, every copies row. **Measured: the literal string `Box 2` renders nine times in the
-document.** `Card N` is the only part of the address this panel uniquely supplies, so it is the
-only part drawn at size: the path becomes an 11px muted two-line stack and the slot a **44px**
-figure beside it. The payload goes 24px -> 44px, **+83%**, on a screen whose whole question is
-*where is this card*.
+**The comment justifying the old size had already been falsified by a layout change.** `BoxBrowse.css` read that the worst realistic label — `Box 100 · Section 12 · Card 543` — draws 521px inside a 630px track, so nothing reflows. The px figure is right (520.8). **The 630px track no longer exists**: D40 made it 448.8px. A later change deleted the premise and left the conclusion standing, which is exactly the failure `docs/DESIGN.md` and D16 are both written against. Recorded here rather than quietly corrected, because the class matters more than the instance.
 
-**THE SEPARATOR IS GONE, NOT RESTYLED, AND THAT IS THE OWNER'S ASK ANSWERED LITERALLY.** Nothing
-takes the interpunct's place — with the path stacked and the slot beside it there is no seam left
-for a character to mark. `.browse-position-joint` is deleted. That rule was itself only three days
-old (2026-08-26, painting the dots muted so the parts would bind); it treated the joints as the
-thing to quieten, and this treats them as the thing to remove. Both answer the same complaint; the
-owner rejected the first.
+**The three parts are not equal, and the old rendering claimed they were.** `Box 2` is the drawer you walk to, `Section 1` narrows it, `Card 14` is the slot. On THIS screen the first two are already answered everywhere the eye lands — the box strip, the identity block, every section header, every copies row — and the literal string `Box 2` renders nine times in the document. `Card N` is the only part this panel uniquely supplies, so it is the only part drawn at size: the path becomes an 11px muted two-line stack and the slot a **44px** figure. The payload goes 24px to 44px, **+83%**, on a screen whose whole question is *where is this card*.
 
-**THE SERVER STRING IS UNTOUCHED AND IS STILL THE ACCESSIBLE NAME.** `pipeline/join.py:Position.label`
-emits `Box N · Section N · Card N` and keeps emitting it. `PositionParts` recomposes it into
-key/figure pairs for THIS screen only and carries the original verbatim on `aria-label`, so what
-a screen reader announces is exactly what the store said. That is what makes a client-side split
-a VIEW rather than a quiet edit of the record. `.review-position` and `.card-locations-label`
-draw the same string and are deliberately untouched — taking this to them is a decision about all
-three sites, not a copy of this one.
+**The separator is gone, not restyled**, which answers the owner literally. Nothing takes the interpunct's place — with the path stacked and the slot beside it there is no seam left to mark. `.browse-position-joint` is deleted; that rule was itself only three days old (2026-08-26, painting the dots muted so the parts would bind), treating the joints as the thing to quieten where this treats them as the thing to remove.
 
-**`app/tests/fulfillment.spec.ts` IS NOT REACHED AND WAS CHECKED RATHER THAN ASSUMED.** Its 32px
-tabular-figure floor probes `.fulfillment-place` and `.card-locations-place-large` inside
-`view(page)`; `.browse-position` is neither, and no spec selects it. D31's rule that the
-Fulfilment spec stays unweakened is intact.
+**The server string is untouched and is still the accessible name.** `pipeline/join.py:Position.label` emits `Box N · Section N · Card N` and keeps emitting it. `PositionParts` recomposes it into key/figure pairs for THIS screen only and carries the original verbatim on `aria-label`, so a screen reader announces exactly what the store said — which is what makes a client-side split a VIEW rather than a quiet edit of the record.
 
-**THE SIDEBAR LINE IS THE SAME COMPLAINT WITH THE SCARCE AXIS INVERTED.** `cards 543 · sold 0 ·
-fill 543 · next index 544` is 46 cells = **354.2px** in a track that D40 narrowed to 299px at
-1440 and 285px at 1280. It is **not** a digit-count problem — box 1's four-characters-shorter
-line wraps identically — it is four label words and three interpuncts, 277.2px of chrome against
-77.0px of digits. Here horizontal is fixed and **vertical is ~290px of unused height** under the
-column in D31's resting state, so the block flows DOWN instead of across: three census figures at
-16px in a row, `next index` on its own line at the muted register.
+**`app/tests/fulfillment.spec.ts` is not reached, and this was checked rather than assumed.** Its 32px tabular-figure floor probes `.fulfillment-place` and `.card-locations-place-large` inside `view(page)`; `.browse-position` is neither, and no spec selects it. D31's rule that the Fulfilment spec stays unweakened is intact.
 
-**`next index` LEAVES THE ROW BECAUSE IT IS NOT A FOURTH STATISTIC.** `cards`, `sold` and `fill`
-describe what is in the box; `next index` is D10's high-water mark — what the allocator will hand
-out next. Four peers joined by dots was a false claim about them, and the structure is now the
-distinction rather than a sentence explaining it.
+### The sidebar is the same complaint with the scarce axis inverted
 
-**AND D20's TWO WORDS ARE ON SCREEN ONCE, ON THE IDENTITY LINE.** That entry is explicit that a
-denominator whose meaning switches silently between an open box and a sealed one is the failure it
-exists to prevent — `fill` is a fill-**so far** while the box is open and a frozen capacity once
-**sealed**.
+`cards 543 · sold 0 · fill 543 · next index 544` is 46 cells = **354.2px** in a track D40 narrowed to 299px at 1440 and 285px at 1280. It is **not** a digit-count problem — box 1's four-characters-shorter line wraps identically — it is four label words and three interpuncts, **277.2px of chrome against 77.0px of digits**. Here horizontal is fixed and **vertical is ~290px of unused height** under the column in D31's resting state, so the block flows DOWN instead of across: three census figures at 16px in a row, `next index` on its own line at the muted register.
 
-**THE QUALIFIER WAS PUT ON `.boxops-meta`'s FILL AND TAKEN OFF AGAIN ONE COMMIT LATER**, and the
-correction is worth recording because the first version made a duplication EXACT that had until
-then only been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`;
-adding the same two words to the meta line put the identical string on screen twice, nine words
-apart. Measured on the owner's store, both before and after.
+**`next index` leaves the row because it is not a fourth statistic.** `cards`, `sold` and `fill` describe what is in the box; `next index` is D10's high-water mark — what the allocator will hand out next. Four peers joined by dots was a false claim about them, and the structure is now the distinction rather than a sentence explaining it.
 
-**The field stays and only the qualifier goes**, which is the half that matters: `BoxOps.tsx`
-promises these key names grep to `inventory.json`, so dropping `fill` outright — the other option
-considered — would have broken one promise to keep another. D20 is discharged either way, because
-its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site that
-draws it.
+**D20's two words are on screen once, on the identity line.** That entry is explicit that a denominator whose meaning switches silently between an open box and a sealed one is the failure it exists to prevent: `fill` is a fill-**so far** while the box is open and a frozen capacity once **sealed**.
 
-**FIELD NAMES STAY VERBATIM IN THE DOM.** `BoxOps.tsx` promises that what is on screen greps to
-`inventory.json`; the keys are written lowercase and uppercased by `text-transform` at paint only,
-so a copy out of the DOM still matches the store. `app/tests/inventory.spec.ts` asserts the
-lowercase text, and a `toUpperCase()` in the component — which would look identical on screen —
-takes it red. That mutation was run.
+**The qualifier was put on `.boxops-meta`'s fill and taken off again one commit later**, and the correction is worth recording because the first version made a duplication EXACT that had until then been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`; adding the same two words put the identical string on screen twice, nine words apart. **The field stays and only the qualifier goes**, which is the half that matters: `BoxOps.tsx` promises these key names grep to `inventory.json`, so dropping `fill` outright would have broken one promise to keep another. D20 is discharged either way, because its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site.
 
-**WHAT IT COSTS, MEASURED.** The address block goes **86px wrapped -> 70px**, so it is shorter
-than the state it replaces. The meta block goes **33px -> 62px**. That height is free in D31's
-resting state and is **not** free once a section is open, where `.browse-map` is at its viewport
-cap and `.browse-list` is the scroller — there it comes out of the walk at 25.5px per card row,
-about 1.2 rows. The ledger variant that was also rendered cost 81px and ~1.9 rows, and was
-declined on that number.
+**Field names stay verbatim in the DOM.** The keys are written lowercase and uppercased by `text-transform` at paint only, so a copy out of the DOM still matches the store. `app/tests/inventory.spec.ts` asserts the lowercase text, and a `toUpperCase()` in the component — identical on screen — takes it red. That mutation was run.
 
-**THAT REOPENING HAPPENED THE SAME DAY. The owner: "Full treatment for all -- amendment."** The
-paragraph this replaces named `.review-position` and `.card-locations-label` and said taking the
-treatment to them was "a decision about all three sites, not a copy of this one". This is that
-decision, and the count was wrong: the capture screen draws the address in **five** more places,
-three of them inside running sentences. Six owner sites, not three.
+**What it costs, measured.** The address block goes **86px wrapped to 70px**, shorter than the state it replaces. The meta block goes **33px to 62px**. That height is free in D31's resting state and is **not** free once a section is open, where `.browse-map` is at its viewport cap and `.browse-list` is the scroller — there it comes out of the walk at 25.5px per card row, about 1.2 rows. The ledger variant also rendered cost 81px and ~1.9 rows, and was declined on that number.
 
-**THE STRUCTURE IS UNIVERSAL AND THE SIZE IS PER SITE, WHICH IS WHAT THE OLD PARAGRAPH'S WARNING
-BUYS.** It predicted that "a 44px figure repeated seven times in a list would be a different and
-worse defect", and that is now measured rather than predicted: at 44px the copies row goes
-114.17 -> 126.48px, +86px on a seven-copy list, and copies visible on landing drop 4 -> 3 — on the
-screen whose recorded complaint (D38 twice, D40 again) is that the copies scroll away. So what is
-shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size —
-and each site sets its own figure.
+### Full treatment for all, the same day
 
-**ONE COMPONENT, `app/src/PositionLabel.tsx`, AND ONE DECLARATION PER SITE.** `--pos-slot` is the
-figure and `.position-num` is `1em`, so a site's whole register is one line in its own stylesheet.
-The key is `clamp(var(--pos-path), 0.295em, 13px)` — 12.98px at a 44px figure and 11px at 32, 28
-and 20 — so `#/inventory` keeps its shipped key to within 0.02px and no other site declares one.
+The owner reopened it in those words. The paragraph this replaces named `.review-position` and `.card-locations-label` and said taking the treatment to them was a decision about all three sites — **and the count was wrong**: the capture screen draws the address in **five** more places, three of them inside running sentences. Six owner sites, not three.
 
-**PROPORTIONAL SCALING WAS TRIED AND REFUSED, WITH THE ARITHMETIC.** D41's shipped ratio is path
-11px against 44px, 0.25em. At the review head's 32px that is 8px and at the copies row's 28px it is
-7px, below anything this product draws. Probed independently, **all four new sites landed on the
-same 11px path against four different figures** — the path tracks each screen's metadata register
-(`.review-machine` 11px, `.card-locations-boxname` 10px) while the figure tracks its payload. Two
-scales, not one; a single multiplier would have claimed these screens are scaled copies of each
-other.
+**The structure is universal and the size is per site**, which is what the old paragraph's warning buys. It predicted that a 44px figure repeated seven times in a list would be a different and worse defect, and that is now measured: at 44px the copies row goes 114.17 to **126.48px**, +86px on a seven-copy list, and copies visible on landing drop 4 to 3 — on the screen whose recorded complaint (D38 twice, D40 again) is that the copies scroll away. So what is shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size — and each site sets its own figure.
 
-**THE FIGURE IS FREE UP TO 32.3px, AND THAT IS ONE MEASUREMENT NOT FIVE.** The two-line path is
-33.9px, so at `line-height: 1.05` every figure to 32.3px draws the same 33.9–34.0px block: 20, 24,
-28 and 32 cost nothing, 36 costs 4px and 44 costs 12. Three of the four new sites sit on that
-plateau by construction. **It is a property of a THREE-part label** — a two-part label has a
-one-line path and the plateau collapses, which D36 and D24 both contemplate.
+**One component, `app/src/PositionLabel.tsx`, and one declaration per site.** `--pos-slot` is the figure and `.position-num` is `1em`, so a site's whole register is one line in its own stylesheet. The key is `clamp(var(--pos-path), 0.295em, 13px)` — 12.98px at a 44px figure and 11px at 32, 28 and 20 — so `#/inventory` keeps its shipped key to within 0.02px and no other site declares one.
 
-**THREE SITES NEEDED A RULE THE BAND DID NOT.**
+**Proportional scaling was tried and refused, with the arithmetic.** The shipped ratio is path 11px against 44px, 0.25em. At the review head's 32px that is 8px and at the copies row's 28px it is 7px, below anything this product draws. Probed independently, **all four new sites landed on the same 11px path against four different figures** — the path tracks each screen's metadata register (`.review-machine` 11px, `.card-locations-boxname` 10px) while the figure tracks its payload. Two scales, not one; a single multiplier would have claimed these screens are scaled copies of each other.
 
-- **The copies list leads with the SLOT, not the path**, because it is a list. Down seven rows the
-  coarse parts are identical, so path-first stands seven `BOX 2 / SECTION n` blocks in front of the
-  only thing that differs — the dense-grey-table failure `docs/DESIGN.md` names by the front door.
-  It is height-free **only because the two-line path absorbs `.card-locations-boxname`**; a box
-  with no name pays +17px on every row, and D20 made names unique but deliberately NOT required.
-  Latent today, nothing warns.
-- **An in-sentence label gets the RANK without the geometry** — the `run` form. Stacking inside a
-  sentence measured 79px against 23px and orphaned the trailing period onto its own line; at
-  `inline-flex` it rendered `BOX 2` above the baseline as a superscript footnote marker.
-- **A NUMERIC GUARD, which D41's own splitter did not have.** `#/inventory` draws only real
-  positions. `#/review` draws D24's pooled label `Pokémon code cards · pooled`, which the shipped
-  splitter turned into a path reading `POKÉMON CODE cards` and a lowercase word promoted to a
-  300.9px figure. Nothing broke geometrically and no assertion saw it. A promoted slot is a slot
-  NUMBER or the label renders whole.
+**The figure is free up to 32.3px, and that is one measurement not five.** The two-line path is 33.9px, so at `line-height: 1.05` every figure to 32.3px draws the same 33.9–34.0px block: 20, 24, 28 and 32 cost nothing, 36 costs 4px and 44 costs 12. **It is a property of a THREE-part label** — a two-part label has a one-line path and the plateau collapses, which D36 and D24 both contemplate.
 
-**THE FULFILLER'S FIREWALL IS THE COMPONENT GRAPH, NOT A SELECTOR.** `Fulfillment.tsx` and
-`CardLocations.tsx:FulfillerCard` do not import the component, so no `.position-*` rule can reach
-his 32px and 36px labels — which is why stripping a class prefix cannot breach it. The breach that
-would actually happen is somebody lifting the call out of `OwnerCard` into a shared render path,
-and `app/tests/fulfillment.spec.ts` now states that as a CAUSE (`.position-parts` count zero)
-rather than leaving it to be diagnosed from a font size. Mutation-tested: the lift takes the
-firewall case red, and eleven other cases with it.
+**Three sites needed a rule the band did not.**
 
-**TWO ASSERTIONS WERE FOUND DEFECTIVE ON THE WAY, BOTH WRITTEN EARLIER THE SAME DAY.**
-`inventory.spec.ts`'s `labelLines` read `getClientRects().length` off a column-flex child, which is
-blockified and returns exactly ONE rect however many lines it holds — measured on the shipped tree,
-the label wraps to 2/3/4 real lines at 200/120/80px and the assertion read 1 every time. Its case
-only ever went red on a different assertion, which hid it. And `review.spec.ts`'s
-`.not.toHaveText(/Card 14$/)` would have gone vacuous the moment the DOM text stopped containing
-that string, passing forever while detecting nothing — the silently-weakened shape D16 forbids.
-Both now assert against `aria-label` or a geometric fact.
+- **The copies list leads with the SLOT, not the path**, because it is a list. Down seven rows the coarse parts are identical, so path-first stands seven `BOX 2 / SECTION n` blocks in front of the only thing that differs — the dense-grey-table failure `docs/DESIGN.md` names by the front door. It is height-free **only because the two-line path absorbs `.card-locations-boxname`**; a box with no name pays +17px on every row, and D20 made names unique but deliberately NOT required. Latent today, and nothing warns.
+- **An in-sentence label gets the RANK without the geometry** — the `run` form. Stacking inside a sentence measured 79px against 23px and orphaned the trailing period onto its own line; at `inline-flex` it rendered `BOX 2` above the baseline as a superscript footnote marker.
+- **A NUMERIC GUARD, which the splitter did not have.** `#/inventory` draws only real positions. `#/review` draws D24's pooled label `Pokémon code cards · pooled`, which the shipped splitter turned into a path reading `POKÉMON CODE cards` and a lowercase word promoted to a 300.9px figure. Nothing broke geometrically and no assertion saw it. A promoted slot is a slot NUMBER or the label renders whole.
 
-**WHAT IS NOT TREATED, AND WHY.** `.review-row-position` (11px, 23 in the rail), `.review-group-pos`
-(10px) and the capture screen's bare-integer consumer keep the plain string: the mechanism is RANK,
-and a 10px caption has no rank to spend — stacking it would cost height in the two lists whose only
-job is to be scannable. The consequence is honest: **`#/review` now renders the address two ways.**
-So does `#/inventory`, where the band's 44px figure and the copies list's 28px sit ~500px apart in
-one idiom; the 1.57 ratio is what keeps the band dominant, and it is the first thing to look at if
-the screen starts feeling noisy.
+**The Fulfiller's firewall is the component graph, not a selector.** `Fulfillment.tsx` and `CardLocations.tsx:FulfillerCard` do not import the component, so no `.position-*` rule can reach his 32px and 36px labels — which is why stripping a class prefix cannot breach it. The breach that would actually happen is somebody lifting the call out of `OwnerCard` into a shared render path, and `app/tests/fulfillment.spec.ts` now states that as a CAUSE (`.position-parts` count zero) rather than leaving it to be diagnosed from a font size. Mutation-tested: the lift takes the firewall case red, and eleven other cases with it.
 
-**ONE SITE IS UNTREATED FOR A STRUCTURAL REASON RATHER THAN A DESIGN ONE.**
-`CaptureScreen.tsx:1931` composes `Note saved on ${target.card.label}.` as a plain STRING inside a
-notice payload — there is no element to style and no JSX to return, so it cannot take even the run
-form without changing the notice type across the component. Named here rather than silently left,
-because it is the one place the owner's "all" is not satisfied.
+**Two assertions were found defective on the way, both written earlier the same day.** `inventory.spec.ts`'s `labelLines` read `getClientRects().length` off a column-flex child, which is blockified and returns exactly ONE rect however many lines it holds — measured on the shipped tree, the label wraps to 2/3/4 real lines at 200/120/80px and the assertion read 1 every time. Its case only ever went red on a different assertion, which hid it. And `review.spec.ts`'s `.not.toHaveText(/Card 14$/)` would have gone vacuous the moment the DOM text stopped containing that string, passing forever while detecting nothing — the silently-weakened shape D16 forbids. Both now assert against `aria-label` or a geometric fact.
 
-**WHAT WOULD REOPEN THIS: a two-part label, or a box with no name.** Both collapse a measurement
-this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row.
-Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
+**What is not treated, and why.** `.review-row-position` (11px, 23 in the rail), `.review-group-pos` (10px) and the capture screen's bare-integer consumer keep the plain string: the mechanism is RANK, and a 10px caption has no rank to spend — stacking it would cost height in the two lists whose only job is to be scannable. The consequence is honest: **`#/review` now renders the address two ways.** So does `#/inventory`, where the band's 44px figure and the copies list's 28px sit ~500px apart in one idiom; the 1.57 ratio is what keeps the band dominant, and it is the first thing to look at if the screen starts feeling noisy.
+
+**One site is untreated for a structural reason rather than a design one.** `CaptureScreen.tsx:1931` composes `Note saved on ${target.card.label}.` as a plain STRING inside a notice payload — there is no element to style and no JSX to return, so it cannot take even the `run` form without changing the notice type across the component. Named here rather than silently left, because it is the one place the owner's *all* is not satisfied.
+
+**What would reopen this: a two-part label, or a box with no name.** Both collapse a measurement this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row. Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
 
 ---
 
