@@ -4361,6 +4361,54 @@ stopped being a Someday item and needs a decision entry of its own"* — and eac
   misses into review-queue taps, not into correct answers. It buys safety, not a higher T1
   number — the mirror image of the trade the set-hint item above warns about.
 
+- **Keep a price series out of the exports runs already hold** (recorded 2026-08-29, from the
+  owner asking whether the export carries last solds). **It does not, and neither does
+  anything else reachable from here.** The Filtered CSV is current-state only — sixteen
+  columns, four of them prices, not one carrying a timestamp, a sale record or a sample size.
+  `TCG Market Price` is the only column with sales behind it and it arrives as TCGplayer's own
+  aggregate over recent sales, so *"what did the last three copies sell for"* is not answerable
+  from it and is not recoverable from it by arithmetic. The `tcgplayer-csv` skill carries the
+  schema half.
+
+  **TCGplayer publishes no price history at all, and that is the fact that decides the rest.**
+  The latest-sales panel on a product page is UI-only, with no export and no API contract — so
+  D2's own rubric answers it before any code is written: a benchmark, never a component. And
+  it would mean scraping the marketplace this project's entire listing path depends on (D11),
+  from the account that depends on it. The exposure is the seller account rather than an IP
+  ban, which is a worse trade than the data is worth.
+
+  **Nothing has to be fetched to start, which is the part worth not forgetting.** D33 makes an
+  app-driven run keep the exact export bytes it joined against, for an unrelated reason — so
+  the archive is already accumulating. Three exports were on disk on 2026-08-29:
+  `runs/2026-08-24-box2-01/` and two inside `runs/2026-08-29-box1-01/`, that run having
+  re-joined against a refreshed export the same morning. Keying `TCG Market Price` by
+  `TCGplayer Id` across run directories is a price series that grows every run and calls
+  nothing.
+
+  **What it cannot cover is the backfill**, holding only SKUs that have been run, on the dates
+  they were run. `tcgcsv.com` is the candidate: a nightly mirror of TCGplayer's own API across
+  89+ games including all three this project captures, sub-type aware — Normal, Holofoil and
+  Reverse Holofoil as separate series, matching how the Condition string carries the variant —
+  with market/low/mid/high per day and an archive back to 2024-02-08. A published mirror, not
+  a scrape.
+
+  **eBay sold listings are a real source and the wrong one.** Officially reachable through the
+  Marketplace Insights API rather than by scraping, but eBay is on the Deferred list above, and
+  an eBay sold price is shipping-inclusive on a different market — it would mislead a
+  TCGplayer listing price rather than inform it.
+
+  **This is Someday rather than a plan because the second half reopens D8**, which names the
+  export as the pricing source and no external pricing API. The two halves are not equally
+  affected and the split is the reason this is written down rather than built: the local
+  series barely touches D8 if at all — same bytes, same column, kept instead of discarded —
+  while `tcgcsv.com` is plainly an external price source whatever it is used for. The owner's
+  call, and a decision entry naming D8 is the shape it takes.
+
+  **What it would be worth**: D49's `bullish` withhold and its `watch_above` threshold are the
+  only things in the product that want a trend, and they have none — a hold is set against the
+  operator's memory of what a card used to cost. **The honest limit is that none of this is
+  last solds**, and no amount of daily aggregate becomes one.
+
 ---
 
 Unsorted scanning is **not** deferred: it works today via the optional hints, with more
