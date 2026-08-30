@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The two guards a prose rewrite of docs/DECISIONS.md needs, and one it does not have.
 
-D60 densifies the four `@`-loaded docs. Two things can go wrong and neither had a guard:
+D60 densifies the four docs CLAUDE.md names, and drops the `@` from three of them. Two
+things can go wrong and neither had a guard:
 
   --structure   the prose is machine-parsed by scripts/decision-context.py, whose failure
                 mode is `except Exception: sys.exit(0)`. A heading that loses its dash
@@ -199,9 +200,8 @@ def check_budget(path: Path, budget: int) -> List[Finding]:
         Finding(
             f"{name}:{entry.line}",
             f"`{entry.ident}` is {len(entry.body):,} bytes against a {budget:,} budget. "
-            f"Every session loads this entry in full (CLAUDE.md `@`-references this file), "
-            f"so length here is a standing cost rather than a style question. Cite a "
-            f"related entry instead of re-arguing it (D60).",
+            f"A session that opens this entry reads all of it, and D60 dropped the `@` so it is "
+            f"opened deliberately. Cite a related entry instead of re-arguing it (D60).",
         )
         for entry in entries(text)
         if len(entry.body) > budget
@@ -293,7 +293,7 @@ def render(findings: Sequence[Finding], clean: str) -> int:
 
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(
-        description="Guards for a prose rewrite of the @-loaded docs (D60).",
+        description="Guards for the four docs CLAUDE.md names (D60).",
     )
     parser.add_argument(
         "--structure",

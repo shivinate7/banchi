@@ -1459,6 +1459,73 @@ def check_decision_structure(report: Report) -> None:
                f"{len(entries)} entries, every heading and bold reaches the hook")
 
 
+def check_decision_index(report: Report) -> None:
+    """CLAUDE.md's index against docs/DECISIONS.md's headings.
+
+    D60 dropped the `@` prefix, so that file is no longer loaded in full and the index is
+    the only thing a session sees without opening it. An index that has drifted is worse
+    than none, because it is believed — the argument D17 makes for auditing docs/map.py
+    exactly as hard as it is trusted.
+
+    MECHANICAL. Both sides are ids and titles: there is nothing here a later session could
+    reasonably disagree with, which is D16's test for what may block.
+
+    NOT a generator, and this deliberately does not open D18's seam list. It computes what
+    the index should say and compares; it never writes. That is D18's own write-time versus
+    check-time split, with only the check half built.
+    """
+    claude = ROOT / "CLAUDE.md"
+    decisions = ROOT / "docs" / "DECISIONS.md"
+    if not exists(claude) or not exists(decisions):
+        report.add("decision index", MECHANICAL,
+                   [Finding("CLAUDE.md", "cannot read the index or the entries.")])
+        return
+
+    want = [
+        (m.group(1), m.group(2).strip())
+        for m in (re.match(r"^##\s+(D\d{1,2})\s*[—-]\s*(.+)$", line)
+                  for line in read(decisions).split("\n"))
+        if m
+    ]
+    # The index is the first fenced block whose lines all start `D<n> `. Located by shape
+    # rather than by a heading, so re-titling the Map section cannot silently unhook it.
+    got: List[Tuple[str, str]] = []
+    fenced, block = False, []
+    for line in read(claude).split("\n"):
+        if line.lstrip().startswith("```"):
+            if fenced and block and all(re.match(r"^D\d{1,2}\s", b) for b in block if b.strip()):
+                got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
+                       for b in block if b.strip()]
+                break
+            fenced, block = not fenced, []
+            continue
+        if fenced:
+            block.append(line)
+
+    findings: List[Finding] = []
+    if not got:
+        findings.append(Finding("CLAUDE.md", "no decision index found. D60 requires one."))
+    else:
+        want_ids = [i for i, _ in want]
+        got_ids = [i for i, _ in got]
+        for ident in [i for i in want_ids if i not in got_ids]:
+            findings.append(Finding("CLAUDE.md", f"`{ident}` has a heading but is not in the index."))
+        for ident in [i for i in got_ids if i not in want_ids]:
+            findings.append(Finding("CLAUDE.md", f"the index lists `{ident}`, which has no heading."))
+        titles = dict(want)
+        for ident, title in got:
+            if ident in titles and titles[ident] != title:
+                findings.append(Finding(
+                    "CLAUDE.md",
+                    f"`{ident}`'s index line reads {title!r} and its heading reads "
+                    f"{titles[ident]!r}. The heading is the source.",
+                ))
+        if got_ids != [i for i in want_ids if i in got_ids]:
+            findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
+    report.add("decision index", MECHANICAL, findings,
+               f"{len(got)} indexed, matching {len(want)} headings")
+
+
 def check_entry_budget(report: Report) -> None:
     """Entry size, reported and never blocked.
 
@@ -5233,6 +5300,7 @@ def audit(staged_only: bool) -> Report:
     check_evidence_freshness(report, staged_only)
     check_decision_ids(report, docs)
     check_decision_structure(report)
+    check_decision_index(report)
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_map(report, allowed)
