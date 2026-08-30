@@ -1105,7 +1105,7 @@ target called "make" when it sat beside another make span on one line.
 
 ---
 
-## One card renders three ways on one screen (2026-08-30)
+## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
 
 Found by the owner looking at five copies of Moonfall in box 3 and seeing the `Number` row
 disagree between them. Two defects and one symptom, separated here because only two of the
@@ -1185,3 +1185,36 @@ and goes blank on the copies whose neighbors are themselves departed.
 
 Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
 ruling about exactly this label. It wants an entry, not a patch.
+
+### The pricing screen shows two Box 1 buttons, and one of them is a box that is gone
+
+Reported as *"why does pricing show two box 1s"*. **Because there are two runs over box 1**,
+and `Pricing.tsx`'s run picker draws one button per run with the box as the headline:
+
+    2026-08-30-box3-01   Box 3 · RB Epics
+    2026-08-29-box1-01   Box 1 · UNL Rares
+    2026-08-24-box2-01   Box 2 · ME01 C/UC
+    2026-08-22-box1-03   Box 1 · UNL Rares
+
+The run id is drawn — it is the `pricing-run-id` span — but `docs/DESIGN.md`'s
+human-label-large, machine-string-small rule puts it in the meta line under the headline, so
+the only thing separating two buttons is small text and a SKU count. **The data is correct
+and the screen is honest**; the fact that distinguishes them is demoted.
+
+**The sharper half is that the older button describes a box that no longer exists.** Box 1 as
+it stands was created **2026-08-29 21:32**, seven days after that run, and **not one card in
+the store carries `run=2026-08-22-box1-03`** — the store's three runs account for all 715
+records and that is not one of them.
+
+**It is labeled `UNL Rares` anyway, and that is D56 working exactly as written.**
+`server/pipeline_routes.py:_summary` derives `box` from the manifest's scope or, failing that,
+from the capture directory's basename — this run has no scope block, so `captures/cards/box1`
+is the whole of the evidence — and then joins `box_name` against the registry **as it stands
+right now**. D56 chose read-time joining on purpose, so that a rename relabels every screen
+rather than stranding an answer nobody can correct. The cost it did not name is this one: a
+run over a *previous* occupant of a box number silently borrows the *current* occupant's name.
+
+Not fixed here because the repair is a choice between three things — draw the run's date in
+the headline, mark a run whose cards are no longer in the store, or refuse to name a box whose
+`created_at` postdates the run — and the third is a real amendment to D56 rather than a
+rendering tweak.
