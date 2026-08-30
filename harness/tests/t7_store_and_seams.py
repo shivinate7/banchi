@@ -5617,6 +5617,89 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "the queue file both print, so it is what gets pasted into a search box",
         )
 
+        # --- D67: the group agrees on what the SCREEN draws, not on what the model typed ---
+        #
+        # THE LIVE SHAPE, WITH THE STORE'S OWN NUMBERS BEHIND IT. Five copies of Moonfall carry
+        # three spellings of one identifier — `198/219` twice, `UNL • 198/219` and
+        # `UNL - 198/219` once each — because D55's repair fires on the JOIN and nothing had
+        # ever applied it to a screen. `_agreed` therefore returned None, correctly, and the
+        # group lost its number row while every copy's own row showed its own variant. All
+        # three glued here so the case cannot pass on a surviving clean copy.
+        with Store().write() as snapshot:
+            for key, glued in (
+                ("8/1", "UNL \u2022 044"),
+                ("8/2", "UNL - 044"),
+                ("8/3", "UNL / 044"),
+            ):
+                snapshot.inventory.cards[key].number = glued
+
+        mixed = capture_server.do_search("eiscue")["groups"][0]
+        checks.equal(
+            mixed["number"],
+            None,
+            "the RAW field still disagrees and is still None — `_agreed` is unchanged, and "
+            "a number lifted off whichever copy the dict yielded first is still refused",
+        )
+        checks.equal(
+            mixed["number_display"],
+            "044/167",
+            "and the group can speak again, because all three copies say the same thing once "
+            "the set code the model glued on is off the front of it (D67)",
+        )
+        checks.equal(
+            [group["sku"] for group in capture_server.do_search("044/167")["groups"]],
+            ["555"],
+            "AND WHAT THE SCREEN DREW IS STILL SEARCHABLE, which is the side effect the fix "
+            "had to close: not one copy stores `044/167` any more, so a raw-only match would "
+            "answer nothing for a string the copies list had just printed",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/1"]["number"],
+            "UNL \u2022 044",
+            "the RECORD is untouched — D36 keeps the read as the model returned it, and a "
+            "store tidied at read time cannot report the prompt being ignored",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/1"]["number_display"],
+            "044/167",
+            "and the decoration rides beside it, wire-only, in the shape `label` already takes",
+        )
+        row_inventory = Store().read().inventory
+        checks.equal(
+            capture_server._card_row(
+                row_inventory, 8, 1, row_inventory.cards["8/1"]
+            )["number_display"],
+            "044/167",
+            "AND `_card_row` DECORATES IT TOO, so a screen holding a write's answer against a "
+            "row of `GET /inventory` compares field for field — the property that file's own "
+            "docstring promises, one field wider. Called directly because the four routes that "
+            "return it are the review and undo routes, whose own fixtures are three sections "
+            "down and have no numbered card in them",
+        )
+        checks.equal(
+            capture_server._match_rank(
+                Store().read().inventory.cards["8/1"], "044/167"
+            ),
+            capture_server._RANK_EXACT_NUMBER,
+            "and typing what the screen drew is an EXACT number match, not a substring one: "
+            "the raw field still contains the display form so a fold-less build still FINDS "
+            "the card, and ranks it below every name prefix on the page — the rank is where "
+            "this is observable, which is why it is asserted and not the group's presence",
+        )
+
+        # A GAME THAT PRINTS NO DENOMINATOR, WHICH IS 174 OF THE OWNER'S 676 NUMBERED RECORDS.
+        # The store writes `""` there and two client copies of this composition tested
+        # `printed_total === null` alone, one line below testing `number` for null OR blank —
+        # so a quarter of the store rendered `198/219/`, a separator with nothing behind it.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["8/1"].printed_total = ""
+        checks.equal(
+            capture_server.do_inventory()["cards"]["8/1"]["number_display"],
+            "044",
+            "an empty `printed_total` is an ABSENT denominator and not half of one: no "
+            "trailing separator, on the game that never prints one",
+        )
+
 
 # -------------------------------------------------------------------------- place block
 
@@ -6320,15 +6403,16 @@ def check_consolidated_numbering(checks: Checks) -> None:
         )
         checks.equal(
             capture_server.do_inventory()["cards"]["3/3"].get("label"),
-            "Box 3 · departed",
+            "Box 3 · departed · 3/3",
             "the DEPARTED card does not keep the number it held — that number belongs to "
             "the card that closed up behind it, and answering it would send someone to the "
-            "wrong slot. It says where the record belongs and that there is no slot, which "
-            "is the same shape a pooled card's line takes for the same reason (D24)",
+            "wrong slot. It says where the record belongs, that there is no slot, and which "
+            "record it is (D68), which is the same shape a pooled card's line takes for the "
+            "same reason (D24)",
         )
         checks.equal(
             place(3)["label"],
-            join.departed_label(3),
+            join.departed_label(3, 3),
             "and its block says so in the one composer that owns that string, beside "
             "`pooled_label` — a card with no slot, said the same way both times it happens",
         )
@@ -6350,6 +6434,22 @@ def check_consolidated_numbering(checks: Checks) -> None:
             label(4),
             "Box 3 · Section 1 · Card 3",
             "while section 1 is untouched by a sale behind it: the map runs one way",
+        )
+
+        # D68: TWO DEPARTED RECORDS IN ONE BOX ARE TWO ROWS, NOT ONE ROW TWICE. Both draw the
+        # same box and the same word, so before the store key was appended they were the
+        # identical string — the owner read that as `I'm seeing two box 1's`, and on his store
+        # 11 of 12 departed records sit in a group that does it. Asserted as an inequality
+        # rather than against the literals above it, because what the label must guarantee is
+        # that no two records ever share one.
+        checks.ok(
+            label(3) != label(8) and {label(3), label(8)} == {
+                "Box 3 · departed · 3/3",
+                "Box 3 · departed · 3/8",
+            },
+            "two departed records in one box draw two different labels, each naming the "
+            "record it belongs to — `Place.index`, which D58 keeps immovable, and never "
+            "`Place.slot`, which now belongs to the card that closed up behind it",
         )
 
         # --- the index never moved --------------------------------------------------------
@@ -10830,6 +10930,57 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "read for the whole list — this is the polled route, at 4s while anything is "
                 "live, so a read per row would be a read per run per poll",
             )
+            # A REALLOCATED BOX NUMBER, which is the one shape the read-time join cannot
+            # get right on the number alone. D20 hands out the lowest FREE integer, so a box
+            # that goes and another that arrives share a number and this map — keyed by the
+            # number — holds the newcomer's name under the old run's box. Observed on the
+            # owner's store: `2026-08-22-box1-03` drew `UNL Rares`, a registry entry made
+            # seven days later over none of that run's 53 cards.
+            #
+            # BOTH CONDITIONS ARE ASSERTED SEPARATELY BELOW, because the first version of
+            # this rule used the timestamp alone and broke the name-it-later flow three
+            # assertions up — a box named after its run is ordinary, and that case is
+            # already covered, so what is left is to prove the card set is what carries it.
+            stranger = runs.create("box3")
+            stranger.set(capture_dir=str(box_dir), created_at="2000-01-01T00:00:00+00:00")
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{stranger.directory.name}")
+            checks.equal(
+                json.loads(body)["box_name"],
+                "Riftbound epics",
+                "a box holding NO cards disowns nobody, so a run older than the registry "
+                "entry is still named — an empty box is not evidence that the drawer "
+                "changed, and refusing the name there would break naming a box afterwards",
+            )
+
+            with Store().write() as snapshot:
+                seeded, _ = snapshot.inventory.allocate_capture(
+                    3, capture_id="reallocated-1"
+                )
+                snapshot.inventory.record_identification(
+                    seeded.key,
+                    name="Moonfall",
+                    number="198/219",
+                    printed_total="219",
+                    confidence="high",
+                    run=made.directory.name,
+                )
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{stranger.directory.name}")
+            checks.equal(
+                json.loads(body)["box_name"],
+                None,
+                "and once the box holds cards and NONE of them is this run's, the name is "
+                "withheld — the drawer under that number is somebody else's, and naming it "
+                "would put a label on a run over 53 cards that are no longer in the store",
+            )
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")
+            checks.equal(
+                json.loads(body)["box_name"],
+                "Riftbound epics",
+                "while the run those cards DO belong to keeps its name, which is what stops "
+                "this being a rule that simply stops naming a reused box for everyone",
+            )
+            shutil.rmtree(stranger.directory)
+
             shutil.rmtree(legacy.directory)
 
             # ----------------------------------------------------------- the file download

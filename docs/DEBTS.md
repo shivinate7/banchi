@@ -1110,67 +1110,78 @@ not by the rows beside it" — failed once in a full run and passed alone and on
 Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately
 afterwards was 256 of 256. The mechanism was given as rendered geometry: D38 sizes the
 photograph off its column, so the assertion reads back a computed width, and a layout that
-has not settled reports a number that is right a frame later.
+has not settled reports a number that is right a frame later. No error text was captured, so
+that was a hypothesis rather than a reading.
 
-**THE MECHANISM WAS A HYPOTHESIS AND IT WAS MEASURED FALSE.** No error text was captured
-when the entry was written — the commit records the count and reasons about the cause — so
-the geometry was inferred from what the case asserts rather than from what it said when it
-broke. It was reproduced on 2026-08-30 by loading the rig: 40 workers against 12 spinning
-CPU hogs, 80 repeats of that one case. **9 of the 80 failed, and every one of them failed
-in `open()` on `expect(page.locator(VIEW)).toBeVisible()` at the 5000 ms default — the
-app had not rendered yet. Not one failed on an assertion.**
+**IT WAS TWO FLAKES, AND THE HYPOTHESIS WAS HALF RIGHT.** Both were reproduced on
+2026-08-30 by loading the rig, and they answer to different fixes.
 
-**The geometry does not move.** The same case was instrumented to print what it measures and
-run 60 more times under the same load: every value came back byte-identical. Shot 387.11px
-in a 387.11px track (the case allows 8px of slack), tallest fact row 31.5px against a 40px
-ceiling, ratio 1.397 against 88/63 ±0.05, the two columns' tops 0px apart against a 1px
-allowance. There is no frame at which these numbers are different, because
-`.browse-body`'s tracks are `fr` and `.browse-photo` takes its height from `aspect-ratio` —
-neither waits on content, an image's bytes, or a font. Blocking the webfonts outright does
-not fail the case either.
+### One — the wait, which is what the recorded red almost certainly was
 
-**What shipped: `expect: { timeout: 15_000 }` in `app/playwright.config.ts`.** The suite is
-`fullyParallel`, so every worker's first act is that same visibility wait against a Vite dev
-server compiling the module graph for N contexts at once. With the wait lengthened the same
-80 loaded repeats passed 80 of 80, the slowest whole case taking 5.276s — which is why the
-default was failing, and why 15s is the number. Five consecutive `make design-check` runs
-after it: 256 of 256 each, 25.6-26.5s, no slower than before, because a timeout costs
-nothing until something fails.
+At 40 workers against 12 spinning CPU hogs, 80 repeats of that one case: **9 failed, and
+every one of them failed in `open()` on `expect(page.locator(VIEW)).toBeVisible()` at the
+5000 ms default — the app had not rendered yet. Not one failed on an assertion.** With the
+allowance lengthened the same 80 passed, the slowest whole case taking 5.276s.
 
-**This weakens no assertion, which is the test D16 sets.** Nothing about what is asserted or
-the value asserted against changed; what changed is how long a true statement is given to
-become true, and a false one is still false at 15s. The cost is slower reporting of a
-genuine failure. `app/tests/fulfillment.spec.ts` already pays that knowingly with a 60s
-`toHaveCount` and a 90s `test.setTimeout` of its own.
+**`expect: { timeout: 15_000 }` in `app/playwright.config.ts`, and it weakens no assertion.**
+Nothing about what is asserted or the value asserted against changed; what changed is how
+long a true statement is given to become true, and a false one is still false at 15s. The
+cost is slower reporting of a genuine failure, which `app/tests/fulfillment.spec.ts` already
+pays knowingly with a 60s `toHaveCount` and a 90s `test.setTimeout` of its own.
 
-**What is NOT closed by this, stated because the reproduction found it.** At 40 workers
-against 12 CPU hogs the full suite still loses tests — `fulfillment.spec.ts` on
-`main.fulfillment`, `capture-claims.spec.ts` on the Finish row, and `capture-undo.spec.ts`
-on a capture that never landed (it expects `Card 10` and the stack's newest is `Card 9`,
-which is a DROPPED PRESS rather than a slow one and is the only one of the three that a
-longer wait cannot be the answer to). None of them is this case, and that load is far past
-anything `make design-check` produces on its own — it runs 7 workers on this 15-core rig, and
-seven consecutive full runs at that setting across this session were 256 of 256, one before
-the change and six after.
+### Two — the case subtracting two layouts, which is the geometry the entry guessed at
+
+**`Received: 1.5` against `expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)`, twice
+in 320 loaded repeats at 30 workers against 8 hogs.** The two columns are flush and stay
+flush: 120 loaded samples that read both tops inside ONE `page.evaluate` came back at
+115.25px and 115.25px, a 0px gap, every single time, with `document.fonts` already loaded
+and no scroll. **What was unstable was the case, not the screen.** `mid` is read forty lines
+and eleven `boundingBox()` round-trips before `under`, and the two were subtracted as though
+they came from one layout — so anything that moves the grid inside that window (row 1
+growing as a face swaps in) is reported as two columns that have come apart.
+
+**Both tops now come out of one `evaluate`.** Same two elements, same tops, same 1px
+allowance — this is a measurement fix, not a loosened assertion, which is the line D16 draws.
+400 loaded repeats at the same 30/8 afterwards: clean.
+
+**The other two comparisons in that case have the same shape and are left alone.**
+`mid.width - shot.width` and `rows.x` against `mid.x + mid.width` also pair an early read
+with a late one, and both are named here rather than rewritten because neither has ever gone
+red and both carry far more room than the drift is worth: 8px of declared slack against a
+measured 0, and a 41px column gap. A case is not improved by rewriting assertions that have
+not failed.
+
+### What is NOT closed
+
+**A starved rig is not a slow one, and no wait answers it.** At 40 workers against 12 hogs —
+4x oversubscription on a 15-core machine — a context can fail to render at all: with the
+allowance raised to 120s, 10 of 80 still failed and one took 122 seconds. At that same load
+the full suite also loses `fulfillment.spec.ts` on `main.fulfillment`,
+`capture-claims.spec.ts` on the Finish row, and `capture-undo.spec.ts` on a capture that
+never landed — it expects `Card 10` and the stack's newest is `Card 9`, which is a DROPPED
+PRESS rather than a slow one and is the only one of those a longer wait could never be the
+answer to. None of it is reachable from `make design-check`, which runs 7 workers here.
 
 One more sighting is on the record and is neither explained nor reproduced: at 15 workers,
-before the change, `app/tests/cursor.spec.ts` — "a typed-into field darkens its edge under the
-pointer, and nothing moves" — failed once in nine runs. Its message was not captured, so it is
-named here rather than diagnosed.
+before either fix, `app/tests/cursor.spec.ts` — "a typed-into field darkens its edge under
+the pointer, and nothing moves" — failed once in nine runs. Its message was not captured, so
+it is named here rather than diagnosed.
 
 **A claim was published against the failing run.** The commit that added D65's capture-screen
 reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1
-failed, and the true count is 256. The number was written before the output was read.
-Corrected here rather than by rewriting the message, because the message is history and this
-file is where what-we-actually-know lives.
+failed, and the true count at that commit was 256. The number was written before the output
+was read. Corrected here rather than by rewriting the message, because the message is history
+and this file is where what-we-actually-know lives.
 
 ## A Playwright line number is not a line in the file — found 2026-08-30
 
-**The entry above cited `app/tests/inventory.spec.ts:2799`. Line 2799 of that file is `  }`.**
-The case it names is at line 2565. The number was copied from the reporter, which is the only
-place it is ever printed, and it is wrong there for **254 of the 256 tests** — checked by
-walking `--reporter=json`'s location for every test and comparing it against the line the
-title actually sits on.
+**The entry above cited `app/tests/inventory.spec.ts:2799`. At the commit it was written
+against (`3ca904e`), line 2799 of that file is `  }` and the case it names is at line 2565.**
+The number was copied from the reporter, which is the only place it is ever printed, and it
+is wrong there for nearly every test in the suite — checked by walking `--reporter=json`'s
+location for all of them and comparing it against the line the title actually sits on.
+**254 of 256 at `3ca904e`; 257 of 259 on the tree this entry lands in**, where that same case
+has moved to line 2612 and is reported at 2827.
 
 **The transform is what moves them, and the sign goes both ways.** Playwright strips the
 TypeScript and reports against the generated file, so a spec loses the lines its type-only
@@ -1185,3 +1196,158 @@ it lands on unrelated code — silently, because the line is real and the file i
 the TITLE instead; the reporter prints that too and it is exact. Recorded rather than fixed
 because there is nothing here to fix: it is the tool's behaviour at 1.55.1, and the repo's
 own remedy is to stop writing the number down.
+
+## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
+
+Found by the owner looking at five copies of Moonfall in box 3 and seeing the `Number` row
+disagree between them. Two defects and one symptom, separated here because only two of the
+three are defects.
+
+### `printed_total` is guarded as `null` and arrives as an empty string — closed 2026-08-30
+
+Recorded and closed the same day, by **D67**. What it argued: `app/src/BoxBrowse.tsx` and
+`app/src/CardLocations.tsx` carried one expression — `printed_total === null ? number :
+${number}/${printed_total}` — **one line below a guard on `number` that tested null OR blank**.
+The store writes `""` there on **174 of 676 numbered records**, which is every Riftbound card,
+so a quarter of the store rendered `198/219/`. Why it sat: the two call sites are one of the
+pairs `docs/DESIGN.md` would rather see merged than edited twice.
+
+**What shipped**: `app/src/cardNumber.ts`, one composer for all three screens — the third copy,
+in `ReviewQueue.tsx`, was the correct one and is gone for the same reason the other two are, so
+a fourth cannot be written. One emptiness test, both halves. `app/tests/inventory.spec.ts`
+asserts it with and without the server's own composition, because the two repairs are
+independent.
+
+### The set code the model glued on is stripped for the key and never for the display — closed 2026-08-30
+
+Closed by **D67**. What it argued: D55 removes a glued-on set code by shape and only after the
+join key has missed — a rule about matching, applied by nothing that draws. Ten numbers in the
+store carry one across **four** separators (the entry said nine and three; the middle dot at
+`1/124` is the fourth, and `_SET_CODE_PREFIX` already covered it). And it propagated:
+`_agreed` returns None when copies disagree, so five copies of Moonfall spelling one number three ways
+made the **group** report nothing while each card's own row showed its own variant.
+
+**What shipped**: `join.strip_set_code` publishes D55's shape and `_repair_set_code` becomes a
+reader of it, so there is one regex rather than two. The server folds where it composes for a
+screen (`number_display` on every inventory row and on both group shapes), agrees on the folded
+value, and matches on it too — the last so that a number the screen printed can be typed back.
+The raw fields are untouched everywhere. Measured: 2,607 export cells matched zero, 10 store
+records changed, **7 of the 11 silent groups recovered** and the four real disagreements stayed
+silent.
+
+**What it does not cover, by choice**: `#/review` still draws the raw read. D55 was found by the
+owner reading `UNL / 120/219` on that screen, and a queue that tidied its own evidence would
+have hidden it.
+
+### The stripped panel was the stranded card, not a third defect
+
+Unchanged, and still not a defect. The fifth Moonfall drew no card block and `sku: null` because
+`_agreed`'s SKU-less group is a deliberate collection of *"cards with nothing in common but the
+operator's query"* — a card with no SKU correctly forms its own group and correctly offers
+nothing that depends on one. **That card should never have been in it**: `3/37` was resolved by
+its run, lost the stamp to the D7 cap `cli/cmd_emit.py` used to apply to `uncommitted_positions`,
+sold at 14:41, and was out of reach of every later re-emit by D57's invariant. Repaired
+2026-08-30 from the run's own paperwork; `GET /search?q=moonfall` returns one group of five, and
+that was confirmed live on 2026-08-30 against a copy of the owner's store.
+
+**What is worth keeping from it**: a SKU-less group renders as a panel with its controls
+missing, and the owner read that as breakage rather than as a category. Whether that category
+should announce itself is a design question nobody has asked.
+
+### Two departed copies in one box render as two identical rows — closed 2026-08-30
+
+Closed by **D68**. What it argued: two sold copies of `Vi, Peacekeeper` in box 1, at stored
+indices **67** and **106**, both drawing `Box 1 · departed` with nothing beside them. D58's
+label is right — a departed card is in no slot — and what was wrong is that `place.index` was in
+the payload and every renderer threw it away.
+
+**What shipped**: `join.departed_label` ends on the store key, `PositionLabel` draws that key in
+the muted register rather than promoting it to the slot figure, and the walk's narrow left cell
+composes its own `departed · 3/31` from the row's key. **Two of the three surfaces were made
+worse by the label change alone and were found by running the app rather than by reasoning** —
+the walk clipped the key off the end at 177px into a 169px cell, and the copies row grew to
+154.2px against the live row's 133.6px. Both measured, both fixed, the row now 105.7px.
+
+### The copies list says the state twice on every departed row — found 2026-08-30
+
+Found while fixing the entry above, by looking at four sold copies of Moonfall on one screen. Each
+departed row draws the word twice at 11px about 40px apart: `.card-locations-state`, which is
+`copy.state` verbatim, and `Inventory.tsx:Action`'s fallback, which prints the same word for the
+door the copy left by. **They can never disagree, because the second is derived from the first**
+— `sold`/`sold`, `retired`/`retired`, by construction — which is what makes this a duplication
+rather than two facts that happen to coincide.
+
+**Why it is not fixed with the rest.** The two have different owners and different arguments.
+The state span is the pipeline's own word and the screen where being able to grep what you saw
+is worth a machine string. The action slot is D57's — it becomes `Undo` for twenty seconds after
+a sale, and the word is what it falls back to. And `Action`'s **other** call site, the lone-copy
+branch of `Inventory.tsx`, has no state span beside it at all, so nulling the fallback would
+lose the fact on the 92% of the store that has no group. The honest fix is per-call-site and it
+is a D57 question.
+
+**The Fulfiller's skin already does the other thing** — `sold ? null :` — so the two skins
+disagree about this today, which is the argument for settling it rather than leaving it.
+
+### The component gallery has no departed case — found 2026-08-30
+
+`app/src/Gallery.tsx` draws four position bars and a pull-confirm in three states, and every one
+of its place fixtures is a live card. The departed rendering — the plain label, the demoted
+store key, the absent bar — is now a real state of two components and appears in no catalogue.
+
+**Cost**: low and specific. The gallery is where a treatment is looked at against the tokens
+rather than through a screen's own layout, and the departed row is the one that was found to be
+drawn wrong by looking at it. Nothing checks that the gallery is complete, which is the general
+shape of this file's entries about `docs/map.py`.
+
+### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
+
+Reported as *"why does pricing show two box 1s"*. **Because there are two runs over box 1**,
+and `Pricing.tsx`'s run picker draws one button per run with the box as the headline:
+
+    2026-08-30-box3-01   Box 3 · RB Epics
+    2026-08-29-box1-01   Box 1 · UNL Rares
+    2026-08-24-box2-01   Box 2 · ME01 C/UC
+    2026-08-22-box1-03   Box 1 · UNL Rares
+
+The run id is drawn — it is the `pricing-run-id` span — but `docs/DESIGN.md`'s
+human-label-large, machine-string-small rule puts it in the meta line under the headline, so
+the only thing separating two buttons is small text and a SKU count. **The data is correct
+and the screen is honest**; the fact that distinguishes them is demoted.
+
+**The sharper half is that the older button describes a box that no longer exists.** Box 1 as
+it stands was created **2026-08-29 21:32**, seven days after that run, and **not one card in
+the store carries `run=2026-08-22-box1-03`** — the store's three runs account for all 715
+records and that is not one of them.
+
+**It is labeled `UNL Rares` anyway, and that is D56 working exactly as written.**
+`server/pipeline_routes.py:_summary` derives `box` from the manifest's scope or, failing that,
+from the capture directory's basename — this run has no scope block, so `captures/cards/box1`
+is the whole of the evidence — and then joins `box_name` against the registry **as it stands
+right now**. D56 chose read-time joining on purpose, so that a rename relabels every screen
+rather than stranding an answer nobody can correct. The cost it did not name is this one: a
+run over a *previous* occupant of a box number silently borrows the *current* occupant's name.
+
+**Closed the same day, on the owner's ruling, by two of the three candidate repairs.**
+`Pricing.tsx` draws the run's date in the headline, so two runs over one drawer are never the
+same string; and `_summary` withholds the name where the box under that number is a different
+drawer. The third candidate — marking a run whose cards have left the store — was not taken
+as a display, but its signal is half of the rule below.
+
+**It is not the D56 amendment it looked like.** `_box_names`'s own docstring already said a
+vanished box gets no name — *"the run remembers a box the store no longer has, and a missing
+name is the honest rendering of that"* — and could not act on it, because a deleted box number
+is REALLOCATED by D20's lowest-free-integer rule, so the map is never missing the key. The
+guard completes a rule this code already stated rather than overturning one, which is why it
+took no new decision entry.
+
+**The first version of the guard was wrong and T7 caught it inside the session.** It compared
+the timestamps alone — box created after the run, withhold the name — and that forbids naming
+a box *afterwards*, which is an ordinary thing to do and which T7 already asserted three
+blocks earlier: name the box, and the name reaches the run on the next read. The shipped rule
+needs **both** conditions, and each rules out the other's false positive:
+
+    the box was created AFTER the run started
+    AND the box's cards disown the run — it holds some, and none of them is this run's
+
+An empty box disowns nobody, so name-it-later still works. A live run that has not identified
+yet owns no cards, so the timestamp keeps it named. Three assertions pin it.

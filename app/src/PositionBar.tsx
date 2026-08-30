@@ -1,4 +1,5 @@
 import type { Place, SectionDetail } from './types'
+import { isDeparted } from './server'
 import './PositionBar.css'
 
 /* How far into the box a card sits, drawn as the box.
@@ -144,6 +145,13 @@ export function sentenceOf(place: Place): string {
    * here would draw on a box that has sold ten. A card with no number among them — departed,
    * or a box that could not be counted — has no sentence of this shape, and saying so is the
    * same refusal the null-fraction line beneath it already makes. */
+  /* A DEPARTED CARD IS NOT AN UNKNOWN ONE, AND THE OLD SENTENCE SAID IT WAS (D68). `slot` is null
+     for two different facts — a card that has left, and a box the server could not count — and
+     this line answered both with the fault's words. Four sold Moonfalls in the copies list each
+     drew `WHERE THIS SITS IN THE BOX IS NOT KNOWN YET`, which reads as the server having failed
+     rather than as the card having been sold, and which is the one thing D10's permanent gap is
+     not: where those copies sat is known exactly, and it is on the row above this one. */
+  if (isDeparted(place)) return 'no longer in the box'
   if (slot === null) return 'where this sits in the box is not known yet'
   if (fraction === null || !Number.isFinite(box_total) || box_total <= 0) {
     return `#${slot} · where this sits in the box is not known yet`

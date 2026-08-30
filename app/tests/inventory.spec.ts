@@ -90,6 +90,18 @@ function card(input: {
   finish?: string | string[] | null
   /** D58's box-wide count, where it differs from `index`. Omit for a box nothing has left. */
   at?: number
+  /** The two halves of the collector number, and the server's own composition of them (D67).
+   *  Defaulted to Pokemon's shape — two halves that both arrive — because that is what every
+   *  case written before D67 assumed. A game that prints ONE identifier passes `printedTotal:
+   *  ''`, which is what the store really holds for 174 of the owner's 676 numbered records and
+   *  what the two client copies of this composition tested for `null` instead.
+   *
+   *  `noDisplay` IS THE OLDER-SERVER ROW. `number_display` is optional on the wire, the
+   *  contract every decoration in `types.ts` takes, and the blank-folding repair has to hold
+   *  without it — so one fixture row omits it on purpose. */
+  number?: string | null
+  printedTotal?: string | null
+  noDisplay?: boolean
   /** D30's neighbours, as the server sends them. NULL IS THE DEFAULT AND IS A REAL WIRE STATE
    *  — an older server, or a record whose position will not read — which the app draws as no
    *  block at all, so a fixture that only ever passed null could never render one. That was
@@ -114,6 +126,9 @@ function card(input: {
      was before D58, which is also what the server answers for one. */
   const at = input.at ?? input.index
   const slot = at - input.sectionStart + 1
+  /* A card with no name has no read at all, which is why both halves hang off it. */
+  const number = input.number ?? (input.name === null ? null : '090')
+  const printedTotal = input.printedTotal ?? (input.name === null ? null : '132')
   const label = `Box ${box} · Section ${input.section} · Card ${slot}`
 
   /* A DEPARTED CARD IS IN NO SLOT (D58), and the fixture has to say so or it is asserting
@@ -123,7 +138,11 @@ function card(input: {
   const place = gone
     ? {
         located: true,
-        label: `Box ${box} · departed`,
+        /* AND IT ENDS ON THE STORE KEY (D68). Two departed records in one box were otherwise
+           the identical string — this file's own walk case expected `Box 2 · departed` twice —
+           so the label carries the one number about a departed card that cannot lie about a
+           shelf. `join.departed_label` is still the one composer of it. */
+        label: `Box ${box} · departed · ${box}/${input.index}`,
         box,
         index: input.index,
         slot: null,
@@ -181,8 +200,18 @@ function card(input: {
     captured_at: '2026-08-22T12:34:00+00:00',
     capture_id: input.captureId === undefined ? `cap-${input.index}` : input.captureId,
     name: input.name,
-    number: input.name === null ? null : '090',
-    printed_total: input.name === null ? null : '132',
+    number: number,
+    printed_total: printedTotal,
+    ...(input.noDisplay === true
+      ? {}
+      : {
+          number_display:
+            number === null || number.trim() === ''
+              ? null
+              : printedTotal === null || printedTotal.trim() === ''
+                ? number
+                : `${number}/${printedTotal}`,
+        }),
     confidence: null,
     sku: input.sku,
     condition: input.sku === null ? null : 'Near Mint',
@@ -1504,14 +1533,21 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * two `Card 3`s in one box and a way to open the wrong slot. So this reads the left cell of
    * every row in order — the number, or the departed fact where there is no number — and the
    * whole list is the claim rather than any one row of it. */
+  /* AND THE OTHER HALF IS D68, WHICH THIS LIST WROTE THE ARGUMENT FOR BEFORE ANYONE READ IT.
+   * The two expected values here were the identical string — `Box 2 · departed` twice, in a
+   * spec asserting that the walk tells its rows apart — and on the owner's own store 11 of 12
+   * departed records sit in a group that does exactly that. The store key is what separates
+   * them; `join.departed_label` now ends on it and this cell drops the box, which the walk has
+   * already named twice above it and which would otherwise ellipsise the key off the end at
+   * 177px into a 169px cell. */
   const slots = page.locator('.browse-row .browse-row-position')
   await expect(slots).toHaveCount(7)
   await expect(slots).toHaveText([
     '1',
     '2',
     '3',
-    'Box 2 · departed',
-    'Box 2 · departed',
+    'departed · 2/4',
+    'departed · 2/5',
     '1',
     '2',
   ])
@@ -1540,9 +1576,20 @@ test('a departed card draws no number, and the cards behind it count past it', a
      NUMBER (D41's numeric guard), so a departed card is rendered whole and there is no
      figure to promote. A version that split this string would draw the word `departed` at
      44px as though it were a slot. */
-  await expect(page.locator('.browse-position')).toHaveText('Box 2 · departed')
+  await expect(page.locator('.browse-position')).toHaveText('Box 2 · departed2/4')
   await expect(page.locator('.browse-position .position-parts')).toHaveCount(0)
   await expect(page.locator('.browse-band .position-bar')).toHaveCount(0)
+
+  /* THE KEY IS DEMOTED, AND THAT IS THE ASSERTION RATHER THAN ITS PRESENCE (D68). `.browse-
+   * position` sets `--pos-slot: 44px`, so a store key promoted into the slot column would draw
+   * `2/4` at 44px in the figure position of a card that is in no slot — D58's lie, put back by
+   * a renderer. It rides the muted register instead, which is the same expression
+   * `.position-key` uses and is what makes the departed panel cost one small line rather than
+   * a second line of the payload face. */
+  const key = page.locator('.browse-position .position-storekey')
+  await expect(key).toHaveText('2/4')
+  await expect(key).toHaveCSS('font-size', '12.98px')
+  await expect(page.locator('.browse-position .position-num')).toHaveCount(0)
 })
 
 test('the census greps to the store, and the identity line says what the box holds', async ({
@@ -2634,10 +2681,24 @@ test('the photograph is sized by its column, not by the rows beside it', async (
 
      What "flush" means here is that the card column and the copies column begin together, which
      is the grid property a regression would break (a stray margin, a row assignment, an
-     `align-items` change). */
+     `align-items` change).
+
+     BOTH TOPS COME OUT OF ONE LAYOUT, and that is the whole of the fix for a red this case
+     really did produce: `Received: 1.5` against this 1px allowance, twice in 80 loaded repeats
+     on 2026-08-30. `mid` is read forty lines above, and eleven `boundingBox()` round-trips
+     separate it from the read below — so the two numbers were being taken from two different
+     moments and subtracted as though they were one. Anything that moves the grid inside that
+     window (row 1 growing as a face swaps in) shows up here as a gap between two columns that
+     never stopped being flush. One `evaluate` cannot be wrong about that, and it weakens
+     nothing: same two elements, same tops, same allowance. */
   const under = await page.locator('.browse-under').boundingBox()
   if (under === null) throw new Error('the copies column did not render')
-  expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)
+  const tops = await page.evaluate(() => {
+    const card = document.querySelector('.browse-detail') as HTMLElement
+    const copies = document.querySelector('.browse-under') as HTMLElement
+    return Math.abs(copies.getBoundingClientRect().top - card.getBoundingClientRect().top)
+  })
+  expect(tops).toBeLessThanOrEqual(1)
 
   /* And the facts are inside that column rather than merely near it. */
   expect(rows.x).toBeGreaterThan(mid.x + mid.width)
@@ -3264,3 +3325,102 @@ test('a card with an open question in the queue says so, and says whether it can
   )
 })
 
+
+// ------------------------------------------------ D67: the number a screen draws, drawn once
+
+/* A GAME THAT PRINTS NO DENOMINATOR, WHICH IS A QUARTER OF THE STORE. Riftbound puts one
+ * identifier on the card and the store writes `""` into `printed_total` for it — 174 of the
+ * owner's 676 numbered records — where Pokemon writes both halves. The two rows below are the
+ * same fixture twice, differing in that one field and in whether the server sent its own
+ * composition, because those are the two things that were wrong at once. */
+const NO_DENOMINATOR: Cards = {
+  ...CARDS,
+  '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, number: '198', printedTotal: '' }),
+  /* THE OLDER-SERVER ROW: no `number_display` at all, which is what every decoration in
+     `types.ts` is typed for. `cardNumber.ts` composes the pair itself here, and it is the
+     composition — not the server field — that has to fold the blank. */
+  '2/3': card({ index: 3, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, number: '198', printedTotal: '', noDisplay: true }),
+}
+
+test('a game with no printed total draws no trailing separator', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NO_DENOMINATOR,
+    search: (query) => searchAnswer(query, NO_DENOMINATOR),
+  })
+  await expandAll(page)
+
+  const number = page.locator('.browse-fact', { hasText: 'Number' }).locator('dd')
+
+  /* THE DEFECT, EXACTLY. `BoxBrowse.tsx` tested `printed_total === null` one line below testing
+   * `number` for null OR blank, so an empty string took the else branch and drew `198/` — a
+   * separator with nothing behind it, on every Riftbound card in the store. */
+  await page.locator('.browse-row').nth(0).click()
+  await expect(number).toHaveText('198')
+
+  /* AND THE SAME WITHOUT THE SERVER'S FIELD, because the two repairs are independent: the blank
+   * is a client bug and `number_display` is a server field, and a screen held against a server
+   * that predates the field still must not draw the separator. */
+  await page.locator('.browse-row').nth(2).click()
+  await expect(number).toHaveText('198')
+})
+
+/* THE GROUP'S NUMBER ROW, WHICH WENT SILENT ON THE CARDS THAT NEEDED IT MOST. `_agreed` returns
+ * null the moment two copies of a SKU spell their number differently, correctly and by design —
+ * and D55's set-code repair fires on the JOIN, so nothing ever applied it to a screen. Five
+ * copies of Moonfall storing `198/219`, `UNL • 198/219` and `UNL - 198/219` are not disagreeing
+ * about the card; the group is. Measured on the owner's store: 11 of 102 groups draw no number,
+ * 7 of them recover under the fold, and the four that do not are real disagreements. */
+const DISAGREEING = (query: string) => {
+  const answer = searchAnswer(query, NO_DENOMINATOR) as {
+    groups: Record<string, unknown>[]
+  }
+  for (const group of answer.groups) {
+    group.number = null
+    group.printed_total = null
+    group.number_display = '198/219'
+  }
+  return answer
+}
+
+test('a group whose copies spell one number three ways still draws it', async ({ page }) => {
+  await open(page, BOXES, { cards: NO_DENOMINATOR, search: DISAGREEING })
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+
+  /* The raw pair is null on the wire and the row is drawn anyway, off the field the server
+     agreed on after folding. A build that composed from `number`/`printed_total` here draws
+     nothing at all, which is what the owner saw: one card, three strings, and the group between
+     them silent. */
+  await expect(page.locator('.card-locations-meta')).toContainText('198/219')
+})
+
+/* THE COPIES LIST, WHICH IS WHERE THIS WAS REPORTED FROM — *"I'm seeing two box 1's"*. There is
+ * one box 1; there were two sold copies of one card in it, both drawing `Box 1 · departed` with
+ * nothing beside them to tell them apart. The fixture's box 2 holds the same shape, one sold and
+ * one retired, and the pair is the assertion for the same reason the walk's is: what a label must
+ * guarantee is that no two records share one. */
+test('two departed copies of one card draw two different rows', async ({ page }) => {
+  const shared: Cards = {
+    ...CARDS,
+    '2/4': card({ index: 4, state: 'sold', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+    '2/5': card({ index: 5, state: 'retired', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
+  }
+  await open(page, BOXES, { cards: shared, search: (query) => searchAnswer(query, shared) })
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+
+  const gone = page.locator('.card-locations-row', { hasText: 'departed' })
+  await expect(gone).toHaveCount(2)
+  await expect(gone.nth(0).locator('.position-storekey')).toHaveText('2/4')
+  await expect(gone.nth(1).locator('.position-storekey')).toHaveText('2/5')
+
+  /* AND NO BAR UNDER EITHER (D68). This list drew one — an empty track captioned `where this
+   * sits in the box is not known yet`, which reads as the server having failed rather than as
+   * the card having been sold, and which disagrees with the walk about the same card: that
+   * screen has omitted the bar for a departed row since D58. Where those copies sat is known
+   * exactly; it is the neighbours line still drawn above this. */
+  await expect(gone.locator('.position-bar')).toHaveCount(0)
+
+  /* The live copies keep theirs, so the case cannot pass by the bar disappearing everywhere. */
+  await expect(page.locator('.card-locations-row .position-bar').first()).toBeVisible()
+})
