@@ -2071,6 +2071,10 @@ def _card_row(
     if place["located"]:
         row.update(_flat_place(place))
     row["place"] = place
+    # D67's decoration, wire-only like the four above it and unconditional unlike them: a
+    # number is a fact about the card rather than about where it is, so a pooled record and
+    # one whose position will not coerce both still get theirs.
+    row["number_display"] = _number_display(card)
     return row
 
 
@@ -2298,6 +2302,14 @@ def do_inventory() -> dict:
     payload = inventory.to_payload()
     places = _Places(inventory)
     for record in (payload.get("cards") or {}).values():
+        # BEFORE THE POSITION, AND BEFORE THE `continue` BELOW (D67). A number is a fact about
+        # the card and not about where it is, so a row whose box or index will not coerce keeps
+        # its number row even though it can carry no label. Composed off the payload's own two
+        # fields rather than off a `master.Card` — `to_payload` writes both verbatim, and this
+        # loop has the dict in hand where `_card_row` has the record.
+        record["number_display"] = join.display_number(
+            record.get("number"), record.get("printed_total")
+        )
         try:
             place = places.of(record["box"], record["index"])
         except (KeyError, TypeError, ValueError, master.BadSections):
@@ -6106,6 +6118,25 @@ def _card_number_key(card: master.Card) -> str:
     return join.join_key(card.number, card.printed_total)
 
 
+def _number_display(card: master.Card) -> Optional[str]:
+    """`198/219` for this card as a SCREEN draws it, or None where it has no number (D67).
+
+    ONE FIELD RATHER THAN A COMPOSITION EACH SCREEN MAKES FOR ITSELF, and that is the defect
+    rather than the tidying. Three files composed this in TypeScript and two of them tested
+    `printed_total === null` a line below a test of `number` for null OR blank — so the 174
+    records that store `""` there rendered `198/219/`. `pipeline/join.py:display_number` is
+    now the only spelling of it, and it also removes the set code D55 removes for the key, so
+    the ten glued reads stop reaching the screen as `UNL • 198/219`.
+
+    THE RAW FIELDS STILL TRAVEL BESIDE IT, UNTOUCHED. `number` and `printed_total` are what
+    the model read and `app/src/types.ts` says so; this is a fourth wire-only decoration in
+    the shape `label`/`section`/`card` already take, and it is drawn rather than stored. The
+    review queue deliberately does NOT get it — see D67: that screen is judging the read, and
+    a cleaned-up number there would hide the evidence it exists to show.
+    """
+    return join.display_number(card.number, card.printed_total)
+
+
 def _match_rank(card: master.Card, query: str) -> Optional[int]:
     """How well this card answers `query` (lowercased), or None if it does not.
 
@@ -6124,8 +6155,14 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     name = str(card.name or "")
     number = str(card.number or "")
     key = _card_number_key(card)
+    # WHAT THE SCREEN DREW IS SEARCHABLE, WHICH IS D67 CLOSING ITS OWN SIDE EFFECT. Once the
+    # copies list draws `198/219` for a record stored as `UNL • 198/219`, an operator reading
+    # that row and typing it back had no way to find the card again — the fix to the render
+    # would have created a string the search could not answer. Both spellings match now: the
+    # raw field is still here, and the display form joins it.
+    shown = _number_display(card) or ""
 
-    if query == number.strip().lower() or query == key.lower():
+    if query in {number.strip().lower(), key.lower(), shown.lower()} - {""}:
         return _RANK_EXACT_NUMBER
     if name.lower().startswith(query):
         return _RANK_NAME_PREFIX
@@ -6136,6 +6173,7 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
         str(card.set_hint or ""),
         str(card.note or ""),
         key,
+        shown,
     ):
         if query in field.lower():
             return _RANK_SUBSTRING
@@ -6259,6 +6297,17 @@ def do_search(query: str) -> dict:
                 "names": _distinct(card.name for card in copies),
                 "number": _agreed(card.number for card in copies),
                 "printed_total": _agreed(card.printed_total for card in copies),
+                # AGREED ON WHAT THE SCREEN DRAWS, NOT ON WHAT THE MODEL TYPED (D67). The two
+                # raw fields above stay exactly as they were and go on disagreeing: five
+                # copies of Moonfall store `198/219` twice and `UNL • 198/219` and
+                # `UNL - 198/219` once each, so `number` is correctly None and the group's
+                # number row went silent while every copy's own row showed its own variant.
+                # Folded through `display_number` all five say `198/219` and the group can
+                # speak again. Measured on the owner's store: 11 of 102 SKU groups draw no
+                # number today and **7 of them recover** — the other four disagree for real
+                # (`044/106` against `044/166`, a digit misread) and stay silent, which is
+                # `_agreed`'s job and is not what this changes.
+                "number_display": _agreed(_number_display(card) for card in copies),
                 "set_hint": _agreed(card.set_hint for card in copies),
                 "condition": _agreed(card.condition for card in copies)
                 or (listing.condition if listing is not None else None),
@@ -6309,6 +6358,10 @@ def do_search(query: str) -> dict:
                 "names": _distinct(card.name for card in loose),
                 "number": _agreed(card.number for card in loose),
                 "printed_total": _agreed(card.printed_total for card in loose),
+                # The same fold on the SKU-less bag, where `_agreed`'s None matters most: these
+                # cards have nothing in common but the query, so a number here is only ever the
+                # one every one of them carries.
+                "number_display": _agreed(_number_display(card) for card in loose),
                 "set_hint": _agreed(card.set_hint for card in loose),
                 "condition": _agreed(card.condition for card in loose),
                 "listed": {stage: 0 for stage in master.LISTING_STAGES},

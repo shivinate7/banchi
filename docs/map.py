@@ -333,7 +333,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D49", "D54", "D55", "D56", "D58", "D59"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -1150,7 +1150,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D56", "D58", "D62", "D64"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D62", "D64", "D67"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1389,11 +1389,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64", "D68"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64", "D67"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1502,14 +1502,14 @@ COMPONENTS = [
                         "(`... \u00b7 pooled`) from drawing a lowercase word as a 300px figure. "
                         "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
                         "the firewall is the component graph, not a selector.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
                         "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them.",
-                "governed_by": ["D31", "D41"]},
+                "governed_by": ["D31", "D41", "D68"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
                         "2026-08-30). `after` / `before` as a muted mono key column with the two "
@@ -1566,7 +1566,7 @@ COMPONENTS = [
                     "The store holds no price at all (D8), so this is the only place one can "
                     "come from, and the age of the reading is drawn with it because `join` is "
                     "re-run against refreshed exports.",
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1601,7 +1601,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43", "D46"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43", "D46", "D55", "D67"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -1739,7 +1739,7 @@ COMPONENTS = [
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
             "src/Gallery.tsx": {"does": "every state on one page — what `make screenshot` renders",
-                                "governed_by": ["D5"]},
+                                "governed_by": ["D5", "D67"]},
             "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
                                 "governed_by": ["D5"]},
 
@@ -1753,7 +1753,7 @@ COMPONENTS = [
                                             "divider, a marker at this card. Says '#40 of 250 · 16% "
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
@@ -1768,7 +1768,7 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D68"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -1869,6 +1869,20 @@ COMPONENTS = [
                                             "sizes, and is the property to preserve if this is "
                                             "ever re-laid-out.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
+            "src/cardNumber.ts": {
+                "does": "ONE COMPOSER OF THE COLLECTOR NUMBER FOR EVERY SCREEN THAT DRAWS ONE "
+                        "(D67). There were three, one per screen, and no two the same: the "
+                        "review queue folded a blank on both halves, the copies list folded it "
+                        "on `number` and tested `printed_total === null` on the line below, and "
+                        "the walk tested null on both. That middle spelling cost a quarter of "
+                        "the store — 174 of 676 numbered records store `\"\"` there — and drew "
+                        "`198/219/`. The set-code fold is deliberately NOT here: that shape is "
+                        "pipeline/join.py:strip_set_code, measured against 2,607 real export "
+                        "cells, and a TypeScript copy of it would be number_index_key's own "
+                        "cautionary tale repeated. The server sends `number_display` and this "
+                        "prefers it, composing the raw pair only when an older server omits it.",
+                "governed_by": ["D3", "D13", "D25", "D35", "D55", "D67"],
+            },
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -2195,7 +2209,7 @@ COMPONENTS = [
                         "whole write, its receipt, its undo window and the `already_sold` path "
                         "were unasserted while the control changed what one press does to a "
                         "real card. Six cases now cover it, three of them mutation-tested.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D57", "D58"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

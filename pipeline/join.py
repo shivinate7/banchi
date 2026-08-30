@@ -300,7 +300,7 @@ class Position:
     def label(self) -> str:
         at = self.card
         if at is None:
-            return departed_label(self.box)
+            return departed_label(self.box, self.index)
         return f"Box {self.box} · Section {self.section} · Card {at}"
 
 
@@ -415,12 +415,35 @@ def divider_index(
     return high + (ordinal - len(occupied))
 
 
-def departed_label(box: int) -> str:
+def departed_label(box: int, index: int) -> str:
     """What a screen shows where a position label would have gone, for a card that has left.
 
     D58: once a box's numbers count the cards in it, a departed card is in no slot — the
     number it used to hold belongs to the card that closed up behind it. So it gets the
     box it belongs to and the word `departed`, never `Box N · Section N · Card N`.
+
+    AND THEN THE STORE KEY, WHICH IS D68 AND IS THE HALF D58 LEFT OUT. Two sold copies of one
+    card in one box drew the identical string with nothing beside it to tell them apart — the
+    owner read it as `I'm seeing two box 1's`, and on this store **11 of 12 departed records**
+    sit in a group that does exactly that. The key is what separates them and it was already in
+    the payload: `Place.index` came back 67 and 106 on those two rows and the label threw it
+    away. **It is not the slot D58 refuses to print.** That entry draws the distinction itself —
+    the stored index never moves, it is the `/inventory/<box>/<index>` path and the `<index>.jpg`
+    the photograph is named after — while `Place.slot` is the countable number that shifts. This
+    prints the one that cannot lie about a shelf.
+
+    THE SEPARATOR AND THE SPELLING ARE `place_text`'S, TWO FUNCTIONS DOWN, deliberately: its
+    pooled form already carries `· {box}/{index}` and already says why — *"the only handle
+    left"*, and *"two pooled entries with identical lines would be indistinguishable in the
+    report that names them"*. That sentence was true of this string as well, and this is one
+    vocabulary rather than a second.
+
+    IT ENDS ON A KEY AND NEVER ON A BARE NUMBER, and that is load-bearing rather than a taste
+    call. `PositionLabel.tsx` promotes the last `·`-part of a label to a slot figure whenever it
+    is all digits, so `Box 1 · departed · 67` would draw **67 at 44px in the slot column** — the
+    exact lie D58 refuses, reintroduced by a renderer. `1/67` fails that guard, so the string is
+    drawn whole, which is what `app/tests/inventory.spec.ts` already asserts for the shorter
+    form and now asserts for this one.
 
     IT NAMES NO DOOR, AND THAT IS DELIBERATE. `sold` and `retired` are different departures
     with different reversals, and both are already on the record beside this string — every
@@ -433,7 +456,7 @@ def departed_label(box: int) -> str:
     snapshot the label BEFORE the write, so "Sold Box 3 · Section 1 · Card 7" still names
     where the operator just was. This string is for the record afterwards, not the moment.
     """
-    return f"Box {int(box)} · departed"
+    return f"Box {int(box)} · departed · {int(box)}/{int(index)}"
 
 
 def place_text(game: str, position: Position) -> str:
@@ -559,6 +582,36 @@ def join_key(number, printed_total) -> str:
     makes a few lines down: a label to show, and a fold to compare.
     """
     return f"{str(number).strip().zfill(3)}/{str(printed_total).strip()}"
+
+
+def display_number(number, printed_total=None) -> Optional[str]:
+    """The number a SCREEN draws: unpadded, blank-safe, and with a glued set code removed.
+
+    THE THIRD MEMBER OF A FAMILY THE TWO ABOVE ALREADY DESCRIBE. `join_key` is the composition
+    form a report prints and a lookup is built from; `number_index_key` is the comparison form
+    that decides whether two spellings are one card; this is the form an eye reads. Three
+    strings, three jobs, one module — and this one exists because it was previously written
+    three times in TypeScript and each copy was different.
+
+    NO `zfill`, for `ReviewQueue.tsx`'s own reason, kept here now that the composition is the
+    server's: padding would put a string on screen that nothing in the run ever said.
+
+    BLANK IS ABSENT, ON BOTH HALVES, WHICH IS THE DEFECT D67 OPENED ON. The two client copies
+    tested `printed_total === null` one line below a test of `number` for null OR blank, and
+    the store writes `""` on **174 of 676 numbered records** — every Riftbound card, which
+    prints one identifier and has no denominator. Those took the else branch and rendered
+    `198/219/`: a separator with nothing behind it, on a quarter of the store. One emptiness
+    test for both halves, written once, is the whole of the repair.
+
+    NULL RATHER THAN A PLACEHOLDER when there is no number at all. The caller decides what an
+    absent number looks like — `none` in a fact row, nothing in a list — and a formatter that
+    chose for them would put that word into a table cell that wanted a blank.
+    """
+    left = strip_set_code(number)
+    if not left:
+        return None
+    right = str(printed_total or "").strip()
+    return f"{left}/{right}" if right else left
 
 
 def number_index_key(text) -> str:
@@ -787,9 +840,40 @@ def _repair_set_code(key: str) -> Optional[str]:
 
     None rather than the unchanged string, so the caller cannot re-look-up a key it has already
     missed on, and so `code~:` is written only where something was actually removed.
+
+    THE SHAPE ITSELF IS `strip_set_code` BELOW, AND THE SPLIT IS D67. This function is the
+    LADDER's reader of it — candidate-or-None, asked only on a miss — and the screens are the
+    other, which strip unconditionally because there is no catalog to miss against. One regex,
+    two contracts; a second spelling of the shape is what D55 spent an entry avoiding.
     """
-    out = _SET_CODE_PREFIX.sub("", key.strip()).strip()
+    out = strip_set_code(key)
     return out if out and out != key.strip() else None
+
+
+def strip_set_code(text) -> str:
+    """`UNL - 150/219` -> `150/219`, and everything else back unchanged. D55's shape, published.
+
+    THE SHAPE IS D55'S AND IS NOT RE-ARGUED HERE; what D67 adds is a second reader. That entry
+    bounded the rule to two-to-five letters, no digits, then one separator, and licensed it by
+    measuring: over every distinct `Number` cell in all four committed exports — 190 SV09, 786
+    wide Pokemon, 1,236 Riftbound, 395 One Piece, **2,607 between them** — it matches ZERO. Over
+    the owner's own 676 numbered records it changes exactly **10**, and all ten are the glued
+    reads it exists to remove.
+
+    UNCONDITIONAL, WHERE `_repair_set_code` FIRES ONLY ON A MISS, and the difference is not a
+    weakening of D55's second safety. That safety is about a JOIN: an identifier that already
+    matched a catalog row is never handed to the repair, so no repair can move a card that was
+    listing correctly. A screen has no catalog and therefore no miss to gate on — the gate is
+    the shape alone — and the worst a wrong strip can do here is draw a shorter string than the
+    model returned. The record still holds the raw read, `identifications.json` still holds it,
+    and the run report still counts the repair as `code~:`, which is the rate D55 says to watch.
+
+    NOT A REPAIR OF THE STORE, and that is the option D67 rejected rather than missed.
+    Normalising at capture would rewrite what the model said into the record, and D36 makes the
+    photograph and the read the durable facts — a store that has been tidied cannot tell you the
+    prompt is being ignored 1.5% of the time.
+    """
+    return _SET_CODE_PREFIX.sub("", str(text or "").strip()).strip()
 
 
 def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
