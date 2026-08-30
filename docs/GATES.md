@@ -436,6 +436,34 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
+- **D60's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
+  TCGplayer.** `POST /pipeline/runs/<name>/export` downloads the Filtered Export with the
+  session cookie from `.env` instead of the operator downloading and uploading it.
+  `check_export_fetch` has its own `isolated_home` AND its own environment — the first
+  section here that reads `.env`, so one that leaked `TCGPLAYER_STORE_COOKIE` or
+  `PKMNSCAN_TCG_EXPORT_URL` would point every later fetch in the process somewhere
+  unexpected.
+
+  **What it proves**: that a session redirected to a login page never becomes a parsed CSV
+  and that a login page served as a **200** refuses the same way; that a WAF 403 has its own
+  code; that every refusal deletes what it wrote; that the cookie reaches the socket and
+  reaches **no file the run holds**; and that a fetched file is the one `join` then actually
+  joins against, recorded in the manifest — which is the seam a route that fetched a file
+  nobody used would pass without.
+
+  **Three cases call `_coverage` directly, and that is not laziness.** All three of them
+  REFUSE, and what differs is whether the refusal claims a FINISH was lost — invisible from
+  outside the route. They pin two defects that shipped in the first build and were found by
+  measuring against the owner's real exports rather than the three-row fixture: counting play
+  conditions as finishes (measured, all 153 of box 3's numbers read as thinned and not one
+  had lost a finish), and a key carrying `Product Name` (measured, 550 multi-finish riftbound
+  numbers keyed `(set, number)` against 522 with the name, so 28 real cases were invisible to
+  the check written to find them). Both mutations were observed failing, each on one case.
+
+  **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
+  accepts this client when the request carries a real session. Measured unauthenticated, the
+  stdlib default User-Agent reaches the endpoint unblocked — which is not evidence about an
+  authenticated one. That is one live fetch by the owner and D60 records it as owed.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This
