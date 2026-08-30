@@ -504,10 +504,17 @@
    rejects, and an accent fill is reserved for a screen with exactly one thing to do. The row
    already lights on hover — this adds the underline that says the address itself is the target,
    and `:focus-visible` gives the keyboard the same fact rather than leaving it to the ring
-   alone. It is set on the parts rather than on the button so it follows the text and not the
-   full-width box: an underline running the width of the cell would read as a rule, not a link.
+   alone.
 
-   `text-align: left` because a button centres its text and every other line in this cell is
+   ON THE SLOT AND NOT ON THE WHOLE BLOCK, which was looked at and is the louder of the two. The
+   stacked address is three lines — the figure, and the two muted path lines under `slot` lead —
+   so underlining the parts drew three rules through a block whose own design demotes two of
+   them. `PositionLabel` already says which part is the anchor; the affordance follows it.
+   Under `.card-locations-goto` so it cannot reach the same component at the five sites that
+   offer no walk-to, and on the parts' own child so it tracks the text rather than the
+   full-width box — an underline running the width of the cell reads as a rule, not a link. */
+
+/* `text-align: left` because a button centres its text and every other line in this cell is
    ragged-right against the same edge. */
 .card-locations-owner .card-locations-goto {
   appearance: none;
@@ -524,8 +531,8 @@
   cursor: pointer;
 }
 
-.card-locations-owner .card-locations-goto:hover .position-parts,
-.card-locations-owner .card-locations-goto:focus-visible .position-parts {
+.card-locations-owner .card-locations-goto:hover .position-slot,
+.card-locations-owner .card-locations-goto:focus-visible .position-slot {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
