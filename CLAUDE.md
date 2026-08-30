@@ -26,6 +26,14 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
                     #   three errors that never mention the worktree.
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
+make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
+                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/.
+                    #   Prints the link. `make down` stops them, `make restart` bounces them.
+                    #   Do NOT run it alongside `make dev`/`make server` — the second loses,
+                    #   loudly (strictPort, EADDRINUSE), which is deliberate: a server that
+                    #   quietly moved would serve a DIFFERENT store (D43).
+make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY — it refuses
+                    #   in a worktree, whose plist would outlive the worktree. ARGS=--remove.
 make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
