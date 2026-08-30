@@ -246,6 +246,15 @@ COMPONENTS = [
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
             "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
+            "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
+                                    "the ledger. FREE — no model call, no network, no money gate "
+                                    "(C9). Presentation only; the core is `codes/scan.py`, shared "
+                                    "with the route so the CLI and the screen cannot disagree. "
+                                    "NOT `tested_by` T8, and the distinction is the audit's "
+                                    "own: T8 imports `codes/scan.py` and never this file, so "
+                                    "what is covered is the reading and the write, while the "
+                                    "argument parsing and the printed report here are not.",
+                            "governed_by": ["D14", "D21", "D24"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
             "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, "
                                     "--bypass trusts the finish claim. SEEDS decisions.json on the "
@@ -544,6 +553,56 @@ COMPONENTS = [
                           "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
                         "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+        },
+    },
+    {
+        "path": "codes/",
+        "status": "built",
+        "does": "the code-card track: deterministic QR decoding, the code ledger, the "
+                "product tier",
+        "governed_by": ["D14", "D21", "D24", "D67"],
+        "note": "ITS OWN PACKAGE UNDER D14 — 'two tracks, one rig' shares the rig, the "
+                "capture server, the app shell and the photo storage, and shares NOTHING "
+                "downstream. `identify/` is the singles track's identification, a PAID "
+                "vision call; the primary path here is its opposite in every respect that "
+                "matters — local, deterministic, free, and correct or loudly absent rather "
+                "than confident. WHAT IS NOT HERE is as deliberate: no second inventory, no "
+                "second store, no second capture path. A code card is captured by the same "
+                "server into the same inventory.json, and D24's `located: False` is the "
+                "whole of the schema difference. NO REAL CODE CARD HAS EVER BEEN THROUGH "
+                "THIS — every measurement in these modules is synthetic, which is T6's "
+                "blind spot in the same words; see docs/specs/code-cards.md section 8.",
+        "modules": {
+            "qr.py": {"does": "read the QR off a code card. The redemption code IS the "
+                              "payload, so this is the whole of identification for this "
+                              "game and it costs nothing. 140/140 physically-possible "
+                              "frames at the rig's real 3840x2160, ZERO mis-reads, 87 ms — "
+                              "and the zero is the number that matters, because a mis-read "
+                              "sells a stranger something that does not work. zxing-cpp, "
+                              "PINNED to 2.3.0 because 3.x has no cp39 wheel and this venv "
+                              "is Python 3.9.",
+                      "governed_by": ["D14", "D67"], "tested_by": ["T8"]},
+            "ledger.py": {"does": "the code ledger, keyed by the CODE rather than by the "
+                                  "position — C8's first build used the position, and under "
+                                  "D24 the card is destroyed, so the code is what outlives "
+                                  "it. Only a code key can dedupe or hold a reservation. "
+                                  "Reservation is all-or-nothing and REFUSES anything not "
+                                  "held, which is the one guard against selling a code "
+                                  "twice; a duplicate is recorded and never resolved.",
+                          "governed_by": ["D24", "D26", "D67"], "tested_by": ["T8"]},
+            "products.py": {"does": "which sealed product a code redeems, and what that is "
+                                    "worth. The vocabulary is DERIVED from the real catalog, "
+                                    "never invented — D22's rule for rarities, which has no "
+                                    "reason to be weaker one track over. This module is why "
+                                    "there is no OCR: the product is a capture claim (C10).",
+                            "governed_by": ["D9", "D22", "D67"], "tested_by": ["T8"]},
+            "scan.py": {"does": "read a capture directory into ledger entries, and apply "
+                                "them. The CORE, shared by `cli/cmd_scan.py` and "
+                                "`server/codes_routes.py` so the command and the screen can "
+                                "never disagree about what a scan did. Nothing here writes "
+                                "except `apply`, and that takes an already-open session so "
+                                "the caller owns the lock's extent.",
+                        "governed_by": ["D14", "D67"], "tested_by": ["T8"]},
         },
     },
     {
@@ -945,7 +1004,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D67"],
                 "status": "built",
             },
             "status.py": {
@@ -1186,6 +1245,18 @@ COMPONENTS = [
                         "authenticated request — that is one live fetch by the owner, and "
                         "D64 records it as owed.",
             },
+            "codes_routes.py": {
+                "does": "the code-card track's seam: GET /codes (the ledger, its two lanes "
+                        "and its duplicates), POST /codes/scan (decode a box's photographs — "
+                        "FREE, no model call anywhere on this track) and POST /codes/export "
+                        "(preview a channel export, or COMMIT one to an order, reserving "
+                        "every code it returns). Its own module for pipeline_routes.py's "
+                        "reason one register down: that one is separate because it can SPEND "
+                        "money, this one because it can COMMIT a bearer instrument — a code "
+                        "handed to a buyer cannot be un-handed and double-selling one is "
+                        "unrecoverable (C3).",
+                "governed_by": ["D14", "D24", "D33"], "tested_by": ["T8"],
+            },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
                         "POST /pipeline/identify (THE ONE THAT SPENDS — spawns a detached "
@@ -1329,7 +1400,7 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: SEVEN hash routes — five after D31 merged #/boxes "
+            "src/App.tsx": {"does": "the shell: EIGHT hash routes — five after D31 merged #/boxes "
                                     "and #/pull into #/inventory, plus #/runs, which D39 gave the "
                                     "pipeline on 2026-08-29 between Capture and the review queue, "
                                     "and #/pricing, which D49 gave hand-pricing on 2026-08-30 "
@@ -1349,8 +1420,37 @@ COMPONENTS = [
                                     "and D51's Cmd-arrow STEPS along the strip in the order the "
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
-                                    "the one place this shell takes a modifier.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53"]},
+                                    "the one place this shell takes a modifier. "
+                                    "`#/codes` IS THE EIGHTH, 2026-08-30 — the code-card track "
+                                    "on a route of its own under D14's two-tracks-one-rig, with "
+                                    "the chord `d` because `c` is Capture. It sits in `look` "
+                                    "rather than `run`: a code-card box is read once in seconds "
+                                    "with no model call and nothing to price, so it is reached "
+                                    "when asked, which is what this table's own definition of "
+                                    "that group says.",
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53"]},
+            "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
+                                      "see the two lanes C11 tiers the pile into, and hand a "
+                                      "lane's codes to a buyer against a named order. The "
+                                      "commit reserves every code it returns, permanently — "
+                                      "C3's atomic dequeue, and the structural defense against "
+                                      "selling one code twice. NOTHING HERE SPENDS: the "
+                                      "code-card primary path makes no model call at all, so "
+                                      "the two-step gate is about handing over a bearer "
+                                      "instrument rather than about money. Deliberately absent "
+                                      "from scripts/views.txt so `make screenshot` never "
+                                      "renders a live code into captures/ui/. NOT `tested_by` "
+                                      "T8: that test asserts the LANE RULE this screen draws "
+                                      "(`codes_routes._pool`), which is where the money "
+                                      "mistake would happen, and asserts nothing about the "
+                                      "rendering. No Playwright spec covers this screen yet.",
+                              "governed_by": ["D14", "D24", "D33"]},
+            "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
+                                      "numbers drawn, because they are the decision; the "
+                                      "duplicate panel takes the one non-hairline border in "
+                                      "the file, because a duplicate can mean a code that is "
+                                      "worth nothing.",
+                              "governed_by": ["D14", "D32"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, why this nav may never render on the "
                                     "Fulfillment view, and the two chip looks — the chord's, "
@@ -2003,7 +2103,7 @@ COMPONENTS = [
                         "them in order, and #/inventory's card panel says whether the selected "
                         "card has an open question. Extracted rather than copied, and its "
                         "docstring is the argument: nothing keeps these labels in step with "
-                        "pipeline/variant.py and pipeline/routing.py, and the defence is making "
+                        "pipeline/variant.py and pipeline/routing.py, and the defense is making "
                         "that drift VISIBLE rather than silent — a second copy in one app would "
                         "defeat it, since the two would drift against each other as well and "
                         "only one would ever be looked at. `reasonLabel`'s `?? reason` fallback "

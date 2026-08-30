@@ -90,6 +90,7 @@ Four commands, because a batch takes minutes to hours and the pricing decision n
 human. One blocking command would put a person in the middle of a poll loop.
 
 ```
+./pkmnscan scan       <capture-dir>                   code cards: read the QRs. FREE.
 ./pkmnscan identify   <capture-dir>                   submit, wait, collect. COSTS MONEY.
 ./pkmnscan join       <run-dir> --export <export.csv> resolve against the export. Free.
 ./pkmnscan emit       <run-dir>                       write import CSVs. Free.

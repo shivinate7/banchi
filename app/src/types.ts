@@ -151,9 +151,33 @@ export type GameEntry = {
  *  guessed at: the app needs a game to start on, and picking the first entry or hardcoding
  *  `'pokemon'` would be a second decision that has to agree with `games.DEFAULT_GAME` and
  *  would stop agreeing the day the registry is reordered. */
+/** One product a code card can have come out of, as `GET /games` serves it (C10). */
+export type ProductEntry = {
+  key: string
+  display: string
+  /** C11's tier. A premium code lists at roughly 46x a booster code, and keeping the two
+   *  populations apart is the whole of what the Codes screen is for. */
+  premium: boolean
+  /** TPCi's SOFT redemption limit for this product type — past it a code grants a little
+   *  in-game currency instead of the product, rather than being refused. Listing copy needs
+   *  it and a buyer will ask. */
+  redeem_limit: number
+}
+
 export type GameRegistry = {
   default: string
   games: GameEntry[]
+  /** C10's product vocabulary. Served BESIDE `games` rather than inside a registry entry:
+   *  `scripts/docs-audit.py` reads `pipeline/games.py` with `ast.literal_eval`, so that file
+   *  can import nothing from this repo and could not carry this list without a second
+   *  hand-authored copy of it. */
+  products: ProductEntry[]
+  /** Which game claims a product — `codes/products.py:GAME`, over the wire. The capture
+   *  screen compares its chosen game against this to decide whether to draw the product
+   *  picker, rather than hardcoding a game key on this side. That mirror is the thing
+   *  `CaptureScreen.tsx` refuses for the registry itself, and it is no more acceptable for
+   *  one string than for the whole vocabulary. */
+  product_game: string
 }
 
 /** What `POST /capture` and `PUT /inventory/<box>/<index>` answer with: where the card
@@ -1741,4 +1765,90 @@ export type ExportFetched = {
     sets: string[]
     widened: boolean
   }
+}
+
+/** One code on the ledger, as `GET /codes` serves it (C3, C8, C11).
+ *
+ *  THE CODE STRING IS HERE IN THE CLEAR, and that is correct rather than an oversight. The
+ *  server binds loopback, the store is the owner's own machine, and the whole job of the
+ *  Codes screen is that the owner can read a code and paste it to a buyer. The repo's opsec
+ *  rules govern what reaches a COMMIT — a tracked file, a screenshot, a listing — not what
+ *  reaches the owner's own browser. `make screenshot` is the one place those two meet, and
+ *  the Codes screen is deliberately absent from `scripts/views.txt` for that reason.
+ */
+export type CodeEntry = {
+  code: string
+  /** `held` | `reserved` | `delivered` | `dead`. A CODE's state, never a card's — a card can
+   *  be destroyed under D24 while its code is still held and perfectly saleable. */
+  state: string
+  product: string | null
+  product_display: string | null
+  premium: boolean
+  set_hint: string | null
+  /** Where the photograph is. Kept after the card is destroyed, because it becomes the only
+   *  surviving evidence of what was printed — which is C8's whole dispute flow. */
+  box: number | null
+  index: number | null
+  photo: string | null
+  source: string | null
+  scanned_at: string | null
+  state_at: string | null
+  order_id: string | null
+  buyer: string | null
+  delivered_at: string | null
+  dead_reason: string | null
+  /** Whether the code matches the printed 3-4-3-3 layout. REPORTED, never enforced: a payload
+   *  that survived the QR's own error correction is likelier to be an unfamiliar print run
+   *  than a misread. */
+  well_formed: boolean
+  /** Non-empty means this code was read at a SECOND position. Either one card photographed
+   *  twice, or two cards bearing one code — and if the second, one of them is worth nothing. */
+  duplicate_positions: { box: number | null; index: number | null; photo: string | null }[]
+}
+
+export type CodeLedger = {
+  counts: Record<string, number>
+  total: number
+  /** C11's two lanes, plus the codes that can enter neither because nobody said what they are. */
+  lanes: { bulk: number; premium: number; unclaimed: number }
+  by_product: {
+    product: string
+    display: string
+    premium: boolean
+    /** `premium` | `bulk` | `none`. The lane that would ACTUALLY take this row's codes, so
+     *  the tier table cannot say something the export lane would contradict. An unclaimed
+     *  code answers `none`. */
+    lane: string
+    count: number
+  }[]
+  duplicates: CodeEntry[]
+  entries: CodeEntry[]
+  products: { key: string; display: string; premium: boolean; redeem_limit: number }[]
+}
+
+export type CodeScanResult = {
+  box: number
+  photographs: number
+  code_cards: number
+  decoded: number
+  unread: string[]
+  malformed: string[]
+  preview: boolean
+  would?: Record<string, number>
+  counts?: Record<string, number>
+  stamped?: number
+  on_file?: number
+}
+
+export type CodeExportResult = {
+  lane: string
+  product: string | null
+  available: number
+  count: number
+  committed: boolean
+  note: string
+  sample?: string[]
+  codes?: string[]
+  order_id?: string
+  buyer?: string | null
 }

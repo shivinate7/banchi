@@ -30,7 +30,7 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
-                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/.
+                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
                     #   files it is made of changes (D53) — so nothing here goes stale on a
                     #   `git pull`. The Makefile is not one of them: nothing reads it at run
@@ -53,6 +53,8 @@ make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 
+./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
+                                   #   FREE — no model call, no network. The QR IS the code.
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
@@ -176,12 +178,17 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
   has no name, because a name is optional and a placeholder would draw a fault where there is
   none.
-- **The app has seven screens and seven routes** — six the owner's, one the Fulfiller's. It
+- **The app has eight screens and eight routes** — seven the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
-  the review queue, and D49 added `#/pricing` on 2026-08-30, which is where a listing price is
-  set by hand.
+  the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
+  set by hand, and D67 added `#/codes` the same day — the code-card track, which shares the rig
+  and nothing downstream (D14).
+
+  **THIS SENTENCE WENT FALSE AGAIN THE MOMENT `#/codes` LANDED, AND WAS CORRECTED IN THE SAME
+  COMMIT.** That is the whole discipline the paragraph below asks for: the count is not
+  checked by anything, so it is only ever as true as the last session that touched a route.
 
   **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
   CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
@@ -398,6 +405,7 @@ D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
 D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
+D67  The QR is the whole identification, the product is a claim, and the card is destroyed
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
@@ -409,6 +417,11 @@ D66  The order screen comes before the transport, and the shipping lane needs ne
   measured rather than carried forward — section 6 names what it could not check. Three modules
   under `pipeline/` have full T7 coverage and no route, no client function and no screen — D66,
   which settles the order the rest is built in. Not `docs/specs/order-flow.md`, the sell path.
+- `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
+  measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
+  the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and
+  NOT executed — every researched venue came back marginal). Read its §8 before trusting a
+  number: no real code card has ever been through this pipeline.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new
   server route) was built to it. 7b (review queue, Fulfillment view, inventory view,
