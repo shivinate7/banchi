@@ -3015,6 +3015,10 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **Every failure answers 200 with an empty list and a reason.** No cookie, no network, the portal down — the operator keeps typing. D19 measures this screen's cadence in milliseconds and a hint field that would not open because an autocomplete failed is a worse product than one with no autocomplete.
 
+**And the reason is drawn, because degrading to empty is correct and degrading invisibly is not.** The first build carried the reason on the response and threw it away, so an expired session and a game with no sets produced the identical empty list and silence was the only signal. The session case names `.env`, since it is the one the operator can act on. It stays a note: the field takes text exactly as before.
+
+**`#/runs` already said so and the capture screen did not**, which is the asymmetry worth recording. The fetch refuses with `tcg_session_expired` and the screen renders the sentence verbatim with no control, because re-copying a cookie happens outside the app. The capture screen had no equivalent, and the hint field is the surface an operator touches long before they ever press Fetch.
+
 **The load follows the field being OPEN, not the row being tapped**, which was a real defect caught by its own test. `H` opens the field from the key handler and never reaches the row's `onToggle`, so hanging the load there left the list empty for every operator using the keyboard — which on this screen is all of them.
 
 **`match_sets` stays regardless.** 677 of the store's cards already carry free-text hints and those runs must keep joining; an exact hint costs the matcher nothing, because rule one matches and the other two never run.
