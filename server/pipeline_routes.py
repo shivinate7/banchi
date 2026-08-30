@@ -101,9 +101,10 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -515,8 +516,19 @@ def _run_box(manifest: dict) -> Optional[int]:
     return int(found.group(1)) if found else None
 
 
-def _box_names() -> Dict[int, str]:
-    """`box -> the name the owner gave it`, for every box the registry names one for.
+def _box_names() -> Dict[int, Tuple[str, Optional[str], FrozenSet[str]]]:
+    """`box -> (the name, when the box was created, the runs its cards came from)`.
+
+    THE SECOND AND THIRD ARE HERE BECAUSE A BOX NUMBER IS REUSED AND A NAME IS NOT TIED TO A
+    RUN. `next_box_number` allocates the lowest FREE integer (D20), so a box that goes and
+    another that arrives share a number — and this map, keyed by the number alone, then hands
+    a run from before the change the name of the drawer that replaced it. Observed:
+    `2026-08-22-box1-03` drew `UNL Rares`, a registry entry made seven days after that run
+    and holding none of its 53 cards.
+
+    THE RUN SET COSTS ONE PASS OVER THE CARDS THIS ALREADY PARSED. `Inventory.parse` is the
+    expensive half and it was happening anyway; walking the parsed cards for `box` and `run`
+    is arithmetic beside it, and it is done ONCE for a whole run list rather than per row.
 
     THE STORE IS THE SOURCE AND THE RUN IS NOT, WHICH IS THE WHOLE POINT OF READING IT HERE
     (D56). A run directory records the box NUMBER it was over — in its scope block, or in the
@@ -545,17 +557,22 @@ def _box_names() -> Dict[int, str]:
         inventory = master.Inventory.parse(files.read_json(Store().inventory_path))
     except Exception:  # noqa: BLE001 — a name is never worth an unanswered poll
         return {}
-    names: Dict[int, str] = {}
+    present: Dict[int, set] = {}
+    for card in inventory.cards.values():
+        if isinstance(card.run, str) and card.run.strip():
+            present.setdefault(card.box, set()).add(card.run)
+    names: Dict[int, Tuple[str, Optional[str], FrozenSet[str]]] = {}
     for key, entry in inventory.boxes.items():
         name = entry.name
         if not isinstance(name, str) or not name.strip():
             continue
         try:
-            names[int(key)] = name
+            box = int(key)
         except (TypeError, ValueError):
             # A registry key that will not coerce names no box, exactly as `_box_row`'s walk
             # treats a card whose box will not: skipped, never fatal.
             continue
+        names[box] = (name, entry.created_at, frozenset(present.get(box, ())))
     return names
 
 
@@ -1236,6 +1253,64 @@ def _phase(manifest: dict, live: bool) -> str:
     return "done"
 
 
+def _box_name_for(
+    box: Optional[int],
+    run: str,
+    ran_at: Optional[str],
+    names: Dict[int, Tuple[str, Optional[str], FrozenSet[str]]],
+) -> Optional[str]:
+    """The registry's name for this box, unless the box in it is a different drawer.
+
+    `_box_names` HAS ALWAYS SAID A VANISHED BOX GETS NO NAME — *"the run remembers a box the
+    store no longer has, and a missing name is the honest rendering of that"* — and could not
+    see the case where it matters, because the number is REALLOCATED: D20 hands out the
+    lowest free integer, so the map is never missing the key, it is holding somebody else's
+    answer under it.
+
+    TWO CONDITIONS, BOTH REQUIRED, AND EACH RULES OUT THE OTHER'S FALSE POSITIVE. This is the
+    correction to a first version that used the timestamp alone and was wrong:
+
+      the box was created AFTER the run started
+      and the box's cards DISOWN the run — it holds some, and none of them is this run's
+
+    **The timestamp alone forbids naming a box afterwards, which is an ordinary thing to
+    do.** A run started in a terminal over `captures/cards/box3` can be named the moment the
+    owner opens the registry, and T7 asserts exactly that flow: name the box, and the name
+    reaches the run on the next read. A rule reading the clock refuses it forever.
+
+    **The card set alone forbids naming a box for a run that has not identified yet.** `run`
+    is written onto a card by `identify`, so a fresh run over a box already holding another
+    run's cards owns none of them for as long as it is live — and would lose its box's name
+    for precisely the window the screen is polling it at 4s.
+
+    Together they name the one shape neither can: a box that arrived after the run AND whose
+    contents came from somewhere else. An empty box disowns nobody, which is what keeps the
+    name-it-later flow working.
+
+    IT ABSTAINS TOWARDS NAMING. An unparseable or absent timestamp means this cannot tell,
+    and withholding on ignorance would strip the name off every run whose manifest predates
+    the field — a claim of its own, made about runs this knows nothing about.
+    """
+    if box is None:
+        return None
+    found = names.get(box)
+    if found is None:
+        return None
+    name, made_at, runs_present = found
+    if not runs_present or run in runs_present:
+        return name
+    if not isinstance(ran_at, str) or not isinstance(made_at, str):
+        return name
+    try:
+        born = datetime.fromisoformat(made_at)
+        ran = datetime.fromisoformat(ran_at)
+    except ValueError:
+        # Not lexicographic: `...:24+00:00` and `...:24.500+00:00` differ in a character
+        # class before the offset, so string order is only accidentally time order.
+        return name
+    return None if born > ran else name
+
+
 def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
     """One run, as every route that mentions one answers with it.
 
@@ -1267,7 +1342,9 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         # holds; `box_name` is a join against the registry as it stands right now, so a
         # rename shows up on the next poll rather than on the next run.
         "box": box,
-        "box_name": None if box is None else names.get(box),
+        "box_name": _box_name_for(
+            box, directory.name, manifest.get("created_at"), names
+        ),
         "started_by": manifest.get("started_by"),
         "live": pid is not None,
         "pid": pid,

@@ -1112,3 +1112,139 @@ target called "make" when it sat beside another make span on one line.
 **What this costs: a green design-check is slightly weaker than it reads.** A single red in a 256-test run may be this rather than a defect, and telling them apart means re-running — which is exactly the habit that hides a real intermittent failure. Recorded rather than fixed because the fix is a wait-for-stable-layout in that one test, and changing an assertion to make it pass is what D16 forbids without knowing which of the two it is.
 
 **A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
+
+---
+
+## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
+
+Found by the owner looking at five copies of Moonfall in box 3 and seeing the `Number` row
+disagree between them. Two defects and one symptom, separated here because only two of the
+three are defects.
+
+### `printed_total` is guarded as `null` and arrives as an empty string
+
+`app/src/BoxBrowse.tsx:864` and `app/src/CardLocations.tsx:85` carry the same expression:
+
+    return printed_total === null ? number : `${number}/${printed_total}`
+
+**The line above it in both guards `number` for `null` or blank, and this one guards
+`printed_total` for `null` alone.** Two emptiness tests in one function, one field apart.
+`printed_total` is stored as `""` on **174 of 715 records that also carry a number**, so those
+take the else branch and render a trailing separator with nothing behind it — `198/219/`.
+
+Cosmetic, and it costs a quarter of the store. Not fixed here because the two call sites are
+one of the pairs `docs/DESIGN.md` would rather see merged than edited twice, and merging them
+is a change with an argument attached rather than a one-line repair.
+
+### The set code the model glued on is stripped for the key and never for the display
+
+D55 removes a glued-on set code **by shape, and only after the join key has missed** — that is
+a rule about matching, and nothing applies it to what a screen draws. **Nine numbers carry
+one, with three different separators**: `UNL • 198/219`, `UNL - 198/219`, `UNL / 120/219`.
+
+**The visible cost is larger than nine rows, because disagreement propagates.**
+`server/capture_server.py:_agreed` returns `None` when the copies of a group do not all say
+the same thing, deliberately and for a good reason — a number lifted off whichever copy the
+dict yielded first would be a confident answer about a group that has none. So five Moonfall
+copies storing three spellings of one number make the **group** report no number at all, while
+each card's own detail row still shows its own raw variant. One card, three strings, one
+screen, and the group between them silent.
+
+Not fixed here because the repair has a real choice in it — normalize at capture, normalize at
+read, or teach `_agreed` to compare folded — and picking one is a decision entry, not a patch.
+
+### The stripped panel was the stranded card, not a third defect
+
+The fifth Moonfall drew no card block, no `Mark sold`, no `Retire` and `sku: null`, and it
+read as the copies panel failing on a null SKU. It was not. `_agreed`'s own docstring records
+that the SKU-less group is a deliberate collection of *"cards with nothing in common but the
+operator's query"*, so a card with no SKU correctly forms its own group and correctly offers
+nothing that depends on one.
+
+**That card should never have been in it.** `3/37` was resolved by its run — the run's
+`pricing.json` names the position under SKU `9191486` — and then lost the stamp to the D7 cap
+that `cli/cmd_emit.py` used to apply to `uncommitted_positions`, sold at 14:41, and was out of
+reach of every later re-emit by D57's invariant. Repaired 2026-08-30 from the run's own
+paperwork; `GET /search?q=moonfall` now returns one group of five.
+
+**What is worth keeping from it**: a SKU-less group renders as a panel with its controls
+missing, and the owner read that as breakage rather than as a category. Whether that category
+should announce itself is a design question nobody has asked.
+
+### Two departed copies in one box render as two identical rows
+
+Reported the same day as *"I'm seeing two box 1's"*. There is one box 1. There are two sold
+copies of `Vi, Peacekeeper` in it, at stored indices **67** and **106**, and both draw the
+string `Box 1 · departed` with nothing whatever beside it to tell them apart. Two physical
+cards, one row repeated.
+
+**D58's label is right and is not what is wrong here.** A departed card is in no slot, and
+printing the slot number would print the number that now belongs to its successor — a lie
+about a shelf. So the label drops it, correctly.
+
+**What is wrong is that the disambiguating value is already in the payload and the row throws
+it away.** `GET /search` returns `place.index` of 67 and 106 on those two rows. D58 itself
+draws the distinction this needs: *"The STORED index never moves — it is the
+`/inventory/<box>/<index>` path"*, while `Place.slot` is the countable number that shifts. The
+index is not a slot and printing it is not the lie D58 refuses.
+
+**It scales with sales, which is why it will get worse rather than stay a curiosity.** Four
+departed Moonfalls already draw four identical rows in box 3, and the only thing separating
+them on screen is the neighbor text underneath — which is the *shelf's* fact, not the card's,
+and goes blank on the copies whose neighbors are themselves departed.
+
+Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
+ruling about exactly this label. It wants an entry, not a patch.
+
+### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
+
+Reported as *"why does pricing show two box 1s"*. **Because there are two runs over box 1**,
+and `Pricing.tsx`'s run picker draws one button per run with the box as the headline:
+
+    2026-08-30-box3-01   Box 3 · RB Epics
+    2026-08-29-box1-01   Box 1 · UNL Rares
+    2026-08-24-box2-01   Box 2 · ME01 C/UC
+    2026-08-22-box1-03   Box 1 · UNL Rares
+
+The run id is drawn — it is the `pricing-run-id` span — but `docs/DESIGN.md`'s
+human-label-large, machine-string-small rule puts it in the meta line under the headline, so
+the only thing separating two buttons is small text and a SKU count. **The data is correct
+and the screen is honest**; the fact that distinguishes them is demoted.
+
+**The sharper half is that the older button describes a box that no longer exists.** Box 1 as
+it stands was created **2026-08-29 21:32**, seven days after that run, and **not one card in
+the store carries `run=2026-08-22-box1-03`** — the store's three runs account for all 715
+records and that is not one of them.
+
+**It is labeled `UNL Rares` anyway, and that is D56 working exactly as written.**
+`server/pipeline_routes.py:_summary` derives `box` from the manifest's scope or, failing that,
+from the capture directory's basename — this run has no scope block, so `captures/cards/box1`
+is the whole of the evidence — and then joins `box_name` against the registry **as it stands
+right now**. D56 chose read-time joining on purpose, so that a rename relabels every screen
+rather than stranding an answer nobody can correct. The cost it did not name is this one: a
+run over a *previous* occupant of a box number silently borrows the *current* occupant's name.
+
+**Closed the same day, on the owner's ruling, by two of the three candidate repairs.**
+`Pricing.tsx` draws the run's date in the headline, so two runs over one drawer are never the
+same string; and `_summary` withholds the name where the box under that number is a different
+drawer. The third candidate — marking a run whose cards have left the store — was not taken
+as a display, but its signal is half of the rule below.
+
+**It is not the D56 amendment it looked like.** `_box_names`'s own docstring already said a
+vanished box gets no name — *"the run remembers a box the store no longer has, and a missing
+name is the honest rendering of that"* — and could not act on it, because a deleted box number
+is REALLOCATED by D20's lowest-free-integer rule, so the map is never missing the key. The
+guard completes a rule this code already stated rather than overturning one, which is why it
+took no new decision entry.
+
+**The first version of the guard was wrong and T7 caught it inside the session.** It compared
+the timestamps alone — box created after the run, withhold the name — and that forbids naming
+a box *afterwards*, which is an ordinary thing to do and which T7 already asserted three
+blocks earlier: name the box, and the name reaches the run on the next read. The shipped rule
+needs **both** conditions, and each rules out the other's false positive:
+
+    the box was created AFTER the run started
+    AND the box's cards disown the run — it holds some, and none of them is this run's
+
+An empty box disowns nobody, so name-it-later still works. A live run that has not identified
+yet owns no cards, so the timestamp keeps it named. Three assertions pin it.
