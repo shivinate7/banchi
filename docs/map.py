@@ -781,7 +781,7 @@ COMPONENTS = [
                 "governed_by": ["D2", "D3", "D17"],
             },
             "prose-guard.py": {
-                "does": "D60's two guards over the @-loaded docs. `--structure` asserts "
+                "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
                         "what decision-context.py needs and cannot report for itself — a "
                         "`## D<n> — <title>` heading, every `**bold**` closed on its own "
                         "line, and at least one ruling per entry — because that hook exits "

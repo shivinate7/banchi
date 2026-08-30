@@ -2365,11 +2365,21 @@ It becomes `Card 29` only when 180 sells, which is a card in its own section and
 ---
 ## D60 — The @-loaded docs are dense American technical English, and an entry cites rather than restates
 
-**Every session loads these four documents in full before any work starts, so their length is a standing cost rather than a style question.** Built 2026-08-30, on the owner's instruction to rewrite the prose denser.
+**The three referenced docs are read on demand rather than loaded in full, and their prose is dense American technical English.** Built 2026-08-30, on the owner's instruction to rewrite the prose denser; amended the same day when the measurement showed where the cost actually was.
 
 `CLAUDE.md` `@`-references `docs/DECISIONS.md`, `docs/GATES.md` and `docs/DESIGN.md`, so all four enter context in every checkout, on every turn, before a word of work. Measured the day this landed: **635,411 bytes, roughly 165,000 tokens.**
 
-**The `@`-references stay.** That was the owner's call, taken against the alternative of an index and on-demand reads. It decides the shape of everything below: a cited entry is already in context, so restating its argument is duplication rather than a service to a reader who cannot reach it.
+**The `@`-references are gone, and that is the amendment.** They stayed at first, on the owner's call and against the alternative of an index. What changed is the measurement: rewriting twenty entries moved the four docs 635,411 -> 627,725 bytes, about 2,000 tokens, because these files are ~85% identifiers, paths, measurements and dates and only ~15% rhetorical framing. Dropping the prefix moves the same figure to **~7,700 tokens**, and the two are not close enough to argue about.
+
+**What replaces the load, because a session must not fly blind.** `scripts/decision-context.py` already names the governing decisions before any edit under the mapped directories, and D60's own reflow is what made it see every bold in the file. That covers the edit path. The conversational path — an architecture question with no file open — is covered by the index in `CLAUDE.md`: 60 lines, 3,929 bytes, one line per entry.
+
+**The index is a table of contents and never a substitute for the entry.** `CLAUDE.md` still says to read the entry itself before proposing an architecture change, and that instruction now costs a `Read` where it used to cost nothing. That is the trade, stated plainly: the file is one tool call away rather than already present.
+
+**`decision index` is a blocking audit row, because an index that has drifted is worse than none.** It is believed — D17's argument for auditing `docs/map.py` exactly as hard as it is trusted. It compares ids, titles and order against the headings, which are the source. Mutation-tested three ways: a drifted title, a dropped entry, and a new heading nobody indexed.
+
+**It is not a generator and does not open D18's seam list.** The row computes what the index should say and compares; it never writes. That is D18's own write-time versus check-time split with only the check half built, and the seam list stays empty.
+
+**Cite-don't-restate loses its premise and is narrowed rather than kept.** That rule rested on the cited entry being already in context, which is now false — a reader who follows a citation pays a `Read`. In practice little moves, because the pass that landed was overwhelmingly register rather than deletion: no entry had its argument cut in favour of a pointer. What the rule becomes is the weaker and more honest form — **do not re-derive a cited entry's reasoning, but do say how it bears here**, which is the half that was doing the work anyway. An entry must still stand up read alone.
 
 ### The rule
 
@@ -2417,7 +2427,7 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 **It is not license to cut reasoning.** D16 forbids editing a document to satisfy a gate, and the budget row is advisory so that it can never become one.
 
-**What would reopen this: the `@`-references being dropped.** Cite-rather-than-restate rests on the cited entry being in context. Remove the `@` and an entry read alone gets less than it used to, and this entry has to be argued again.
+**What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles — or worse, re-litigated because nobody opened the entry — the honest answer is not a longer index but a louder instruction, and `CLAUDE.md` is where it would go.
 
 ---
 
