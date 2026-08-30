@@ -23,7 +23,10 @@ tree.** What was retired is the gate as a *control*: the blocking, the sequencin
 make hooks          # arm the three git hooks. Once per clone — core.hooksPath never travels.
 make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; neither
                     #   is tracked, so neither travels. Skipping it fails T1/T6/T7 with
-                    #   three errors that never mention the worktree.
+                    #   three errors that never mention the worktree. The Browser pane's
+                    #   port is NOT among them any more: the SessionStart hook writes
+                    #   `.claude/launch.json` from this checkout's own slot before any work
+                    #   starts, so a worktree can no longer preview the MAIN tree (D43).
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you

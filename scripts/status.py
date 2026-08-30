@@ -139,6 +139,14 @@ SOURCES = (
                "the checkout is, not a literal; stdlib-only, so it cannot need `make venv`",
     },
     {
+        "path": "scripts/launch-config.py",
+        "kind": "file",
+        "requires": (),
+        "why": "what the Browser pane will open — run with `--check` by ports_and_store() "
+               "below. Run rather than imported because it is a CLI with three appetites "
+               "and this is the read-only one; a missing file costs the line, not the run",
+    },
+    {
         "path": "scripts/githooks/*",
         "kind": "file",
         "requires": (),
@@ -767,6 +775,30 @@ def ports_and_store() -> List[str]:
             cont(f"the main checkout serves capture {module.CAPTURE_BASE_PORT} / "
                  f"dev {module.DEV_BASE_PORT}, over a DIFFERENT store"),
         ]
+
+    # WHICH PORT THE BROWSER PANE WILL ACTUALLY OPEN, which is not the same question as the
+    # line above and was the sixth reader D43 missed. `scripts/worktree-guard.sh` writes this
+    # file at session start, so the ordinary answer is that they agree — and this line exists
+    # for the case where they do not, because that hook FAILS OPEN by design and a silent
+    # skip leaves a tab pointing at the main tree while everything else here reads correctly.
+    #
+    # Reported and never repaired, like every other line in this file: `--check` writes
+    # nothing. The remedy is named in the output rather than performed, which is D18's split
+    # between a thing that reports and a thing that acts.
+    found = resolve("scripts/launch-config.py")
+    if found:
+        done = subprocess.run(
+            [sys.executable, str(found[0]), "--check"],
+            cwd=str(ROOT), capture_output=True, text=True, check=False,
+        )
+        said = ""
+        for line in done.stdout.splitlines():
+            if line.startswith("launch-config:"):
+                said = line.split(":", 1)[1].strip()
+        if said.startswith("current"):
+            pass  # agreeing is the ordinary case and costs no line
+        elif said:
+            out += [cont(f"BROWSER PANE: {said}"), cont("fix with `make launch-config`")]
     return out
 
 

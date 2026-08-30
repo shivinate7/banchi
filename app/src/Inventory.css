@@ -16,11 +16,18 @@
  * mostly empty column. What is left of this file is the page frame, the receipts, the two
  * confirm panels and the copies block — everything else belongs to `BoxBrowse.css`.
  *
- * ACCENT APPEARS EXACTLY ONCE, IN THE CONFIRM PANEL, AND NOWHERE ELSE. docs/DESIGN.md's rule
- * is that a solid fill marks a screen with exactly one thing to do, and the photo-confirm is
- * that screen — a photograph, a position, and one action. It is drawn by PullConfirm, which
- * brings its own fill, so no rule in this file paints it. The copy rows get none for the reason
- * CardLocations.css gives: several things to do is not one thing to do.
+ * ACCENT APPEARS NOWHERE ON THIS SCREEN, AND THIS PARAGRAPH HAS NOW SAID BOTH THINGS. It read
+ * "exactly once, in the confirm panel" — the sale's photo-confirm, a photograph, a position and
+ * one action, which is docs/DESIGN.md's definition of a screen that earns a solid fill. D57
+ * deleted that panel on 2026-08-30: the owner ruled the photograph redundant against the card
+ * band, so `Mark sold` writes on one press and the way back is an `Undo` in the row and on the
+ * receipt. Nothing here renders PullConfirm any more.
+ *
+ * THAT IS THE RULE SATISFIED RATHER THAN BROKEN, which is worth stating because the sentence
+ * reads like a loss. The rule says where a fill MAY go, never that a screen must have one —
+ * `#/runs` draws none either — and the retire panel that inherited this file's scrim is a choice
+ * between four reasons, which is the case that has always been refused a fill. The copy rows get
+ * none for the reason CardLocations.css gives: several things to do is not one thing to do.
  *
  * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header strip —
  * docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it, and
@@ -316,8 +323,10 @@
   border-radius: var(--r);
 }
 
-/* The position is the payload: it is what says which copy is about to be sold. Larger than the
-   row's 13px because this is the one thing being checked, and mono so it cannot shift width. */
+/* The position is the payload: it is what says which copy is about to be retired. Larger than
+   the row's 13px because this is the one thing being checked, and mono so it cannot shift width.
+   It said "about to be sold" until D57 took the sale's panel away; the retirement is the only
+   write left that draws one. */
 .inventory-confirm-place {
   font-family: var(--util);
   font-size: 15px;
@@ -344,14 +353,12 @@
   margin-top: var(--s2);
 }
 
-/* The one fill on this screen fills the panel it sits in. Cancel keeps its own width beside
-   it, so the loud control is unmistakably the larger of the two. */
-.inventory-confirm-actions .pull-confirm {
-  flex: 1 1 auto;
-}
+/* `margin-left: auto` is right for a receipt, where Undo packs to the far end of a wide row, and
+   wrong here, where Cancel is the only thing in the row and would drift to its far end.
 
-/* `margin-left: auto` is right for a receipt, where Undo packs to the far end of a wide row,
-   and wrong here, where the two controls are a pair. */
+   IT SAID "where the two controls are a pair" UNTIL D57, and a `.pull-confirm` rule stood above
+   it giving the sale's confirm button the rest of the row. That button is gone with its panel,
+   so this row holds one control and the rule survives its own reason. */
 .inventory-confirm-actions .inventory-plain {
   margin-left: 0;
 }
