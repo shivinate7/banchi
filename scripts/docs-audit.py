@@ -2610,6 +2610,147 @@ def check_withhold_reasons(report: Report) -> None:
     )
 
 
+def check_pricing_presets(report: Report) -> None:
+    """The three pricing presets, reconciled between the tuple that prices them and the
+    table that writes them.
+
+    `cli/cmd_join.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
+    so the client performs no arithmetic on money. `app/src/Pricing.tsx:PRESETS` is what a
+    press on the pricing screen writes into `decisions.json` — and it has to write the RULE,
+    because D49 refuses to write the suggestions themselves: an override is layer 1 of
+    `prices_for` and would beat the rule at layer 4, producing a run where changing the preset
+    silently changed nothing.
+
+    THE DEFECT THAT PUT THIS ROW HERE IS THAT SAME FAILURE BY THE OTHER ROAD. The press wrote
+    `preset: <key>`, a field `pipeline/decisions.py:parse` does not know and `to_payload` does
+    not emit — so the next join dropped it and `rule`/`basis` never moved. Measured on the
+    owner's riftbound run: `preset: market_undercut_5` beside `rule: match`, 2 overrides across
+    50 SKUs, and 48 cards about to list at a price nobody had chosen. Nothing could see it: no
+    check compared the two tables, and the screen never drew which rule was live.
+
+    BLOCKING, for the reason `check_withhold_reasons` above gives and which applies here
+    verbatim: `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations
+    agreeing is the whole defence. A rule the screen writes and `pricing.Rule.parse` refuses is
+    a run `emit` cannot price.
+
+    THE LABELS AND THE BLURBS ARE NOT CHECKED, the same carve-out and the same reason: they are
+    prose for a person, and a rule about wording would be this audit taking a view on English.
+    What is checked is the triple a parser has to accept.
+    """
+    findings: List[Finding] = []
+    python_path = ROOT / "cli" / "cmd_join.py"
+    ts_path = ROOT / "app" / "src" / "Pricing.tsx"
+
+    # `PRESETS` NAMES `pricing.RULE_MATCH` RATHER THAN `"match"`, WHICH IS RIGHT AND IS WHY
+    # THIS IS NOT A `literal_eval`. Referring to the constant is what keeps `cmd_join.py` from
+    # being a fourth place a rule name is spelled; the cost is that reading it means resolving
+    # `pricing.<NAME>` first. Resolved by `ast` out of `pipeline/pricing.py`, never by
+    # importing — same rule D22 sets for the game registry and this script keeps for itself.
+    constants: Dict[str, object] = {}
+    for node in ast.walk(ast.parse(read(ROOT / "pipeline" / "pricing.py"))):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and isinstance(node.value, ast.Constant):
+                constants[target.id] = node.value.value
+
+    def resolved(node):
+        """One PRESETS cell as its string, or None where this audit cannot say."""
+        if isinstance(node, ast.Constant):
+            return node.value
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "pricing"
+        ):
+            return constants.get(node.attr)
+        return None
+
+    authored: Set[tuple] = set()
+    for node in ast.walk(ast.parse(read(python_path))):
+        if not isinstance(node, ast.Assign):
+            continue
+        if "PRESETS" not in [t.id for t in node.targets if isinstance(t, ast.Name)]:
+            continue
+        if not isinstance(node.value, (ast.Tuple, ast.List)):
+            findings.append(
+                Finding(
+                    "cli/cmd_join.py",
+                    "PRESETS is not a table this audit can read. It is a hand-authored "
+                    "table in D22's sense and has to stay one.",
+                )
+            )
+            continue
+        for row in node.value.elts:
+            if not isinstance(row, (ast.Tuple, ast.List)) or len(row.elts) != 3:
+                continue
+            cells = [resolved(cell) for cell in row.elts]
+            if all(isinstance(cell, str) for cell in cells):
+                authored.add(tuple(cells))
+            else:
+                findings.append(
+                    Finding(
+                        "cli/cmd_join.py",
+                        "a PRESETS row names something this audit cannot resolve to a "
+                        "string. Spell it as a literal or as a `pricing.` constant, or this "
+                        "row stops reconciling anything and goes quietly green.",
+                    )
+                )
+
+    ts_text = read(ts_path)
+    block = re.search(r"const PRESETS[^=]*=\s*\[(.*?)\n\]", ts_text, re.S)
+    offered: Set[tuple] = set()
+    if block is None:
+        findings.append(
+            Finding(
+                "app/src/Pricing.tsx",
+                "no PRESETS array — the screen has to declare the rule each preset writes, "
+                "in one place, or nothing can reconcile it with the tuple that prices them.",
+            )
+        )
+    else:
+        for entry in re.findall(r"\{(.*?)\}", block.group(1), re.S):
+            fields = dict(re.findall(r"(key|rule|basis):\s*'([^']*)'", entry))
+            if {"key", "rule", "basis"} <= set(fields):
+                offered.add((fields["key"], fields["rule"], fields["basis"]))
+            elif "key" in fields:
+                findings.append(
+                    Finding(
+                        "app/src/Pricing.tsx",
+                        f"preset {fields['key']!r} declares no rule/basis pair. A press has "
+                        f"to write one: writing anything else leaves the run at whatever rule "
+                        f"it already had, which is the defect this row exists for.",
+                    )
+                )
+
+    if not authored:
+        findings.append(Finding("cli/cmd_join.py", "PRESETS is missing or empty."))
+
+    for entry in sorted(offered - authored):
+        findings.append(
+            Finding(
+                "app/src/Pricing.tsx",
+                f"the screen writes {entry!r} and cli/cmd_join.py:PRESETS does not price it — "
+                f"so the suggested numbers on screen are not what this rule emits.",
+            )
+        )
+    for entry in sorted(authored - offered):
+        findings.append(
+            Finding(
+                "app/src/Pricing.tsx",
+                f"cli/cmd_join.py prices {entry!r} and the screen does not write it — priced "
+                f"into every row of the pricing table, reachable from nothing.",
+            )
+        )
+
+    report.add(
+        "pricing presets",
+        MECHANICAL,
+        findings,
+        f"{len(authored)} priced, written by the screen, key rule and basis agree",
+    )
+
+
 def check_reason_codes(report: Report) -> None:
     """The twelve review reasons, reconciled across the three places they are published.
 
@@ -4878,6 +5019,7 @@ def audit(staged_only: bool) -> Report:
     check_join_key_shape(report)
     check_reason_codes(report)
     check_withhold_reasons(report)
+    check_pricing_presets(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)

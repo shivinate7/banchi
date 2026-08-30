@@ -8079,6 +8079,112 @@ def _stages(inventory) -> str:
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
 
 
+def check_emit_bypass(checks: Checks) -> None:
+    """`emit` re-derives the run, so every input to that derivation comes from the run.
+
+    THE DEFECT, FOUND BY THE OWNER PRESSING `Write the import files` ON A BOX THEY HAD JOINED.
+    `cli/cmd_emit.py` called `resolve.load` without `trust_claim`, so it walked the ladder with
+    D3 rung 3 LIVE over a run joined with `--bypass` — inventing a queued position for every
+    bypassed card, finding none of them in either queue file (join deliberately never wrote
+    them), and refusing with *"Run `pkmnscan join` first"* at an operator who had. Re-running
+    join could not clear it, because join was right.
+
+    Measured on the owner's box 1 before the fix: `bypassed: 39` in the manifest, 39 positions
+    invented, 39 absent from disk, and the refusal's first ten positions matched what the screen
+    printed character for character.
+
+    THE REFUSAL WAS THE SECOND-WORST OUTCOME, which is why the case asserts the OUTPUT and not
+    just the exit code. That same resolution is what writes the import files, so had the check
+    passed, those cards would have been routed to review and left out of the CSV — the bypass
+    silently void at the one step that produces output. So this asserts the bypassed card is IN
+    the file, at the SKU its claim names.
+
+    Its own isolated home, this file's own lesson yet again: it emits, which writes `pushed`
+    counts that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
+    """
+    checks.note("")
+    checks.note("EMIT BYPASS — the run's own resolution decides, not this command's defaults")
+
+    # Dunsparce 120/159 stocks two condition rows, so a claim of `normal` is a claim the
+    # catalog cannot settle on its own and detection is what contradicts it — D3 rung 3, the
+    # exact rung `--bypass` switches off. A holofoil-only number could not produce the case.
+    cards = [(3, 1, "Dunsparce", "120", "normal")]
+
+    with isolated_home():
+        for box, index, *_ in cards:
+            while Store().read().inventory.next_index(box) <= index:
+                capture_server.do_capture(capture_payload(box))
+
+        run_dir = runs.create("t7-bypass")
+        payload = identifications_for(cards)
+        # THE CLAIM AND THE DETECTION MUST DISAGREE, and `identifications_for` sets both from
+        # one field by design — a null finish is its rung-2 case. Patched here rather than by
+        # widening that helper, because every other block in this file wants the agreeing shape.
+        payload["cards"][master.position_key(3, 1)]["identification"]["finish"] = "reverse_holo"
+        run_dir.write_identifications(payload)
+        export = write_export(run_dir.path("export.csv"))
+
+        said = command(
+            checks, "join", str(run_dir.directory), "--export", str(export), "--bypass"
+        )
+        run_dir = runs.open_run(run_dir.directory)
+
+        checks.ok(
+            run_dir.manifest.get("bypass_detection") is True,
+            "the run RECORDS that it was joined with --bypass. Without this on the manifest "
+            "there is nothing for a later command to read, and every later command re-derives",
+        )
+        checks.equal(
+            run_dir.manifest.get("bypassed"),
+            1,
+            "and records how many cards it cleared, so the count is reported rather than "
+            "inferred from a smaller queue (D3)",
+        )
+
+        snapshot = Store().read()
+        checks.equal(
+            (len(snapshot.review.entries), len(snapshot.parked.entries)),
+            (0, 0),
+            "A BYPASSED CARD IS QUEUED NOWHERE, which is the whole point of the flag and the "
+            "fact that made emit refuse: the position emit invented could not be on disk",
+        )
+
+        said = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "REFUSING to write" not in said,
+            "`emit` DOES NOT REFUSE a run joined with --bypass. It read the flag off the "
+            "manifest exactly as it already read `review_below_confidence`, rather than "
+            "defaulting rung 3 back on and re-deriving a run that is not the one on disk",
+        )
+
+        # GUARDED, because the failure this case exists for is a REFUSAL — and a refusal
+        # writes no file, so reading one unconditionally turns a clean red line into a
+        # traceback that hides every check behind it. `answers()` above states the same rule.
+        listed = run_dir.path(runs.import_listed_name("pokemon"))
+        written = (
+            {row[tcgcsv.SKU_COLUMN] for row in tcgcsv.read_export(listed).rows}
+            if listed.is_file()
+            else set()
+        )
+        checks.ok(
+            listed.is_file(),
+            "an import file EXISTS at all — the refusal wrote nothing, so this is what a "
+            "regression looks like before any SKU can be asserted about",
+        )
+        checks.ok(
+            DUNSPARCE_SKU in written,
+            "AND THE CARD IS IN THE FILE AT THE SKU ITS CLAIM NAMES. This is the assertion "
+            "that matters: the refusal was the second-worst outcome, and a fix that only "
+            "silenced it would have left the card routed to review and out of the CSV — the "
+            "bypass void at the one step that writes",
+        )
+        checks.ok(
+            DUNSPARCE_REVERSE_SKU not in written,
+            "and NOT at the finish detection claimed. `--bypass` is one rule — detection may "
+            "not contradict a claim — so the claim decides, and rung 3's other job is untouched",
+        )
+
+
 def check_pricing_authority(checks: Checks) -> None:
     """`decisions.json` decides the price, and `join` may not take that decision back.
 
@@ -9997,6 +10103,7 @@ def check_open_section(checks: Checks) -> None:
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
+    check_emit_bypass(checks)
     check_pricing_authority(checks)
     check_withholding(checks)
     check_pricing_route(checks)

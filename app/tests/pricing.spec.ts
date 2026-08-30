@@ -564,3 +564,68 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
   expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
   await expect(page.locator('.pricing-save')).toHaveText('saved')
 })
+
+// ------------------------------------------------------- a preset reaches what emit reads
+
+test('a preset writes the rule and the basis, which is what the pipeline reads', async ({
+  page,
+}) => {
+  const wire = await open(page)
+
+  await page.getByRole('button', { name: 'Market −5%' }).click()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
+
+  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
+    decisions?: Record<string, unknown>
+  }
+  /* THE PRESS USED TO WRITE `preset: <key>`, WHICH NO READER ANYWHERE HAS.
+     `pipeline/decisions.py:parse` does not know the field and `to_payload` does not emit it,
+     so the next join dropped it and `rule`/`basis` stayed at `match`/`market` — the
+     suggestions on screen moved and nothing `emit` reads did. Measured on the owner's
+     riftbound run: that dead key beside `rule: match`, 2 overrides across 50 SKUs, 48 cards
+     about to list at a price nobody chose. The rule at layer 4 is the thing that has to
+     move, because D49 correctly refuses to write the suggestions as overrides at layer 1. */
+  expect(sent.decisions?.rule).toBe('undercut:5')
+  expect(sent.decisions?.basis).toBe('market')
+  expect(sent.decisions).not.toHaveProperty('preset')
+
+  /* AND NO ROW GAINED AN OVERRIDE. The whole reason the preset must move the RULE is that
+     writing the suggestions would beat it — layer 1 over layer 4 — and produce a run where
+     changing the preset silently changed nothing. */
+  expect(sent.decisions?.overrides).toEqual({})
+})
+
+test('the chip says which rule is live, and it is derived rather than remembered', async ({
+  page,
+}) => {
+  await open(page)
+
+  const match = page.getByRole('button', { name: 'Match market' })
+  const under = page.getByRole('button', { name: 'Market −5%' })
+
+  /* The run loads at `match`/`market`, so that chip is the live one before anything is
+     pressed — read off `decisions.json`, not off a selection this screen remembers. */
+  await expect(match).toHaveAttribute('aria-pressed', 'true')
+  await expect(under).toHaveAttribute('aria-pressed', 'false')
+
+  await under.click()
+  await expect(under).toHaveAttribute('aria-pressed', 'true')
+  await expect(match).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('a hand-typed rule lights no chip rather than a stale one', async ({ page }) => {
+  /* `#/runs` edits `decisions.json` as text (D33), so a rule no preset names is ordinary and
+     must not be drawn as one of the three. A remembered selection would have lit whichever
+     chip was pressed last, which is a claim about what untouched rows will list at — and the
+     pair the pipeline reads is the only thing that can answer that. */
+  await open(page, {
+    decisions: { rule: 'markup:100', basis: 'market', sub_threshold: null, overrides: {} },
+  })
+
+  for (const label of ['Match market', 'Market −5%', 'TCG Low −1%']) {
+    await expect(page.getByRole('button', { name: label })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  }
+})
