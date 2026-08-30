@@ -1103,17 +1103,99 @@ supervisor's stdout line reporting the stack up, which reads as an unregistered 
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
 
-## `make design-check` has one test that flakes under parallel load
+## `make design-check` has one test that flakes under parallel load — resolved 2026-08-30
 
-**`app/tests/inventory.spec.ts:2799` — "the photograph is sized by its column, not by the rows beside it" — failed once in a full run and passed alone and on re-run.** Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately afterwards was 256 of 256.
+**What it argued.** `app/tests/inventory.spec.ts` — "the photograph is sized by its column,
+not by the rows beside it" — failed once in a full run and passed alone and on re-run.
+Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately
+afterwards was 256 of 256. The mechanism was given as rendered geometry: D38 sizes the
+photograph off its column, so the assertion reads back a computed width, and a layout that
+has not settled reports a number that is right a frame later. No error text was captured, so
+that was a hypothesis rather than a reading.
 
-**It measures rendered geometry, which is the shape most sensitive to load.** D38 sizes the photograph off its column, so the assertion reads back a computed width, and a layout that has not settled reports a number that is right a frame later. Nothing about it is specific to the change that was in flight.
+**IT WAS TWO FLAKES, AND THE HYPOTHESIS WAS HALF RIGHT.** Both were reproduced on
+2026-08-30 by loading the rig, and they answer to different fixes.
 
-**What this costs: a green design-check is slightly weaker than it reads.** A single red in a 256-test run may be this rather than a defect, and telling them apart means re-running — which is exactly the habit that hides a real intermittent failure. Recorded rather than fixed because the fix is a wait-for-stable-layout in that one test, and changing an assertion to make it pass is what D16 forbids without knowing which of the two it is.
+### One — the wait, which is what the recorded red almost certainly was
 
-**A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
+At 40 workers against 12 spinning CPU hogs, 80 repeats of that one case: **9 failed, and
+every one of them failed in `open()` on `expect(page.locator(VIEW)).toBeVisible()` at the
+5000 ms default — the app had not rendered yet. Not one failed on an assertion.** With the
+allowance lengthened the same 80 passed, the slowest whole case taking 5.276s.
 
----
+**`expect: { timeout: 15_000 }` in `app/playwright.config.ts`, and it weakens no assertion.**
+Nothing about what is asserted or the value asserted against changed; what changed is how
+long a true statement is given to become true, and a false one is still false at 15s. The
+cost is slower reporting of a genuine failure, which `app/tests/fulfillment.spec.ts` already
+pays knowingly with a 60s `toHaveCount` and a 90s `test.setTimeout` of its own.
+
+### Two — the case subtracting two layouts, which is the geometry the entry guessed at
+
+**`Received: 1.5` against `expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)`, twice
+in 320 loaded repeats at 30 workers against 8 hogs.** The two columns are flush and stay
+flush: 120 loaded samples that read both tops inside ONE `page.evaluate` came back at
+115.25px and 115.25px, a 0px gap, every single time, with `document.fonts` already loaded
+and no scroll. **What was unstable was the case, not the screen.** `mid` is read forty lines
+and eleven `boundingBox()` round-trips before `under`, and the two were subtracted as though
+they came from one layout — so anything that moves the grid inside that window (row 1
+growing as a face swaps in) is reported as two columns that have come apart.
+
+**Both tops now come out of one `evaluate`.** Same two elements, same tops, same 1px
+allowance — this is a measurement fix, not a loosened assertion, which is the line D16 draws.
+400 loaded repeats at the same 30/8 afterwards: clean.
+
+**The other two comparisons in that case have the same shape and are left alone.**
+`mid.width - shot.width` and `rows.x` against `mid.x + mid.width` also pair an early read
+with a late one, and both are named here rather than rewritten because neither has ever gone
+red and both carry far more room than the drift is worth: 8px of declared slack against a
+measured 0, and a 41px column gap. A case is not improved by rewriting assertions that have
+not failed.
+
+### What is NOT closed
+
+**A starved rig is not a slow one, and no wait answers it.** At 40 workers against 12 hogs —
+4x oversubscription on a 15-core machine — a context can fail to render at all: with the
+allowance raised to 120s, 10 of 80 still failed and one took 122 seconds. At that same load
+the full suite also loses `fulfillment.spec.ts` on `main.fulfillment`,
+`capture-claims.spec.ts` on the Finish row, and `capture-undo.spec.ts` on a capture that
+never landed — it expects `Card 10` and the stack's newest is `Card 9`, which is a DROPPED
+PRESS rather than a slow one and is the only one of those a longer wait could never be the
+answer to. None of it is reachable from `make design-check`, which runs 7 workers here.
+
+One more sighting is on the record and is neither explained nor reproduced: at 15 workers,
+before either fix, `app/tests/cursor.spec.ts` — "a typed-into field darkens its edge under
+the pointer, and nothing moves" — failed once in nine runs. Its message was not captured, so
+it is named here rather than diagnosed.
+
+**A claim was published against the failing run.** The commit that added D65's capture-screen
+reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1
+failed, and the true count at that commit was 256. The number was written before the output
+was read. Corrected here rather than by rewriting the message, because the message is history
+and this file is where what-we-actually-know lives.
+
+## A Playwright line number is not a line in the file — found 2026-08-30
+
+**The entry above cited `app/tests/inventory.spec.ts:2799`. At the commit it was written
+against (`3ca904e`), line 2799 of that file is `  }` and the case it names is at line 2565.**
+The number was copied from the reporter, which is the only place it is ever printed, and it
+is wrong there for nearly every test in the suite — checked by walking `--reporter=json`'s
+location for all of them and comparing it against the line the title actually sits on.
+**254 of 256 at `3ca904e`; 257 of 259 on the tree this entry lands in**, where that same case
+has moved to line 2612 and is reported at 2827.
+
+**The transform is what moves them, and the sign goes both ways.** Playwright strips the
+TypeScript and reports against the generated file, so a spec loses the lines its type-only
+constructs occupied and gains the lines its long ones are re-broken into. Measured with a
+probe spec in this repo's own `app/tests`: a test on source line 24 with no annotations above
+it reported 23, and the same test on line 27 with a 22-line `type` block above it reported 3.
+Clearing `$TMPDIR/playwright-transform-cache-501` changes nothing — it is not staleness.
+
+**What it costs: a citation nobody can follow.** Every failure this repo has ever pasted into
+a commit message or a doc carries one of these numbers, and a session that opens the file at
+it lands on unrelated code — silently, because the line is real and the file is right. Grep
+the TITLE instead; the reporter prints that too and it is exact. Recorded rather than fixed
+because there is nothing here to fix: it is the tool's behaviour at 1.55.1, and the repo's
+own remedy is to stop writing the number down.
 
 ## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
 

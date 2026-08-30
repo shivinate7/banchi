@@ -2681,10 +2681,24 @@ test('the photograph is sized by its column, not by the rows beside it', async (
 
      What "flush" means here is that the card column and the copies column begin together, which
      is the grid property a regression would break (a stray margin, a row assignment, an
-     `align-items` change). */
+     `align-items` change).
+
+     BOTH TOPS COME OUT OF ONE LAYOUT, and that is the whole of the fix for a red this case
+     really did produce: `Received: 1.5` against this 1px allowance, twice in 80 loaded repeats
+     on 2026-08-30. `mid` is read forty lines above, and eleven `boundingBox()` round-trips
+     separate it from the read below — so the two numbers were being taken from two different
+     moments and subtracted as though they were one. Anything that moves the grid inside that
+     window (row 1 growing as a face swaps in) shows up here as a gap between two columns that
+     never stopped being flush. One `evaluate` cannot be wrong about that, and it weakens
+     nothing: same two elements, same tops, same allowance. */
   const under = await page.locator('.browse-under').boundingBox()
   if (under === null) throw new Error('the copies column did not render')
-  expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)
+  const tops = await page.evaluate(() => {
+    const card = document.querySelector('.browse-detail') as HTMLElement
+    const copies = document.querySelector('.browse-under') as HTMLElement
+    return Math.abs(copies.getBoundingClientRect().top - card.getBoundingClientRect().top)
+  })
+  expect(tops).toBeLessThanOrEqual(1)
 
   /* And the facts are inside that column rather than merely near it. */
   expect(rows.x).toBeGreaterThan(mid.x + mid.width)

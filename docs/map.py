@@ -1300,8 +1300,12 @@ COMPONENTS = [
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
                                              "ON and is safe only because devPort.ts makes the port "
-                                             "per-checkout",
-                                     "governed_by": ["D5"]},
+                                             "per-checkout. `expect.timeout` is 15s rather than "
+                                             "Playwright's 5s: fullyParallel puts every worker's "
+                                             "first visibility wait against a cold Vite, and that "
+                                             "wait — never an assertion — was the whole of the "
+                                             "flake DEBTS.md recorded on 2026-08-30",
+                                     "governed_by": ["D5", "D16"]},
 
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing "
