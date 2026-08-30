@@ -127,7 +127,35 @@ that lands.
 
 ## STATUS
 
-**RECORDED, not BUILT.** Nothing reads this file and nothing reads the fixture. No product
-code was written, no route exists, no screen draws any of it. The cut above is a measurement
-sitting in a document — under `CLAUDE.md`'s route-is-not-a-feature rule it is not a feature,
-and it must not be reported as one.
+**RECORDED AND NOW READ; STILL NOT A FEATURE.** Amended 2026-08-30 (D61), and the two halves
+of the old sentence went in opposite directions.
+
+It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."* The
+second half is false as of D61 — `pipeline/shipping.py` reads this format and routes an
+order by the cut derived above, `pipeline/pirateship.py` writes the Pirate Ship import, and
+`harness/tests/t7_store_and_seams.py:check_shipping_lane` asserts the lane counts against
+this fixture's 331 real orders. The first half stands exactly as written: **no route, no
+client function, and no screen reaches either module**, so under `CLAUDE.md`'s
+route-is-not-a-feature rule this is not landed and must not be reported as one.
+
+**Two of this document's own limits are answered by the build rather than by re-measurement,
+and one is not:**
+
+- **"It abstains on 29% of orders, and one of them is a $1750 order."** The router asks the
+  VALUE question before the weight proxy, and 58 of the 97 weightless orders are at or over
+  $50 — answered with certainty by a rule that needs no weight. Abstention is **39 of 331
+  (11.8%)**, and order `A2FFC195-0000F4-006AC` at $1750.00 is routed to a tracked parcel
+  without the proxy being consulted. The 29% figure is still correct **about the weight rule
+  in isolation**, which is what this document measures.
+- **The sub-0.07 false-negative path.** Named here as a real mechanism with no row in the
+  sample. It is now a third answer rather than a silent `cards_only`: a ratio below the
+  singles constant abstains as `sub_single_weight`, on the grounds this document gives — no
+  combination of catalog weights can produce one, so the proxy does not apply.
+- **The cut itself is untouched and unre-fitted.** 0.30, the geometric midpoint of the empty
+  band, exactly as derived above. D61 re-derives nothing here and cites this document for
+  every number it uses.
+
+**The retirement condition is unchanged and is now written into the code that depends on it:**
+this is a pre-line-data stopgap, and the cut is to be **deleted rather than tuned** the day a
+feed supplies line items. `pipeline/orders.py` already answers the same question properly
+from declared line kinds.

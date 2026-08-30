@@ -168,6 +168,8 @@ from __future__ import annotations
 
 import ast
 import base64
+import codecs
+import csv
 import io
 import json
 import hashlib
@@ -183,6 +185,7 @@ import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
 
@@ -192,7 +195,16 @@ from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
-from pipeline import games, join, orders, pricehistory, tcgcsv, variant  # noqa: E402
+from pipeline import (  # noqa: E402
+    games,
+    join,
+    orders,
+    pirateship,
+    pricehistory,
+    shipping,
+    tcgcsv,
+    variant,
+)
 from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
@@ -12812,6 +12824,364 @@ def check_price_history(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------- the shipping lane (D61)
+
+# A relative literal, which is what `scripts/docs-audit.py`'s `tested_by reach` row can
+# actually see — see the note above the price-history fixtures for why a path assembled
+# from segments is invisible to it.
+SHIPPING_FIXTURE = "fixtures/orders-shipping.csv"
+SHIPPING_EXPORT = Path(__file__).resolve().parents[2] / SHIPPING_FIXTURE
+
+
+def _shipment(**overrides) -> shipping.Shipment:
+    """One synthetic export row. Every column present, so the reader's contract holds.
+
+    CONSTRUCTED, AND THE BLOCK BELOW SAYS SO EVERY TIME IT USES ONE. The fixture is 331
+    real orders and carries the SHAPE — five exact ratios, the empty band, 97 weightless
+    rows — and it is what the lane counts are asserted against. What it cannot carry is a
+    row that has never occurred, and `sub_single_weight` is exactly that: `docs/specs/
+    shipping-export.md` names it as a real mechanism with no example. A case for it has to
+    be built, and building one is not evidence that it happens.
+    """
+    cells = {column: "" for column in shipping.CANONICAL_HEADER}
+    cells.update(
+        {
+            "Order #": "TEST-0001",
+            "FirstName": "Buyer001",
+            "LastName": "Placeholder",
+            "Address1": "101 Example St",
+            "City": "Springfield",
+            "State": "WV",
+            "PostalCode": "17919",
+            "Country": "US",
+            "Product Weight": "0.70",
+            "Item Count": "10",
+            "Value Of Products": "10.00",
+        }
+    )
+    cells.update(overrides)
+    return shipping.Shipment(cells=cells)
+
+
+def check_shipping_lane(checks: Checks) -> None:
+    """`pipeline/shipping.py` and `pipeline/pirateship.py` — the router and the emitter.
+
+    THREE LANES, NOT A $50 LINE, and the middle lane is why this is a router: a $12 sealed
+    booster box may not go in a stamped envelope and a $600 single may not go untracked, so
+    a rule reading only the money and a rule reading only the contents are each wrong about
+    one real order.
+
+    THE ASSERTIONS THAT MATTER MOST ARE THE ONES ABOUT ORDER AND ABOUT ABSENCE, because
+    both are satisfiable by a plausible wrong build:
+
+      THE SEQUENCE. Asking the value question before the weight question is not a style
+      choice — 58 of the fixture's 97 weightless orders are at or over $50 and are answered
+      with certainty by a rule that needs no weight. A router that abstained first would
+      still produce three lanes, still count correctly on every weight-bearing row, and
+      still look right; it would abstain on 97 orders instead of 39, one of which is the
+      $1750 order `docs/specs/shipping-export.md` names as its own worst case. So the
+      $1750 order is asserted BY NAME.
+
+      THE WEIGHT IS NEVER DERIVED. `Package Weight` comes out blank even though the
+      shipment in hand carries a `Product Weight`, and that emptiness is asserted. It is
+      the single most likely thing for a later session to "fix", and it is wrong in the
+      expensive direction: the catalog constant counts the cardboard and not the mailer, so
+      it buys postage for less than the parcel weighs and the bill arrives at the far end.
+
+      INSURANCE IS REFUSED. D49's rule in another lane. A row carrying an insurance column
+      raises rather than being dropped, because dropping it silently is an operator who
+      believes they asked for insurance and did not.
+
+    WHAT THIS BLOCK DOES NOT COVER, named so a green harness is not misread: whether Pirate
+    Ship's importer accepts these headers. Nobody has fed it this file. Their wizard maps
+    column names on their side of a seam no committed fixture can hold — the same standing
+    as T6's synthetic composites, and the reason `Name` is PRE-JOINED here rather than left
+    to their mapper to work out from two of ours.
+    """
+    checks.note("")
+    checks.note("SHIPPING LANE — the router over a real Export Shipping, and the emitter")
+
+    with isolated_home() as home:
+        export = shipping.read_shipping(SHIPPING_EXPORT)
+
+        # ---------------------------------------------------------------- the reader
+        checks.equal(len(export), 331, "the committed Export Shipping reads 331 orders")
+        checks.equal(
+            export.header,
+            shipping.CANONICAL_HEADER,
+            "and its header is the documented 17 columns, in order",
+        )
+        checks.raises(
+            shipping.MalformedShipping,
+            lambda: shipping.parse(b"Order #,FirstName\r\n"),
+            "a header that is not that one refuses, rather than reading every order as "
+            "unjudgeable — 331 silent abstentions look like a quiet afternoon",
+        )
+        checks.raises(
+            shipping.MalformedShipping,
+            lambda: shipping.parse(
+                b"\xef\xbb\xbf" + ",".join(shipping.CANONICAL_HEADER).encode() + b"\n"
+            ),
+            "and a BOM refuses; the real export has none",
+        )
+
+        # ----------------------------------------------------------------- the lanes
+        routings = shipping.route_all(export.shipments)
+        checks.equal(
+            shipping.lane_counts(routings),
+            {"envelope": 166, "parcel": 126, "unjudged": 39},
+            "331 real orders land 166 envelope / 126 parcel / 39 unjudged",
+        )
+        checks.equal(
+            shipping.reason_counts(routings),
+            {
+                "value_at_threshold": 112,
+                "non_card_signal": 14,
+                "cards_only": 166,
+                "no_weight_data": 39,
+                "no_value_data": 0,
+                "sub_single_weight": 0,
+            },
+            "and every lane carries its grounds — two reasons reach `parcel`, and one of "
+            "them is a fact while the other is an 18x inference",
+        )
+
+        # THE SEQUENCE, ASSERTED AS THE ARITHMETIC RATHER THAN AS A NUMBER. 97 rows report
+        # no weight and only 39 survive to abstain, which is the value rule doing its work
+        # ahead of the proxy. Pinning 39 alone would go green on a build that abstained
+        # first and happened to be re-fitted; this cannot.
+        weightless = [s for s in export.shipments if s.weight is None]
+        rescued = [r for s, r in zip(export.shipments, routings) if s.weight is None and r.judged]
+        checks.equal(len(weightless), 97, "97 of the 331 report no weight at all")
+        checks.equal(
+            len(rescued),
+            58,
+            "and 58 of those 97 are still answered — with certainty, by a rule that never "
+            "needed a weight. Abstention is 39 of 331 (11.8%), not 97 (29%)",
+        )
+        checks.ok(
+            all(r.reason == shipping.VALUE_AT_THRESHOLD for r in rescued),
+            "every one of the 58 is answered by the value, which is the only fact a "
+            "weightless row carries",
+        )
+
+        # THE SPEC'S OWN WORST CASE, BY NAME. `docs/specs/shipping-export.md`: "It abstains
+        # on 29% of orders, and one of them is a $1750 order." It does not abstain on that
+        # one, and this is the assertion that says so.
+        big = next(r for r in routings if r.order == "A2FFC195-0000F4-006AC")
+        checks.equal(
+            (big.lane, big.reason, big.certain, str(big.value)),
+            ("parcel", "value_at_threshold", True, "1750.00"),
+            "the $1750 weightless order the spec names as unjudgeable is judged — tracked, "
+            "with certainty, without consulting the proxy",
+        )
+
+        # THE BOUNDARY. TCGplayer mandates tracking above $49.99, so exactly 50.00 is
+        # tracked. The fixture holds exactly one such row, which is why it is worth pinning.
+        fifty = [r for r in routings if r.value == Decimal("50.00")]
+        checks.equal(len(fifty), 1, "the fixture holds exactly one order at exactly $50.00")
+        checks.equal(
+            (fifty[0].lane, fifty[0].reason),
+            ("parcel", "value_at_threshold"),
+            "and $50.00 is ON the tracked side — the mandate is above $49.99",
+        )
+        checks.equal(
+            shipping.route(_shipment(**{"Value Of Products": "49.99"})).lane,
+            "envelope",
+            "a constructed $49.99 order of pure singles is not — the two sit either side "
+            "of one comparison",
+        )
+
+        # ------------------------------------------------- abstention is a third answer
+        unjudged = [r for r in routings if not r.judged]
+        checks.equal(len(unjudged), 39, "39 orders cannot be placed by either signal")
+        parcel_orders = {routing.order for _, routing in shipping.parcel_lane(export)}
+        checks.ok(
+            not (parcel_orders & {r.order for r in unjudged}),
+            "and not one of them is swept into the Pirate Ship lane. Sweeping them in is a "
+            "postage charge the operator did not choose, which is the objection insurance "
+            "gets one module over",
+        )
+        checks.equal(
+            len(parcel_orders), 126,
+            "the emitter's input is the 126 the router placed there, and nothing else",
+        )
+
+        # -------------------------------------------- exact arithmetic, never a float
+        # `docs/specs/shipping-export.md` records that a float pass "reported a phantom
+        # sub-0.07 row" on a distribution whose true minimum is exactly 0.07 — and sub-0.07
+        # is the one band this router treats as impossible, so a float would manufacture
+        # the outcome. 115/86 is the fixture's non-terminating ratio and is the row that
+        # cannot survive a float round trip intact.
+        ratios = {s.weight_per_item for s in export.shipments if s.weight_per_item is not None}
+        checks.ok(
+            Fraction(115, 86) in ratios,
+            "the fixture's non-terminating ratio parses to exactly 115/86",
+        )
+        checks.ok(
+            all(r >= shipping.SINGLES_WEIGHT for r in ratios),
+            "and no observed ratio is below the singles constant — the floor the spec "
+            "confirmed with rational arithmetic after floats reported a phantom row",
+        )
+
+        # THE FALSE-NEGATIVE PATH THE SPEC NAMES, WHICH THE FIXTURE CANNOT SHOW. One card
+        # plus one weightless non-card reads 0.035 oz/item — BELOW the singles constant, so
+        # a router comparing only against the 0.30 cut calls it `cards_only` and puts a
+        # playmat in a stamped envelope, silently. CONSTRUCTED, because no such row occurs.
+        sub = shipping.route(_shipment(**{"Product Weight": "0.07", "Item Count": "2"}))
+        checks.equal(
+            (sub.lane, sub.reason),
+            ("unjudged", "sub_single_weight"),
+            "a ratio below the singles constant abstains rather than reading as safer than "
+            "pure singles — no combination of catalog weights can produce it, so the proxy "
+            "does not apply and this router has nothing to say",
+        )
+        checks.equal(
+            shipping.route(_shipment(**{"Product Weight": "0.00"})).reason,
+            "no_weight_data",
+            "and a zero weight is absent data rather than a light order — a different "
+            "abstention with a different remedy",
+        )
+        # THIS CASE FOUND A REAL DEFECT AND IS WHY IT IS PINNED ON THE REASON RATHER THAN
+        # ON THE LANE. The guard was a COMMENT in `route` before it was a line of code, and
+        # a valueless order of pure singles fell through to `cards_only` — a $600 single
+        # going out untracked in a stamped envelope. CONSTRUCTED: `Value Of Products` is
+        # present on all 331 fixture rows, so nothing observed reaches it.
+        valueless = shipping.route(_shipment(**{"Value Of Products": ""}))
+        checks.equal(
+            (valueless.lane, valueless.reason),
+            ("unjudged", "no_value_data"),
+            "an order whose value nobody knows is exactly the one not to make a postage "
+            "decision about — and the proxy may not rescue it, because a cards-only ratio "
+            "is the shape an expensive single takes",
+        )
+
+        # -------------------------------------------------------------- the emitter
+        # CHOSEN FOR ITS WEIGHT, NOT TAKEN FIRST, and the first draft of this block took
+        # the first row and failed: 58 of the 126 in this lane are `value_at_threshold` and
+        # carry no weight at all, so the negative below would have been asserting that a
+        # blank column stayed blank. The order that makes it mean something is one the
+        # router reached THROUGH the weight — those are the ones whose `Product Weight` is
+        # most tempting to carry across.
+        shipment, routing = next(
+            (s, r) for s, r in shipping.parcel_lane(export)
+            if r.reason == shipping.NON_CARD_SIGNAL
+        )
+        parcel = shipping.to_parcel(shipment, stamps=("Box 3 · Card 31",))
+        data = pirateship.render([parcel])
+        rows = list(csv.DictReader(io.StringIO(data.decode("utf-8"), newline="")))
+
+        checks.equal(
+            tuple(rows[0]), pirateship.COLUMNS,
+            "every column is written, blanks included — a column absent from the file is "
+            "one Pirate Ship's wizard cannot map and cannot show the operator",
+        )
+        checks.equal(
+            rows[0]["Name"],
+            f"{shipment.cells['FirstName']} {shipment.cells['LastName']}",
+            "`Name` is PRE-JOINED from the two columns TCGplayer holds it in, because we "
+            "own the columns and their mapper does not have to guess",
+        )
+        checks.equal(
+            pirateship.Parcel.from_parts(
+                "Buyer001", "", address="", city="", state="", zipcode="", country="",
+                order_id="x",
+            ).name,
+            "Buyer001",
+            "and a record carrying only one half joins to one word, not to a word and a "
+            "trailing space that survives onto the printed label",
+        )
+        checks.equal(
+            rows[0]["Order ID"], shipment.order,
+            "the TCGplayer order number rides along, which is what closes the loop — "
+            "`Tracking #` and `Carrier` are empty on all 331 rows of the export",
+        )
+        checks.equal(
+            rows[0]["Rubber Stamp 1"], "Box 3 · Card 31",
+            "and the physical location prints on the label, so the label IS the pick "
+            "instruction",
+        )
+
+        # THE NEGATIVE THIS BLOCK EXISTS FOR. The shipment in hand carries a real
+        # `Product Weight` and the emitted cell is still blank.
+        checks.ok(
+            shipment.weight is not None and routing.reason == shipping.NON_CARD_SIGNAL,
+            "this order reports a Product Weight AND was routed by it, so the temptation to "
+            "carry it across is at its strongest",
+        )
+        checks.equal(
+            rows[0]["Package Weight"], "",
+            "and `Package Weight` is STILL BLANK. The catalog constant counts the cardboard "
+            "and not the mailer, so writing it buys postage for less than the parcel "
+            "weighs — under-paid at the far end, weeks later. Nothing is defaulted on the "
+            "owner's behalf (D49)",
+        )
+
+        # ------------------------------------------------------------ what is refused
+        # ASSERTED ON THE GUARD RATHER THAN THROUGH `render`, and that is the point of the
+        # guard existing separately. `to_row` builds only `COLUMNS`, so no `Parcel` can
+        # carry an insurance cell — the case this closes is a row that reached the writer by
+        # some OTHER path, which is `tcgcsv.check_only_writable_changed`'s shape and the
+        # same argument: the rule that matters is the one the bytes have to pass.
+        checks.raises(
+            pirateship.InsuranceRefused,
+            lambda: pirateship.check_no_insurance({"Insured Value": "50.00"}),
+            "an insurance column is REFUSED, not dropped — the owner chooses insurance per "
+            "order inside Pirate Ship, looking at the card",
+        )
+        checks.raises(
+            pirateship.InsuranceRefused,
+            lambda: pirateship.check_no_insurance({" insured  VALUE ": "50.00"}),
+            "and the match folds case and whitespace, so a differently-spelled column "
+            "cannot slip past the one guard that stops it",
+        )
+        checks.raises(
+            pirateship.MalformedParcel,
+            lambda: pirateship.Parcel(
+                name="x", address="1 St", city="Springfield", state="WV", zipcode="17919",
+                country="US", order_id="TEST-0001", stamps=("a", "b", "c", "d"),
+            ),
+            "a fourth rubber stamp refuses — the label has three corners, which is knowable "
+            "from the format, unlike a stamp's length, which nobody here has measured",
+        )
+
+        # ------------------------------------------------------------- the byte format
+        # T2's rules, and the one case a naive writer corrupts silently: a street address
+        # carries a comma by construction, and the symptom is a package at another building.
+        comma = pirateship.render([pirateship.Parcel(
+            name='O\'Nare, Billy', address="Apt 4, Building C", city="Springfield",
+            state="WV", zipcode="17919", country="US", order_id="TEST-0001",
+        )])
+        checks.equal(
+            list(csv.DictReader(io.StringIO(comma.decode(), newline="")))[0]["Address"],
+            "Apt 4, Building C",
+            "an address with a comma round-trips — real CSV library only (v1 bug 2)",
+        )
+        checks.ok(
+            comma.endswith(b"\r\n") and comma.count(b"\n") == comma.count(b"\r\n"),
+            "CRLF throughout including the final record, with no bare LF — the IMPORT "
+            "shape (T2), which is not the LF the export it was read from uses",
+        )
+        checks.ok(
+            not comma.startswith(b'"') and not comma.startswith(codecs.BOM_UTF8),
+            "unquoted header, no BOM",
+        )
+        checks.ok(
+            comma.split(b"\r\n")[1].startswith(b'"') and comma.split(b"\r\n")[1].endswith(b'"'),
+            "and every data field quoted, empties included",
+        )
+
+        # `write_csv` is the only thing here that touches a disk, and it writes exactly
+        # where it is told — buyer PII passes through and is not persisted, so nothing in
+        # either module reaches the store.
+        out = home / "pirateship-import.csv"
+        written = pirateship.write_csv(out, [parcel])
+        checks.equal(
+            out.read_bytes(), written,
+            "`write_csv` writes exactly the bytes it returns, and only where it is told",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -12862,6 +13232,7 @@ def run() -> Result:
     check_crop_preview(checks)
     check_price_history(checks)
     check_history_route(checks)
+    check_shipping_lane(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )
