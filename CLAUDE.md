@@ -34,6 +34,8 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
 make check          # harness + docs-audit + both self-tests + lint + typecheck
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
+make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
+                    #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.

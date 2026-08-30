@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
+.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -35,6 +35,7 @@ help:
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -284,6 +285,17 @@ githooks-selftest:
 # on a machine that has none rather than on a defect.
 port-agreement:
 	@python3 scripts/port-agreement.py
+
+# NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
+# so D18's rule applies at its strongest: nothing that writes may run on the path that decides
+# whether a commit proceeds. It is also not a defect to have conflict copies lying around —
+# the pre-commit hook already refuses to COMMIT one — so failing `check` over them would gate
+# a tidy-up on a condition the owner's filesystem creates on its own schedule.
+#
+# `make status` reports the count, which is where a thing you should know but need not act on
+# belongs. Deleting is opt-in: `make icloud-sweep ARGS=--delete`.
+icloud-sweep:
+	@python3 scripts/icloud-sweep.py $(ARGS)
 
 # Foreground and blocking, like `server` below — background it from an agent session, or
 # the Stop hook's harness run never gets to happen.
