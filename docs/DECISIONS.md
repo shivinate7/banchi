@@ -1913,43 +1913,19 @@ decide architecture, not about which tests may go red.
 
 ## D32 — The pixel budget is spent on the card, not the desk
 
-**The owner's question, 2026-08-23**: *"should we run a mass crop / should i be prompted on a
-way to trim images where im like for this run you wont need the top or bottom 5% ... resizing
-with sliders or something to save on pixel load and thereby less tokens?"* The instinct was
-right and the axis was right — measured over 544 real frames, the card fills 80–88% of the
-width and only 61–72% of the height, so the waste really is top and bottom.
+**Identification crops to the detected card in memory, behind `--crop`, and the crop and the max edge are chosen as one pair.** The owner asked, 2026-08-23, whether a mass crop or a per-run trim would cut token load. The instinct and the axis were both right: measured over 544 real frames, the card fills 80–88% of the width and only 61–72% of the height, so the waste really is top and bottom.
 
-**Detection, not sliders.** `geometry.detect_card` already answers this per frame, locally,
-for free — the border search built for Gate B and covered by T6. Over all 544 box-2 frames it
-found the card **544 times, refusing none** (467 by edge search, 77 by tone). A fixed
-percentage would be a guess that is wrong per frame: card area across that same box ranges
-39% to 81%, because cards move on the tray. The detector knows; the operator would be
-estimating.
+**Detection, not sliders.** `geometry.detect_card` already answers this per frame, locally, for free. Over all 544 box-2 frames it found the card **544 times, refusing none** — 467 by edge search, 77 by tone. A fixed percentage would be a guess that is wrong per frame, because card area across that box ranges 39% to 81% as cards move on the tray. The detector knows; the operator would be estimating.
 
-**At identify time, in memory, never on disk.** The photograph is not modified. A wrong crop
-costs one re-run of a free local step; a crop written at capture is irreversible by the time
-anyone notices, because the card is back in the box. That is D10's undo argument read the
-other way — undo is safe *because* the card is still in your hand, and at identify time it is
-not. It also means the 682 photographs already taken benefit, which a capture-time preset
-could never do, and that every other consumer keeps the full frame: the review queue photo a
-human judges foil against, the pull preview matched to a physical slot, the re-shoot
-comparison.
+**At identify time, in memory, never on disk.** The photograph is not modified. A wrong crop costs one re-run of a free local step; a crop written at capture is irreversible by the time anyone notices, because the card is back in the box — D10's undo argument read the other way, since undo is safe *because* the card is still in your hand and at identify time it is not. It also means the 682 photographs already taken benefit, which a capture-time preset never could, and that every other consumer keeps the full frame: the review queue photo a human judges foil against, the pull preview matched to a physical slot, the re-shoot comparison.
 
-**A refusal sends the whole frame.** `detect_card` answers `None` rather than guessing (T6:
-*"'Not found' must be a refusal, never a guess"*), and the honest response is to send what was
-always sent. The preflight names the count, because a nonzero refusal count means some cards
-are going at whole-frame cost and that is worth seeing before spending.
+**A refusal sends the whole frame.** `detect_card` answers `None` rather than guessing (T6: *not found must be a refusal, never a guess*), and the honest response is to send what was always sent. The preflight names the count, because a nonzero refusal count means some cards are going at whole-frame cost.
 
-**THE COST MODEL WAS GOT WRONG IN PUBLIC FIRST, AND THE CORRECTION IS THE USEFUL PART.** The
-first estimate reasoned from the card's AREA in the frame — 53%, therefore a ~40% saving. That
-is wrong, because `MAX_EDGE` normalises the LONG EDGE, not the area. The frames are 2160x3840
-(aspect 0.56) and a card is aspect 0.72 — fatter — so at an unchanged 1568 cap the crop sends
-*more* pixels, not fewer: measured, +26% cost. Cropping buys resolution by default and only
-buys money if `--max-edge` comes down with it. Recorded because the arithmetic looks obvious
-in the wrong direction and a later session will re-derive it the same way.
+### The cost model was got wrong in public first
 
-The measured frontier, 20 real frames, against today's full-frame @1568 baseline of $0.72 for
-box 2 and 268x57 native pixels on the collector-number strip:
+The first estimate reasoned from the card's AREA in the frame — 53%, therefore a ~40% saving. That is wrong, because `MAX_EDGE` normalizes the LONG EDGE rather than the area. The frames are 2160x3840 (aspect 0.56) and a card is aspect 0.72 — fatter — so at an unchanged 1568 cap the crop sends *more* pixels: measured, **+26% cost**. Cropping buys resolution by default and only buys money if `--max-edge` comes down with it. Recorded because the arithmetic looks obvious in the wrong direction and a later session will re-derive it the same way.
+
+The measured frontier, 20 real frames, against a full-frame @1568 baseline of $0.72 for box 2 and 268x57 native pixels on the collector-number strip:
 
 | config | box 2 | native px on the number | vs today |
 |---|---|---|---|
@@ -1959,200 +1935,60 @@ box 2 and 268x57 native pixels on the collector-number strip:
 | crop @1000 | $0.50 | -3% linear | cheaper, ~parity |
 | crop @900 | $0.44 | -13% linear | cheapest, softer |
 
-**Off by default, behind `--crop`.** It changes the bytes a card is read from, and Gate B's
-53-card end-to-end run — the only one this project has — was full-frame. Turning it on is a
-per-run choice until a measurement says otherwise.
+**Off by default, behind `--crop`.** It changes the bytes a card is read from, and Gate B's 53-card end-to-end run — the only one this project has — was full-frame.
 
-**KNOWN GAP, NAMED RATHER THAN PATCHED: the crop is not part of the cache identity.** The
-cache is keyed by card key plus the profile's prompt fingerprint, and neither `--crop` nor
-`--max-edge` is in that hash — so a cropped run over cards already answered uncropped would
-reuse the old answers and report cache hits. It cannot bite today: box 2 has zero cached
-answers, and the A/B that measures this ran in isolated `PKMNSCAN_HOME` directories precisely
-so the two configurations could not read each other's cache. The remedy when it matters is the
-shape `rarity_fingerprint` already established — a sibling hash kept deliberately OUT of
-`prompt_fingerprint`, so recording what an image was read from cannot move `1ef974bf511d`.
+**Known gap, named rather than patched: the crop is not part of the cache identity.** The cache is keyed by card key plus the profile's prompt fingerprint, and neither `--crop` nor `--max-edge` is in that hash — so a cropped run over cards already answered uncropped would reuse the old answers and report cache hits. It cannot bite today: box 2 has zero cached answers, and the A/B that measures this ran in isolated `PKMNSCAN_HOME` directories precisely so the two configurations could not read each other's cache. The remedy when it matters is the shape `rarity_fingerprint` already established — a sibling hash kept deliberately OUT of `prompt_fingerprint`, so recording what an image was read from cannot move `1ef974bf511d`.
 
-**THE SCREEN OFFERS THE PAIR, NOT THE TWO CONTROLS (owner, 2026-08-25).** The run panel drew
-this decision as a checkbox reading `Crop to the card` beside a number reading `Max edge`, and
-those two labels were **every user-visible string in the block**. The owner asked the question
-that settles it: *"walk me through how im supposed to understand crop with just this dialog
-box"*. They could not. Everything above — what the crop does, that the photograph on disk is
-untouched, what a refusal falls back to, and above all that the two are ONE decision — lived in
-this entry and in a code comment.
+### The screen offers the pair, not the two controls
 
-**The paragraph on getting the cost model wrong in public is what makes this a defect rather
-than a missing sentence.** That correction exists because the arithmetic runs backwards from
-intuition: cropping at an unchanged max edge sends MORE pixels, measured at +26%. A checkbox
-that reads as *send less* beside a number nobody explained is an invitation to do exactly that,
-and the panel had no guard against it — it was one click from the most expensive setting on the
-frontier while appearing to ask for the cheapest.
+The owner, 2026-08-25, asked to be walked through how they were supposed to understand crop from the dialog they had. They could not. The run panel drew a checkbox reading `Crop to the card` beside a number reading `Max edge`, and those two labels were **every user-visible string in the block** — while everything above lived in this entry and in a code comment.
 
-**So `READINGS` offers three named PAIRS, and a pair cannot be got wrong.** `Measured best ·
-1200`, `Cheapest · 900`, `Whole frame · 1568` — three rows of the measured table above, each
-setting both values, each carrying the sentence that says what it costs and what it buys on the
-box it was measured on. `Sharpest · 1400` is not one of the three: it is the row strictly dearer
-than the baseline, and three chips fit the 340px end of D38's column where four do not. It lives
-behind **`Custom`**, which reveals the old checkbox and number unchanged — demoted, never taken
-away, because a free-form max edge is a real need and this entry's own frontier runs wider than
-three points.
+**The paragraph on getting the cost model wrong is what makes this a defect rather than a missing sentence.** A checkbox that reads as *send less* beside an unexplained number is an invitation to do exactly that, and the panel had no guard: it was one click from the most expensive setting on the frontier while appearing to ask for the cheapest.
 
-**The warning follows the mistake to where it is still reachable.** `Custom`'s sentence is the
-only one that names the +26%, because `Custom` is the only state that can produce it.
+So `READINGS` offers three named PAIRS, and a pair cannot be got wrong. `Measured best · 1200`, `Cheapest · 900`, `Whole frame · 1568` — three rows of the table above, each setting both values, each carrying the sentence that says what it costs and what it buys. `Sharpest · 1400` is not one of the three: it is the row strictly dearer than the baseline, and three chips fit the 340px end of D38's column where four do not. It lives behind **`Custom`**, which reveals the old checkbox and number unchanged — demoted, never taken away, because a free-form max edge is a real need and this frontier runs wider than three points. **The warning follows the mistake to where it is still reachable**: `Custom`'s sentence is the only one naming the +26%, because `Custom` is the only state that can produce it.
 
-**THE ESTIMATE IS VOID WHEN THE READING MOVES, and that was a hole in D33's money gate rather
-than a copy gap.** `RunPanel.tsx`'s `scopeKey` was `box:indices` alone, so unticking the crop
-after Check cost left a stale figure standing above a live *Spend $0.62 and identify 36 cards*
-button — an estimate for a send that was no longer the one about to happen. The effect's own
-comment already stated the governing rule, *"a confirm whose first step described a different
-set of cards is not a confirm at all"*; it named cards where the estimate is computed from
-BYTES, and the crop and the max edge are what decide those. Both values are in the key now.
-`app/tests/run-panel.spec.ts` asserts the void as an ABSENCE, the same shape as the spend
-button's own case, and it was observed failing against the old key before it was kept.
+**The estimate is void when the reading moves**, and that was a hole in D33's money gate rather than a copy gap. `RunPanel.tsx`'s `scopeKey` was `box:indices` alone, so unticking the crop after Check cost left a stale figure above a live *Spend $0.62 and identify 36 cards* button. The effect's own comment already stated the rule — *a confirm whose first step described a different set of cards is not a confirm at all* — but it named cards where the estimate is computed from BYTES, which the crop and the max edge decide. Both values are in the key now. `app/tests/run-panel.spec.ts` asserts the void as an ABSENCE, the same shape as the spend button's own case, observed failing against the old key first.
 
-**The cache gap above is now said on screen, in the words it means rather than the words it
-is.** Where the preflight reports any cache hits, the quote carries one line: *cards already
-answered keep the answer they were first read with, and the reading only reaches the cards
-being sent*. No hash is named — the panel has no business publishing `prompt_fingerprint` — and
-nothing about the gap is closed. Drawn only above zero, because a warning about answers that do
-not exist is the kind an operator learns to skip.
+**The cache gap is now said on screen, in the words it means.** Where the preflight reports any cache hits, the quote carries one line: cards already answered keep the answer they were first read with, and the reading only reaches the cards being sent. No hash is named — the panel has no business publishing `prompt_fingerprint` — and nothing about the gap is closed. Drawn only above zero, because a warning about answers that do not exist is one an operator learns to skip.
 
-**THE READING IS DRAWN NOW, NOT ONLY DESCRIBED (built 2026-08-29, at the owner's instruction:
-*"there should be a crop preview on the runs tab given that I need to select a crop there"*).**
-`POST /pipeline/crop-preview` is free, writes nothing, shells out to nothing, and answers what
-the selected pair would send for one card; `RunPanel.tsx` draws it in a column beside the
-chips. Everything above stands — this is the sentence the READINGS block could not be.
+### The reading is drawn, not only described
 
-**THE MEASUREMENT THAT DECIDED THE DESIGN: the rectangle is IDENTICAL at 1200 and at 900.**
-The cut comes from `detect_card` plus the aspect correction plus `CROP_PAD`, and not one of
-those reads `max_edge` — the downscale happens after. So a preview that drew only the crop
-would leave two of the three chips looking exactly alike, which is most of the question the
-owner was asking. The pair has two axes and one picture cannot carry both:
+Built 2026-08-29 at the owner's instruction: there should be a crop preview on the runs tab, given that the crop is selected there. `POST /pipeline/crop-preview` is free, writes nothing, shells out to nothing, and answers what the selected pair would send for one card; `RunPanel.tsx` draws it in a column beside the chips.
 
-- **The crop decides FRAMING**, and the frame shows it as a composite: the discarded margin is
-  the stored photograph at 35% opacity, and the cut region is **the payload itself**, at full
-  strength, with the accent outline on the boundary. It answers *is the collector number inside
-  the bytes* — box 2's failure, 38 numbers cut clean off — and **a picture of the crop alone
-  could never answer it, because what was cut is not in the crop.**
-- **The max edge decides RESOLUTION**, and it is shown by a **1:1 window onto the same file**.
-  `background-size: auto` with a pixel `background-position` IS 1:1, with no scaling arithmetic
-  to get wrong and no second request. That is the review queue's loupe one screen over, aimed
-  at the PAYLOAD rather than at the stored photograph, and the same standards are behind it:
-  FADGI and Metamorfoze both require this class of judgement at 100%, and here a downscale is
-  precisely what is being judged.
+**The measurement that decided the design: the rectangle is IDENTICAL at 1200 and at 900.** The cut comes from `detect_card` plus the aspect correction plus `CROP_PAD`, and not one of those reads `max_edge` — the downscale happens after. So a preview drawing only the crop would leave two of the three chips looking exactly alike, which is most of the question the owner was asking. The pair has two axes and one picture cannot carry both:
 
-**THE FRAME DREW THE STORED PHOTOGRAPH UNTIL THE OWNER CAUGHT IT** — *"the crop preview should
-also show the depixelation reflected as you change the options"*. It did not, and could not: it
-was `GET /photo`, which is the same bytes at every reading, so the one thing being changed was
-the one thing the picture could not show. It draws the prepared bytes now, which costs 235-441KB
-on a localhost socket, debounced, for one card.
+- **The crop decides FRAMING**, shown as a composite: the discarded margin is the stored photograph at 35% opacity, and the cut region is **the payload itself**, at full strength, with the accent outline on the boundary. It answers *is the collector number inside the bytes* — box 2's failure, 38 numbers cut clean off — and **a picture of the crop alone could never answer it, because what was cut is not in the crop.**
+- **The max edge decides RESOLUTION**, shown by a **1:1 window onto the same file**. `background-size: auto` with a pixel `background-position` IS 1:1, with no scaling arithmetic to get wrong and no second request. That is the review queue's loupe aimed at the PAYLOAD rather than at the stored photograph, and the same standards are behind it: FADGI and Metamorfoze both require this class of judgement at 100%, and here a downscale is precisely what is being judged.
 
-**AND THE FRAME STILL CANNOT SHOW THE DIFFERENCE, WHICH IS PHYSICS RATHER THAN A DEFECT.** It
-draws the payload at roughly 28% of its pixels, and no two downscales are distinguishable under
-a reduction that large — an operator comparing 1200 against 900 up there will correctly see no
-difference and wrongly conclude there is none. So the caption says `shown reduced`, and the 1:1
-window below is where the comparison is actually made. Recorded because the obvious "fix" is to
-enlarge the frame, and no size short of 100% would work.
+**The frame drew the stored photograph until the owner caught it** — the preview should show the depixelation as the options change. It did not, and could not: it was `GET /photo`, the same bytes at every reading, so the one thing being changed was the one thing the picture could not show. It draws the prepared bytes now, which costs 235-441KB on a localhost socket, debounced, for one card.
 
-**THE BAND STOPPED BEING A SECOND IMAGE, and that is what makes the pair trustworthy.** It was
-a separately encoded JPEG of the number strip; it is a RECTANGLE INTO the sent bytes now, and
-the window paints that region of the file the frame is already showing. One image over the
-wire, two views of it, and **the second cannot drift from the first because there is no second
-file to drift**. It also costs fewer bytes than the two-image version it replaces.
+**And the frame still cannot show the difference, which is physics rather than a defect.** It draws the payload at roughly 28% of its pixels, and no two downscales are distinguishable under a reduction that large — an operator comparing 1200 against 900 will correctly see no difference and wrongly conclude there is none. So the caption says `shown reduced`, and the 1:1 window below is where the comparison is made. Recorded because the obvious fix is to enlarge the frame, and no size short of 100% would work.
 
-**THE WINDOW FOLLOWS THE POINTER, AND THAT IS WHAT MAKES A BANDLESS GAME USABLE.** It rests on
-the collector number where the registry claims one and reads whatever the pointer is over
-otherwise — so on Riftbound, where nobody has measured where the identifier prints, the
-operator points at it themselves. A refusal that had taken the magnifier away with it would
-have left that game strictly worse off than before the preview existed.
+**The band stopped being a second image, and that is what makes the pair trustworthy.** It was a separately encoded JPEG of the number strip; it is a RECTANGLE INTO the sent bytes now, and the window paints that region of the file the frame is already showing. One image over the wire, two views of it, and **the second cannot drift from the first because there is no second file to drift**. It also costs fewer bytes than the two-image version it replaces.
 
-**ONE COMPUTATION, TWO CALLERS, AND THAT IS THE HONESTY OF IT.** `identify/images.py:crop_rect`
-is the rectangle `card_crop` cuts, extracted so the screen can draw it rather than derive one
-of its own. A preview with its own copy of that arithmetic is a preview that can reassure the
-operator about a crop it is not describing — which is EXACTLY the failure the aspect correction
-was written for. `card_rect` splits out beside it, unpadded, because the number band is a
-fraction of the cardboard rather than of the cut. T6 asserts the identity and was observed
-failing against a `card_crop` that had quietly stopped using it; the extraction was checked
-byte-for-byte against the committed version on 25 real box-2 frames before anything was built
-on it.
+**The window follows the pointer, and that is what makes a bandless game usable.** It rests on the collector number where the registry claims one and reads whatever the pointer is over otherwise — so on Riftbound, where nobody has measured where the identifier prints, the operator points at it themselves. A refusal that had taken the magnifier away with it would have left that game strictly worse off than before the preview existed.
 
-**IT IS PRESSED BEFORE THE PREFLIGHT, WHICH IS THE ORDER OF THE DECISION.** The reading is
-chosen here, the estimate is what the choice costs, and the spend button does not exist until
-the estimate has answered — three steps down the panel in the order they happen. It is keyed on
-the same `scopeKey` that voids the estimate, so a chip press redraws the picture and clears the
-number together. The previous strip stays up, dimmed, while the next is fetched: blanking would
-move `Check cost` under a pointer already travelling toward it, which is D28's hazard on the
-one panel whose next button spends money.
+**One computation, two callers, and that is the honesty of it.** `identify/images.py:crop_rect` is the rectangle `card_crop` cuts, extracted so the screen can draw it rather than derive one of its own. A preview with its own copy of that arithmetic can reassure the operator about a crop it is not describing — EXACTLY the failure the aspect correction was written for. `card_rect` splits out beside it, unpadded, because the number band is a fraction of the cardboard rather than of the cut. T6 asserts the identity and was observed failing against a `card_crop` that had quietly stopped using it; the extraction was checked byte-for-byte against the committed version on 25 real box-2 frames.
 
-**`rect: null` MEANS TWO OPPOSITE THINGS AND `method` IS WHAT SEPARATES THEM.** The crop being
-off is a setting the operator chose; detection refusing is a card going at whole-frame cost
-when they asked for a crop. The route reports both and the strip says which, because the
-preflight counts refusals across the box and this is where one can actually be looked at.
+**It is pressed before the preflight, which is the order of the decision.** The reading is chosen, the estimate is what the choice costs, and the spend button does not exist until the estimate has answered — three steps down the panel in the order they happen. It is keyed on the same `scopeKey` that voids the estimate, so a chip press redraws the picture and clears the number together. The previous strip stays up, dimmed, while the next is fetched: blanking would move `Check cost` under a pointer already travelling toward it, which is D28's hazard on the one panel whose next button spends money.
 
-**ONE CARD, BESIDE THE CHIPS, WALKED BY THE ARROW KEYS — and it was three abreast underneath
-them for a few hours.** The first build sampled three cards evenly across the box on this
-entry's own measurement: card area runs 39-81% across box 2 because cards move on the tray, so
-the front of a box does not stand for it. That argument is right about SAMPLING and it lost to
-a plainer fact, which the owner put plainly: *"the preview right now is too small"*. Three
-pictures across a panel are three small pictures — each frame drew 112px wide — and a preview
-nobody can read is not a preview. One card in a column of its own is ~2.5x the linear size for
-the same block of screen, and the spread is reached by WALKING, which is also the only version
-of it that lets the operator look at a card they actually suspect.
+**`rect: null` means two opposite things and `method` is what separates them.** The crop being off is a setting the operator chose; detection refusing is a card going at whole-frame cost when they asked for a crop. The route reports both and the strip says which, because the preflight counts refusals across the box and this is where one can be looked at.
 
-**The walk wraps, on both sides of the wire.** The route takes `offset % total` so a stale
-client cannot send a negative, and the screen wraps too so the caption stays inside the box
-being looked at. Arrow keys are the control and the buttons beside the card do the same thing:
-a key with no visible affordance is a key nobody finds. **The listener is guarded on the
-event's target** — this panel holds a number input and a `decisions.json` textarea, and an
-unguarded window listener steals the caret keys from both. The fetch is debounced at 140ms,
-because a held arrow key repeats faster than a photograph decodes.
+**One card, beside the chips, walked by the arrow keys — and it was three abreast for a few hours.** The first build sampled three cards evenly across the box on this entry's own measurement that card area runs 39-81%, so the front of a box does not stand for it. That argument is right about SAMPLING and it lost to a plainer fact, which the owner put plainly: the preview was too small. Three pictures across a panel are three small pictures — each frame drew 112px wide — and a preview nobody can read is not a preview. One card in a column is ~2.5x the linear size for the same block of screen, and the spread is reached by WALKING, which is also the only version that lets the operator look at a card they actually suspect.
 
-Measured at ~115ms a card — 63-84ms of detection, ~51ms to crop, downscale and encode — so
-firing it on every chip press and every arrow press is affordable.
+**The walk wraps, on both sides of the wire.** The route takes `offset % total` so a stale client cannot send a negative, and the screen wraps too so the caption stays inside the box. Arrow keys are the control and the buttons beside the card do the same thing: a key with no visible affordance is a key nobody finds. **The listener is guarded on the event's target** — this panel holds a number input and a `decisions.json` textarea, and an unguarded window listener steals the caret keys from both. The fetch is debounced at 140ms, because a held arrow key repeats faster than a photograph decodes. Measured at ~115ms a card — 63-84ms of detection, ~51ms to crop, downscale and encode — so firing on every chip press and every arrow press is affordable.
 
-**Two things came with it that are not about pixels.** `make server` ran bare `python3`, whose
-interpreter has no Pillow, so this route would have refused on the one machine it is for; it
-runs `$(PYTHON)` now, which is the venv where one exists and `python3` where none does — the
-property that line protected was *"must not NEED `make venv`"*, and that is intact. And the
-imports are inside the handler, so a missing Pillow is a named `imaging_unavailable` refusal
-rather than a server that will not boot over a preview nobody asked for.
+**Two things came with it that are not about pixels.** `make server` ran bare `python3`, whose interpreter has no Pillow, so this route would have refused on the one machine it is for; it runs `$(PYTHON)` now, which is the venv where one exists and `python3` where none does — the property that line protected was *must not NEED `make venv`*, and that is intact. And the imports are inside the handler, so a missing Pillow is a named `imaging_unavailable` refusal rather than a server that will not boot over a preview nobody asked for.
 
-**D24's tripwire fired, and it is answered by D24 rather than by new machinery.** `scripts/
-docs-audit.py`'s `views exposure` row now names `#/runs` as a screen that can draw stored
-capture photos — which is exactly what that row is for, and the render-conditions ruling in D24
-already answers it: renders are local-only, `captures/ui/` is gitignored, and the pre-commit
-hook blocks stray images. No per-screen filtering, for the reason that ruling gives.
+**D24's tripwire fired, and it is answered by D24 rather than by new machinery.** `scripts/docs-audit.py`'s `views exposure` row now names `#/runs` as a screen that can draw stored capture photos — exactly what that row is for — and the render-conditions ruling already answers it: renders are local-only, `captures/ui/` is gitignored, and the pre-commit hook blocks stray images. No per-screen filtering.
 
-**What this does NOT do: it does not record what a PAST run sent.** The strip recomputes with
-today's detector, so it describes the run you are about to start and nothing else. That
-distinction matters for box 2 specifically — its crops were cut by the flat pad this entry
-records, fixed in `d431afb` about 35 minutes after that run was submitted, so a recomputation
-of those cards shows the corrected crop rather than the one that lost 38 collector numbers.
-Making a run replayable means recording the box on the run payload at identify time, which is a
-change to what `identify` writes and has not been argued. Until it is, this is a preview and
-never a receipt.
+**What this does NOT do: it does not record what a PAST run sent.** The strip recomputes with today's detector, so it describes the run you are about to start and nothing else. That matters for box 2 specifically — its crops were cut by the flat pad this entry records, fixed in `d431afb` about 35 minutes after that run was submitted, so a recomputation shows the corrected crop rather than the one that lost 38 collector numbers. Making a run replayable means recording the box on the run payload at identify time, which is a change to what `identify` writes and has not been argued. Until it is, this is a preview and never a receipt.
 
-**THE BAND IS THE REGISTRY'S TO GRANT, PER CARD, AND THIS SHIPPED WRONG FIRST.** The first
-build cut `geometry/crop.py`'s number band over every card whatever game it was, and
-`pipeline/games.py` refuses exactly that in writing: *"the bands are fractions measured on a
-Pokemon card. Nothing has measured where a Riftbound card puts its title or its number, and a
-band claimed without that measurement is cut over the wrong pixels."* Box 1 is Riftbound, the
-owner opened it, and the strip drew that card's RULES TEXT as though it were a collector
-number. Only `pokemon` claims a number band today; a game that does not gets **no band and the
-registry's own sentence saying why**, which is the same refusal `crop_regions` makes reached
-through the same field. **The CUT is unaffected** — a card is 63x88mm whatever is printed on
-it, so the crop is right for every game even where no band has been measured, and that
-asymmetry is the whole reason the two halves are separate answers.
+**The band is the registry's to grant, per card, and this shipped wrong first.** The first build cut `geometry/crop.py`'s number band over every card whatever game it was, and `pipeline/games.py` refuses exactly that in writing: the bands are fractions measured on a Pokemon card, and a band claimed without that measurement is cut over the wrong pixels. Box 1 is Riftbound, the owner opened it, and the strip drew that card's RULES TEXT as though it were a collector number. Only `pokemon` claims a number band today; a game that does not gets **no band and the registry's own sentence saying why**, the same refusal `crop_regions` makes reached through the same field. **The CUT is unaffected** — a card is 63x88mm whatever is printed on it — and that asymmetry is why the two halves are separate answers.
 
-Worth naming as a class rather than an instance: the registry already held the answer and the
-first build did not ask it. A preview is a second reader of everything the pipeline knows, and
-every fact it draws has an owner somewhere in `pipeline/` — drawing one from a constant instead
-of from its owner is how a picture ends up more confident than the thing it depicts.
+Worth naming as a class: the registry already held the answer and the first build did not ask it. A preview is a second reader of everything the pipeline knows, and every fact it draws has an owner somewhere in `pipeline/` — drawing one from a constant instead of from its owner is how a picture ends up more confident than the thing it depicts.
 
-**What would reopen this: a refusal the walk never reaches.** The preflight counts detection
-refusals across the whole box and the walk shows one card at a time, so a box with three
-refusals among 543 is a hunt. If that ever costs a real session, the fix is a control that
-jumps to the next refused card once the preflight has answered — not a return to sampling,
-which is what made the picture too small to read in the first place.
+**What would reopen this: a refusal the walk never reaches.** The preflight counts detection refusals across the whole box and the walk shows one card at a time, so a box with three refusals among 543 is a hunt. If that costs a real session, the fix is a control that jumps to the next refused card once the preflight has answered — not a return to sampling, which is what made the picture too small to read.
 
 ---
 
@@ -3316,307 +3152,122 @@ Neither is hypothetical: D24 pools cards without positions and D20 leaves names 
 
 ## D42 — main moves by pull request, and the guard is local because the server-side one is not for sale
 
-**BUILT 2026-08-29, after main moved under live worktrees twice in one day.** `637e2e4` was
-authored on one session's branch and fast-forwarded into main while three others were working
-on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that
-wrote this entry, which is how the second half of the guard got specified. `origin/main`'s
-reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may
-not do that, and nothing checked.
+**`main` moves only by a merged pull request, and two local git hooks enforce it.** Built 2026-08-29, after main moved under live worktrees twice in one day.
 
-**BRANCH PROTECTION WAS THE OBVIOUS ANSWER AND IT IS NOT AVAILABLE ON THIS REPOSITORY.**
+`637e2e4` was authored on one session's branch and fast-forwarded into main while three others were working on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may not do that, and nothing checked.
+
+### Branch protection is not available here
+
 Measured rather than assumed — both surfaces answer 403:
 
     GET repos/shivinate7/pkmnscan/rulesets                   403
     GET repos/shivinate7/pkmnscan/branches/main/protection   403
     "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
-Free plan, private repo. The second half of that sentence is not an option: `CLAUDE.md`'s
-repo-wide opsec rule makes a live unredeemed code card a bearer instrument, and this tree
-carries the enforcement for it. So the server-side gate costs a Pro subscription, and the
-owner chose the local guard instead.
+Free plan, private repo. Going public is not an option: `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard.
 
-**AND IT WOULD NOT HAVE CLOSED THIS ON ITS OWN, WHICH IS THE PART WORTH KEEPING IF THE PLAN
-EVER CHANGES.** Branch protection bites at `git push`. Both incidents moved main **locally**
-first, under worktrees that share this clone — by which point every session cut from main is
-already sitting on a different history than the one it started from. A gate at the remote
-would have caught the second incident and been silent through the first.
+**It would not have closed this on its own**, which matters if the plan ever changes. Branch protection bites at `git push`. Both incidents moved main **locally** first, by which point every session cut from main is already on a different history. A gate at the remote would have caught the second and been silent through the first.
 
-**TWO HOOKS, BECAUSE THERE ARE TWO WAYS OUT, AND NEITHER COVERS THE OTHER.**
+### Two hooks, because there are two ways out
 
-- `scripts/githooks/reference-transaction` — main does not move in this clone. It is a ref
-  hook and not a commit hook **because the first incident created no commit**: a fast-forward
-  merge moves a ref and runs no commit hook, and `git rebase`, `git reset --hard`,
-  `git branch -f` and `git update-ref` are the same shape. Underneath they are all one ref
-  update, so the ref update is the only place that catches all of them and the only one that
-  cannot be routed around by reaching for a different porcelain command.
-- `scripts/githooks/pre-push` — nothing pushes to main. `git push origin HEAD:main` never
-  touches `refs/heads/main` locally and lands the commit on GitHub anyway, so the first hook
-  is blind to it. This is the piece standing in for branch protection, and it is weaker in one
-  nameable way: it lives on this machine, so it protects this clone rather than the repository.
+- **`scripts/githooks/reference-transaction`** — main does not move in this clone. A ref hook rather than a commit hook **because the first incident created no commit**: a fast-forward merge moves a ref and runs no commit hook, and `git rebase`, `git reset --hard`, `git branch -f` and `git update-ref` are the same shape. Underneath they are one ref update, so that is the only place catching all of them and the only one no porcelain command routes around.
+- **`scripts/githooks/pre-push`** — nothing pushes to main. `git push origin HEAD:main` never touches `refs/heads/main` locally and lands the commit anyway, so the first hook is blind to it. This stands in for branch protection and is weaker in one nameable way: it lives on this machine, so it protects this clone rather than the repository.
 
-**THE ONE LEGITIMATE MOVE IS TO A COMMIT ORIGIN ALREADY HAS.** That is the whole allow rule,
-and it is what makes the pair a workflow rather than a wall: a PR is merged on GitHub,
-`git pull` fast-forwards, and the commit was on the remote before it was ever on your main.
-It cannot be forged from inside a session, because a local commit is not on origin until
-something pushes it, and pushing to main is what the second hook refuses.
+**The one legitimate move is to a commit origin already has.** That is the whole allow rule, and it is what makes the pair a workflow rather than a wall: a PR is merged on GitHub, `git pull` fast-forwards, and the commit was on the remote before it was ever on your main. It cannot be forged from inside a session, because a local commit is not on origin until something pushes it, and pushing to main is what the second hook refuses.
 
-**THE `old` COLUMN OF A reference-transaction PAYLOAD IS NOT EVIDENCE, AND BELIEVING IT SHIPPED
-TWO HOLES BEFORE THE SELF-TEST FOUND THEM.** The format is `<old> <new> <ref>`, so the obvious
-rules are *allow a no-op* (`old == new`) and *allow a creation* (`old` all zeros). Both are
-wrong. Measured on git 2.39.3:
+### The `old` column is not evidence
+
+The payload is `<old> <new> <ref>`, so the obvious rules are *allow a no-op* (`old == new`) and *allow a creation* (`old` all zeros). Both are wrong, and believing them shipped two holes. Measured on git 2.39.3:
 
     git branch -D main              0000000... 0000000... refs/heads/main
     git branch -f main feature      0000000... 3f5f2cd... refs/heads/main
     git update-ref refs/heads/main  0000000... 8f06f47... refs/heads/main
 
-Git reports zeros for the old value **whenever the caller did not state an expected one**, even
-where main exists at a real commit. So a deletion is indistinguishable from a no-op, and
-`branch -f` is indistinguishable from a creation — the first draft waved both through, and main
-was genuinely deleted in the test rig. The hook now decides on `new` alone and asks git for the
-pre-update value itself when it wants one.
+Git reports zeros whenever the caller did not state an expected value, even where main exists at a real commit. A deletion is indistinguishable from a no-op and `branch -f` from a creation — the first draft waved both through, and main was genuinely deleted in the test rig. The hook decides on `new` alone and asks git for the pre-update value itself.
 
-**IT FAILS OPEN ON ITS OWN BUGS, AND THAT IS A TRADE RATHER THAN A WEAKNESS.** This hook runs on
-every ref update in every worktree of the clone. A version that exits non-zero when it did not
-mean to does not block one commit; it breaks git for every concurrent session at once. So the
-only non-zero exit in the file is the deliberate refusal, and an unknown phase, an unparseable
-line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for
-itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
+**It fails open on its own bugs, which is a trade rather than a weakness.** This runs on every ref update in every worktree of the clone, so a version exiting non-zero by accident breaks git for every concurrent session at once. The only non-zero exit in the file is the deliberate refusal; an unknown phase, an unparseable line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
 
-**THE HOOKS ARE INSTALLED INTO THE GIT COMMON DIR. THIS PARAGRAPH SAID SOMETHING ELSE FOR
-ABOUT AN HOUR AND BOTH OF ITS CLAIMS WERE FALSE — the amendment is dated the same day as the
-entry, which is the useful part of it.** What it said: point `core.hooksPath` at the MAIN
-worktree's `scripts/githooks`, absolutely, because "that setting lives in the common `.git`
-dir, so one value governs every worktree of this clone."
+### Installed into the git common dir
 
-**Claim one, falsified within the hour of merging.** A working tree's contents are a function
-of whatever branch that checkout is on. The moment this entry landed on main, the main
-checkout was sitting on another session's WIP branch that predated it, so the directory git
-actually read held **one hook out of three**. The guard was armed at zero and nothing said so
-— the silent-failure class this repo refuses everywhere else, reproduced by the fix for it.
+**This paragraph said something else for about an hour and both its claims were false.** It said to point `core.hooksPath` at the MAIN worktree's `scripts/githooks`, because that setting lives in the common `.git` dir so one value governs every worktree.
 
-**Claim two, falsified by running the test rather than reading the config.** `extensions.
-worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a
-per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree` — beside a
-`core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the
-common one.** After an install that printed success, `git config --get core.hooksPath` inside
-a worktree still answered the old path, and all four worktrees were still unguarded. It was
-found by running the nineteen cases against the INSTALLED directory — `PKMNSCAN_HOOKS_DIR`
-exists on the self-test for exactly this — and it would not have been found by reading the
-config, because the config that lies is not the one you look at.
+**Claim one, falsified within the hour of merging.** A working tree's contents are a function of its branch. The moment this entry landed on main, the main checkout was on another session's WIP branch that predated it, so the directory git read held **one hook out of three**. The guard was armed at zero and nothing said so — the silent-failure class this repo refuses everywhere else, reproduced by the fix for it.
 
-**So: `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`, points the
-common config there, and UNSETS the per-worktree override in every worktree.** `.git` is
-per-clone, shared by every worktree, and no branch can empty it. Unsetting rather than
-re-pointing, because one value is the property this paragraph wanted in the first place and
-four copies is four things that can drift. Verified after the change: all seven worktrees
-resolve to the install, the installed copy passes all nineteen cases, and a live
-`git push --dry-run --force origin <branch>:main` in the real repository is refused by name.
+**Claim two, falsified by running the test rather than reading the config.** `extensions.worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree`, beside a `core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the common one.** After an install that printed success, `git config --get core.hooksPath` inside a worktree still answered the old path and all four worktrees were unguarded. It was found by running the nineteen cases against the INSTALLED directory — `PKMNSCAN_HOOKS_DIR` exists for exactly this — and would not have been found by reading the config, because the config that lies is not the one you look at.
 
-**IT INSTALLS WHAT GIT TRACKS, NOT WHAT THE DIRECTORY HOLDS.** The first version copied
-`scripts/githooks/*`, and this repo lived in iCloud Drive at the time, which had made `pre-push 2` and
-`reference-transaction 2` beside the originals — so it installed five hooks from three files,
-two of them untracked and reviewed by nobody. Git dispatches on exact names so it would not
-have RUN those two, and the damage was cosmetic; the mechanism is not. A hook directory whose
-contents are decided by whatever is lying on disk has given up the reviewability that is the
-whole reason these files are tracked rather than written into `.git` by hand. `git ls-files`
-is the only enumeration that means "the thing someone reviewed", and untracked files present
-are reported rather than silently skipped.
+So `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`, points the common config there, and UNSETS the per-worktree override everywhere. `.git` is per-clone and no branch can empty it. Verified after: all seven worktrees resolve to the install, the installed copy passes all nineteen cases, and a live `git push --dry-run --force origin <branch>:main` is refused by name.
 
-**WHAT IS GIVEN UP, NAMED RATHER THAN DESIGNED AWAY: the copy can go stale**, and a new
-worktree gets handed the per-worktree override again by whatever creates it. Neither can be
-closed by a check without lying — the tracked file legitimately differs between branches, so
-"installed does not match this tree" is a fact and never a fault, and it must never gate a
-commit. `make status` reports both instead: it reads NOT ARMED whenever the effective path is
-not the install, and prints which hooks differ from the current tree. That is the one surface
-in this repo whose whole job is saying what state you are actually in.
+**It installs what git tracks, not what the directory holds.** The first version copied `scripts/githooks/*`, and this repo lived in iCloud Drive, which had made `pre-push 2` and `reference-transaction 2` beside the originals — so it installed five hooks from three files, two untracked and reviewed by nobody. Git dispatches on exact names so it would not have RUN those two, and the damage was cosmetic; the mechanism is not. `git ls-files` is the only enumeration meaning *the thing someone reviewed*, and untracked files present are reported rather than skipped.
 
-**A SESSION MAY PERFORM THE MERGE WHEN THE OWNER SAYS THE WORD, AND THIS IS THE OWNER'S
-AMENDMENT OF 2026-08-30**: *"if I explicitly say the word merge to main to you, that you do
-so"*. The sentence that changes is "the owner merges it on GitHub", and only that sentence.
-Everything the rest of this entry is about — the two hooks, what they refuse, why they exist
-and the two incidents that produced them — is untouched, because none of it is about who
-presses the button.
+**What is given up: the copy can go stale**, and a new worktree gets handed the per-worktree override again. Neither can be closed by a check without lying — the tracked file legitimately differs between branches, so *installed does not match this tree* is a fact and never a fault, and must never gate a commit. `make status` reports both instead, reading NOT ARMED whenever the effective path is not the install.
 
-**THE PERMISSION COVERS BOTH HALVES OF THE MERGE, AND THE SECOND HALF IS THE OWNER'S SECOND
-AMENDMENT ON 2026-08-30**: *"Change D42 so that it merges on both local and github"*. This
-paragraph read that the permission was for `gh pr merge` alone, *"which moves a ref on GitHub
-and not in this clone"*, and offered that as the reason the amendment cost nothing. It was an
-accurate reading of a narrower grant, and what it left behind was a clone permanently one
-commit short: a session that merged a PR had to stop and *describe* the `git pull` rather than
-run it, which is a handoff in the middle of one operation and leaves every later session cutting
-branches from a stale main.
+### A session may perform the merge when the owner says the word
 
-**IT CANNOT WIDEN WHAT IS MECHANICALLY POSSIBLE, AND THAT IS THE WHOLE SAFETY ARGUMENT.** Allow
-rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new"
-refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged
-PR produces IS that commit. So this amendment reaches the prose and nothing else. It arms
-nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch:
-the move it licenses is the one that hook has allowed since the day it was written, and
-everything it refuses is refused byte for byte afterwards. The change is **who may run an
-already-permitted move**, not which moves run. **`PKMNSCAN_MAIN=off` is not what a session
-reaches for here and must not become it.** A session that finds itself typing that variable has
-left this amendment behind and is doing something else.
+The owner's amendment, 2026-08-30. The sentence that changes is *the owner merges it on GitHub*, and only that sentence: the two hooks, what they refuse and why are untouched, because none of that is about who presses the button.
 
-**THE MOVE IS TWO COMMANDS AND MUST BE, AND THE FIRST DRAFT OF THIS PARAGRAPH SHIPPED THE
-ONE-COMMAND FORM AND WAS REFUSED BY THE HOOK WITHIN THE MINUTE.** It said the move is
-`git fetch origin main:main`, which is the right shape for this clone — the hook's own refusal
-message suggests `git switch main && git pull`, and **main is often checked out in no worktree
-at all** here, the main working tree sitting on a feature branch as often as not, so there is
-frequently nowhere to switch. What that draft missed is that the combined refspec updates
-`refs/heads/main` and `refs/remotes/origin/main` **in one transaction**:
+**The permission covers both halves of the merge**, which is the owner's second amendment of the same day. An earlier reading granted only `gh pr merge` and left the clone permanently one commit short: a session that merged had to stop and *describe* the `git pull`, which is a handoff in the middle of one operation and leaves every later session cutting branches from a stale main.
+
+**It cannot widen what is mechanically possible, and that is the safety argument.** Allow rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new" refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged PR produces IS that commit. So this reaches the prose and nothing else: it arms nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch. **`PKMNSCAN_MAIN=off` is not what a session reaches for here** and must not become it; a session typing that variable has left this amendment behind.
+
+### The local half is two states, and one question tells them apart
+
+**The move is two commands and must be.** An earlier draft said `git fetch origin main:main`, which is the right shape for this clone — the hook's own refusal message suggests `git switch main && git pull`, and main is often checked out in no worktree at all here, so there is frequently nowhere to switch. What it missed is that the combined refspec updates both refs **in one transaction**:
 
     git fetch origin main:main
       255e33b..8e8973f  main -> main
       51492d6..8e8973f  main -> origin/main        <- same transaction
 
-At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/origin/main`, and
-that read answers with the PRE-update value — so whenever origin/main has moved since your last
-fetch, `new` is a DESCENDANT of what the hook can see rather than an ancestor, and it refuses. **The
-evidence the hook consults is being written by the transaction it is judging.**
+At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/origin/main`, and that read of `refs/remotes/origin/main` answers with the PRE-update value — so whenever origin/main has moved since your last fetch, `new` is a DESCENDANT of what the hook can see rather than an ancestor, and it refuses. **The evidence the hook consults is being written by the transaction it is judging.**
 
-    git fetch origin              # refs/remotes/origin/main only; never touches refs/heads/main
-    git fetch origin main:main    # now origin/main demonstrably holds it, and the hook allows
+**This is not a hook defect and must not be fixed in the hook.** The repair that suggests itself — read the transaction's own `origin/main` line and credit it — is the mistake that file's header refuses for the `old` column: **a transaction may not be a witness for itself.** Trusting a caller-supplied line would let one `git update-ref` naming two refs assert its own permission. The hook asking git for state OUTSIDE the transaction is what makes it sound, and the cost is that the caller fetches first. Observed 2026-08-30 against a main that had moved under it, PR #22 having merged between the write and the run — not a rare alignment but the ordinary state of a clone running seven worktrees.
 
-**THIS IS NOT A HOOK DEFECT AND MUST NOT BE "FIXED" IN THE HOOK.** The repair that suggests
-itself — read the transaction's own `origin/main` line and credit it — is the exact mistake the
-header of `scripts/githooks/reference-transaction` spends its longest section refusing for the
-`old` column: **a transaction may not be a witness for itself.** Trusting a line the caller
-supplied would let one `git update-ref` naming two refs assert its own permission, which is
-strictly worse than the failure it would fix. The hook asking git for state OUTSIDE the
-transaction is precisely what makes it sound, and the cost of that soundness is that the caller
-fetches first. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and
-then a merge, two transactions, in that order.
-
-**Observed 2026-08-30**, in the session that wrote this amendment, against a main that had moved
-under it — PR #22 merged between the write and the run. That is not a rare alignment; it is the
-ordinary state of a clone running seven worktrees, which is the condition this whole entry
-exists for.
-
-**AND THE RECIPE ABOVE COVERS ONE OF TWO STATES, WHICH THE SAME DAY'S NEXT MERGE FOUND** (added
-2026-08-30, after PR #38). It reasons from *main is often checked out in no worktree at all*,
-which is true and is not always true: `main` was checked out in the main working tree, and
-`git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on.
-
-    fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/pkmnscan'
-
-**THAT REFUSAL IS GIT'S AND NOT THE HOOK'S, and telling them apart is most of why this is worth
-writing down.** Everything else in this entry is about a hook that refuses, so a session reading
-the word `refusing` here reaches for `PKMNSCAN_MAIN=off` — which changes nothing, because no hook
-has spoken yet, and which the paragraph above already forbids reaching for. The hook's own
-refusals name themselves and print the variable; this one names a path.
-
-**SO THE LOCAL HALF IS TWO STATES AND ONE QUESTION TELLS THEM APART.** Ask which working tree,
-if any, holds main:
+**Ask which working tree, if any, holds main:**
 
     git worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/main$/{print w}'
 
-Nothing printed — main is checked out nowhere, the state this entry was written against:
+**Nothing printed — main is checked out nowhere:**
 
     git fetch origin && git fetch origin main:main
 
-A path printed — main is checked out there, and it is the hook's own suggested remedy with the
-switch already done for you:
+**A path printed — main is checked out there.** Added 2026-08-30 after PR #38, because `git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on:
+
+    fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/pkmnscan'
+
+**That refusal is git's and not the hook's**, and telling them apart is most of why this is written down. Everything else here is about a hook that refuses, so a session reading the word `refusing` reaches for `PKMNSCAN_MAIN=off`, which changes nothing because no hook has spoken. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and then a merge, two transactions, in that order. The hook's refusals name themselves and print the variable; this one names a path. Pull in that tree instead:
 
     git -C <that path> pull --ff-only
 
-**NEITHER FORM IS NEWLY PERMITTED AND THE REASONING ABOVE IS UNTOUCHED.** Both are two
-transactions in the right order, so the hook still asks `merge-base --is-ancestor` against an
-`origin/main` that demonstrably holds the commit, and everything it refused before it refuses
-now. What is settled here is *which of two already-permitted moves applies*, which is the same
-shape as this entry's own amendment about who may run one.
+**Neither form is newly permitted.** Both are two transactions in the right order, so the hook still asks `merge-base --is-ancestor` against an `origin/main` that demonstrably holds the commit.
 
-**THE UNCONDITIONAL SHORTCUT IS A FOOTGUN AND IS NAMED RATHER THAN LEFT TO BE FOUND.**
-`git -C <main tree> pull --ff-only` is correct only while main is the branch in that tree. Run
-without the question above, in the state this entry actually describes — the main working tree
-sitting on a feature branch — it fast-forwards **that feature branch** to its own remote. It
-does not move main, so no hook has anything to say about it, and the only symptom is a branch
-somebody else is working on having quietly advanced.
+**The unconditional shortcut is a footgun.** `git -C <main tree> pull --ff-only` is correct only while main is the branch in that tree. Run without the question above, in the state this entry describes — the main working tree on a feature branch — it fast-forwards **that feature branch**. It moves no protected ref, so no hook has anything to say, and the only symptom is a branch somebody else is working on having quietly advanced.
 
-**REJECTED: a `make` target that picks for you.** It would delete the choice, and the choice is
-not what goes wrong — the two incidents at the top of this entry are main moving *unasked*, and
-a target does not touch that. What it would cost is the thing this entry values: the move is a
-deliberate act performed on the owner's word, and a make target reads as routine plumbing. A
-recipe that covers both states is the whole fix.
+**Rejected: a `make` target that picks for you.** It would delete the choice, and the choice is not what goes wrong — the two incidents are main moving *unasked*. What it would cost is the thing this entry values: the move is a deliberate act on the owner's word, and a target reads as routine plumbing.
 
-**WHAT IT COSTS IS RECORDED RATHER THAN DESIGNED AWAY, because it is real and it is this
-entry's own subject.** Advancing main reshapes what every live worktree is cut from, and both
-incidents at the top of this entry are that happening unasked. What makes it a decision now
-rather than a repeat is the pair of conditions the rest of this entry establishes: it happens on
-an explicit instruction, and it happens only to a commit that was on origin before it was ever
-on your main.
+**What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
-**THE WORD COMES FROM THE OWNER IN THE CONVERSATION, AND IT IS PER-INSTRUCTION.** Not a
-standing grant, not a mode, and never inferred: "ship it", "land it", "looks good" and an
-approving review are not the word. The permission is spent on the merge it was given for, which
-is the same shape D33's `confirm` field has one register down and for a smaller reason — that
-route refuses without an explicit field because the next thing that happens costs money, and
-this refuses without an explicit instruction because the next thing that happens is the branch
-every other session is cut from.
+### The word
 
-**THE TEST IS WHETHER THE OWNER NAMED THE ACT, NOT WHETHER THEY MATCHED A PHRASE** (added
-2026-08-30, after this paragraph cost a session a round trip). It said *"merge to main" is the
-word*, and a session reading that literally hesitated over a bare **"Merge"** — which is the
-verb itself, given as a direct instruction, in reply to being told main had not moved. That is
-the word. So are "merge it", "merge the PR" and "merge to main". What is NOT the word is
-approval that never names the act: "ship it", "land it", "looks good", "nice", an approving
-review. **The line is naming the operation versus expressing satisfaction with the work**, and
-it was always meant to be — a phrase list is a worse instrument for it, because a session that
-matches on phrases both balks at a plain instruction and can be walked into a merge by anyone
-who happens to say five particular words.
+**It comes from the owner in the conversation, and it is per-instruction.** Not a standing grant, not a mode, never inferred. It is the same shape as D33's `confirm` field one register down — that route refuses without an explicit field because the next thing that happens costs money, and this refuses without an explicit instruction because the next thing that happens is the branch every other session is cut from.
 
-**AND THE MERGE IS ONE OPERATION, PERFORMED WHOLE. A SESSION DOES NOT STOP BETWEEN THE HALVES
-TO ASK AGAIN.** This is the correction the owner asked for in as many words — *"correct the
-prose so that this isn't an issue in the future"* — after a session merged on GitHub, reported
-that local main had not moved, and waited. That session was reading the entry correctly, which
-is what makes it a defect here rather than there. One word, both halves: `gh pr merge`, then the
-fast-forward. If the second half refuses or cannot run, that is reported as the incomplete
-operation it is — not re-asked as though permission were the thing missing.
+**The test is whether the owner NAMED THE ACT, not whether they matched a phrase.** Added 2026-08-30, after this paragraph cost a session a round trip: it said *"merge to main" is the word*, and a session reading that literally hesitated over a bare **"Merge"** — the verb itself, as a direct instruction. That is the word. So are *merge it* and *merge the PR*. What is not the word is approval that never names the act: *ship it*, *land it*, *looks good*, an approving review. **The line is naming the operation versus expressing satisfaction with the work.** A phrase list is a worse instrument, because a session matching on phrases both balks at a plain instruction and can be walked into a merge by anyone who says five particular words.
 
-**WHAT IT DOES NOT LICENSE, stated because a permission to merge reads wider than it is**: a
-direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did
-not name. All four are still refused by a hook, and none becomes available by the owner saying
-this word.
+**The merge is one operation, performed whole, and a session does not stop between the halves to ask again.** This is the correction the owner asked for after a session merged on GitHub, reported that local main had not moved, and waited — a session reading the entry correctly, which is what makes it a defect here rather than there. One word, both halves: `gh pr merge`, then the fast-forward. If the second half refuses or cannot run, that is reported as the incomplete operation it is, not re-asked as though permission were missing.
 
-**AND THE LOCAL FAST-FORWARD IS NOW SPLIT RATHER THAN REFUSED WHOLE.** This list read "a local
-fast-forward" flatly, which was loose prose the day it was written and would be actively
-misleading now. The incident it meant is `637e2e4` — a fast-forward to a commit that was on
-NOBODY's origin — and that stays refused, by the hook rather than merely by this paragraph. What
-the word licenses is the fast-forward to the merged commit ON ORIGIN, a different move that
-happens to share a verb. The hook has always drawn exactly this line; the only thing that
-changed today is that the prose draws it too.
+**What it does not license**: a direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did not name. All four are still refused by a hook, and none becomes available by the owner saying this word.
 
-**Why this is safe to grant and was not safe to assume.** The hooks were built because main
-moved twice in one day under three live worktrees, with nothing in the repo saying it may not.
-What was missing was not the owner's consent — they had it either time — it was any record that
-consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit
-instruction is a decision rather than a default, which is the distinction this whole entry is
-built on.
+**The local fast-forward is split rather than refused whole.** The incident that list meant is `637e2e4`, a fast-forward to a commit on NOBODY's origin, and that stays refused by the hook rather than merely by this paragraph. What the word licenses is the fast-forward to the merged commit ON ORIGIN, a different move sharing a verb. The hook has always drawn that line; today the prose draws it too.
 
-**THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
-`PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
-a guard with no visible way past it gets disarmed at the config instead — and a disarmed
-`core.hooksPath` takes the three opsec rules with it, which is the trade D16 already refused to
-make for the docs audit.
+**Why this is safe to grant and was not safe to assume.** What was missing was never the owner's consent — they had it either time. It was any record that consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit instruction is a decision rather than a default.
 
-**`make githooks-selftest` IS THE EVIDENCE, AND IT RUNS IN `make check` AND NEVER IN THE GIT
-HOOK.** D18's rule: it writes — a bare repo, a clone, commits, pushes — and nothing that writes
-may run on the path that decides whether a commit proceeds. It has a second reason of its own
-that the docs audit's self-test does not: it exercises the guard by **violating** it, so a
-version wired into the commit path would be refusing its own commits. Nineteen cases, and two
-of them were green for the wrong reason until the harness was made to check whose refusal it
-was: git declines to delete the branch you are standing on and declines to push what is already
-up to date, both without consulting a hook. A refusal now has to carry the hook's own marker to
-count.
+### The escape hatch and the evidence
 
-**WHAT IT DOES NOT COVER, stated so a green self-test is not misread.** It is one machine's
-clone. A push from anywhere else, a commit made in a different clone, and the GitHub web
-editor are all outside it. That is the exact gap branch protection would close, which is why
-the next paragraph is short.
+**`PKMNSCAN_MAIN=off`**, spelled the way `PKMNSCAN_GATE=off` and `PKMNSCAN_DOCS=off` already are. One variable, printed in every refusal, because a guard with no visible way past it gets disarmed at the config instead — and a disarmed `core.hooksPath` takes the three opsec rules with it, the trade D16 already refused for the docs audit.
 
-**What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets
-available, and the honest response is to add one requiring a pull request on main and keep both
-hooks — the server gate for what reaches the repository, these for what reaches this clone's
-main. Not either/or: the two incidents that produced this entry were one of each.
+**`make githooks-selftest` is the evidence, and it runs in `make check` and never in the git hook.** D18's rule: it writes — a bare repo, a clone, commits, pushes. It has a second reason of its own that the docs audit's self-test does not: it exercises the guard by **violating** it, so a version on the commit path would be refusing its own commits. Nineteen cases, two of which were green for the wrong reason until the harness checked whose refusal it was — git declines to delete the branch you are standing on and declines to push what is already up to date, both without consulting a hook. A refusal now has to carry the hook's own marker to count.
+
+**What it does not cover**: one machine's clone. A push from anywhere else, a commit in a different clone, and the GitHub web editor are all outside it — the exact gap branch protection would close.
+
+**What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets available, and the honest response is to add one requiring a pull request on main and keep both hooks — the server gate for what reaches the repository, these for what reaches this clone's main. Not either/or: the two incidents were one of each.
 
 ---
 
@@ -5075,288 +4726,120 @@ deliberately did not take.
 
 ## D53 — One link, always live, and the restart discipline becomes machinery
 
-**BUILT 2026-08-30, from the owner asking to stop running the project the way it had always
-been run.** Their words: *"ideally i just in my browser go to a link and it's the live version
-of my app connected to my local storage, and if we edit something in the code we dont need to
-do the whole remember to restart server shennanigan it just reloads yanno?"*
+**`make up` runs both servers under a supervisor that reloads them when their source changes.** Built 2026-08-30, from the owner asking to stop running the project the way it had always been run: go to a link, get the live version against local storage, and have an edit picked up without remembering to restart.
 
-**THE RESTART SHENANIGAN IS A RECORDED DEFECT, NOT AN INCONVENIENCE.** `docs/GATES.md` holds
-the measurement: `store/master.py:now()` was changed to milliseconds at 20:16, box 95's run at
-22:08 still wrote whole-second stamps, and the cause was not the code — *"the server process
-serving it had been started before 20:16 and was holding the old code in memory, which no
-commit can reach."* That file files it as a restart discipline. A discipline is what you have
-instead of a guard, and this repo has been here before: D42 exists because *"it already was a
-line nobody had written"* and main moved under three live worktrees twice in one day.
-`scripts/serve.py` is that lesson applied to the server.
+**The restart shenanigan is a recorded defect, not an inconvenience.** `docs/GATES.md` holds the measurement: `store/master.py:now()` was changed to milliseconds at 20:16, box 95's run at 22:08 still wrote whole-second stamps, and the cause was not the code — the server process serving it had started before 20:16 and was holding the old code in memory, which no commit can reach. That file calls it a restart discipline. A discipline is what you have instead of a guard, and this repo has been here before: D42 exists because it already was a line nobody had written, and main moved under three live worktrees twice in one day. `scripts/serve.py` is that lesson applied to the server.
 
-**`make server` AND `make dev` ARE UNTOUCHED.** This is additive. A session that wants a
-foreground server in a terminal it is watching still has one, and that one still does not watch
-files — so `docs/GATES.md`'s discipline goes on governing it, and that paragraph is amended
-rather than deleted.
+**`make server` and `make dev` are untouched.** A session wanting a foreground server in a terminal it is watching still has one, and that one still does not watch files, so `docs/GATES.md`'s discipline goes on governing it.
 
-**REJECTED, AND IT WAS THE LEADING OPTION UNTIL THE OWNER ANSWERED: building the app to `dist`
-and serving it from the capture server.** It genuinely collapses two processes into one, and
-`app/package.json` has carried an unused `build` script the whole time. It is the wrong answer
-to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in
-exchange for removing one. Vite stays, and it was already the half of the problem that worked.
+**Rejected, and it led until the owner answered: building the app to `dist` and serving it from the capture server.** It collapses two processes into one, and `app/package.json` has carried an unused `build` script the whole time. It is the wrong answer to *this* request, because a built bundle has to be rebuilt — it would ADD a step to remember in exchange for removing one. Vite stays, and it was already the half that worked.
 
-**THE DRAIN IS COUNTED ON REQUESTS, NEVER ON THREADS, AND THE OBVIOUS IMPLEMENTATION IS A NO-OP
-THAT LOOKS LIKE IT WORKS.** Both halves measured on this machine's Python:
+### The drain is counted on requests, never on threads
 
-- `ThreadingHTTPServer` sets `daemon_threads = True`, and `socketserver._Threads.append`
-  **discards a daemon thread** rather than recording it — so `_threads` is always empty and the
-  join inside `server_close()` already does nothing. A version that trusted it would pass every
-  smoke test and lose requests.
-- Setting `daemon_threads = False` does not fix it either. `protocol_version` is HTTP/1.1, so a
-  handler thread lives for the whole keep-alive CONNECTION rather than for one request, and
-  `BaseHTTPRequestHandler.timeout` is None — the join would block forever on an idle browser tab.
+Both halves measured on this machine's Python, and the obvious implementation is a no-op that looks like it works:
 
-So a counter wraps `_dispatch`, which every verb already funnels through and which is entered
-after the request line is parsed and before the body is read. **`server_close()` first, then
-drain** — in the other order the wait races arrivals it cannot refuse and never reaches zero.
+- `ThreadingHTTPServer` sets `daemon_threads = True`, and `socketserver._Threads.append` **discards a daemon thread** rather than recording it — so `_threads` is always empty and the join inside `server_close()` already does nothing. A version trusting it would pass every smoke test and lose requests.
+- Setting `daemon_threads = False` does not fix it either. `protocol_version` is HTTP/1.1, so a handler thread lives for the whole keep-alive CONNECTION rather than one request, and `BaseHTTPRequestHandler.timeout` is None — the join would block forever on an idle tab.
 
-**WHY IT IS WORTH BUILDING: `store/session.py:Store.write()` replaces four JSON files in
-sequence.** Each is atomic alone and none is atomic as a set, so a kill between them leaves a
-torn store. That risk exists today at Ctrl-C frequency and auto-restart multiplies it — which is
-why the drain is a PREREQUISITE for the watcher rather than a refinement of it, and why the two
-were built and verified in that order.
+So a counter wraps `_dispatch`, which every verb funnels through and which is entered after the request line is parsed and before the body is read. **`server_close()` first, then drain** — in the other order the wait races arrivals it cannot refuse and never reaches zero.
 
-**`DRAIN_SECONDS` IS DERIVED FROM THE LOCK TIMEOUT AND WAS NEVER CHOSEN.**
-`files.LOCK_TIMEOUT_SECONDS` is 30, and a capture posted while `./pkmnscan identify` holds the
-store lock legitimately waits that long before answering `store_busy`. A shorter drain would cut
-a request that was behaving correctly and about to say so — the same argument `app/src/server.ts`
-makes one process over for having no client timeout below 30s. T7 asserts the arithmetic rather
-than the number, so it moves the day the lock timeout does.
+**Why it is worth building: `store/session.py:Store.write()` replaces four JSON files in sequence.** Each is atomic alone and none is atomic as a set, so a kill between them leaves a torn store. That risk exists today at Ctrl-C frequency and auto-restart multiplies it, which is why the drain is a PREREQUISITE for the watcher rather than a refinement, and why the two were built and verified in that order.
 
-**AN UNHANDLED SIGTERM WAS STRICTLY WORSE THAN CTRL-C**, which is what made the handler necessary
-rather than tidy: with no handler the default disposition terminates the process with no
-`server_close()` at all. **The hard kill survives and is loud** — after the grace period the
-supervisor sends SIGKILL, because an unkillable wedged server is worse than a cut request, and it
-names `history.jsonl` as where to look.
+**`DRAIN_SECONDS` is derived from the lock timeout and was never chosen.** `files.LOCK_TIMEOUT_SECONDS` is 30, and a capture posted while `./pkmnscan identify` holds the store lock legitimately waits that long before answering `store_busy`. A shorter drain would cut a request that was behaving correctly and about to say so — the same argument `app/src/server.ts` makes one process over for having no client timeout below 30s. T7 asserts the arithmetic rather than the number.
 
-**THE WATCHER REFUSES TO RESTART INTO CODE THAT DOES NOT PARSE.** Auto-restart *guarantees* the
-watcher observes half-written code: an editor saves mid-keystroke and a formatter writes again a
-beat later. Changed files are `compile()`d first, and on failure the last code that parsed keeps
-running while the log names the file and line.
+**An unhandled SIGTERM was strictly worse than Ctrl-C**, which is what made the handler necessary rather than tidy: with no handler the default disposition terminates the process with no `server_close()` at all. **The hard kill survives and is loud** — after the grace period the supervisor sends SIGKILL, because an unkillable wedged server is worse than a cut request, and it names `history.jsonl` as where to look.
 
-**Its limit is stated where it is implemented: it catches PARSE errors only.** An `ImportError`,
-a module-scope `NameError` or a bad constant still kills the new child with no rollback. The
-containment is the fast-failure cap — after five quick deaths the supervisor **stops respawning
-and keeps running, still watching**, so a broken commit cannot make it spin and cannot make it
-die (which under launchd would flap it forever). The next save retries.
+### The watcher
 
-**The fingerprint is a `{path: (mtime, size)}` dict rather than a digest so the log can NAME the
-file that caused the restart** — the only thing connecting a restart the operator did not ask for
-to the save they just made.
+**It refuses to restart into code that does not parse.** Auto-restart *guarantees* the watcher observes half-written code: an editor saves mid-keystroke and a formatter writes again a beat later. Changed files are `compile()`d first, and on failure the last code that parsed keeps running while the log names the file and line.
 
-**Mtime polling rather than `watchdog`, for two reasons.** The Makefile's invariant is that the
-capture server must never NEED `make venv`. And FSEvents coalesces and delivers directory-level
-events with its own latency, so the debounce would still be needed — the dependency buys nothing.
+**Its limit is stated where it is implemented: PARSE errors only.** An `ImportError`, a module-scope `NameError` or a bad constant still kills the new child with no rollback. The containment is the fast-failure cap — after five quick deaths the supervisor **stops respawning and keeps running, still watching**, so a broken commit cannot make it spin and cannot make it die, which under launchd would flap it forever. The next save retries.
 
-**THE LAN HALF WAS NEVER THE SERVER. `HOST = "0.0.0.0"` HAS BEEN THERE SINCE IT WAS WRITTEN**, so
-the capture server has been reachable from the network the whole time and this adds no new
-listener. **The client was the broken half**: `app/devPort.ts` composes
-`http://localhost:${CAPTURE_PORT}` and `vite.config.ts` bakes it into the bundle, and on a phone
-`localhost` IS THE PHONE.
+The fingerprint is a `{path: (mtime, size)}` dict rather than a digest so the log can NAME the file that caused the restart — the only thing connecting an unasked restart to the save that produced it.
 
-**So only the PORT is baked and the host is resolved at runtime** from `window.location`. It
-keeps every property the injected URL had — the port still comes from the same slot as the Vite
-port, so a worktree's UI still cannot be answered by another tree's server (D43) — and adds the
-one it lacked: it follows the address bar.
+**Mtime polling rather than `watchdog`, for two reasons.** The Makefile's invariant is that the capture server must never NEED `make venv`. And FSEvents coalesces and delivers directory-level events with its own latency, so the debounce would still be needed and the dependency buys nothing.
 
-**This HONOURS `VITE_CAPTURE_SERVER` rather than overriding it.** That knob's comment says it
-exists so *"the Fulfiller's device can be pointed at this Mac by address"*, which was necessary
-only because the default could not follow the address bar. It still wins, and is still the answer
-for pointing a device at a DIFFERENT machine.
+### The LAN half was never the server
 
-**`server.host` WAS HALF THE VITE CHANGE AND THE HOSTNAME TEST FOUND THE OTHER HALF.** `host:
-true` makes Vite LISTEN on every interface; it does not make it ACCEPT every name. Vite refuses
-a request whose `Host` header it does not recognise — DNS-rebinding protection — so the app
-answered fine at `http://192.168.1.125:5366` and returned *"Blocked request. This host
-(\"pkmnscan.lan\") is not allowed"* at the name the operator would actually type. **Reaching it
-by IP is not a test of reaching it by name**, and only the second one is the feature.
+**`HOST = "0.0.0.0"` has been there since it was written**, so the capture server has been reachable from the network the whole time and this adds no new listener. **The client was the broken half**: `app/devPort.ts` composes `http://localhost:${CAPTURE_PORT}` and `vite.config.ts` bakes it into the bundle, and on a phone `localhost` IS THE PHONE.
 
-`allowedHosts` is `['.lan', '.local']` rather than `true`. A leading dot admits a domain and its
-subdomains, so both the router's local record and Bonjour work while an arbitrary public
-hostname pointed at this machine is still refused; both suffixes are non-routable on the public
-internet, which is what makes the narrowing meaningful rather than decorative. `true` would
-switch the protection off for every name and was declined.
+**So only the PORT is baked and the host is resolved at runtime** from `window.location`. It keeps every property the injected URL had — the port still comes from the same slot as the Vite port, so a worktree's UI still cannot be answered by another tree's server (D43) — and adds the one it lacked: it follows the address bar. This **honors `VITE_CAPTURE_SERVER`** rather than overriding it; that knob exists so the Fulfiller's device can be pointed at this Mac by address, which was necessary only because the default could not follow the address bar. It still wins, and is still the answer for a DIFFERENT machine.
 
-**THE ORIGIN ALLOWLIST NEEDED NO CODE CHANGE.** `PKMNSCAN_ALLOWED_ORIGINS` already existed, is
-documented, is read fresh per request, and **extends the defaults rather than replacing them** —
-and `*` is compared as an exact string, so it refuses everything rather than reopening the hole
-(T7 asserts this). The supervisor composes the value from this Mac's Bonjour name and
-`PKMNSCAN_LAN_NAME`. `scripts/serve.py` may not import the capture server, so it lifts
-`ORIGINS_ENV` with `ast` — the docs audit's own idiom; the alternative was a second hand-written
-spelling whose only symptom when it drifted would be writes silently 403ing from the LAN.
+**`server.host` was half the Vite change and the hostname test found the other half.** `host: true` makes Vite LISTEN on every interface; it does not make it ACCEPT every name. Vite refuses a request whose `Host` header it does not recognize — DNS-rebinding protection — so the app answered fine at `http://192.168.1.125:5366` and returned *"Blocked request. This host (\"pkmnscan.lan\") is not allowed"* at the name the operator would actually type. **Reaching it by IP is not a test of reaching it by name**, and only the second is the feature.
 
-**WHAT IS GENUINELY WIDENED, STATED PLAINLY: writes from a LAN origin are now accepted.** Reads
-always were. This is the point — D5 puts the Fulfiller on his own device — and it is still a real
-change to what a machine on the same network can do. Verified both ways before it was kept: a
-write from the named host answers 201, one from an unknown origin still answers 403.
+`allowedHosts` is `['.lan', '.local']` rather than `true`. A leading dot admits a domain and its subdomains, so the router's local record and Bonjour both work while an arbitrary public hostname pointed at this machine is still refused; both suffixes are non-routable on the public internet, which makes the narrowing meaningful rather than decorative. `true` would switch the protection off for every name and was declined.
 
-**`PKMNSCAN_LAN_NAME` LIVES IN `.env`, NOT A SHELL PROFILE**, and D47's amendment is why: an
-export in `~/.zshenv` fixes an interactive shell and does nothing for a process launchd starts,
-which reads no profile at all.
+**The origin allowlist needed no code change.** `PKMNSCAN_ALLOWED_ORIGINS` already existed, is documented, is read fresh per request, and **extends the defaults rather than replacing them** — and `*` is compared as an exact string, so it refuses everything rather than reopening the hole (T7 asserts this). The supervisor composes the value from this Mac's Bonjour name and `PKMNSCAN_LAN_NAME`. `scripts/serve.py` may not import the capture server, so it lifts `ORIGINS_ENV` with `ast` — the docs audit's own idiom; the alternative was a second hand-written spelling whose only symptom when it drifted would be writes silently 403ing from the LAN.
 
-**The owner's DNS is theirs and this repo does not touch it.** A DHCP reservation and a local DNS
-record on their UniFi map `pkmnscan.lan` to this Mac. Nothing in the code knows or cares what the
-name is, which is the property the runtime host resolution buys.
+**What is genuinely widened: writes from a LAN origin are now accepted.** Reads always were. This is the point — D5 puts the Fulfiller on his own device — and it is still a real change to what a machine on the same network can do. Verified both ways: a write from the named host answers 201, one from an unknown origin still answers 403.
 
-**THE LAUNCH AGENT IS GENERATED, WRITTEN OUTSIDE THE REPO, AND REFUSED IN A WORKTREE.** A plist
-names an absolute path on one Mac; a tracked one would be D47's failure verbatim. `~/Library` is
-strictly better than gitignoring it — there is then no file in the tree to commit by accident at
-all — and `plistlib.dump` rather than a here-doc for `make launch-config`'s recorded reason: a
-hand-built plist is one escaping mistake from a file that presents as *"the app does not start"*
-rather than as a syntax error. `server/ports.py:agent_label` derives the label from the same slot
-as the ports, so two checkouts cannot install one label and silently replace each other.
+**`PKMNSCAN_LAN_NAME` lives in `.env`, not a shell profile**, and D47's amendment is why: an export in `~/.zshenv` fixes an interactive shell and does nothing for a process launchd starts, which reads no profile at all. **The owner's DNS is theirs and this repo does not touch it** — a DHCP reservation and a local DNS record on their UniFi map `pkmnscan.lan` to this Mac, and nothing in the code knows what the name is, which is the property runtime host resolution buys.
 
-**Main tree only, and the refusal is the design.** A worktree is deleted routinely and its plist
-would outlive it, leaving launchd retrying a path that is gone. `up`, `down`, `restart` and
-`status` work in every tree; only login-persistence is refused.
+### The launch agent
 
-**`KeepAlive: {SuccessfulExit: false}` AND NOT `true`, WHICH IS WHAT LETS `make down` WIN.** A
-process terminated by a signal is an *unsuccessful* exit to launchd, so `true` would restart the
-very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, and
-`make down` says — before the operator finds out tomorrow morning — that the agent will start it
-again at the next login.
+**Generated, written outside the repo, and refused in a worktree.** A plist names an absolute path on one Mac; a tracked one would be D47's failure verbatim. `~/Library` is strictly better than gitignoring it — there is then no file in the tree to commit by accident — and `plistlib.dump` rather than a here-doc for `make launch-config`'s recorded reason: a hand-built plist is one escaping mistake from a file that presents as *the app does not start* rather than as a syntax error. `server/ports.py:agent_label` derives the label from the same slot as the ports, so two checkouts cannot install one label and silently replace each other.
 
-**IT ALSO SAID `make down` PREFERS `launchctl bootout` WHEN A PLIST EXISTS, AND THAT CLAUSE IS
-DELETED RATHER THAN REPAIRED (2026-08-30).** Both halves of its reasoning were wrong.
+**Main tree only, and the refusal is the design.** A worktree is deleted routinely and its plist would outlive it, leaving launchd retrying a path that is gone. `up`, `down`, `restart` and `status` work in every tree; only login-persistence is refused.
 
-**Wrong about the premise.** With the handler exiting 0, a signalled supervisor is a SUCCESSFUL
-exit and launchd leaves it alone — so signalling never needed avoiding. Measured rather than
-reasoned: SIGTERM to a launchd-started supervisor left no process, no pid in `launchctl print`,
-and no listener on either port.
+**`KeepAlive: {SuccessfulExit: false}` and not `true`, which is what lets `make down` win.** A process terminated by a signal is an *unsuccessful* exit to launchd, so `true` would restart the very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, and `make down` says — before the operator finds out tomorrow morning — that the agent will start it again at the next login.
 
-**Wrong about which process.** `bootout` acts on the SERVICE, not on whatever is running — so
-when the live supervisor had been started by `make up` rather than by launchd, bootout applied
-to nothing and `down` printed `stopped.` over a supervisor that was still up. `make
-launch-agent` then bootstrapped a second one, whose capture child could not bind, gave up after
-five retries, and overwrote `supervisor.pid` with its own pid. Two supervisors: one serving, one
-supervising nothing, and the pidfile naming the wrong one.
+**It also said `make down` prefers `launchctl bootout` when a plist exists, and that clause is deleted rather than repaired.** Both halves of its reasoning were wrong.
 
-**IT IS THE SAME DEFECT AS THE LIVENESS PROBE, ONE COMMIT LATER, AND THAT IS THE PART WORTH
-KEEPING.** Both are an action reporting success on the strength of something that did not apply
-to the process in question — the probe asked the socket instead of the child, this asked launchd
-about a service instead of the pid that was there. The probe was fixed and this survived,
-because it sat in a branch nobody re-read while fixing its twin. One path now, acting on the pid
-that is actually running.
-**`EnvironmentVariables.PATH` is baked because launchd gives an agent a minimal PATH and `npm` is
-otherwise not found**, so the app half never starts while the capture server looks fine. If npm
-comes from nvm, an `nvm install` moves it and the agent needs regenerating.
+- **Wrong about the premise.** With the handler exiting 0, a signalled supervisor is a SUCCESSFUL exit and launchd leaves it alone, so signalling never needed avoiding. Measured: SIGTERM to a launchd-started supervisor left no process, no pid in `launchctl print`, and no listener on either port.
+- **Wrong about which process.** `bootout` acts on the SERVICE, not on whatever is running — so when the live supervisor had been started by `make up`, bootout applied to nothing and `down` printed `stopped.` over a supervisor that was still up. `make launch-agent` then bootstrapped a second one, whose capture child could not bind, gave up after five retries, and overwrote `supervisor.pid` with its own pid. Two supervisors: one serving, one supervising nothing, and the pidfile naming the wrong one.
 
-**`make status` REPORTS LIVENESS, WHICH IT NEVER HAS.** `ports_and_store()` prints which ports
-this tree WOULD use and has never known who holds them. **The third branch is what earns it: a
-port that answers while no pidfile in THIS checkout claims it** — D43's fault made visible for the
-first time, and previously undetectable from inside the tree it was happening to.
+**It is the same defect as the liveness probe, one commit later.** Both are an action reporting success on the strength of something that did not apply to the process in question — the probe asked the socket instead of the child, this asked launchd about a service instead of the pid that was there. The probe was fixed and this survived, because it sat in a branch nobody re-read while fixing its twin. One path now, acting on the pid that is actually running.
 
-**THE PID GUARD COMPARES THE FULL PATH AND NOT THE BASENAME, AND THE FIRST VERSION DID NOT.**
-`pipeline_routes.py:_live_pid` is the house pattern and only ever READS, so a recycled pid there
-is a run wrongly reported busy. `make down` SIGNALS a process group, so the same mistake kills an
-unrelated process tree — and here it is not hypothetical, because every checkout runs a file
-called `capture_server.py` and an `npm run dev` under a directory called `app`. A basename check
-answers *"yes, that's ours"* for another tree's server. Found by reasoning about a main-tree
-server that died during this build, exonerated by the timestamps, and fixed anyway.
+**`EnvironmentVariables.PATH` is baked** because launchd gives an agent a minimal PATH and `npm` is otherwise not found, so the app half never starts while the capture server looks fine. If npm comes from nvm, an `nvm install` moves it and the agent needs regenerating.
 
-**A HALF-STARTED STACK IS NOT A STARTED STACK, AND `make up` REPORTED ONE AS STARTED**
-(found on the owner's machine 2026-08-30, hours after this entry landed). A bare `make server`
-held `:8000`; `make up` then started the app, spawned a capture child that could not bind,
-retried it five times, hit the fast-failure cap and stopped. The end state served the app off
-the SQUATTER — right store, right data, and **no file watching at all**, so a `git pull` would
-not have been picked up. Everything looked healthy.
+### Liveness
 
-**THE ROOT DEFECT WAS THE PROBE: `wait_for_port` asked the SOCKET, not the child.** A port
-another process holds answers exactly like one of ours does, so `make up` printed `pkmnscan is
-up` on the strength of the squatter's reply. **A liveness probe another process can satisfy is
-not a liveness probe** — it now takes the child and returns failure the moment that child is
-gone.
+**`make status` reports it, which it never has.** `ports_and_store()` printed which ports this tree WOULD use and never knew who holds them. **The third branch is what earns it: a port that answers while no pidfile in THIS checkout claims it** — D43's fault made visible for the first time, and previously undetectable from inside the tree it was happening to.
 
-**THE COLLISION ITSELF IS UNTOUCHED AND MUST STAY LOUD.** D43 is why: a server that quietly
-moved to a free port would serve a DIFFERENT store. What was wrong was never that two things
-wanted one port; it was that the system settled into a working-looking half of itself and said
-so. Four guards, none of which weakens the collision:
+**The pid guard compares the full path and not the basename, and the first version did not.** `pipeline_routes.py:_live_pid` is the house pattern and only ever READS, so a recycled pid there is a run wrongly reported busy. `make down` SIGNALS a process group, so the same mistake kills an unrelated process tree — and here it is not hypothetical, because every checkout runs a file called `capture_server.py` and an `npm run dev` under a directory called `app`. A basename check answers *yes, that's ours* for another tree's server.
 
-- **The probe takes the child** (above), so a squatter can no longer be mistaken for success.
-- **`start()` will not start the app if capture did not come up.** The app alone is not a
-  product, and the half that failed is the whole reason this supervisor exists.
-- **A held port is not a retryable crash.** `_refuse_capture` says who holds it and stops;
-  burning five retries and a backoff on a condition that cannot change without a human was the
-  old behavior and it is what produced the silent end state. `_note_exit`'s retry is for a
-  child that started and died, which is the opposite case.
-- **`make dev` and `make server` refuse while this checkout's supervisor is up**, which is
-  where the squatter comes from in the first place. `PKMNSCAN_FOREGROUND=ok` bypasses, the
-  shape `PKMNSCAN_MAIN=off` already uses.
+**A half-started stack is not a started stack, and `make up` reported one as started** (found on the owner's machine 2026-08-30, hours after this entry landed). A bare `make server` held `:8000`; `make up` then started the app, spawned a capture child that could not bind, retried five times, hit the fast-failure cap and stopped. The end state served the app off the SQUATTER — right store, right data, and **no file watching at all**, so a `git pull` would not have been picked up. Everything looked healthy.
 
-**`make up` PREFLIGHTS THE PORT BEFORE SPAWNING ANYTHING**, so the refusal costs no processes —
-and it prints the TAIL of the holder's command line rather than the head, because `ps` leads
-with a 96-character interpreter path and a head-truncated line identified the process as
-"Python" and nothing else, on the one output whose whole job is telling you which process to
-kill.
+**The root defect was the probe: `wait_for_port` asked the SOCKET, not the child.** A port another process holds answers exactly like one of ours does, so `make up` reported the stack up on the strength of the squatter's reply:
 
-**`make launch-agent` IS NOT THIS FIX AND WAS ASKED ABOUT AS THOUGH IT MIGHT BE.** It makes
-`make up` the canonical starter, so a hand-run `make server` becomes rare — it prevents
-nothing, and under `KeepAlive` it would restart the supervisor into the same wall.
+    pkmnscan is up
+. **A liveness probe another process can satisfy is not a liveness probe** — it now takes the child and returns failure the moment that child is gone.
 
-**THE SUPERVISOR WATCHES ITSELF AS OF 2026-08-30, AND THE CASE THAT MATTERED WAS THE SILENT
-ONE.** The owner asked how they would know whether a change touched `scripts/serve.py` — the
-one file the watcher did not cover, because it is the watcher. Answering it turned up a worse
-sibling nobody had noticed.
+**The collision itself is untouched and must stay loud.** D43 is why: a server that quietly moved to a free port would serve a DIFFERENT store. What was wrong was never that two things wanted one port; it was that the system settled into a working-looking half of itself and said so. Four guards, none weakening the collision:
 
-**`server/ports.py` and `store/files.py` were ALREADY watched, and that made it invisible.** A
-change to either restarts the capture CHILD — in the log, at the usual speed, looking exactly
-like the fix landing — while the supervisor goes on running the module it imported at boot,
-because Python caches an imported module. Something restarts, so nothing looks wrong. The
-`scripts/serve.py` case at least failed silently in both halves; this one failed while
-appearing to succeed, which is the shape this repo treats as worse.
+- **The probe takes the child**, so a squatter can no longer be mistaken for success.
+- **`start()` will not start the app if capture did not come up.** The app alone is not a product, and the half that failed is the whole reason this supervisor exists.
+- **A held port is not a retryable crash.** `_refuse_capture` says who holds it and stops; burning five retries and a backoff on a condition that cannot change without a human was the old behavior and it produced the silent end state. `_note_exit`'s retry is for a child that started and died, the opposite case.
+- **`make dev` and `make server` refuse while this checkout's supervisor is up**, which is where the squatter comes from. `PKMNSCAN_FOREGROUND=ok` bypasses, the shape `PKMNSCAN_MAIN=off` already uses.
 
-**`SELF_FILES` is the four files this supervisor is made of** — itself, `envfile.py`,
-`server/ports.py`, `store/files.py` — and a change to any of them re-execs the process rather
-than restarting a child.
+**`make up` preflights the port before spawning anything**, so the refusal costs no processes — and it prints the TAIL of the holder's command line rather than the head, because `ps` leads with a 96-character interpreter path and a head-truncated line identified the process as *Python* and nothing else, on the one output whose whole job is telling you which process to kill.
 
-**`os.execv`, WHICH KEEPS THE PID, and that is the whole reason to use it** rather than
-spawning a replacement and exiting: `supervisor.pid` stays valid, and launchd sees the same
-process it started instead of an exit it would race to restart. Children are stopped FIRST,
-because exec throws away every `Popen` handle — anything still running would be orphaned,
-holding the ports the new image is about to want. The parse pre-check applies as before, so a
-half-written `serve.py` cannot be exec'd into; if exec fails anyway the children are rebuilt
-and the log says the old code is still running.
+**`make launch-agent` is not this fix** and was asked about as though it might be. It makes `make up` the canonical starter, so a hand-run `make server` becomes rare — it prevents nothing, and under `KeepAlive` it would restart the supervisor into the same wall.
 
-**THE MAKEFILE IS NOT IN THAT SET, AND SAYING OTHERWISE WAS WRONG.** It was claimed once in
-conversation that a Makefile change also needs a restart. Three comments in `scripts/serve.py`
-mention the Makefile and nothing reads it; `make` re-reads it from disk on every invocation,
-so it cannot make a running process stale. Corrected here rather than left standing, because a
-rule that names one file too many is how the real list stops being read.
+### The supervisor watches itself
 
-**`scripts/docs-audit.py`'s `supervisor self-watch` ROW IS WHAT KEEPS THE LIST HONEST.** A
-hand-written list of a file's own imports is precisely the thing that goes stale the next time
-somebody adds one, and the failure it would reintroduce is the invisible one above. The row
-parses `serve.py` with `ast`, resolves its module-scope imports against the tree, and blocks on
-any project-local import missing from `SELF_FILES`. Mutation-tested: dropping `server/ports.py`
-from the list takes it red and names the file.
+Added 2026-08-30, from the owner asking how they would know whether a change touched `scripts/serve.py` — the one file the watcher did not cover, because it is the watcher. Answering it turned up a worse sibling nobody had noticed.
 
-**WHAT THIS COSTS, NAMED RATHER THAN DESIGNED AWAY:**
+**`server/ports.py` and `store/files.py` were ALREADY watched, and that made it invisible.** A change to either restarts the capture CHILD — in the log, at the usual speed, looking exactly like the fix landing — while the supervisor goes on running the module it imported at boot, because Python caches an imported module. Something restarts, so nothing looks wrong. The `scripts/serve.py` case at least failed silently in both halves; this one failed while appearing to succeed.
 
-- **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing.
-  Inherent to D13, written down now rather than found as a bug in three weeks.
-- **An agent session restarts the owner's live server.** With the agent on the main tree, any
-  session editing `store/` or `server/` bounces the server the owner may be capturing with. That
-  is what was asked for, and a further argument for main-tree-only.
-- **A request accepted but not yet inside `_dispatch` is uncounted.** Microseconds; closing it
-  means reimplementing `handle_one_request`. Recorded in `docs/DEBTS.md`.
-- **The swap gap.** Tens of milliseconds of `ECONNREFUSED` between children, which the client
-  surfaces as `unreachable` because it deliberately has no retry. The fix, named and NOT built:
-  the supervisor holds the listening socket and passes it to the child. Rejected for v1 because it
-  turns a fast honest refusal into a hang when the new child fails to boot.
+`SELF_FILES` is the four files this supervisor is made of — itself, `envfile.py`, `server/ports.py`, `store/files.py` — and a change to any of them re-execs the process rather than restarting a child.
 
-**D13 IS NOT REOPENED.** The store, the photographs and the truth stay on this Mac. LAN reach is
-the tunnel case D13 already names as needing no code change, and the owner deferred off-site
-access to its own decision rather than folding it in here.
+**`os.execv`, which keeps the PID**, and that is the whole reason to use it rather than spawning a replacement and exiting: `supervisor.pid` stays valid, and launchd sees the same process it started instead of an exit it would race to restart. Children are stopped FIRST, because exec throws away every `Popen` handle — anything still running would be orphaned, holding the ports the new image is about to want. The parse pre-check applies as before; if exec fails anyway the children are rebuilt and the log says the old code is still running.
 
-**WHAT WOULD REOPEN THIS: the watcher restarting during real capture work.** If the server bounces
-under the owner mid-box because a session saved a file, the answer is not to weaken the drain — it
-is that the agent and an active feeder run should not share a tree, which is one condition on
-`is_linked_worktree` away from what is already built.
+**The Makefile is not in that set, and saying otherwise was wrong.** It was claimed once in conversation that a Makefile change also needs a restart. Three comments in `scripts/serve.py` mention the Makefile and nothing reads it; `make` re-reads it from disk on every invocation, so it cannot make a running process stale. Corrected here rather than left standing, because a rule that names one file too many is how the real list stops being read.
+
+**`scripts/docs-audit.py`'s `supervisor self-watch` row is what keeps the list honest.** A hand-written list of a file's own imports goes stale the next time somebody adds one, and the failure it would reintroduce is the invisible one above. The row parses `serve.py` with `ast`, resolves its module-scope imports against the tree, and blocks on any project-local import missing from `SELF_FILES`. Mutation-tested: dropping `server/ports.py` from the list takes it red and names the file.
+
+### What it costs
+
+- **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing. Inherent to D13, written down now rather than found as a bug in three weeks.
+- **An agent session restarts the owner's live server.** With the agent on the main tree, any session editing `store/` or `server/` bounces the server the owner may be capturing with. That is what was asked for, and a further argument for main-tree-only.
+- **A request accepted but not yet inside `_dispatch` is uncounted.** Microseconds; closing it means reimplementing `handle_one_request`. Recorded in `docs/DEBTS.md`.
+- **The swap gap.** Tens of milliseconds of `ECONNREFUSED` between children, which the client surfaces as `unreachable` because it deliberately has no retry. The fix, named and NOT built: the supervisor holds the listening socket and passes it to the child. Rejected for v1 because it turns a fast honest refusal into a hang when the new child fails to boot.
+
+**D13 is not reopened.** The store, the photographs and the truth stay on this Mac. LAN reach is the tunnel case D13 already names as needing no code change, and the owner deferred off-site access to its own decision.
+
+**What would reopen this: the watcher restarting during real capture work.** If the server bounces under the owner mid-box because a session saved a file, the answer is not to weaken the drain — it is that the agent and an active feeder run should not share a tree, which is one condition on `is_linked_worktree` away from what is already built.
 
 ---
 

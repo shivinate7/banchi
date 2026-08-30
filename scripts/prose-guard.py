@@ -61,6 +61,12 @@ MAX_RULINGS = 3
 HEADING_RE = re.compile(r"^##\s+(D[1-9][0-9]?)\s*[—-]\s*(.+)$")
 ANY_H2_RE = re.compile(r"^##\s+(D[1-9][0-9]?)\b")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+# Fenced blocks are lifted out BEFORE inline backticks are read, and this was a real
+# defect rather than a refinement. The inline pattern is `` `([^`]+)` ``, so a ``` fence
+# shifts backtick PARITY for everything after it in the entry — D42 reported eighteen
+# tokens dropped that were sitting in the rewrite untouched. The blocks are compared in
+# their own right, so nothing is given up by removing them first.
+FENCE_RE = re.compile(r"```.*?```", re.S)
 
 
 class Finding(NamedTuple):
@@ -227,13 +233,17 @@ def facts(text: str) -> Dict[str, Set[str]]:
     checker called a present token missing. A guard whose findings need triage is one
     whose findings get skimmed.
     """
-    flat = re.sub(r"\s+", " ", text)
-    found: Dict[str, Set[str]] = {}
+    fenced = [re.sub(r"\s+", " ", block).strip() for block in FENCE_RE.findall(text)]
+    flat = re.sub(r"\s+", " ", FENCE_RE.sub(" ", text))
+    # Close a code span's internal wraps BEFORE any pattern reads the text, not just the
+    # code one. docs/DECISIONS.md wrapped `scripts/ docs-audit.py` mid-token, so the PATH
+    # pattern found a bare `docs-audit.py` that a correctly-written rewrite never produces
+    # and reported it dropped. Repairing the text once is right where repairing each
+    # pattern's output is a rule that has to be remembered per pattern.
+    flat = re.sub(r"`([^`]*)`", lambda m: "`" + re.sub(r"\s+", "", m.group(1)) + "`", flat)
+    found: Dict[str, Set[str]] = {"fenced": set(fenced)}
     for name, pattern in FACT_PATTERNS.items():
-        hits = re.findall(pattern, flat)
-        if name == "code":
-            hits = [re.sub(r"\s+", "", hit) for hit in hits]
-        found[name] = set(hits)
+        found[name] = set(re.findall(pattern, flat))
     return found
 
 
