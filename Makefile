@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
+.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -28,6 +28,7 @@ help:
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
+	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
@@ -52,12 +53,37 @@ help:
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
 
-venv:
+venv: launch-config
 	@python3 -m venv .venv
 	@.venv/bin/python -m pip install --quiet --upgrade pip
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
 	@echo "venv ready: $$(.venv/bin/python -V)"
 	@echo "T1 also needs ANTHROPIC_API_KEY in the environment."
+
+# `.claude/launch.json` NAMES A PORT, AND D43 MADE THE PORT PER CHECKOUT — so the file
+# cannot be tracked and correct at the same time. It was tracked at a hardcoded 5173, which
+# is right in the main tree and wrong in every linked worktree, and wrong in the exact shape
+# D43 exists to prevent: the Browser pane would start THIS tree's dev server and then open a
+# tab on 5173, which is either dead or is the MAIN TREE'S server. A worktree silently
+# previewing main is the same fault `app/devPort.ts` was written to close, reached through
+# the one file that change did not touch.
+#
+# So it is gitignored and written here, from `server/ports.py` — the same derivation Vite and
+# Playwright read, so all three cannot disagree. Written by `venv`, which is already the
+# documented first step in a fresh clone and is what `worktree-setup` calls; standalone as
+# well, because the port follows the PATH and a renamed worktree needs it again.
+#
+# stdlib only, and it writes JSON through `json.dump` rather than a here-doc: a hand-built
+# brace in a Makefile recipe is one escaping mistake away from a file the harness cannot
+# parse, and the failure would present as "the preview does not work" rather than as a
+# syntax error.
+launch-config:
+	@$(PYTHON) -c 'import json, pathlib, sys; sys.path.insert(0, "."); from server import ports; \
+	path = pathlib.Path(".claude/launch.json"); path.parent.mkdir(parents=True, exist_ok=True); \
+	path.write_text(json.dumps({"version": "0.0.1", "configurations": [{"name": "app", \
+	"runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--prefix", "app"], \
+	"port": ports.dev_port()}]}, indent=2) + "\n", encoding="utf-8"); \
+	print("launch.json written: the Browser pane opens this checkout on {0}".format(ports.dev_port()))'
 
 # A GIT WORKTREE GETS THE TRACKED FILES AND NOTHING ELSE, which is the whole of the problem
 # this target exists for. Three things `make harness` needs are gitignored by deliberate

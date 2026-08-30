@@ -42,3 +42,9 @@ inventory/
 # nothing locks is not pinned.
 app/test-results/
 app/playwright-report/
+
+# `.claude/launch.json` names a dev port and D43 made the port per checkout, so a tracked
+# copy is wrong in every linked worktree — and wrong by pointing the Browser pane at the MAIN
+# tree, which is the fault D43 exists to prevent. `make launch-config` writes it from
+# `server/ports.py`, the same derivation Vite and Playwright read.
+.claude/launch.json
