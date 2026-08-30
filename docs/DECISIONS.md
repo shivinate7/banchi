@@ -3444,6 +3444,60 @@ audit check resolves it — so this cost nothing but the file.
 until `make venv` runs, where before it had a wrong one immediately. That is the right
 direction for a file whose only failure mode is pointing somewhere plausible and wrong.
 
+**AND A SECOND FILE WAS MISSED, WHICH IS THE ONE THAT DECIDES WHETHER A WORKTREE CAN WRITE AT
+ALL** (found and fixed 2026-08-30). `server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the
+literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming
+the only origins permitted to POST, PUT or DELETE. This entry moved the dev port itself,
+`vite.config.ts`, `playwright.config.ts`, `app/src/server.ts` and eventually
+`.claude/launch.json` onto one derivation, and left the allowlist on the constant.
+
+**SO A LINKED WORKTREE SERVED AN APP WHOSE EVERY WRITE ITS OWN SERVER THEN REFUSED.** The app
+comes off that tree's derived dev port, the gate expects 5173, and the answer is 403
+`origin_not_allowed`. Observed on the worktree at `.claude/worktrees/inventory-delete-feedback-2b96fa`:
+capture, undo, mark-sold, retire, the mid-box delete and the claim editor all refused. **Reads
+are ungated**, so every screen rendered, the inventory drew, the walk worked — a branch's app
+could look at its store and never change it, and the only way to find out was to press
+something. `PKMNSCAN_ALLOWED_ORIGINS` was the workaround and nothing pointed at it until the
+refusal arrived.
+
+**IT IS THIS ENTRY'S OWN RULE WITH ONE MORE READER, AND THAT IS THE FINDING RATHER THAN THE
+FIX.** The paragraph above says it about `launch.json` in as many words — a tracked constant
+cannot be right in every checkout — and the same sentence was true of a second file nobody had
+enumerated. What both misses have in common is that they are readers of the port that are not
+*servers* on it: the bind moved because it was obviously about the port, and a launch config
+and an origin allowlist are about the port without looking like it.
+
+**`ports.dev_port()` IS ASKED, ONCE, AT IMPORT.** Unlike `allowed_origins()` one line below,
+which is read fresh per request because its input is an environment variable a running server
+should pick up without a restart, this has no input that can change while the process lives.
+
+**NOTHING MOVES IN THE MAIN TREE**, which is the property that makes this safe and also the
+reason it hid: `dev_port()` answers 5173 there by construction, so the tuple is byte-identical
+to the constant it replaces wherever the owner actually works, and every doc naming that number
+stays true. Only a linked worktree changes, and only from "refuses everything" to "allows its
+own app".
+
+**A CHECKOUT ALLOWS ITS OWN ORIGIN AND NOT THE MAIN TREE'S.** Adding 5173 back for worktrees
+was the obvious way to be generous and is the wrong one: it would let a page served by the MAIN
+checkout write into a branch's store, which is the cross-tree write this entry exists to
+prevent, arriving through the one control in this repo whose job is to stop a page writing
+where it should not. Pointing one tree's app at another tree's server is a real thing to want
+and is already deliberate — `VITE_CAPTURE_SERVER` — so it takes the deliberate answer:
+`PKMNSCAN_ALLOWED_ORIGINS`.
+
+**COVERED IN `check_origin_gate`, WHICH HAD THE CONSTANT WRITTEN INTO IT TOO.** That block
+asserted `["http://127.0.0.1:5173", "http://localhost:5173"]` literally, so it would have gone
+red in a worktree for the right reason and green in the main tree for the wrong one. It now
+asserts the PROPERTY — both spellings, at the port this checkout's app is actually served on —
+plus that a non-worktree root still derives 5173, and, in a worktree only, that the main tree's
+origin is NOT in the list. Mutation-tested: restoring the constant takes two of them red.
+
+**THE HONEST LIMIT, NAMED BECAUSE IT IS HOW THE DEFECT SURVIVED: none of those cases can fail
+in the main checkout.** 5173 is correct there whichever way the list is built, so the whole
+guard is only ever exercised by somebody running the harness from a worktree — which is what
+`make worktree-setup` and the Stop hook make ordinary, and is why the case is worth having at
+all. The block says so in a note rather than leaving a green run to be misread.
+
 ---
 
 ## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess

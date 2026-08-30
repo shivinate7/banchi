@@ -191,7 +191,7 @@ from harness.tests import Checks, Result  # noqa: E402
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import games, join, tcgcsv, variant  # noqa: E402
-from server import capture_server, pipeline_routes  # noqa: E402
+from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
 
@@ -6337,11 +6337,40 @@ def check_origin_gate(checks: Checks) -> None:
     )
     checks.equal(
         sorted(capture_server.DEFAULT_ALLOWED_ORIGINS),
-        ["http://127.0.0.1:5173", "http://localhost:5173"],
-        "and BOTH spellings of this machine are allowed by default: a browser's Origin is "
-        "the literal string in the address bar, so localhost and 127.0.0.1 are the same "
-        "host and not the same origin, and the owner types both",
+        [
+            f"http://127.0.0.1:{ports.dev_port()}",
+            f"http://localhost:{ports.dev_port()}",
+        ],
+        "BOTH spellings of this machine are allowed by default — a browser's Origin is the "
+        "literal string in the address bar, so localhost and 127.0.0.1 are the same host "
+        "and not the same origin, and the owner types both — AT THE PORT THIS CHECKOUT'S "
+        "APP IS ACTUALLY SERVED ON, which is the whole of D43's amendment: the list was the "
+        "constant 5173 while D43 made the dev port per-checkout, so a linked worktree "
+        "served an app whose every write its own server then refused",
     )
+    with tempfile.TemporaryDirectory() as plain:
+        checks.equal(
+            ports.dev_port(Path(plain)),
+            5173,
+            "AND THE MAIN TREE IS UNMOVED: a root that is not a linked worktree still "
+            "derives 5173, so this list is byte-identical to the constant it replaced "
+            "wherever the owner actually works, and every doc naming that number stays true",
+        )
+    if ports.is_linked_worktree(ports.REPO_ROOT):
+        checks.ok(
+            "5173" not in "".join(capture_server.DEFAULT_ALLOWED_ORIGINS),
+            "and a WORKTREE allows its own origin and not the main tree's — letting a page "
+            "served by the main checkout write into a branch's store is the cross-tree "
+            "write D43 exists to prevent, arriving through the one control meant to stop "
+            "it. Pointing one tree's app at another's is already deliberate "
+            "(VITE_CAPTURE_SERVER) and takes the deliberate answer: name the origin in "
+            "PKMNSCAN_ALLOWED_ORIGINS",
+        )
+    else:
+        checks.note(
+            "        (the worktree case is not exercised here: this IS the main checkout, "
+            "and 5173 being correct in it is exactly how the defect stayed hidden)"
+        )
 
     with isolated_home(), allowed_origins_env(None):
         capture_server.captures_root().mkdir(parents=True, exist_ok=True)

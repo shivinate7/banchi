@@ -298,7 +298,40 @@ ALL_METHODS = ("GET", "POST", "PUT", "DELETE", "OPTIONS")
 # The Vite dev server (`make dev`), on both spellings of this machine. Two entries and not
 # one because a browser's `Origin` is the literal string in the address bar: `localhost` and
 # `127.0.0.1` are the same host and are not the same origin, and the owner types both.
-DEFAULT_ALLOWED_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+#
+# THE PORT IS THIS CHECKOUT'S, NOT THE CONSTANT 5173, AND IT WAS THE CONSTANT UNTIL
+# 2026-08-30 (D43, amended). That entry moved five readers of the dev port onto one
+# derivation and missed this one, so a linked worktree served its app on its own port and
+# then REFUSED EVERY WRITE THAT APP MADE — capture, undo, mark-sold, retire, the mid-box
+# delete and the claim editor, all 403 `origin_not_allowed`. Reads are ungated, so every
+# screen rendered and looked correct; the failure was a branch's app that could look at the
+# inventory and never change it.
+#
+# IT IS D43's OWN SUBJECT WITH ONE FILE MISSED, and the second time: that entry's amendment
+# records `.claude/launch.json` found the same way, and the lesson it drew is the one that
+# applies here — a tracked constant cannot be right in every checkout, so it has to be asked
+# for rather than written down.
+#
+# NOTHING MOVES IN THE MAIN TREE. `ports.dev_port()` answers 5173 there by construction, so
+# this tuple is byte-identical to the constant it replaces and every doc naming 5173 stays
+# true. Only a linked worktree changes, and only from "refuses everything" to "allows its
+# own app".
+#
+# A CHECKOUT ALLOWS ITS OWN ORIGIN AND NOT THE MAIN TREE'S, which is the security half and
+# is deliberate rather than incidental. Adding 5173 back for worktrees would let a page
+# served by the MAIN tree write into a branch's store — the cross-tree write D43 exists to
+# prevent, arriving through the one control in this repo that is supposed to stop a page
+# from writing where it should not. Pointing one tree's app at another tree's server is a
+# real thing to want and it is already a deliberate act (`VITE_CAPTURE_SERVER`), so it
+# takes the deliberate answer below: name the origin in `PKMNSCAN_ALLOWED_ORIGINS`.
+#
+# COMPUTED ONCE AT IMPORT, unlike `allowed_origins()` below, and the difference is that this
+# has no input that can change while the process runs: `dev_port` reads no environment and
+# the checkout does not move. The env var is what is read fresh, and it is read fresh for
+# the reason stated there.
+DEFAULT_ALLOWED_ORIGINS = tuple(
+    f"http://{host}:{ports.dev_port()}" for host in ("localhost", "127.0.0.1")
+)
 
 # EXTENDED, NEVER REPLACED, and deliberately not able to re-enable `*`. The LAN move above
 # needs one more origin — `http://the-mac.local:5173` — and rebuilding the whole list from an
