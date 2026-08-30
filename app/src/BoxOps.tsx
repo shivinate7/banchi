@@ -469,11 +469,13 @@ export function BoxIdentity({
      the literal, `record.fill` rather than an index arithmetic of our own, and the spans through
      `spansOf(trackPlace(...))` so this track and that one cannot disagree about a divider. */
   const sealed = record.state === CLOSED
-  /* WHAT THE BOX HOLDS, NOT ITS HIGH-WATER MARK (D58). `fill` is the allocator's and still
-   * greps to `inventory.json` down in the census block; this line is the one a person reads
-   * against the cards in front of them, and it is the number every other figure on the screen
-   * divides by. They are the same until something is sold. */
-  const fill = known(record.on_hand)
+  /* NAMED `holds` AND NOT `fill`, WHICH IS THE WHOLE OF WHY THIS COMMENT IS HERE (D58). What
+   * the box HOLDS is `on_hand` and is what every figure on this screen divides by; `fill` is
+   * the allocator's high-water mark and still greps to `inventory.json` down in the census
+   * block. They are the same number until a card leaves the box, and calling this one `fill`
+   * is how the census came to draw `FILL 29` over a store whose `fill` is 39 — caught by
+   * looking at the screen, not by any check. Two facts, two names. */
+  const holds = known(record.on_hand)
   const total = denominator(record)
   const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
@@ -494,12 +496,12 @@ export function BoxIdentity({
               preposition says which is which. They are equal until something is sold, which
               is the ordinary state of a box on the day it is sealed. */}
           {sealed && record.capacity !== null
-            ? fill === null || fill === record.capacity
+            ? holds === null || holds === record.capacity
               ? `${record.capacity} sealed`
-              : `${fill} of ${record.capacity} sealed`
-            : fill === null
+              : `${holds} of ${record.capacity} sealed`
+            : holds === null
               ? 'fill unread'
-              : `${fill} so far`}
+              : `${holds} so far`}
         </span>
         <span className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}>
           {sealed ? 'sealed' : 'open'}
@@ -613,7 +615,14 @@ export function BoxIdentity({
                 and the identity line is the better host because that is where the box's state is
                 already being read. The field stays, so `BoxOps.tsx`'s promise that these names
                 grep to `inventory.json` is untouched. */}
-            <span className="boxops-meta-num">{fill ?? 'unknown'}</span>
+            {/* `record.fill` AND NOT THE HEADLINE'S NUMBER (D58). The identity line above
+                reads `on_hand` now — what the box holds — and this row is the store's own
+                `fill`, the allocator's high-water mark, which is what is in `inventory.json`
+                under that key. They were the same number until a card left the box, and
+                reading one variable for both was a live defect: box 3 drew `FILL 29` beside
+                `NEXT INDEX 40` over a store whose `fill` is 39, which is the one thing this
+                block's own promise says it may not do. */}
+            <span className="boxops-meta-num">{known(record.fill) ?? 'unknown'}</span>
           </span>
         </p>
         <p className="boxops-meta-next">

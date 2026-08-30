@@ -1537,6 +1537,37 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await expect(page.locator('.browse-band .position-bar')).toHaveCount(0)
 })
 
+test('the census greps to the store, and the identity line says what the box holds', async ({
+  page,
+}) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* A LIVE DEFECT THIS CATCHES, FOUND BY LOOKING AT THE SCREEN AND BY NOTHING ELSE. D58 moved
+   * the identity line onto `on_hand` — what the box holds — and the two readings shared one
+   * local called `fill`, so the CENSUS moved with it: box 3 drew `FILL 29` beside
+   * `NEXT INDEX 40` over a store whose `fill` is 39. `BoxOps.tsx` promises in its own comment
+   * that these key names grep to `inventory.json`, and 29 is under no key in that file.
+   *
+   * SO THE PAIR IS THE ASSERTION, on one screen at one moment: the census is the store's own
+   * three numbers verbatim, and the identity line is the one the screen divides by. They are
+   * equal until a card leaves the box, which is exactly why one variable could serve both and
+   * why only a box with a departure can tell them apart. */
+  const census = page.locator('.boxops-meta')
+  await expect(census.locator('.boxops-meta-cell').nth(0)).toHaveText('cards7')
+  await expect(census.locator('.boxops-meta-cell').nth(1)).toHaveText('sold1')
+  await expect(census.locator('.boxops-meta-cell').nth(2)).toHaveText('fill7')
+  await expect(census.locator('.boxops-meta-next')).toHaveText('next index8')
+
+  /* Five, not seven: two of the seven records have left. */
+  await expect(page.locator('.boxops-identity-fill')).toHaveText('5 so far')
+
+  /* And the control that freezes capacity names the ALLOCATOR's number, because that is what
+     `close_box` writes — D20's rule, and the one denominator D58 deliberately left alone. */
+  const seal = page.getByRole('button', { name: /^Seal box/ })
+  await expect(seal.locator('.boxops-op-detail')).toHaveText('freezes at 7')
+})
+
 // ------------------------------------------------------- the box's operations, as rows (D20)
 
 test('the seal names the number it will freeze, on the control that freezes it', async ({
