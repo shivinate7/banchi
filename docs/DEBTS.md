@@ -1043,3 +1043,21 @@ because a green `make up` should not read as a promise none of them exists.
 - `.claude/commands/docs-audit.md` tells the reader exit 2 means the coupling question,
   but the command it prints in step 1 runs without `--staged`, and coupling only runs
   under `--staged`.
+
+## D60's guards see tokens, never arguments
+
+`scripts/prose-guard.py` is the only thing comparing two versions of a doc, and it compares
+HARD TOKENS — backticked identifiers, file paths, decision ids, measurements, dates. A
+rewrite that keeps every backtick and loses the reason the entry exists passes it silently
+and completely. That is the residual risk of the whole D60 exercise, and nothing mechanical
+can close it: judging whether a paragraph still carries its argument is D16's layer 3, which
+is a model reading prose and is deliberately never a gate.
+
+`--facts` is also on no gate at all. It needs a BEFORE, which only exists while a rewrite is
+in flight, so it is run by hand. The two rows that DO gate — `decision structure` and
+`entry budget` — check the tree as it stands and cannot see what a change removed.
+
+Two deliberate token removals stand against the D60 baseline and are not defects: the
+supervisor's stdout line reporting the stack up, which reads as an unregistered subcommand when
+backticked inline and is an indented output block now, and a bare `make` span that read as a
+target called "make" when it sat beside another make span on one line.

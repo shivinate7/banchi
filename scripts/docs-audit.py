@@ -1403,6 +1403,83 @@ def code_haystack() -> str:
     return _HAYSTACK
 
 
+# D60's two rows. Both read docs/DECISIONS.md by hard-coded path, so they answer on every
+# run rather than only when that file is staged — the same asymmetry check_map and
+# check_pass_criteria already have, and for the same reason: a broken heading there breaks
+# every consumer, not only the commit that wrote it.
+#
+# ENTRY_BUDGET is twice the median entry (6,374 bytes on the day it was set) rather than a
+# picked round number. D60 itself is 4,967. An entry at twice the median is one that should
+# have cited a neighbour instead of re-arguing it, which is that entry's own rule.
+ENTRY_BUDGET = 12000
+
+
+def _prose_guard():
+    """scripts/prose-guard.py, or None.
+
+    Imported rather than reimplemented: it already replicates decision-context.py's three
+    selectors, and a second copy here is the drift this file exists to catch. The filename
+    has a hyphen, hence importlib. Returns None on any failure — a missing guard must cost
+    two rows, never the whole audit.
+    """
+    path = ROOT / "scripts" / "prose-guard.py"
+    if not path.exists():
+        return None
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("prose_guard", path)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module
+    except Exception:  # noqa: BLE001 - a broken guard must not take the audit down
+        return None
+
+
+def check_decision_structure(report: Report) -> None:
+    """What scripts/decision-context.py needs, which it cannot report for itself.
+
+    That hook is wrapped in `except Exception: sys.exit(0)`, so a heading that loses its
+    dash separator or a `**bold**` reflowed across a wrap degrades it in silence. Measured
+    before D60: 270 bold runs — 20% of all 1,318 — were invisible to it, and seven entries
+    surfaced nothing but their title, with every row of this audit green throughout.
+
+    MECHANICAL, because each finding is provably wrong rather than a judgement: the hook's
+    regex either matches or it does not.
+    """
+    guard = _prose_guard()
+    if guard is None:
+        report.add("decision structure", ADVISORY,
+                   [Finding("scripts/prose-guard.py", "not readable; structure unchecked.")])
+        return
+    target = ROOT / "docs" / "DECISIONS.md"
+    findings = [Finding(f.where, f.message) for f in guard.check_structure(target)]
+    entries = guard.entries(read(target))
+    report.add("decision structure", MECHANICAL, findings,
+               f"{len(entries)} entries, every heading and bold reaches the hook")
+
+
+def check_entry_budget(report: Report) -> None:
+    """Entry size, reported and never blocked.
+
+    ADVISORY on D16's own test: a long entry is a judgement call rather than something
+    provably wrong, and a blocking row here would teach `--no-verify`, which switches off
+    the three opsec rules in the same hook. It exists because a rewrite is spent in two
+    days without it — growth over the two days before D60 was +45,580 and +44,460 tokens,
+    80% of it new entries.
+    """
+    guard = _prose_guard()
+    if guard is None:
+        report.add("entry budget", ADVISORY,
+                   [Finding("scripts/prose-guard.py", "not readable; sizes unchecked.")])
+        return
+    target = ROOT / "docs" / "DECISIONS.md"
+    findings = [Finding(f.where, f.message) for f in guard.check_budget(target, ENTRY_BUDGET)]
+    total = sum(len(e.body) for e in guard.entries(read(target)))
+    report.add("entry budget", ADVISORY, findings,
+               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
+
+
 def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
     haystack = code_haystack()
     findings: List[Finding] = []
@@ -5147,6 +5224,8 @@ def audit(staged_only: bool) -> Report:
     check_criteria_evidence(report)
     check_evidence_freshness(report, staged_only)
     check_decision_ids(report, docs)
+    check_decision_structure(report)
+    check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_map(report, allowed)
     check_game_vocabulary(report)

@@ -263,7 +263,7 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
   still find nothing.
 
   **T6 could not have caught it, and that is the part worth keeping.** `_scene` paints one
-  flat colour behind a uniformly bright card — precisely the premise the tone path assumes —
+  flat color behind a uniformly bright card — precisely the premise the tone path assumes —
   so the test constructed the one condition under which the method works. A green harness
   was not wrong; it was answering a question nobody had asked it.
 
@@ -886,7 +886,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     repeatable `--export` with per-game catalogs and one import file per game (D25), step 7's
     pooled non-located inventory and both opsec discharges, step 8's rarity clause — built
     behind its A/B flag, MEASURED, and switched off because it lost (holdout 0.9706 → 0.9559,
-    $0.17; the numbers are in the T1 section above) — and step 9's per-game finalisation:
+    $0.17; the numbers are in the T1 section above) — and step 9's per-game finalization:
     `riftbound_card_v1` and `one_piece_card_v1` exist, are registered, are dispatched to by
     the registry and carry parsers.
 

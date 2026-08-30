@@ -60,7 +60,7 @@ divider. They routinely disagree: a card reading `#51 of 53` draws hard right at
 and is `Card 1` of section 3 — the very front — at section scale. Both are true, and a person
 walking to a box needs the first to get near it and the second to land on it.
 
-Three cues separate them, and none is a new colour: the section track is shorter (8px against
+Three cues separate them, and none is a new color: the section track is shorter (8px against
 16px), a hairline indents it beneath the box track, and its caption opens with the section
 number where the box caption opens with `#`. The marker convention is the server's own
 `fraction`, so a card at the front of both sits at the front of both.
@@ -143,7 +143,7 @@ record for contrast: `scripts/docs-audit.py` compares hex values between this fi
 Fulfillment view, which is the one route this section does not govern. A screen that drifts
 back to a 32px page header will do it silently.
 
-**`field` is a SECOND line colour, and it exists because one number was checked and the other
+**`field` is a SECOND line color, and it exists because one number was checked and the other
 was not** (added 2026-08-26, on the owner's instruction to decide it). Every token that carries
 text clears 7:1 here and always has. Nothing ever asked what `line` measures, and the answer is
 **1.24:1 on surface** — so every border, separator and input outline in the product sits far
@@ -195,7 +195,7 @@ invisible; the difference between the two sentences is not.
 The paragraph above was written while the answer to "every ground it sits on" was being read
 off the first two rows of the block — `bg` and `surface`, the two things a screen is
 obviously made of. `hover` was derived afterwards, as an interaction state, and interaction
-states are the row you skip when you are asking which colours a word can land on. But a
+states are the row you skip when you are asking which colors a word can land on. But a
 hovered row does not empty itself. Every word stays exactly where it was, the row under the
 pointer is by definition the row somebody is reading, and `hover` is the darkest of the
 three grounds — so it is the one that decides, not the one that is safe to omit.
@@ -219,8 +219,8 @@ they measure the pairs the Fulfillment view actually draws, which is not all of 
 a ground token means recomputing every text token against it by hand.
 
 **Cabinet Grotesk comes from Fontshare, not Google Fonts.** That is a second font host and
-a second licence to read before step 7 ships — do it then, and self-host all three faces if
-the answer is at all unclear. **Step 7 shipped on 2026-08-13 with the licence unread**, and
+a second license to read before step 7 ships — do it then, and self-host all three faces if
+the answer is at all unclear. **Step 7 shipped on 2026-08-13 with the license unread**, and
 `app/index.html` loads all three faces from their hosts and says so in its own comment. The
 condition on this paragraph has gone by; it is written down rather than quietly re-dated,
 which is the same rule `docs/DEBTS.md` applies to a fix trigger that fires and is passed.
@@ -276,13 +276,13 @@ denominator rule discharged on the one line that had never honoured it.
 ## What this is not
 
 **Not Collectr, not Discogs, not LibraryThing.** Three cataloguing tools that became
-spreadsheets: dense grey tables, everything at one weight, no hierarchy between a $12 card
+spreadsheets: dense gray tables, everything at one weight, no hierarchy between a $12 card
 and a 15-cent one. This is the failure mode with a face on it, and it is worth naming
 because the review queue *is* a list of hundreds of rows and will drift there by default.
 
 **Not NYT/FT.** No newspaper coding: no high-contrast serif display, no editorial column
 measure, no warm-paper ground. An earlier pass landed there — warm cream, rust accent,
-Fraunces — and was rejected as too sanitised-professional for what this is. The register is
+Fraunces — and was rejected as too sanitized-professional for what this is. The register is
 tech-forward: mono carrying the metadata, saturated accent rather than muted earth,
 hairlines rather than air.
 
@@ -754,7 +754,7 @@ The agent cannot see its own output, so these are Playwright assertions, not pro
 **All nine rows now run, against the view itself.** `app/tests/fulfillment.spec.ts` asserts
 every row of the table below on the Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps
 three of them on step 6's component. `make design-check` runs both. Every contrast ratio is
-computed from the *rendered* colours rather than compared against a number published here, so
+computed from the *rendered* colors rather than compared against a number published here, so
 a token edited in `app/src/tokens.css` without being re-argued in this file has to break
 something.
 
@@ -770,7 +770,7 @@ renumbering evidence to match a later tree is the one thing a record may never d
 The spec asserts the view is on screen before it measures anything, and that is not defensive
 padding: it is what caught 7b shipping unwired, failing 16 of 30 on an unregistered route
 rather than reporting nine confident measurements of whatever Vite serves for a hash it does
-not recognise.
+not recognize.
 
 Two things this does not cover. The requirement under the table rather than in it — D5's "if
 a flow needs explaining twice, redesign the flow" — has no instrument but the Fulfiller
@@ -780,7 +780,7 @@ contract in `docs/GATES.md` is seven Python tests run at turn end, and this runs
 | Constraint | Assertion |
 |---|---|
 | Body text | `font-size >= 20px` on every text node in the view |
-| Body colour | any text token on any ground token — every pair clears 7:1, so this is a floor the palette cannot violate |
+| Body color | any text token on any ground token — every pair clears 7:1, so this is a floor the palette cannot violate |
 | Position label | `font-size >= 32px`, tabular figures |
 | Card photo in pull modal | `>= 320px` on the short edge |
 | Tap targets | `>= 44 x 44 px`, `>= 12px` apart |
@@ -819,7 +819,7 @@ here. Restated rather than rewritten silently, because nothing parses this secon
 `scripts/docs-audit.py` reads the fence under `## Tokens` and stops there, so this is the
 one place in this file where a stale hex can sit unnoticed indefinitely. The ratio it is
 quoted at went up (7.48:1 to 7.96:1 on `surface`), so the assertion this block describes
-passes by more than it did; the spec computes it from the rendered colour either way.
+passes by more than it did; the spec computes it from the rendered color either way.
 
 `app/src/PullConfirm.tsx` and its stylesheet, rendered on a gallery route at `app/src/Gallery.tsx`.
 `make screenshot` draws it into `captures/ui/`; `make design-check` measures it.
@@ -857,7 +857,7 @@ is why the tokens above are hex values and typeface names rather than words like
 **The reference is `docs/design-refs/locked.html`, and it is in the repo for this reason.**
 The sheets were built in a scratchpad while the tokens were being chosen and would have
 died with that session, which would have left this paragraph asserting something the file's
-own state contradicted. Hex values substitute for colour; they do not substitute for layout
+own state contradicted. Hex values substitute for color; they do not substitute for layout
 or density, and those are most of what a reference carries.
 
 ## Copy rules

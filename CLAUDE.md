@@ -63,7 +63,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
 
 ## Things you will get wrong without being told
 
-- **The join key is PER-GAME, and matching is normalised on both sides.** Pokemon composes
+- **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes
   `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
   is their field name), but at runtime both values come from the identification and match
   against the export's `Number` column; nothing in the pipeline calls that API. One Piece
