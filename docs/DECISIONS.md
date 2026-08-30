@@ -4267,6 +4267,123 @@ answer. The measurement is whether the same SKU is withheld in two runs over one
 
 ---
 
+## D50 — Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
+
+**BUILT 2026-08-30, from the owner pressing a key that was already answering them wrongly**:
+*"cmd+arrow keys doesn't have me going in order between c r q p i, can you resolve?"*
+
+**THE SHELL HAD A JUMP AND NO STEP.** `app/src/App.tsx`'s `,` chord names a destination — `,c`,
+`,r`, `,q`, `,p`, `,i` — and it has never had a way to say *the next one along*. That sentence
+is worth having because the nav is not an arbitrary set of links: D31 and D39 order it as the
+work happens, shoot → run → answer → price → look up, and `group` was added so the row says
+that out loud. An ordered row whose only key is a jump is a row whose order the keyboard cannot
+use.
+
+**WHAT WAS ANSWERING THE PRESS INSTEAD WAS THE BROWSER'S HISTORY, WHICH IS A DIFFERENT QUESTION
+WEARING THE SAME SHAPE.** A back stack orders by when a screen was ARRIVED AT, so Cmd-arrow
+walked whichever two routes the last two presses happened to be, in whatever order they were
+visited, and at the bottom of the stack it left the app entirely. It is not that the browser was
+wrong; it is that it was answering "where was I" while the hand was asking "what is next".
+
+**THIS IS THE ONE PLACE THE SHELL TAKES A MODIFIER, AND `LEADER`'s RULE IS NARROWED RATHER THAN
+BROKEN.** That comment read *"MODIFIERS ARE NEVER PART OF IT"* and gave the reason — Cmd-comma
+belongs to the browser and the OS, and a shell that eats it has broken something it does not
+own. It is amended in place to say `NEVER PART OF THE CHORD`, which is where the argument
+actually lives: a chord is two unmodified presses, and a leader needing a modifier would be
+competing for exactly the key space it was invented to escape. The step is not a chord.
+
+**IT COSTS A BROWSER SHORTCUT AND THAT IS PAID RATHER THAN ARGUED AWAY.** Cmd-arrow is Back and
+Forward in Chrome and in Safari. What makes it affordable is that neither browser has only one
+way back — Cmd-[ and Cmd-] and the two-finger swipe are all untouched — and that the key is
+handed to the page at all, which not every Cmd shortcut is: the reserved set that never reaches
+a listener is Cmd-N, Cmd-W, Cmd-T, Cmd-Q and their kind. **The half no test in this repo can
+see is whether the browser then honours `preventDefault`**, because Playwright presses keys
+through the debugging protocol, which never fires a browser shortcut in the first place.
+`app/tests/nav.spec.ts` says so in its own header, and this is the paragraph to reopen if a
+press ever both steps and goes Back — the remedy then is a different pair of keys, not a
+different handler.
+
+**THE RING IS THE ROUTES THAT HAVE A KEY, IN THE ORDER THE NAV DRAWS THEM.** Both halves are
+derived rather than listed a second time:
+
+- **Which** — `hotkey !== undefined` already means "reachable from the keyboard", and the two
+  rows without one are without one for reasons that apply here word for word. Fulfillment must
+  not be arrivable by accident, because it renders no way out; the gallery is not a step in any
+  loop. A second list is a second answer to a question `ROUTES` has already answered, and the
+  first screen added to one and not the other is the defect.
+- **Order** — `GROUP_ORDER` first, then the table, which is what the nav actually renders rather
+  than what the table alone says. They agree today. The day somebody re-orders `ROUTES` without
+  touching `GROUP_ORDER`, a ring built from the table alone would step in an order the strip
+  does not draw — and stepping in the drawn order is the whole of what this is for.
+
+**NEVER A WRAP, AND EVERY END STOPS.** `BoxBrowse` says it in those words about its own arrows
+and the reason transfers: a row that starts again is a row you can no longer count along. **The
+press is consumed at the ends all the same**, which is that file's second rule and the half that
+makes them readable — a refusal is still this handler answering for the key, and letting it fall
+through would mean Cmd-left sometimes steps a route and sometimes leaves the app for whatever
+the history stack holds. That is the "not in order" this entry exists to fix, arriving by
+another road.
+
+**A SCREEN OUTSIDE THE RING KEEPS THE BROWSER'S KEY.** The gallery is the live case: it has
+chrome, so the listener is mounted, and it is deliberately not a step in the loop — so there is
+no next one along, and the honest answer is to leave the press alone rather than invent a
+landing.
+
+**THREE REFUSALS, EACH ANSWERING A KEY THAT IS SOMEBODY ELSE'S.** A bare arrow is the screens' —
+`BoxBrowse` walks a box with them and `RunPanel` steps the crop preview — so the modifier is not
+decoration, it is what keeps the shell out of their key. Alt is excluded outright rather than
+merely not required, because Cmd-Alt-arrow is "previous/next tab" in Chrome and a step that also
+changed tab would be answering for a press it did not read. And in a text field Cmd-arrow is the
+caret going to the start or the end of the line, which is what the hands are doing when they are
+in one.
+
+**IT BUBBLES, WHERE THE LEADER CAPTURES.** The leader takes the capture phase because its whole
+purpose is to consume a key another screen has bound, and that bluntness is bounded by having to
+be armed one press earlier. A step key is never armed, so a permanent capture-phase listener
+would be a standing claim on a key it mostly does not want — and it needs none, because every
+arrow handler in the app returns on a held Cmd before it reads the key. What it does need is
+`preventDefault`, which works from either phase.
+
+**ARRIVING ANYWHERE DISARMS THE LEADER, AND THAT IS A HOLE THIS ENTRY FOUND RATHER THAN MADE.**
+A chord is spent on arriving, so an arm that survives an arrival is an arm nobody is holding —
+and `useLeader`'s own comments already say what that costs: the next keystroke is eaten on a
+screen the operator did not press it from, which on the capture screen is a card that went past
+the lens unrecorded. It was already reachable by the browser's Back and by a nav link; the step
+would have been a third way in. One effect on the path closes all three.
+
+**THE STRIP ADVERTISES IT ONCE, AT THE END OF THE RING.** `docs/DESIGN.md`'s "every choice shows
+its key" — a binding nothing advertises is a binding only the person who asked for it will ever
+press. One hint rather than one per link, because there is one binding and it reaches whichever
+screen is next, where `,C` is per route because the destination is what changes. It trails the
+last route the step can reach rather than the end of the bar, where `.app-nav-group-aside`'s auto
+margin would have stood it beside the two routes it cannot. Drawn in the same 10px chip as every
+other key in this app but **deliberately not wearing `.app-nav-key`**, because that class lights
+up when the leader is armed and the step is never armed — a chip claiming a state it does not
+have is worse than no chip. `aria-keyshortcuts` on the nav carries the same fact for a screen
+reader, which two arrow glyphs could not.
+
+**THE FIRST TEST THIS SHELL HAS EVER HAD IS `app/tests/nav.spec.ts`.** Neither keyboard had an
+assertion of any kind: `make design-check` covered six screens and nothing covered the chrome all
+six sit under. Seven cases, and the strongest are the two ends and the three refusals. Four
+mutations were observed failing before they were kept — a wrapping ring, a dropped
+editable-target guard, a dropped modifier guard, and the leader disarm removed.
+
+**TWO CASES WERE WRITTEN, FOUND TO BE INCAPABLE OF FAILING, AND CHANGED — which is the part of
+this worth reading.** The disarm case asserted `not.toHaveAttribute('data-armed')`, and that
+assertion retries: `CHORD_MS` expires on its own after a second, so it went green against a build
+with the disarm deleted. It now reads the attribute two frames after the hash changes, ~30ms into
+a 1000ms window. And a case pressing the step on the Fulfiller's view was deleted outright: it is
+refused by `enabled` AND by the ring, so no single mutation makes it fail. What guards him
+instead is the end-of-ring assertion, which goes red the moment a `hotkey` is added to his row —
+the mistake that would actually put him in the ring.
+
+**WHAT WOULD REOPEN THIS: a browser that keeps the key.** If Cmd-arrow turns out to both step and
+navigate, the fix is a pair the browser does not claim — and the obvious candidates, Cmd-[ and
+Cmd-], are the same shortcut by another name. `,` plus an arrow is the one that costs nothing,
+since the leader already consumes whatever follows it.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

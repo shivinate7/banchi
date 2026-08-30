@@ -991,12 +991,20 @@ COMPONENTS = [
                                     "the Fulfiller's view gets no chrome at all. #/boxes WAS "
                                     "the seventh, registered with D20's screen rather than after "
                                     "it; D31 deleted the route and kept the screen — the "
-                                    "registration rule stands, the route does not.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49"]},
+                                    "registration rule stands, the route does not. TWO KEYBOARDS "
+                                    "SINCE 2026-08-30: the `,` chord JUMPS to a route by name, "
+                                    "and D50's Cmd-arrow STEPS along the strip in the order the "
+                                    "nav draws it — the ring derived from `hotkey` and "
+                                    "GROUP_ORDER rather than listed twice, never wrapping, and "
+                                    "the one place this shell takes a modifier.",
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D50"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
-                                    "shadow, and why this nav may never render on the "
-                                    "Fulfillment view",
-                            "governed_by": ["D5", "D10", "D49"]},
+                                    "shadow, why this nav may never render on the "
+                                    "Fulfillment view, and the two chip looks — the chord's, "
+                                    "which lights up when the leader is armed, and D50's step, "
+                                    "which deliberately does not wear that class because it is "
+                                    "never armed",
+                            "governed_by": ["D5", "D10", "D13", "D49", "D50"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
@@ -1595,6 +1603,26 @@ COMPONENTS = [
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
+            },
+            "tests/nav.spec.ts": {
+                "does": "the shell's keyboard, and the first test this app has had of the strip "
+                        "every screen sits under: D50's Cmd-arrow steps the ring in the order "
+                        "the nav draws it, both ends stop, and the three refusals hold — a bare "
+                        "arrow belongs to the screens, a held Cmd in a text field belongs to the "
+                        "caret, and a screen outside the ring keeps the browser's key. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D5", "D31", "D39", "D50"],
+                "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
+                        "worth keeping. The leader-disarm case retried an assertion that "
+                        "CHORD_MS satisfies on its own after a second, so it went green against "
+                        "a build with the disarm deleted; it reads the attribute two frames "
+                        "after the hash changes now. A case pressing the step on the "
+                        "Fulfiller's view was deleted outright — `enabled` refuses there AND "
+                        "the ring does, so no single mutation makes it fail. What guards him is "
+                        "the end-of-ring assertion, red the moment a hotkey is added to his "
+                        "row. It cannot see whether the BROWSER honours preventDefault: "
+                        "Playwright presses keys through the debugging protocol, which never "
+                        "fires a browser shortcut at all.",
             },
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
