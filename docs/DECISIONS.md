@@ -5176,6 +5176,43 @@ kill.
 `make up` the canonical starter, so a hand-run `make server` becomes rare — it prevents
 nothing, and under `KeepAlive` it would restart the supervisor into the same wall.
 
+**THE SUPERVISOR WATCHES ITSELF AS OF 2026-08-30, AND THE CASE THAT MATTERED WAS THE SILENT
+ONE.** The owner asked how they would know whether a change touched `scripts/serve.py` — the
+one file the watcher did not cover, because it is the watcher. Answering it turned up a worse
+sibling nobody had noticed.
+
+**`server/ports.py` and `store/files.py` were ALREADY watched, and that made it invisible.** A
+change to either restarts the capture CHILD — in the log, at the usual speed, looking exactly
+like the fix landing — while the supervisor goes on running the module it imported at boot,
+because Python caches an imported module. Something restarts, so nothing looks wrong. The
+`scripts/serve.py` case at least failed silently in both halves; this one failed while
+appearing to succeed, which is the shape this repo treats as worse.
+
+**`SELF_FILES` is the four files this supervisor is made of** — itself, `envfile.py`,
+`server/ports.py`, `store/files.py` — and a change to any of them re-execs the process rather
+than restarting a child.
+
+**`os.execv`, WHICH KEEPS THE PID, and that is the whole reason to use it** rather than
+spawning a replacement and exiting: `supervisor.pid` stays valid, and launchd sees the same
+process it started instead of an exit it would race to restart. Children are stopped FIRST,
+because exec throws away every `Popen` handle — anything still running would be orphaned,
+holding the ports the new image is about to want. The parse pre-check applies as before, so a
+half-written `serve.py` cannot be exec'd into; if exec fails anyway the children are rebuilt
+and the log says the old code is still running.
+
+**THE MAKEFILE IS NOT IN THAT SET, AND SAYING OTHERWISE WAS WRONG.** It was claimed once in
+conversation that a Makefile change also needs a restart. Three comments in `scripts/serve.py`
+mention the Makefile and nothing reads it; `make` re-reads it from disk on every invocation,
+so it cannot make a running process stale. Corrected here rather than left standing, because a
+rule that names one file too many is how the real list stops being read.
+
+**`scripts/docs-audit.py`'s `supervisor self-watch` ROW IS WHAT KEEPS THE LIST HONEST.** A
+hand-written list of a file's own imports is precisely the thing that goes stale the next time
+somebody adds one, and the failure it would reintroduce is the invisible one above. The row
+parses `serve.py` with `ast`, resolves its module-scope imports against the tree, and blocks on
+any project-local import missing from `SELF_FILES`. Mutation-tested: dropping `server/ports.py`
+from the list takes it red and names the file.
+
 **WHAT THIS COSTS, NAMED RATHER THAN DESIGNED AWAY:**
 
 - **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing.

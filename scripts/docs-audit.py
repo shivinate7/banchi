@@ -2579,6 +2579,75 @@ def design_reason_lists() -> Tuple[Dict[str, str], Optional[str]]:
     return out, None
 
 
+def check_supervisor_self_watch(report: Report) -> None:
+    """Every project module the supervisor imports is in its own `SELF_FILES`.
+
+    `scripts/serve.py` restarts ITSELF when a file it is made of changes — `os.execv`, same
+    pid, children rebuilt. That list is hand-written, and a hand-written list of a file's own
+    imports is exactly the thing that goes stale the next time somebody adds one.
+
+    THE FAILURE IT PREVENTS IS SILENT, WHICH IS WHY IT BLOCKS. An import that is watched but
+    absent from `SELF_FILES` still restarts the capture CHILD — visibly, in the log, looking
+    like the change landing — while the supervisor goes on running the module it imported at
+    boot, because Python caches it. Something restarts, so nothing looks wrong. That is how
+    `server/ports.py` behaved before D53's amendment.
+
+    Provably wrong when it fires, and no judgement to defer: the import is right there in the
+    same file as the list that fails to mention it.
+    """
+    findings: List[Finding] = []
+    path = ROOT / "scripts" / "serve.py"
+    if not exists(path):
+        report.add("supervisor self-watch", MECHANICAL,
+                   [Finding(rel(path), "scripts/serve.py is missing.")], "")
+        return
+
+    tree = ast.parse(read(path))
+
+    declared: Set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "SELF_FILES":
+                    try:
+                        declared = set(ast.literal_eval(node.value))
+                    except (ValueError, SyntaxError):
+                        declared = set()
+
+    # Module-level imports only: something imported inside a handler is not held across the
+    # life of the process in the way that makes staleness possible.
+    imported: Set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.add(alias.name.replace(".", "/") + ".py")
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            for alias in node.names:
+                imported.add(f"{node.module.replace('.', '/')}/{alias.name}.py")
+
+    # Project-local means "resolves to a file in this repo". Stdlib and third-party do not,
+    # and neither can go stale under us anyway — they are not what a `git pull` rewrites.
+    local = {name for name in imported if (ROOT / name).is_file()}
+
+    for name in sorted(local - declared):
+        findings.append(
+            Finding(
+                rel(path),
+                f"imports `{name}` at module scope but SELF_FILES does not list it. Python "
+                f"caches that module, so a change to it leaves this supervisor running the "
+                f"old code while its CHILD restarts and looks like the fix landed. Add it to "
+                f"SELF_FILES.",
+            )
+        )
+
+    report.add(
+        "supervisor self-watch",
+        MECHANICAL,
+        findings,
+        f"{len(declared)} self-files, every module-scope import accounted for",
+    )
+
+
 def check_withhold_reasons(report: Report) -> None:
     """The three withhold reasons, reconciled across the two languages that declare them.
 
@@ -5075,6 +5144,7 @@ def audit(staged_only: bool) -> Report:
     check_matrix_superset(report)
     check_join_key_shape(report)
     check_reason_codes(report)
+    check_supervisor_self_watch(report)
     check_withhold_reasons(report)
     check_pricing_presets(report)
     check_tested_by_reach(report)
