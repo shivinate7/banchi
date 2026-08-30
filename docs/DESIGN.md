@@ -63,6 +63,14 @@ for the growing last section of an open box. That rule is D20's, argued there; i
 in the caption because the number is small and the operator is already at the right box, which
 is exactly when a silently switching denominator is easiest to miss.
 
+**In an UNDECLARED box the two scales now say the same thing, and that is the truth rather
+than a redundancy to design away** (2026-08-29, D10 amended). Such a box has one section — the
+box — so both tracks draw the same marker over the same denominator and both say `so far`.
+What they said before was worse: the section scale was measured against a divider at every
+25th card that nobody had put in, so `Card 6 of 25 slots` was drawn under a box holding 133
+cards and no dividers at all. Two tracks agreeing is a box nobody has divided yet; the second
+track earns its 8px the moment somebody presses `S`.
+
 **One system, two densities.** Owner screens use the 4–16 end of the scale; the Fulfillment
 view uses 24–64 and the minimums in the table below. Same palette, same three faces, same
 radius. The alternative — two deliberately different visual worlds — was considered and
@@ -222,8 +230,9 @@ owner getting something sharper.
 
 **Martian Mono carries every number in the product.** Position labels, prices, collector
 numbers, counts, ages. `Box 3 · Section 2 · Card 17` is built by
-`pipeline/join.py:Position.label` at 25 cards per section, and it must not shift width
-between cards — which a mono gives for free rather than by remembering to set `tnum`.
+`pipeline/join.py:Position.label` against the box's own dividers — at 25 cards per section
+until 2026-08-29, when D10's amendment deleted that default — and it must not shift width
+between cards, which a mono gives for free rather than by remembering to set `tnum`.
 
 ## What this is not
 
@@ -288,6 +297,17 @@ actions, which is the thing this whole rule exists to prevent.
 Rejected and worth naming: confirming only on a *second consecutive* undo, which protects
 against a held key walking backwards through good cards at the cost of one more state to
 explain. If that ever happens in practice, it is the fix to reach for first.
+
+**THE CONTROL IS A STACK OF TEN SINCE 2026-08-29 (owner, D10), AND THE NO-DIALOG RULE SURVIVES
+IT BY DRAWING A NUMBER.** The capture screen lists the session's ten most recent captures into
+the current box, newest first, each row its own control: `U` and the trigger still mean the
+top one, and row N undoes N — that card and everything captured after it. The exception above
+is argued for ONE card, on the ground that its photograph is of a card still within reach of
+the hand that fed it, and that argument does not stretch to five. What replaces it is not a
+confirm but a number: every row draws how many cards its press removes, before the press, so
+the thing a dialog would have said afterwards is on screen beforehand. It is the same
+instrument D33's money gate uses — make the number impossible not to have seen — at a much
+smaller register.
 
 This says nothing about the Fulfiller's undo on mark-sold, which is a different control
 with its own row in the table below.
@@ -590,11 +610,15 @@ turns up full of ten-candidate cards, the paragraph above is still the one to re
 `OPTION_KEYS` is then the thing to reach for rather than a second alphabet.
 
 **The alphabet SKIPS rather than shadows, and that is the half a later session must not
-tidy.** The capture screen has already spent ten letters, two of which are `c` and `u` —
-the shutter and the undo. (It read *eleven* until 2026-08-25, and the eleventh was `n`, the
-jump to the Box field's second input; D20's amendment merged that input away, so `n` re-enters
-the alphabet. It re-enters at its own place, which moves nothing before the twentieth option —
-the first thirteen keys are `1234567890ade` either way — so nothing on this screen redrew.) A literal `a`–`z` puts `Rainbow Rare` on `c`. Neither resolution
+tidy.** The capture screen has spent eleven letters: `b h r f g v o t` are its fields, and
+`c u s` are its three ACTS — the shutter, the undo, and D10's divider. (It read *ten* between
+2026-08-25 and 2026-08-29, and the count has been eleven, ten and eleven again for two
+different reasons. `n` left when D20's amendment merged away the Box field's second input,
+and `s` arrived when the owner asked for `S` to open a section and moved the set hint to `h`.
+The two cancel exactly, and `h` sorts after `e`, so the option rows draw on the same letters
+they always did — the first thirteen keys are `1234567890ade` through all three counts, which
+is why `app/tests/capture-claims.spec.ts` stayed green across both changes.) A literal `a`–`z`
+puts `Rainbow Rare` on `c`. Neither resolution
 of that collision is safe: whichever act wins, the other looks like it fired, silently, one
 card at a time. So the gaps at `b` and `c` are the design, and they cost nothing to read
 because every row draws its own key in its chip. `app/tests/capture-claims.spec.ts` asserts

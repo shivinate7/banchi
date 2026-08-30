@@ -32,6 +32,9 @@
     GET    /boxes                          every box: its dividers, its fill, its capacity
     POST   /boxes                          register a box before any card goes into it
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
+    POST   /boxes/<box>/sections           put ONE divider in front of the next card, at the
+                                           moment the real one goes in (D10, the capture
+                                           screen's `S`). Takes no index: the store reads it
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /pipeline/runs                  every run, newest first, with its phase
@@ -372,6 +375,12 @@ _BOXES_ITEM_RE = re.compile(r"^/boxes/(\d+)$")
 # even though what it writes is SKU-scoped and the response has to say so.
 _BOX_LISTINGS_RE = re.compile(r"^/boxes/(\d+)/listings$")
 _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
+# D10's divider, opened one at a time from the capture screen. A POST on a sub-path rather
+# than a `sections` field on `PUT /boxes/<box>`, and the difference is what the caller has
+# to know: the PUT takes a whole layout the client must already hold, and this one takes
+# nothing at all — the index comes from `next_index` inside the lock, which is the only
+# place it can be read without a round trip that could go stale between the two halves.
+_BOX_SECTIONS_RE = re.compile(r"^/boxes/(\d+)/sections$")
 
 # The pipeline routes. A run name is `<date>-<slug>-<nn>` and nothing else builds one, so
 # the character class here is the same one `pipeline_routes._open_run` validates against —
@@ -1648,11 +1657,14 @@ class _Places:
         # its docstring means. `total or None` rather than a bare `total`, so a box holding
         # nothing answers "no end" instead of claiming its last section ends at card 0.
         #
-        # An UNDECLARED box never reaches this branch — the default rule gives every section
-        # a 25-card window whatever the fill — so an open box with 5 cards says its first
-        # section ends at 25 while a DECLARED one says it ends at 5. Both are honest about
-        # their own rule: one is a divider that exists, the other is a divider that is
-        # implied and has not been reached yet.
+        # AN UNDECLARED BOX NOW ALWAYS REACHES THIS BRANCH, and it used never to. It had a
+        # 25-card window whatever the fill, so an open box with 5 cards said its first
+        # section ended at card 25 — a boundary nobody had put in the plastic. D10's
+        # amendment of 2026-08-29 deletes that rule: an undeclared box is ONE section, its
+        # end is the box's end, and this is the line that fills it in. The consequence is
+        # that `section_end` for such a box now degrades with the denominator rather than
+        # standing on its own — which is correct and is asserted as such in T7. A number
+        # derived from a count cannot survive the count being unreadable.
         end = position.section_end
         if end is None:
             end = total or None
@@ -1991,7 +2003,7 @@ def do_inventory() -> dict:
 
     DECORATED BECAUSE THE ALTERNATIVE IS A SECOND RENDERER, and the alternative is what
     happened: an undecorated row carries `box` and `index` and nothing else, so the app
-    reimplemented D10's 25-cards-per-section arithmetic in TypeScript to draw a label with.
+    reimplemented D10's section arithmetic in TypeScript to draw a label with.
     Two copies of the rule that says where a physical card is, one edit away from
     disagreeing about it. `_card_summary` already answers POST and PUT with exactly these
     three fields, so this makes the two shapes agree rather than inventing a third.
@@ -5729,10 +5741,11 @@ def _section_spans(
     DERIVED BY WALKING `Position`, NEVER BY RE-DIVIDING THE INDEX. `pipeline/join.py` holds
     the only label formula in the repo and this is a view of the same thing one level up, so
     it asks `Position` where each section starts and ends and jumps to the next one — which
-    means an undeclared box's spans come out of the default rule and a declared box's out of
-    its dividers, with nothing here knowing which rule it is using or how big the default is.
-    `store/master.py` says materialising a box's implied dividers is this process's job,
-    since it is the one that already imports `Position`; this is that.
+    means an undeclared box comes out as the ONE section it has and a declared box out of its
+    dividers, with nothing here knowing which of the two it is looking at. That is what made
+    deleting the 25-card default (D10, amended 2026-08-29) a change to one property rather
+    than to this walk: an undeclared box now yields a single span from card 1 to the fill,
+    and this loop discovers that the same way it discovers everything else.
 
     THE WALK IS BOUNDED BY SECTIONS, NOT BY CARDS. One `Position` per section rather than one
     per index, so a hand-edited capacity of a million costs a handful of iterations rather
@@ -6081,6 +6094,71 @@ def do_put_box(box: int, payload: dict) -> dict:
     return body
 
 
+def do_open_section(box: int, payload: dict) -> dict:
+    """Put a divider in front of the next card, from the capture screen. D10 (amended).
+
+    THE ROUTE EXISTS BECAUSE THE ACT DOES. D10 has said since 2026-08-23 that a box "carries
+    its own list of divider indices, set by a **New section** control on the capture screen
+    at the moment the real divider goes in" — and that control was never built. What shipped
+    was `PUT /boxes/<box>` taking a whole layout, typed into a field on `#/inventory`, which
+    is a different operation wearing the same words: it is performed later, from another
+    screen, and it needs the operator to remember which card they were on. This is the one
+    the entry described.
+
+    IT TAKES NO INDEX, AND THAT IS THE WHOLE OF ITS SAFETY. `Inventory.open_section` reads
+    `next_index` inside the store lock, so the divider lands in front of the card the next
+    capture will actually take. A client that computed the index would be reading a
+    high-water mark over the wire and sending it back — two lock acquisitions with a round
+    trip between them, which `next_index`'s own docstring names as the lost update this
+    store is built to avoid, and which at a 623 ms feeder cadence is not a theoretical race.
+
+    A BODY IT DOES NOT READ, and it reads it anyway. `_body()` refuses an empty request as
+    `body_required` for every write in this server, and mark-sold already documents the
+    convention: send `{}`. `_reject_unknown` with no allowed fields is what makes a client
+    that sends `{"at": 41}` — the obvious wrong guess about this route — get told the index
+    is not settable rather than get a divider somewhere else.
+
+    NO CONFIRM, AND IT IS NOT AN OVERSIGHT. D33's money gate and D34's release both refuse
+    without one; neither reason applies here. Nothing is spent, nothing is destroyed, no
+    fact is recorded on somebody's word that only they can check: the layout is editable
+    from `#/inventory` and `resectioned` carries the layout it moved from, so a mis-press is
+    reversed by typing the old list back. Adding a dialog to the screen the owner shoots a
+    box from at feeder pace is what `docs/DESIGN.md` refuses in as many words.
+
+    ANSWERS WITH THE BOX ROW, so the capture screen redraws the same object `GET /boxes`
+    gave it — and, more to the point, gets `sections_detail` back. The screen's receipt says
+    which section was opened and where it starts, and both numbers are the SERVER's own
+    rendering of the layout rather than a length and a last element the client added up
+    itself. `BoxOps.tsx` spends a comment on why that distinction is not pedantic.
+    """
+    # `_reject_unknown` with nothing allowed would render "Settable: ." — the one caller
+    # for which its message does not compose. Same code, same first-thing-checked order,
+    # and a sentence that says what to do instead of naming an empty list.
+    if payload:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "field_not_settable",
+            f"Cannot set {', '.join(sorted(payload))} here — this route takes an empty "
+            f"body. The divider goes in front of the card the store's own next index "
+            f"names, and nothing in a request can move it. To place one somewhere else, "
+            f"send the whole layout to PUT /boxes/{box}.",
+        )
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "box_not_found",
+                f"No box {box}. Create it with POST /boxes, or capture into it — a box "
+                f"registers itself the first time a card lands in it.",
+            )
+        inventory.open_section(box)
+        body = _box_row(inventory, box)
+
+    return body
+
+
 # ------------------------------------------------------------------------------- handler
 
 
@@ -6246,6 +6324,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(HTTPStatus.BAD_REQUEST, "sections_invalid", str(exc))
         except master.BoxClosed as exc:
             self._fail(HTTPStatus.CONFLICT, "box_closed", str(exc))
+        # `open_section`'s two, and they are 409s on the rule the comment above draws: the
+        # request was well-formed — it carries no index to be wrong about — and lost to
+        # something the STORE knows, which is where the last divider already is. Each
+        # already names that divider in a sentence written for a person, so both are
+        # answered with their own text rather than a substitute.
+        except master.SectionEmpty as exc:
+            self._fail(HTTPStatus.CONFLICT, "section_empty", str(exc))
+        except master.SectionAhead as exc:
+            self._fail(HTTPStatus.CONFLICT, "section_ahead", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
         # A FOURTH JOINS THEM, for the same reason and with the same shape. `BoxNameTaken`
@@ -6421,6 +6508,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _BOX_LISTINGS_RELEASE_RE.match(path)
             if match:
                 body = do_release_box_listings(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            # D10's divider, opened at the rig. A POST rather than a field on the box's own
+            # PUT because it sets no field: the index it writes is read from the store, not
+            # from the request, which is exactly what `PUT_BOX_FIELDS` cannot express.
+            match = _BOX_SECTIONS_RE.match(path)
+            if match:
+                body = do_open_section(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit

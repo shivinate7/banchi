@@ -168,11 +168,13 @@ export function photoUrl(box: number, index: number): string {
 /**
  * The position label the server rendered, or null when it sent none.
  *
- * `pipeline/join.py:Position.label` composes `Box 3 · Section 2 · Card 17` at 25 cards per
- * section (D10) and `do_inventory` decorates every row it can with the result. The rule
- * types.ts states on that field is that the app displays this string and never composes a
- * second one — a client-side renderer is a copy of D10's divider size that nothing keeps in
- * step with the pipeline's.
+ * `pipeline/join.py:Position.label` composes `Box 3 · Section 2 · Card 17` against the
+ * box's own dividers (D10) and `do_inventory` decorates every row it can with the result.
+ * The rule types.ts states on that field is that the app displays this string and never
+ * composes a second one — a client-side renderer is a copy of a rule that nothing keeps in
+ * step with the pipeline's, and the rule has now moved once: the 25-cards-per-divider
+ * default an undeclared box used to render with was deleted on 2026-08-29, and every screen
+ * drawing the server's string followed it without an edit.
  *
  * MISSING IS RETURNED AS NULL, NEVER FILLED IN, and what a caller shows instead is the
  * caller's decision: the pull preview and the inventory view both print the store key with
@@ -1077,6 +1079,45 @@ export async function updateBox(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  })) as BoxRecord
+}
+
+/**
+ * Put ONE divider in front of the next card in a box. The capture screen's `S`.
+ *
+ * SENDS NO INDEX, AND THAT IS THE CONTRACT RATHER THAN A CONVENIENCE. The divider goes where
+ * `store/master.py:next_index` says the next card will land, read inside the store lock. A
+ * caller that computed it from `BoxRecord.next_index` and sent it back would be re-deriving
+ * a high-water mark across a round trip, which at a feeder's 623 ms cadence is a real race:
+ * one capture between the read and the write and the divider lands behind the card it was
+ * meant to be in front of. There is no parameter to get that wrong with.
+ *
+ * `updateBox({ sections })` IS THE OTHER OPERATION AND IS NOT A SUBSTITUTE. That one declares
+ * a whole layout, from a screen, after the fact — the caller has to hold every divider the
+ * box already has and append to it, so two devices editing one box last-writer-wins the way
+ * that function's own note describes. This one appends, in the store, from the physical act.
+ *
+ * REFUSALS WORTH BRANCHING ON, all three of them facts about the box rather than about the
+ * request. `section_empty`: the last section was opened and nothing has been captured into
+ * it yet, so the divider asked for is already there — the two-presses-in-a-row case, and the
+ * one an operator will actually hit. `section_ahead`: a divider is already declared past the
+ * next card, so this one cannot go in front of it; the remedy is the dividers editor.
+ * `box_closed`: a sealed box takes no more cards. Show the server's sentence — each names
+ * the divider or the box that is in the way, and this module has nothing to add to it.
+ *
+ * Answers with the whole `BoxRecord`, so `sections_detail` comes back with it. Read the
+ * section that was opened off the LAST entry of that array rather than off `sections.length`
+ * — same reason `BoxOps.tsx` gives at `renderedSections`: the server renders spans and the
+ * app does not do section arithmetic.
+ */
+export async function openSection(box: number): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    /* `{}` and not an empty body: every write in the capture server reads its body the same
+     * way and refuses an absent one as `body_required`, which `markSold` documents as the
+     * convention rather than an oversight. Two characters. */
+    body: JSON.stringify({}),
   })) as BoxRecord
 }
 
