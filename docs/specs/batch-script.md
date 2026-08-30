@@ -238,7 +238,8 @@ implements it:
 | `not_joined` | `misc` | never joined at all |
 
 **ONLY THAT KEY IS PER GAME.** `pipeline/join.py:_walk` is one ladder for every game — build
-the key, look it up, try the blank-`Number` name, then D35's name rung — and `KeyStrategy`
+the key, look it up, repair it once where the game declares a repair, try the blank-`Number`
+name, then D35's name rung — and `KeyStrategy`
 is the per-game part as a value. It is written that way because the alternative was measured
 and failed: three parallel `_lookup_*` functions each re-implemented the ladder, D35's rung
 landed in the Pokemon copy alone, and `riftbound` returned zero candidates for a year's worth
@@ -246,9 +247,12 @@ of cards whose rows were in the export the whole time. A rung added to `_walk` c
 in one game and not another.
 
 **Both sides of a comparison go through one fold**, never two spellings of one rule:
-`number_index_key` for the number, `name_index_key` for the name. `_strip_set_code` runs ahead
-of the printed-code key and removes a set code the model glued on with a bullet or middle dot —
-licensed by a measurement, that no export cell anywhere contains either character.
+`number_index_key` for the number, `name_index_key` for the name. `_repair_set_code` is the
+ladder's second rung for the printed-code games and removes a set code the model glued onto the
+front of the identifier against its own prompt — matched by SHAPE (two to five letters, no
+digits, then one separator) rather than by naming the separator, because the separator turned
+out to be arbitrary: one 39-card box produced three of them and read one card both ways. D55
+carries the measurement that licenses it, and the reason it runs only after the key has missed.
 
 That key is unique only *within* a set. Multi-set runs are required, so:
 

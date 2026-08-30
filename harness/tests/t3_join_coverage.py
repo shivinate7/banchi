@@ -81,6 +81,7 @@ SOURCE_FIXTURE = "fixtures/sv09_export_untouched.csv"
 # `_check_game_partition`, as the other GAME.
 WIDE_FIXTURE = "fixtures/pokemon_wide_export_untouched.csv"  # SM Cosmic Eclipse, unpadded
 RIFTBOUND_FIXTURE = "fixtures/riftbound_export_untouched.csv"  # letter-suffixed variants
+ONEPIECE_FIXTURE = "fixtures/onepiece_export_untouched.csv"  # `P-044`: a ONE-letter prefix
 
 # The partition's own cases (D25). The Riftbound cell is quoted in full because it is not
 # guessable from the game's name, which is half the argument for reading cells at all.
@@ -1803,22 +1804,76 @@ def run() -> Result:
     # to the identifier is noise the model added on top of digits it read correctly, so the
     # honest repair is to strip the noise — an exact join on the field that tells one card from
     # another — not to fall back to the name, which is a weaker signal that only ever queues.
-    # `_strip_set_code` is licensed by a measurement: no export cell anywhere carries a bullet
-    # or a middle dot.
-    rift_prefixed = rift_catalog.candidates(_rift(810, RIFT_NAME, "UNL \u2022 " + RIFT_NUMBER))
+    # `_repair_set_code` is licensed by a measurement: across every distinct `Number` cell in
+    # both games keyed this way — 1,237 Riftbound and 396 One Piece — none is set-code-shaped.
+    #
+    # THE SEPARATOR IS ARBITRARY, WHICH IS WHY THE RULE IS A SHAPE (2026-08-30). Box 3 glued a
+    # set code onto 7 of 39 reads across THREE separators — bullet, hyphen and slash — including
+    # two copies of one card read both ways. The old rule was a tuple of two characters and an
+    # `rsplit`, and neither of the new separators could join it: `rsplit("/")` over `120/219`
+    # yields `219`, a real identifier belonging to a different card. Every case below was
+    # observed failing against that rule before the shape rule replaced it.
+    for separator in ("\u2022", "\u00b7", "-", "/"):
+        glued = f"UNL {separator} {RIFT_NUMBER}"
+        found = rift_catalog.candidates(_rift(814, RIFT_NAME, glued))
+        c.equal(
+            {r[tcgcsv.NUMBER_COLUMN] for r in found.rows},
+            {RIFT_NUMBER},
+            f"set code: {glued!r} lands on the row the bare identifier would have",
+        )
+        c.ok(
+            not found.name_inferred,
+            f"set code: {glued!r} is recovered by NUMBER, not rescued by name",
+        )
+        c.ok(
+            found.lookup == f"code~:{RIFT_NUMBER}",
+            f"set code: {glued!r} reports `code~:`, so the report counts the model ignoring "
+            "its own prompt rather than hiding it as an ordinary match",
+        )
+
+    # A MATCHING IDENTIFIER IS NEVER HANDED TO THE REPAIR, which is the ordering guarantee and
+    # is stronger than any of the shape bounds: the repair runs only after a miss, so it cannot
+    # move a card that was already joining. Red if `_repair_set_code` moves back into
+    # `_key_printed_code`, where it used to live and where it rewrote every identifier on its
+    # way to the lookup.
+    rift_plain = rift_catalog.candidates(_rift(815, RIFT_NAME, RIFT_NUMBER))
     c.ok(
-        not rift_prefixed.name_inferred,
-        "set code: a prefixed identifier is recovered by NUMBER, not rescued by name",
+        rift_plain.lookup == f"code:{RIFT_NUMBER}",
+        "set code: an identifier that matches is reported as a plain `code:` match, unrepaired",
     )
-    c.ok(
-        rift_prefixed.lookup.startswith("code:"),
-        "set code: and the lookup says `code:`, because that is what it matched on",
-    )
-    c.equal(
-        {r[tcgcsv.NUMBER_COLUMN] for r in rift_prefixed.rows},
-        {RIFT_NUMBER},
-        "set code: and it lands on the exact row the bare identifier would have",
-    )
+
+    # THE TWO SHAPE BOUNDS ARE ASSERTED ON THE FUNCTION, NOT THROUGH THE LADDER, AND THAT IS
+    # FORCED RATHER THAN LAZY. `_repair_set_code` is reached only after a key MISSES, so a real
+    # cell like `P-044` or `T02 // T03` never reaches it at all — a catalog-level case over
+    # either one passes whatever the bounds say. Both were written that way first and observed
+    # passing against a deliberately broken rule, which is the shape of assertion this file
+    # refuses. What the bounds actually protect is the narrow case the ordering cannot: a read
+    # that misses raw and whose over-eager repair lands on a real row belonging to another card.
+    #
+    #   at least two letters   One Piece prints 16 cells as `P-044` — ONE letter, a hyphen,
+    #                          digits. At a bound of one, a missed `P-<digits>` read repairs to
+    #                          a bare number that is a different card's identifier.
+    #   letters only           `T02 // T03` is a real double-sided token, 13 cells carry the
+    #                          form, and the prompt asks for the spaces around the `//` by name.
+    #                          Digits in the prefix token would make its first half a set code.
+    for intact in ("P-044", "T02 // T03", "056/298", "066a/298", "303*/298", "SP3/006", "R04"):
+        c.equal(
+            join._repair_set_code(intact),
+            None,
+            f"set code: {intact!r} is a real identifier shape and is left ENTIRELY alone",
+        )
+    for glued, bare in (
+        ("UNL \u2022 056/298", "056/298"),
+        ("UNL \u00b7 080/219", "080/219"),
+        ("UNL - 150/219", "150/219"),
+        ("UNL / 120/219", "120/219"),
+        ("UNL-150/219", "150/219"),
+    ):
+        c.equal(
+            join._repair_set_code(glued),
+            bare,
+            f"set code: {glued!r} gives up its prefix and nothing else",
+        )
 
     # THE NAME RUNG IS STILL REACHED, by a code that is well-formed and simply wrong — which is
     # the case D35 exists for and which no strip can repair. Kept alongside the case above so a
