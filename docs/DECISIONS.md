@@ -2827,7 +2827,20 @@ taking if a real feed offers it, and not worth inventing before one does.
 
 `identify` spawns detached (D33) and the three free steps are re-runnable, so the only thing left between a finished batch and a joined run was opening TCGplayer, pressing Export Filtered CSV, waiting, and uploading the file back. `POST /pipeline/runs/<name>/export` fetches it.
 
-**It is autonomous for single-game runs, and this entry claims no more than that.** One fetch returns one file, and a file answers for the games its own `Product Line` cells claim. All eleven of the owner's historical exports carry a single product line. D21 allows a mixed box, so a mixed-game run needs one fetch per game.
+**One fetch answers for whatever product lines the portal's filter is set to, which may be several.** A file answers for the games its own `Product Line` cells claim, and D25 has always allowed two games to share one file.
+
+**This entry said the opposite until the first live fetch, and the correction is the useful part.** It read that all eleven of the owner's historical exports carry a single product line, and concluded that a mixed-game run needs one fetch per game. The premise was true of those eleven files and was never a fact about the portal. Measured on the first authenticated fetch, 2026-08-30: 394 rows over six product lines, and `games_claimed` answered `pokemon`, `pokemon_code`, `riftbound` and `one_piece` from one file.
+
+| product line | rows |
+|---|---|
+| Pokemon | 203 |
+| Riftbound League of Legends Trading Card Game | 145 |
+| One Piece Card Game | 42 |
+| YuGiOh | 2 |
+| Card Sleeves | 1 |
+| Playmats | 1 |
+
+**A generalization drawn from stored files rather than from the rule is what failed here.** D25 already decided this and the pipeline already handled it; the limitation existed only in this prose.
 
 ### What replaces the promise
 
@@ -2902,13 +2915,15 @@ This is cookie-session auth, not the order-management API, which is another host
 
 ### What it costs
 
-**The fetch composes with the recorded exports and `join` does not.** `exports_for` replaces the recorded mapping outright once any `--export` is passed, which the upload path has always done. So on a mixed-game run, fetching one game's file and joining with it alone passes the fetch and refuses at the join, naming the uncovered game. Making a recorded export compose with an explicit `--export` changes that function's contract and has not been argued.
+**The fetch composes with the recorded exports and `join` does not.** `exports_for` replaces the recorded mapping outright once any `--export` is passed, which the upload path has always done. So on a mixed-game run, fetching one game's file and joining with it alone passes the fetch and refuses at the join, naming the uncovered game. Making a recorded export compose with an explicit `--export` changes that function's contract and has not been argued. It is a narrower case than it looked when this was written: a fetch returns whatever product lines the portal's filter holds, and the measurement above shows that covering every game the run holds in one file is the ordinary state rather than the exception.
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
 **What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
-**The live fetch is not verified.** Measured unauthenticated, the stdlib `Python-urllib` User-Agent reaches the endpoint unblocked, which is not evidence about an authenticated request against an AWS WAF. `tcg_blocked` names `PKMNSCAN_TCG_USER_AGENT` as the first remedy. One live fetch by the owner is owed.
+**The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
+
+**What that fetch also showed is that the portal's saved filter decides what arrives.** It returned the owner's current listings — eight conditions including `Unopened` and the Lightly Played family — rather than a catalog export. That is not a defect in the fetch, and the guard is what catches it: against box 3's baseline the same file carries 145 Riftbound rows to that run's 153, so it refuses `export_narrower` and names what went.
 
 **What would reopen this: an authenticated probe of `getjsonfilters` and `productsearch`.** If scope can be set by request, the scoped-export design replaces this guard with a positive one, and the one-fetch-one-game limit may soften with it.
 

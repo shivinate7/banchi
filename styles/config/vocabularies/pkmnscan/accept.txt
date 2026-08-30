@@ -59,8 +59,8 @@ ETag
 Evelynn
 [Ff]ocusable
 [Ff]ootgun
-[Ff]ULFILLER
 [Ff]ulfiller
+[Ff]ULFILLER
 Fontshare
 Fraunces
 FSEvents
@@ -132,6 +132,7 @@ Postgres
 [Pp]idfile
 [Pp]kmnscan
 [Pp]laymat
+[Pp]laymats
 [Pp]layset
 [Pp]list
 [Pp]refetch
