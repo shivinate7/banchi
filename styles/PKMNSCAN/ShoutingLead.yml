@@ -1,0 +1,7 @@
+extends: existence
+message: "Bold lead in capitals — D60 asks for sentence case. Use a heading if it is a section."
+level: warning
+scope: raw
+nonword: true
+tokens:
+  - '\*\*[A-Z][A-Z0-9 ,\x27`\-—:/\.]{24,}\*\*'

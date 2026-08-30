@@ -15,7 +15,7 @@ place this project writes down what it has actually measured — 53 cards end to
 detection false-positive at 30%, `detect_card` at 0 of 53 and then 53 of 53, a 623 ms
 feeder cadence. **Those numbers are evidence and are never rewritten to match a later
 tree.** What was retired is the gate as a *control*: the blocking, the sequencing, and the
-"current gate" a session had to look up before it was allowed to build. See @docs/GATES.md.
+"current gate" a session had to look up before it was allowed to build. See docs/GATES.md.
 
 ## Commands
 
@@ -63,7 +63,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
 
 ## Things you will get wrong without being told
 
-- **The join key is PER-GAME, and matching is normalised on both sides.** Pokemon composes
+- **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes
   `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
   is their field name), but at runtime both values come from the identification and match
   against the export's `Number` column; nothing in the pipeline calls that API. One Piece
@@ -131,7 +131,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   never will: `#/inventory` keeps the only one and hands it over through
   `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
   the disagreement D33 named and D39 was built to avoid.
-- **A CARD'S NUMBER COUNTS THE CARDS IN THE BOX, NOT THE SLOTS** (D58). Sell card 17 and the
+- **A card's number counts the cards in the box, not the slots** (D58). Sell card 17 and the
   card behind it becomes card 17, on every screen and in every report — the box closes up, and
   the section boundaries move with it so `Section N · Card M` is countable on both axes. **The
   STORED index never moves**: it is the `/inventory/<box>/<index>` path, the `<index>.jpg` the
@@ -157,7 +157,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   to `H` to free the letter. A whole layout is still typed on `#/inventory`'s dividers editor;
   neither path ever invents a divider.
 
-- **A BOX IS ADDRESSED BY ITS NAME, AND NAMES ARE UNIQUE** (D20, amended 2026-08-25). The
+- **A box is addressed by its name, and names are unique** (D20, amended 2026-08-25). The
   capture screen's Box field is ONE free-text control searching number and name together, and a
   new box is created by name — `store/master.py:next_box_number` allocates the lowest free
   integer inside the lock, so there is no number to mistype and `new_box`'s typo guard is
@@ -167,7 +167,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
 
-  **A RUN CARRIES THE NAME THE SAME WAY, AND IT IS JOINED AT READ TIME** (D56). Every run on
+  **A run carries the name the same way, and it is joined at read time** (D56). Every run on
   the wire has `box` and `box_name`, put there by `server/pipeline_routes.py:_summary` — the
   box from the manifest's scope or from its capture directory, the name from the registry as
   it stands right now. **Never write a name into a run directory**: a rename relabels every
@@ -236,11 +236,11 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
-- **MAIN MOVES BY PULL REQUEST. A SESSION NEVER COMMITS TO IT AND NEVER PUSHES IT.**
+- **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
 
-  **A SESSION MERGES ON THE OWNER'S WORD, ON GITHUB AND IN THIS CLONE, AS ONE OPERATION**
+  **A session merges on the owner's word, on GitHub and in this clone, as one operation**
   (D42, amended twice 2026-08-30). Explicit and per-instruction. **The test is whether the
   owner NAMED THE ACT** — "merge", "merge it", "merge to main" all are the word; "ship it",
   "land it", "looks good" and an approving review are not, because they approve the work
@@ -250,7 +250,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
-  **THE LOCAL HALF IS TWO STATES, AND ONE QUESTION TELLS THEM APART.** Ask which working tree,
+  **The local half is two states, and one question tells them apart.** Ask which working tree,
   if any, holds main — a clone running several worktrees is in either state on any given day,
   and the command that is right in one is refused in the other:
 
@@ -299,7 +299,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 ## Working agreement
 
 - Run `make harness` before you tell me something works. Show me the output, not a claim.
-- Read @docs/DECISIONS.md before proposing an architecture change. Every entry there is
+- Read docs/DECISIONS.md before proposing an architecture change. Every entry there is
   settled; if you want to reopen one, say which entry and why, and wait for me.
 - Report format: result first, then files touched, then risks. No task restatement, no
   summary of what I asked for.
@@ -322,8 +322,80 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   `identify/`, `store/`, `geometry/` or `cli/`** — every entry there is settled and
   re-litigating one wastes a session. Audited by `make docs-audit`, so it cannot quietly go
   stale: adding a file under any of those without an entry fails the commit.
-- @docs/DECISIONS.md — settled decisions and why. Read before redesigning.
-- @docs/GATES.md — gates, harness contract, build order.
+- docs/DECISIONS.md — settled decisions and why. Read before redesigning.
+
+  **These three are NOT `@`-loaded, and that is deliberate (D60).** At 627KB they cost
+  ~163,000 tokens in every session before a word of work, and a session needs one entry
+  at a time. Two mechanisms answer that without loading the file: `scripts/decision-context.py`
+  names the governing decisions before any edit under the mapped directories, and the index
+  below says what exists. **Read the entry itself before proposing an architecture change** —
+  the index is a table of contents, never a substitute for the argument in the entry.
+
+```
+D1   Two-phase architecture
+D2   Identification is Claude Haiku vision, owned end to end
+D3   Variant resolution ladder
+D4   Review queue is digital-only
+D5   Two personas
+D6   Photo service and pull preview
+D7   Duplicates aggregate by SKU at join time
+D8   Pricing source is the TCGplayer Filtered CSV export itself
+D9   Threshold and floor are both $0.40
+D10  Inventory model
+D11  Listing path is a catalog join, never a from-scratch CSV
+D12  Scope
+D13  Stack
+D14  Two tracks, one rig
+D15  Catalog data is vendored, not fetched
+D16  The docs are checked mechanically; the prose is checked by asking
+D17  The repo describes itself in `docs/map.py`, and the map is audited
+D18  A generator may write. Nothing that writes may gate a commit.
+D19  Motion capture: live fire behind the seam, a trace for tuning, video for neither
+D20  A box is an object, and its capacity is retroactive
+D21  Game is a per-card claim, not a mode
+D22  Taxonomies are hand-authored per game, and audited so they cannot drift
+D23  The rarity claim does three jobs, and one of them pays for the feature
+D24  Code cards are pooled inventory, not located
+D25  The join partitions by game, and `Product Line` becomes a real reader
+D26  A card leaves inventory by a state — `retired` — and a bad photo is replaced in place
+D27  Session state is device-local and may be persisted
+D28  The review answer gets an undo window, and the list stops moving under it
+D29  A homogeneous queue may be answered as a group
+D30  The physical convention for a gap
+D31  One owner-side view of stored cards, and the Fulfiller does not get a vote on it
+D32  The pixel budget is spent on the card, not the desk
+D33  The pipeline is reachable from a screen, and one route can spend
+D34  A listing hold is released against the releasing box's own copies
+D35  A number that cannot be read falls back to the name, and the card still faces a human
+D36  The run says what the model read; the store says which slot it is in
+D37  A queued question can be closed without answering it, and the card is left alone
+D38  The photograph is sized by the rows beside it, and the box and the runs get the third column
+D39  The pipeline gets a route, and the selection is handed to it
+D40  The screen is three columns: the box, the card, and where its copies are
+D41  The address is a rank, not a list, and the separator is deleted rather than replaced
+D42  main moves by pull request, and the guard is local because the server-side one is not for sale
+D43  the port follows the store, because the store was already per-checkout
+D44  an iCloud conflict copy is refused at the commit and never deleted on a guess
+D45  The copies list is a way back into the walk, and the filter yields to the jump
+D46  A card the pipeline could not place is offered the catalog, and a human may point at a row
+D47  A tracked symlink is a path baked into the tree, and a checkout will spend a directory to place one
+D48  A send is a cart of boxes; a run is still one box
+D49  The pricing answer is one file, and a card can be held back on purpose
+D50  An interactive element's feedback is the product's, not each stylesheet's
+D51  Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
+D52  The photo URL names a photograph, because a slot's occupant changes under it
+D53  One link, always live, and the restart discipline becomes machinery
+D54  A re-emit adds; it never subtracts
+D55  A set code the model glued on is removed by shape, and only after the key has missed
+D56  A run names the drawer it was over, and the name is joined at read time
+D57  The sale is one press, and the button becomes the way back
+D58  A card's number counts the cards in the box, not the slots
+D59  The live cap is a per-SKU quantity, and a count of one run's positions was answering for it
+D60  The @-loaded docs are dense American technical English, and an entry cites rather than restates
+D63  The order ledger is two maps, and the sync writes only one of them
+```
+
+- docs/GATES.md — gates, harness contract, build order.
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
@@ -347,6 +419,6 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   treating a green `make design-check` as evidence about the feeder — the TRIGGER half of
   Gate C is confirmed and the PIPELINE half is not: box 95's 85 records are all still
   `captured`, and no run directory exists for that box.
-- @docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
+- docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.
