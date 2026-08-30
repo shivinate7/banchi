@@ -95,7 +95,7 @@ def _game_only(report, priced):
     THREE THINGS DROP A SKU AFTER THIS POINT AND THIS FUNCTION USED TO KNOW ABOUT ONE:
 
       - it is WITHHELD (D49) — `prices_for` leaves it out of the price mapping. Subtracted
-        here since 2026-08-29, which is the version of this docstring D52 replaces.
+        here since 2026-08-29, which is the version of this docstring D54 replaces.
       - it is `no_market_data` ANSWERED `"unlisted"` — `prices_for` drops it too, and
         nothing subtracted it. LIVE ON A FIRST EMIT for a game whose only above-threshold
         entries are unpriced-and-unlisted.
@@ -119,7 +119,7 @@ def _game_only(report, priced):
 def _write(game_join, path, only, choice, say, label):
     """Write one import file, or leave it alone. Returns the SKUs that reached it.
 
-    ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D52:
+    ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D54:
     `emit` never opens an import file until it has at least one row for it, because
     `tcgcsv.render` emits the header before it iterates and an empty write therefore replaces
     a good file with a valid CSV of nothing.
@@ -420,7 +420,7 @@ def run(args, say) -> int:
         queue_line = writable.queue_summary
         stages = writable.inventory.listing_counts()
 
-    # ONLY WHEN SOMETHING REACHED A FILE. D52: the record is created by the first emit that
+    # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
     # writes a row and is afterwards only ever added to. Writing it unconditionally is what
     # blanked it on every second press — and `reconcile` reads it, so a blank record made a
     # run that had emitted perfectly an hour ago refuse with "this run has emitted nothing".

@@ -793,7 +793,7 @@
 /* ------------------------------------------------------------------------------- files */
 
 /* `.run-files`, `.run-files-head`, `.run-file`, `.run-file-name`, `.run-file-import` and
- * `.run-file-size` MOVED TO `app/src/RunFiles.css` on 2026-08-30 (D52), with the component
+ * `.run-file-size` MOVED TO `app/src/RunFiles.css` on 2026-08-30 (D54), with the component
  * that draws them. Tombstoned rather than deleted silently, the way this file already
  * tombstones `.run-head` and its neighbours above: the obvious repair when somebody finds a
  * `.run-file` rule missing is to write a new one here, and a second copy is what the

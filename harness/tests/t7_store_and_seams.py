@@ -8716,7 +8716,7 @@ def check_withholding(checks: Checks) -> None:
             "it on the first free command the operator pressed",
         )
 
-        # --- a re-emit that HAS something new to say (D52) --------------------------------
+        # --- a re-emit that HAS something new to say (D54) --------------------------------
         #
         # THE CASE THAT STOPS THE FIX BEING "EMIT ONCE, EVER". The block above proves a
         # no-op re-emit leaves the file alone; on its own, that assertion is satisfied just

@@ -168,7 +168,7 @@ export function Pricing() {
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
-  /* ------------------------------------------------------------------ shipping this run (D52)
+  /* ------------------------------------------------------------------ shipping this run (D54)
    *
    * `emit`'s press and its import CSVs live HERE now, on the screen where every answer it
    * refuses without is made. `#/runs` keeps the step's head, its note and a link over, so the
@@ -260,7 +260,7 @@ export function Pricing() {
   const load = useCallback(async (name: string) => {
     try {
       const answer = await getPricing(name)
-      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D52). This was
+      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D54). This was
          `answer.decisions ?? {}`, so the first write `PUT` a document carrying no `rule` and
          no `basis` — and `Decisions.parse` then defaults them to `match`/`market` while
          `cli/cmd_join.py` treats the FILE as authoritative. A run joined at `markup:100` was
@@ -343,7 +343,7 @@ export function Pricing() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, saving])
 
-  /* ------------------------------------------------------------------- shipping this run (D52) */
+  /* ------------------------------------------------------------------- shipping this run (D54) */
 
   /** What pricing still owes, recomputed live from the document on screen — never fetched.
    *  See `app/src/readiness.ts` for why this is a second implementation and what audits it. */
@@ -542,7 +542,7 @@ export function Pricing() {
 
   /** The suggestion a row opens carrying.
    *
-   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D52). Pressing a preset now
+   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D54). Pressing a preset now
    *  writes `rule`/`basis` into the document, and `pricing.json` is not rewritten until the
    *  next join — so a screen that only ever read `rule_price` would say `decisions.json`
    *  prices at `undercut:5` while every suggestion on it showed `match`. Where the document's
@@ -1010,7 +1010,7 @@ export function Pricing() {
         </aside>
       )}
 
-      {/* ------------------------------------------------------- the ship bar (D52)
+      {/* ------------------------------------------------------- the ship bar (D54)
           STICKY AND IN FLOW, NOT `fixed`, AND THAT IS THE ANSWER TO "HOW DOES THE LIST AVOID
           BEING COVERED". A sticky last child reserves its own height in the document, so the
           padding under a ~6,500px list is exactly the bar's height BY CONSTRUCTION —
@@ -1140,7 +1140,7 @@ export function Pricing() {
               <>
                 {/* ABSENT, NOT DISABLED. A second press used to overwrite the good CSV with a
                     header-only file and blank the manifest, after which `reconcile` refused a
-                    run that had emitted perfectly — D52 fixed that in the command, and this
+                    run that had emitted perfectly — D54 fixed that in the command, and this
                     is the half that stops the press being made by momentum. */}
                 <span className="pricing-ship-key">
                   This run has already written its import files.

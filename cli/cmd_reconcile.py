@@ -37,7 +37,7 @@ def run(args, say) -> int:
         say(f"staged export not found: {staged_path}")
         return 1
 
-    # THROUGH `emitted_skus`, WHICH IS THE UNION ACROSS EVERY EMIT (D52). This report runs in
+    # THROUGH `emitted_skus`, WHICH IS THE UNION ACROSS EVERY EMIT (D54). This report runs in
     # BOTH directions, so a record holding only the last emit's delta would put every SKU
     # from an earlier import into `rows_without_cards` — reconcile accusing something else of
     # writing rows it wrote itself.
