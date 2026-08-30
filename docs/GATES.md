@@ -578,7 +578,7 @@ has no test runner outside the browser `make design-check` starts, and nothing u
 beside the code and by nothing that runs, which is the weakest guard in this section and
 the reason it is named here rather than left to be inferred from the commit stats.
 
-**BOX 1'S RECORDS WERE DELETED ON 2026-08-24, AND EVERY NUMBER ABOVE STANDS.** Recorded so a
+**Box 1's records were deleted on 2026-08-24, and every number above stands.** Recorded so a
 later session that goes looking for the 53 records does not conclude the run never happened.
 The box was a shakedown lot the owner wanted gone, and it could not go: its 45 listing records
 still claimed 53 staged copies and one live, so `box_not_empty_of_commitments` refused it, and
@@ -978,7 +978,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     exist — the strongest of its cases being negative: **before the free preflight has answered,
     the control that spends does not exist.** Absent, not disabled.
 
-    **THE PANEL'S ADDRESS MOVED TWICE AFTER THIS STEP AND THIS PARAGRAPH NAMED THE FIRST ONE.**
+    **The panel's address moved twice after this step and this paragraph named the first one.**
     It read "on `#/inventory` — sharing one `.browse-boxrun` row with `BoxOps`", which D38
     superseded within a day and D39 superseded outright: the pipeline has its own route, `#/runs`,
     as of 2026-08-29. Corrected rather than left standing, because this is a build-order note

@@ -462,7 +462,7 @@ first, because an unpriced `no_catalog_row` has no market and sorted last *perma
 2 left 47 entries queued, counted and unreachable. `bandOf` is price-only and cannot see that
 tier, so the five type-size bands render a sort the queue no longer has.
 
-**THE BANDS WERE NOT RETIRED, AND THIS PARAGRAPH SAID THEY WERE.** Corrected 2026-08-25 after
+**The bands were not retired, and this paragraph said they were.** Corrected 2026-08-25 after
 reading the screen rather than this file: `bandOf` is live at `app/src/ReviewQueue.tsx:469`,
 applied as `data-band` on every rail row at `:3073`, and all five sizes are the only
 `font-size` those spans have (`app/src/ReviewQueue.css:1089-1112`). The worklist was not
@@ -514,7 +514,7 @@ makes the fill mean two different things on two screens. Reserving it for single
 screens means its meaning never has to be learned twice, and it is why the Fulfiller's
 pull-confirm is the loudest thing he ever sees.
 
-**THE THIRD FILL IN THE PRODUCT IS THE RUN PANEL'S SPEND BUTTON** (D33, 2026-08-24; on
+**The third fill in the product is the run panel's spend button** (D33, 2026-08-24; on
 `#/runs` since D39), and it is listed here so a later session reading the rule does not find it
 as an unexplained exception. `app/src/RunPanel.tsx` draws exactly one solid fill: the control
 that starts a paid identification run. **The screen around it draws none** — `Runs.css` says so
@@ -679,7 +679,7 @@ card at a time. So the gaps at `b` and `c` are the design, and they cost nothing
 because every row draws its own key in its chip. `app/tests/capture-claims.spec.ts` asserts
 the skip — the negative case, because nothing in the type system or the render says it.
 
-**THE QUESTION BELOW IS CLOSED AS OF 2026-08-25 — D37 IS THE DECISION ENTRY IT ASKED FOR.**
+**The question below is closed as of 2026-08-25 — D37 is the decision entry it asked for.**
 This section said the screen "needs a real defer that records a reason, and that is a decision
 entry rather than a button", and named counting skips as the measurement that would settle it.
 The owner asked for the defer directly instead: *"why can't i mark something as known skip

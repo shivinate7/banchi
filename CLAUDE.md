@@ -131,7 +131,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   never will: `#/inventory` keeps the only one and hands it over through
   `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
   the disagreement D33 named and D39 was built to avoid.
-- **A CARD'S NUMBER COUNTS THE CARDS IN THE BOX, NOT THE SLOTS** (D58). Sell card 17 and the
+- **A card's number counts the cards in the box, not the slots** (D58). Sell card 17 and the
   card behind it becomes card 17, on every screen and in every report — the box closes up, and
   the section boundaries move with it so `Section N · Card M` is countable on both axes. **The
   STORED index never moves**: it is the `/inventory/<box>/<index>` path, the `<index>.jpg` the
@@ -157,7 +157,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   to `H` to free the letter. A whole layout is still typed on `#/inventory`'s dividers editor;
   neither path ever invents a divider.
 
-- **A BOX IS ADDRESSED BY ITS NAME, AND NAMES ARE UNIQUE** (D20, amended 2026-08-25). The
+- **A box is addressed by its name, and names are unique** (D20, amended 2026-08-25). The
   capture screen's Box field is ONE free-text control searching number and name together, and a
   new box is created by name — `store/master.py:next_box_number` allocates the lowest free
   integer inside the lock, so there is no number to mistype and `new_box`'s typo guard is
@@ -167,7 +167,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
 
-  **A RUN CARRIES THE NAME THE SAME WAY, AND IT IS JOINED AT READ TIME** (D56). Every run on
+  **A run carries the name the same way, and it is joined at read time** (D56). Every run on
   the wire has `box` and `box_name`, put there by `server/pipeline_routes.py:_summary` — the
   box from the manifest's scope or from its capture directory, the name from the registry as
   it stands right now. **Never write a name into a run directory**: a rename relabels every
@@ -236,11 +236,11 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
-- **MAIN MOVES BY PULL REQUEST. A SESSION NEVER COMMITS TO IT AND NEVER PUSHES IT.**
+- **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
 
-  **A SESSION MERGES ON THE OWNER'S WORD, ON GITHUB AND IN THIS CLONE, AS ONE OPERATION**
+  **A session merges on the owner's word, on GitHub and in this clone, as one operation**
   (D42, amended twice 2026-08-30). Explicit and per-instruction. **The test is whether the
   owner NAMED THE ACT** — "merge", "merge it", "merge to main" all are the word; "ship it",
   "land it", "looks good" and an approving review are not, because they approve the work
@@ -250,7 +250,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
-  **THE LOCAL HALF IS TWO STATES, AND ONE QUESTION TELLS THEM APART.** Ask which working tree,
+  **The local half is two states, and one question tells them apart.** Ask which working tree,
   if any, holds main — a clone running several worktrees is in either state on any given day,
   and the command that is right in one is refused in the other:
 
