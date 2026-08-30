@@ -1,0 +1,378 @@
+{
+ "totalItems": 8,
+ "success": true,
+ "errors": [],
+ "results": [
+  {
+   "productId": 678149,
+   "name": "Unleashed - Booster Pack",
+   "cleanName": "Unleashed Booster Pack",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/678149_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/678149/riftbound-league-of-legends-trading-card-game-unleashed-unleashed-booster-pack",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": []
+  },
+  {
+   "productId": 678150,
+   "name": "Unleashed - Booster Display",
+   "cleanName": "Unleashed Booster Display",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/678150_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/678150/riftbound-league-of-legends-trading-card-game-unleashed-unleashed-booster-display",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": []
+  },
+  {
+   "productId": 678152,
+   "name": "Unleashed - Booster Display Case",
+   "cleanName": "Unleashed Booster Display Case",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/678152_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/678152/riftbound-league-of-legends-trading-card-game-unleashed-unleashed-booster-display-case",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": []
+  },
+  {
+   "productId": 684125,
+   "name": "Vilemaw",
+   "cleanName": "Vilemaw",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/684125_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/684125/riftbound-league-of-legends-trading-card-game-unleashed-vilemaw",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": [
+    {
+     "name": "Rarity",
+     "displayName": "Rarity",
+     "value": "Epic"
+    },
+    {
+     "name": "Number",
+     "displayName": "Number",
+     "value": "060/219"
+    },
+    {
+     "name": "Description",
+     "displayName": "Description",
+     "value": "[AMBUSH] <em>(You may play me as a [REACTION] to a battlefield where you have units.)</em>\r\n<br>Enemy units here with less Might than me don't deal combat damage.\r\n<br>When I hold, draw 1."
+    },
+    {
+     "name": "Energy Cost",
+     "displayName": "Energy Cost",
+     "value": "8"
+    },
+    {
+     "name": "Power Cost",
+     "displayName": "Power Cost",
+     "value": "2"
+    },
+    {
+     "name": "Might",
+     "displayName": "Might",
+     "value": "8"
+    },
+    {
+     "name": "Card Type",
+     "displayName": "Card Type",
+     "value": "Unit"
+    },
+    {
+     "name": "Tag",
+     "displayName": "Tag",
+     "value": "Shadow Isles;Spider"
+    },
+    {
+     "name": "Domain",
+     "displayName": "Domain",
+     "value": "Calm"
+    },
+    {
+     "name": "Flavor Text",
+     "displayName": "Flavor Text",
+     "value": "<em>Its lair lies beyond a twisted treeline.</em>"
+    }
+   ]
+  },
+  {
+   "productId": 684215,
+   "name": "Rengar, Trophy Hunter",
+   "cleanName": "Rengar Trophy Hunter",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/684215_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/684215/riftbound-league-of-legends-trading-card-game-unleashed-rengar-trophy-hunter",
+   "modifiedOn": "2026-08-12T20:28:57.34",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": null,
+    "note": null
+   },
+   "extendedData": [
+    {
+     "name": "Rarity",
+     "displayName": "Rarity",
+     "value": "Epic"
+    },
+    {
+     "name": "Number",
+     "displayName": "Number",
+     "value": "120/219"
+    },
+    {
+     "name": "Description",
+     "displayName": "Description",
+     "value": "[AMBUSH] <em>(You may play me as a [REACTION] to a battlefield where you have units.)</em>\r\n<br>I can be played to a battlefield where there are enemy units <em>(even if you don't have units there).</em>"
+    },
+    {
+     "name": "Energy Cost",
+     "displayName": "Energy Cost",
+     "value": "5"
+    },
+    {
+     "name": "Power Cost",
+     "displayName": "Power Cost",
+     "value": "1"
+    },
+    {
+     "name": "Might",
+     "displayName": "Might",
+     "value": "6"
+    },
+    {
+     "name": "Card Type",
+     "displayName": "Card Type",
+     "value": "Champion Unit"
+    },
+    {
+     "name": "Tag",
+     "displayName": "Tag",
+     "value": "Cat;Ixtal;Rengar"
+    },
+    {
+     "name": "Domain",
+     "displayName": "Domain",
+     "value": "Body"
+    },
+    {
+     "name": "Flavor Text",
+     "displayName": "Flavor Text",
+     "value": "<em>\"Let's see what they're made of.\"</em>"
+    }
+   ]
+  },
+  {
+   "productId": 684527,
+   "name": "Moonfall",
+   "cleanName": "Moonfall",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/684527_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/684527/riftbound-league-of-legends-trading-card-game-unleashed-moonfall",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": [
+    {
+     "name": "Rarity",
+     "displayName": "Rarity",
+     "value": "Epic"
+    },
+    {
+     "name": "Number",
+     "displayName": "Number",
+     "value": "198/219"
+    },
+    {
+     "name": "Description",
+     "displayName": "Description",
+     "value": "ACTION <em>(Play on your turn or in showdowns.)</em>\r\n<br>\r\nChoose a battlefield where you have units. You may move up to one enemy unit to that battlefield. Then give enemy units there -2 Might this turn."
+    },
+    {
+     "name": "Energy Cost",
+     "displayName": "Energy Cost",
+     "value": "3"
+    },
+    {
+     "name": "Power Cost",
+     "displayName": "Power Cost",
+     "value": "1"
+    },
+    {
+     "name": "Card Type",
+     "displayName": "Card Type",
+     "value": "Signature Spell"
+    },
+    {
+     "name": "Tag",
+     "displayName": "Tag",
+     "value": "Diana"
+    },
+    {
+     "name": "Domain",
+     "displayName": "Domain",
+     "value": "Mind;Chaos"
+    },
+    {
+     "name": "Flavor Text",
+     "displayName": "Flavor Text",
+     "value": "<em>\"Night approaches!\"\r\n<br>\r\n—Diana"
+    }
+   ]
+  },
+  {
+   "productId": 685942,
+   "name": "Arena Kingpin",
+   "cleanName": "Arena Kingpin",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/685942_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/685942/riftbound-league-of-legends-trading-card-game-unleashed-arena-kingpin",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": [
+    {
+     "name": "Rarity",
+     "displayName": "Rarity",
+     "value": "Common"
+    },
+    {
+     "name": "Number",
+     "displayName": "Number",
+     "value": "001/219"
+    },
+    {
+     "name": "Description",
+     "displayName": "Description",
+     "value": "I enter ready.\r\n<br>\r\nExhaust: Give a unit +3 Might this turn."
+    },
+    {
+     "name": "Energy Cost",
+     "displayName": "Energy Cost",
+     "value": "5"
+    },
+    {
+     "name": "Might",
+     "displayName": "Might",
+     "value": "3"
+    },
+    {
+     "name": "Card Type",
+     "displayName": "Card Type",
+     "value": "Unit"
+    },
+    {
+     "name": "Tag",
+     "displayName": "Tag",
+     "value": "Noxus;Yordle"
+    },
+    {
+     "name": "Domain",
+     "displayName": "Domain",
+     "value": "Fury"
+    },
+    {
+     "name": "Flavor Text",
+     "displayName": "Flavor Text",
+     "value": "<em>Don't you dare suggest it's a hairpiece.</em>"
+    }
+   ]
+  },
+  {
+   "productId": 686331,
+   "name": "Conscription",
+   "cleanName": "Conscription",
+   "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/686331_200w.jpg",
+   "categoryId": 89,
+   "groupId": 24560,
+   "url": "https://www.tcgplayer.com/product/686331/riftbound-league-of-legends-trading-card-game-unleashed-conscription",
+   "modifiedOn": "2026-05-08T04:10:16.743",
+   "imageCount": 1,
+   "presaleInfo": {
+    "isPresale": false,
+    "releasedOn": "2026-05-08T00:00:00",
+    "note": null
+   },
+   "extendedData": [
+    {
+     "name": "Rarity",
+     "displayName": "Rarity",
+     "value": "Rare"
+    },
+    {
+     "name": "Number",
+     "displayName": "Number",
+     "value": "140/219"
+    },
+    {
+     "name": "Description",
+     "displayName": "Description",
+     "value": "You may spend 5 XP as an additional cost to play this.\r\n<br>Choose an enemy unit at a battlefield with 3 Might or less. If you paid the additional cost, choose any enemy unit at a battlefield instead. Take control of it, exhaust it, and recall it."
+    },
+    {
+     "name": "Energy Cost",
+     "displayName": "Energy Cost",
+     "value": "5"
+    },
+    {
+     "name": "Power Cost",
+     "displayName": "Power Cost",
+     "value": "2"
+    },
+    {
+     "name": "Might",
+     "displayName": "Might",
+     "value": "0"
+    },
+    {
+     "name": "Card Type",
+     "displayName": "Card Type",
+     "value": "Spell"
+    },
+    {
+     "name": "Domain",
+     "displayName": "Domain",
+     "value": "Chaos"
+    }
+   ]
+  }
+ ]
+}

@@ -272,7 +272,15 @@ COMPONENTS = [
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
-            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36", "D58", "D59"], "tested_by": ["T7"]},
+            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
+                                   "`paperwork_for` is the other direction and lives here for the "
+                                   "reason `pipeline/orders.py` may not hold it: it reads a run "
+                                   "directory and hashes photographs, which a pure resolver does not "
+                                   "do. It reads `pricing.json` back as SKU -> positions THROUGH "
+                                   "`realign` (D36), because that file stores position keys and a "
+                                   "mid-box delete moves them — reading it raw is the defect that "
+                                   "wrote 47 box-2 queue entries one position off.",
+                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
         },
     },
@@ -337,6 +345,42 @@ COMPONENTS = [
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
                            "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
+            # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
+            # store/ imports nothing from pipeline/, so there is no cycle. What it buys is
+            # that `Inventory.copies_on_hand`'s terminal-state rule (D26 — a retired card
+            # has left the box exactly as a sold one has) has ONE definition; the
+            # alternative was a second copy of it here, audited against nothing.
+            "orders.py": {"does": "the order resolver: (sku, quantity) -> the copies that fill it, "
+                                  "for EVERY open order in one pass over a shared per-SKU pool. "
+                                  "Per-order resolution hands two buyers the same physical card and "
+                                  "reports success twice, so there is deliberately no `resolve_one`. "
+                                  "Pure: no route, no screen, no file, no network — the input is "
+                                  "domain objects and an `Inventory`, and the answer is recomputed "
+                                  "on every read rather than stored, because a mid-box delete slides "
+                                  "every higher index down one (D10 ruling 1) and a saved position "
+                                  "list eventually names the wrong card (D36). `fulfilled` is a "
+                                  "COUNT and `Pick.capture_id` is the identity, for the same reason. "
+                                  "Six line reasons, because an empty result has several causes with "
+                                  "different remedies: `no_copies_on_hand` is deliberately not "
+                                  "`already_pulled` — D26 makes a retirement a departure WITHOUT a "
+                                  "sale, so calling it filled tells the owner to ship nothing and "
+                                  "believe it shipped. Candidates are a HINT, never a permission "
+                                  "set: a copy is valid for what it IS (holds the SKU, not terminal, "
+                                  "located, not already spoken for), which is D7's fungibility rather "
+                                  "than an address re-imposed on it.",
+                          # D58 because it decides what this module deliberately does NOT
+                          # do: a card's number counts the cards in the box now, so drawing
+                          # a label needs the box's whole occupancy — a `Pick` carries the
+                          # box and index and leaves the rendering to the one label formula.
+                          "governed_by": ["D7", "D10", "D21", "D24", "D26", "D36", "D58"],
+                          "tested_by": ["T7"],
+                          "note": "THE SKU IS COERCED AT THE BOUNDARY AND WITHOUT THAT NOTHING WORKS "
+                                  "AT ALL: `Card.sku` is a CSV string and a JSON payload carries the "
+                                  "int, `\"9191486\" == 9191486` is False, so an uncoerced resolver "
+                                  "reports every line unresolvable, raises nothing and logs nothing. "
+                                  "IT IS A LIBRARY AND NOT A FEATURE — no route, no client function "
+                                  "and no screen reaches it, which by CLAUDE.md's own rule means it "
+                                  "is not landed and must not be reported as such."},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
                                      "and as of D49 the AUTHORITY for rule and basis rather than "
                                      "a copy of them. `overrides` holds a price OR a `Withheld`: "
@@ -349,6 +393,58 @@ COMPONENTS = [
                              # two states `withheld` is deliberately not, and whose reason words it
                              # may not reuse; D39 for the route the watch line surfaces on.
                              "governed_by": ["D9", "D16", "D26", "D37", "D39", "D49"]},
+            # THE FIRST MODULE IN THIS PACKAGE THAT OPENS A SOCKET, and it says so in its own
+            # header. Everything else under `pipeline/` is pure local computation over the
+            # export, so the network is contained on purpose: `fetch_json` is the one impure
+            # function, every reading and metric is a pure function of a parsed payload, and
+            # `Market` takes the fetcher and the cache directory as arguments. That last one
+            # is why it does NOT import `store.files` — no module in this package imports
+            # anything outside itself and the stdlib, and this one keeps that.
+            #
+            # A LIBRARY AND NOT A FEATURE. Nothing calls it, no route serves it, no screen
+            # draws it. CLAUDE.md's route-is-not-a-feature rule says a capability that exists
+            # only in a package must never be reported as done, so it is recorded here as the
+            # unfinished half it is: surfacing it means a route, a client function and a
+            # control, and that is separate work with a decision entry.
+            #
+            # D8 governs it because that entry names the export as the pricing source and no
+            # external pricing API — which this reads NEXT TO rather than instead of; nothing
+            # here prices anything. D49 because its `bullish` withhold and `watch_above` are
+            # the only things in the product that want a trend and have none. D22 because the
+            # `Product Line` cell it resolves a category by is that entry's to author. D35 for
+            # the number-then-name shape the join borrows, D25 for the per-game partition.
+            "pricehistory.py": {"does": "what a SKU has been selling for: the public "
+                                        "infinite-api price-history endpoint, reached through a "
+                                        "LOCAL sku -> productId join against tcgcsv.com's mirror "
+                                        "of TCGplayer's own catalog. Per SKU it answers a "
+                                        "volume-weighted VWAP on marketPrice, the interval that "
+                                        "VWAP must lie in, momentum, liquidity, units per "
+                                        "transaction and within-bucket dispersion. It also reads "
+                                        "that mirror's current /prices, which are per product per "
+                                        "PRINTING and never per SKU.",
+                                "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
+                                "tested_by": ["T7"],
+                                "note": "RECORDED RATHER THAN BUILT: a library with T7 "
+                                        "coverage that nothing calls, no route serves and no "
+                                        "screen draws, which CLAUDE.md says must be reported in "
+                                        "those words. THE RANGES OVERLAP — `annual` INCLUDES "
+                                        "`month`'s days at a coarser width, so concatenating them "
+                                        "double-counts the recent window; nothing here merges two "
+                                        "series and the wider range is also the staler one. "
+                                        "/prices supplements an export and can NEVER replace one: "
+                                        "no TCGplayer Id, no Total Quantity, and subTypeName is "
+                                        "the printing rather than the condition, so it speaks only "
+                                        "for Near Mint. THE BOUND IS A SANITY CHECK AND NEVER A "
+                                        "RESULT. The "
+                                        "endpoint gives a low and a high PER BUCKET, not "
+                                        "per-transaction fills, so a true VWAP is not "
+                                        "computable — only bounded. Measured on Moonfall over "
+                                        "`quarter`: $16.33 against $12.54..$20.35, which is 48% "
+                                        "of the point estimate wide and 62% of its own low end, "
+                                        "which is why `Bound` names both denominators rather "
+                                        "than reporting one percentage. The join was measured "
+                                        "at 3,588 distinct products across all four committed "
+                                        "exports, 100% resolved, zero ambiguous."},
         },
     },
     {
@@ -851,16 +947,25 @@ COMPONENTS = [
         "path": "fixtures/",
         "status": "built",
         "does": "real TCGplayer exports for three product lines — Pokemon (SV09), Riftbound "
-                "and One Piece — plus the import file TCGplayer accepted verbatim. Ground "
-                "truth. Never modified, enforced by pre-commit.",
-        "governed_by": ["D11", "D22", "D25"],
-        "tested_by": ["T2"],
+                "and One Piece — plus the import file TCGplayer accepted verbatim, and "
+                "two verbatim upstream captures the price-history reader is asserted "
+                "against: slices of tcgcsv.com's Unleashed products and prices, and one "
+                "answer from the infinite-api price-history endpoint. Ground truth. Never "
+                "modified, enforced by pre-commit.",
+        "governed_by": ["D8", "D11", "D22", "D25"],
+        "tested_by": ["T2", "T7"],
         "note": "The Riftbound and One Piece exports arrived 2026-08-23 and settled the "
                 "highest-risk assumption in D22: TCGplayer does carry both as Product Line "
                 "values, on the identical 16-column header. They also refuted three guesses "
                 "the registry had been written around — see D22. No per-file entries here "
                 "because this component declares no source_suffixes, so the orphan rule does "
-                "not scan it; the audit's game rows read the directory instead.",
+                "not scan it; the audit's game rows read the directory instead. THE TWO "
+                "JSON CAPTURES ARE NOT EXPORTS and are here for the property that makes "
+                "this directory what it is: they carry the SHAPE nothing invented would "
+                "get wrong in the same way — every number arriving as a string, a "
+                "literal zero written into a bucket that sold nothing, and the buckets "
+                "arriving NEWEST FIRST, which is the ordering that would have inverted "
+                "every momentum reading in silence.",
     },
     {
         "path": "server/",

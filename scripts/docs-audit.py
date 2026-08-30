@@ -4815,7 +4815,15 @@ def self_test() -> int:
             "a directory holding no Python passes on a path literal — fixtures/ from T2",
             str(found),
         )
-        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T7"]}], registry)
+        # T6 RATHER THAN T7, AND THE SWAP IS THIS SELF-TEST'S OWN ALLOWLIST RULE FIRING.
+        # This case named T7 until 2026-08-30, when T7 gained two `fixtures/` literals for the
+        # price-history reader and the negative case went green for a reason that had nothing
+        # to do with the checker. A negative case whose subject stops being negative is a case
+        # that has silently stopped testing anything — the same shape D16 gives
+        # `docs-audit-allow.txt`, where an entry coming true is what forces it out. T6 builds
+        # synthetic composites and names no path under `fixtures/`, which is what this case
+        # needs and is a property of that test rather than an accident of today's tree.
+        found, _ = reach_findings([{"path": "fixtures/", "tested_by": ["T6"]}], registry)
         ok(
             len(found) == 1,
             "and fails when the cited test never names a path under it",

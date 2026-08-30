@@ -349,6 +349,49 @@ at a temporary directory, so nothing here touches the real inventory.
   age resets to `read today` every time the panel is opened is a stale figure wearing a fresh
   stamp, which is worse than no stamp at all. Same lesson this file already records at the
   multi-game prompt seam — a check that cannot fail is not coverage.
+- **The price-history reader is covered as of 2026-08-30, in its own isolated home, and
+  OFFLINE.** `pipeline/pricehistory.py` walks a SKU to a productId against tcgcsv.com's
+  mirror and reads the public `infinite-api` price-history endpoint. Every assertion runs
+  against two committed fixtures and a fetcher the test supplies, so the harness opens no
+  socket — which is not a style preference: this suite runs behind the Stop hook at the end
+  of every turn, and a case that reached a third party would put a stranger's uptime on the
+  path that decides whether work is done, and hammer a free public mirror once per turn.
+
+  **What is real here and what is constructed, because the two prove different things.** The
+  fixtures are verbatim upstream captures and carry the SHAPE — every number arriving as a
+  string, a literal zero written into a bucket that sold nothing, and **the buckets arriving
+  NEWEST FIRST**. The arithmetic is asserted against small literal buckets whose answer is
+  computable in the assertion's own label, because a real series' VWAP is a number nobody can
+  check by hand and a fixture cannot tell a correct weighted mean from a plausible one.
+
+  **The case that would otherwise fail silently is the bucket order**, and it is why the real
+  capture is committed rather than described: `momentum` subtracts one end of the list from
+  the other, so a parser trusting the wire order reports every rising card as falling — no
+  exception, no missing field, nothing on screen to see. The fixture is asserted newest-first
+  ON DISK and the parse ascending, so an upstream change goes red and says so rather than the
+  parser quietly starting to pass for a new reason.
+
+  **The `/prices` half is covered by its ABSENCES.** The same mirror serves current prices per
+  product per PRINTING, and the cases assert what the payload does NOT carry — no
+  `TCGplayer Id`, no `Total Quantity` — because that is what makes it a supplement to an export
+  rather than a replacement for one. A real two-printing product in the fixture (Arena Kingpin,
+  Foil $0.11 against Normal $0.08) is what makes the composite key load-bearing rather than
+  tidy.
+
+  **Thirteen mutations were observed failing before the block was kept**, each on a named
+  assertion: the sort dropped, `"0"` read as a price, `find()` picking the first of an
+  ambiguous pair, the name rung deleted, the VWAP unweighted, the cache never reaching disk, a
+  corrupt cache entry raising instead of missing, an unresolvable row dropped without being
+  named, `momentum` comparing a window against itself, an unknown range fetched anyway, the
+  printing dropped from the price key, a null direct low read as $0.00, and the group's prices
+  re-fetched rather than cached.
+
+  **What it does NOT cover, named so a green harness is not misread**: whether the endpoint is
+  still public, whether tcgcsv still mirrors these groups, and whether the figures are right.
+  All three are facts about someone else's server on the day you ask, and no committed fixture
+  holds them. The module is also a LIBRARY — nothing calls it and no screen draws it — so this
+  is coverage of a reader, not of a feature.
+
 - **The queue's starvation tier is covered as of 2026-08-24, in its own isolated home.**
   `store/queues.py:sort_key` gained a tier that promotes an entry past `STARVATION_DAYS`
   ahead of price, because price alone never releases an unpriced card: `no_catalog_row` has
