@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-import type { PricingSku } from '../src/types'
+import type { HistoryRange, PriceHistoryPayload, PricingSku } from '../src/types'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -124,6 +124,9 @@ async function open(
     /** Land with NO run selected, which is the only state the picker is drawn in. The default
      *  route carries `?run=` and goes straight to the table. */
     noRun?: boolean
+    /** What `GET .../history` answers. `'refuse'` answers a named refusal, so the panel's
+     *  failure arm is exercised against the same shape a real server sends. */
+    history?: unknown | 'refuse'
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -162,6 +165,43 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ ok: true, run: RUN, written: 'decisions.json' }),
+    })
+  })
+
+  /* THE PRICE HISTORY (D62). Registered among the specific patterns for the reason the
+     comment above gives — Playwright matches most-recent-first, so `[^/]+$` must not get
+     there first. Every case that presses `T` reads `wire` to count how many times this was
+     asked, because the load-bearing property of that panel is that it does NOT fire on a
+     walk. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/history/, async (route) => {
+    const url = new URL(route.request().url())
+    wire.push({
+      method: 'GET',
+      path: `${url.pathname}?sku=${url.searchParams.get('sku')}`,
+      body: null,
+    })
+    if (options.history === 'refuse') {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        /* THE ENVELOPE THE CAPTURE SERVER ACTUALLY SENDS — `{error: {code, message}}`, which
+           `app/src/server.ts:errorEnvelope` is the only reader of. A stub with a flatter
+           shape falls through to the invented `http_error` message, so the panel would draw
+           `409 Conflict from …` and this case would pass while asserting nothing about the
+           sentence the server wrote. */
+        body: JSON.stringify({
+          error: {
+            code: 'not_catalogued',
+            message: 'Vilemaw is not in a catalogued product line.',
+          },
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(options.history ?? history()),
     })
   })
 
@@ -268,6 +308,56 @@ async function open(
   await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
+}
+
+/** A reading in the shape `server/pipeline_routes.py:do_pipeline_history` answers.
+ *
+ *  THE NUMBERS ARE VILEMAW'S, READ LIVE ON 2026-08-30, and the two ranges point OPPOSITE
+ *  WAYS on purpose — up 71.2% over the month, down 33.9% over the year. That is the real
+ *  shape of the card and it is the case the panel's overlap sentence exists for; a fixture
+ *  where both ranges agreed would let a screen that silently merged them pass. */
+function history(over: Partial<PriceHistoryPayload> = {}): PriceHistoryPayload {
+  const range = (
+    name: string,
+    vwap: string,
+    fraction: string,
+    points: number[],
+  ): HistoryRange => ({
+    range: name,
+    buckets: points.length,
+    from: '2026-08-01',
+    to: '2026-08-30',
+    latest_market: '23.63',
+    vwap,
+    bound: { low: '16.02', high: '22.13', width_of_vwap: '0.3248', width_of_low: '0.3814' },
+    momentum: { early: '13.99', late: '23.95', change: '9.96', fraction, window: 5 },
+    liquidity: 642,
+    transactions: 528,
+    units_per_transaction: '1.216',
+    dispersion: '6.11',
+    points: points.map((market, at) => ({
+      at: `2026-08-${String(at + 1).padStart(2, '0')}`,
+      market: String(market),
+      quantity: 3,
+      low: '12.00',
+      high: '24.00',
+    })),
+  })
+  return {
+    run: RUN,
+    sku: '8608859',
+    product_id: 684125,
+    name: 'Articuno',
+    set_name: 'SV: Prismatic Evolutions',
+    condition: 'Near Mint Holofoil',
+    market: '22.03',
+    ranges: [
+      range('month', '18.81', '0.7119', [13.58, 15.2, 18.4, 21.9, 23.63]),
+      range('annual', '21.50', '-0.3389', [29.15, 26.0, 24.0, 21.0, 19.27]),
+    ],
+    never_sold: false,
+    ...over,
+  }
 }
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
@@ -932,4 +1022,162 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
       'false',
     )
   }
+})
+
+// ------------------------------------------------------- the price history (D62)
+//
+// THE PROPERTY THESE CASES EXIST FOR IS THAT THE PANEL DOES NOT FIRE ON A WALK. Every other
+// assertion here is about what is drawn; that one is about what is REQUESTED, and it is the
+// only one whose failure is invisible on screen — a follow-focus panel looks identical and
+// quietly fires one request per arrow key at a free public mirror.
+
+const asks = (wire: Wire[]) => wire.filter((call) => call.path.includes('/history'))
+
+test('`T` reads the price history, and draws the average as the anchor', async ({ page }) => {
+  const wire = await open(page)
+  await field(page).click()
+  await page.keyboard.press('t')
+
+  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await expect(panel).toBeVisible()
+  await expect(panel).toContainText('$18.81')
+  expect(asks(wire).map((call) => call.path)).toEqual([
+    `/pipeline/runs/${RUN}/history?sku=8608859`,
+  ])
+
+  /* THE ANCHOR IS DRAWN LARGER THAN THE BOUND, AND THAT IS THE HONESTY RULE AS A
+     MEASUREMENT. `pipeline/pricehistory.py` names the failure: rendering the two "as though
+     they were a price and an error bar of comparable authority". A class name cannot say
+     which is bigger, so this reads the computed sizes — which goes red on any restyle that
+     brings them level, however the selectors are renamed. */
+  const figure = await panel
+    .locator('.pricehistory-figure')
+    .first()
+    .evaluate((node) => parseFloat(getComputedStyle(node).fontSize))
+  const bound = await panel
+    .locator('.pricehistory-bound')
+    .first()
+    .evaluate((node) => parseFloat(getComputedStyle(node).fontSize))
+  expect(figure).toBeGreaterThan(bound * 2)
+})
+
+test('the panel is PINNED — walking the list fires no further reads', async ({ page }) => {
+  /* THE LOAD-BEARING CASE. A read leaves the machine, so a panel that followed the focused
+     row would fire one request per arrow key: fifty for a walk down a fifty-SKU list, at a
+     free public mirror, for readings nobody asked for. Two SKUs and two arrow presses are
+     enough to catch it — a follow-focus panel asks again on the first one. */
+  const wire = await open(page, {
+    skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })],
+  })
+  await field(page).first().click()
+  await page.keyboard.press('t')
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  expect(asks(wire)).toHaveLength(1)
+
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowUp')
+  expect(asks(wire)).toHaveLength(1)
+
+  // And it still names the card it was opened for rather than the focused one.
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toContainText(
+    'sku 8608859',
+  )
+})
+
+test('a second press closes it, and re-opening asks nothing', async ({ page }) => {
+  const wire = await open(page)
+  await field(page).click()
+  await page.keyboard.press('t')
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+
+  await page.keyboard.press('t')
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toHaveCount(0)
+
+  await page.keyboard.press('t')
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  /* THE READING IS KEPT BY SKU, which is what makes the toggle affordable. Without it a
+     bounce between two cards would re-read both every time. */
+  expect(asks(wire)).toHaveLength(1)
+})
+
+test('both ranges are drawn, and the panel says they overlap', async ({ page }) => {
+  await open(page)
+  await field(page).click()
+  await page.keyboard.press('t')
+  const panel = page.getByRole('complementary', { name: /Price history for/ })
+
+  /* THE MACHINE STRINGS, VERBATIM — `month` and `annual` are the endpoint's own range names
+     and docs/DESIGN.md's owner-screen rule is that they are drawn rather than relabelled. */
+  await expect(panel).toContainText('month')
+  await expect(panel).toContainText('annual')
+
+  /* THEY POINT OPPOSITE WAYS AND BOTH ARE DRAWN. Vilemaw's real numbers: a screen that
+     merged the two ranges could not show both, and one that dropped the sentence would leave
+     `+71.2%` beside `-33.9%` reading as a broken screen. */
+  await expect(panel).toContainText('+71.2%')
+  await expect(panel).toContainText('rising')
+  await expect(panel).toContainText('-33.9%')
+  await expect(panel).toContainText('falling')
+  await expect(panel).toContainText(/ranges overlap/)
+})
+
+test('the export price is drawn beside the reading, and nothing averages them', async ({
+  page,
+}) => {
+  await open(page)
+  await field(page).click()
+  await page.keyboard.press('t')
+  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  // D8's figure, labelled as the export's, next to the reading rather than mixed into it.
+  await expect(panel).toContainText('EXPORT MARKET')
+  await expect(panel).toContainText('$22.03')
+})
+
+test('a card that has never sold says so, and does not read as a failure', async ({ page }) => {
+  /* THE ENDPOINT ANSWERS HTTP 200 WITH A NULL RESULT for a real, catalogued product that has
+     never traded — measured on two of them — so this is not an error arm. A screen that drew
+     it as one would report a join defect over a card that is merely illiquid. */
+  await open(page, { history: history({ ranges: [], never_sold: true }) })
+  await field(page).click()
+  await page.keyboard.press('t')
+  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await expect(panel).toContainText('no recorded sales')
+  await expect(panel).toContainText(/has not traded/)
+})
+
+test('a refusal draws the sentence the server sent, and offers a retry', async ({ page }) => {
+  const wire = await open(page, { history: 'refuse' })
+  await field(page).click()
+  await page.keyboard.press('t')
+  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await expect(panel).toContainText(/not in a catalogued product line/)
+  expect(asks(wire)).toHaveLength(1)
+
+  /* THE RETRY IS THE ONLY WAY PAST THE CACHE, and a refusal is cached like a reading is —
+     without that, a card whose mirror was down would re-read on every press and the panel
+     would look idle while hammering a host that is already struggling. */
+  await panel.getByRole('button', { name: 'Try again' }).click()
+  await expect.poll(() => asks(wire).length).toBe(2)
+})
+
+test('opening the history closes the photograph', async ({ page }) => {
+  /* BOTH PANELS ARE FIXED IN THE SAME CORNER — `PriceHistory.css` carries why that corner is
+     the right one — so they are mutually exclusive rather than overlapping. */
+  await open(page)
+  await field(page).click()
+  await page.keyboard.press('p')
+  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
+
+  await page.keyboard.press('t')
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toHaveCount(0)
+})
+
+test('the button beside the hold does what the key does', async ({ page }) => {
+  /* A BINDING NOTHING ADVERTISES IS ONE ONLY THE PERSON WHO ASKED FOR IT WILL PRESS (D51),
+     so the letter is on screen as a control and not only in a key handler. */
+  const wire = await open(page)
+  await page.getByRole('button', { name: /Price history for/ }).first().click()
+  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  expect(asks(wire)).toHaveLength(1)
 })

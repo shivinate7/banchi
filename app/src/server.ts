@@ -28,6 +28,7 @@ import type {
   CropPreview,
   CsvUpload,
   RunDetail,
+  PriceHistoryPayload,
   PricingPayload,
   RunLeg,
   RunPreflight,
@@ -1602,6 +1603,41 @@ export async function getPricing(name: string): Promise<PricingPayload> {
     `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
     NO_CACHE,
   )) as PricingPayload
+}
+
+/**
+ * What one SKU has actually been selling for — a volume-weighted mean, a momentum reading
+ * and the buckets behind them, over a daily range and a weekly one.
+ *
+ * THE ONE CALL IN THIS FILE THAT LEAVES THE MACHINE, and it is worth knowing at the call
+ * site rather than only in the server. The capture server fetches from `tcgcsv.com` and
+ * `infinite-api.tcgplayer.com` to answer it: both public, no key, no account, nothing spent.
+ * What it costs is TIME — about 1.3s cold and 5ms warm, measured — because the walk is
+ * sku -> product -> history across two hosts, cached on disk with the module's own TTLs.
+ *
+ * SO IT MAY NEVER BE FIRED BY A WALK. This is not a preference and it is the reason the
+ * control on `#/pricing` is a press rather than an effect on the focused row: arrowing down
+ * fifty SKUs with a follow-focus panel open would be fifty requests at a free public mirror,
+ * which is the one way this feature could become rude. One press, one card.
+ *
+ * IT PRICES NOTHING. D8 makes the TCGplayer export the pricing source and this reopens none
+ * of it — the payload carries the export's own `market` beside the reading so the two can be
+ * put side by side, and nothing here is written back or fed to a rule.
+ *
+ * Refusals worth branching on: `not_catalogued` (a `misc` card has no product line to look a
+ * category up by, which D22 makes permanent rather than a missing export),
+ * `history_unresolved` (no single product matched — it refuses rather than guessing),
+ * `history_unreachable` (a mirror did not answer; nothing is wrong with the run),
+ * `sku_not_in_run` and `pricing_not_written`.
+ */
+export async function getPriceHistory(
+  run: string,
+  sku: string,
+): Promise<PriceHistoryPayload> {
+  return (await request(
+    `/pipeline/runs/${encodeURIComponent(run)}/history?sku=${encodeURIComponent(sku)}`,
+    NO_CACHE,
+  )) as PriceHistoryPayload
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

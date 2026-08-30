@@ -487,10 +487,12 @@ COMPONENTS = [
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
                                 "tested_by": ["T7"],
-                                "note": "RECORDED RATHER THAN BUILT: a library with T7 "
-                                        "coverage that nothing calls, no route serves and no "
-                                        "screen draws, which CLAUDE.md says must be reported in "
-                                        "those words. THE RANGES OVERLAP — `annual` INCLUDES "
+                                "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
+                                        "RECORDED RATHER THAN BUILT for one day, and the whole "
+                                        "chain now exists: GET /pipeline/runs/<name>/history, "
+                                        "getPriceHistory in app/src/server.ts, and a T key and a "
+                                        "panel on #/pricing beside the hold that needed it. "
+                                        "THE RANGES OVERLAP — `annual` INCLUDES "
                                         "`month`'s days at a coarser width, so concatenating them "
                                         "double-counts the recent window; nothing here merges two "
                                         "series and the wider range is also the staler one. "
@@ -554,7 +556,7 @@ COMPONENTS = [
                 "outright: check_queue_supersede calls it directly rather than watching it "
                 "through a route, which is what earned queues.py its tested_by. cache.py is "
                 "still only read through a session there, with nothing asserting its own "
-                "behaviour, so it carries no tested_by: an unenforced claim is the defect "
+                "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
@@ -1140,7 +1142,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D52", "D53", "D56", "D58"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D52", "D53", "D56", "D58", "D62"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -1164,7 +1166,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D20", "D21", "D25", "D29", "D32", "D48", "D54", "D56"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D13", "D16", "D20", "D21", "D22", "D25", "D29", "D32", "D43", "D47", "D48", "D49", "D54", "D56"],
                 "tested_by": ["T7"],
             },
         },
@@ -1338,7 +1340,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -1773,7 +1775,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D54", "D56", "D58", "D59"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -1783,7 +1785,41 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62"]},
+            # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
+            # entry names the export as the pricing source: this draws a reading BESIDE that
+            # figure and writes nothing, and the day it prices anything is a change to D8.
+            # D49 because the hold it sits against is what wanted a trend and had none.
+            "src/PriceHistory.tsx": {"does": "the price-history panel on #/pricing: what one SKU "
+                                             "has actually been selling for, over a daily range "
+                                             "and a weekly one, drawn beside the hold. A "
+                                             "volume-weighted average as the ANCHOR, its bound as "
+                                             "a muted sanity check beneath, a momentum reading in "
+                                             "words as well as a sign, liquidity and within-bucket "
+                                             "spread, and a sparkline over the buckets. PINNED to "
+                                             "the SKU it was opened for and deliberately NOT "
+                                             "follow-focus: a read leaves the machine, so a panel "
+                                             "that re-read on the focused row would fire one "
+                                             "request per arrow key.",
+                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62"],
+                                     "note": "IT PRICES NOTHING AND WRITES NOTHING. The two "
+                                             "ranges OVERLAP and are drawn side by side with a "
+                                             "sentence saying so — measured on Vilemaw the day it "
+                                             "was built, up 71% over the month and down 34% over "
+                                             "the year, which is the panel working rather than a "
+                                             "contradiction. DIRECTION IS A SIGN AND A WORD, "
+                                             "NEVER A COLOR: the palette has no red and no green "
+                                             "and accent already means `unsure`."},
+            "src/PriceHistory.css": {"does": "that panel at owner density. It shares the "
+                                            "photograph's bottom-left corner and the two are "
+                                            "mutually exclusive, for the reason Pricing.css "
+                                            "chose that corner: bottom-right covers the four "
+                                            "reference columns and the price field. The 26px "
+                                            "average against the 11px bound is the "
+                                            "anchor-versus-sanity-check rule expressed as type "
+                                            "sizes, and is the property to preserve if this is "
+                                            "ever re-laid-out.",
+                                     "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -2061,7 +2097,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D9", "D20", "D28", "D33", "D49", "D54", "D56", "D57", "D58", "D59"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -2149,7 +2185,7 @@ COMPONENTS = [
             },
             "tests/fulfillment.spec.ts": {
                 "does": "all nine rows of the Fulfillment constraints table against the "
-                        "rendered view, with every contrast ratio computed from the colours "
+                        "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41"],

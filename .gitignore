@@ -88,3 +88,13 @@ test-results
 styles/*
 !styles/PKMNSCAN/
 !styles/config/
+
+# `pipeline/pricehistory.py`'s fetches, cached on disk by `server/pipeline_routes.py`.
+# Derived from two PUBLIC mirrors and reproducible by pressing the key again, so it is
+# `harness/.cache`-shaped rather than `inventory/`-shaped: deleting it costs a few requests
+# and nothing else. Per checkout, because it hangs off `files.home()` (D43).
+#
+# ANCHORED, and bare. The leading slash keeps it to the repo root so it cannot silently
+# swallow `harness/.cache` — which has its own line above and its own reason. No trailing
+# slash, per the rule at the top of this file: a worktree can put a link at this name.
+/.cache

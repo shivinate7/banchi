@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   describeFailure,
+  getPriceHistory,
   getPricing,
   getRun,
   getRuns,
@@ -21,6 +22,7 @@ import type {
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
+import { PriceHistoryPanel, type HistoryRead } from './PriceHistory'
 import { RunFiles } from './RunFiles'
 import { runBoxLabel } from './runScope'
 import './Pricing.css'
@@ -166,6 +168,24 @@ export function Pricing() {
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
+
+  /* ------------------------------------------------------------- the price history (D62)
+   *
+   * WHICH SKU THE PANEL IS PINNED TO, AND IT DOES NOT FOLLOW FOCUS. That is the one way this
+   * differs from the photograph above it, and it is not a preference: a reading is a request
+   * to two public mirrors, so a panel that re-read on the focused row would fire one request
+   * per arrow key — fifty for a walk down this list, at a free mirror, for readings nobody
+   * asked for. `t` re-aims it, which is a press and therefore a deliberate act.
+   *
+   * The panel prints the SKU it is pinned to for the same reason, so a panel left open while
+   * the hands move down the list cannot be read as describing the focused row. */
+  const [historyFor, setHistoryFor] = useState<string | null>(null)
+  /* Every reading this session has taken, by SKU. Kept across closes so re-opening a card is
+   * free, and NOT cleared when the run changes: a SKU's sales history is a fact about the
+   * card rather than about the run that priced it, so the same reading is correct on any run
+   * that matched it. The server's own on-disk cache (`pipeline/pricehistory.py`'s TTLs) is
+   * what decides staleness; this only avoids asking it twice in one sitting. */
+  const [history, setHistory] = useState<Record<string, HistoryRead>>({})
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
@@ -646,6 +666,46 @@ export function Pricing() {
     setUndo(rest)
   }, [undo])
 
+  /* OPEN THE HISTORY PANEL FOR ONE SKU, AND FETCH IF THIS SESSION HAS NOT ALREADY.
+   *
+   * ONE PRESS, ONE READ, AND A SECOND PRESS IS FREE. The reading is kept by SKU, so toggling
+   * the panel shut and open again asks nothing — which matters because the panel is closed by
+   * the same key that opens it and an operator comparing two cards will bounce between them.
+   *
+   * `force` IS THE RETRY, and it is the only way past the cache. A refusal is cached like a
+   * reading is: without that, a card whose mirror was down would re-fetch on every press, and
+   * the panel would look like it were doing nothing while quietly hammering a host that is
+   * already struggling. The button says `Try again` because retrying is the operator's call.
+   *
+   * IT CLOSES THE PHOTOGRAPH. Both panels are fixed in the same corner — `PriceHistory.css`
+   * carries the reason that corner is the right one — so they are mutually exclusive rather
+   * than overlapping. */
+  const openHistory = useCallback(
+    (sku: PricingSku, force = false) => {
+      if (run === null) return
+      setPhotoFor(null)
+      setHistoryFor(sku.sku)
+      if (!force && history[sku.sku] !== undefined) return
+      setHistory((current) => ({ ...current, [sku.sku]: { kind: 'reading' } }))
+      /* `.then().catch()` AND NOT `.then(ok, fail)` — `app/eslint.config.js` refuses the
+         second form and names the morning it cost: a success handler that throws becomes an
+         unhandled rejection, so the panel would sit on `reading…` forever with no failure
+         shown and no control to press. This handler walks a response body, which is exactly
+         the throw that rule is about. */
+      getPriceHistory(run, sku.sku)
+        .then((payload) =>
+          setHistory((current) => ({ ...current, [sku.sku]: { kind: 'read', payload } })),
+        )
+        .catch((error) =>
+          setHistory((current) => ({
+            ...current,
+            [sku.sku]: { kind: 'refused', why: describeFailure(error).message },
+          })),
+        )
+    },
+    [history, run],
+  )
+
   const onKey = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
       const key = event.key
@@ -701,12 +761,26 @@ export function Pricing() {
         )
         return
       }
+      /* `t` FOR TREND, AND `h` WOULD HAVE BEEN THE OBVIOUS LETTER. It is spent on the hold —
+         which is the control this sits beside and exists to inform, so the collision is with
+         exactly the thing it is for. `t` is unspent on this screen and is a word the owner
+         would say out loud naming what the panel shows, which is the rule `App.tsx` states
+         for the route chords one level up.
+
+         THE SAME KEY CLOSES IT, matching `p` beside it, so the panel never takes a binding
+         away from price entry and `Escape` keeps its two existing jobs in the field. */
+      if (lower === 't') {
+        event.preventDefault()
+        if (historyFor === sku.sku) setHistoryFor(null)
+        else openHistory(sku)
+        return
+      }
       if (lower === 'n' && sku.snap.now !== null) {
         event.preventDefault()
         snap(sku, 'now')
       }
     },
-    [answerFor, commit, move, snap, toggleHold, undoLast],
+    [answerFor, commit, historyFor, move, openHistory, snap, toggleHold, undoLast],
   )
 
   /* THE PHOTO PANEL FOLLOWS FOCUS WHILE IT IS OPEN, and the same key closes it — so
@@ -715,6 +789,15 @@ export function Pricing() {
   const photoSku = useMemo(
     () => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null),
     [photoFor, rows],
+  )
+
+  /* THE PINNED CARD, RESOLVED AGAINST THE CURRENT ROWS. `rows` is what the section filter and
+     the held filter leave, so a card filtered out from under an open panel resolves to null
+     and the panel closes itself — which is right: a reading floating over a list that no
+     longer contains its card is a panel about nothing the operator can see. */
+  const historySku = useMemo(
+    () => (historyFor === null ? null : rows.find((row) => row.sku === historyFor) ?? null),
+    [historyFor, rows],
   )
 
   /** `Box 3 · RB Epics` for the run being priced, or `null` where nothing can say (D56).
@@ -900,6 +983,12 @@ export function Pricing() {
               <span>Id</span>
               <span>Qty</span>
               <span>Lists at</span>
+              {/* Two empty cells, for the two 32px controls at the end of every row — the
+                  hold and the history. The caption reads the SAME `--pricing-cols` template
+                  the rows do, so a cell missing here does not merely lose a heading: it
+                  leaves the row with an item the grid has no column for, which wraps into an
+                  implicit row and breaks the height invariant below. */}
+              <span />
               <span />
             </div>
 
@@ -1010,6 +1099,27 @@ export function Pricing() {
                       H
                     </button>
 
+                    {/* BESIDE THE HOLD, BECAUSE IT IS THE FACT THE HOLD WAS MISSING. D49
+                        records that `bullish` and `watch_above` are set against the
+                        operator's memory of what a card used to cost; this is the reading
+                        that replaces the memory, so it sits against the control it informs.
+
+                        A BUTTON AND NOT ONLY A KEY. docs/DESIGN.md: "every choice shows its
+                        key" — and the converse, from D51, is that a binding nothing
+                        advertises is one only the person who asked for it will ever press.
+                        The letter IS the label here, the same way `H` is on the hold. */}
+                    <button
+                      type="button"
+                      className="pricing-history"
+                      aria-pressed={historyFor === sku.sku}
+                      aria-label={`Price history for ${sku.name}`}
+                      onClick={() =>
+                        historyFor === sku.sku ? setHistoryFor(null) : openHistory(sku)
+                      }
+                    >
+                      T
+                    </button>
+
                     {/* THE SERVER SAYS WHY; THIS DRAWS IT. The sentence here used to be
                         "nothing to add this run — TCGplayer already holds {live_before}",
                         composed on the client out of the export's live column alone — which
@@ -1048,6 +1158,24 @@ export function Pricing() {
           </section>
         )
       })}
+
+      {/* THE READING, PINNED TO THE SKU IT WAS OPENED FOR. Not `photoSku`'s follow-focus
+          shape, and `openHistory` carries the reason: a read leaves this machine, so a panel
+          that re-read on the focused row would fire one request per arrow key.
+
+          IT SURVIVES THE ROW SCROLLING AWAY, which is the other half of being pinned. The
+          operator opens a reading, walks the list comparing it against other cards, and the
+          panel goes on describing the card they opened it for — with its SKU printed, so
+          which card that is stays answerable. */}
+      {historySku === null ? null : (
+        <PriceHistoryPanel
+          sku={historySku.sku}
+          name={historySku.name}
+          read={history[historySku.sku]}
+          onClose={() => setHistoryFor(null)}
+          onRetry={() => openHistory(historySku, true)}
+        />
+      )}
 
       {photoSku === null || photoFor === null ? null : (
         <aside className="pricing-photo" aria-label={`Photograph of ${photoSku.name}`}>
