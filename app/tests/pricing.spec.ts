@@ -100,6 +100,13 @@ async function open(
     decisions?: Record<string, unknown> | null
     /** Whether the run already carries an emit record — the double-press guard's input. */
     emitted?: boolean
+    /** The run LIST, for cases about the picker rather than about a table. Each entry is the
+     *  handful of `RunSummary` fields a chip draws; everything else is filled in below, so a
+     *  case names what it is about and nothing more. */
+    runs?: { run: string; box: number | null; box_name: string | null; skus: number }[]
+    /** Land with NO run selected, which is the only state the picker is drawn in. The default
+     *  route carries `?run=` and goes straight to the table. */
+    noRun?: boolean
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -183,6 +190,11 @@ async function open(
       body: JSON.stringify({
         run: RUN,
         path: `/tmp/runs/${RUN}`,
+        /* WHICH DRAWER, AND WHAT THE OWNER CALLS IT (D56). Both routes carry it because both
+           are `_summary` server-side, and this screen prefers the DETAIL: it is what Reload
+           re-reads, so a box renamed on `#/inventory` reaches the header on a press. */
+        box: 7,
+        box_name: 'Riftbound epics',
         live: false,
         phase: options.emitted === true ? 'reconcile' : 'emit',
         joined: true,
@@ -201,23 +213,29 @@ async function open(
   })
 
   await page.route(/\/pipeline\/runs$/, async (route) => {
+    const listed = options.runs ?? [
+      { run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 },
+    ]
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        runs: [
-          {
-            run: RUN,
-            path: `/tmp/runs/${RUN}`,
-            live: false,
-            phase: 'emit',
-            joined: true,
-            collected: true,
-            counts: { skus: 1, cards_in: 3, queued_main: 0, queued_parked: 0 },
-            batch_ids: [],
-            usage: {},
-          },
-        ],
+        runs: listed.map((row) => ({
+          run: row.run,
+          path: `/tmp/runs/${row.run}`,
+          box: row.box,
+          box_name: row.box_name,
+          live: false,
+          phase: 'emit',
+          /* EVERY FIXTURE RUN IS JOINED, because the picker filters on it — an unjoined run
+             has no `pricing.json` and therefore nothing to price. A case wanting the empty
+             state passes `runs: []`. */
+          joined: true,
+          collected: true,
+          counts: { skus: row.skus, cards_in: 3, queued_main: 0, queued_parked: 0 },
+          batch_ids: [],
+          usage: {},
+        })),
       }),
     })
   })
@@ -230,7 +248,7 @@ async function open(
     })
   })
 
-  await page.goto(VIEW_ROUTE)
+  await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
 }
@@ -248,6 +266,49 @@ test('the screen is on its own route and draws the run it was linked to', async 
      the hash rather than through a second `sessionStorage` key with its own clearing rules —
      a run name has one source of truth, so nothing here can disagree with anything. */
   await expect(page.locator('.pricing-row')).toHaveCount(1)
+
+  /* AND IT NAMES THE DRAWER (D56). This line read `<run> · N SKUs` — a directory and a count,
+     never what is in the box — which is the complaint that produced D56, in the place the
+     owner was looking when they made it. The run name STAYS: it is what `emit` and `join` are
+     pointed at and what `decisions.json` is written under. What is new goes in front of it. */
+  await expect(page.locator('.pricing-scope')).toHaveText(
+    `Box 7 · Riftbound epics · ${RUN} · 1 SKUs`,
+  )
+})
+
+test('the run picker leads with the box, and the directory is what tells two runs apart', async ({
+  page,
+}) => {
+  /* THE OWNER'S OWN STORE IS THE CASE: box 1 carries TWO joined runs, so the headline is
+     identical on two chips and the date beneath is the only thing separating them. That is
+     what stops the run name being demoted out of usefulness when the box takes the top line —
+     `docs/DESIGN.md`'s human-label-large, machine-string-small rule, which the review queue
+     already applies to its reason codes, pointed at a picker. */
+  await open(page, {
+    runs: [
+      { run: '2026-08-30-box3-01', box: 3, box_name: 'RB Epics', skus: 15 },
+      { run: '2026-08-29-box1-01', box: 1, box_name: 'UNL Rares', skus: 50 },
+      { run: '2026-08-22-box1-03', box: 1, box_name: 'UNL Rares', skus: 45 },
+      /* A BOX WITH NO NAME. D20 leaves a name optional, so this is an ordinary box and its
+         chip must draw the number ALONE — no separator, no placeholder. */
+      { run: '2026-08-24-box2-01', box: 2, box_name: null, skus: 108 },
+    ],
+    noRun: true,
+  })
+
+  const chips = page.locator('.pricing-run')
+  await expect(chips).toHaveCount(4)
+  await expect(chips.nth(0).locator('.pricing-run-name')).toHaveText('Box 3 · RB Epics')
+  await expect(chips.nth(1).locator('.pricing-run-name')).toHaveText('Box 1 · UNL Rares')
+  await expect(chips.nth(2).locator('.pricing-run-name')).toHaveText('Box 1 · UNL Rares')
+  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2')
+
+  /* THE DIRECTORY IS STILL DRAWN, and on the two chips whose headline is identical it is the
+     whole of the difference. An assertion on the headline alone would go green against a chip
+     that had dropped the run name entirely. */
+  await expect(chips.nth(1).locator('.pricing-run-id')).toHaveText('2026-08-29-box1-01')
+  await expect(chips.nth(2).locator('.pricing-run-id')).toHaveText('2026-08-22-box1-03')
+  await expect(chips.nth(0)).toContainText('15 SKUs')
 })
 
 test('every export column that carries data is on the row', async ({ page }) => {

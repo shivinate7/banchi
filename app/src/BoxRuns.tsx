@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { getRuns } from './server'
 import type { RunSummary } from './types'
-import { boxOf, runningFor } from './RunPanel'
+import { runningFor } from './RunPanel'
+import { boxOf } from './runScope'
 import { carryScope, clearCarriedScope } from './runHandoff'
 import './BoxRuns.css'
 
@@ -82,9 +83,10 @@ export function BoxRuns({ box, indices }: BoxRunsProps) {
     }
   }, [])
 
-  /* RUNS OVER THIS BOX, BY THE PANEL'S OWN DERIVATION. `boxOf` is imported rather than
-     re-derived because a run's box is parsed out of its capture directory when the run predates
-     the scope block, and two copies of that regex are two answers to which box a run was over. */
+  /* RUNS OVER THIS BOX, BY THE ONE DERIVATION. `boxOf` is imported from `runScope.ts` rather
+     than re-derived: the box comes off the server now (D56) and falls back to parsing the
+     capture directory for a run that predates the field, and two copies of that fallback are
+     two answers to which box a run was over. */
   const here = box === null ? [] : runs.filter((row) => row.live && boxOf(row) === box)
 
   const said =

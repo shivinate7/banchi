@@ -140,11 +140,34 @@
   color: var(--ink);
 }
 
+/* THE SECOND LINE HOLDS TWO FACTS AT TWO WEIGHTS (D56): the run directory, which is what
+   tells two runs over one box apart, and the SKU count, which is the size of the job. A row
+   rather than one string so the directory keeps the metadata size while the count sits at the
+   caption size beside it — `2026-08-29-box1-01` at 10px is a date somebody has to squint at,
+   and it is the only thing distinguishing two chips whose headline is identical.
+
+   `flex-wrap` because a long run name plus a count is wider than a short chip, and a chip that
+   grew to fit would break the picker's row rhythm; wrapping inside the chip costs 13px and
+   keeps the strip even. */
 .pricing-run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  /* `--s3` and not `--s2` on the row axis. Both facts are mono and the worst adjacency is two
+     runs of digits — `2026-08-30-box3-01` ends in `01` and `15 SKUs` opens on `15` — so 8px
+     lets them read as one string. The separator is the gap rather than an interpunct because
+     D41 answered this exact question for `.boxops-meta` by giving the facts structure instead
+     of dots, and line one above already spends the one dot this chip can afford. */
+  gap: 2px var(--s3);
   font-family: var(--util);
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.pricing-run-id {
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .pricing-empty,

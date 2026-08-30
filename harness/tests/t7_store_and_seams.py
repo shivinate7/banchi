@@ -10097,6 +10097,72 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "the download the owner actually came for",
             )
 
+            # ------------------------------------------------- which drawer, and its name
+            #
+            # D56. The screens that list runs drew a box NUMBER and nothing else, on a store
+            # whose boxes have been named since D20 — `#/pricing`'s picker offered
+            # `2026-08-30-box3-01` over `15 SKUs` while the registry held `RB Epics`. The join
+            # is the server's because the name lives in the store, which no screen drawing a
+            # run list had read.
+            checks.equal(
+                (payload["box"], payload["box_name"]),
+                (3, None),
+                "a run reports the box it is over, and a box the registry has never heard "
+                "of reports no name rather than an invented one — D20 leaves a name optional, "
+                "so unnamed is an ordinary box and not a fault to mark",
+            )
+
+            capture_server.do_create_box({"box": 3, "name": "RB Epics"})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")
+            checks.equal(
+                json.loads(body)["box_name"],
+                "RB Epics",
+                "naming the box names the run, WITHOUT the run being touched — the join runs "
+                "at read time against the registry, so nothing had to be written into a "
+                "manifest that `cli/runs.py` makes an immutable input",
+            )
+
+            # THE ASSERTION THAT MAKES THE READ-TIME JOIN LOAD-BEARING, and the one a stored
+            # name would fail. D20 makes a rename a live edit that relabels every card in the
+            # box on every screen that draws one; a name copied into a run directory when the
+            # run was created would go on saying `RB Epics` here forever.
+            capture_server.do_put_box(3, {"name": "Riftbound epics"})
+            status, body, _ = request(port, "GET", f"/pipeline/runs/{made.directory.name}")
+            checks.equal(
+                json.loads(body)["box_name"],
+                "Riftbound epics",
+                "and a RENAME reaches the run on the next read, which is the property a name "
+                "stored on the run could not have",
+            )
+
+            # A RUN WITH NO SCOPE BLOCK, which is what `pkmnscan identify captures/cards/box3`
+            # leaves behind and what two of the four runs on the owner's own machine are.
+            # `_run_box` reads the capture directory's own name for exactly this case, and the
+            # name follows the number wherever the number came from.
+            legacy = runs.create("box3")
+            legacy.set(capture_dir=str(box_dir))
+            status, body, _ = request(port, "GET", "/pipeline/runs")
+            listed = {row["run"]: row for row in json.loads(body)["runs"]}
+            checks.equal(
+                (
+                    listed[legacy.directory.name]["scope"],
+                    listed[legacy.directory.name]["box"],
+                    listed[legacy.directory.name]["box_name"],
+                ),
+                (None, 3, "Riftbound epics"),
+                "a run started from a TERMINAL carries no scope block at all, and is still "
+                "placed and named — the box comes off the capture directory's own name, "
+                "which is the only thing that can see such a run",
+            )
+            checks.equal(
+                listed[made.directory.name]["box_name"],
+                "Riftbound epics",
+                "and the LIST carries it as well as the single-run route, off one registry "
+                "read for the whole list — this is the polled route, at 4s while anything is "
+                "live, so a read per row would be a read per run per poll",
+            )
+            shutil.rmtree(legacy.directory)
+
             # ----------------------------------------------------------- the file download
             status, body, headers = request(
                 port,

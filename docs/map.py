@@ -905,7 +905,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D21", "D25", "D29", "D32", "D48", "D54"],
+                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D20", "D21", "D25", "D29", "D32", "D48", "D54", "D56"],
                 "tested_by": ["T7"],
             },
         },
@@ -1083,7 +1083,7 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1447,8 +1447,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38",
-                                             "D39"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -1480,8 +1479,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
-                                                "D37", "D39", "D41", "D49", "D35", "D48", "D54"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D54", "D56"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -1491,7 +1489,7 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -1538,7 +1536,7 @@ COMPONENTS = [
                                 # become a second door to; D7 is the fungible-copy model the
                                 # ticked selection writes against; D13 is one truth on one Mac,
                                 # which is why a run this tab did not start still shows here.
-                                "governed_by": ["D5", "D7", "D13", "D33", "D39"]},
+                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56"]},
             "src/BoxRuns.css": {"does": "one row, and the rule that it must stay one — the whole "
                                         "argument for the panel leaving this screen was its "
                                         "625-1143px height in a column whose question is 'where "
@@ -1546,6 +1544,20 @@ COMPONENTS = [
                                         "BoxOps' own 32px so the two panels in this screen agree "
                                         "about how tall a control is.",
                                 "governed_by": ["D5", "D33", "D39"]},
+            "src/runScope.ts": {"does": "WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS "
+                                        "IT — one answer, three screens (D56). `boxOf` prefers "
+                                        "the `box` the server now sends and keeps the "
+                                        "scope/capture-directory derivation only as the fallback "
+                                        "for a payload that predates the field; `boxLabel` "
+                                        "composes `Box 3 · RB Epics`, and `Box 3` ALONE where the "
+                                        "box has no name, because D20 leaves a name optional and "
+                                        "a placeholder would draw a fault where there is none. "
+                                        "It replaced a second implementation of "
+                                        "server/pipeline_routes.py:_run_box written in TypeScript "
+                                        "with a differently-anchored regex.",
+                                # D20 is the name and its optionality; D10 ruling 3 is the deleted
+                                # box whose number a run still remembers; D56 is the entry.
+                                "governed_by": ["D10", "D20", "D56"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
@@ -1580,7 +1592,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D49", "D48", "D54"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1755,7 +1767,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D9", "D28", "D33", "D49", "D54"]},
+                                      "governed_by": ["D9", "D20", "D28", "D33", "D49", "D54", "D56"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -1767,7 +1779,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32", "D33", "D39", "D48", "D54"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

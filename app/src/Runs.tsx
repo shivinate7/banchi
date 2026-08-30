@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { describeFailure, getBoxes, type Failure } from './server'
+import { boxLabel } from './runScope'
 import type { BoxRecord } from './types'
 import { RunPanel, type CartBox } from './RunPanel'
 import { carriedScope, clearCarriedScope } from './runHandoff'
@@ -157,9 +158,16 @@ export function Runs() {
         .sort((a, b) => a - b)
         .map((box) => ({
           box,
+          /* THE NAME TRAVELS WITH THE BOX INTO THE PANEL (D56), from the same `GET /boxes` the
+             picker above draws. The panel names the drawer on every leg head and in the
+             per-box cost breakdown, and a cart row is the one place the name can come from —
+             a box that has never been run has no run summary to carry it. It is drawn and
+             never sent: `RunPanel`'s `legs` projects a row to what the route reads, so a
+             rename cannot reach `scopeKey` and cannot void a live estimate. */
+          name: boxes?.find((record) => record.box === box)?.name ?? null,
           indices: carried !== null && carried.box === box ? carried.indices : NONE,
         })),
-    [picked, carried],
+    [picked, carried, boxes],
   )
 
   /** The one box, where there is exactly one. Bound rather than indexed twice, because
@@ -167,11 +175,17 @@ export function Runs() {
    *  would be a claim about a length the compiler can already see. */
   const only = cart.length === 1 ? cart[0] : undefined
 
+  /* THE ONE-BOX CASE NAMES THE DRAWER AND THE CART CASE DOES NOT (D56). With one box this is
+     the only line above the money gate saying what is about to be read, and `Box 3` alone was
+     the complaint that produced D56. With several, the names would run this header to two and
+     three lines while the picker directly below it draws every one of them named — so the
+     header counts the boxes and the chips say which. */
   const scopeLine =
     only !== undefined
-      ? only.indices.length > 0
-        ? `Box ${only.box} · ${only.indices.length} ticked card${only.indices.length === 1 ? '' : 's'}`
-        : `Box ${only.box} · the whole box`
+      ? `${boxLabel(only.box, only.name) ?? `Box ${only.box}`} · ` +
+        (only.indices.length > 0
+          ? `${only.indices.length} ticked card${only.indices.length === 1 ? '' : 's'}`
+          : 'the whole box')
       : cart.length === 0
         ? 'Pick a box. You can pick several.'
         : `${cart.length} boxes · ` +
