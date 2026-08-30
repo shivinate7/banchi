@@ -467,3 +467,100 @@ test('a row is the same height whether or not it carries a note', async ({ page 
   )
   expect(heights[0]).toBe(heights[1])
 })
+
+// ------------------------------------------------------ the save loop actually finishes
+
+test('a committed answer lands and the indicator returns to saved', async ({ page }) => {
+  const wire = await open(page)
+
+  await field(page).focus()
+  await page.keyboard.type('4.50')
+  await page.keyboard.press('Enter')
+
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(1)
+  /* THE INDICATOR IS THE ONLY THING ON SCREEN THAT SAYS THE ANSWER IS SAFE, and it read
+     `saving…` forever — on every save, from the first one. The effect depended on the
+     `saving` STATE it raised itself, so raising it re-ran the effect and the re-run's cleanup
+     killed the in-flight closure: the response landed on a dead one and neither the clear nor
+     `setSaving(false)` ever fired. Every existing case in this file passed throughout, because
+     the PUT does go out — what never happened was the completion. */
+  await expect(page.locator('.pricing-save')).toHaveText('saved')
+})
+
+test('a second answer is written too, and it is not the first one over again', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    skus: [sku(), sku({ sku: '8608459', name: 'Dunsparce' })],
+  })
+
+  const fields = field(page)
+  await fields.nth(0).focus()
+  await page.keyboard.type('4.50')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(1)
+
+  await fields.nth(1).focus()
+  await page.keyboard.type('1.25')
+  await page.keyboard.press('Enter')
+
+  /* THE HALF THAT IS NOT COSMETIC. With the loop wedged after the first write, the guard read
+     "a save is in flight" forever and every later answer was typed, drawn, and never sent —
+     the operator would have priced a box and closed a tab holding one row. The PUT replaces
+     the document wholesale, so the second body must carry BOTH answers rather than the second
+     alone. */
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
+  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
+    decisions?: { overrides?: Record<string, unknown> }
+  }
+  expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
+  await expect(page.locator('.pricing-save')).toHaveText('saved')
+})
+
+test('an answer typed while a write is in flight is not lost', async ({ page }) => {
+  /* THE COALESCING PROMISE, WHICH THE COMMENT MADE AND THE CODE DID NOT KEEP. `dirty` was a
+     flag, and a flag cannot tell "the write I just sent" from "the write that landed while it
+     was in flight" — so clearing it on a response discarded whatever had been typed since
+     that response left, silently and with the indicator reading `saved`. It is a comparison
+     against the document the server confirmed now, so the second answer is still unequal when
+     the first write lands and the loop runs again. */
+  await open(page, { skus: [sku(), sku({ sku: '8608459', name: 'Dunsparce' })] })
+
+  /* REGISTERED AFTER `open`, WHICH IS WHAT MAKES IT WIN. Playwright matches handlers newest
+     first, so this shadows the one `open` installed and holds the first PUT open. */
+  const wire: Wire[] = []
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/pipeline\/runs\/[^/]+\/decisions$/, async (route) => {
+    wire.push({
+      method: 'PUT',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    if (wire.length === 1) await held
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, run: RUN, written: 'decisions.json' }),
+    })
+  })
+
+  const fields = field(page)
+  await fields.nth(0).focus()
+  await page.keyboard.type('4.50')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => wire.length).toBe(1)
+
+  await fields.nth(1).focus()
+  await page.keyboard.type('1.25')
+  await page.keyboard.press('Enter')
+
+  release()
+
+  await expect.poll(() => wire.length).toBe(2)
+  const sent = wire.pop()?.body as { decisions?: { overrides?: Record<string, unknown> } }
+  expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
+  await expect(page.locator('.pricing-save')).toHaveText('saved')
+})

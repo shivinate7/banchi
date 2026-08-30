@@ -4222,6 +4222,39 @@ and it matters more here than for the review vocabulary, since `PUT .../decision
 nothing and the screen's only defence against writing an unparseable file is that the two
 declarations agree. Mutation-tested in both directions before it was kept.
 
+**THE SAVE LOOP WAS WEDGED FROM THE DAY IT SHIPPED, AND EVERY CASE IN ITS OWN SPEC WAS GREEN
+THROUGHOUT (found by the owner 2026-08-30: *"any changes to the prices seems to be stuck on
+perpetually saving"*).** The effect that writes `decisions.json` read the `saving` STATE it
+raised itself, so `saving` was in its dependency list — raising it re-ran the effect, and the
+re-run's CLEANUP set the in-flight closure's `live` to false. The response landed on a dead
+closure, so neither the clear nor `setSaving(false)` ever fired. **On the first save of every
+session**: the indicator read `saving…` forever and the guard `if (… || saving) return` then
+refused every later write. The operator could price a box, watch each answer draw, and have one
+row reach the file.
+
+**IT PASSED FIFTEEN CASES BECAUSE THE PUT REALLY DOES GO OUT.** `app/tests/pricing.spec.ts`
+asserted what the screen SENDS — the load-bearing absences this entry rests on, and one body
+with one answer in it — and never that a write COMPLETED. What that suite could not see is
+everything after the request: the indicator returning to `saved`, and a second answer being
+sent at all. Both are asserted now, and both were observed red against the old code with the
+other fifteen still green.
+
+**`dirty` IS A COMPARISON NOW, NOT A FLAG, AND THAT IS THE HALF THAT IS NOT COSMETIC.** The
+effect's own comment promised *"a change during one re-runs when it lands"*, and a flag cannot
+keep that promise: it cannot tell "the write I just sent" from "the write that landed while it
+was in flight", so clearing it on a response discarded whatever had been typed since that
+response left — silently, with the indicator reading `saved`. The screen holds the document the
+server last confirmed and `dirty` is object identity against it, so a write clears only what it
+carried and anything typed during a flight is still unequal when it lands. The guard is a ref,
+which is what lets `saving` stay in the dependency list doing the one job it is good for —
+re-firing the effect when a flight ends, since everything a completion changes is a ref and a
+re-render is the only thing that can ask whether more is owed.
+
+**A REFUSED WRITE IS NOT RETRIED IN A SPIN.** `dirty` correctly stays true after a failure —
+the server does not have those answers — so without a record of the document that failed, the
+loop would re-fire the instant `saving` went false, forever. The next keystroke makes a new
+document and the retry happens then.
+
 **WHAT IS NOT BUILT, named rather than left to be discovered**: no durable home for a hold
 outside the run directory; no cross-run view of what is being held; no search or sort control,
 because the sort is the hierarchy and a re-sort under a finger is D28's defect; and no `Custom`
