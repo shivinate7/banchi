@@ -2983,238 +2983,84 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 ## D43 — the port follows the store, because the store was already per-checkout
 
-**BUILT 2026-08-29.** `store/files.py:home()` has always defaulted to `REPO_ROOT` — the
-checkout the code is running from — so every git worktree has its own `inventory/`, its own
-`runs/` and its own `captures/`. The capture server's port was the bare constant `8000` in all
-of them, and `app/src/server.ts` asked for `http://localhost:8000` whatever tree served it.
+**Every checkout derives its own dev and capture ports from its own path, because every checkout already had its own store.** Built 2026-08-29. `store/files.py:home()` has always defaulted to `REPO_ROOT` — the checkout the code runs from — so every git worktree has its own `inventory/`, `runs/` and `captures/`. The capture server's port was the bare constant `8000` in all of them, and `app/src/server.ts` asked for `http://localhost:8000` whatever tree served it.
 
-**A SHARED PORT OVER PER-CHECKOUT STORES IS NOT A BUSY-PORT PROBLEM. IT IS A DATA-LOSS
-PROBLEM, AND IT RUNS IN BOTH DIRECTIONS.** Whichever server won the bind answered every tree's
-UI:
+**A shared port over per-checkout stores is not a busy-port problem. It is a data-loss problem, and it runs in both directions.** Whichever server won the bind answered every tree's UI:
 
-- a worktree's screens drive the owner's real 767-card inventory, on a branch, with whatever
-  half-finished route that branch happens to define; or
-- the MAIN checkout's capture screen — the one the owner actually shoots a box from — is
-  answered by a worktree's server, and real card photographs are written into
-  `<worktree>/captures/cards/` and deleted with the branch.
+- a worktree's screens drive the owner's real 767-card inventory, on a branch, with whatever half-finished route that branch happens to define; or
+- the MAIN checkout's capture screen — the one the owner actually shoots a box from — is answered by a worktree's server, and real card photographs are written into `<worktree>/captures/cards/` and deleted with the branch.
 
 The second is unrecoverable and silent. Nothing on either screen says which process replied.
 
-**HALF OF THIS WAS ALREADY FIXED AND THE HALF THAT WAS LEFT IS THE ONE THAT WRITES.**
-`app/devPort.ts` (2026-08-29, earlier the same day) gave every checkout its own **Vite** port,
-after `make design-check` in a worktree attached to the main tree's dev server and asserted
-`docs/DESIGN.md`'s floors against code the worktree had never seen — and passed. That entry's
-own reasoning is the argument here: *"the shared PORT is the whole fault"*. It stopped at
-Vite and Playwright. The capture server, which is the process that writes photographs and
-inventory to disk, kept the shared constant.
+**Half of this was already fixed and the half that was left is the one that writes.** `app/devPort.ts`, earlier the same day, gave every checkout its own **Vite** port after `make design-check` in a worktree attached to the main tree's dev server, asserted `docs/DESIGN.md`'s floors against code the worktree had never seen, and passed. That entry's own reasoning is the argument here: the shared PORT is the whole fault. It stopped at Vite and Playwright. The capture server, which is the process that writes photographs and inventory to disk, kept the shared constant.
 
-**`app/tests/inventory.spec.ts` HAD ALREADY WRITTEN THE BUG REPORT.** Its stubs are justified
-in a comment saying an unstubbed read is *"a request to whatever is listening on port 8000,
-which in this repo is the owner's actual capture server over their actual 767-card
-inventory."* That is this defect, observed, worked around locally, and never filed.
+**`app/tests/inventory.spec.ts` had already written the bug report.** Its stubs are justified in a comment saying an unstubbed read is a request to whatever is listening on port 8000, which in this repo is the owner's actual capture server over their actual 767-card inventory. That is this defect, observed, worked around locally, and never filed.
 
-**ONE SLOT, TWO PORTS.** `sha256` of the checkout's canonical path, first four bytes, modulo
-300. Dev is `5200 + slot`, capture is `8100 + slot`, so a tree reads as a pair — 5276 beside
-8176 — and there is one number to recognise rather than two unrelated ones. **The main working
-tree keeps 5173 and 8000**, so every doc, the Makefile's help and `scripts/views.txt` stay
-true and the ordinary single-checkout workflow is untouched.
+### One slot, two ports
 
-**DERIVED, NOT ALLOCATED**, for the reason `app/devPort.ts` already gives: the same tree
-answers the same port on every run, which is what makes a printed URL worth keeping and what
-lets `strictPort` tell *"someone else is here"* from *"I moved"*. Collisions are possible —
-300 slots, a handful of trees — and are loud: Vite refuses to start, and the capture server
-raises `EADDRINUSE` rather than serving somewhere else. The remedy is to rename the worktree
-directory; the port follows the path.
+`sha256` of the checkout's canonical path, first four bytes, modulo 300. Dev is `5200 + slot`, capture is `8100 + slot`, so a tree reads as a pair — 5276 beside 8176 — and there is one number to recognize rather than two unrelated ones. **The main working tree keeps 5173 and 8000**, so every doc, the Makefile's help and `scripts/views.txt` stay true and the ordinary single-checkout workflow is untouched.
 
-**TWO IMPLEMENTATIONS OF ONE ALGORITHM, ASSERTED RATHER THAN TRUSTED.** Python serves and
-TypeScript addresses, and neither can import the other. `make port-agreement` runs both over
-the same real directories and diffs them, and it is in `make check` rather than the git hook
-because it needs node and the hook runs bare. **It was mutation-tested in both directions
-before it was kept** — moving the Python band takes the composed-port case red, and changing
-the slot width takes every path red. A check that cannot fail is not coverage; this repo
-already paid for that lesson at the multi-game prompt seam, where a differently-named
-identifier field would have parsed cleanly and joined nothing.
+**Derived, not allocated**, for the reason `app/devPort.ts` already gives: the same tree answers the same port on every run, which is what makes a printed URL worth keeping and what lets `strictPort` tell *someone else is here* from *I moved*. Collisions are possible — 300 slots, a handful of trees — and are loud: Vite refuses to start, and the capture server raises `EADDRINUSE` rather than serving somewhere else. The remedy is to rename the worktree directory; the port follows the path.
 
-**CANONICALISATION IS PART OF THE ALGORITHM AND WAS THE ONE REAL TRAP.** Both sides realpath
-the root before hashing — Node's `realpathSync`, Python's `Path.resolve()` — because `/tmp` is
-a symlink to `/private/tmp` on this machine and one worktree genuinely lives under it. The
-agreement test therefore feeds **real directories** rather than invented strings: a path that
-does not exist canonicalises differently in the two languages, so synthetic inputs would have
-tested the test rather than the code. `app/devPort.ts` was moved from `resolve()` to
-`realpathSync` for this, and it was measured first — every worktree in this clone answers the
-same slot either way, so **no existing dev port moved.**
+**Two implementations of one algorithm, asserted rather than trusted.** Python serves and TypeScript addresses, and neither can import the other. `make port-agreement` runs both over the same real directories and diffs them, and it is in `make check` rather than the git hook because it needs node and the hook runs bare. **It was mutation-tested in both directions before it was kept** — moving the Python band takes the composed-port case red, and changing the slot width takes every path red. A check that cannot fail is not coverage; this repo already paid for that lesson at the multi-game prompt seam, where a differently-named identifier field would have parsed cleanly and joined nothing.
 
-**IT IS SAID IN THE THREE PLACES A SESSION ACTUALLY LOOKS, which is the half that makes it
-reliable rather than merely correct.** The owner's complaint was exact: the port reasoning
-existed only in a source comment, *"not on CLAUDE.md nor on any hook, so it's not reliable"*.
-So: `CLAUDE.md` carries the rule; `scripts/worktree-guard.sh` — the SessionStart hook — prints
-this tree's two ports before any work begins; `make status` prints them and says outright when
-you are in a worktree; and `make server`'s banner names the store it is about to serve and
-warns when that store is not the main checkout's.
+**Canonicalization is part of the algorithm and was the one real trap.** Both sides realpath the root before hashing — Node's `realpathSync`, Python's `Path.resolve()` — because `/tmp` is a symlink to `/private/tmp` on this machine and one worktree genuinely lives under it. The agreement test therefore feeds **real directories**: a path that does not exist canonicalizes differently in the two languages, so synthetic inputs would have tested the test rather than the code. `app/devPort.ts` was moved from `resolve()` to `realpathSync` for this, and it was measured first — every worktree in this clone answers the same slot either way, so **no existing dev port moved.**
 
-**`PKMNSCAN_PORT` OVERRIDES, the same knob and shape as `PKMNSCAN_HOME`.** An unparseable or
-out-of-range value is **ignored rather than obeyed**: a typo must not put the server on a port
-no client will look at, which is this entry's own failure arriving by another road.
-`VITE_CAPTURE_SERVER` still outranks the derived default on the client, because that is the
-operator's explicit override and the case `docs/specs/capture-app.md` §11 leaves open — the
-Fulfiller's device pointed at this Mac by address.
+**It is said in the three places a session actually looks**, which is the half that makes it reliable rather than merely correct. The owner's complaint was exact: the port reasoning existed only in a source comment, not in `CLAUDE.md` nor in any hook, so it was not reliable. So `CLAUDE.md` carries the rule; `scripts/worktree-guard.sh` — the SessionStart hook — prints this tree's two ports before any work begins; `make status` prints them and says outright when you are in a worktree; and `make server`'s banner names the store it is about to serve and warns when that store is not the main checkout's.
 
-**WHAT THIS DOES NOT DO: it does not give worktrees a shared store.** Each still has its own,
-still usually empty, and that is D13's "one truth on the Mac" holding — the truth is the main
-checkout's. A worktree that wants to work against real data points `PKMNSCAN_HOME` at it
-deliberately, which is a decision with a visible env var rather than an accident of which
-process bound a socket first.
+**`PKMNSCAN_PORT` overrides, the same knob and shape as `PKMNSCAN_HOME`.** An unparseable or out-of-range value is **ignored rather than obeyed**: a typo must not put the server on a port no client will look at, which is this entry's own failure arriving by another road. `VITE_CAPTURE_SERVER` still outranks the derived default on the client, because that is the operator's explicit override and the case `docs/specs/capture-app.md` §11 leaves open — the Fulfiller's device pointed at this Mac by address.
 
-**What would reopen this: wanting one capture server for every tree.** The honest shape then
-is one server on 8000 with `PKMNSCAN_HOME` pinned to the main checkout and the worktrees'
-clients pointed at it by `VITE_CAPTURE_SERVER` — which is the knob that already exists. That
-is a different decision about where the truth lives, not a tweak to this one.
+**What this does not do: it does not give worktrees a shared store.** Each still has its own, still usually empty, and that is D13's one-truth-on-the-Mac holding — the truth is the main checkout's. A worktree that wants to work against real data points `PKMNSCAN_HOME` at it deliberately, which is a decision with a visible env var rather than an accident of which process bound a socket first.
 
-**ONE FILE WAS MISSED AND IT WAS THE ONE A HUMAN LOOKS THROUGH: `.claude/launch.json`** (found
-and fixed 2026-08-30, immediately after this entry landed). It was tracked, and it hardcoded
-`"port": 5173` — right in the main tree and wrong in every linked worktree. `vite.config.ts`,
-`playwright.config.ts`, `server/capture_server.py` and `app/src/server.ts` all moved onto the
-derivation; the Browser pane's own launch config did not, so `preview_start` would start THIS
-tree's dev server on its own port and then open a tab on 5173.
+**What would reopen this: wanting one capture server for every tree.** The honest shape then is one server on 8000 with `PKMNSCAN_HOME` pinned to the main checkout and the worktrees' clients pointed at it by `VITE_CAPTURE_SERVER` — the knob that already exists. That is a different decision about where the truth lives.
 
-**That is this entry's own defect wearing a different hat, and the worse half of it.** A dead
-tab is a nuisance. A tab on 5173 while the main tree's `make dev` is up is a worktree
-**previewing main and looking like it worked** — the same silent-wrong-answer shape
-`app/devPort.ts` records for `make design-check`, which that file calls "the worst shape a
-check can fail in, because the only signal it gives is the one you were hoping for."
+### One file was missed, and it was the one a human looks through
 
-**A tracked file cannot hold a per-checkout value, so it stopped being tracked.**
-`.claude/launch.json` is gitignored and written by `make launch-config` from
-`server/ports.py` — the same derivation the other four read, so all five cannot disagree. It
-hangs off `make venv`, which is already the documented first step in a fresh clone and is what
-`make worktree-setup` calls; it is a standalone target as well, because **the port follows the
-PATH** and a renamed worktree needs it written again.
+`.claude/launch.json`, found and fixed 2026-08-30. It was tracked, and it hardcoded `"port": 5173` — right in the main tree and wrong in every linked worktree. `vite.config.ts`, `playwright.config.ts`, `server/capture_server.py` and `app/src/server.ts` all moved onto the derivation; the Browser pane's own launch config did not, so `preview_start` would start THIS tree's dev server on its own port and then open a tab on 5173.
 
-**The precedent is `.claude/settings.local.json`, already gitignored beside it.** The split
-inside that directory is not new: what every checkout shares is tracked, what one machine or
-one checkout answers is not. Nothing in the repo reads `launch.json` — no doc names it, no
-audit check resolves it — so this cost nothing but the file.
+**That is this entry's own defect wearing a different hat, and the worse half of it.** A dead tab is a nuisance. A tab on 5173 while the main tree's `make dev` is up is a worktree **previewing main and looking like it worked** — the same silent-wrong-answer shape `app/devPort.ts` records for `make design-check`, which that file calls the worst shape a check can fail in, because the only signal it gives is the one you were hoping for.
 
-**What this gives up, stated because it is a real trade:** a fresh clone has no launch config
-until `make venv` runs, where before it had a wrong one immediately. That is the right
-direction for a file whose only failure mode is pointing somewhere plausible and wrong.
+**A tracked file cannot hold a per-checkout value, so it stopped being tracked.** `.claude/launch.json` is gitignored and written by `make launch-config` from `server/ports.py` — the same derivation the other four read, so all five cannot disagree. It hangs off `make venv`, which is already the documented first step in a fresh clone and is what `make worktree-setup` calls; it is a standalone target as well, because **the port follows the PATH** and a renamed worktree needs it written again.
 
-**AND THAT TRADE WAS WRONG ABOUT WHAT AN ABSENT FILE COSTS, WHICH TOOK TWENTY-THREE DAYS AND
-A MEASUREMENT TO SEE (2026-08-30).** The paragraph above reasons that absent beats wrong. It
-does not, and the reason is that **nothing leaves it absent**: the Browser pane's own
-instructions tell an agent that finds no `launch.json` to create one from a template carrying
-a literal port, so "absent" is a state that lasts until the first `preview_start` and then
-becomes "wrong" — written by a session that had no way to know this repo derives the number.
-Absent is not the safe end of that trade; it is the *entrance* to the unsafe end.
+**The precedent is `.claude/settings.local.json`, already gitignored beside it.** The split inside that directory is not new: what every checkout shares is tracked, what one machine or one checkout answers is not. Nothing in the repo reads `launch.json` — no doc names it, no audit check resolves it — so this cost nothing but the file.
 
-**Measured across the five worktrees of this clone**: four correct, one absent, and one — the
-tree the measurement was taken in — holding a hand-written **5173** nobody remembered writing.
-That is a linked worktree whose Browser pane would start its own dev server on 5470 and then
-open a tab on the MAIN TREE's, which is this entry's own "silent wrong answer" with the only
-signal being the one you were hoping for.
+**What this gives up:** a fresh clone has no launch config until `make venv` runs, where before it had a wrong one immediately. That is the right direction for a file whose only failure mode is pointing somewhere plausible and wrong.
 
-**AND THE ABSENT ONE BECAME A 5173 WHILE THE FIX WAS BEING WRITTEN, WHICH IS THE MEASUREMENT
-THAT SETTLES IT.** `card-sku-stamping-fix-d11945` was the tree with no config at 10:16. At
-10:29 it had one, naming **5173** against a derived **5313** — written by a session in that
-worktree, from the template, in the twenty minutes between the two readings. Nobody was
-careless: the port is a fact about the checkout's path and there is no way to know it from
-inside a tool that offers a template. **The absent state is not a resting state, and it decays
-in exactly one direction.**
+**And that trade was wrong about what an absent file costs, which took twenty-three days and a measurement to see** (2026-08-30). The paragraph above reasons that absent beats wrong. It does not, because **nothing leaves it absent**: the Browser pane's own instructions tell an agent that finds no `launch.json` to create one from a template carrying a literal port, so *absent* is a state that lasts until the first `preview_start` and then becomes *wrong* — written by a session that had no way to know this repo derives the number. Absent is not the safe end of that trade; it is the *entrance* to the unsafe end.
 
-**THE FAULT WAS THAT THE FIX WAS A `make` TARGET, AND A TARGET ONLY RUNS WHEN SOMEBODY RUNS
-IT.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls — so it
-reaches a worktree provisioned that way and no other. The five readers this entry moved onto
-one derivation are all *code*, which runs whether or not anyone remembers; this one was a
-file somebody had to ask for.
+**Measured across the five worktrees of this clone**: four correct, one absent, and one — the tree the measurement was taken in — holding a hand-written **5173** nobody remembered writing. That is a linked worktree whose Browser pane would start its own dev server on 5470 and then open a tab on the MAIN TREE's.
 
-**SO `scripts/worktree-guard.sh` WRITES IT, AND THAT IS THE WHOLE OF THE REPAIR.** The
-SessionStart hook already runs before any work starts in every checkout, already provisions
-the other gitignored things a tree cannot inherit, and already imports this same
-`server/ports.py` to print the pair. One more provisioned thing, from the one derivation,
-with nobody required to remember a target. **It runs ABOVE the worktree test**, because
-`dev_port()` answers 5173 in the main tree by construction — the same call is right in every
-checkout and there is no branch to get wrong.
+**And the absent one became a 5173 while the fix was being written, which is the measurement that settles it.** `card-sku-stamping-fix-d11945` was the tree with no config at 10:16. At 10:29 it had one naming **5173** against a derived **5313** — written by a session in that worktree, from the template, in the twenty minutes between the two readings. Nobody was careless: the port is a fact about the checkout's path and there is no way to know it from inside a tool that offers a template. **The absent state is not a resting state, and it decays in exactly one direction.**
 
-**ONE WRITER, THREE APPETITES, AND THE DIFFERENCE IS WHO ASKED.** `scripts/launch-config.py`
-holds the shape; the Makefile target FORCES because somebody typed it, the hook passes
-`--if-needed` because it runs unasked, and `make status` passes `--check` and writes nothing.
-Splitting the appetites rather than the writers is what stops the two from drifting, which is
-the failure this entry is otherwise entirely about.
+**The fault was that the fix was a Makefile target, and a target only runs when somebody runs it.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls — so it reaches a worktree provisioned that way and no other. The five readers this entry moved onto one derivation are all *code*, which runs whether or not anyone remembers; this one was a file somebody had to ask for.
 
-**IT REWRITES AN ABSENT OR A STALE FILE AND NEVER A HAND-EDITED ONE.** Stale is the narrow
-case — this repo's exact shape at the wrong port, which is precisely what the Browser pane's
-template produces. A second configuration, a different command, a `url`, JSON that does not
-parse: all reported, none touched. That asymmetry is **D44's**, taken deliberately rather than
-reinvented — `make icloud-sweep` deletes only what is provably a duplicate and only ever
-reports what differs, on the grounds that guessing is the one way a cleanup tool destroys
-work. Something that runs on every session start without being asked has more reason to keep
-that rule, not less.
+**So `scripts/worktree-guard.sh` writes it, and that is the whole of the repair.** The SessionStart hook already runs before any work starts in every checkout, already provisions the other gitignored things a tree cannot inherit, and already imports `server/ports.py` to print the pair. One more provisioned thing, from the one derivation, with nobody required to remember a target. **It runs ABOVE the worktree test**, because `dev_port()` answers 5173 in the main tree by construction — the same call is right in every checkout and there is no branch to get wrong.
 
-**`make status` REPORTS A DISAGREEMENT, BECAUSE THE HOOK FAILS OPEN BY DESIGN.** That is this
-repo's standing rule for hooks and it is right, and its cost is that a skipped hook is silent.
-The status line closes exactly that gap: it is the surface whose whole job is saying what
-state you are actually in, it already reports NOT ARMED for the git hooks on the same
-argument, and it is silent when the two agree so the ordinary case costs no line.
+**One writer, three appetites, and the difference is who asked.** `scripts/launch-config.py` holds the shape; the Makefile target FORCES because somebody typed it, the hook passes `--if-needed` because it runs unasked, and `make status` passes `--check` and writes nothing. Splitting the appetites rather than the writers is what stops the two from drifting, which is the failure this entry is otherwise entirely about.
 
-**WHAT IS STILL NOT CLOSED, named rather than implied: a worktree gets the fixed hook only
-once this lands on the branch it was cut from.** The guard is a tracked file, so a tree cut
-from an older main runs the older guard and goes on needing `make launch-config` by hand.
-Nothing can reach backwards into a checkout that does not have the code; what it does mean is
-that the last hand-run of that target is the one this repair asks for, once.
+**It rewrites an absent or a stale file and never a hand-edited one.** Stale is the narrow case — this repo's exact shape at the wrong port, which is precisely what the Browser pane's template produces. A second configuration, a different command, a `url`, JSON that does not parse: all reported, none touched. That asymmetry is **D44's**, taken deliberately rather than reinvented — `make icloud-sweep` deletes only what is provably a duplicate and only ever reports what differs, on the grounds that guessing is the one way a cleanup tool destroys work. Something that runs on every session start without being asked has more reason to keep that rule, not less.
 
-**AND A SECOND FILE WAS MISSED, WHICH IS THE ONE THAT DECIDES WHETHER A WORKTREE CAN WRITE AT
-ALL** (found and fixed 2026-08-30). `server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the
-literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming
-the only origins permitted to POST, PUT or DELETE. This entry moved the dev port itself,
-`vite.config.ts`, `playwright.config.ts`, `app/src/server.ts` and eventually
-`.claude/launch.json` onto one derivation, and left the allowlist on the constant.
+**`make status` reports a disagreement, because the hook fails open by design.** That is this repo's standing rule for hooks and it is right, and its cost is that a skipped hook is silent. The status line closes exactly that gap: it is the surface whose whole job is saying what state you are actually in, it already reports NOT ARMED for the git hooks on the same argument, and it is silent when the two agree so the ordinary case costs no line.
 
-**SO A LINKED WORKTREE SERVED AN APP WHOSE EVERY WRITE ITS OWN SERVER THEN REFUSED.** The app
-comes off that tree's derived dev port, the gate expects 5173, and the answer is 403
-`origin_not_allowed`. Observed on the worktree at `.claude/worktrees/inventory-delete-feedback-2b96fa`:
-capture, undo, mark-sold, retire, the mid-box delete and the claim editor all refused. **Reads
-are ungated**, so every screen rendered, the inventory drew, the walk worked — a branch's app
-could look at its store and never change it, and the only way to find out was to press
-something. `PKMNSCAN_ALLOWED_ORIGINS` was the workaround and nothing pointed at it until the
-refusal arrived.
+**What is still not closed**: a worktree gets the fixed hook only once this lands on the branch it was cut from. The guard is a tracked file, so a tree cut from an older main runs the older guard and goes on needing `make launch-config` by hand. Nothing can reach backwards into a checkout that does not have the code.
 
-**IT IS THIS ENTRY'S OWN RULE WITH ONE MORE READER, AND THAT IS THE FINDING RATHER THAN THE
-FIX.** The paragraph above says it about `launch.json` in as many words — a tracked constant
-cannot be right in every checkout — and the same sentence was true of a second file nobody had
-enumerated. What both misses have in common is that they are readers of the port that are not
-*servers* on it: the bind moved because it was obviously about the port, and a launch config
-and an origin allowlist are about the port without looking like it.
+### And a second file decided whether a worktree could write at all
 
-**`ports.dev_port()` IS ASKED, ONCE, AT IMPORT.** Unlike `allowed_origins()` one line below,
-which is read fresh per request because its input is an environment variable a running server
-should pick up without a restart, this has no input that can change while the process lives.
+`server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming the only origins permitted to POST, PUT or DELETE. This entry moved the dev port itself, `vite.config.ts`, `playwright.config.ts`, `app/src/server.ts` and eventually `.claude/launch.json` onto one derivation, and left the allowlist on the constant.
 
-**NOTHING MOVES IN THE MAIN TREE**, which is the property that makes this safe and also the
-reason it hid: `dev_port()` answers 5173 there by construction, so the tuple is byte-identical
-to the constant it replaces wherever the owner actually works, and every doc naming that number
-stays true. Only a linked worktree changes, and only from "refuses everything" to "allows its
-own app".
+**So a linked worktree served an app whose every write its own server then refused.** The app comes off that tree's derived dev port, the gate expects 5173, and the answer is 403 `origin_not_allowed`. Observed on the worktree at `.claude/worktrees/inventory-delete-feedback-2b96fa`: capture, undo, mark-sold, retire, the mid-box delete and the claim editor all refused. **Reads are ungated**, so every screen rendered, the inventory drew, the walk worked — a branch's app could look at its store and never change it, and the only way to find out was to press something. `PKMNSCAN_ALLOWED_ORIGINS` was the workaround and nothing pointed at it until the refusal arrived.
 
-**A CHECKOUT ALLOWS ITS OWN ORIGIN AND NOT THE MAIN TREE'S.** Adding 5173 back for worktrees
-was the obvious way to be generous and is the wrong one: it would let a page served by the MAIN
-checkout write into a branch's store, which is the cross-tree write this entry exists to
-prevent, arriving through the one control in this repo whose job is to stop a page writing
-where it should not. Pointing one tree's app at another tree's server is a real thing to want
-and is already deliberate — `VITE_CAPTURE_SERVER` — so it takes the deliberate answer:
-`PKMNSCAN_ALLOWED_ORIGINS`.
+**It is this entry's own rule with one more reader, and that is the finding rather than the fix.** The paragraph above says it about `launch.json` in as many words — a tracked constant cannot be right in every checkout — and the same sentence was true of a second file nobody had enumerated. What both misses have in common is that they are readers of the port that are not *servers* on it: the bind moved because it was obviously about the port, and a launch config and an origin allowlist are about the port without looking like it.
 
-**COVERED IN `check_origin_gate`, WHICH HAD THE CONSTANT WRITTEN INTO IT TOO.** That block
-asserted `["http://127.0.0.1:5173", "http://localhost:5173"]` literally, so it would have gone
-red in a worktree for the right reason and green in the main tree for the wrong one. It now
-asserts the PROPERTY — both spellings, at the port this checkout's app is actually served on —
-plus that a non-worktree root still derives 5173, and, in a worktree only, that the main tree's
-origin is NOT in the list. Mutation-tested: restoring the constant takes two of them red.
+**`ports.dev_port()` is asked once, at import.** Unlike `allowed_origins()` one line below, which is read fresh per request because its input is an environment variable a running server should pick up without a restart, this has no input that can change while the process lives.
 
-**THE HONEST LIMIT, NAMED BECAUSE IT IS HOW THE DEFECT SURVIVED: none of those cases can fail
-in the main checkout.** 5173 is correct there whichever way the list is built, so the whole
-guard is only ever exercised by somebody running the harness from a worktree — which is what
-`make worktree-setup` and the Stop hook make ordinary, and is why the case is worth having at
-all. The block says so in a note rather than leaving a green run to be misread.
+**Nothing moves in the main tree**, which is the property that makes this safe and also the reason it hid: `dev_port()` answers 5173 there by construction, so the tuple is byte-identical to the constant it replaces wherever the owner actually works, and every doc naming that number stays true. Only a linked worktree changes, and only from *refuses everything* to *allows its own app*.
+
+**A checkout allows its own origin and not the main tree's.** Adding 5173 back for worktrees was the obvious way to be generous and is the wrong one: it would let a page served by the MAIN checkout write into a branch's store, which is the cross-tree write this entry exists to prevent, arriving through the one control in this repo whose job is to stop a page writing where it should not. Pointing one tree's app at another tree's server is a real thing to want and is already deliberate — `VITE_CAPTURE_SERVER` — so it takes the deliberate answer, `PKMNSCAN_ALLOWED_ORIGINS`.
+
+**Covered in `check_origin_gate`, which had the constant written into it too.** That block asserted `["http://127.0.0.1:5173", "http://localhost:5173"]` literally, so it would have gone red in a worktree for the right reason and green in the main tree for the wrong one. It now asserts the PROPERTY — both spellings, at the port this checkout's app is actually served on — plus that a non-worktree root still derives 5173, and, in a worktree only, that the main tree's origin is NOT in the list. Mutation-tested: restoring the constant takes two of them red.
+
+**The honest limit, named because it is how the defect survived: none of those cases can fail in the main checkout.** 5173 is correct there whichever way the list is built, so the whole guard is only ever exercised by somebody running the harness from a worktree — which `make worktree-setup` and the Stop hook make ordinary, and is why the case is worth having at all. The block says so in a note rather than leaving a green run to be misread.
 
 ---
 
@@ -3842,271 +3688,90 @@ forever, the honest simplification is a single-box request again. The measuremen
 
 ## D49 — The pricing answer is one file, and a card can be held back on purpose
 
-**BEING BUILT 2026-08-29, from an interview the owner asked for.** They had never been asked what
-they wanted a listing price to BE — `match` on `market` was the CLI default running by accident
-through every run this project has done. Their answer: *"I want all the data from the CSV shown
-when I make the decision, but I actually intend to be hand-pricing for now."* And on volume, which
-inverts every measurement taken before it: *"almost everything coming next is all above 0.40."*
+**`decisions.json` decides the price and the run manifest only records what a join ran with, and a card may be withheld from a run on purpose.** Built from an interview the owner asked for on 2026-08-29. They had never been asked what they wanted a listing price to BE — `match` on `market` was the CLI default running by accident through every run this project has done. Their answer: show all the CSV data at the moment of the decision, because they intend to hand-price.
 
-**WHAT THAT LAST SENTENCE OVERTURNS, because a build was nearly aimed at the opposite.** Measured
-across the two Pokemon runs on disk — 596 cards, 153 SKUs — the total value of every per-item
-pricing decision available was **zero**: box 2's export tops out at $0.74 and stocks no Near Mint
-row at or above the threshold, and Gate B's `import-listed.csv` is header-only. The honest reading
-of that history is a screen whose job is to report that there is nothing to do. The owner says the
-next boxes are the other thing, and the export bears out the mechanism: Near Mint **normal** is
-9.5% listable, **reverse holo** 40.6%, **holo 76.2%**. The exception rate is a function of the
-finish claim made at capture, so it is predictable before a run starts and it is about to go up.
+**On volume, which inverts every measurement taken before it**: almost everything coming next is above $0.40. Measured across the two Pokemon runs on disk — 596 cards, 153 SKUs — the total value of every per-item pricing decision available was **zero**: box 2's export tops out at $0.74 and stocks no Near Mint row at or above the threshold, and Gate B's `import-listed.csv` is header-only. The honest reading of that history is a screen whose job is to report there is nothing to do. The owner says the next boxes are the other thing, and the export bears out the mechanism: Near Mint **normal** is 9.5% listable, **reverse holo** 40.6%, **holo 76.2%**. The exception rate is a function of the finish claim made at capture, so it is predictable before a run starts and it is about to go up.
 
----
+### Part one — the file decides, the manifest records
 
-**PART ONE — `decisions.json` DECIDES, AND THE MANIFEST RECORDS.** Two bugs in one seam, and the
-owner's instruction on being shown them was *"I don't understand this it seems like some stuff is
-in conflict and it shouldn't be, resolve this."*
+Two bugs in one seam, and the owner's instruction on being shown them was to resolve the conflict.
 
-- **`emit` priced from the run MANIFEST and printed the rule from `decisions.json`.** So an
-  operator who set `"rule": "undercut:5"` in the file got a run that printed `rule=undercut:5` and
-  wrote every row at market. The file's own module docstring has called it *"the pricing decision,
-  as a file rather than as a flag"* since it was written, and `rule` was the one thing in it that
-  decided nothing.
-- **`join` assigned `choice.rule` and `choice.basis` back from the run** immediately after printing
-  *"merging into existing decisions.json — your edits are kept"*. Measured: `markup:100` on `low`
-  reverted to `match` on `market` on a plain re-join while `sub_threshold` beside it survived — so
-  the file looked merged and was not. `join` is free and re-runnable and is re-run routinely, so
-  this was not an edge case.
+- **`emit` priced from the run MANIFEST and printed the rule from `decisions.json`.** An operator who set `"rule":"undercut:5"` got a run that printed `rule=undercut:5` and wrote every row at market. That file's module docstring has called it *the pricing decision, as a file rather than as a flag* since it was written, and `rule` was the one thing in it that decided nothing.
+- **`join` assigned `choice.rule` and `choice.basis` back from the run** immediately after printing that it was merging into an existing `decisions.json` and keeping your edits. Measured: `markup:100` on `low` reverted to `match` on `market` on a plain re-join while `sub_threshold` beside it survived — so the file looked merged and was not. `join` is free, re-runnable and re-run routinely, so this was not an edge case.
 
-**The file is the authority; the manifest keeps `rule`/`basis` as the RECORD of what a join ran
-with**, which `report.txt` prints. A record of what happened and the answer to what should happen
-are different facts and only one of them may be authoritative. `--rule` still seeds the file on the
-FIRST join, because a document that cannot answer its own question is not a document.
+**The file is the authority; the manifest keeps `rule`/`basis` as the RECORD of what a join ran with**, which `report.txt` prints. A record of what happened and the answer to what should happen are different facts and only one may be authoritative. `--rule` still seeds the file on the FIRST join, because a document that cannot answer its own question is not a document.
 
-**Both commands now refuse `UnknownRule` and `UnknownBasis` with a sentence.** They are `ValueError`
-subclasses and NOT `MalformedDecisions`, nothing above `cli/__main__.py` caught them, and
-`PUT /pipeline/runs/<name>/decisions` writes this file with no validation at all — so a screen could
-put a run into a state where `emit` answered with a traceback. T7's `check_pricing_authority` block
-holds all of it, and both halves were **observed failing against the old code** before they were
-kept.
+**Both commands now refuse `UnknownRule` and `UnknownBasis` with a sentence.** They are `ValueError` subclasses and NOT `MalformedDecisions`, nothing above `cli/__main__.py` caught them, and `PUT /pipeline/runs/<name>/decisions` writes this file with no validation at all — so a screen could put a run into a state where `emit` answered with a traceback. T7's `check_pricing_authority` block holds all of it, and both halves were **observed failing against the old code**.
 
----
+### Part two — a card can be withheld, and the hold says why
 
-**PART TWO — A CARD CAN BE WITHHELD, AND THE HOLD SAYS WHY.** The owner: *"say i'm bullish on the
-price going up, and don't want to list any right now"*, and then *"definitely want someway of
-flagging that i'm intentionally holding this card // am bullish maybe even price threshold etc"*.
+The owner: bullish on a price going up and not wanting to list any right now, and wanting a way of flagging that the hold is intentional.
 
-Before this there was no way to say it. `overrides` demanded a price, `"unlisted"` was accepted only
-under `no_market_data`, and a card with a market price had no representation for *not this run*.
+Before this there was no way to say it. `overrides` demanded a price, `"unlisted"` was accepted only under `no_market_data`, and a card with a market price had no representation for *not this run*.
 
-**`overrides` gains two shapes and every existing shape stays byte-identical.** A scalar is a price.
-The bare string `"unlisted"` is a hold with no reason — the spelling a terminal user types, and the
-one `no_market_data` has accepted since D9. An object is a hold **with** a reason, which is what the
-screen writes:
+**`overrides` gains two shapes and every existing shape stays byte-identical.** A scalar is a price. The bare string `"unlisted"` is a hold with no reason — the spelling a terminal user types, and the one `no_market_data` has accepted since D9. An object is a hold **with** a reason, which is what the screen writes:
 
     "9114773": {"withheld": "bullish", "watch_above": "12.00", "note": "waiting on rotation"}
 
-**A strict widening, not a new failure mode**: before this a dict reached `_price`,
-`Decimal(str({...}))` raised, and it was already a clean `MalformedDecisions` rather than a
-traceback.
+**A strict widening, not a new failure mode**: before this a dict reached `_price`, `Decimal(str({...}))` raised, and it was already a clean `MalformedDecisions` rather than a traceback.
 
-**`withheld` AND NOT `held`, WHICH IS D26's RENAME FOR D26's REASON.** `store/master.py:Listing.held`
-already means copies **TCGplayer** is holding — the opposite direction — and `_listing_hold` in the
-capture server means a box may not be deleted. D26 renamed `removed` to `retired` because a state
-sharing a word with an existing one makes both unreadable; this is the same call.
+**`withheld` and NOT `held`, which is D26's rename for D26's reason.** `store/master.py:Listing.held` already means copies **TCGplayer** is holding — the opposite direction — and `_listing_hold` in the capture server means a box may not be deleted. D26 renamed `removed` to `retired` because a state sharing a word with an existing one makes both unreadable.
 
-**THE VOCABULARY IS DISJOINT FROM THE TWO IT COULD BE CONFUSED WITH, and no word appears twice.**
-`WITHHOLD_REASONS` is `bullish | keeping | next_batch`, against D26's `pulled | damaged | lost |
-given_away` (the CARD left inventory) and D37's `wasted_position | cannot_settle | not_listing` (the
-QUESTION was closed). `next_batch` rather than the obvious `not_yet`, because `not_listing` is
-already a stand-down reason and the two read as one word at the 10px a machine string is drawn at.
+**The vocabulary is disjoint from the two it could be confused with, and no word appears twice.** `WITHHOLD_REASONS` is `bullish | keeping | next_batch`, against D26's `pulled | damaged | lost | given_away` (the CARD left inventory) and D37's `wasted_position | cannot_settle | not_listing` (the QUESTION was closed). `next_batch` rather than the obvious `not_yet`, because `not_listing` is already a stand-down reason and the two read as one word at the 10px a machine string is drawn at.
 
-**A WITHHOLD IS NONE OF THE THREE THINGS IT SITS BESIDE.** Not a retirement: the card does not move,
-does not change state, keeps its slot and its photograph, and is sellable the moment the hold is
-lifted. Not a stand-down: nothing is asking — the card resolved cleanly, with a catalog row and a
-market price, and what is refused is the *listing*. Not a sale: no count at `pushed`, `staged` or
-`live` moves. What is withheld is one run's import row, and nothing else.
+**A withhold is none of the three things it sits beside.** Not a retirement: the card does not move, does not change state, keeps its slot and its photograph, and is sellable the moment the hold is lifted. Not a stand-down: nothing is asking — the card resolved cleanly, with a catalog row and a market price, and what is refused is the *listing*. Not a sale: no count at `pushed`, `staged` or `live` moves. What is withheld is one run's import row.
 
-**HOLDS ARE ABSENT FROM `dispositions()`, AND THAT IS THE SURVIVAL GUARANTEE RATHER THAN TIDINESS.**
-`emit` refuses the whole run when that mapping names a SKU the batch does not hold, and
-`prices_for` refuses again per game. A withheld SKU is precisely the one most likely to fall out of
-a later run — it was withheld *because* it is not being listed — so letting holds reach those checks
-would mean the act of holding a card back eventually breaks `emit` for the entire run, with no
-control anywhere able to clear it. For the same reason `prices_for`'s `withheld` set carries
-**no unknown-key check**, unlike the dispositions beside it.
+**Holds are absent from `dispositions()`, and that is the survival guarantee rather than tidiness.** `emit` refuses the whole run when that mapping names a SKU the batch does not hold, and `prices_for` refuses again per game. A withheld SKU is precisely the one most likely to fall out of a later run — it was withheld *because* it is not being listed — so letting holds reach those checks would mean the act of holding a card back eventually breaks `emit` for the entire run, with no control anywhere able to clear it. For the same reason `prices_for`'s `withheld` set carries **no unknown-key check**, unlike the dispositions beside it.
 
-**A HEADER-ONLY IMPORT FILE WAS ONE LINE AWAY AND IS CLOSED HERE.** `prices_for` leaving a SKU out
-and `import_rows` skipping its row is correct — but `emit` decides whether to write a file AT ALL
-from whether its SKU set is empty, and the writer emits the header before it iterates rows. A game
-whose every listable SKU was held would have written a header-only `import-listed.csv` and reported
-`listed 0 row(s)`. That is the Gate B shape exactly, and `_game_only` subtracts the holds instead.
+**A header-only import file was one line away and is closed here.** `prices_for` leaving a SKU out and `import_rows` skipping its row is correct — but `emit` decides whether to write a file AT ALL from whether its SKU set is empty, and the writer emits the header before it iterates rows. A game whose every listable SKU was held would have written a header-only `import-listed.csv` and reported `listed 0 row(s)`. That is the Gate B shape exactly, and `_game_only` subtracts the holds instead.
 
-**THE PRICE THRESHOLD IS BUILT, NOT DEFERRED, and the argument that nearly deferred it was wrong in
-an instructive way.** A watch looked pointless on the grounds that it can only fire while somebody
-is already looking at the price. They are not: a re-join is driven from `#/runs` (D39), and `join`
-is free and re-runnable precisely so it can be pointed at a **refreshed export** — which is the only
-moment a market price has moved and therefore the only moment a watch has anything to say.
-`Decisions.watches(matches)` is a method rather than a `warnings` entry because `warnings` is a
-zero-argument property and cannot see a price.
+**The price threshold is built, not deferred, and the argument that nearly deferred it was wrong in an instructive way.** A watch looked pointless on the grounds that it can only fire while somebody is already looking at the price. They are not: a re-join is driven from `#/runs` (D39), and `join` is free and re-runnable precisely so it can be pointed at a **refreshed export** — the only moment a market price has moved and therefore the only moment a watch has anything to say. `Decisions.watches(matches)` is a method rather than a `warnings` entry because `warnings` is a zero-argument property and cannot see a price.
 
-**A HOLD LIVES IN ITS RUN AND DIES WITH IT.** `decisions.json` is per-run, so a hold survives every
-re-join of its own run — which is where it does its work, since a box is identified once and
-re-joined many times — and a **second** run over the same box starts with none. That is a real limit
-and the screen says so in words rather than implying it. A durable per-SKU home outside the run
-directory — beside `Listing` in the store, or a standing `holds.json` beside the queue files — is
-**recorded and deferred**: it is a schema change, a route and a client function, and scope is argued.
+**A hold lives in its run and dies with it.** `decisions.json` is per-run, so a hold survives every re-join of its own run — which is where it does its work, since a box is identified once and re-joined many times — and a **second** run over the same box starts with none. That is a real limit and the screen says so in words. A durable per-SKU home outside the run directory — beside `Listing` in the store, or a standing `holds.json` beside the queue files — is **recorded and deferred**: it is a schema change, a route and a client function, and scope is argued.
 
-**A second cost, named because nothing else would say it.** `emit` writes a card's identity only for
-SKUs that reached a file, so a withheld SKU's copies keep `state: captured` and carry no `sku` —
-invisible to `GET /search` and every SKU-keyed surface until the hold is lifted and the run
-re-emitted.
+**A second cost, named because nothing else would say it.** `emit` writes a card's identity only for SKUs that reached a file, so a withheld SKU's copies keep `state: captured` and carry no `sku` — invisible to `GET /search` and every SKU-keyed surface until the hold is lifted and the run re-emitted.
 
----
+### Part three — the screen, built 2026-08-30
 
----
+`#/pricing` is the seventh route, and it is where the owner sets by hand what every SKU a run matched will list at. One row per SKU, sorted market descending, carrying every export column that holds data. It draws no photograph on the row, no price type-size bands and no solid accent fill; the box, the cart and the money gate stay on `#/runs`, and **nothing here spends**.
 
-**PART THREE — THE SCREEN, BUILT 2026-08-30.** `#/pricing` is the seventh route, and it is where
-the owner sets by hand what every SKU a run matched will list at. One row per SKU, sorted market
-descending, carrying every export column that holds data — *"I want all the data from the CSV
-shown when I make the decision"*. It draws no photograph on the row, no price type-size bands and
-no solid accent fill; the box, the cart and the money gate stay on `#/runs`, and **nothing here
-spends**.
+**After the review queue and not before it**, which is the owner's ruling and reverses what the first design pass proposed. Answering the queue changes what the next join resolves, so pricing before the queue is worked prices a set that is about to move.
 
-**AFTER THE REVIEW QUEUE AND NOT BEFORE IT**, which is the owner's ruling and reverses what the
-first design pass proposed. Answering the queue changes what the next join resolves, so pricing
-before the queue is worked prices a set that is about to move.
+**The suggestion writes nothing, and that is the load-bearing decision of the whole screen.** The run's rule prefills every row as a visible suggestion; the first digit typed clears it, Enter commits and advances, and `m`/`d`/`l`/`s` snap the price to a named export column. But an untouched row writes no key at all — because an override is layer 1 of the ladder and beats the rule at layer 4, so a screen that wrote its hundred suggestions would produce a run where **changing the preset silently changed nothing**. That failure has no symptom. `pipeline/decisions.py` states the rule it rests on in one line: nothing here is ever defaulted on your behalf, and that is the entire point. If a later session finds itself wanting a *write all suggestions* button, that button is this defect.
 
-**THE SUGGESTION WRITES NOTHING, AND THAT IS THE LOAD-BEARING DECISION OF THE WHOLE SCREEN.**
-The run's rule prefills every row as a visible suggestion; the first digit typed clears it, Enter
-commits and advances, and `m`/`d`/`l`/`s` snap the price to a named export column. But an
-untouched row writes no key at all — because an override is layer 1 of the ladder and beats the
-rule at layer 4, so a screen that wrote its hundred suggestions would produce a run where
-**changing the preset silently changed nothing**. That failure has no symptom. `pipeline/
-decisions.py` states the rule it rests on in one line: *"Nothing here is ever defaulted on your
-behalf — that is the entire point."* If a later session finds itself wanting a *write all
-suggestions* button, that button is this defect.
+**The keyboard works with the hands in a field, which no other screen here does.** Every other handler in the app returns on `isEditableTarget`; on this one the hands are in a price field essentially always, so that rule would make every letter dead. What makes it safe is that the field's alphabet is CLOSED — `[0-9.]`, one dot, two decimals, enforced at `beforeinput` — so a letter is unambiguously a command and there is nothing to disambiguate. That closure is the entire safety argument and may not be widened without taking the keyboard with it.
 
-**THE KEYBOARD WORKS WITH THE HANDS IN A FIELD, WHICH NO OTHER SCREEN HERE DOES.** Every other
-handler in the app returns on `isEditableTarget`; on this one the hands are in a price field
-essentially always, so that rule would make every letter dead. What makes it safe is that the
-field's alphabet is CLOSED — `[0-9.]`, one dot, two decimals, enforced at `beforeinput` — so a
-letter is unambiguously a command and there is nothing to disambiguate. That closure is the
-entire safety argument and may not be widened without taking the keyboard with it.
+**A preset prices what it can and names what it could not**, which is the owner's ruling over refusing the whole press. Measured: 394 of 2,476 listable rows in the wide export carry no `TCG Low Price`, so a Low-based preset genuinely cannot price every row, and `SkuMatch.list_price` is `None` there — which `tcgcsv.set_writable` would turn into an import row carrying a quantity and no price. The three presets and their numbers are the owner's: match market, `Market −5%`, TCG Low −1%.
 
-**A PRESET PRICES WHAT IT CAN AND NAMES WHAT IT COULD NOT** (the owner's ruling, over refusing the
-whole press). Measured: 394 of 2,476 listable rows in the wide export carry no `TCG Low Price`,
-so a Low-based preset genuinely cannot price every row, and `SkuMatch.list_price` is `None` there
-— which `tcgcsv.set_writable` would turn into an import row carrying a quantity and no price.
-The three presets and their numbers are the owner's: match market, market −5%, TCG Low −1%.
+**The run comes from a picker or from the URL, and never from storage.** D39's handoff exists because `#/inventory`'s mass-select is the only one in the product and a second would be two answers to *which cards*. A run name has no such property — `GET /pipeline/runs` reads the runs directory and is the single source — so a picker here cannot disagree with anything, and `#/runs` links a specific run as `#/pricing?run=<name>`. A link, not a handoff: no second `sessionStorage` key and no clearing rules. **The hash router did not strip a query until this landed**, so the link matched no route and rendered `NoSuchView` — a defect invisible from either the route table or the screen, and fixed in `currentPath`.
 
-**THE RUN COMES FROM A PICKER OR FROM THE URL, AND NEVER FROM STORAGE.** D39's handoff exists
-because `#/inventory`'s mass-select is the only one in the product and a second would be two
-answers to *which cards*. A run name has no such property — `GET /pipeline/runs` reads the runs
-directory and is the single source — so a picker here cannot disagree with anything, and `#/runs`
-links a specific run as `#/pricing?run=<name>`. A link, not a handoff: no second `sessionStorage`
-key and no clearing rules. **The hash router did not strip a query until this landed**, so the
-link matched no route and rendered `NoSuchView` — a defect invisible from either the route table
-or the screen, and fixed in `currentPath`.
+**The photograph is on demand, toggled by one key, and names which copy it is drawing.** The owner asked the question that settles it: how it resolves when multiple captures of the same card exist. A SKU averages five copies with five photographs, they are the same card by construction, and **there is no quality signal worth trusting** — confidence is the tempting one and is exactly wrong here, since T1's recorded misses are confident answers with the digits wrong. So the pick is the first in box-walk order, captioned with its real position and `1 of N`, and steppable. The stepping is what makes an arbitrary pick safe, and it earns a second job: five photographs answer *are these actually the same card*, and if they are not, the identification was wrong.
 
-**THE PHOTOGRAPH IS ON DEMAND, TOGGLED BY ONE KEY, AND NAMES WHICH COPY IT IS DRAWING.** The
-owner asked the question that settles it: *"if multiple captures/cards of the same exist, how
-would that resolve?"* A SKU averages five copies with five photographs, they are the same card by
-construction, and **there is no quality signal worth trusting** — confidence is the tempting one
-and is exactly wrong here, since T1's recorded misses are confident answers with the digits
-wrong. So the pick is the first in box-walk order, captioned with its real position and `1 of N`,
-and steppable. The stepping is what makes an arbitrary pick safe, and it earns a second job:
-five photographs answer *are these actually the same card*, and if they are not, the
-identification was wrong.
+**`scripts/docs-audit.py` gains a `withhold reasons` row**, reconciling `WITHHOLD_REASONS` across `pipeline/decisions.py` and `app/src/holds.ts`. Blocking, because a mismatch is provably wrong — and it matters more here than for the review vocabulary, since `PUT .../decisions` validates nothing and the screen's only defense against writing an unparseable file is that the two declarations agree. Mutation-tested in both directions.
 
-**`scripts/docs-audit.py` GAINS A `withhold reasons` ROW**, reconciling `WITHHOLD_REASONS` across
-`pipeline/decisions.py` and `app/src/holds.ts`. Blocking, because a mismatch is provably wrong —
-and it matters more here than for the review vocabulary, since `PUT .../decisions` validates
-nothing and the screen's only defence against writing an unparseable file is that the two
-declarations agree. Mutation-tested in both directions before it was kept.
+**The save loop was wedged from the day it shipped, and every case in its own spec was green throughout** (found by the owner 2026-08-30: price changes stuck on perpetually saving). The effect that writes `decisions.json` read the `saving` STATE it raised itself, so `saving` was in its dependency list — raising it re-ran the effect, and the re-run's CLEANUP set the in-flight closure's `live` to false. The response landed on a dead closure, so neither the clear nor `setSaving(false)` ever fired. **On the first save of every session**: the indicator read `saving…` forever and the guard `if (… || saving) return` then refused every later write. The operator could price a box, watch each answer draw, and have one row reach the file.
 
-**THE SAVE LOOP WAS WEDGED FROM THE DAY IT SHIPPED, AND EVERY CASE IN ITS OWN SPEC WAS GREEN
-THROUGHOUT (found by the owner 2026-08-30: *"any changes to the prices seems to be stuck on
-perpetually saving"*).** The effect that writes `decisions.json` read the `saving` STATE it
-raised itself, so `saving` was in its dependency list — raising it re-ran the effect, and the
-re-run's CLEANUP set the in-flight closure's `live` to false. The response landed on a dead
-closure, so neither the clear nor `setSaving(false)` ever fired. **On the first save of every
-session**: the indicator read `saving…` forever and the guard `if (… || saving) return` then
-refused every later write. The operator could price a box, watch each answer draw, and have one
-row reach the file.
+**It passed fifteen cases because the PUT really does go out.** `app/tests/pricing.spec.ts` asserted what the screen SENDS — the load-bearing absences this entry rests on, and one body with one answer in it — and never that a write COMPLETED. What that suite could not see is everything after the request: the indicator returning to `saved`, and a second answer being sent at all. Both are asserted now, and both were observed red against the old code with the other fifteen still green.
 
-**IT PASSED FIFTEEN CASES BECAUSE THE PUT REALLY DOES GO OUT.** `app/tests/pricing.spec.ts`
-asserted what the screen SENDS — the load-bearing absences this entry rests on, and one body
-with one answer in it — and never that a write COMPLETED. What that suite could not see is
-everything after the request: the indicator returning to `saved`, and a second answer being
-sent at all. Both are asserted now, and both were observed red against the old code with the
-other fifteen still green.
+**`dirty` is a comparison now, not a flag, and that is the half that is not cosmetic.** The effect's own comment promised that a change during one write re-runs when it lands, and a flag cannot keep that promise: it cannot tell *the write I just sent* from *the write that landed while it was in flight*, so clearing it on a response discarded whatever had been typed since that response left — silently, with the indicator reading `saved`. The screen holds the document the server last confirmed and `dirty` is object identity against it, so a write clears only what it carried and anything typed during a flight is still unequal when it lands. The guard is a ref, which is what lets `saving` stay in the dependency list doing the one job it is good for — re-firing the effect when a flight ends, since everything a completion changes is a ref and a re-render is the only thing that can ask whether more is owed.
 
-**`dirty` IS A COMPARISON NOW, NOT A FLAG, AND THAT IS THE HALF THAT IS NOT COSMETIC.** The
-effect's own comment promised *"a change during one re-runs when it lands"*, and a flag cannot
-keep that promise: it cannot tell "the write I just sent" from "the write that landed while it
-was in flight", so clearing it on a response discarded whatever had been typed since that
-response left — silently, with the indicator reading `saved`. The screen holds the document the
-server last confirmed and `dirty` is object identity against it, so a write clears only what it
-carried and anything typed during a flight is still unequal when it lands. The guard is a ref,
-which is what lets `saving` stay in the dependency list doing the one job it is good for —
-re-firing the effect when a flight ends, since everything a completion changes is a ref and a
-re-render is the only thing that can ask whether more is owed.
+**A refused write is not retried in a spin.** `dirty` correctly stays true after a failure — the server does not have those answers — so without a record of the document that failed, the loop would re-fire the instant `saving` went false, forever. The next keystroke makes a new document and the retry happens then.
 
-**A REFUSED WRITE IS NOT RETRIED IN A SPIN.** `dirty` correctly stays true after a failure —
-the server does not have those answers — so without a record of the document that failed, the
-loop would re-fire the instant `saving` went false, forever. The next keystroke makes a new
-document and the retry happens then.
+**The preset wrote a key nothing reads, so picking one changed the screen and not the run** — the owner's own analysis, 2026-08-30, and it is exactly right. `applyPreset` wrote `preset: <key>` into the document. `pipeline/decisions.py:parse` does not know that field and `to_payload` does not emit it, so the next join dropped it, and `rule` and `basis` sat at `match`/`market` throughout. Pressing `Market −5%` re-rendered every suggestion on screen and moved nothing `emit` reads.
 
-**THE PRESET WROTE A KEY NOTHING READS, SO PICKING ONE CHANGED THE SCREEN AND NOT THE RUN**
-(the owner's own analysis, 2026-08-30, and it is exactly right). `applyPreset` wrote
-`preset: <key>` into the document. `pipeline/decisions.py:parse` does not know that field and
-`to_payload` does not emit it, so the next join dropped it — and `rule` and `basis` sat at
-`match`/`market` throughout. Pressing `Market −5%` re-rendered every suggestion on screen and
-moved nothing `emit` reads.
+**The comment directly above that line said `A PRESET WRITES rule/basis AND NO OVERRIDE`.** It described the design; the line under it did something else, and nothing compared them. Measured on the owner's riftbound run, on disk: `preset: market_undercut_5` sitting beside `rule: match`, `basis: market`, with **2 overrides across 50 SKUs** — so 48 cards were about to list at a price nobody had chosen, and the screen had shown all of them at −5%.
 
-**The comment directly above that line said `A PRESET WRITES rule/basis AND NO OVERRIDE`.** It
-described the design; the line under it did something else, and nothing compared them.
+**It is this entry's own named failure reached by the other road**, which is why the fix is the rule and not the suggestions. The paragraph above refuses to write the hundred suggestions into `overrides`, correctly, because an override beats the rule. That refusal is only half an answer: if the suggestions must not move, then **the rule at layer 4 has to**, and it never did. A preset now writes `rule` and `basis`, which is what that comment always claimed.
 
-**Measured on the owner's riftbound run, on disk**: `preset: market_undercut_5` sitting beside
-`rule: match`, `basis: market`, with **2 overrides across 50 SKUs** — so 48 cards were about
-to list at a price nobody had chosen, and the screen had shown all of them at −5%.
+**The active chip is derived from `rule`/`basis` and is never stored.** Nothing on this screen said which rule was live, and that is most of why the dead write survived — pressing a chip appeared to work, because the suggestions really did change. A REMEMBERED selection would have been a second answer to *what will an untouched row list at*, and the pair the pipeline reads is the only one that can answer it; so a rule typed by hand into `decisions.json` on `#/runs` correctly lights no chip rather than lighting a stale one.
 
-**IT IS THIS ENTRY'S OWN NAMED FAILURE REACHED BY THE OTHER ROAD, which is why the fix is the
-rule and not the suggestions.** The paragraph above refuses to write the hundred suggestions
-into `overrides`, correctly, because an override is layer 1 of `prices_for` and beats the rule
-at layer 4 — *"a run where changing the preset silently changed nothing"*. That refusal is
-only half an answer: if the suggestions must not move, then **the rule at layer 4 has to**, and
-it never did. A preset now writes `rule` and `basis`, which is what that comment always
-claimed.
+**`scripts/docs-audit.py` gains a `pricing presets` row**, reconciling `cli/cmd_join.py:PRESETS` against `app/src/Pricing.tsx:PRESETS` on all three fields — key, rule and basis. Blocking, for the reason the `withhold reasons` row gives verbatim. It reads the Python side by `ast` and resolves `pricing.RULE_MATCH` out of `pipeline/pricing.py` rather than importing anything, because naming the constant is right and flattening it to a literal to please a checker is the inversion D16 forbids. Mutation-tested in both directions.
 
-**THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis` AND IS NEVER STORED.** Nothing on this screen
-said which rule was live, and that is most of why the dead write survived — pressing a chip
-appeared to work, because the suggestions really did change. A REMEMBERED selection would have
-been a second answer to *what will an untouched row list at*, and the pair the pipeline reads
-is the only one that can answer it; so a rule typed by hand into `decisions.json` on `#/runs`
-correctly lights no chip rather than lighting a stale one.
+**What is still not built, and the owner found it in the same pass**: `server/pipeline_routes.py` computes `remembered_sub_threshold` and ships it on the pricing route, `app/src/types.ts` declares it, and **no component reads it**. The sub-threshold disposition is still typed into `decisions.json` by hand on `#/runs`. It is `CLAUDE.md`'s route-is-not-a-feature rule in its mildest form — a server half with no client half — and it is named here rather than built because a control that answers D9's per-run disposition is a design question, not a wiring one.
 
-**`scripts/docs-audit.py` GAINS A `pricing presets` ROW**, reconciling `cli/cmd_join.py:PRESETS`
-against `app/src/Pricing.tsx:PRESETS` on all three fields — key, rule and basis. Blocking, for
-the reason the `withhold reasons` row above gives verbatim: `PUT .../decisions` validates
-nothing, so two declarations agreeing is the whole defence. It reads the Python side by `ast`
-and resolves `pricing.RULE_MATCH` out of `pipeline/pricing.py` rather than importing anything,
-because naming the constant is right and flattening it to a literal to please a checker is the
-inversion D16 forbids. Mutation-tested in both directions.
+**What is not built, named rather than left to be discovered**: no durable home for a hold outside the run directory; no cross-run view of what is being held; no search or sort control, because the sort is the hierarchy and a re-sort under a finger is D28's defect; and no `Custom` preset — any other rule or basis is typed into `decisions.json` on `#/runs`, in the text editor D33 chose, and a re-join regenerates the suggestions.
 
-**WHAT IS STILL NOT BUILT, and the owner found it in the same pass**: `server/pipeline_routes.py`
-computes `remembered_sub_threshold` and ships it on the pricing route, `app/src/types.ts`
-declares it, and **no component reads it**. The sub-threshold disposition is still typed into
-`decisions.json` by hand on `#/runs`, which is what the paragraph above says. It is
-`CLAUDE.md`'s route-is-not-a-feature rule in its mildest form — a server half with no client
-half — and it is named here rather than built because a control that answers D9's per-run
-disposition is a design question, not a wiring one.
-
-**WHAT IS NOT BUILT, named rather than left to be discovered**: no durable home for a hold
-outside the run directory; no cross-run view of what is being held; no search or sort control,
-because the sort is the hierarchy and a re-sort under a finger is D28's defect; and no `Custom`
-preset — any other rule or basis is typed into `decisions.json` on `#/runs`, in the text editor
-D33 chose, and a re-join regenerates the suggestions.
-
-**WHAT WOULD REOPEN THIS: a hold nobody lifts.** If holds accumulate across runs and are re-set by
-hand every time, the per-run home is the wrong one and the deferred durable store becomes the
-answer. The measurement is whether the same SKU is withheld in two runs over one box.
+**What would reopen this: a hold nobody lifts.** If holds accumulate across runs and are re-set by hand every time, the per-run home is the wrong one and the deferred durable store becomes the answer. The measurement is whether the same SKU is withheld in two runs over one box.
 ## D50 — An interactive element's feedback is the product's, not each stylesheet's
 
 **BUILT 2026-08-29, on the owner's report**: *"I hate how my mouse doesn't change correctly
