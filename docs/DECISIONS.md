@@ -3043,6 +3043,14 @@ Distinct from Deferred above: those need an argument and a decision entry first.
 
   Honest limit, and why this is Someday rather than a plan: it might do nothing. The crop-retry path was built on the assumption that enlarging the number helps, and that assumption has never been measured on its own — which is exactly what makes it worth an experiment rather than an edit.
 
+- **Refresh prices against a scheduled pull, and keep the push out of it.** D65 made the export a scoped request, so fetching fresh prices on a schedule is now small — `fetch(Scope(...))` on a cron, storing a dated export, so a pricing decision is made against today's market rather than a file from three days ago.
+
+  **The useful, safe half stops there: surface which SKUs have moved.** *These 23 have moved more than 10% since you listed them*, on `#/pricing`. The staleness gets answered and the decision stays with a person.
+
+  **The push is a different thing and needs its own entry.** Three facts make it so, each checked rather than assumed. Nothing in the pipeline reprices anything — `join` picks a price at the moment it lists a card and `emit` writes it once, so "change the price of something already live" is a concept this product does not have rather than a feature it is missing. The import path is `initializeexportcsv`, `uploadexportcsv`, `finalizeexportcsv`, `rollbackexportcsv`, none of which appear anywhere in this repo; TCGplayer wrapping it in a transaction with a rollback is their own statement about how consequential it is. And `pipeline/pricing.py` has the arithmetic — match, undercut, markup, the $0.40 floor — but no opinion on *when* a live price should move, which is the part that decides whether a loop is useful or expensive.
+
+  **If it is built, it takes D33's shape**: a free preflight showing exactly which prices would change and by how much, and a confirm that is not a default. An unattended loop that moves live marketplace prices is the one thing in this product that could lose money while nobody is looking.
+
 **Three items left this list by being built, and they are struck here rather than deleted so that a later session reading an older copy does not reinstate them as open work.** Each one did what this list's own header says it must — *"if an item starts blocking something, it has stopped being a Someday item and needs a decision entry of its own"* — and each got one:
 
 - ~~**Re-shoot a stored photo in place, long after capture.**~~ **Built 2026-08-23 — D26.** `POST /inventory/<box>/<index>/photo` replaces the bytes and rebuilds the sidecar with the record untouched and the allocator never involved, exactly as this item asked; the control is on the card detail, and D31 carries the rule that a merge may not drop it.

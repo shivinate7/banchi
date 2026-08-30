@@ -31,6 +31,7 @@ Canonicalization
 [Cc]onfig
 Cmd
 Collectr
+cron
 CSVs
 [Dd]ataclass
 [Dd]atalist
@@ -62,8 +63,9 @@ ETag
 Evelynn
 [Ff]ocusable
 [Ff]ootgun
-[Ff]ulfiller
 [Ff]ULFILLER
+[Ff]ulfiller
+finalizeexportcsv
 Fontshare
 Fraunces
 FSEvents
@@ -90,6 +92,7 @@ Idempotence
 [Ii]node
 [Ii]nterpunct
 [Ii]nterpuncts
+initializeexportcsv
 Inteleon
 Kha'Zix
 [Kk]eyless
@@ -150,6 +153,7 @@ Pyroars
 [Qq]uantile
 Rengar
 Repo
+rollbackexportcsv
 [Rr]asterizes
 [Rr]ealpath
 [Rr]ebase
@@ -161,6 +165,7 @@ Repo
 [Rr]enderers
 [Rr]eopener
 [Rr]eplayable
+[Rr]eprices
 [Rr]esolver
 [Rr]espawning
 [Rr]estamp
@@ -206,6 +211,7 @@ Thievuls
 [Tt]ypecheck
 Unimodal
 Unleashed
+uploadexportcsv
 [Uu]nasserted
 [Uu]nbuilt
 [Uu]nclaimable
