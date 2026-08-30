@@ -339,8 +339,12 @@ def run(args, say) -> int:
     emitted = set(listed_skus) | set(sub_skus)
     at_cap = [m for g in resolved.joins.values() for m in g.report.at_cap]
     if at_cap:
-        say(f"{'at cap':<16} {len(at_cap)} SKU(s) already at the live "
-            f"cap, nothing added")
+        # NAMED PER SKU, because "already at the live cap" is almost never the reason
+        # (D59): `live_before` reads 0 on every copy of an import this pipeline has not
+        # seen land, so the old line told the operator TCGplayer already holds nothing.
+        say(f"{'no room':<16} {len(at_cap)} SKU(s) matched and added nothing")
+        for match in at_cap[:8]:
+            say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #

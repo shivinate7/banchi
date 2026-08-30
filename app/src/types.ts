@@ -1260,9 +1260,32 @@ export type PricingSku = {
   copies: number
   add_to_quantity: number
   backstock: number
+  /** The export's `Total Quantity` cell for this SKU — what TCGplayer reports LIVE, and
+   *  nothing else. It is the narrower of the two figures below and it is the one that reads
+   *  0 for a copy sitting on an import nobody has reconciled: measured at 167 pushed copies
+   *  across 72 SKUs of the owner's store, zero of them live, where a screen drawing this
+   *  alone said TCGplayer holds nothing about SKUs it holds several of. Draw it only where
+   *  the sentence means the export (D59). */
   live_before: number
   committed: number
+  /** Copies TCGplayer is holding right now — live plus pending, per SKU and across every
+   *  box, which is what the cap is actually spent against. `>= live_before` always: D8 and
+   *  D11 make the export's live column a FLOOR the store may never argue down, so this
+   *  corrects it upward for a push the pipeline has not seen land and never downward
+   *  (D59). */
+  copies_out: number
   at_cap: boolean
+  /** WHY this run adds no row for a SKU it matched, composed by `pipeline/join.py:
+   *  SkuMatch.nothing_to_add` — or `null` when it adds one, which is the ordinary case.
+   *
+   *  A SENTENCE RATHER THAN THE PARTS TO BUILD ONE, and that is the point of the field.
+   *  `at_cap` above says a row was not written and cannot say why: at the cap, held out by
+   *  an unreconciled push, or every copy in this run already listed or gone. Those have
+   *  three different remedies, and a screen reassembling them from `live_before`,
+   *  `copies_out` and `committed` would be a second copy of that property's reasoning with
+   *  nothing auditing the two against each other — the drift D16 exists to catch. The
+   *  client performs no arithmetic on money and none on the cap either (D59). */
+  nothing_to_add: string | null
   condition: string
   set_name: string
   name: string

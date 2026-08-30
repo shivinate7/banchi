@@ -140,6 +140,39 @@ requires is that the report and the queue file both exist *before* the emitter w
 anything — a card may leave the pipeline unlisted, never unrecorded. `emit_import` enforces
 it by refusing to write while any unmatched card has not been routed.
 
+- **The live cap is covered as a QUANTITY as of 2026-08-30 (D59), and the block that guards
+  it had been pinning the defect.** `_check_committed_from_counts` is where the store's
+  per-SKU counts become `SkuMatch.committed_positions`, and three of its assertions were
+  holding `room = live_cap - live_before - len(committed_positions)` in place — an
+  expression wrong three ways at once. It is RUN-SCOPED against a GLOBAL cap, so a SKU split
+  across two boxes had its cap enforced once per box. It counts a copy that has SOLD, which
+  TCGplayer decremented on the sale and `live_before` had therefore already subtracted. And
+  it reads `pushed`, which has no drawdown, so once an import landed the same copies were
+  subtracted a second time. The cap is measured against one quantity now —
+  `cli/resolve.py:_copies_out`, `min(live + pushed + staged, max(live, copies not sold))` —
+  and the same number is what `_committed_keys` spends on positions.
+
+  **What the three cases assert instead.** Six copies with three live commit **three**
+  positions, add **one** and leave **two** backstock — the old shape committed none, added
+  one, and called five of the six copies backstock while three of them were for sale. And
+  seven copies with one **sold**, against a `Total Quantity` of zero, offer **four**: a card
+  in the post may not shrink what its SKU is allowed to list.
+
+  **Observed failing first, under TWO separate mutations, because one reversal only
+  exercises half of it.** Restoring the old `room` expression to `pipeline/join.py` takes
+  the add-one, backstock-two and departed-copy cases red; restoring `_committed_keys` to
+  spend `pushed + staged` alone takes the live-commits-its-own-copies case red, and
+  backstock-two with it. That one goes red under EITHER mutation, which is what a
+  double-count looks like when it is read from both ends. The fix moved `live` out of
+  `add_to_quantity` and into `_copies_out`, so a single reversal leaves the other half green
+  and reads as coverage it is not.
+
+  **The measurements the change was found by.** 167 copies across 72 SKUs standing at
+  `pushed` on the owner's store with `staged` and `live` both zero — an import that landed
+  under an operator who does not run `reconcile`. And 83 rows across 64 SKUs that one
+  `reconcile` forward would have handed straight back to the import file, because no copy
+  TCGplayer had actually LISTED was ever marked held.
+
 ### T4 — Variant ladder
 
 For a card with normal, holo, and reverse rows in the fixture, assert each ladder stage
@@ -375,6 +408,34 @@ at a temporary directory, so nothing here touches the real inventory.
   moved numbers that block asserts, and the section failed on its own fixture rather than on
   the code. A test that writes to a shared fixture is a test that will eventually be blamed
   for someone else's assertion.
+- **The refill is covered as of 2026-08-30 (D59), end to end and in both directions.** The
+  cap is a per-SKU quantity rather than a count of one run's positions, and the two halves
+  of that live at a seam T3 cannot reach: `cli/resolve.py:_copies_out` reads a real store
+  and a real export, and `emit` writes a real file. So the cases run the whole cycle —
+  `join` -> `emit` -> import -> `reconcile` -> a fresh export -> `join` again — rather than
+  asserting an expression.
+
+  **The positive case is D7's own refill sentence, restored.** Six copies, four pushed, the
+  import lands, two of them sell, and a fresh Filtered Export reports two live. The SKU tops
+  back up to the cap and **the import file carries the DELTA, not the total** — two rows,
+  never four, which is D54's rule that a re-emit adds and never subtracts, reached from the
+  other end. `Add to Quantity = min(cap - live, backstock)` is what that computes, and it is
+  the arithmetic `docs/specs/batch-script.md` §8's counter-argument was written to
+  protect.
+
+  **The negative case is the one that matters more, and it is the fix nobody should reach
+  for.** Eight copies, four pushed, and an export reporting **two** live because the other
+  two are still sitting in Staged. The answer is **add nothing**. The obvious repair for a
+  stuck `pushed` — clear the claim once the export reports anything live — passes the
+  positive case and re-offers two copies TCGplayer is already holding, which is exactly the
+  double-stage the first post-import re-emit produced on 2026-08-22. What bounds the claim
+  instead is physical: `store/master.py:Inventory.copies_not_sold`, which cannot be argued
+  above the copies this Mac actually owns and has not sold.
+
+  **Observed failing first, and the mutation that counts is the PLAUSIBLE repair rather
+  than an absent one.** A case that only goes red when the whole feature is deleted does
+  nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
+  is the one thing this negative case exists to refuse.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This

@@ -1010,9 +1010,29 @@ export function Pricing() {
                       H
                     </button>
 
+                    {/* THE SERVER SAYS WHY; THIS DRAWS IT. The sentence here used to be
+                        "nothing to add this run — TCGplayer already holds {live_before}",
+                        composed on the client out of the export's live column alone — which
+                        reads 0 for every copy sitting on an import nobody has reconciled.
+                        Measured on the owner's store: 167 pushed copies across 72 SKUs,
+                        zero live and zero staged, and `live_before` reads 0 on every SKU of
+                        both runs on disk — so wherever this note drew at all it read
+                        "TCGplayer already holds 0" under a row adding nothing BECAUSE
+                        TCGplayer was holding them. A row that stops appearing in an import
+                        file is close enough to the silent drop `CLAUDE.md` forbids that
+                        saying nothing would have beaten saying that.
+
+                        `nothing_to_add` is composed in `pipeline/join.py` beside the numbers
+                        and names which of the three reasons applies, because they have three
+                        different remedies (D59). The fallback is not defensive padding: this
+                        table is `pricing.json` READ OFF DISK, and a file written by an
+                        earlier join carries `at_cap` with no sentence beside it — measured,
+                        both runs in `runs/` today. So an older file states the bare fact,
+                        which is exactly what `at_cap` means, and invents no reason for
+                        it. */}
                     {sku.at_cap ? (
                       <p className="pricing-row-note">
-                        nothing to add this run — TCGplayer already holds {sku.live_before}
+                        {sku.nothing_to_add ?? 'nothing to add this run'}
                       </p>
                     ) : withheld && standing !== 'unlisted' && standing.note ? (
                       <p className="pricing-row-note">{standing.note}</p>

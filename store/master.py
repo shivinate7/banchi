@@ -540,6 +540,19 @@ class Listing:
         Quantity of 3 would compute room for 0 instead of 1, and would under-list by one
         copy forever after. Measured by the Phase 3 rewrite; do not "simplify" it to
         `pushed + staged + live`.
+
+        AND THE SAME SENTENCE WAS FALSE ABOUT `pushed` FROM THE DAY IT WAS WRITTEN (D59).
+        `pushed` means one thing: a CSV was written. The moment the operator imports it and
+        moves the rows live, `Total Quantity` reports those copies — so `pushed` becomes the
+        second subtraction this docstring spends its length forbidding, reached through the
+        one stage nobody thought to check. Measured on the owner's own store: 167 copies
+        across 72 SKUs at `pushed`, with `staged` and `live` both zero.
+
+        THIS PROPERTY HAD NO CALLER AT ALL until `cli/resolve.py:_copies_out`, which is
+        where the correction lives: the claim is bounded by `Inventory.copies_not_sold`
+        rather than trusted. A rule with no caller cannot be kept honest by anything, and
+        `server/capture_server.py:_stages_held` one process over already implements a
+        DIFFERENT rule under a near-identical name.
         """
         return max(0, int(self.pushed)) + max(0, int(self.staged))
 
@@ -1238,6 +1251,37 @@ class Inventory:
         would put a card that is no longer in the box back into D7's refill arithmetic.
         """
         return [c for c in self.positions_for_sku(sku) if c.state not in TERMINAL_STATES]
+
+    def copies_not_sold(self, sku: str) -> List[Card]:
+        """Every copy carrying this SKU that has not SOLD — the sent-copy bound (D59).
+
+        `SOLD` alone, and NOT `TERMINAL_STATES`, which is the opposite of the choice
+        `copies_on_hand` above makes and is right for the opposite reason. A sale is proof
+        a copy reached TCGplayer and left it. A RETIREMENT (D26) is the other door: the
+        card left THIS box and TCGplayer was never told, so its row is still out there and
+        counting it as gone would free a slot under the cap that is not free.
+
+        What it bounds is `cli/resolve.py:_copies_out`. `pushed` has no drawdown — it is
+        written by `cli/cmd_emit.py` and cleared only by `cli/cmd_reconcile.py`, which an
+        operator is not obliged to run — so once an import LANDS the count claims copies the
+        export is already reporting live. This is the physical fact that corrects it: we
+        cannot have sent more copies than we own and have not sold.
+
+        WHAT IT IS FOR CHANGED UNDER THIS BRANCH, AND THE PREMISE THAT MOVED IS WORTH
+        KEEPING. It was the SHELF BOUND — "we cannot have SENT more copies than we own and
+        have not sold" — which held only while `cli/cmd_emit.py` stamped a SKU onto exactly
+        the copies it wrote into a file. D7's 2026-08-30 amendment moved that stamp to `uncommitted_positions`,
+        correctly: the cap bounds the LISTING, not the IDENTITY, and copies past the fourth
+        were invisible to every SKU-keyed surface. **A stamp now means MATCHED, not SENT**,
+        so a count of stamped copies includes backstock that reached no import file.
+
+        SO `cli/resolve.py:_copies_out` READS IT AS THE OTHER HALF OF A SUBTRACTION —
+        `positions_for_sku` minus this is the number of copies of the SKU that have SOLD,
+        and a sale is the one event that proves a sent copy has left TCGplayer, because a
+        copy cannot sell without having been listed. That reading survives the stamp move:
+        an unsent backstock copy is in both counts and cancels out.
+        """
+        return [c for c in self.positions_for_sku(sku) if c.state != SOLD]
 
     def listing_counts(self) -> Dict[str, int]:
         """Copies at each TCGplayer stage, summed across every SKU."""

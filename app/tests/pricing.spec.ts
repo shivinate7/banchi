@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import type { PricingSku } from '../src/types'
+
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
  * `CLAUDE.md`'s hard rule — "A ROUTE IS NOT A FEATURE" — and `docs/GATES.md` step 7's account
@@ -37,9 +39,18 @@ type Wire = { method: string; path: string; body: unknown }
  *  a given case reads. A partial fixture here does not fail partially: the row reads
  *  `row['Number']` and `positions[0]`, so a record missing either takes the screen down and
  *  every assertion below fails with "element not found", which reads exactly like an
- *  unregistered route. */
-function sku(over: Record<string, unknown> = {}) {
-  const base = {
+ *  unregistered route.
+ *
+ *  IT IS TYPED, AND IT WAS NOT UNTIL D59 ADDED TWO FIELDS NOBODY NOTICED WERE MISSING. This
+ *  read `over: Record<string, unknown>` returning an un-annotated literal, so `PricingSku` was
+ *  never applied to the fixture in either direction: `copies_out` and `nothing_to_add` were
+ *  added to the wire and to the type, the fixture stayed on the old shape, and `tsc` had
+ *  nothing to say about it — which is how the at_cap case below came to exercise the FALLBACK
+ *  while reading as coverage of the sentence. `Partial<PricingSku>` also makes an override that
+ *  reaches no field an error rather than a no-op; it caught one (`market`), inert since the
+ *  case was written. */
+function sku(over: Partial<PricingSku> = {}): PricingSku {
+  const base: PricingSku = {
     sku: '8608859',
     game: 'pokemon',
     row: {
@@ -66,6 +77,12 @@ function sku(over: Record<string, unknown> = {}) {
     backstock: 0,
     live_before: 0,
     committed: 0,
+    /* D59's two. `copies_out` is what the cap is spent against — live plus pending, per SKU
+       and across every box — and it is `>= live_before` always. `nothing_to_add` is null on
+       the ordinary row, which is the row that ADDS one; a case about a row that does not
+       overrides both. */
+    copies_out: 0,
+    nothing_to_add: null,
     at_cap: false,
     condition: 'Near Mint Holofoil',
     set_name: 'SV: Prismatic Evolutions',
@@ -350,7 +367,12 @@ test('the sub-threshold answer is settable here, and emit says what it still owe
   page,
 }) => {
   const wire = await open(page, {
-    skus: [sku({ bucket: 'sub_threshold', market: '0.12' })],
+    /* `bucket` alone puts the row in the sub-threshold section — it is decided by the Market
+       cell at join time and nothing the screen does can move a row between sections (D28).
+       This carried a `market: '0.12'` beside it that reached no field of `PricingSku` and was
+       therefore inert from the day it was written; the annotation on `sku()` is what found
+       it. */
+    skus: [sku({ bucket: 'sub_threshold' })],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
   })
 
@@ -667,6 +689,71 @@ test('the caption and the rows share one grid template, so they cannot drift', a
   expect(seen.captionCols).not.toBe('')
   expect(seen.captionCols).toBe(seen.rowCols)
   expect(seen.captionCount).toBe(seen.rowCount)
+})
+
+// -------------------------------------------------- why a row adds nothing (D59)
+
+test('a row that adds nothing draws the reason the SERVER composed, verbatim', async ({
+  page,
+}) => {
+  /* THE SENTENCE IS THE SERVER'S AND THE CLIENT MAY NOT COMPOSE ONE. This note read
+     "nothing to add this run — TCGplayer already holds {live_before}", built here out of the
+     export's live column alone — and `live_before` is 0 for every copy sitting on an import
+     nobody has reconciled, which is 167 copies across 72 SKUs of the owner's store and every
+     SKU of both runs on disk. So wherever it drew at all it said TCGplayer holds NOTHING under
+     a row adding nothing BECAUSE TCGplayer was holding them.
+
+     `pipeline/join.py:SkuMatch.nothing_to_add` names which of three reasons applies, beside
+     the numbers, because they have three different remedies (D59). The one below is the branch
+     that is almost always the reason on this operator's store: they do not run `reconcile` and
+     never will, so `pushed` never lands and the export never learns about it. Asserted as the
+     EXACT string rather than a substring — a client that reassembled this out of `live_before`,
+     `copies_out` and `committed` would be a second copy of that property's reasoning with
+     nothing auditing the two against each other, and a near-miss is exactly what it would
+     produce. */
+  const pending =
+    '0 live and 4 on an import this pipeline has not seen land — 4 of the 4 this SKU may have out'
+
+  /* AND THE FALLBACK IS NOT DEFENSIVE PADDING. This table is `pricing.json` READ OFF DISK, so
+     a file written by an earlier join carries `at_cap` with no sentence beside it — measured,
+     both runs in `runs/` today. Modelled by DELETING the key, because that is the shape on
+     disk and `PricingSku` cannot express an absent field; `null` reaches the same `??` and is
+     what a fresh join writes for a zero-copy match. An older file must state the bare fact,
+     which is exactly what `at_cap` means, and invent no reason for it. */
+  const older = sku({
+    sku: '8608659',
+    name: 'Wattrel',
+    at_cap: true,
+    add_to_quantity: 0,
+    copies: 2,
+  }) as Partial<PricingSku>
+  delete older.nothing_to_add
+
+  await open(page, {
+    skus: [
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        copies: 4,
+        live_before: 0,
+        copies_out: 4,
+        nothing_to_add: pending,
+      }),
+      older,
+    ],
+  })
+
+  const notes = page.locator('.pricing-row .pricing-row-note')
+  await expect(notes).toHaveCount(2)
+  await expect(notes.nth(0)).toHaveText(pending)
+  await expect(notes.nth(1)).toHaveText('nothing to add this run')
+
+  /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
+     composes something the assertion above happens to match. Neither row may claim the export
+     knows what TCGplayer is holding. */
+  await expect(page.locator(VIEW)).not.toContainText('already holds')
 })
 
 test('a row is the same height whether or not it carries a note', async ({ page }) => {

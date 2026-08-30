@@ -252,7 +252,7 @@ COMPONENTS = [
                                     "first join and never touches its rule again (D49) — the two "
                                     "lines that did ran under the sentence promising your edits "
                                     "were kept.",
-                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D54"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D54", "D58", "D59"], "tested_by": ["T4", "T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
                                     "from decisions.json rather than from the run manifest (D49). "
                                     "A RE-EMIT ADDS AND NEVER SUBTRACTS (D54): it never opens an "
@@ -270,9 +270,9 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
-            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36", "D58"], "tested_by": ["T7"]},
+            "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36", "D58", "D59"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
         },
     },
@@ -325,8 +325,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D49", "D54", "D55", "D56", "D58"], "tested_by": ["T3"]},
-            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D49", "D54", "D55", "D56", "D58", "D59"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -402,7 +401,7 @@ COMPONENTS = [
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
                                   "`open_section`, which puts one divider in front of the next "
                                   "card at the index only the store can read (D10)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D58"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D58", "D59"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
@@ -1119,7 +1118,7 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1523,7 +1522,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D54", "D56"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D54", "D56", "D58", "D59"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -1811,7 +1810,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D9", "D20", "D28", "D33", "D49", "D54", "D56"]},
+                                      "governed_by": ["D9", "D20", "D28", "D33", "D49", "D54", "D56", "D57", "D58", "D59"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

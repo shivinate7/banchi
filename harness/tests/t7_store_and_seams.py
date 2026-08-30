@@ -9530,10 +9530,18 @@ def check_listing_commands(checks: Checks) -> None:
             "same defect, which regressed staged copies to `pushed`",
         )
         checks.ok(
-            "at cap           2 SKU(s)" in again,
-            "the SKUs are REPORTED as already at the cap, because they are real cards at "
-            "real positions and a run that silently omitted them would look identical to a "
-            "run that lost them",
+            "no room          2 SKU(s)" in again
+            # A REASON PER SKU, whichever of `nothing_to_add`'s branches it is. Naming one
+            # branch here would pin the wording of a sentence that is per-SKU by design,
+            # and would go green the day a SKU took a different branch.
+            and again.count(" — ") >= 2,
+            "the SKUs are REPORTED and each is given ITS OWN reason (D59), because they "
+            "are real cards at real positions and a run that silently omitted them would "
+            "look identical to a run that lost them. It pinned the words `at cap` and the "
+            "count alone until D59, which is why the heading went on saying `already at "
+            "the live cap` — false for every copy of an import this pipeline has not seen "
+            "land — while the rows beneath it had already been corrected. The label may "
+            "move again; what may not is that every such SKU is named with a reason",
             again,
         )
         # A RE-EMIT WITH NOTHING NEW TO WRITE DOES NOT OPEN THE FILE.
@@ -9807,6 +9815,210 @@ def check_listing_commands(checks: Checks) -> None:
             2,
             "a stored 9 against an export that says 2 becomes 2 — set from the export, never "
             "nudged toward it",
+        )
+
+    # --- the cap is a QUANTITY, and a sold copy gives its slot back (D59) -----------------
+    #
+    # ITS OWN `isolated_home`, and this file has now recorded that lesson four times — the
+    # sharpest being `check_emit_bypass`, which emits and therefore writes `pushed` counts
+    # that the block above asserts as absolute dicts over its own fixtures. This one emits
+    # three times.
+    #
+    # SIX COPIES, NOT FOUR, AND THE COUNT IS THE CASE. At `copies == live_before` the answer
+    # is zero however the room is computed, so a four-copy fixture could not fail; the
+    # refill only exists where there is real backstock behind the cap.
+    with isolated_home():
+        six = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 7)]
+        run_dir, _ = seam_run(checks, six)
+        first = command(checks, "emit", str(run_dir.directory))
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).pushed,
+            4,
+            "SIX COPIES, FOUR PUSHED: the cap is what the file may carry, and the two behind "
+            "it are backstock at known positions (D7) rather than cards this run lost",
+        )
+        checks.equal(
+            tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+            .by_sku()[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN],
+            "4",
+            "and the file carries the four",
+        )
+
+        # THE IMPORT LANDS, WHICH IS THE STEP THE OLD ARITHMETIC COULD NOT SURVIVE.
+        # `reconcile` moves the count off `pushed`, and `join` then reads the four copies
+        # live off the export — the only two commands that ever move these numbers.
+        landed_staged = write_staged(run_dir.path("staged.csv"), {DUNSPARCE_SKU: 4})
+        command(checks, "reconcile", str(run_dir.directory), str(landed_staged))
+        landed = write_export(run_dir.path("landed.csv"), live={DUNSPARCE_SKU: 4})
+        command(checks, "join", str(run_dir.directory), "--export", str(landed))
+        checks.equal(
+            (
+                Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+                Store().read().inventory.listing_for(DUNSPARCE_SKU).staged,
+            ),
+            (4, 0),
+            "four live, nothing pending: the round trip closed and the SKU is at its cap",
+        )
+
+        # --- two copies sell -------------------------------------------------------------
+        # Through the real route, because the sale's own half of D7 is what makes the refill
+        # arithmetic true: `do_mark_sold` decrements the SKU's `live` count, and nothing else
+        # in the product does. Hand-setting the number here would assert the refill against a
+        # figure this test had written rather than against one a sale produced.
+        for index in (1, 2):
+            capture_server.do_mark_sold(3, index, {})
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+            2,
+            "two sales take the live count to two, which is the room the cap now has",
+        )
+
+        # A STALE EXPORT CANNOT RE-OPEN THE CAP, and this is the assertion for the `max()` in
+        # `cli/resolve.py:_copies_out`. The export still says four — the operator has not
+        # downloaded a fresh one since the sales — and D8 and D11 make that column
+        # authoritative, so it is a FLOOR the store's own smaller physical count may not
+        # argue below. Offering two copies here would list against slots TCGplayer is still
+        # holding, on the strength of a reading that has gone backwards.
+        stale = command(checks, "join", str(run_dir.directory), "--export", str(landed))
+        checks.ok(
+            "8608459 Dunsparce copies=6 — every copy in this run is already listed "
+            "or has left the box" in stale,
+            # THE SENTENCE IS THE COMMITTED ONE, NOT THE CAP ONE, AND THAT IS THIS FIXTURE
+            # BEING HONEST ABOUT WHAT IT CAN PROVE. Six copies with two sold leaves four,
+            # and TCGplayer holds four — so `uncommitted_positions` is EMPTY and
+            # `nothing_to_add` answers on that before it ever reaches the cap. This case
+            # pinned `4 live, at the cap of 4` until D59, which asserted a branch the
+            # fixture cannot reach; the floor itself is demonstrated by the eight-copy
+            # partial-import case below, where two copies really are still offerable.
+            "a STALE export reporting four live offers nothing and SAYS WHY — a reading "
+            "taken before the sales cannot free a slot, and every copy this run still "
+            "holds is one TCGplayer is holding too",
+            stale,
+        )
+
+        # --- and the fresh one refills ---------------------------------------------------
+        before_bytes = run_dir.path(runs.IMPORT_LISTED).read_bytes()
+        fresh = write_export(run_dir.path("fresh.csv"), live={DUNSPARCE_SKU: 2})
+        refilled = command(checks, "join", str(run_dir.directory), "--export", str(fresh))
+        checks.ok(
+            # THE SKU MUST BE ABSENT FROM THE no-room BLOCK, NOT MERELY UNNAMED BY ONE
+            # STRING. This pinned `"already at the live cap" not in refilled` until D59
+            # renamed that heading — after which no production path emitted the string at
+            # all and the assertion was TRUE in the failure state too. A check that cannot
+            # fail is not coverage, which this file records having paid for twice.
+            f"{DUNSPARCE_SKU} — " not in refilled and "no room" not in refilled,
+            "TWO LIVE, FOUR COPIES IN THE BOX, CAP FOUR — D7's own `min(cap - live, "
+            "backstock)`, and the SKU is no longer at the cap. Against the old expression "
+            "this answered zero: `live_cap - live_before - len(committed_positions)` counted "
+            "the two SOLD copies that `live_before` had already accounted for, so a departed "
+            "card shrank what its SKU could ever list and this row would never have appeared "
+            "in an import file again",
+            refilled,
+        )
+        refill = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "1 row(s), 2 card(s)" in refill,
+            "and the emit sends exactly the two the cap has room for",
+            refill,
+        )
+        inventory = Store().read().inventory
+        checks.equal(
+            tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+            .by_sku()[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN],
+            "2",
+            "THE FILE CARRIES THE DELTA AND NOT THE CAP (D54). Four here would re-import the "
+            "copies already live and double-stage them, which is the Gate B defect — the two "
+            "TCGplayer is holding were never withdrawn, and this run may only add the two "
+            "the sales made room for",
+        )
+        checks.equal(
+            inventory.listing_for(DUNSPARCE_SKU).pushed,
+            2,
+            "the count on the SKU is the same two, so a reconcile can move exactly them",
+        )
+        checks.equal(
+            sorted(c.key for c in inventory.positions_for_sku(DUNSPARCE_SKU)),
+            ["3/1", "3/2", "3/3", "3/4", "3/5", "3/6"],
+            "AND THE COPIES SENT ARE THE TWO THAT HAD NOT BEEN. `live_positions` is "
+            "`uncommitted_positions[:add_to_quantity]`, so a budget that failed to commit "
+            "the copies TCGplayer already has out would re-send those instead and leave the "
+            "backstock unstamped — same row count, wrong cards, and invisible in the file",
+        )
+        checks.ok(
+            "next: import" in refill,
+            "and an emit that wrote something tells the operator to go and import it",
+            refill,
+        )
+        checks.ok(
+            run_dir.path(runs.IMPORT_LISTED).read_bytes() != before_bytes,
+            "which is the other side of the re-emit case above: that one must not touch the "
+            "file, and this one must",
+        )
+
+    # --- pushed and live disagreeing, which is the case that refutes the obvious fix ------
+    #
+    # GREEN IN BOTH BUILDS, DELIBERATELY, AND KEPT FOR THE MUTATION. `pushed=4, live=2` is
+    # produced by "four went live and two sold" AND by "two rows landed and two are still
+    # sitting in Staged", and those want opposite answers — the first has room for two, the
+    # second has none. Nothing on this Mac can tell them apart (D34: no export this pipeline
+    # reads can assert what TCGplayer is holding), so the conservative reading is the only
+    # honest one, and any "fix" that makes the refill above work by trusting `live` alone
+    # takes this case red.
+    with isolated_home():
+        eight = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 9)]
+        run_dir, _ = seam_run(checks, eight)
+        command(checks, "emit", str(run_dir.directory))
+        untouched = run_dir.path(runs.IMPORT_LISTED).read_bytes()
+
+        partial = write_export(run_dir.path("partial.csv"), live={DUNSPARCE_SKU: 2})
+        said = command(checks, "join", str(run_dir.directory), "--export", str(partial))
+        checks.ok(
+            "8608459 Dunsparce copies=8 — 2 live and 2 on an import this pipeline has not "
+            "seen land — 4 of the 4 this SKU may have out" in said,
+            "TWO LIVE AND TWO STILL PENDING IS FOUR OUT, so eight copies in the box add "
+            "nothing — and the sentence names BOTH halves. `at_cap` said `already at the "
+            "live cap` for every zero, which under an operator who does not reconcile is "
+            "almost never the reason: a card that stops appearing in import files is the "
+            "silent drop `CLAUDE.md` forbids, and a count under a false sentence is worse "
+            "than no count",
+            said,
+        )
+        again = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "nothing new to send" in again,
+            "and the re-emit says so rather than writing a file",
+            again,
+        )
+        checks.equal(
+            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            untouched,
+            "leaving the first emit's file exactly as the operator was told to import it",
+        )
+
+        # AND A RETIRED COPY IS STILL A COPY TCGPLAYER IS HOLDING (D26, D59).
+        #
+        # `Inventory.copies_not_sold` bounds the claim by what we physically hold, and it
+        # filters `SOLD` alone rather than `TERMINAL_STATES` — which is the opposite of the
+        # choice `copies_on_hand` makes one method up. A sale is proof a copy reached
+        # TCGplayer and left it; a retirement is the other door, where the card left THIS BOX
+        # and TCGplayer was never told, so its row is still out there. Counting a retired
+        # copy as gone lowers the ceiling and frees a slot under the cap that is not free,
+        # and the six unstamped copies behind it are exactly what would pour through.
+        for index in (1, 2):
+            capture_server.do_retire(3, index, {"reason": "damaged"})
+        retired = command(checks, "join", str(run_dir.directory), "--export", str(partial))
+        checks.ok(
+            "8608459 Dunsparce copies=8 — 2 live and 2 on an import this pipeline has not "
+            "seen land — 4 of the 4 this SKU may have out" in retired,
+            "two copies leaving the box changes nothing about what TCGplayer is holding, so "
+            "the answer and the sentence are identical to the line above it",
+            retired,
+        )
+        command(checks, "emit", str(run_dir.directory))
+        checks.equal(
+            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            untouched,
+            "and the file is still the first emit's — a retirement may never re-open the cap",
         )
 
     # --- the v1 -> v2 migration, through a real store session ------------------------------
