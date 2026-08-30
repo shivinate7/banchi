@@ -4198,6 +4198,102 @@ answer. The measurement is whether the same SKU is withheld in two runs over one
 
 ---
 
+---
+
+## D50 — The photo URL names a photograph, because a slot's occupant changes under it
+
+**BUILT 2026-08-29, from the owner's report about the mid-box delete**: *"deleting a card
+often feels risky because the delete doesn't kick in super quickly and it makes you think you
+need to delete more but in reality it eventually (maybe half a minute or less) shows that it
+really was deleted."*
+
+**NOTHING WAS SLOW, AND THAT IS THE FINDING.** Measured against a hardlinked copy of the
+owner's real store, box 2, 543 cards: `POST /inventory/2/180/remove` answered in **288 ms**
+having shifted 363 cards, the three reads behind it returned in **116 ms**, and the walk,
+the count, the facts and the receipt were all correct **500 ms** after the press. The
+`inventory.json` write is 0.29 s at its worst — deleting card 1 of 543 — and `GET /inventory`
+over the whole 715-card store is 37 ms.
+
+**WHAT THE OPERATOR IS ACTUALLY LOOKING AT IS A PHOTOGRAPH OF THE CARD THEY JUST DELETED.**
+`app/src/server.ts:photoUrl` answers `/photo/<box>/<index>`, which is an address for a SLOT
+rather than for a card, and D10 ruling 1 slides a different card into that slot. The card
+band kept drawing the deleted card's picture over its replacement's facts, at the same
+position label — so the one large, unambiguous thing on the screen said nothing had happened
+while four small ones said it had. **The reading that makes this dangerous rather than untidy
+is the owner's own**: the next press deletes the card that slid in, which is a real capture
+with a real photograph, and it is not refused, because the aim check is satisfied by the
+record the screen just re-read.
+
+**THREE OPERATIONS CHANGE A SLOT'S OCCUPANT AND ONLY ONE OF THEM WAS EVER GUARDED.** The
+mid-box delete (D10 ruling 1), the undo that releases an index for the next capture (D10),
+and D26's re-shoot. Only the third had an answer, and it was a nonce appended by the one
+screen that knew it had just replaced the bytes.
+
+**THREE REPAIRS, IN THE ORDER THEY WERE BUILT, AND THE FIRST TWO ARE KEPT DESPITE NOT BEING
+SUFFICIENT.** Recorded as a sequence because each one looks like the whole answer until it is
+measured, and a later session will reach for them in the same order.
+
+1. **A validator on the server, which is the repair this repo had already specified in
+   writing and never built.** `photoUrl`'s comment said "the server sends no validators ...
+   the fix is a cache header on the server", and it was right about the diagnosis for four
+   months. `GET /photo` now sends a strong `ETag` — sha256 of the bytes, truncated to 128
+   bits — and `Cache-Control: no-cache`, and `_photo` answers `If-None-Match` with a 304.
+   **Necessary and not sufficient**: a header is a rule about reusing a cached RESPONSE, and
+   an `<img>` React keeps in the document never asks for one.
+2. **The occupant in the element's React key, so it remounts.** It does remount — measured,
+   `sameDomNode: false` across a delete — and **the picture still did not change**. Chrome
+   satisfies a second load of an IDENTICAL URL within one document from its in-memory
+   resource cache, which consults neither the ETag nor `no-cache`: one resource-timing entry,
+   `transferSize: 0`, before and after. Kept, because a remount is what makes step 3 issue a
+   load at all.
+3. **The capture id in the URL.** `?card=<capture_id>` on the card band's photograph. The
+   two loads are now different requests, so there is nothing for the memory cache to reuse,
+   and the correct photograph is on screen ~1 s after the press. Verified end to end in a
+   browser against the copied store, with the walk, the facts, the count and the picture all
+   naming the same card.
+
+**THE STAMP IS NOT THE CACHE-BUSTER `photoUrl` REFUSED, AND THE DISTINCTION IS THE WHOLE
+LICENCE FOR IT.** That comment rejected "a cache-busting query parameter minted here", and it
+was right: a NONCE is a value that never repeats, so it defeats caching by construction and
+papers over the missing header. `capture_id` is stable for the life of a photograph. It makes
+this URL name the photograph rather than the slot, so a card keeps one URL forever and the
+route caches **better** than it did — and a URL changes only when the thing behind it does.
+The re-shoot exception that comment already carries is now the same rule arriving one re-read
+early rather than a second mechanism: `nonce` IS the new capture id.
+
+**IT IS ONE SCREEN, AND THE REASON IS SPECIFIC RATHER THAN A JUDGEMENT ABOUT EFFORT.** Every
+other site that draws a stored photo keys its element on a POSITION that moves with the card —
+the review queue's entries are re-keyed by the renumber itself, the Fulfiller's card and the
+two confirm panels are opened for one copy at a time. `BoxBrowse`'s card band is the only
+place in the product that holds a slot SELECTED while its occupant changes underneath, which
+is exactly what a delete does to it.
+
+**WHAT IS NOT FIXED, NAMED SO A GREEN SUITE IS NOT MISREAD.** The in-document memory cache is
+still reachable anywhere two different cards are drawn from one slot URL in one document —
+the review screen's photograph after a renumber is the realistic one. The ETag makes every
+genuinely new load correct, so the residual is narrow, and the remedy if it ever bites is this
+entry's step 3 at that site rather than a new mechanism. And a record written before capture
+ids existed carries `null` and falls back to the bare slot URL: `do_remove_card` aims by the
+same field and is blind in the same place, so a Reload is the answer in both.
+
+**`SearchCopy` IS DELIBERATELY NOT WIDENED TO CARRY ONE.** `app/src/types.ts` argues that a
+search result which also carried `confidence` and `capture_id` "would invite a second
+inventory view to grow inside a search result", and none of the sites fed by it needed the
+stamp. Left alone rather than widened for symmetry.
+
+**Covered by `harness/tests/t7_store_and_seams.py:check_photo_cache` over real sockets** — the
+headers, the 304, the weak comparison, `If-None-Match: *`, and the case that is the defect: the
+same URL with the same tag answers 200 after a shift, under a new tag, with the neighbour's
+bytes. And by `app/tests/inventory.spec.ts`, which asserts the URL carries the occupant before
+and after a delete. **Both were mutation-tested**: a slot-derived ETag takes the T7 case red, a
+dropped `Cache-Control` takes another, and reverting the stamp takes the browser case red.
+
+**What would reopen this: a photograph that is slow rather than wrong.** Every measurement
+above says the data path is fast, so nothing here buys latency. If the walk ever feels slow
+after this, the thing to look at is the 304 round trip per card — and the honest fix then is a
+long `max-age` on a URL that already names its photograph, which this entry makes safe and
+deliberately did not take.
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

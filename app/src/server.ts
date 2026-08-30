@@ -169,18 +169,34 @@ export function describeFailure(err: unknown): Failure {
  * cannot load one, and building a `file://` URL from it fails silently in a way that looks
  * like a missing photo. This is the only way to display a capture.
  *
- * Known hazard, recorded rather than worked around: undo deletes a photo and releases its
- * index, so the next capture reuses this exact URL for different bytes. The server sends no
- * validators, so if a browser ever does hold one of these, the fix is a cache header on
- * the server — not a cache-busting query parameter minted here, which would have to be
- * threaded through every caller and would defeat caching for the pull preview too.
+ * KNOWN HAZARD, AND IT STOPPED BEING HYPOTHETICAL ON 2026-08-29 (D50). This URL names a SLOT,
+ * and three operations put a different card in one: D10 ruling 1's mid-box delete slides
+ * every higher card down an index, D10's undo releases an index the next capture reuses,
+ * and D26's re-shoot replaces the bytes outright. The owner reported the first of those as
+ * a delete that "doesn't kick in super quickly ... it makes you think you need to delete
+ * more" — measured against a copy of their store, the delete answered in 288 ms and the
+ * screen went on drawing the deleted card's photograph over its replacement's facts.
  *
- * ONE EXCEPTION STANDS, AND IT IS NOT THIS FUNCTION'S: after `reshootPhoto` below succeeds,
- * the screen that sent the new bytes appends a nonce to its own `<img>`'s src. That is a
- * different case from the one this paragraph rejects — not a nonce minted here for every
- * caller on every load, but one screen, at the one moment it KNOWS the bytes behind the
- * stable URL changed, refusing to show the photograph it just replaced. PullPreview.tsx
- * argues it where it happens; the general repair stays a response header on the server.
+ * THE HEADER THIS PARAGRAPH ASKED FOR IS BUILT, AND IT IS NOT ENOUGH ON ITS OWN. It read
+ * "the server sends no validators ... the fix is a cache header on the server", and that
+ * sentence is now false in its first half and incomplete in its second:
+ * `server/capture_server.py:_photo` sends a strong `ETag` and `Cache-Control: no-cache`,
+ * so a LOAD of one of these revalidates and gets the right bytes. Two things a header
+ * cannot do, both observed rather than reasoned: it cannot make an `<img>` React keeps in
+ * the document ask again, and it does not reach Chrome's in-document memory cache, which
+ * satisfies a second load of an IDENTICAL URL without consulting either the ETag or
+ * `no-cache`. A remount alone was measured showing the stale picture for exactly that
+ * reason.
+ *
+ * SO A CALLER THAT KNOWS WHICH CAPTURE IT IS DRAWING MAY SAY SO IN THE URL, and that is
+ * not the thing this paragraph used to refuse. What it refused was a NONCE minted per
+ * load because the bytes might have changed — a value that never repeats and therefore
+ * defeats caching. A `capture_id` is stable for the life of a photograph, so it makes this
+ * URL name the photograph rather than the slot and caches strictly better. `BoxBrowse.tsx`
+ * does it, because it is the one screen that holds a slot SELECTED across a renumber; the
+ * re-shoot exception below is now the same rule reaching one re-read early rather than a
+ * separate mechanism. Callers whose element re-keys when the card moves — the copies list,
+ * the review queue, the Fulfiller's card — need nothing, and the ETag covers them.
  */
 export function photoUrl(box: number, index: number): string {
   return `${base}/photo/${box}/${index}`

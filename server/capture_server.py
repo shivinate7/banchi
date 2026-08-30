@@ -209,6 +209,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 import os
 import re
@@ -2002,7 +2003,39 @@ def do_games() -> dict:
     }
 
 
-def do_photo(box: int, index: int) -> bytes:
+def do_photo(box: int, index: int) -> Tuple[bytes, str]:
+    """The stored capture, and a validator for it. D6's route, D50's validator.
+
+    THE URL NAMES A SLOT, NOT A PHOTOGRAPH, AND THAT IS WHY THE SECOND RETURN VALUE EXISTS.
+    `/photo/2/180` means "whatever is in box 2's slot 180 today", and three operations move
+    a different card into a slot the browser has already cached: D10 ruling 1's mid-box
+    delete slides every higher card down one, D10's undo releases an index the next capture
+    reuses, and D26's re-shoot replaces the bytes outright. `app/src/server.ts:photoUrl`
+    has recorded the hazard for the undo case since it was written and named this repair in
+    as many words — "the fix is a cache header on the server" — while the response carried
+    no `Cache-Control`, no `ETag` and no `Last-Modified` at all.
+
+    WHAT IT COST, MEASURED ON A REAL BOX 2 (2026-08-29). Deleting box 2's card 180 shifted
+    363 cards down one index in 288 ms and the walk redrew in 500 ms — and the screen went
+    on showing the photograph of the card that had just been deleted, over the facts of the
+    card that had slid into its slot. `performance.getEntriesByType` reported the displayed
+    image at `transferSize: 0`; the same URL fetched with a cache-buster returned the right
+    card. **The operator's reading of that screen is that the delete did not happen**, and
+    the next press deletes the card that slid in, which is a real capture with a real
+    photograph. The staleness is not one card either: every slot above the deleted one is
+    now off by one for as long as its entry survives in the browser's cache.
+
+    A STRONG ETag OVER THE BYTES, RATHER THAN A STAT TRIPLE. `os.replace` preserves the
+    moved file's own mtime, so a renumbered slot's timestamp is the neighbour's capture time
+    and not the rename — a validator built from mtime and size would be arguing about
+    whether two photographs can share both, and an inode is reusable once a photo is
+    deleted. A digest of what is actually being sent cannot be wrong about any of that.
+    Measured at ~0.15 ms per photograph on top of the read this route already does, against
+    ~0.6 ms for the read itself.
+
+    TRUNCATED TO 128 BITS because an ETag is an opaque string a browser compares for
+    equality, and the full digest is 64 characters on every photo response for no reader.
+    """
     path = photo_path(box, index)
     if not path.is_file():
         raise BadRequest(
@@ -2010,7 +2043,8 @@ def do_photo(box: int, index: int) -> bytes:
             "photo_not_found",
             f"No photo stored at box {box}, card {index}.",
         )
-    return path.read_bytes()
+    blob = path.read_bytes()
+    return blob, '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
 
 
 def do_inventory() -> dict:
@@ -6551,14 +6585,67 @@ class CaptureHandler(BaseHTTPRequestHandler):
             ("Vary", "Origin"),
         )
 
-    def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
+    def _send(
+        self,
+        status: HTTPStatus,
+        body: bytes,
+        content_type: str,
+        extra: Sequence[Tuple[str, str]] = (),
+    ) -> None:
         self.send_response(int(status))
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         for header, value in self._cors_headers():
             self.send_header(header, value)
+        for header, value in extra:
+            self.send_header(header, value)
         self.end_headers()
         self.wfile.write(body)
+
+    def _photo(self, box: int, index: int) -> None:
+        """`GET /photo/<box>/<index>`, as a conditional request. See `do_photo`.
+
+        `no-cache` IS NOT `no-store`, AND THE DIFFERENCE IS THE WHOLE POINT. It tells the
+        browser to keep the bytes and ask before reusing them, so an unchanged photograph
+        costs a ~200-byte 304 rather than the 1.9 MB it measures on this rig. `no-store`
+        was the cruder repair available and it would have made every arrow-key step of the
+        box walk a fresh download — affordable over loopback and not over the LAN, which is
+        exactly where D5's Fulfiller reads his photographs from.
+
+        THE DIGEST IS COMPUTED EVEN WHEN THE ANSWER IS 304, because it is computed FROM the
+        bytes and there is no cheaper validator this route can honestly offer (`do_photo`
+        argues why). Measured at ~0.75 ms per photograph all in, on a route that serves one
+        card at a time on the walk.
+
+        `If-None-Match: *` IS HONOURED AS THE SPEC DEFINES IT — it matches whenever the
+        resource exists — rather than being compared as a literal string. Nothing in this
+        app sends it; a proxy or a `fetch` written later might, and a server that treated it
+        as an ordinary tag would answer 200 forever and look like it worked.
+        """
+        blob, etag = do_photo(box, index)
+        headers = (("ETag", etag), ("Cache-Control", "no-cache"))
+        offered = [
+            tag.strip()
+            for tag in (self.headers.get("If-None-Match") or "").split(",")
+            if tag.strip()
+        ]
+        # A weak comparison, which is what RFC 9110 requires of If-None-Match: a cache that
+        # holds `W/"abc"` is holding the same photograph as `"abc"`, and refusing to say so
+        # would send 1.9 MB to answer a question already answered.
+        fresh = "*" in offered or etag in [
+            tag[2:] if tag.startswith("W/") else tag for tag in offered
+        ]
+        if fresh:
+            self.send_response(int(HTTPStatus.NOT_MODIFIED))
+            for header, value in self._cors_headers():
+                self.send_header(header, value)
+            for header, value in headers:
+                self.send_header(header, value)
+            # No Content-Length and no body: RFC 9110 gives 304 no content at all, so
+            # framing it as a zero-length entity would be a claim about a body that the
+            # status code says does not exist.
+            return self.end_headers()
+        return self._send(HTTPStatus.OK, blob, "image/jpeg", headers)
 
     def _json(self, status: HTTPStatus, payload) -> None:
         self._send(status, json.dumps(payload).encode("utf-8") + b"\n", "application/json")
@@ -6759,8 +6846,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 )
             match = _PHOTO_RE.match(path)
             if match:
-                blob = do_photo(int(match.group(1)), int(match.group(2)))
-                return self._send(HTTPStatus.OK, blob, "image/jpeg")
+                # Its own method because it is the one read in this server that answers a
+                # request HEADER — see `_photo`, and `do_photo` for what the validator is
+                # protecting against.
+                return self._photo(int(match.group(1)), int(match.group(2)))
             # The pipeline reads. All three are free and hold nothing: each one opens the
             # run directory, reads it, and answers — which is what lets a screen poll a run
             # this process did not start and would not otherwise know about.

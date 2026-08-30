@@ -1264,6 +1264,77 @@ test('the mid-box delete aims with the target’s own capture id and reports the
   await expect(page.locator('.browse-receipt')).toContainText('moved down one index')
 })
 
+test('and the photograph follows the shift, because the URL names the capture', async ({
+  page,
+}) => {
+  /* THE DEFECT THE OWNER REPORTED, AS A CASE. Their words, 2026-08-29: deleting a card
+     "doesn't kick in super quickly and it makes you think you need to delete more but in
+     reality it eventually ... shows that it really was deleted". Nothing was slow —
+     measured against a copy of their store, the delete answered in 288 ms and the walk
+     redrew in 500 ms. What stayed was the PICTURE: `/photo/<box>/<index>` names a SLOT, the
+     renumber puts a different card in it, and the browser went on showing what it had. The
+     screen then read as a delete that had not happened, over the facts of the card that
+     had slid in — and the next press deletes that card, which is a real capture.
+
+     THE ASSERTION IS THE URL AND NOT THE PIXELS, because a stubbed photo route serves one
+     SVG for every slot and a browser test cannot see a stale bitmap. The URL carrying the
+     occupant's id is the whole mechanism: it is what makes the two loads different
+     requests, which is what Chrome's in-document memory cache needs before it will go and
+     ask. A remount alone was built first and measured NOT sufficient — same URL, same
+     bytes, no request — so a version of this case that asserted only `sameDomNode: false`
+     would have passed against the broken screen.
+
+     THE STORE SHIFTS UNDER THE RE-READ, which is what the real one does: `2/3` is deleted,
+     the card behind it slides down into that key, and it brings its own capture id. */
+  const AFTER: Cards = {
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Thievul',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+    }),
+    '2/3': card({
+      index: 3,
+      state: 'identified',
+      name: 'Eiscue',
+      sku: '8937371',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      captureId: 'cap-slid-into-3',
+    }),
+  }
+  let shifted = false
+  page.on('request', (request) => {
+    if (request.url().includes('/remove')) shifted = true
+  })
+  await open(page, BOXES, {
+    get cards() {
+      return shifted ? AFTER : CARDS
+    },
+    search: (query) => searchAnswer(query),
+  })
+
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Thievul' }).nth(1).click()
+
+  /* Before: the slot's URL carries the id of the card standing in it. */
+  const photo = page.locator('.browse-photo')
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-3$/)
+
+  await page.getByRole('button', { name: 'Remove this card…' }).click()
+  await page.getByRole('button', { name: /^Remove this card and slide/ }).click()
+
+  /* After: the SAME slot, a different card, and therefore a different URL — so the picture
+     is re-fetched rather than reused. The facts beside it moved on their own and always
+     did; it is the photograph that used to lie. */
+  await expect(page.locator('.browse-facts')).toContainText('Eiscue')
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-slid-into-3$/)
+})
+
 test('a sold or retired card is not offered the mid-box delete at all', async ({ page }) => {
   await open(page)
 
