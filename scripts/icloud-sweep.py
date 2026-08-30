@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Find — and, where it is provably safe, delete — iCloud Drive conflict copies.
 
-WHY THIS EXISTS. This repo lives in iCloud Drive, and iCloud resolves a same-file race by
+WHY THIS EXISTS. This repo lived in iCloud Drive when this was written (it moved to
+~/Developer on 2026-08-29, so the ordinary answer is now `no conflict copies` — D44, amended,
+keeps the target because the hazard belongs to a synced directory rather than to this repo).
+iCloud resolves a same-file race by
 writing a SECOND file beside the original with " 2" appended to the stem: `pre-push 2`,
 `githooks-selftest 2.sh`, `ports 2.py`. Three appeared in one afternoon on 2026-08-29. They
 are untracked, so they are invisible until something says `git add -A` — which is what an

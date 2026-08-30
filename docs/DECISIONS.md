@@ -3281,7 +3281,7 @@ resolve to the install, the installed copy passes all nineteen cases, and a live
 `git push --dry-run --force origin <branch>:main` in the real repository is refused by name.
 
 **IT INSTALLS WHAT GIT TRACKS, NOT WHAT THE DIRECTORY HOLDS.** The first version copied
-`scripts/githooks/*`, and this repo lives in iCloud Drive, which had made `pre-push 2` and
+`scripts/githooks/*`, and this repo lived in iCloud Drive at the time, which had made `pre-push 2` and
 `reference-transaction 2` beside the originals — so it installed five hooks from three files,
 two of them untracked and reviewed by nobody. Git dispatches on exact names so it would not
 have RUN those two, and the damage was cosmetic; the mechanism is not. A hook directory whose
@@ -3449,10 +3449,11 @@ direction for a file whose only failure mode is pointing somewhere plausible and
 ## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess
 
 **BUILT 2026-08-29, and it is a decision about an ENVIRONMENT rather than about the product.**
-This repo lives in iCloud Drive. iCloud resolves a same-file race by writing a second file
-beside the original with `" 2"` appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`.
-Three appeared in one afternoon. The owner is moving the repo off iCloud; this entry is what
-holds until they do, and it costs nothing afterwards.
+This repo lived in iCloud Drive until later the same day (see the amendment at the foot of this
+entry). iCloud resolves a same-file race by writing a second file beside the original with
+`" 2"` appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. Three appeared in one
+afternoon. The owner was moving the repo off iCloud; this entry is what held until they did,
+and it costs nothing afterwards.
 
 **IT HAD ALREADY DONE DAMAGE TWICE BEFORE ANYTHING GUARDED IT.** `make hooks` copied
 `scripts/githooks/*` and installed **five hooks from three files**, two of them untracked and
@@ -3496,6 +3497,25 @@ fact you should know but need not act on belongs, and is silent when there are n
 **What retires this: leaving iCloud Drive.** The sweep then finds nothing forever, the
 pre-commit rule costs one grep per commit, and the `git ls-files` enumeration in `make hooks`
 is correct on its own terms and stays regardless.
+
+**THAT CONDITION FIRED ON 2026-08-29. The repo is at `~/Developer/pkmnscan` and nothing in this
+entry is deleted.** The paragraph above is the whole disposition and it was written to be
+executed rather than re-argued: `make icloud-sweep` reports `no conflict copies` and will go on
+doing so, the pre-commit rule is one grep, and `make hooks` enumerating `git ls-files` was never
+about iCloud in the first place. So all three stay armed.
+
+**Kept rather than retired, and the distinction is what this amendment is for.** A guard that
+costs a grep is not worth the argument it takes to remove, and the hazard is a property of a
+DIRECTORY rather than of this project — the repo could move back, a checkout could be made
+inside a synced folder on another machine, and the same `foo 2.py` would appear with nothing
+watching for it. What IS retired is the urgency: this entry no longer describes the environment
+the work happens in, and a session reading it should treat the three failures below as an
+account of what the guards were built from rather than as conditions live today.
+
+**The one thing that genuinely ends is the stale-import hazard**, because it was never about
+file names: `os.replace` in `scripts/status.py`'s helper is correct on its own terms and stays,
+but the failure it mitigates — iCloud serving an interpreter bytes that are no longer on disk —
+cannot happen in a directory nothing syncs.
 
 ---
 
@@ -3749,8 +3769,8 @@ BUG.** `PKMNSCAN_IMAGE_MIRROR` has been documented since build-order step 9 was 
 by nothing; `harness/eval/fixtures.py` honours it now, and the allowlist entry that carried it as
 a documented-but-unbuilt name is retired the moment it came true, exactly as D16 requires. The
 default is unchanged, so a tree that sets nothing behaves as it always did and every banked score
-stays comparable. The reason for moving it is D44's: this repository sits in iCloud Drive, and
-133 MB of derived binaries syncing there is what produces the conflict copies that entry refuses.
+stays comparable. The reason for moving it was D44's: this repository sat in iCloud Drive, and
+133 MB of derived binaries syncing there is what produced the conflict copies that entry refuses.
 
 **AND MOVING IT GIVES UP THE THING THAT JUST SAVED THE MIRROR, WHICH IS THE HONEST WAY TO RECORD
 THIS TRADE.** iCloud's copy is what restored the directory above. Outside it there is no second
@@ -3758,6 +3778,41 @@ copy and no version history — the recovery path becomes the re-download, which
 D15 says this data is for: derived, reproducible, and never the artefact worth keeping. The
 trade is a safety net that costs conflict copies, against a clean tree whose worst case is one
 download. The owner took the second.
+
+**THE MIRROR CAME HOME ON 2026-08-29, HOURS AFTER IT LEFT, BECAUSE THE REPO LEFT iCLOUD AND TOOK
+THE WHOLE REASON WITH IT.** `PKMNSCAN_IMAGE_MIRROR` is unset, `harness/eval/fixtures.py` falls
+back to its own default, and the 152 files sit at `harness/images` where every version of this
+project before 2026-08-30 expected them. Measured after the move: `IMAGES_DIR` resolves in-repo,
+152 entries with the manifest, `make harness` all 7 passed, `make ignore-check` green.
+
+**BOTH PARAGRAPHS ABOVE ARE VOID AS DISPOSITIONS AND KEPT AS REASONING, AND THE SECOND ONE IS WHY
+THIS WAS CHEAP TO REVERSE.** The trade it records — a safety net that costs conflict copies,
+against a clean tree whose worst case is one download — had exactly one term on each side, and
+leaving iCloud zeroed both at once. There are no conflict copies to pay because nothing syncs the
+directory, and there is no safety net to give up because there was none left to lose. A decision
+whose two arguments both evaporate is not a decision that has to be re-argued; it is one whose
+premise is gone, and the honest move is to put the data back where the default already pointed.
+
+**WHAT SURVIVES, NAMED SO NOTHING IS UNPICKED WITH IT.** Three things landed under this heading
+and only one of them was about iCloud:
+
+- **The knob stays and is still honoured.** D15 authored `PKMNSCAN_IMAGE_MIRROR` for the
+  mirror's SIZE, not for its sync status, and ~16.7 GB at full catalog is still the reason
+  which disk it lands on is a choice worth having. Unset is not unbuilt: the code reads it, the
+  allowlist entry stays retired, and a tree that wants the mirror elsewhere sets one line.
+- **The provisioner still ASKS rather than assumes.** `scripts/worktree-guard.sh` running the
+  main checkout's `fixtures.py` to learn where the mirror is was written because the move broke
+  it, and it is correct whatever the answer — including today's answer, which is the in-repo
+  default it used to hardcode. Reverting it would restore the silent skip, not the old code.
+- **`harness/images` keeps its type-agnostic ignore pattern.** That is D47's own subject and has
+  nothing to do with where the bytes live: the pattern exists so a worktree's SYMLINK at that
+  name is ignored, which is the fault this entry opens with. A directory there now makes the
+  pattern matter more, not less.
+
+**What would reopen this: the repo going back into a synced folder.** Then D44's hazard returns
+and the mirror is the largest thing in the tree that would sync, so moving it out is the first
+remedy to reach for — and it is one line in `.env`, which is the whole point of leaving the knob
+alone.
 
 **WHAT THIS DOES NOT DO.** It does not stop `worktree-guard.sh` making the links — they are
 right, and they are what keep T1 from re-downloading 151 files per worktree. It does not make
@@ -3797,6 +3852,11 @@ that precedence in shell is how the two drift apart a second time, and `fixtures
 at module scope so a bare `python3` can answer it. The script never reads `.env` itself; `envfile`
 does, and the only thing crossing the pipe is a path. Where there is no mirror to link, it now
 SAYS so — the silent skip was the defect, not the missing link.
+
+**That resolution answers `harness/images` again as of 2026-08-29**, the mirror having come home
+with the repo (see the amendment above). The fix is untouched by that and must stay: what it
+replaced was a hardcoded path that happened to be right, and it is exactly as wrong to hardcode
+a path that happens to be right today.
 
 **AND THE PATH BELONGS IN `.env`, NOT IN A SHELL PROFILE.** Tried and reverted the same day: an
 export in `~/.zshenv` fixes an interactive session and does nothing for the Stop hook, which runs

@@ -711,8 +711,9 @@ def icloud() -> List[str]:
     normal command, and the way they surfaced was a commit failing on the repo-map orphan rule
     and, once, one being installed as a git hook.
 
-    Silent when there are none, which is the ordinary case and will be the permanent one once
-    the repo moves off iCloud Drive.
+    Silent when there are none, which has been the permanent case since the repo moved off
+    iCloud Drive on 2026-08-29. Kept rather than deleted for D44's amended reason: the check is
+    a scan of this tree, and a tree can be put back inside a synced folder without telling it.
     """
     found = resolve("scripts/icloud-sweep.py")
     if not found:

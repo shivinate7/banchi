@@ -58,9 +58,14 @@ API_KEY_ENV = "POKEMONTCG_API_KEY"
 
 # WHERE THE MIRROR LIVES, AND IT IS A KNOB BECAUSE OF ITS SIZE (D15). `PKMNSCAN_IMAGE_MIRROR`
 # has been documented since build-order step 9 was written and read by nothing until 2026-08-30,
-# when D47 made moving it the remedy rather than a preference: this repository is inside iCloud
+# when D47 made setting it the remedy rather than a preference: the repository was inside iCloud
 # Drive, and 133 MB of derived binaries syncing there is what produced the conflict copies D44
 # refuses at the commit.
+#
+# IT IS UNSET AGAIN AS OF 2026-08-29 AND THE MIRROR IS BACK AT THE DEFAULT BELOW, the repo having
+# left iCloud and taken that reason with it (D47, amended). Unset is not unbuilt: this line still
+# reads the knob, and the size argument D15 makes for having one is untouched — a full catalog
+# mirror is ~16.7 GB, which is large enough that which disk it lands on stays a real choice.
 #
 # THE DEFAULT IS UNCHANGED, so a tree that sets nothing behaves exactly as it always did — which
 # is what keeps every banked score comparable across the change. An empty value reads as unset

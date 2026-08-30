@@ -412,6 +412,17 @@ test('the caption and the rows share one grid template, so they cannot drift', a
 }) => {
   await open(page)
 
+  /* THE ROWS ARE AWAITED BEFORE THE EVALUATE, AND THAT IS NOT DEFENSIVE PADDING. `open`
+     waits for `main.pricing`, which renders before the pricing fetch resolves — so the rows
+     are not on the page yet. Every other case here reaches the DOM through a Playwright
+     locator and is auto-waited for free; this one is the only case that runs
+     `document.querySelector` in the page, which waits for nothing. It passed alone and
+     failed in the parallel suite with a null element, which is the same signature the
+     comment below records for a different cause: an assertion that is racing the render
+     rather than measuring it. */
+  await expect(page.locator('.pricing-caption')).toBeVisible()
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+
   /* Two declarations that have to agree is two declarations that will eventually not. The
      template is a custom property read by both, which makes the drift structurally impossible
      rather than carefully avoided — and this case is what stops a later edit inlining one.

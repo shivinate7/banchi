@@ -201,7 +201,8 @@ def now() -> str:
     machine and is an artifact of the truncation. The real jitter — 34ms — was recoverable
     only because APFS happened to preserve `st_birthtime` on the photographs through an
     unrelated rewrite, and that is filesystem metadata: it does not survive a clone, a copy,
-    or an iCloud eviction of a repo that lives on iCloud Drive.
+    or an iCloud eviction, which is what this repo was exposed to until it left iCloud
+    Drive on 2026-08-29. A clone and a copy still lose it, so the reasoning is unchanged.
 
     Gate C tunes an auto-capture trigger against that cadence. It should not have to hope
     for a second accident, so the measurement is a property of the store now.

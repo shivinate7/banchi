@@ -44,8 +44,11 @@ if [ -n "$changed_fixtures" ]; then
   If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture."
 fi
 
-# iCloud Drive conflict copies. This repo lives in iCloud Drive until the owner moves it off,
-# and iCloud resolves a same-file race by writing a SECOND file beside the original with " 2"
+# iCloud Drive conflict copies. This repo LEFT iCloud Drive on 2026-08-29 and the rule stays
+# armed anyway (D44, amended): it costs one grep, and the hazard is a property of a synced
+# DIRECTORY rather than of this project — a checkout made inside one on any machine brings it
+# straight back. iCloud resolves a same-file race by writing a SECOND file beside the original
+# with " 2"
 # appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. They are untracked, so they
 # are invisible until something says `git add -A`, which is exactly what an agent session
 # says. Measured on 2026-08-29: three appeared in one afternoon, and one of them was
