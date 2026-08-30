@@ -6502,6 +6502,231 @@ inferred. It is worth less now than when this entry was first written — the sa
 wherever the export corroborates a live copy — so it is recorded as available rather than owed.
 
 ---
+## D61 — The shipping lane is three lanes, and the third answer is "I cannot tell"
+
+**BUILT 2026-08-30.** `pipeline/shipping.py` reads the TCGplayer Export Shipping CSV and
+routes one order into one lane; `pipeline/pirateship.py` writes the Pirate Ship import
+spreadsheet. `fixtures/orders-shipping.csv` is 331 real orders and is what every number
+below is measured against.
+
+**THE NUMBER IS THE THIRD LANE, NOT THE $50 LINE.** The obvious build is a comparison —
+under fifty goes in an envelope, over fifty gets tracking — and it is wrong about two real
+orders in the fixture at once:
+
+    < $50, all cards           tcgtracking IMb envelope    (not this entry's to build)
+    < $50, contains non-card   Pirate Ship parcel
+    >= $50                     Pirate Ship parcel
+
+A **playmat cannot go in an envelope whatever it cost**, and a **$600 single may not go
+untracked whatever it weighs** — TCGplayer mandates tracking above $49.99. Those are two
+independent facts about one order, so a rule reading only the money puts a $12 sealed
+booster box in a stamped mailer, and a rule reading only the contents ships the single.
+Two signals, and neither subsumes the other.
+
+### The two signals are not the same strength of claim, and the order they are asked in is the whole design
+
+**`Value Of Products` IS A FACT.** Present on all 331 rows, needs no weight, and $50 is a
+threshold TCGplayer publishes rather than one this project fitted.
+
+**`Product Weight / Item Count` IS A PROXY, AND IT ABSTAINS.** `docs/specs/shipping-export.md`
+measured it and this entry re-derives nothing: `Product Weight` is a summed per-product
+**catalog constant** — 0.07 oz a single, 2.50 oz a sealed product, every mixed order an
+exact combination of the two — so the ratio proxies *does this order contain a non-single*.
+Five exact values, an empty band from 0.0700 to 1.2850, an **18.4x separation with nothing
+inside it**, cut at **0.30**, the geometric midpoint of the gap. Derived from where the
+distribution is empty rather than picked, which is D19's rule about tuning from a real
+trace. It is missing on **97 of 331 rows**.
+
+**SO THE FACT IS ASKED BEFORE THE PROXY, AND THAT IS WORTH 58 ORDERS.** Measured: **58 of
+the 97 weightless orders are at or over $50** and are answered with certainty by a rule that
+never needed a weight. **Abstention falls from 97 orders (29%) to 39 (11.8%).**
+
+**It also answers the case that spec names as its own worst.** `docs/specs/shipping-export.md`:
+*"It abstains on 29% of orders, and one of them is a $1750 order."* That order is
+`A2FFC195-0000F4-006AC` — one item, no weight, $1750.00 — and this router sends it to a
+tracked parcel **without consulting the proxy at all**. T7 asserts it by name, because a
+router that abstained first would still produce three lanes, still count correctly on every
+weight-bearing row, and still look right.
+
+**The proxy says "heavier than cards alone" and may never say "contains a playmat".** Even
+at 18x that is an inference. The reason code is `non_card_signal`, and it produces the same
+lane the value rule produces, so nothing downstream needs the guess sharper than it is.
+
+### Abstention is a third answer, never a default to a lane
+
+`LANE_UNJUDGED` is returned, named and counted. Defaulting it to the envelope ships a
+playmat in a stamped mailer; defaulting it to the parcel spends money on postage nobody
+asked for. **Both are decisions, and this module is not entitled to make either** — the
+operator is, looking at the order. `parcel_lane` therefore hands the emitter the 126 orders
+the router placed there and nothing else, and T7 asserts the unjudged are absent from it.
+
+**FIVE REASONS, BECAUSE TWO LANES ARE REACHED ON DIFFERENT GROUNDS AND THREE ABSTENTIONS
+HAVE DIFFERENT REMEDIES.** `Routing.certain` is the split that matters: `value_at_threshold`
+reads a published price against a published threshold, and everything else is the 18x
+inference. A screen that cannot tell them apart cannot show which of its answers is worth
+checking.
+
+**TWO OF THE THREE ABSTENTIONS ARE LATENT, AND SAYING SO IS THE POINT OF COUNTING THEM.**
+Both report zero over the fixture. Neither is speculative machinery: each is one comparison
+standing between a silent wrong answer and a visible refusal.
+
+- **`sub_single_weight` IS THE SPEC'S OWN NAMED FALSE-NEGATIVE, TURNED INTO AN ABSTENTION.**
+  `docs/specs/shipping-export.md` records the mechanism and has no row for it: *"an order of
+  one card plus one weightless non-card reads 0.035 oz/item — below the singles constant, so
+  it would read as safer than a pure-singles order."* Every catalog weight observed is at
+  least a single's 0.07, so a summed constant over the item count **cannot** come out below
+  it; a ratio that does means a product on the order carries a catalog weight lower than a
+  card's, which is exactly the weightless non-card. Compared only against the 0.30 cut it
+  reads `cards_only` — a playmat in a stamped envelope, silently. The model does not apply,
+  so the router has nothing to say.
+
+- **`no_value_data` WAS A COMMENT BEFORE IT WAS A LINE OF CODE, AND T7 CAUGHT THE
+  DIFFERENCE.** `route` carried a comment claiming a missing `Value Of Products` landed in
+  the unjudged lane. It did not: a valueless order of pure singles fell past the threshold
+  check, past the proxy, and out as `cards_only` — **a $600 single going out untracked in a
+  stamped envelope**, from a router whose comment said otherwise. It is the failure this
+  repo records under D41 (a premise deleted and the conclusion left standing) caught inside
+  the session that wrote it, by a test written before the code was believed. **The proxy may
+  not rescue it**, which is why the guard sits above the ratio: a cards-only ratio is
+  precisely the shape an expensive single takes.
+
+### Exact rational arithmetic, never floats
+
+`docs/specs/shipping-export.md` records a float pass **reporting a phantom sub-0.07 row** on
+a distribution whose true minimum is exactly 0.07. Sub-0.07 is the one band this router
+treats as impossible, so **a float manufactures the outcome the paragraph above exists to
+refuse**. `Fraction` over the decimal strings is exact, and it is not decoration: T7 was run
+with `Fraction(float(weight))` substituted and the **lane counts themselves move**.
+
+`Fraction` and not `Decimal`, because the comparison is against a RATIO and a ratio of two
+decimals is not a decimal — 45.14/20 terminates, 115/86 does not, and that row is real.
+
+### The emitter: a spreadsheet, because there is no API
+
+**Pirate Ship has no API**, and this is not a gap to work around. Their three first-class
+entry points are a typed address, a marketplace connection, and a **spreadsheet import** —
+the third is the only one this project can drive, and it is supported rather than
+improvised. `pipeline/pirateship.py` is that format.
+
+**`Name` IS PRE-JOINED FROM `FirstName` + `LastName`.** The importer auto-maps headers and
+does it well, and it is a guess made on the far side of a seam no committed fixture can
+test. We own the columns, so their mapper does not have to work out that two of ours make
+one of theirs — a recipient addressed as a first name alone is a package that arrives at the
+right street with the wrong person on it, and the failure is invisible from this end.
+
+**EVERY COLUMN IS WRITTEN, BLANKS INCLUDED.** A column absent from the file is one the
+wizard cannot map and cannot show the operator; a column present and blank is a field they
+can see is blank. Identical in a spreadsheet, opposite facts on an import screen.
+
+**`Order ID` IS WHAT CLOSES THE LOOP.** `Tracking #` and `Carrier` are empty on **all 331
+rows** of the export — structurally, not incidentally. Carrying the TCGplayer order number
+into Pirate Ship is what lets the tracking number it mints be matched back to the order that
+needed it.
+
+**THE RUBBER STAMP MAKES THE LABEL THE PICK INSTRUCTION.** Pirate Ship prints three of them
+in the label corners, so a label reading `Box 3 · Card 31` is read off the thing already in
+the picker's hand rather than off a second screen. **No label is composed here**:
+`pipeline/join.py:Position` is the only label formula in this repo, D58 makes a card's
+number count the cards in the box so drawing one needs the box's whole occupancy, and a
+second formula here is the second-renderer failure already recorded three times. A stamp is
+an opaque string somebody else composed, written out unchanged.
+
+**No length is enforced on a stamp, because nobody has measured one.** There is certainly a
+practical limit; truncating at an invented number would silently cut the end off a pick
+instruction, and a wrong shelf reads as a right one. Too many stamps refuses, because *that*
+is knowable from the format: there are three columns.
+
+### Three things the emitter may never do, and all three are D49 in another lane
+
+D49 states it as *"nothing here is ever defaulted on your behalf — that is the entire point"*.
+
+- **IT NEVER SELECTS INSURANCE.** An insurance-shaped column **raises** rather than being
+  dropped, matched folded and stripped so a differently-spelled header cannot slip past.
+  Dropping it silently is an operator who believes they asked for insurance and did not.
+  Insurance is a per-order judgement made inside Pirate Ship, looking at the card.
+
+  **It is a deny list over a set that is already closed, which reads as belt and braces and
+  is not.** `render` refuses any column outside `COLUMNS` on its own; what the named list
+  adds is the **reason**. A refusal reading *"not a Pirate Ship column"* invites the fix of
+  adding it to `COLUMNS`. One naming this entry does not.
+
+- **IT NEVER BUYS A LABEL.** No API exists to buy one with, and it would be spending.
+
+- **IT NEVER DERIVES A WEIGHT, WHICH IS THE ONE MOST LIKELY TO BE "FIXED" LATER.** The
+  obvious candidate is `Product Weight`, and it is wrong **in the expensive direction**: the
+  catalog constant counts the cardboard and not the mailer, the toploader, the team bag or
+  the tape, so it is a **lower bound** on what the parcel weighs. Writing it buys postage for
+  less than the package weighs — returned or postage due, at the far end, weeks later.
+  `Package Weight` is whatever the caller measured and blank until they have measured it;
+  Pirate Ship's own import sets one weight across every row after the fact, which is the
+  right place for a number that comes off a scale.
+
+  T7 asserts the blank **on an order routed by its weight**, so the temptation is at its
+  strongest where the assertion stands. The first draft of that case took the first order in
+  the lane and passed vacuously — 58 of the 126 are `value_at_threshold` and carry no weight
+  at all, so it was asserting that a blank column stayed blank.
+
+### Buyer PII passes through and is not persisted
+
+Names and street addresses enter as function arguments and leave as the bytes the caller
+asked for. Neither module reaches `store/`, neither caches, and `render` returns **bytes
+rather than a path**, so a caller may hand the file over without a buyer's name ever
+touching a disk. `write_csv` is the one function that writes, and only where it is told.
+
+### The one-way edge, and why this is two modules
+
+`shipping.py` imports `pirateship.py` and never the reverse. The Pirate Ship format knows
+nothing about TCGplayer, so it can be fed by the Bridge — or by anything else — without
+being touched; the translation lives on the TCGplayer side, which already reads the export.
+Same direction `store/` and `pipeline/` have, and for the same reason. `tcgcsv.py` is the
+precedent: a foreign format gets its own module.
+
+### This is a pre-line-data stopgap, and it is to be RETIRED rather than tuned
+
+**The export carries no line items at all** — no SKUs, no product names, only `Item Count`,
+confirmed against a real export. That is what makes a weight ratio the best signal
+available, and it is why the ratio exists rather than a proper answer.
+`pipeline/orders.py` already answers this question correctly from declared line kinds
+(`OrderResolution.ships_in_an_envelope`), and that module refuses to classify a product by
+reading its name for the reason `CLAUDE.md` forbids guessing an identification. The day a
+feed supplies line kinds, **the cut here is the thing to delete, not the thing to re-fit.**
+
+### IT IS A LIBRARY AND NOT A FEATURE
+
+No route, no client function in `app/src/server.ts`, and no screen reaches either module.
+By `CLAUDE.md`'s route-is-not-a-feature rule that means it is **not landed**, and this entry
+says so rather than letting a green harness read as a shipped lane. The remaining half is
+the unfinished part of this task and not a follow-up to it. `docs/specs/shipping-export.md`
+said *"RECORDED, not BUILT — nothing reads this file and nothing reads the fixture"*; that
+sentence is now false in its second half and true in its first, and that spec is amended to
+say exactly which.
+
+### What would reopen this
+
+**Line items, which retire the cut** — the paragraph above. **Or a measured stamp length**,
+which turns the unenforced limit into an enforceable one. **Or Pirate Ship refusing the
+file**, which is the one thing here no committed fixture can hold: nobody has fed their
+importer this CSV, and their column mapping lives on their side of the seam. Same standing
+as T6's synthetic composites, and it is the reason `Name` is pre-joined rather than left to
+their mapper.
+
+### On this entry's own number
+
+Taken as D61 because it was the lowest free number on the day. **The number below it was
+already claimed by two unmerged branches at once** — the three-way heading collision D16
+records, in progress again rather than in the past. It is named as a position rather than
+spelled, because a bare citation of a heading this branch does not carry is exactly what
+this audit blocks on, and writing one into the paragraph explaining the collision would be
+the collision arriving by a third road. The owner's rule, given when asked: *"you'll probably have to relabel again by the time i
+merge you to main, it's not that serious, always change YOUR OWN branch's D numbers rather
+than another's."* That is narrower than D16's renumber-by-position rule and does not conflict
+with it: D16 settles headings that have **already** landed, and this settles who yields
+**before** they do — the incoming branch, always. Recorded here because the alternative is
+each session renumbering whichever entry it finds easiest to move, which is how a cited id
+comes to point at a different entry.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
