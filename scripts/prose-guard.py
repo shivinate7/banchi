@@ -199,9 +199,8 @@ def check_budget(path: Path, budget: int) -> List[Finding]:
         Finding(
             f"{name}:{entry.line}",
             f"`{entry.ident}` is {len(entry.body):,} bytes against a {budget:,} budget. "
-            f"Every session loads this entry in full (CLAUDE.md `@`-references this file), "
-            f"so length here is a standing cost rather than a style question. Cite a "
-            f"related entry instead of re-arguing it (D60).",
+            f"A session that opens this entry reads all of it, and D60 dropped the `@` so it is "
+            f"opened deliberately. Cite a related entry instead of re-arguing it (D60).",
         )
         for entry in entries(text)
         if len(entry.body) > budget
