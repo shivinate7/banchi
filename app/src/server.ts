@@ -202,7 +202,7 @@ export function describeFailure(err: unknown): Failure {
  * cannot load one, and building a `file://` URL from it fails silently in a way that looks
  * like a missing photo. This is the only way to display a capture.
  *
- * KNOWN HAZARD, AND IT STOPPED BEING HYPOTHETICAL ON 2026-08-29 (D50). This URL names a SLOT,
+ * KNOWN HAZARD, AND IT STOPPED BEING HYPOTHETICAL ON 2026-08-29 (D52). This URL names a SLOT,
  * and three operations put a different card in one: D10 ruling 1's mid-box delete slides
  * every higher card down an index, D10's undo releases an index the next capture reuses,
  * and D26's re-shoot replaces the bytes outright. The owner reported the first of those as
@@ -351,7 +351,7 @@ function errorEnvelope(body: unknown): { code: string; message: string } | null 
   return { code, message }
 }
 
-/* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D51).
+/* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D53).
  *
  * `make up` restarts the capture server on every Python edit, and a restart is otherwise
  * invisible from here — same port, same store. The alternative was a component polling
@@ -381,7 +381,7 @@ export function onServerBoot(listener: BootListener): () => void {
 
 function noteBoot(response: Response): void {
   const seen = response.headers.get('X-Pkmnscan-Boot')
-  /* A server that does not send it says nothing. Absent means either a server older than D51
+  /* A server that does not send it says nothing. Absent means either a server older than D53
    * or — far more likely in a test — a stubbed route, and inventing a reload from a missing
    * header would make every spec that stubs the wire report one. */
   if (seen === null || seen === '') return

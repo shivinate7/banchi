@@ -478,7 +478,7 @@ function useLeader(enabled: boolean, path: string): number | null {
 
 /* ---- stepping the strip ---- */
 
-/* CMD-ARROW WALKS THE STRIP IN THE ORDER IT IS DRAWN — D50, and the owner said it of the five
+/* CMD-ARROW WALKS THE STRIP IN THE ORDER IT IS DRAWN — D51, and the owner said it of the five
  * keys the chord already had (2026-08-30): "cmd+arrow keys doesn't have me going in order
  * between c r q p i, can you resolve?"
  *
@@ -733,7 +733,7 @@ export function App() {
 
       {route === undefined ? <NoSuchView path={path} /> : <route.view />}
 
-      {/* "The capture server reloaded" (D51), and it hangs off `chrome` — the SAME condition
+      {/* "The capture server reloaded" (D53), and it hangs off `chrome` — the SAME condition
           the nav does — rather than off a route test of its own. That is not tidiness: the
           Fulfiller's view would fail three rows of docs/DESIGN.md's constraints table at once
           if this drew there. It is 11px against a 20px floor on every text node, it says

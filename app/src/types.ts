@@ -203,12 +203,12 @@ export type CardSummary = {
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
 export type ServerStatus = {
   /** WHICH PROCESS ANSWERED. `make up` restarts the capture server whenever a watched Python
-   *  file changes (D51), and a restart is otherwise invisible from here — same port, same
+   *  file changes (D53), and a restart is otherwise invisible from here — same port, same
    *  store, and the only symptom of NOT having restarted is the one `docs/GATES.md` records:
    *  whole-second timestamps written two hours after the millisecond fix landed, because the
    *  process predated it.
    *
-   *  Optional because a server older than D51 does not send it, and the honest response to
+   *  Optional because a server older than D53 does not send it, and the honest response to
    *  its absence is to say nothing rather than to claim a reload. */
   boot_id?: string
   started_at?: number

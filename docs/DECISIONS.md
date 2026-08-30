@@ -707,6 +707,32 @@ that tell the next session what done means.
    check, enforced for all of them. Positions moved once already; the report's labels
    are the names.
 
+   **AND A DECISION ID NAMES ONE ENTRY, WHICH NOTHING ASSERTED UNTIL 2026-08-30.**
+   `docs/DECISIONS.md` carried THREE entries numbered `## D50` at once — the feedback
+   states, the Cmd-arrow nav and the photo URL — written by three sessions that each took
+   "the next free number" against the same base and all merged. Every row of this audit was
+   green the whole time.
+
+   **The reason is the shape of the reader, not an oversight in the roster.**
+   `decision_headings` returned a SET, so three headings collapsed to one element: the
+   published count was of DISTINCT ids and read 51 over a file holding 53, and the citation
+   scan is satisfied by a heading EXISTING rather than by exactly one existing. A reader that
+   collapses its input cannot report on what it collapsed, so the list is now the primitive
+   and the set is derived from it.
+
+   **What a duplicate costs is worse than an untidy file, which is why this blocks.**
+   `governed_by` in `docs/map.py`, D17's decision-context hook and every `(D50)` in a comment
+   all resolve an id to an ENTRY, and with three candidates they resolve to whichever is found
+   first — a citation that is wrong in no way anything can see, because it points at a real
+   heading, just not the intended one. Two headings carrying one id is provably wrong however
+   the file got that way, which is this entry's own test for mechanical.
+
+   **The three were renumbered by POSITION IN THE FILE rather than by who landed first**, so
+   `docs/DECISIONS.md` stays ascending and no entry's 200-line block had to move: the first
+   keeps D50, and the others became D51, D52 and D53. That also left the most-cited of them
+   untouched, which is the smaller half of the reason and the one that made the change
+   reviewable.
+
 2. **Coupling** — the same script, `--staged`: code changed under `pipeline/`, and
    `docs/specs/batch-script.md` did not. **Exit 2 prints and allows.** Fires only above 20
    staged lines, so a typo fix stays quiet.
@@ -4734,7 +4760,7 @@ anyone arguing with it.
 
 ---
 
-## D50 — Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
+## D51 — Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
 
 **BUILT 2026-08-30, from the owner pressing a key that was already answering them wrongly**:
 *"cmd+arrow keys doesn't have me going in order between c r q p i, can you resolve?"*
@@ -4853,7 +4879,7 @@ since the leader already consumes whatever follows it.
 
 ---
 
-## D50 — The photo URL names a photograph, because a slot's occupant changes under it
+## D52 — The photo URL names a photograph, because a slot's occupant changes under it
 
 **BUILT 2026-08-29, from the owner's report about the mid-box delete**: *"deleting a card
 often feels risky because the delete doesn't kick in super quickly and it makes you think you
@@ -4947,7 +4973,7 @@ after this, the thing to look at is the 304 round trip per card — and the hone
 long `max-age` on a URL that already names its photograph, which this entry makes safe and
 deliberately did not take.
 
-## D51 — One link, always live, and the restart discipline becomes machinery
+## D53 — One link, always live, and the restart discipline becomes machinery
 
 **BUILT 2026-08-30, from the owner asking to stop running the project the way it had always
 been run.** Their words: *"ideally i just in my browser go to a link and it's the live version

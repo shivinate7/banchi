@@ -250,7 +250,7 @@
   color: var(--muted);
 }
 
-/* ---- the step's chips (D50) ----
+/* ---- the step's chips (D51) ----
  *
  * `⌘←` `⌘→`, drawn once at the end of the ring they walk — App.tsx's `STEP_HINT_GROUP` puts
  * them there rather than at the end of the bar, where `.app-nav-group-aside`'s auto margin

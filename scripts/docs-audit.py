@@ -1266,9 +1266,30 @@ _CODES_DECISION_RE = re.compile(r"\bC([1-9][0-9]?)\b")
 
 
 def decision_headings(path: Path, letter: str) -> Set[str]:
+    return {found for found, _ in decision_heading_lines(path, letter)}
+
+
+def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
+    """Every decision heading with the line it is on — a LIST, so duplicates survive.
+
+    `decision_headings` above returns a set and is right to: its callers ask "does this id
+    exist", and a set answers that. But a set is also how THREE identically numbered headings became one
+    element and reached main with every row green — the count printed the number of DISTINCT
+    ids, so it read 51 over a file holding 53 headings, and nothing anywhere compared the two.
+    Three sessions each took "the next free number" against the same base and all three merged.
+
+    So the list is the primitive and the set is derived from it, rather than the other way
+    around. A reader that collapses its input cannot report on what it collapsed.
+    """
     if not exists(path):
-        return set()
-    return set(re.findall(r"^##\s+(" + letter + r"[1-9][0-9]?)\b", read(path), re.MULTILINE))
+        return []
+    pattern = re.compile(r"^##\s+(" + letter + r"[1-9][0-9]?)\b")
+    out: List[Tuple[str, int]] = []
+    for number, line in enumerate(read(path).splitlines(), start=1):
+        match = pattern.match(line)
+        if match:
+            out.append((match.group(1), number))
+    return out
 
 
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
@@ -1298,6 +1319,42 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                         )
 
     in_docs: List[Finding] = []
+
+    # AN ID IS UNIQUE, AND NOTHING ASSERTED THAT UNTIL 2026-08-30 (D16, amended). Three
+    # entries in `docs/DECISIONS.md` carried ONE number, written by three sessions that each
+    # took the next free id against the same base and all merged. Every row here stayed green
+    # throughout, because the count above is over a SET: it printed a distinct-id total for a
+    # file holding more headings than that, and the citation scan below is satisfied by a
+    # heading EXISTING, never by exactly one existing. D16 carries the incident.
+    #
+    # WHAT A DUPLICATE COSTS is worse than an untidy file. `governed_by` in `docs/map.py`, the
+    # decision-context hook and every id in a comment all resolve to an ENTRY, and
+    # with three candidates they resolve to whichever a reader happens to find first. The
+    # citation is then not wrong in a way anything can see — it points at a real heading, just
+    # not the intended one.
+    #
+    # BLOCKING, because there is no judgement in it: two headings carrying one id is provably
+    # wrong however the file got that way, which is D16's own test for mechanical.
+    for path, letter in (
+        (ROOT / "docs" / "DECISIONS.md", "D"),
+        (ROOT / "docs" / "CODES-DECISIONS.md", "C"),
+    ):
+        seen: Dict[str, List[int]] = {}
+        for found, number in decision_heading_lines(path, letter):
+            seen.setdefault(found, []).append(number)
+        for found, numbers in sorted(seen.items()):
+            if len(numbers) > 1:
+                where = ", ".join(str(n) for n in numbers)
+                in_docs.append(
+                    Finding(
+                        f"{rel(path)}:{numbers[0]}",
+                        f"`## {found}` appears {len(numbers)} times — lines {where}. An id "
+                        f"names one entry: `governed_by`, the decision-context hook and every "
+                        f"`({found})` in a comment resolve to whichever heading is found "
+                        f"first. Renumber all but one, and every reference to them.",
+                    )
+                )
+
     scan(docs, in_docs)
     in_code: List[Finding] = []
     scan(python_files(), in_code)

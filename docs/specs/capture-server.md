@@ -635,7 +635,7 @@ string, so setting the variable to `*` refuses everything rather than re-opening
 asserted in T7, because a wildcard sneaking back through configuration would undo the whole
 control silently.
 
-**`PKMNSCAN_LAN_NAME`** (D51) is the name the owner's own DNS answers with — `pkmnscan.lan` on
+**`PKMNSCAN_LAN_NAME`** (D53) is the name the owner's own DNS answers with — `pkmnscan.lan` on
 their UniFi. `scripts/serve.py` reads it, together with this Mac's Bonjour name, and composes
 `PKMNSCAN_ALLOWED_ORIGINS` from both when it starts the server, so opening the app from a phone
 can WRITE and not only read. It is read through `envfile`, so it belongs in `.env` rather than a
@@ -647,7 +647,7 @@ server reads, still extends rather than replaces, and still cannot be widened to
 
 ### 6.4a — Shutdown, and why it counts requests rather than threads
 
-**`make up` restarts this process whenever a watched Python file changes** (D51), so shutdown
+**`make up` restarts this process whenever a watched Python file changes** (D53), so shutdown
 stopped being a once-a-day event and became a many-times-a-day one. `store/session.py:Store.write()`
 replaces four JSON files in sequence — each atomic alone, none atomic as a set — so a kill landing
 between them leaves a torn store.

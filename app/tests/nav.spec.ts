@@ -4,7 +4,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
  * SCREEN.
  *
  * `app/src/App.tsx` carries two keyboards — the `,` chord that JUMPS to a route by name, and
- * (D50, 2026-08-30) Cmd-arrow, which STEPS along the strip in the order it is drawn. Neither
+ * (D51, 2026-08-30) Cmd-arrow, which STEPS along the strip in the order it is drawn. Neither
  * had an assertion of any kind: `make design-check` covered the Fulfilment view, the review
  * queue, the run panel, the capture claims, the inventory walk and the pricing screen, and
  * nothing at all covered the chrome all of them sit under.
@@ -18,7 +18,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
  * WHAT THIS CANNOT SEE, said plainly rather than left to be assumed. Playwright presses keys
  * through the debugging protocol, which never fires the BROWSER's own shortcuts — so a case
  * here proves the handler steps and that it calls `preventDefault`, and it cannot prove that
- * Chrome or Safari then declines to go Back. That half is one press at the rig, and D50 names
+ * Chrome or Safari then declines to go Back. That half is one press at the rig, and D51 names
  * it as the thing to check first if the step ever appears to fire twice.
  *
  * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is seven Python tests
@@ -134,7 +134,7 @@ test('the step walks the strip in the order it is drawn, and the last screen is 
     expect(page.url()).toContain(next)
   }
 
-  /* NEVER A WRAP — `BoxBrowse` says it in those words about its own arrows and D50 takes the
+  /* NEVER A WRAP — `BoxBrowse` says it in those words about its own arrows and D51 takes the
      rule: a row that starts again is a row you can no longer count along. The press is still
      consumed (see the case below on the Gallery for what "consumed" is worth), so what is
      asserted here is that it lands nowhere new.

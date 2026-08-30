@@ -701,7 +701,7 @@ COMPONENTS = [
                         "capture_server, whose ORIGINS_ENV it lifts with `ast` instead. "
                         "`report()` is read-only and is what `make status` asks. "
                         "`make server` and `make dev` are untouched and still work.",
-                # D51 is the entry that argues all of it. D43 because every port and the
+                # D53 is the entry that argues all of it. D43 because every port and the
                 # agent label come from server/ports.py rather than a constant — a second
                 # spelling here is the cross-tree failure that entry exists to close, and the
                 # pid-ownership check compares the FULL argv path for the same reason: every
@@ -709,7 +709,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D51"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53"],
                 "status": "built",
             },
             "status.py": {
@@ -877,7 +877,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D50", "D51"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D52", "D53"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -1032,20 +1032,20 @@ COMPONENTS = [
                                     "it; D31 deleted the route and kept the screen — the "
                                     "registration rule stands, the route does not. TWO KEYBOARDS "
                                     "SINCE 2026-08-30: the `,` chord JUMPS to a route by name, "
-                                    "and D50's Cmd-arrow STEPS along the strip in the order the "
+                                    "and D51's Cmd-arrow STEPS along the strip in the order the "
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
                                     "the one place this shell takes a modifier.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D50", "D51"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, why this nav may never render on the "
                                     "Fulfillment view, and the two chip looks — the chord's, "
-                                    "which lights up when the leader is armed, and D50's step, "
+                                    "which lights up when the leader is armed, and D51's step, "
                                     "which deliberately does not wear that class because it is "
                                     "never armed",
-                            "governed_by": ["D5", "D10", "D13", "D49", "D50"]},
+                            "governed_by": ["D5", "D10", "D13", "D49", "D51"]},
             "src/ServerReloaded.tsx": {"does": "says once when the capture server has restarted "
-                                               "under it (D51). SUBSCRIBES, NEVER POLLS: "
+                                               "under it (D53). SUBSCRIBES, NEVER POLLS: "
                                                "`server.ts` reads a boot header off responses "
                                                "the screens were already fetching, so this "
                                                "generates no traffic at all — the first build "
@@ -1061,13 +1061,13 @@ COMPONENTS = [
                                                "Fulfillment constraints table at once. NO "
                                                "AUTOMATED CASE — docs/DEBTS.md carries why, and "
                                                "what was verified by hand instead.",
-                                       "governed_by": ["D5", "D31", "D51"]},
+                                       "governed_by": ["D5", "D31", "D53"]},
             "src/ServerReloaded.css": {"does": "that notice: fixed bottom-left so it costs no "
                                                "layout on screens whose recorded complaint "
                                                "(D38, D40) is content pushed below the fold, "
                                                "pointer-events none, accent as an outline dot "
                                                "and never a fill",
-                                       "governed_by": ["D5", "D38", "D40", "D51"]},
+                                       "governed_by": ["D5", "D38", "D40", "D53"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -1075,11 +1075,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D50", "D51"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D50", "D51"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1227,7 +1227,7 @@ COMPONENTS = [
                     "re-run against refreshed exports.",
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39",
-                            "D41", "D45", "D46", "D49", "D50"]},
+                            "D41", "D45", "D46", "D49", "D52"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1699,12 +1699,12 @@ COMPONENTS = [
             },
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
-                        "every screen sits under: D50's Cmd-arrow steps the ring in the order "
+                        "every screen sits under: D51's Cmd-arrow steps the ring in the order "
                         "the nav draws it, both ends stop, and the three refusals hold — a bare "
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D50"],
+                "governed_by": ["D5", "D31", "D39", "D51"],
                 "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
                         "worth keeping. The leader-disarm case retried an assertion that "
                         "CHORD_MS satisfies on its own after a second, so it went green against "
