@@ -33,6 +33,7 @@
     POST   /boxes                          register a box before any card goes into it
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
+    POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /pipeline/runs                  every run, newest first, with its phase
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
@@ -6438,6 +6439,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/preflight":
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())
+                )
+            # The crop preview, and it sits BEFORE the one that spends for the reason the
+            # money gate itself gives: what the reading does to the bytes has to be legible
+            # before the estimate is asked for, not after it. Free, writes nothing, and
+            # unlike the preflight it does not even shell out.
+            if path == "/pipeline/crop-preview":
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
                 )
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())

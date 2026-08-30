@@ -5,7 +5,7 @@ card in the frame: a wrong crop produces a miss indistinguishable from a bad rea
 does it confidently. So detection gets its own failing test name rather than hiding inside
 a green identification run.
 
-Pass: detected rectangle within tolerance across the sweep; bands contain their target; no card -> not found; a ground the tone path cannot segment is still found by its borders
+Pass: detected rectangle within tolerance across the sweep; bands contain their target; no card -> not found; a ground the tone path cannot segment is still found by its borders; the cut and the rectangle the run panel draws are one computation
 
 The sweep is offset, scale and rotation. The bands are the title band and the number
 corner, and each must contain its target region. "Not found" is a refusal, never a guess.
@@ -37,6 +37,8 @@ digits.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from harness.tests import Checks, Result
 
 NAME = "T6"
@@ -44,7 +46,7 @@ DESCRIPTION = "Card boundary detection and crop-retry bands"
 PASS_CRITERIA = (
     "detected rectangle within tolerance across the sweep; bands contain their target; "
     "no card -> not found; a ground the tone path cannot segment is still found by its "
-    "borders"
+    "borders; the cut and the rectangle the run panel draws are one computation"
 )
 
 # Angle tolerance in degrees. The fine search steps at 0.25, so anything inside half a
@@ -353,6 +355,63 @@ def run() -> Result:
             _share(numpy, rig_regions[geometry.REGION_TITLE], TITLE_RGB) >= PRESENT
             and _share(numpy, rig_regions[geometry.REGION_NUMBER], TITLE_RGB) <= ABSENT,
             "and the bands are still the right way up",
+        )
+
+    # --- the cut and the rectangle the screen draws are ONE computation --------------------
+    #
+    # `#/runs` draws the crop over the photograph before a run is paid for, and it gets the
+    # rectangle from `images.crop_rect` rather than deriving one of its own. That is the whole
+    # safety of the preview: a second copy of this arithmetic is a picture that can reassure
+    # the operator about a crop it is not describing, which is EXACTLY the failure the aspect
+    # correction below was written for — box 2 sent 544 cards under a flat pad, 38 came back
+    # with no collector number at all and a further handful with a National Pokedex number read
+    # off the artwork once the real one had been cropped away.
+    #
+    # So this asserts the identity rather than the arithmetic: whatever `crop_rect` says, that
+    # is what `card_crop` cuts. Observed failing against a `crop_rect` returning the UNPADDED
+    # `card_rect` before it was kept.
+    from identify import images
+
+    frame = _scene(Image, ImageDraw, angle=0.0, scale=0.9)
+    cut_box = geometry.detect_card(frame)
+    c.ok(cut_box is not None, "the crop-rectangle fixture is a frame with a card in it")
+    if cut_box is not None:
+        rect = images.crop_rect(frame.size, cut_box)
+        c.equal(
+            images.card_crop(frame, cut_box).tobytes(),
+            frame.crop(rect).tobytes(),
+            "the pixels `card_crop` cuts are the pixels `crop_rect` names — one computation, "
+            "so the preview cannot describe a crop the run does not make",
+        )
+
+        # THE CORRECTION IS THE THING WORTH ASSERTING SEPARATELY, because it is what the flat
+        # pad got wrong. A box too SHORT for its width is grown back to a real card's shape;
+        # one already tall enough is left alone, which is the "only ever grows" rule.
+        short = replace(cut_box, top=cut_box.top + 0.04, bottom=cut_box.bottom - 0.04)
+        grown = images.card_rect(frame.size, short)
+        grown_aspect = (grown[2] - grown[0]) / (grown[3] - grown[1])
+        c.ok(
+            abs(grown_aspect - geometry.CARD_ASPECT) < 0.01,
+            "a box short for its width is restored to a card's own aspect, not padded flat",
+            f"aspect {grown_aspect:.3f} against {geometry.CARD_ASPECT:.3f}",
+        )
+        tall = replace(cut_box, top=cut_box.top - 0.06, bottom=cut_box.bottom + 0.06)
+        tall_rect = images.card_rect(frame.size, tall)
+        c.ok(
+            abs(tall_rect[1] - tall.top * frame.size[1]) < 0.5
+            and abs(tall_rect[3] - tall.bottom * frame.size[1]) < 0.5,
+            "and a box with room to spare is left exactly alone — the correction only grows",
+        )
+
+        # CLAMPED, so the rectangle is always drawable. The screen positions the overlay as a
+        # percentage of the frame, and a pad that ran off the picture would draw outside it.
+        edge = replace(cut_box, left=0.0, top=0.0)
+        clamped = images.crop_rect(frame.size, edge)
+        c.ok(
+            clamped[0] >= 0 and clamped[1] >= 0
+            and clamped[2] <= frame.size[0] and clamped[3] <= frame.size[1],
+            "a card against the frame's edge pads into nothing rather than off the picture",
+            f"{clamped} against {frame.size}",
         )
 
     return c.result()

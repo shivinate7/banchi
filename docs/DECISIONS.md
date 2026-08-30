@@ -1672,6 +1672,144 @@ being sent*. No hash is named — the panel has no business publishing `prompt_f
 nothing about the gap is closed. Drawn only above zero, because a warning about answers that do
 not exist is the kind an operator learns to skip.
 
+**THE READING IS DRAWN NOW, NOT ONLY DESCRIBED (built 2026-08-29, at the owner's instruction:
+*"there should be a crop preview on the runs tab given that I need to select a crop there"*).**
+`POST /pipeline/crop-preview` is free, writes nothing, shells out to nothing, and answers what
+the selected pair would send for one card; `RunPanel.tsx` draws it in a column beside the
+chips. Everything above stands — this is the sentence the READINGS block could not be.
+
+**THE MEASUREMENT THAT DECIDED THE DESIGN: the rectangle is IDENTICAL at 1200 and at 900.**
+The cut comes from `detect_card` plus the aspect correction plus `CROP_PAD`, and not one of
+those reads `max_edge` — the downscale happens after. So a preview that drew only the crop
+would leave two of the three chips looking exactly alike, which is most of the question the
+owner was asking. The pair has two axes and one picture cannot carry both:
+
+- **The crop decides FRAMING**, and the frame shows it as a composite: the discarded margin is
+  the stored photograph at 35% opacity, and the cut region is **the payload itself**, at full
+  strength, with the accent outline on the boundary. It answers *is the collector number inside
+  the bytes* — box 2's failure, 38 numbers cut clean off — and **a picture of the crop alone
+  could never answer it, because what was cut is not in the crop.**
+- **The max edge decides RESOLUTION**, and it is shown by a **1:1 window onto the same file**.
+  `background-size: auto` with a pixel `background-position` IS 1:1, with no scaling arithmetic
+  to get wrong and no second request. That is the review queue's loupe one screen over, aimed
+  at the PAYLOAD rather than at the stored photograph, and the same standards are behind it:
+  FADGI and Metamorfoze both require this class of judgement at 100%, and here a downscale is
+  precisely what is being judged.
+
+**THE FRAME DREW THE STORED PHOTOGRAPH UNTIL THE OWNER CAUGHT IT** — *"the crop preview should
+also show the depixelation reflected as you change the options"*. It did not, and could not: it
+was `GET /photo`, which is the same bytes at every reading, so the one thing being changed was
+the one thing the picture could not show. It draws the prepared bytes now, which costs 235-441KB
+on a localhost socket, debounced, for one card.
+
+**AND THE FRAME STILL CANNOT SHOW THE DIFFERENCE, WHICH IS PHYSICS RATHER THAN A DEFECT.** It
+draws the payload at roughly 28% of its pixels, and no two downscales are distinguishable under
+a reduction that large — an operator comparing 1200 against 900 up there will correctly see no
+difference and wrongly conclude there is none. So the caption says `shown reduced`, and the 1:1
+window below is where the comparison is actually made. Recorded because the obvious "fix" is to
+enlarge the frame, and no size short of 100% would work.
+
+**THE BAND STOPPED BEING A SECOND IMAGE, and that is what makes the pair trustworthy.** It was
+a separately encoded JPEG of the number strip; it is a RECTANGLE INTO the sent bytes now, and
+the window paints that region of the file the frame is already showing. One image over the
+wire, two views of it, and **the second cannot drift from the first because there is no second
+file to drift**. It also costs fewer bytes than the two-image version it replaces.
+
+**THE WINDOW FOLLOWS THE POINTER, AND THAT IS WHAT MAKES A BANDLESS GAME USABLE.** It rests on
+the collector number where the registry claims one and reads whatever the pointer is over
+otherwise — so on Riftbound, where nobody has measured where the identifier prints, the
+operator points at it themselves. A refusal that had taken the magnifier away with it would
+have left that game strictly worse off than before the preview existed.
+
+**ONE COMPUTATION, TWO CALLERS, AND THAT IS THE HONESTY OF IT.** `identify/images.py:crop_rect`
+is the rectangle `card_crop` cuts, extracted so the screen can draw it rather than derive one
+of its own. A preview with its own copy of that arithmetic is a preview that can reassure the
+operator about a crop it is not describing — which is EXACTLY the failure the aspect correction
+was written for. `card_rect` splits out beside it, unpadded, because the number band is a
+fraction of the cardboard rather than of the cut. T6 asserts the identity and was observed
+failing against a `card_crop` that had quietly stopped using it; the extraction was checked
+byte-for-byte against the committed version on 25 real box-2 frames before anything was built
+on it.
+
+**IT IS PRESSED BEFORE THE PREFLIGHT, WHICH IS THE ORDER OF THE DECISION.** The reading is
+chosen here, the estimate is what the choice costs, and the spend button does not exist until
+the estimate has answered — three steps down the panel in the order they happen. It is keyed on
+the same `scopeKey` that voids the estimate, so a chip press redraws the picture and clears the
+number together. The previous strip stays up, dimmed, while the next is fetched: blanking would
+move `Check cost` under a pointer already travelling toward it, which is D28's hazard on the
+one panel whose next button spends money.
+
+**`rect: null` MEANS TWO OPPOSITE THINGS AND `method` IS WHAT SEPARATES THEM.** The crop being
+off is a setting the operator chose; detection refusing is a card going at whole-frame cost
+when they asked for a crop. The route reports both and the strip says which, because the
+preflight counts refusals across the box and this is where one can actually be looked at.
+
+**ONE CARD, BESIDE THE CHIPS, WALKED BY THE ARROW KEYS — and it was three abreast underneath
+them for a few hours.** The first build sampled three cards evenly across the box on this
+entry's own measurement: card area runs 39-81% across box 2 because cards move on the tray, so
+the front of a box does not stand for it. That argument is right about SAMPLING and it lost to
+a plainer fact, which the owner put plainly: *"the preview right now is too small"*. Three
+pictures across a panel are three small pictures — each frame drew 112px wide — and a preview
+nobody can read is not a preview. One card in a column of its own is ~2.5x the linear size for
+the same block of screen, and the spread is reached by WALKING, which is also the only version
+of it that lets the operator look at a card they actually suspect.
+
+**The walk wraps, on both sides of the wire.** The route takes `offset % total` so a stale
+client cannot send a negative, and the screen wraps too so the caption stays inside the box
+being looked at. Arrow keys are the control and the buttons beside the card do the same thing:
+a key with no visible affordance is a key nobody finds. **The listener is guarded on the
+event's target** — this panel holds a number input and a `decisions.json` textarea, and an
+unguarded window listener steals the caret keys from both. The fetch is debounced at 140ms,
+because a held arrow key repeats faster than a photograph decodes.
+
+Measured at ~115ms a card — 63-84ms of detection, ~51ms to crop, downscale and encode — so
+firing it on every chip press and every arrow press is affordable.
+
+**Two things came with it that are not about pixels.** `make server` ran bare `python3`, whose
+interpreter has no Pillow, so this route would have refused on the one machine it is for; it
+runs `$(PYTHON)` now, which is the venv where one exists and `python3` where none does — the
+property that line protected was *"must not NEED `make venv`"*, and that is intact. And the
+imports are inside the handler, so a missing Pillow is a named `imaging_unavailable` refusal
+rather than a server that will not boot over a preview nobody asked for.
+
+**D24's tripwire fired, and it is answered by D24 rather than by new machinery.** `scripts/
+docs-audit.py`'s `views exposure` row now names `#/runs` as a screen that can draw stored
+capture photos — which is exactly what that row is for, and the render-conditions ruling in D24
+already answers it: renders are local-only, `captures/ui/` is gitignored, and the pre-commit
+hook blocks stray images. No per-screen filtering, for the reason that ruling gives.
+
+**What this does NOT do: it does not record what a PAST run sent.** The strip recomputes with
+today's detector, so it describes the run you are about to start and nothing else. That
+distinction matters for box 2 specifically — its crops were cut by the flat pad this entry
+records, fixed in `d431afb` about 35 minutes after that run was submitted, so a recomputation
+of those cards shows the corrected crop rather than the one that lost 38 collector numbers.
+Making a run replayable means recording the box on the run payload at identify time, which is a
+change to what `identify` writes and has not been argued. Until it is, this is a preview and
+never a receipt.
+
+**THE BAND IS THE REGISTRY'S TO GRANT, PER CARD, AND THIS SHIPPED WRONG FIRST.** The first
+build cut `geometry/crop.py`'s number band over every card whatever game it was, and
+`pipeline/games.py` refuses exactly that in writing: *"the bands are fractions measured on a
+Pokemon card. Nothing has measured where a Riftbound card puts its title or its number, and a
+band claimed without that measurement is cut over the wrong pixels."* Box 1 is Riftbound, the
+owner opened it, and the strip drew that card's RULES TEXT as though it were a collector
+number. Only `pokemon` claims a number band today; a game that does not gets **no band and the
+registry's own sentence saying why**, which is the same refusal `crop_regions` makes reached
+through the same field. **The CUT is unaffected** — a card is 63x88mm whatever is printed on
+it, so the crop is right for every game even where no band has been measured, and that
+asymmetry is the whole reason the two halves are separate answers.
+
+Worth naming as a class rather than an instance: the registry already held the answer and the
+first build did not ask it. A preview is a second reader of everything the pipeline knows, and
+every fact it draws has an owner somewhere in `pipeline/` — drawing one from a constant instead
+of from its owner is how a picture ends up more confident than the thing it depicts.
+
+**What would reopen this: a refusal the walk never reaches.** The preflight counts detection
+refusals across the whole box and the walk shows one card at a time, so a box with three
+refusals among 543 is a hunt. If that ever costs a real session, the fix is a control that
+jumps to the next refused card once the preflight has answered — not a return to sampling,
+which is what made the picture too small to read in the first place.
+
 ---
 
 ## D33 — The pipeline is reachable from a screen, and one route can spend

@@ -310,11 +310,20 @@ dev:
 # its own turn — the Stop hook runs the harness at turn end and never gets there — so
 # background it from an agent session.
 #
-# python3, not $(PYTHON): the capture server is stdlib-only, so it must not need `make venv`
-# first. Same rule as `status` and `docs-audit` above, and verified against bare system
-# python3 rather than assumed.
+# $(PYTHON), WHICH IS THE VENV WHERE ONE EXISTS AND BARE python3 WHERE ONE DOES NOT — and
+# that keeps the property this line used to protect by naming `python3` outright. The rule was
+# never "the server must run on system python3"; it was "the server must not NEED `make venv`
+# first", same as `status` and `docs-audit`. It still does not: every route it has ever served
+# is stdlib, and `$(PYTHON)` falls back to `python3` when no venv is there.
+#
+# What changed is that ONE route can now do more when Pillow is present. `POST
+# /pipeline/crop-preview` draws what a reading will send, which means decoding a photograph —
+# so it imports Pillow, numpy and geometry INSIDE the handler and refuses by name
+# (`imaging_unavailable`) when they are absent, rather than at module scope where a missing
+# dependency would stop the server booting over a preview nobody asked for. Under bare python3
+# every other route is unaffected and that one says what to do.
 server:
-	@python3 server/capture_server.py
+	@$(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
 # captures/views.txt, which .gitignore excludes wholesale — so the one file that says which

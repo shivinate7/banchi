@@ -815,7 +815,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D25", "D32"],
+                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D21", "D25", "D32"],
                 "tested_by": ["T7"],
             },
         },
@@ -938,11 +938,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D33", "D34", "D37"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D32", "D33", "D34", "D37"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1307,8 +1307,8 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32", "D33",
-                                                 "D39"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32",
+                                                 "D33", "D39"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1321,8 +1321,11 @@ COMPONENTS = [
                                          "BoxOps gives the same job over in the walk's column. ALL FOUR "
                                          "STEPS draw in every state now, controls absent until a run is "
                                          "picked; the list polls at two cadences because a run started "
-                                         "in a terminal begins live.",
-                                 "governed_by": ["D31", "D33", "D38"]},
+                                         "in a terminal begins live. Carries the crop preview under the "
+                                         "reading chips: a 200px frame with the cut drawn over it, and the "
+                                         "collector-number strip at 1:1 because a band scaled to the column "
+                                         "makes 1200 and 900 look identical.",
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
