@@ -485,6 +485,12 @@ class KeyStrategy(NamedTuple):
     run report (D16: the machine string stays greppable), so it names how the row was FOUND and
     must not be prettified.
 
+    `repair` is asked ONLY when a key found no rows, and returns a second key to try before the
+    name rung — today, the identifier with a set code the model glued onto the front of it. It
+    is deliberately not folded into `build`: a key that MATCHES must never be rewritten, and a
+    repair that runs before the lookup cannot promise that. None means this game has no repair,
+    which is the case for every game but the two keyed by a printed code.
+
     `name_rung` is D35's last resort, and `pokemon_code` deliberately switches it OFF. That is
     not an oversight preserved for compatibility: a code card has no collector number at all, it
     lives inside the Pokemon export as a blank-`Number` row, and `rows_for_name` would happily
@@ -496,6 +502,7 @@ class KeyStrategy(NamedTuple):
     build: Callable[["IdentifiedCard"], Optional[str]]
     label: str
     name_rung: bool
+    repair: Optional[Callable[[str], Optional[str]]] = None
 
 
 def _key_number_and_printed_total(card: "IdentifiedCard") -> Optional[str]:
@@ -509,47 +516,59 @@ def _key_number_and_printed_total(card: "IdentifiedCard") -> Optional[str]:
     return join_key(card.number, card.printed_total)
 
 
-# The separators a model reaches for when it glues a set code to the identifier. NO EXPORT
-# CELL CONTAINS EITHER — measured across all 1,237 distinct Riftbound `Number` cells and both
-# One Piece fixtures — which is the entire licence for the strip below. A character that can
-# never be part of a real identifier cannot be destroyed by removing it.
-_SET_CODE_SEPARATORS = ("\u2022", "\u00b7")  # bullet, middle dot
+# THE SET CODE IS REMOVED BY SHAPE, NOT BY CHARACTER, AND THAT IS THE WHOLE OF THE 2026-08-30
+# AMENDMENT. This was a tuple of two separators and an `rsplit` over them, licensed by "no
+# export cell contains a bullet or a middle dot". Box 3 then produced the same defect with a
+# HYPHEN and with a SLASH, and neither can join that tuple: `rsplit("/")` over `120/219` yields
+# `219`, which is a real identifier belonging to a different card. A character-based rule cannot
+# be widened to cover the observed shapes without destroying the field it repairs.
+#
+# So the rule is anchored to the FRONT and describes a set code rather than a separator: two to
+# five letters, no digits, then one separator. Measured against every distinct `Number` cell in
+# both games that use this key — 1,237 Riftbound and 396 One Piece — it matches ZERO of them,
+# which is the same licence the old tuple had, taken over a shape instead of a character.
+#
+# THREE BOUNDS DO THE WORK AND EACH ONE IS LOAD-BEARING:
+#   letters only   `T02 // T03` starts with a token carrying digits, so the 13 double-sided
+#                  cells are untouched — and they are what a slash rule would otherwise have to
+#                  reason about. `SP3/006` is excluded for the same reason.
+#   at least two   One Piece prints 16 cells of the form `P-044`: ONE letter, a hyphen, digits.
+#                  A lower bound of one would strip every one of them down to `044`. This is the
+#                  bound that keeps a per-game rule from being necessary.
+#   at most five   Nothing measured needs more, and an unbounded run of letters would start
+#                  eating names the day something hands this a title by mistake.
+_SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}\s*[\u2022\u00b7/-]\s*")
 
 
-def _strip_set_code(text: str) -> str:
-    """`UNL \u2022 140/219` -> `140/219`. The identifier, with the set code the card also prints.
+def _repair_set_code(key: str) -> Optional[str]:
+    """`UNL - 150/219` -> `150/219`, or None where there is nothing set-code-shaped to remove.
 
-    THE MODEL WAS TOLD NOT TO DO THIS AND DID IT ANYWAY. `identify/prompt.py`'s Riftbound
-    contract says in as many words *"Do not add a set code printed elsewhere on the card"*, and
-    3 of run `2026-08-29-box1-01`'s 133 reads did — twice with a bullet, once with a middle dot.
-    Each produced a well-formed key that matched nothing, and each landed as a zero-candidate
-    `no_catalog_row`, which the answer route refuses outright. Three cards that could not be
-    answered at all, one of them listable at $2.86.
+    THE MODEL WAS TOLD NOT TO DO THIS AND GOES ON DOING IT. `identify/prompt.py`'s Riftbound
+    contract says in as many words *"Do not add a set code printed elsewhere on the card"*.
+    Run `2026-08-29-box1-01`: 3 of 133 reads glued it on anyway. Run `2026-08-30-box3-01`: **7
+    of 39**, an order of magnitude worse, and across THREE different separators in one box —
+    bullet, hyphen and slash — including two copies of one card read both ways, `UNL - 198/219`
+    at card 31 and `UNL \u2022 198/219` at card 3. The separator is arbitrary, so enumerating
+    separators is a losing game and the shape above is what replaces it.
 
-    RECOVERING THE NUMBER IS BETTER THAN FALLING BACK TO THE NAME, and that is why this exists
-    even though D35's rung already rescued these three. The number is the field that tells one
-    card from another; the name is the field that survives a bad read. Matching on a recovered
-    number is an exact join and lists the card, where the name rung deliberately only ever
-    queues it (the owner's ruling). Same three cards, one press cheaper, and on stronger
-    evidence.
+    RECOVERING THE NUMBER IS BETTER THAN FALLING BACK TO THE NAME, which is why this exists even
+    though D35's rung already rescues these cards. The number is the field that tells one card
+    from another; the name is the field that survives a bad read. A recovered number is an exact
+    join and LISTS the card, where the name rung deliberately only ever queues it (the owner's
+    ruling). Box 3's four unrepaired reads were $30.81, $23.76, $17.06 and $12.52 of cards
+    sitting in a queue that had nothing to ask.
 
-    IT IS A STRIP, NOT A SEARCH, AND THAT BOUNDARY IS THE SAFETY. Only text up to and including
-    a separator that no real identifier contains is removed. A general "find the number-shaped
-    substring" rule would have to decide what to do with `T02 // T03` — a real double-sided
-    token whose two halves are both number-shaped and whose spaces the prompt explicitly asks
-    for — and deciding that on a guess is how a fold starts destroying identifiers it was meant
-    to repair. 13 export cells carry that form.
+    IT RETURNS A CANDIDATE, NOT AN ANSWER, AND `_walk` ONLY ASKS ON A MISS. That ordering is the
+    second safety and it is stronger than the shape bounds: an identifier that already matched a
+    row is never handed to this function at all, so no repair can move a card that was joining
+    correctly — however a future export's cells are spelled. It is D35's own rule for its own
+    rung, applied one step earlier.
 
-    A SPACE-SEPARATED SET CODE IS THE SAME CLASS AND IS DELIBERATELY NOT HANDLED. `UNL 140/219`
-    has not been observed, and a space is exactly the character `T02 // T03` needs, so splitting
-    on one would trade a measured repair for an unmeasured risk. If it turns up, the evidence to
-    check first is whether the remainder still parses as an identifier.
+    None rather than the unchanged string, so the caller cannot re-look-up a key it has already
+    missed on, and so `code~:` is written only where something was actually removed.
     """
-    out = text.strip()
-    for separator in _SET_CODE_SEPARATORS:
-        if separator in out:
-            out = out.rsplit(separator, 1)[1]
-    return out.strip()
+    out = _SET_CODE_PREFIX.sub("", key.strip()).strip()
+    return out if out and out != key.strip() else None
 
 
 def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
@@ -571,17 +590,22 @@ def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
     reads to learn what shape to ask the model for, and asking for `OGN-001` would have put a
     set code into the joined field and matched nothing.
 
-    THAT EXACT FAILURE THEN HAPPENED FROM THE MODEL'S SIDE. Three of run
-    `2026-08-29-box1-01`'s reads came back `UNL • 140/219` — the set code glued to the
-    identifier, which the Riftbound prompt forbids in as many words — and matched nothing. The
-    name rung below is what now recovers them.
+    THAT EXACT FAILURE THEN HAPPENED FROM THE MODEL'S SIDE. Reads come back as `UNL • 140/219`,
+    `UNL - 150/219` and `UNL / 120/219` — the set code glued to the identifier, which the
+    Riftbound prompt forbids in as many words — at 3 of 133 in one run and 7 of 39 in the next.
+
+    THIS FUNCTION NO LONGER REPAIRS THEM, AND THE MOVE IS THE POINT (2026-08-30). It used to
+    call `_strip_set_code` here, which meant every identifier was rewritten on its way to the
+    lookup whether or not the raw one would have matched. `_repair_set_code` is now reached from
+    `_walk`, on a miss only, so a card that joins cleanly is never touched by it. What is
+    returned here is what the model read, verbatim.
 
     `printed_total` is not consulted at all, in either direction. A game keyed this way has no
     denominator to disagree with.
     """
     if card.number is None:
         return None
-    return _strip_set_code(str(card.number)) or None
+    return str(card.number).strip() or None
 
 
 def _key_none(card: "IdentifiedCard") -> Optional[str]:
@@ -598,11 +622,13 @@ def _walk(catalog: "Catalog", card: "IdentifiedCard", strategy: KeyStrategy):
     """THE LADDER, written once for every game. Only `strategy` varies.
 
     1. The game's own key, if this card yields one.
-    2. Failing that — no key at all — the export's blank-`Number` rows by name. Sealed
-       products, promos and code cards land here whatever keys the rest of the export.
-    3. D35's last resort: the name, for a card that DOES print a number we could not read.
+    2. A key that missed, repaired once, where the game declares a repair. Today that is the
+       set code the model glues onto a Riftbound identifier against its own instructions.
+    3. Failing a key at all, the export's blank-`Number` rows by name. Sealed products, promos
+       and code cards land here whatever keys the rest of the export.
+    4. D35's last resort: the name, for a card that DOES print a number we could not read.
 
-    STEP 3 IS REACHED FROM TWO DIRECTIONS AND NOT FROM A THIRD. A key that found nothing falls
+    STEP 4 IS REACHED FROM TWO DIRECTIONS AND NOT FROM A THIRD. A key that found nothing falls
     to it, and so does a card with no key whose blank-`Number` name found nothing. A key that
     MATCHED never reaches it — the rung is a last resort, not a peer, and a number that
     resolves is never second-guessed.
@@ -620,6 +646,22 @@ def _walk(catalog: "Catalog", card: "IdentifiedCard", strategy: KeyStrategy):
         rows = catalog.rows_for_key(key)
         if rows:
             return rows, f"{strategy.label}:{key}"
+        # A KEY THAT MISSED GETS ONE REPAIR BEFORE THE NAME RUNG, where the game declares one.
+        # Reached only from here, which is what lets the repair be bolder than it could be at
+        # build time: the card is already bound for `no_catalog_row`, and the worst a wrong
+        # repair can do is miss again and fall through to exactly where it was going.
+        #
+        # `~` MARKS IT, AND A SEPARATE LABEL IS THE POINT RATHER THAN A FLOURISH. This is a
+        # count of how often the model ignores an explicit instruction in its own prompt — 7 of
+        # 39 on box 3 — and a repair that reported itself as an ordinary `code:` match would
+        # make its own cause invisible on the run report. Same argument D35 makes for spelling
+        # its rung `name?:` rather than `name:`.
+        if strategy.repair is not None:
+            repaired = strategy.repair(key)
+            if repaired:
+                rows = catalog.rows_for_key(repaired)
+                if rows:
+                    return rows, f"{strategy.label}~:{repaired}"
         # A NUMBER THAT FINDS NOTHING IS A NUMBER WE SHOULD STOP BELIEVING (D35). Falling
         # through rather than returning empty is the whole of the rung: box 2's nine
         # confident-wrong reads carried a denominator, so they composed a well-formed key that
@@ -656,7 +698,7 @@ class NotJoinable(LookupError):
 
 JOIN_KEY_STRATEGIES: Dict[str, Optional[KeyStrategy]] = {
     "number_and_printed_total": KeyStrategy(_key_number_and_printed_total, "number", True),
-    "printed_code": KeyStrategy(_key_printed_code, "code", True),
+    "printed_code": KeyStrategy(_key_printed_code, "code", True, repair=_repair_set_code),
     # `name_only` keeps its registry name — the strategy is still "match on the name alone" —
     # but it is now expressed as the ABSENCE of a key rather than as a separate ladder.
     "name_only": KeyStrategy(_key_none, "name", False),

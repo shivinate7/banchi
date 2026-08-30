@@ -4076,9 +4076,12 @@ earlier and the copy never mentioned it — the one place that most needed to.
 
 **What would reopen this: the flag being used on cards that had a good answer available.** If
 `from_catalog` starts appearing on answers for cards whose export row a better join would have
-found, the fix is upstream in the join, not more catalog searching. `_strip_set_code` is the
+found, the fix is upstream in the join, not more catalog searching. `_repair_set_code` is the
 first instance of exactly that: three of box 1's four dead ends turned out to be a set code
-glued to a correct identifier, and code now recovers them without a human at all.
+glued to a correct identifier, and code now recovers them without a human at all. **It was
+`_strip_set_code` and a two-character rule until 2026-08-30, when box 3 produced the same defect
+across three separators at 7 of 39 — D55 is that amendment**, and it is also this paragraph's
+own rule pointing the other way: the repair keeps working and the READ is what has not improved.
 ## D47 — A tracked symlink is a path baked into the tree, and a checkout will spend a directory to place one
 
 **BUILT 2026-08-30, after a `git merge --ff-only origin/main` in the main working tree replaced
@@ -5317,6 +5320,99 @@ per SKU rather than inferring it from `_committed_keys`, and rewriting the whole
 become the honest thing to do.
 
 ---
+## D55 — A set code the model glued on is removed by shape, and only after the key has missed
+
+**BUILT 2026-08-30, from the owner reading their own review queue three times in one
+afternoon**: *"The number read as UNL / 120/219, which is in no row"*, then the same sentence
+for `UNL - 060/219` and `UNL - 150/219`. Each card matched by name and each was therefore
+queued rather than listed, and each one's row was sitting in the export it was joined against.
+
+**THE READ WAS NOT WRONG ABOUT THE CARD. IT WAS WRONG ABOUT THE FIELD.** `identify/prompt.py`'s
+Riftbound contract says in as many words *"Do not add a set code printed elsewhere on the
+card"*, and the model added it anyway — on top of digits it had read perfectly. Rengar, Trophy
+Hunter is `120/219` in the export and `120/219` is what the photograph shows; what arrived was
+`UNL / 120/219`, which is in no row because no row is spelled that way.
+
+**MEASURED, THE RATE IS AN ORDER OF MAGNITUDE WORSE THAN THE RUN THIS MECHANISM WAS BUILT
+FROM.** Run `2026-08-29-box1-01`: 3 of 133. Run `2026-08-30-box3-01`: **7 of 39**. And the same
+card was read both ways in one box — `UNL • 198/219` at card 3, `UNL - 198/219` at card 31 —
+which is the finding that decides the whole design: **the separator is arbitrary**, so
+enumerating separators is a losing game.
+
+**D46's `_strip_set_code` COULD NOT BE WIDENED TO COVER IT, AND THAT IS WHY THIS IS AN ENTRY
+RATHER THAN A LINE OF CODE.** It was a tuple of two characters — bullet and middle dot — and an
+`rsplit` over them, licensed by the measurement that no export cell contains either. Adding
+`-` and `/` to that tuple is not a bigger version of the same repair, it is a different and
+destructive one: `rsplit("/")` over `120/219` yields `219`, a real identifier belonging to
+another card. A character-based rule cannot reach the observed shapes without eating the field
+it exists to repair. D46's own docstring predicted this class and declined it pending evidence
+— *"the evidence to check first is whether the remainder still parses as an identifier"*.
+
+**SO THE RULE DESCRIBES A SET CODE INSTEAD OF A SEPARATOR, ANCHORED TO THE FRONT: two to five
+letters, no digits, then one separator.** Measured against every distinct `Number` cell in both
+games keyed this way — **1,237 Riftbound and 396 One Piece** — it matches **zero** of them,
+which is the same licence the old tuple had, taken over a shape rather than a character. Three
+bounds do the work and each is load-bearing:
+
+- **Letters only.** `T02 // T03` is a real double-sided token, 13 cells carry the form, and the
+  prompt asks for the spaces around its `//` by name. Its first group has digits, so it is
+  untouched — and it is exactly what a slash rule would otherwise have had to reason about.
+  `SP3/006` and `303*/298` are excluded the same way.
+- **At least two.** One Piece prints **16 cells as `P-044`** — one letter, a hyphen, digits. A
+  bound of one strips every one of them to a bare number. This bound is the reason one rule is
+  safe for both games instead of a rule per game.
+- **At most five.** Nothing measured needs more, and an unbounded run of letters starts eating
+  names the day something hands this a title by mistake.
+
+**AND IT MOVED OUT OF THE KEY BUILDER INTO THE LADDER, WHICH IS THE STRONGER HALF OF THE
+SAFETY.** `_strip_set_code` ran inside `_key_printed_code`, so every identifier was rewritten on
+its way to the lookup whether or not the raw one would have matched. `_repair_set_code` is now
+`pipeline/join.py:_walk`'s **second rung**, asked only when the key found no rows — so a card
+that joins cleanly is never handed to it at all, and no repair can move a card that was already
+joining, **however a future export's cells are spelled**. It is D35's own rule for D35's own
+rung, applied one step earlier: it fires only on an empty result, and the worst a wrong repair
+can do is miss again and fall through to precisely where the card was already going.
+
+**`KeyStrategy` GAINS `repair`, WHICH IS WHY THIS IS ONE RUNG AND NOT THREE COPIES OF ONE.**
+D35's whole entry is about the ladder being written once with the per-game part as a value; a
+repair bolted into one game's key builder would have recreated the shape that let D35's own rung
+land in Pokemon and not in Riftbound. `pokemon` and `pokemon_code` declare no repair, so nothing
+about their walk changes.
+
+**IT REPORTS ITSELF AS `code~:` RATHER THAN `code:`, AND THE SEPARATE LABEL IS THE POINT.** This
+is a count of how often the model ignores an explicit instruction in its own prompt, and a
+repair that reported an ordinary match would make its own cause invisible on the run report —
+the rate would only ever be discoverable by someone re-reading raw identifications. Same
+argument D35 makes for spelling its rung `name?:` rather than `name:`: two facts with two
+remedies get two strings. **It does not reach the queue entry**, for the reason D35 already
+records — `QueueEntry` declares no `lookup` field — and it does not need to, because a repaired
+card no longer queues.
+
+**WHAT IT RECOVERS, RE-WALKED OVER THE REAL RUNS RATHER THAN ESTIMATED.** Box 3: all 7 glued
+reads now join by exact number, at **$30.81, $23.76, $17.06, $12.52** and three more — cards
+that were sitting in a queue offering one name-matched candidate the operator had to answer by
+hand, one at a time, on every future join. The 2 that remain on the name rung are the reads it
+must not repair: `044/106` for the export's `044/166`, a digit misread, and one blank number.
+Box 1's 133 cards are unchanged — 129 clean, the 3 bullet cases still recovered, and
+`Wuju Master` still correctly finding nothing.
+
+**RECOVERING THE NUMBER IS BETTER THAN FALLING BACK TO THE NAME, which is the whole reason to
+spend an entry on cards D35 already rescues.** The name rung deliberately only ever QUEUES
+(the owner's ruling in D35), because the field that tells one card from another is the field
+that could not be read. Here it *was* read — correctly — and something else was added to it. A
+recovered number is an exact join and lists the card.
+
+**WHAT WOULD REOPEN THIS: the rate not falling, or a fourth separator that is not a separator.**
+The repair makes the defect free rather than absent, and `identify/prompt.py`'s instruction is
+still being ignored 18% of the time on this set. If `code~:` keeps climbing, the fix is upstream
+in the prompt — D46's own closing rule, that a repair used on cards a better read would have
+handled means the read is what to fix. What this rule genuinely cannot reach is a set code the
+model writes with no separator at all (`UNL120/219`) or one that is not letters-first; both
+would need the remainder checked against the catalog rather than against a shape, which is a
+different and much bolder rule than this one.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
