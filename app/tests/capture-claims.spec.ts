@@ -559,3 +559,58 @@ test('a refused divider is a sentence beside the control, and never a halt', asy
      must not be here. */
   await expect(page.locator('.capture-halt')).toHaveCount(0)
 })
+
+// ------------------------------------ the hint offers a real vocabulary (D65)
+
+async function routeSets(page: Page, body: unknown) {
+  await page.route(/\/tcg\/sets/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    })
+  })
+}
+
+test('the set hint offers the real set names, and still takes free text', async ({ page }) => {
+  await routeSets(page, {
+    game: 'pokemon',
+    sets: [{ name: 'SV09: Journey Together', id: '4242' }],
+    aliases: { JTG: 'SV09' },
+    reason: null,
+  })
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+  await expect(hint).toBeVisible()
+
+  /* A DATALIST AND NOT A SELECT, which is what makes this safe on the rig's own screen: it
+     suggests without constraining. The alias is offered beside the name because the operator
+     types `JTG` and TCGplayer publishes `SV09: Journey Together` — two vocabularies for one
+     set, which is the whole reason the hint needed a list. */
+  await expect(hint).toHaveAttribute('list', 'capture-set-names')
+  await expect(page.locator('#capture-set-names option[value="SV09: Journey Together"]')).toHaveCount(1)
+  await expect(page.locator('#capture-set-names option[value="JTG"]')).toHaveCount(1)
+
+  await hint.fill('something nobody listed')
+  await expect(hint).toHaveValue('something nobody listed')
+})
+
+test('a set vocabulary that could not be fetched leaves the hint field working', async ({
+  page,
+}) => {
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: 'tcg_cookie_missing' })
+  await open(page)
+  await page.keyboard.press('h')
+
+  /* THE RIG DOES NOT STOP FOR AN AUTOCOMPLETE. No cookie, no network, the portal down — the
+     control is the plain text input it was before D65 and a capture is unaffected. Asserted
+     as the ABSENCE of options plus a working input, because the failure worth forbidding is
+     a field that will not open. */
+  const hint = page.getByLabel('Set hint')
+  await expect(hint).toBeVisible()
+  await expect(page.locator('#capture-set-names option')).toHaveCount(0)
+  await hint.fill('sv09')
+  await expect(hint).toHaveValue('sv09')
+})

@@ -8,6 +8,7 @@
 [Aa]llowlist
 [Aa]rrivable
 [Aa]uditable
+[Aa]utocomplete
 [Aa]utocorrected
 another's
 Archivo
@@ -32,6 +33,7 @@ Cmd
 Collectr
 CSVs
 [Dd]ataclass
+[Dd]atalist
 [Dd]ebounce
 [Dd]ebounced
 [Dd]edup

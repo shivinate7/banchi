@@ -11742,6 +11742,36 @@ def check_export_fetch(checks: Checks) -> None:
                     before,
                     "and that refusal keeps nothing either",
                 )
+                # --------------------------- THE VOCABULARY THE CAPTURE SCREEN OFFERS
+                #
+                # `GET /tcg/sets` (D65). The capture screen is the RIG, and D19 measures its
+                # cadence in milliseconds — so the property worth asserting is not that this
+                # answers, but that it answers 200 WITH AN EMPTY LIST when it cannot, rather
+                # than refusing. A hint field that would not open because an autocomplete
+                # failed would be a worse product than one with no autocomplete.
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=pokemon")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("game")),
+                    (200, "pokemon"),
+                    "the set vocabulary answers 200 for a game that has a category",
+                )
+                checks.equal(
+                    [row["name"] for row in body.get("sets") or []],
+                    ["SV09: Journey Together"],
+                    "and it drops the portal's `All Set Names` row, which is a filter option "
+                    "rather than a set and would be offered as one",
+                )
+                status, raw, _ = request(port, "GET", "/tcg/sets?game=misc")
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("sets"), body.get("reason")),
+                    (200, [], "no_category"),
+                    "a game with no TCGplayer category answers 200 with an empty list and a "
+                    "reason — never a refusal, because this is drawn on the rig's own screen "
+                    "and a capture must not stop for a missing convenience",
+                )
+
                 # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
                 #
                 # `match_sets` DIRECTLY, because it is pure and the interesting inputs are the

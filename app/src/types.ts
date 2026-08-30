@@ -1702,6 +1702,16 @@ export type CsvUpload = { name: string; content: string }
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
  *  not a step. */
+/** The real set names for a game, for the capture screen's hint field (D65). Always answers,
+ *  even when it could not be fetched: `sets` is empty and `reason` says why, because the rig
+ *  must not stop for an autocomplete. */
+export type TcgSets = {
+  game: string
+  sets: { name: string; id: string }[]
+  aliases?: Record<string, string>
+  reason: string | null
+}
+
 export type ExportFetched = {
   ok: boolean
   run: string

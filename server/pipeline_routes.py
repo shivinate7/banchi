@@ -1971,6 +1971,58 @@ def _export_report(path: Path, games: Sequence[str]) -> dict:
     }
 
 
+# The set vocabulary, cached for this process. TCGplayer's set list for a category changes
+# when a set releases, which is monthly at most, and the capture screen asks for it every time
+# the operator opens the hint field. Cached rather than re-fetched because the rig is the
+# latency-sensitive surface in this product (D19's 623 ms cadence) and because a screen that
+# fetched per keystroke would spend the owner's session on autocomplete.
+_SETS_CACHE: Dict[int, list] = {}
+
+
+def do_tcg_sets(game: str) -> dict:
+    """`GET /tcg/sets?game=<game>` — the real set names for a game, for the capture screen.
+
+    THE WHITELIST HALF OF D65. A hint typed free-hand has to be matched against TCGplayer's
+    vocabulary later, and the two do not agree: `OGN` is the community code for the set
+    TCGplayer calls `Origins`. Offering the real names at capture time makes the stored hint
+    exact by construction, so the matching that follows is an equality test rather than three
+    rules and an alias table.
+
+    IT DEGRADES TO NOTHING AND MUST. The capture screen is the rig, and D19 measures its
+    cadence in milliseconds; a set list that cannot be fetched — no cookie, no network, the
+    portal down — has to leave the operator typing free text exactly as before rather than
+    blocking a capture. So every failure here answers 200 with an empty list and a reason,
+    and the screen renders a plain input when the list is empty.
+    """
+    entry = game_registry.get(game) or {}
+    category = entry.get("tcgplayer_category_id")
+    if not category:
+        return {"game": game, "sets": [], "reason": "no_category"}
+    category = int(category)
+    if category not in _SETS_CACHE:
+        try:
+            vocabulary = tcg_export.filters(category)
+        except tcg_export.FetchRefusal as caught:
+            # NOT AN ERROR TO THE SCREEN. The operator is mid-capture; a refusal here is a
+            # missing convenience, not a failed capture, and the reason is carried so the
+            # screen can say why the list is empty rather than pretending the game has no sets.
+            return {"game": game, "sets": [], "reason": caught.code}
+        _SETS_CACHE[category] = [
+            {"name": str(row.get("Text") or ""), "id": str(row.get("Value") or "")}
+            for row in (vocabulary.get("Sets") or [])
+            if str(row.get("Value") or "") != "0"
+        ]
+    aliases = entry.get("set_aliases") or {}
+    return {
+        "game": game,
+        "sets": _SETS_CACHE[category],
+        # The codes the owner types, offered beside the names so the list is searchable by
+        # either. A hint stored as an alias still resolves — `match_sets` folds it first.
+        "aliases": {str(k): str(v) for k, v in aliases.items()},
+        "reason": None,
+    }
+
+
 def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     """What to ask TCGplayer for, derived from what the box was captured as (D65).
 

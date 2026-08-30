@@ -3007,7 +3007,17 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **It is deliberately partial and maps a code to another HINT rather than to an id.** There is no machine-readable source for community codes, so it covers what the owner types and grows as they type more; and resolving `MEG` to `ME01` lets the three shape rules do the matching without the table repeating a full set name that TCGplayer may re-word. An absent alias costs a wider export, never a wrong one.
 
-**What is owed: a whitelist at capture time.** The hint is free text today and `match_sets` is what reads it. The owner's proposal is to offer the real set and rarity vocabulary on the capture screen so a hint is exact by construction. The matcher stays regardless, because 676 of 715 stored cards already carry free-text hints and an exact hint costs it nothing — rule one matches and the other two never run.
+### The whitelist at capture time
+
+**The capture screen offers the real set names, so a new hint is exact by construction.** `GET /tcg/sets` serves the game's vocabulary and the hint field is a `datalist` over it, with the alias codes listed beside the names so the field is searchable by either.
+
+**A datalist rather than a select, because the rig may not be constrained.** It suggests without restricting: free text still works, and an empty list is indistinguishable from the control before this entry.
+
+**Every failure answers 200 with an empty list and a reason.** No cookie, no network, the portal down — the operator keeps typing. D19 measures this screen's cadence in milliseconds and a hint field that would not open because an autocomplete failed is a worse product than one with no autocomplete.
+
+**The load follows the field being OPEN, not the row being tapped**, which was a real defect caught by its own test. `H` opens the field from the key handler and never reaches the row's `onToggle`, so hanging the load there left the list empty for every operator using the keyboard — which on this screen is all of them.
+
+**`match_sets` stays regardless.** 677 of the store's cards already carry free-text hints and those runs must keep joining; an exact hint costs the matcher nothing, because rule one matches and the other two never run.
 
 ---
 
