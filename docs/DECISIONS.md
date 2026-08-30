@@ -3214,6 +3214,35 @@ is one server on 8000 with `PKMNSCAN_HOME` pinned to the main checkout and the w
 clients pointed at it by `VITE_CAPTURE_SERVER` — which is the knob that already exists. That
 is a different decision about where the truth lives, not a tweak to this one.
 
+**ONE FILE WAS MISSED AND IT WAS THE ONE A HUMAN LOOKS THROUGH: `.claude/launch.json`** (found
+and fixed 2026-08-30, immediately after this entry landed). It was tracked, and it hardcoded
+`"port": 5173` — right in the main tree and wrong in every linked worktree. `vite.config.ts`,
+`playwright.config.ts`, `server/capture_server.py` and `app/src/server.ts` all moved onto the
+derivation; the Browser pane's own launch config did not, so `preview_start` would start THIS
+tree's dev server on its own port and then open a tab on 5173.
+
+**That is this entry's own defect wearing a different hat, and the worse half of it.** A dead
+tab is a nuisance. A tab on 5173 while the main tree's `make dev` is up is a worktree
+**previewing main and looking like it worked** — the same silent-wrong-answer shape
+`app/devPort.ts` records for `make design-check`, which that file calls "the worst shape a
+check can fail in, because the only signal it gives is the one you were hoping for."
+
+**A tracked file cannot hold a per-checkout value, so it stopped being tracked.**
+`.claude/launch.json` is gitignored and written by `make launch-config` from
+`server/ports.py` — the same derivation the other four read, so all five cannot disagree. It
+hangs off `make venv`, which is already the documented first step in a fresh clone and is what
+`make worktree-setup` calls; it is a standalone target as well, because **the port follows the
+PATH** and a renamed worktree needs it written again.
+
+**The precedent is `.claude/settings.local.json`, already gitignored beside it.** The split
+inside that directory is not new: what every checkout shares is tracked, what one machine or
+one checkout answers is not. Nothing in the repo reads `launch.json` — no doc names it, no
+audit check resolves it — so this cost nothing but the file.
+
+**What this gives up, stated because it is a real trade:** a fresh clone has no launch config
+until `make venv` runs, where before it had a wrong one immediately. That is the right
+direction for a file whose only failure mode is pointing somewhere plausible and wrong.
+
 ---
 
 ## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess
