@@ -445,8 +445,24 @@ modified. `check_only_writable_changed` runs per row against the catalog origina
 `emit` does **not** refuse for a non-empty review queue. It restates the queue totals beside
 the row counts it wrote.
 
-On success, every emitted SKU's copies transition to **`pushed`** in the master store, and
-the transition is appended to `history.jsonl`.
+On success `emit` makes **two writes per SKU, and they are about different things** — one
+about the cards, one about the listing.
+
+**The cards get their identity**: `sku`, `condition` and the run that decided them, written
+to every copy the run matched, with the transition appended to `history.jsonl`. **Every copy,
+not the listable subset** — the identity write runs over `uncommitted_positions`, so a card
+held past D7's live cap is still findable by `GET /search`, `copies_on_hand` and
+`positions_for_sku` (D7 amended; the cap bounds the listing, never the record). It runs over
+`uncommitted_positions` and **not** `positions`, because every terminal copy of a matched SKU
+is committed and `set_state` has no terminal guard — iterating those would move a sold card
+back to `identified`.
+
+**The listing gets the count**: `pushed`, bumped by the copies that actually reached an import
+file, which is `live_positions` and nothing wider. `pushed` has not been a card state since
+D7's amendment moved the three listing stages off the card and onto the SKU's `Listing` as
+counts; the card stays at `identified`, and passing `pushed` to `set_state` now raises
+`UnknownState`. This paragraph said "every emitted SKU's copies transition to `pushed`", which
+named a state that no longer exists and a set that was never right.
 
 ---
 

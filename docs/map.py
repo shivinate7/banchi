@@ -262,8 +262,15 @@ COMPONENTS = [
                                     "writes is the DELTA — the copies not already sent — and the "
                                     "SKU set is INTERSECTED with what prices_for will actually "
                                     "price rather than guessed at by subtracting the exclusions "
-                                    "somebody thought of.",
-                            "governed_by": ["D9", "D25", "D49", "D54"], "tested_by": ["T7"]},
+                                    "somebody thought of. THE LIVE CAP BOUNDS THE LISTING AND NOT "
+                                    "THE IDENTITY (D7 amended): the SKU stamp runs over "
+                                    "uncommitted_positions, so every copy the run matched is "
+                                    "findable, while the pushed count still runs over "
+                                    "live_positions, because that count is a commitment that a "
+                                    "CSV row was written. Not match.positions — every terminal "
+                                    "copy is committed, and set_state has no terminal guard, so "
+                                    "iterating those would resurrect a sold card (D10, D26).",
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
