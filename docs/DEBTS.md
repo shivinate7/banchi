@@ -1186,7 +1186,7 @@ and goes blank on the copies whose neighbors are themselves departed.
 Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
 ruling about exactly this label. It wants an entry, not a patch.
 
-### The pricing screen shows two Box 1 buttons, and one of them is a box that is gone
+### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
 
 Reported as *"why does pricing show two box 1s"*. **Because there are two runs over box 1**,
 and `Pricing.tsx`'s run picker draws one button per run with the box as the headline:
@@ -1214,7 +1214,27 @@ right now**. D56 chose read-time joining on purpose, so that a rename relabels e
 rather than stranding an answer nobody can correct. The cost it did not name is this one: a
 run over a *previous* occupant of a box number silently borrows the *current* occupant's name.
 
-Not fixed here because the repair is a choice between three things — draw the run's date in
-the headline, mark a run whose cards are no longer in the store, or refuse to name a box whose
-`created_at` postdates the run — and the third is a real amendment to D56 rather than a
-rendering tweak.
+**Closed the same day, on the owner's ruling, by two of the three candidate repairs.**
+`Pricing.tsx` draws the run's date in the headline, so two runs over one drawer are never the
+same string; and `_summary` withholds the name where the box under that number is a different
+drawer. The third candidate — marking a run whose cards have left the store — was not taken
+as a display, but its signal is half of the rule below.
+
+**It is not the D56 amendment it looked like.** `_box_names`'s own docstring already said a
+vanished box gets no name — *"the run remembers a box the store no longer has, and a missing
+name is the honest rendering of that"* — and could not act on it, because a deleted box number
+is REALLOCATED by D20's lowest-free-integer rule, so the map is never missing the key. The
+guard completes a rule this code already stated rather than overturning one, which is why it
+took no new decision entry.
+
+**The first version of the guard was wrong and T7 caught it inside the session.** It compared
+the timestamps alone — box created after the run, withhold the name — and that forbids naming
+a box *afterwards*, which is an ordinary thing to do and which T7 already asserted three
+blocks earlier: name the box, and the name reaches the run on the next read. The shipped rule
+needs **both** conditions, and each rules out the other's false positive:
+
+    the box was created AFTER the run started
+    AND the box's cards disown the run — it holds some, and none of them is this run's
+
+An empty box disowns nobody, so name-it-later still works. A live run that has not identified
+yet owns no cards, so the timestamp keeps it named. Three assertions pin it.
