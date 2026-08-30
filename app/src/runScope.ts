@@ -50,6 +50,29 @@ export function boxOf(row: RunSummary): number | null {
  *  —` would draw a fault where there is none. Same for a box that has since been deleted:
  *  the run remembers a number the registry no longer has, and the number alone is the honest
  *  rendering of that. */
+/*  A REAL BOX NUMBER GETS A STRING BACK. Every caller but `runBoxLabel` passes a number the
+ *  types already guarantee — `CartBox.box` and `RunScope.box` are both plain `number` — so a
+ *  nullable return had three call sites each answering a state none of them can be in, and
+ *  answering it three different ways.
+ *
+ *  IT IS NOT A COMPILE-TIME PROOF, AND CLAIMING SO WAS THE FIRST DRAFT'S MISTAKE. Removing
+ *  this signature produces no type error anywhere: JSX renders a `null` child as nothing and a
+ *  template literal stringifies it, so both shapes these values arrive in swallow it silently.
+ *  TypeScript never had a stake in this.
+ *
+ *  WHAT THE DELETED FALLBACKS WERE WORTH IS ZERO, MEASURED. Two of the three carried
+ *  `?? Box ${box}`, which on a null box renders the string `Box null` — the same garbage one
+ *  step later. The third carried nothing and rendered empty. They read as defensiveness and
+ *  were noise: there is nothing honest to draw from a box number the server failed to send,
+ *  and the guard against that belongs at the source — T7's subset-scope case — not here.
+ *
+ *  The nullable arm stays for `runBoxLabel`, whose `boxOf` can genuinely answer null: a
+ *  payload with no `box` field and no box-shaped capture directory to fall back to. */
+export function boxLabel(box: number, name: string | null | undefined): string
+export function boxLabel(
+  box: number | null | undefined,
+  name: string | null | undefined,
+): string | null
 export function boxLabel(
   box: number | null | undefined,
   name: string | null | undefined,

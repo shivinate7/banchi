@@ -182,7 +182,7 @@ export function Runs() {
      header counts the boxes and the chips say which. */
   const scopeLine =
     only !== undefined
-      ? `${boxLabel(only.box, only.name) ?? `Box ${only.box}`} · ` +
+      ? `${boxLabel(only.box, only.name)} · ` +
         (only.indices.length > 0
           ? `${only.indices.length} ticked card${only.indices.length === 1 ? '' : 's'}`
           : 'the whole box')

@@ -1065,7 +1065,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                       D33's gate is two presses over a number the operator cannot miss, and
                       what that number buys is a box — which until D56 this row could only
                       call by its digit, on the one screen in the product that spends. */}
-                  <span className="run-leg-box">{boxLabel(row.box, row.name) ?? `Box ${row.box}`}</span>
+                  <span className="run-leg-box">{boxLabel(row.box, row.name)}</span>
                   <span className="run-leg-scope">
                     {row.indices.length > 0
                       ? `${row.indices.length} ticked card${row.indices.length === 1 ? '' : 's'}`
@@ -1304,8 +1304,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                 key={leg.scope.box}
                 text={leg.console}
                 label={
-                  `What the preflight printed for ` +
-                  `${boxLabel(leg.scope.box, cartName(leg.scope.box)) ?? `box ${leg.scope.box}`}`
+                  `What the preflight printed for ${boxLabel(leg.scope.box, cartName(leg.scope.box))}`
                 }
               />
             ))}
