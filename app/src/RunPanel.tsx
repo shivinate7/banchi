@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 
 import {
+  cropPreview,
   describeFailure,
   getRun,
   getRuns,
+  photoUrl,
   preflightRun,
   putDecisions,
   runFileUrl,
@@ -12,6 +14,7 @@ import {
   type Failure,
 } from './server'
 import type {
+  CropPreview,
   CsvUpload,
   RunDetail,
   RunPreflight,
@@ -331,9 +334,30 @@ export function RunPanel({ cart }: RunPanelProps) {
   )
   const setReading = useCallback((box: number, patch: Partial<Reading>) => {
     setReadings((held) => ({ ...held, [box]: { ...(held[box] ?? DEFAULT_READING), ...patch } }))
+    /* AND THE PICTURE FOLLOWS THE READING THAT WAS JUST TOUCHED. Setting a chip on box 7's row
+     * is the act that says "I am deciding about box 7", so the preview is of box 7 from that
+     * press onward — one line, in the one function every reading change goes through, rather
+     * than four call sites each remembering to do it. */
+    setPreviewBox(box)
   }, [])
 
   const [bypass, setBypass] = useState(false)
+
+  /* THE CROP PREVIEW'S STATE. `previewFor` is the reading-and-offset the strip on screen was
+   * drawn for, compared against the one the controls currently name — the same shape
+   * `ticketScope` uses against the estimate, and for the same reason: a picture of a reading
+   * that is no longer selected is worse than no picture, because it is believed. */
+  const [preview, setPreview] = useState<CropPreview | null>(null)
+  const [previewFor, setPreviewFor] = useState('')
+  const [previewOffset, setPreviewOffset] = useState(0)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [previewTrouble, setPreviewTrouble] = useState<string | null>(null)
+  /* WHERE THE 1:1 VIEW IS LOOKING, in the SENT image's own pixels, or null for its resting
+   * aim — the collector number where the registry claims one, the middle of the card where it
+   * does not. Null rather than a computed default so that leaving the frame returns the view
+   * to the thing worth reading rather than to wherever the pointer happened to exit. */
+  const [aim, setAim] = useState<{ x: number; y: number } | null>(null)
+  const detailRef = useRef<HTMLDivElement | null>(null)
 
   const [busy, setBusy] = useState<string | null>(null)
   const [trouble, setTrouble] = useState<Failure | null>(null)
@@ -536,6 +560,223 @@ export function RunPanel({ cart }: RunPanelProps) {
       }
     },
     [],
+  )
+
+  /* WHICH BOX THE PICTURE IS OF, once a send can be several (D48). The preview's whole job is
+   * showing what THIS reading sends, and a reading belongs to a box now — so the box whose
+   * chip was last pressed is the one being decided about, and the picture follows it. Null
+   * means "the first in the cart", which makes a cart of one behave exactly as it did before
+   * the cart existed.
+   *
+   * NOT one preview per row: that is N photographs decoded to answer one question, and the
+   * owner already rejected three-abreast on the plainer ground that three pictures in a row
+   * are three pictures too small to read. */
+  const [previewBox, setPreviewBox] = useState<number | null>(null)
+
+  const previewLeg = useMemo(
+    () => legs.find((leg) => leg.box === previewBox) ?? legs[0] ?? null,
+    [legs, previewBox],
+  )
+
+  const previewArgs = useMemo(
+    () =>
+      previewLeg === null
+        ? null
+        : {
+            box: previewLeg.box,
+            indices: previewLeg.indices,
+            crop: previewLeg.crop,
+            maxEdge: previewLeg.maxEdge,
+          },
+    [previewLeg],
+  )
+
+  /* THE PREVIEW'S OWN KEY, AND IT IS NOT THE CART'S. `scopeKey` covers every box and every
+   * reading, because the ESTIMATE is about the whole send; the picture is about one leg. Keyed
+   * on the cart, adding an unrelated box to it would refetch and redraw a photograph that had
+   * not changed. */
+  const previewKey =
+    previewArgs === null
+      ? ''
+      : `${previewArgs.box}:${(previewArgs.indices ?? []).join(',')}` +
+        `:${previewArgs.crop ? 'crop' : 'whole'}:${previewArgs.maxEdge}`
+
+  /* THE PREVIEW FOLLOWS THE READING, and it is keyed on `scopeKey` — the same string that
+   * voids the estimate below. The crop and the max edge are in that key already (D32's
+   * amendment put them there when unticking the crop left a stale figure over a live spend
+   * button), so a reading change redraws the picture and clears the number together. It runs
+   * BEFORE `Check cost` rather than after: this is what the pair is chosen from, and the
+   * estimate is what the choice then costs.
+   *
+   * DEBOUNCED, BECAUSE THE WALK IS HELD DOWN AS OFTEN AS IT IS TAPPED. An arrow key repeating
+   * at ~30/s against a route that decodes a photograph would queue a request per frame for a
+   * card nobody is looking at. 140ms is under the interval a key repeat produces and over the
+   * one a human tapping produces, so a tap is immediate and a hold costs one request when it
+   * stops.
+   *
+   * THE PREVIOUS CARD STAYS UP WHILE THE NEXT IS FETCHED. Blanking would make every press
+   * flash the tallest block in this column out of and back into the document, and the column
+   * beside it holds the button that spends. */
+  useEffect(() => {
+    if (!scoped || previewArgs === null) {
+      setPreview(null)
+      setPreviewFor('')
+      return
+    }
+    const want = `${previewKey}:${previewOffset}`
+    if (previewFor === want) return
+    let live = true
+    const timer = setTimeout(() => {
+      setPreviewBusy(true)
+      void (async () => {
+        try {
+          const answer = await cropPreview({ ...previewArgs, offset: previewOffset })
+          if (!live) return
+          setPreview(answer)
+          setPreviewTrouble(null)
+        } catch (err) {
+          if (!live) return
+          /* NAMED, NOT SWALLOWED. The one refusal an operator will actually meet is
+           * `imaging_unavailable` — Pillow missing from the SERVER's interpreter — and its
+           * remedy is a `make venv` and a restart they cannot guess at from an empty panel. */
+          setPreview(null)
+          setPreviewTrouble(describeFailure(err).message)
+        } finally {
+          if (live) {
+            setPreviewFor(want)
+            setPreviewBusy(false)
+          }
+        }
+      })()
+    }, 140)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [scoped, previewKey, previewOffset, previewFor, previewArgs])
+
+  /* THE AIM IS RELEASED WHEN THE PICTURE CHANGES. It is a position in the SENT image's
+   * pixels, and those move when the reading or the card does — so an aim carried across a
+   * change would be pointing at a coordinate that no longer means what it meant. */
+  useEffect(() => {
+    setAim(null)
+  }, [previewFor])
+
+  /* A NEW BOX STARTS AT THE FRONT OF ITS OWN WALK. Without this, stepping through box 2 and
+   * then picking box 6 would open box 6 at somebody else's offset.
+   *
+   * KEYED ON THE RESOLVED BOX AND NOT ON `previewBox`, WHICH IS THE DIFFERENCE BETWEEN A NEW
+   * BOX AND A NEW READING. `previewBox` starts null and `previewLeg` falls back to the first
+   * leg, so the first chip press changes the STATE from null to a box without changing which
+   * box is being previewed — and keyed on the state, that press reset the walk. Caught by
+   * `run-panel.spec.ts`'s arrow-key case: step to card 2, press Custom, and the caption fell
+   * back to card 1. Setting the reading of the box you are already looking at must not throw
+   * away where you are in it. */
+  useEffect(() => {
+    setPreviewOffset(0)
+  }, [previewLeg?.box])
+
+  /* THE WALK WRAPS RATHER THAN STOPPING, and it wraps HERE as well as on the route: the
+   * server takes `offset % total` so a stale client can never send a negative, and this keeps
+   * the number the caption prints inside the box the operator is looking at. */
+  const stepPreview = useCallback(
+    (by: number) =>
+      setPreviewOffset((was) => {
+        const total = preview?.total ?? 0
+        return total > 0 ? (was + by + total) % total : Math.max(0, was + by)
+      }),
+    [preview],
+  )
+
+  /* ARROW KEYS WALK THE BOX — the owner asked for them by name, and the buttons beside the
+   * card do the same thing because a key with no visible control is a key nobody finds.
+   *
+   * GUARDED ON THE EVENT'S TARGET, which is the whole subtlety. This panel holds a number
+   * input (Custom's max edge) and a textarea (`decisions.json`), and an unguarded window
+   * listener would steal the caret keys from both — the operator would be unable to move
+   * through a number they were editing. Modifier chords are left alone too: they belong to
+   * the browser and to `App.tsx`'s route chords. */
+  useEffect(() => {
+    if (!scoped) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return
+      }
+      event.preventDefault()
+      stepPreview(event.key === 'ArrowRight' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [scoped, stepPreview])
+
+  /* THE 1:1 VIEW'S POSITION, in the sent image's own pixels.
+   *
+   * `background-size: auto` paints the file at its natural size and `background-position`
+   * picks which natural pixel sits in the corner — that pair IS 1:1, with no scaling
+   * arithmetic to get wrong. It is the review queue's loupe, aimed at the PAYLOAD instead of
+   * at the stored photograph, and for the reason that screen gives: FADGI and Metamorfoze
+   * both require this class of judgement at 100%, and a downscale is exactly what is being
+   * judged here.
+   *
+   * CLAMPED INTO THE IMAGE, so the window never shows more empty ground than picture at the
+   * edges of a card. */
+  const detailPosition = useMemo(() => {
+    const sample = preview?.sample
+    if (sample?.sent == null) return undefined
+    const [sentW, sentH] = sample.sent
+    const node = detailRef.current
+    const viewW = node?.offsetWidth ?? 320
+    const viewH = node?.offsetHeight ?? 140
+    let x: number
+    let y: number
+    if (aim !== null) {
+      x = aim.x
+      y = aim.y
+    } else if (sample.band_rect != null) {
+      /* THE RESTING AIM IS THE COLLECTOR NUMBER, left-aligned and vertically centred on the
+         band — the registry knows where it is on a Pokemon card, so the operator should not
+         have to go looking for the one region that decides the run. */
+      x = sample.band_rect[0]
+      y = sample.band_rect[1] + (sample.band_rect[3] - sample.band_rect[1] - viewH) / 2
+    } else {
+      x = (sentW - viewW) / 2
+      y = (sentH - viewH) / 2
+    }
+    x = Math.max(0, Math.min(x, Math.max(0, sentW - viewW)))
+    y = Math.max(0, Math.min(y, Math.max(0, sentH - viewH)))
+    return `${-Math.round(x)}px ${-Math.round(y)}px`
+  }, [preview, aim])
+
+  /* POINTING AT THE FRAME AIMS THE 1:1 VIEW. The frame is drawn at a fraction of the sent
+   * image's size, so a pointer position has to travel two coordinate systems: the box is the
+   * ORIGINAL frame, and the view reads the SENT one. `rect` is the map between them, and its
+   * absence is the whole-frame case where the two differ only by scale.
+   *
+   * IT IS WHAT MAKES A GAME WITH NO BAND USABLE AT ALL. The registry cannot say where a
+   * Riftbound card prints its identifier, and it does not have to: the operator can. */
+  const aimAt = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const sample = preview?.sample
+      if (sample?.frame == null || sample.sent == null) return
+      const node = detailRef.current
+      const box = event.currentTarget.getBoundingClientRect()
+      if (box.width === 0 || box.height === 0) return
+      const [frameW, frameH] = sample.frame
+      const cut = sample.rect ?? [0, 0, frameW, frameH]
+      const originalX = ((event.clientX - box.left) / box.width) * frameW
+      const originalY = ((event.clientY - box.top) / box.height) * frameH
+      const sentX = ((originalX - cut[0]) / (cut[2] - cut[0])) * sample.sent[0]
+      const sentY = ((originalY - cut[1]) / (cut[3] - cut[1])) * sample.sent[1]
+      setAim({
+        x: sentX - (node?.offsetWidth ?? 320) / 2,
+        y: sentY - (node?.offsetHeight ?? 140) / 2,
+      })
+    },
+    [preview],
   )
 
   const doQuote = () =>
@@ -790,6 +1031,9 @@ export function RunPanel({ cart }: RunPanelProps) {
           <span className="run-step-cost run-step-money">{STEPS[0].cost}</span>
         </div>
         <p className="run-step-note">{STEPS[0].note}</p>
+
+        <div className="run-identify">
+          <div className="run-identify-controls">
 
         {/* ------------------------------------------------------------------- the cart
 
@@ -1064,6 +1308,177 @@ export function RunPanel({ cart }: RunPanelProps) {
             ))}
           </div>
         )}
+          </div>
+
+          {/* WHAT THE READING SENDS, AS A PICTURE, BESIDE THE CONTROL THAT SETS IT.
+              D32's amendment answered "walk me through how im supposed to understand crop with
+              just this dialog box" with three named pairs and a sentence each. The sentences are
+              true and they are prose about pixels; this is the same answer in the medium the
+              decision is actually about.
+
+              ONE CARD, AT THE SIZE OF ITS OWN COLUMN (the owner, 2026-08-29). It was three
+              abreast under the chips for a few hours, sampled evenly across the box because
+              cards move on the tray — sound about sampling, and it lost to a plainer fact: three
+              pictures in a row are three small pictures, and the operator could not see what
+              they were being shown. The spread is reached by WALKING now, which is also the only
+              version of it that lets you look at a card you actually suspect. */}
+          {scoped && (previewTrouble !== null || preview !== null) && (
+            <div className="run-preview">
+              <div className="run-preview-head">
+                <h4 className="run-preview-title">What this sends</h4>
+                {preview !== null && (
+                  <span className="run-preview-count">
+                    card {preview.offset + 1} of {count(preview.total)}
+                  </span>
+                )}
+              </div>
+
+              {previewTrouble !== null ? (
+                <p className="run-step-note run-step-fine">{previewTrouble}</p>
+              ) : preview === null ? null : preview.sample.unreadable !== undefined ||
+                preview.sample.frame === undefined ? (
+                <p className="run-preview-fact">
+                  #{preview.sample.index} — this photograph cannot be decoded, so nothing is
+                  sent for it.
+                </p>
+              ) : (
+                <div className="run-preview-card" aria-busy={previewBusy}>
+                  <div
+                    className="run-preview-frame"
+                    onPointerMove={aimAt}
+                    onPointerLeave={() => setAim(null)}
+                  >
+                    {/* WHAT IS THROWN AWAY, AND IT IS DRAWN AS SUCH. The stored photograph
+                        sits underneath at a low opacity, so the margin outside the cut is
+                        visible as something the run will never see rather than as an equal
+                        part of the picture. */}
+                    <img
+                      className="run-preview-ghost"
+                      src={photoUrl(preview.sample.box, preview.sample.index)}
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                    />
+                    {/* THE PAYLOAD ITSELF, at the cut's own position. This is the half the
+                        owner asked for: the frame used to draw the stored file, which is the
+                        same bytes at every reading — so the one thing being changed was the
+                        one thing the picture could not show. Positioned in PERCENTAGES of the
+                        frame, so it is right at whatever size the column happens to give it. */}
+                    {preview.sample.sent_image != null && (
+                      <img
+                        className="run-preview-sent"
+                        src={preview.sample.sent_image}
+                        alt={`Box ${preview.sample.box}, card ${preview.sample.index}, as this reading sends it`}
+                        draggable={false}
+                        style={
+                          preview.sample.rect != null && preview.sample.frame != null
+                            ? {
+                                left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
+                                top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
+                                width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
+                                height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
+                              }
+                            : { left: 0, top: 0, width: '100%', height: '100%' }
+                        }
+                      />
+                    )}
+                    {preview.sample.rect != null && preview.sample.frame != null && (
+                      <div
+                        className="run-preview-cut"
+                        style={{
+                          left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
+                          top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
+                          width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
+                          height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* THE 1:1 WINDOW, onto the SAME file the frame is drawing. `background-size:
+                      auto` paints it at its natural size, so this is where the reading is
+                      actually legible: the frame is ~28% of the sent pixels and no downscale is
+                      distinguishable at that size, while here 1200 and 900 cannot look alike.
+
+                      IT RESTS ON THE COLLECTOR NUMBER and follows the pointer over the frame.
+                      The registry knows where the number is on a Pokemon card; on a game where
+                      it does not, the operator points at it themselves — which is what makes
+                      this usable for Riftbound at all. */}
+                  <div
+                    ref={detailRef}
+                    className="run-preview-detail"
+                    style={{
+                      backgroundImage:
+                        preview.sample.sent_image != null
+                          ? `url(${preview.sample.sent_image})`
+                          : undefined,
+                      backgroundPosition: detailPosition,
+                    }}
+                    role="img"
+                    aria-label={`Card ${preview.sample.index} at full size, as this reading sends it`}
+                  />
+                  <p className="run-preview-fact">
+                    <span>{aim === null ? 'resting on the collector number' : 'where you are pointing'}</span>
+                    <span>at 1:1</span>
+                    {preview.sample.band_px != null && (
+                      <span>
+                        number {preview.sample.band_px[0]}×{preview.sample.band_px[1]}
+                      </span>
+                    )}
+                  </p>
+                  {preview.sample.band_absent != null && (
+                    /* THE REGISTRY REFUSED A RESTING AIM AND SAYS SO. `pipeline/games.py` holds
+                       which bands a game claims, and only `pokemon` claims a number band — the
+                       fractions in `geometry/crop.py` were measured on a Pokemon card. This
+                       block drew them over a Riftbound card for one afternoon and rendered its
+                       rules text as though it were a collector number. */
+                    <p className="run-step-note run-step-fine">{preview.sample.band_absent}</p>
+                  )}
+
+                  <p className="run-preview-fact">
+                    <span className="run-preview-slot">#{preview.sample.index}</span>
+                    {/* THE CARD ABOVE IS THE PAYLOAD, DRAWN SMALL, AND THAT HAS TO BE SAID.
+                        It is ~28% of the sent pixels, and no two downscales are
+                        distinguishable at that size — so an operator comparing 1200 against
+                        900 up there will correctly see no difference and wrongly conclude
+                        there is none. This sentence points at the window that can show it. */}
+                    {preview.sample.sent != null && (
+                      <span>
+                        sends {preview.sample.sent[0]}×{preview.sample.sent[1]}, shown reduced
+                      </span>
+                    )}
+                    {/* A REFUSAL IS NOT THE SAME FACT AS THE CROP BEING OFF, and `rect` alone
+                        cannot tell them apart. */}
+                    {preview.sample.method == null && <span>no card found — sent whole</span>}
+                  </p>
+
+                  {/* THE WALK. Arrow keys do the same thing, which is what the owner asked
+                      for; these exist because a key with no visible control is a key nobody
+                      finds, and because a pointer is sometimes already in the hand. */}
+                  <div className="run-preview-walk">
+                    <button
+                      type="button"
+                      className="run-button run-preview-step"
+                      aria-label="The card before this one"
+                      onClick={() => setPreviewOffset((was) => was - 1)}
+                    >
+                      ←
+                    </button>
+                    <span className="run-preview-hint">arrow keys walk the box</span>
+                    <button
+                      type="button"
+                      className="run-button run-preview-step"
+                      aria-label="The card after this one"
+                      onClick={() => setPreviewOffset((was) => was + 1)}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ the run list */}

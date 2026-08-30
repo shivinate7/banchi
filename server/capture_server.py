@@ -33,6 +33,7 @@
     POST   /boxes                          register a box before any card goes into it
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
+    POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /pipeline/runs                  every run, newest first, with its phase
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
@@ -221,7 +222,8 @@ from urllib.parse import parse_qs, urlparse
 # not importable without this. Same idiom and same reason as harness/run.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline import games, join  # noqa: E402
+from pipeline import games, join, tcgcsv  # noqa: E402
+from cli import runs as cli_runs  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
@@ -234,9 +236,16 @@ from store import Store, files, master, queues  # noqa: E402
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
 from server import pipeline_routes  # noqa: E402
+from server import ports  # noqa: E402
 
 HOST = "0.0.0.0"
-PORT = 8000
+
+# DERIVED PER CHECKOUT, NOT A CONSTANT (D46). It was `8000` here while `store/files.py:home()`
+# already defaulted to the checkout the code runs from — so every worktree served a DIFFERENT
+# store on the SAME port, and whichever process won the bind answered everyone. The main tree
+# still answers 8000 and every doc that says so stays true; a linked worktree gets its own.
+# `server/ports.py` carries the argument and `PKMNSCAN_PORT` overrides.
+PORT = ports.capture_port()
 
 CAPTURES_DIRNAME = "captures"
 CARDS_DIRNAME = "cards"
@@ -344,6 +353,7 @@ _INVENTORY_ITEM_RE = re.compile(r"^/inventory/(\d+)/(\d+)$")
 # a path cannot carry one segment and two.
 _INVENTORY_BOX_RE = re.compile(r"^/inventory/(\d+)$")
 _REVIEW_ANSWER_RE = re.compile(r"^/review/(\d+)/(\d+)/answer$")
+_REVIEW_CATALOG_RE = re.compile(r"^/review/(\d+)/(\d+)/catalog$")
 # D37. Its own path rather than a mode of the answer, because it is a different act: the
 # answer says what the card IS, and this says the question is closed while the card is
 # untouched. A flag on the answer route would have made "I decline to identify this" reach
@@ -454,7 +464,7 @@ PUT_FIELDS = tuple(
 # reversal without ever having been told what it reverses. It is deliberately NOT a second
 # route for the further reason that the app then reads one field to learn which way a call
 # went, rather than comparing a card's SKU against a queue file to work it out.
-ANSWER_FIELDS = ("sku", "condition", "undo")
+ANSWER_FIELDS = ("sku", "condition", "undo", "from_catalog")
 
 # ...and what the reversal carries, which is the flag alone. Two tuples rather than one,
 # because a body carrying `undo` AND a SKU is a client that has confused the two directions,
@@ -3704,8 +3714,45 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
     return previous, None
 
 
+def _catalog_answer(card, sku: str) -> dict:
+    """The catalog row `sku` names, in this card's own export, or a refusal (D46).
+
+    THE SERVER RE-READS THE ROW; IT NEVER TAKES THE CLIENT'S WORD FOR ONE. The request
+    carries a SKU and nothing else that matters — the name, the number, the condition and
+    the price all come back off the export here. That is what makes this an answer chosen
+    from a catalog rather than a free-text write into the field `CLAUDE.md` protects, and it
+    is why the condition on the request is discarded rather than validated: a client that
+    sends the wrong one gets the right one, not an error.
+
+    THE SAME EXPORT THE CARD WAS JOINED AGAINST, via `_catalog_for_card`, not "some export".
+    A SKU is only meaningful inside the file that defines it, and answering out of a
+    different export would write a row this run never saw.
+
+    `sku_not_in_catalog` is its own code rather than reusing `sku_not_a_candidate`: that one
+    means "not one of the rows offered" and prints the ones that were, which for a card with
+    no candidates is an empty list and a confusing message.
+    """
+    catalog, _game = _catalog_for_card(card)
+    row = catalog.row_for_sku(sku)
+    if row is None:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "sku_not_in_catalog",
+            f"{sku} is not in the export run {card.run!r} was joined against, so it cannot "
+            f"be what this card is. Search the catalog on the review screen and choose a "
+            f"row from it.",
+        )
+    return _catalog_row(row)
+
+
 def _answer_target(
-    snapshot, box: int, index: int, sku: str, condition: str
+    snapshot,
+    box: int,
+    index: int,
+    sku: str,
+    condition: str,
+    *,
+    from_catalog: bool = False,
 ) -> Tuple[
     master.Card,
     List[Tuple[queues.Queue, queues.QueueEntry]],
@@ -3794,6 +3841,27 @@ def _answer_target(
     # card in both is a card the owner answers from the review screen.
     offering, governing = holders[0]
     candidates: List[dict] = list(governing.candidates)
+    if not candidates and from_catalog:
+        # D46 — THE ROW CAME OUT OF THE EXPORT, SO IT IS NOT FREE TEXT.
+        #
+        # The refusal below names the evidence it stands on: "Every one of them wanted a
+        # re-export or a re-shoot, never a typed SKU". That was true of the cards it was
+        # written about and it is not true of the case that reopened it. Box 1's
+        # `Master Yi, Wuju Master` has a good photograph — measured, statistically identical
+        # to two copies of the same card that read perfectly — and its row was sitting in the
+        # export the whole time. A re-shoot repairs nothing; the read was simply wrong, in a
+        # way a person looking at the card can see and the pipeline cannot.
+        #
+        # WHAT KEEPS THE ORIGINAL GUARD INTACT: the SKU is re-read out of THIS CARD'S OWN
+        # EXPORT here, inside the write lock, and the condition is taken from that row rather
+        # than from the request. A SKU that is not in the export refuses; a condition the
+        # client invented is discarded rather than believed. So no string a client sends can
+        # become a listing on its own — which is the property the refusal was protecting, and
+        # it is unchanged. What changed is that a human may now point at a row the pipeline
+        # failed to find, instead of only being able to walk away from it.
+        chosen = _catalog_answer(card, sku)
+        offered_condition = str(chosen.get("condition") or "")
+        return card, holders, offering, governing, chosen, offered_condition
     if not candidates:
         # `cli/resolve.py:failure_entry` records no candidates at all — an identification
         # that failed, or a card with no position, has no rows for a human to choose
@@ -3840,6 +3908,255 @@ def _answer_target(
         )
 
     return card, holders, offering, governing, chosen, offered_condition
+
+
+# How many catalog rows one lookup may return. Nine because `app/src/ReviewQueue.tsx` keys
+# candidates on the digits and stops at `MAX_KEYED_CANDIDATES = 9`; a tenth row would draw a
+# blank chip and be mouse-only, which is the trap `docs/DESIGN.md` records for that screen.
+# The count is reported alongside so a truncated search says so rather than looking complete.
+CATALOG_LOOKUP_LIMIT = 9
+
+
+def _near_mint_conditions(game: str) -> Set[str]:
+    """The Condition strings this game's Near Mint rows carry (D12 hardcodes Near Mint).
+
+    Read off the registry rather than restated, so a game whose finishes change here changes
+    in one place. `variant.resolve` narrows to exactly these when it builds candidates, and a
+    lookup that offered `Lightly Played Foil` would be offering a row the ladder never would.
+    """
+    entry = games.require(game)
+    return {str(v) for v in dict(entry["condition_by_finish"]).values()}
+
+
+def _catalog_for_card(card) -> Tuple[object, str]:
+    """The export THIS card was joined against, and the game it was read as.
+
+    THE EDGE IS ON THE CARD, NOT ON THE QUEUE ENTRY, and that distinction is the whole reason
+    this function is short. `store/queues.py:QueueEntry` records no run, no game and no export,
+    and `Queue.parse` drops any key it does not declare — so nothing about a run can be written
+    into `review.json` without a schema change. `master.Card` has carried `run` since
+    identification wrote it (`Inventory.record_identification`) and `game` since D21, and
+    `_answer_target` already loads the card before it looks at any queue. So the lookup is
+    exact: card -> run -> that run's manifest -> the export for that card's game.
+
+    Guessing the run by scanning `runs/` for one whose scope covers this box was the
+    alternative and it is unsound: three runs exist on this machine, two of them touch box 1,
+    `first_seen` is date-only so it cannot separate two runs on one day, and `Queue.upsert`
+    preserves `first_seen` across re-joins anyway. An exact edge that is sometimes absent beats
+    an inferred one that is always present and sometimes wrong.
+
+    Every way this can fail is a named refusal rather than a traceback, because most of them
+    are ordinary history rather than corruption:
+
+      no_run_recorded   a card identified before `run` was written, or never identified.
+      run_not_found     the run directory has been deleted. Runs are disposable; the store is
+                        not, so this is expected rather than alarming.
+      no_export_for_game  the run was never joined, or was joined for another game.
+      export_missing    THE LEGACY CASE, and the one worth naming. A join driven from a
+                        terminal records the `--export` path it was given, which is typically
+                        `~/Downloads/...` and may be long gone; a join driven from the app
+                        uploads the file INTO the run (`pipeline_routes._store_upload`) so the
+                        run holds the exact bytes. Both are legal and only the second survives.
+    """
+    run_name = str(getattr(card, "run", "") or "")
+    if not run_name:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "no_run_recorded",
+            f"Card {card.box}/{card.index} records no run, so there is no export to look "
+            f"the catalog up in. Identify it first.",
+        )
+    # The name is validated as a NAME before it is joined onto a path, the same posture
+    # `pipeline_routes._open_run` takes. It comes off a stored record rather than off a
+    # request, so this is defence in depth rather than the front line — but a record is a
+    # file, and a `..` that reached `runs_dir() / run_name` would read outside the store.
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", run_name):
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "run_not_found",
+            f"Card {card.box}/{card.index} records {run_name!r} as its run, which is not a "
+            f"run name. The record is malformed; re-identify the box.",
+        )
+    directory = files.runs_dir() / run_name
+    if not directory.is_dir():
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "run_not_found",
+            f"Run {run_name!r} is not on disk any more, so the export it was joined "
+            f"against cannot be read. Re-join the box to rebuild the queue.",
+        )
+    game = str(getattr(card, "game", "") or games.DEFAULT_GAME)
+    # `exports_by_game`, never the `export_path` property — that one answers the DEFAULT
+    # game's file only, which for a riftbound card is silently the wrong question. It also
+    # carries the scalar-era backfill for manifests written before per-game exports existed.
+    #
+    # NARROW EXCEPT, DELIBERATELY. This was `except Exception` for one draft and it turned a
+    # real coding error — calling the property with an argument — into a confident
+    # `no_export_for_game` refusal about a manifest that named the export perfectly well. A
+    # catch wide enough to hide a TypeError is a catch that makes its own bugs unreportable.
+    # `open_run`, not `Run(directory)` — `Run` is a dataclass whose `manifest` field defaults
+    # to an EMPTY DICT and never reads disk, so constructing one directly answers "this run
+    # records no export" for every run that ever existed. Cost one debugging pass.
+    try:
+        path = cli_runs.open_run(directory).exports_by_game.get(game)
+    except (KeyError, TypeError, ValueError, OSError, cli_runs.RunError):
+        path = None
+    if not path:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "no_export_for_game",
+            f"Run {run_name!r} records no export for game {game!r}, so there is no catalog "
+            f"to search. Join the run against an export for that game first.",
+        )
+    source = Path(str(path))
+    if not source.is_file():
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "export_missing",
+            f"Run {run_name!r} names its {game!r} export as {source}, and that file is not "
+            f"there. A join driven from a terminal records the path it was handed; a join "
+            f"driven from the app keeps the bytes inside the run. Re-join from the app, or "
+            f"put the file back.",
+        )
+    export = tcgcsv.read_export(source)
+    return join.Catalog.from_export(export, game), game
+
+
+def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
+    """Catalog rows a human might mean by `query`, best first.
+
+    THE MATCH IS DELIBERATELY LOOSE IN BOTH DIRECTIONS, and that is what makes it useful for
+    the case it was built for. `Master Yi, Wuju Master` was read as `Wuju Master` — the
+    epithet, with the champion dropped — so an exact fold finds nothing and a
+    query-contains-name test finds nothing either. Only name-contains-query recovers it.
+    The mirror case is real too: the same run read `Master Yi, Tempered` as `Master Yi`.
+    Measured on that export, 490 of 494 epithets identify exactly one product and only 38 of
+    98 champion names do, so both directions are worth offering and neither is worth trusting
+    without a human looking at the photograph.
+
+    NOTHING HERE DECIDES ANYTHING. It ranks rows for a person to choose between, so a loose
+    match costs a row on a list rather than a wrong card in an import file. That is the whole
+    reason this is allowed to do what `CLAUDE.md` forbids the JOIN to do.
+
+    Near Mint only (D12), read off the registry, because those are the rows the ladder itself
+    would have offered.
+    """
+    wanted = join.name_index_key(query)
+    number = join.number_index_key(query)
+    conditions = _near_mint_conditions(game)
+    scored: List[Tuple[int, str, dict]] = []
+    # `Catalog.from_export` has already filtered `export.rows` to this game's product
+    # line, so walking them here cannot reach another game's rows. There is no
+    # every-row accessor on `Catalog` and this deliberately does not add one: the
+    # indexes it does expose are all exact-match, and a substring search is not a
+    # lookup the JOIN should ever be able to make.
+    for row in catalog.export.rows:
+        if str(row.get(tcgcsv.CONDITION_COLUMN, "")) not in conditions:
+            continue
+        name = join.name_index_key(row.get(tcgcsv.NAME_COLUMN, ""))
+        cell = join.number_index_key(row.get(tcgcsv.NUMBER_COLUMN, ""))
+        sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
+        if wanted and name == wanted:
+            rank = 0
+        elif number and cell == number:
+            rank = 1
+        elif sku and sku == query.strip():
+            rank = 1
+        elif wanted and wanted in name:
+            rank = 2  # the epithet case: the read is part of the catalogued title
+        elif wanted and name in wanted:
+            rank = 3  # the read carries more than the title does
+        else:
+            continue
+        scored.append((rank, name, row))
+    scored.sort(key=lambda item: (item[0], item[1]))
+    return [_catalog_row(row) for _rank, _name, row in scored]
+
+
+def _catalog_row(row) -> dict:
+    """One catalog row in the shape the review screen already draws.
+
+    Identical keys to `cli/resolve.py:_candidate_rows`, deliberately: the screen renders these
+    through the same component as the pipeline's own candidates, so a divergence here would be
+    a second row shape nothing audits.
+    """
+    return {
+        "sku": row[tcgcsv.SKU_COLUMN],
+        "name": row[tcgcsv.NAME_COLUMN],
+        "set": row.get(tcgcsv.SET_COLUMN, ""),
+        "number": row[tcgcsv.NUMBER_COLUMN],
+        "condition": row[tcgcsv.CONDITION_COLUMN],
+        "market": row[tcgcsv.MARKET_PRICE_COLUMN],
+    }
+
+
+def do_review_catalog(box: int, index: int, query: str) -> dict:
+    """What this card COULD be, out of the export it was actually joined against.
+
+    THE GAP THIS CLOSES, in the owner's words: *"it should've brought up what cards it could
+    have matched too (along with letting me literally just enter what it is)"*. A queued card
+    with no candidate rows was a dead end — `POST /review/<box>/<index>/answer` refuses it as
+    `no_candidates`, so the only moves were skip (which writes nothing and asks again next
+    session) and stand-down (which closes the question without answering it). The row was
+    sitting in the export the whole time.
+
+    FREE, READ-ONLY, AND IT CREATES NOTHING. No run directory, no store write, no lock. It
+    reads one CSV the run already holds — measured at ~40 ms for a 10,000-row export — and
+    answers. `Store().read()` is used for the card lookup alone.
+
+    WITH NO QUERY IT SUGGESTS, USING THE CARD'S OWN READ. That is the half that answers the
+    owner's first clause: arriving at the card, the screen already shows what it could have
+    been, without anyone typing. With a query it searches, which is the second clause.
+
+    IT OFFERS; IT NEVER ANSWERS. Nothing here writes a SKU onto a card — the operator still
+    presses a digit, and `do_review_answer` still validates what they picked. This route is
+    the evidence, not the decision.
+    """
+    # `Store().read()` answers a snapshot outright rather than a context manager — this
+    # route takes no lock because it writes nothing.
+    snapshot = Store().read()
+    key = master.position_key(box, index)
+    card = snapshot.inventory.cards.get(key)
+    if card is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "card_not_found",
+            f"No card at box {box}, card {index}.",
+        )
+    read_name = ""
+    for holder in (snapshot.review, snapshot.parked):
+        entry = holder.entries.get(key)
+        if entry is not None:
+            read_name = str((entry.read or {}).get("name") or "")
+            break
+    card_name = str(getattr(card, "name", "") or "")
+
+    catalog, game = _catalog_for_card(card)
+    # The typed query wins; failing that the queue entry's own read, failing that the card
+    # record's name. The last two are usually the same string and the fallback matters for a
+    # card whose entry has been re-joined since.
+    term = query.strip() or read_name or card_name
+    if not term:
+        return {
+            "box": box,
+            "index": index,
+            "game": game,
+            "query": "",
+            "rows": [],
+            "found": 0,
+            "truncated": False,
+        }
+    matches = _catalog_matches(catalog, game, term)
+    return {
+        "box": box,
+        "index": index,
+        "game": game,
+        "query": term,
+        "searched": bool(query.strip()),
+        "rows": matches[:CATALOG_LOOKUP_LIMIT],
+        "found": len(matches),
+        "truncated": len(matches) > CATALOG_LOOKUP_LIMIT,
+    }
 
 
 def do_review_answer(box: int, index: int, payload: dict) -> dict:
@@ -3961,6 +4278,11 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         return _reverse_answer(box, index)
 
     _reject_unknown(payload, ANSWER_FIELDS)
+    # D46. Opt-in, per request, and only this route ever passes it: the group route below
+    # calls `_answer_target` too, and a group is by definition uniform over ONE shared
+    # candidate row — a zero-candidate entry can never qualify — so widening it there would
+    # open a path nothing could ever legitimately walk.
+    from_catalog = _optional_flag(payload, "from_catalog", "from_catalog_invalid")
     sku = _require_text(
         payload,
         "sku",
@@ -3983,7 +4305,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         # governing entry, the pair checked against the offered row. Nothing is written
         # until it returns.
         card, holders, offering, governing, _, offered_condition = _answer_target(
-            snapshot, box, index, sku, condition
+            snapshot, box, index, sku, condition, from_catalog=from_catalog
         )
 
         # READ BEFORE THE WRITE, WHICH IS THE ENTIRE REASON THE UNDO IS POSSIBLE (D28). This is
@@ -4036,6 +4358,12 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             queue=offering.name,
             reason=governing.reason,
             restores_to=restores_to,
+            # D46. Present only when it is true, because `_history` drops a None extra — so
+            # every line already on disk keeps its exact shape and a reader can tell a row the
+            # PIPELINE offered from a row a HUMAN went and found. Those are different claims
+            # about how much the machine knew, and after the write there is no other evidence
+            # which one happened.
+            from_catalog=True if from_catalog and not governing.candidates else None,
         )
 
         # WHETHER THE UNDO WILL BE ALLOWED, ANSWERED NOW RATHER THAN AT THE TAP THAT FAILS. This
@@ -6313,6 +6641,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # would otherwise answer a real route with "there is no GET /boxes/<n>" — that
             # regex is anchored one segment shorter, so it cannot match this path, and the
             # order here is for the reader rather than for correctness.
+            # The review screen's catalog lookup. A query string like `/search` above, and
+            # `keep_blank_values` for the same reason — except here a blank `q` is LEGAL and
+            # means "suggest from the card's own read", which is the arriving-at-the-card
+            # case. Free and read-only; it takes no lock and creates nothing.
+            match = _REVIEW_CATALOG_RE.match(path)
+            if match:
+                query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
+                return self._json(
+                    HTTPStatus.OK,
+                    do_review_catalog(
+                        int(match.group(1)), int(match.group(2)), query[0]
+                    ),
+                )
             match = _BOX_LISTINGS_RE.match(path)
             if match:
                 return self._json(HTTPStatus.OK, do_box_listings(int(match.group(1))))
@@ -6442,6 +6783,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())
                 )
+            # The crop preview, and it sits BEFORE the one that spends for the reason the
+            # money gate itself gives: what the reading does to the bytes has to be legible
+            # before the estimate is asked for, not after it. Free, writes nothing, and
+            # unlike the preflight it does not even shell out.
+            if path == "/pipeline/crop-preview":
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
+                )
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)
@@ -6563,6 +6912,13 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")
     print(f"  store     {files.inventory_dir()}")
+    # WHICH CHECKOUT IS SERVING, printed because the two lines above are absolute paths that
+    # differ between trees by one path segment nobody reads at a glance. A worktree's server
+    # over a worktree's empty store looks exactly like the real one until a capture lands
+    # somewhere that gets deleted with the branch — which is the failure D46 exists for.
+    if ports.is_linked_worktree(ports.REPO_ROOT):
+        print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
+        print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
     print("  Ctrl-C to stop.")
     try:
         httpd.serve_forever()

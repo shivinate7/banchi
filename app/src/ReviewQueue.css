@@ -598,18 +598,42 @@
 /* Where the card physically is. Utility face because it is a position, 20px because it is
    read against a box across the desk. Not the Fulfillment view's 32px floor — see the file
    header for why this screen does not borrow his numbers. */
-/* TRACKING ONLY, AND THE SIZE DELIBERATELY STAYS 20px. `-0.01em` is the display face's
-   optical correction and does not belong on a fixed-advance mono label — the same copy-paste
-   corrected on `.browse-position` the same day. What is NOT copied across is that rule's
-   move to 24px: this screen's payload is the PHOTOGRAPH, which docs/DESIGN.md spends a
-   section making the largest thing here, so the position label growing would take from the
-   one element that must not shrink. */
+/* THE PREMISE ABOVE WAS FALSE AND IS DELETED WITH ITS CONCLUSION (2026-08-29, D41 amended).
+   The rule read "this screen's payload is the PHOTOGRAPH ... so the position label growing would
+   take from the one element that must not shrink". Measured: `.review-card` is a grid with
+   `align-items: start` and `--photo-cap` is viewport-derived, so the photograph is 415.1x736.4 —
+   23.59% of the viewport, long edge 736.4 — IDENTICALLY at every figure size from 24px to 44px,
+   with `.review-frame` at y=146 throughout. The label cannot take from it. Leaving a premise
+   deleted and a conclusion standing is the exact failure D41 records against BoxBrowse.css's own
+   630px-track comment, and this is the second instance found in two days.
+
+   WHAT ACTUALLY BINDS THE FIGURE IS THE REASON CHIP. The label sits on one baseline-aligned line
+   with `.review-reason`, whose box is 56px and whose CHIP is 35.5px. At a 32px figure the label
+   block is 34.0px; at 36px it is 37.8px and the address becomes the tallest object in the head,
+   out-shouting the thing that says WHY the card is queued. 32px is the largest figure under that
+   bound.
+
+   AND IT IS MOSTLY A SAVING. The treated label is 179.5px against 378px, -52.5%, in a 664.9px
+   `space-between` head. Untreated, 4 of the 14 reason strings are wider than the 270.9px left
+   over and wrap the head to 94px; at 1280 it is 12 of 14 and the page overflows by 33px. Treated,
+   0 of 14 wrap at either width and the head is a constant 62.5px — so a row no longer moves 38px
+   between one card and the next depending on which reason fired. */
 .review-position {
   font-family: var(--util);
-  font-size: 20px;
-  font-weight: 600;
   color: var(--ink);
   letter-spacing: 0;
+  --pos-slot: 32px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* THE BAIL PATH KEEPS THE SHIPPED 20px, and this is what the numeric guard is for. A pooled
+   entry (`Pokémon code cards · pooled`, D24) has no slot number, so the component renders the
+   string whole — and it must then be drawn as the string it is rather than at a figure size
+   nothing is filling. `:has()` asks whether the treatment actually applied. */
+.review-position:has(.position-parts) {
+  font-size: var(--pos-slot);
+  font-weight: 400;
 }
 
 /* ---- the reason: human label large, machine string small beneath it ---- */
@@ -1411,5 +1435,73 @@
 .review-close-elsewhere {
   margin: var(--s3) 0 0;
   font-size: 15px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ D46's catalog lookup
+
+   The panel drawn where the candidate rows would be, for an entry the pipeline found no row
+   for. It borrows `.review-candidates` and `.review-candidate` wholesale — see the component
+   — so nothing here restyles a row; what is below is only the frame, the prose and the
+   search control.
+
+   NO BORDER AND NO SURFACE OF ITS OWN, unlike `.review-close`. That panel is a second thing
+   you may do to the card and is boxed to say so; this one IS the card's rows, standing where
+   they always stand, and boxing it would draw a container around the primary content of the
+   screen. */
+.review-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.review-catalog-empty {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.review-catalog-more {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.review-catalog-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* Visible, not sr-only. The operator arrives here from a dead end, and an unlabelled box is
+   the one control on this screen whose purpose cannot be guessed from what is beside it. */
+.review-catalog-label {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* `--field`, not `--line`: docs/DESIGN.md gives that token to the boundary of something you
+   TYPE INTO and nowhere else, on the finding that `line` measures 1.24:1 and an empty input
+   is a rectangle with nothing else to find it by. */
+.review-catalog-input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+}
+
+.review-catalog-input:disabled {
   color: var(--muted);
 }

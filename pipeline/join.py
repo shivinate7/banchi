@@ -68,7 +68,7 @@ import re
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from pipeline import games, pricing, routing, tcgcsv, variant
 
@@ -442,105 +442,184 @@ def name_index_key(text) -> str:
 # a rule to a spelling that exists to be read.
 
 
-def _lookup_number_and_printed_total(catalog: "Catalog", card: IdentifiedCard):
-    """The collector number, falling back to the name when the card prints none.
+class KeyStrategy(NamedTuple):
+    """How ONE game builds its catalog key. Everything below the key is shared.
 
-    THE FALLBACK IS PART OF THIS STRATEGY AND NOT A SEPARATE ONE, which is what keeps today's
-    behaviour intact: a Pokemon code card sits inside the Pokemon export as a blank-`Number`
-    row, and T3 asserts it resolves. `name_only` is the strategy for a game whose cards NEVER
-    carry a number; this is the strategy for a game whose cards usually do.
+    THIS TYPE IS THE REPAIR FOR A REAL DEFECT, AND THE DEFECT IS WHY IT IS SHAPED THIS WAY.
+    Until 2026-08-29 each game had its own `_lookup_*` function, and each of those functions
+    re-implemented the SAME four-step ladder — build a key, look it up, try the blank-`Number`
+    name, fall back to the name — differing only in step one. D35's name rung was then written
+    into the Pokemon copy and not the printed-code copy, so `riftbound` and `one_piece` returned
+    zero candidates exactly where `pokemon` recovered. Nothing compared the copies, because
+    nothing could: they were three unrelated functions that happened to be parallel.
+
+    Measured cost before it was found: run `2026-08-29-box1-01`, 133 real Riftbound cards, 4
+    unusable reads, all 4 landing as zero-candidate `no_catalog_row` — and a zero-candidate
+    entry is refused by the answer route as `no_candidates`, so those cards could not be
+    answered at all, only skipped. Three of the four hold exactly one row by name, one of them
+    above D9's threshold at $2.86.
+
+    So the per-game part is now a VALUE and the ladder is written once. A new rung added to
+    `_walk` below cannot land in one game and not another, which is the property the old shape
+    could not offer at any level of care.
+
+    `build` returns the key or None. None means "this card gives this game nothing to look up",
+    which is a different fact from "the key found no rows" and is why the two take different
+    branches below.
+
+    `label` is the lookup string's prefix — `number:`, `code:`, `name:`. It is rendered on the
+    run report (D16: the machine string stays greppable), so it names how the row was FOUND and
+    must not be prettified.
+
+    `name_rung` is D35's last resort, and `pokemon_code` deliberately switches it OFF. That is
+    not an oversight preserved for compatibility: a code card has no collector number at all, it
+    lives inside the Pokemon export as a blank-`Number` row, and `rows_for_name` would happily
+    match it to the NUMBERED card of the same name — a code card listed as the card it came
+    with. The rung exists for "we could not READ the number"; a product that prints none has
+    nothing to fall back from.
     """
-    if card.number is not None and card.printed_total is not None:
-        key = join_key(card.number, card.printed_total)
-        rows = catalog.rows_for_key(key)
-        if rows:
-            return rows, f"number:{key}"
-        # A NUMBER THAT FINDS NOTHING IS A NUMBER WE SHOULD STOP BELIEVING, and falling
-        # through here is half of D35 rather than a widening of it. The 9 confident-wrong
-        # reads box 2 produced are the case: `0326`, `0342`, `0934`, `721` — National Pokedex
-        # numbers read off the artwork strip once the real collector number had been cropped
-        # away. Four of them carried a denominator too, so they composed a perfectly
-        # well-formed key that matched nothing, and stopping at this return would leave them
-        # exactly as stuck as a blank number does.
-        #
-        # It cannot mislist anything, and that is what makes it safe rather than merely
-        # useful: this branch is reached only when the key already found zero rows, so the
-        # card was bound for `no_catalog_row` regardless — and what the name rung produces is
-        # a REVIEW entry, never a listing. The change is strictly from an unanswerable queue
-        # entry to an answerable one.
-    else:
-        # No collector number on the product (code cards, some promos). These are exactly the
-        # rows whose `Number` is blank, so this fallback stays scoped to them.
-        rows = catalog.rows_for_blank_number_name(card.name)
-        if rows:
-            return rows, f"name:{card.name}"
 
-    # D35 — THE LAST RESORT, AND THE ASSUMPTION IT REPAIRS IS THE COMMENT DIRECTLY ABOVE IT.
-    # "No collector number on the product" was read off `card.number is None`, which is a
-    # fact about the READ and not about the product. The two are the same thing only when
-    # the photograph is good. Box 2 shipped 544 cards cropped by a pad that cut the number
-    # off the bottom of the frame: 37 came back with no number and 9 with a National Pokedex
-    # number read off the artwork strip, and every one of them landed here, found nothing,
-    # and queued as `no_catalog_row` — 45 of the 46 against an export that held their row the
-    # whole time and had already matched it for other copies in the same run.
-    #
-    # So: when the product's own blank-`Number` rows come back empty, the card is one that
-    # DOES print a number and we failed to read it. Ask the name.
-    #
-    # THIS MAY NEVER LIST A CARD ON ITS OWN, and that is not enforced here — `join_batch`
-    # holds it, because listing is its decision and not this function's. What is enforced
-    # here is that the answer says how it was found: `name?:` and not `name:`. A row found
-    # because the product prints no number and a row found because we could not read one are
-    # different facts with different remedies, and the RUN REPORT prints this string (D16 — the
-    # machine string stays greppable). It does NOT reach the queue entry: `store/queues.py`'s
-    # `QueueEntry` has no `lookup` field and `Queue.parse` drops unknown keys. So a name-inferred
-    # card that does not resolve cleanly never reaches the `number_unread_name_matched` block
-    # below, and its entry is indistinguishable on screen from one whose number read fine — see
-    # D35, which names carrying the lookup onto the entry as the unargued fix.
-    return catalog.rows_for_name(card.name), f"name?:{card.name}", True
+    build: Callable[["IdentifiedCard"], Optional[str]]
+    label: str
+    name_rung: bool
 
 
-def _lookup_printed_code(catalog: "Catalog", card: IdentifiedCard):
-    """The identifier exactly as printed, matched against `Number` verbatim.
+def _key_number_and_printed_total(card: "IdentifiedCard") -> Optional[str]:
+    """Pokemon: two printed halves composed into one key, zero-padded on the left.
+
+    Both halves or nothing. A number without its denominator cannot compose the key the export
+    is indexed by, and guessing a denominator would invent half an identity.
+    """
+    if card.number is None or card.printed_total is None:
+        return None
+    return join_key(card.number, card.printed_total)
+
+
+# The separators a model reaches for when it glues a set code to the identifier. NO EXPORT
+# CELL CONTAINS EITHER — measured across all 1,237 distinct Riftbound `Number` cells and both
+# One Piece fixtures — which is the entire licence for the strip below. A character that can
+# never be part of a real identifier cannot be destroyed by removing it.
+_SET_CODE_SEPARATORS = ("\u2022", "\u00b7")  # bullet, middle dot
+
+
+def _strip_set_code(text: str) -> str:
+    """`UNL \u2022 140/219` -> `140/219`. The identifier, with the set code the card also prints.
+
+    THE MODEL WAS TOLD NOT TO DO THIS AND DID IT ANYWAY. `identify/prompt.py`'s Riftbound
+    contract says in as many words *"Do not add a set code printed elsewhere on the card"*, and
+    3 of run `2026-08-29-box1-01`'s 133 reads did — twice with a bullet, once with a middle dot.
+    Each produced a well-formed key that matched nothing, and each landed as a zero-candidate
+    `no_catalog_row`, which the answer route refuses outright. Three cards that could not be
+    answered at all, one of them listable at $2.86.
+
+    RECOVERING THE NUMBER IS BETTER THAN FALLING BACK TO THE NAME, and that is why this exists
+    even though D35's rung already rescued these three. The number is the field that tells one
+    card from another; the name is the field that survives a bad read. Matching on a recovered
+    number is an exact join and lists the card, where the name rung deliberately only ever
+    queues it (the owner's ruling). Same three cards, one press cheaper, and on stronger
+    evidence.
+
+    IT IS A STRIP, NOT A SEARCH, AND THAT BOUNDARY IS THE SAFETY. Only text up to and including
+    a separator that no real identifier contains is removed. A general "find the number-shaped
+    substring" rule would have to decide what to do with `T02 // T03` — a real double-sided
+    token whose two halves are both number-shaped and whose spaces the prompt explicitly asks
+    for — and deciding that on a guess is how a fold starts destroying identifiers it was meant
+    to repair. 13 export cells carry that form.
+
+    A SPACE-SEPARATED SET CODE IS THE SAME CLASS AND IS DELIBERATELY NOT HANDLED. `UNL 140/219`
+    has not been observed, and a space is exactly the character `T02 // T03` needs, so splitting
+    on one would trade a measured repair for an unmeasured risk. If it turns up, the evidence to
+    check first is whether the remainder still parses as an identifier.
+    """
+    out = text.strip()
+    for separator in _SET_CODE_SEPARATORS:
+        if separator in out:
+            out = out.rsplit(separator, 1)[1]
+    return out.strip()
+
+
+def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
+    """Riftbound and One Piece: the identifier exactly as printed, matched verbatim.
 
     THE OPPOSITE SHAPE TO THE ONE ABOVE, and the difference is where the string is built.
-    Pokemon prints two halves and this pipeline composes the key — zero-padding the left
-    one, because `25` and `025` are the same card and the export writes the padded form.
-    Riftbound and One Piece print ONE identifier and the export's `Number` cell carries
-    that same string, so there is nothing to compose and nothing to pad: padding here would
-    turn a code the export holds into one it does not.
+    Pokemon prints two halves and this pipeline composes the key — zero-padding the left one,
+    because `25` and `025` are the same card and the export writes the padded form. These games
+    print ONE identifier and the export's `Number` cell carries that same string, so there is
+    nothing to compose and nothing to pad: padding here would turn a code the export holds into
+    one it does not.
 
     THE EXAMPLES ARE THE EXPORTS' OWN CELLS, corrected 2026-08-23. This docstring offered
     `OGN-001` for Riftbound, and no cell anywhere in `fixtures/riftbound_export_untouched.csv`
-    looks like that — a set-code-prefixed shape borrowed from One Piece and attributed to
-    the wrong game. Riftbound's real cells are `179/298`, `066a/298`, `303*/298`, `SP3/006`,
-    `R04` and `T02 // T03`; One Piece's are `OP15-079`, `EB04-042`, `PRB02-014` and `P-105`.
-    The invented example mattered more than a docstring usually does: it is what a prompt
-    author reads to learn what shape to ask the model for, and asking for `OGN-001` would
-    have put a set code into the joined field and matched nothing.
+    looks like that — a set-code-prefixed shape borrowed from One Piece and attributed to the
+    wrong game. Riftbound's real cells are `179/298`, `066a/298`, `303*/298`, `SP3/006`, `R04`
+    and `T02 // T03`; One Piece's are `OP15-079`, `EB04-042`, `PRB02-014` and `P-105`. The
+    invented example mattered more than a docstring usually does: it is what a prompt author
+    reads to learn what shape to ask the model for, and asking for `OGN-001` would have put a
+    set code into the joined field and matched nothing.
 
-    `printed_total` is not consulted at all, in either direction. A game keyed this way has
-    no denominator to disagree with, and reaching for one would invent half a key.
+    THAT EXACT FAILURE THEN HAPPENED FROM THE MODEL'S SIDE. Three of run
+    `2026-08-29-box1-01`'s reads came back `UNL • 140/219` — the set code glued to the
+    identifier, which the Riftbound prompt forbids in as many words — and matched nothing. The
+    name rung below is what now recovers them.
 
-    The blank-`Number` fallback is shared with the strategy above, and deliberately: sealed
-    products and promos land in the same rows whatever keys the rest of the export.
+    `printed_total` is not consulted at all, in either direction. A game keyed this way has no
+    denominator to disagree with.
     """
-    if card.number is not None:
-        key = str(card.number).strip()
-        if key:
-            return catalog.rows_for_key(key), f"code:{key}"
-    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+    if card.number is None:
+        return None
+    return _strip_set_code(str(card.number)) or None
 
 
-def _lookup_name_only(catalog: "Catalog", card: IdentifiedCard):
-    """The blank-`Number` rows, by name, and never the collector number.
+def _key_none(card: "IdentifiedCard") -> Optional[str]:
+    """`pokemon_code`: there is no collector number on this product, so there is no key.
 
-    For a game whose product has no collector number at all. Deliberately does not consult
-    `card.number` even when one is present: a number read off a card of this kind is a number
-    read off the wrong part of it, and matching on it would find a row belonging to something
-    else entirely.
+    Deliberately does not consult `card.number` even when one is present: a number read off a
+    card of this kind is a number read off the wrong part of it, and matching on it would find
+    a row belonging to something else entirely.
     """
-    return catalog.rows_for_blank_number_name(card.name), f"name:{card.name}"
+    return None
+
+
+def _walk(catalog: "Catalog", card: "IdentifiedCard", strategy: KeyStrategy):
+    """THE LADDER, written once for every game. Only `strategy` varies.
+
+    1. The game's own key, if this card yields one.
+    2. Failing that — no key at all — the export's blank-`Number` rows by name. Sealed
+       products, promos and code cards land here whatever keys the rest of the export.
+    3. D35's last resort: the name, for a card that DOES print a number we could not read.
+
+    STEP 3 IS REACHED FROM TWO DIRECTIONS AND NOT FROM A THIRD. A key that found nothing falls
+    to it, and so does a card with no key whose blank-`Number` name found nothing. A key that
+    MATCHED never reaches it — the rung is a last resort, not a peer, and a number that
+    resolves is never second-guessed.
+
+    It cannot mislist anything, which is what makes it safe rather than merely useful: it is
+    reached only when the card was bound for `no_catalog_row` regardless, and what it produces
+    is a REVIEW entry. That listing ban is enforced in `join_batch`, not here, because listing
+    is its decision and not this function's.
+
+    The third element of the return is `name_inferred`. `Catalog.candidates` accepts two
+    elements or three, so a strategy that never infers stays a two-tuple.
+    """
+    key = strategy.build(card)
+    if key:
+        rows = catalog.rows_for_key(key)
+        if rows:
+            return rows, f"{strategy.label}:{key}"
+        # A NUMBER THAT FINDS NOTHING IS A NUMBER WE SHOULD STOP BELIEVING (D35). Falling
+        # through rather than returning empty is the whole of the rung: box 2's nine
+        # confident-wrong reads carried a denominator, so they composed a well-formed key that
+        # matched nothing, and box 1's three carried a set code. Stopping here would leave
+        # every one of them exactly as stuck as a blank number does.
+    else:
+        rows = catalog.rows_for_blank_number_name(card.name)
+        if rows or not strategy.name_rung:
+            # `not name_rung` returns the empty result deliberately — see `KeyStrategy`.
+            return rows, f"name:{card.name}"
+    # `name?:` and not `name:`. A row found because the product prints no number and a row
+    # found because we could not read one are different facts with different remedies, and the
+    # run report prints this string (D16 — the machine string stays greppable).
+    return catalog.rows_for_name(card.name), f"name?:{card.name}", True
 
 
 # A game that is never joined at all — `misc`, the occasional Yu-Gi-Oh, Weiss Schwarz,
@@ -561,10 +640,12 @@ class NotJoinable(LookupError):
     """
 
 
-JOIN_KEY_STRATEGIES: Dict[str, Optional[Callable]] = {
-    "number_and_printed_total": _lookup_number_and_printed_total,
-    "printed_code": _lookup_printed_code,
-    "name_only": _lookup_name_only,
+JOIN_KEY_STRATEGIES: Dict[str, Optional[KeyStrategy]] = {
+    "number_and_printed_total": KeyStrategy(_key_number_and_printed_total, "number", True),
+    "printed_code": KeyStrategy(_key_printed_code, "code", True),
+    # `name_only` keeps its registry name — the strategy is still "match on the name alone" —
+    # but it is now expressed as the ABSENCE of a key rather than as a separate ladder.
+    "name_only": KeyStrategy(_key_none, "name", False),
     NOT_JOINED: None,
 }
 
@@ -609,7 +690,7 @@ def lookup_for(game: str) -> Callable:
             "is captured, located and described by hand; filter it out of the run before a "
             "catalog is built rather than matching it against an export it has no rows in."
         )
-    return strategy
+    return lambda catalog, card: _walk(catalog, card, strategy)
 
 
 def normalize_set(name: str) -> str:
@@ -860,7 +941,7 @@ class Catalog:
         """Every NUMBERED row whose folded name is this one. D35's last resort.
 
         Answers rows the caller must not list on that basis alone — see
-        `_lookup_number_and_printed_total` for the rung and `join_batch` for the routing
+        `_walk` for the rung and `join_batch` for the routing
         that keeps a card found this way in front of a human.
         """
         return list(self._by_name.get(name_index_key(name), ()))
@@ -1404,7 +1485,7 @@ def join_batch(
 
         # D35 — THE ROW WAS FOUND BY NAME, SO IT IS NOT LISTED ON THAT ALONE.
         #
-        # The rung below `_lookup_number_and_printed_total`'s blank-number fallback answers
+        # The rung below `_walk`'s blank-number fallback answers
         # rows for a card whose collector number could not be read. The ladder then does its
         # ordinary work on them and, on a stack with a one-member finish claim, resolves
         # cleanly — which would list the card. That is the outcome this block refuses.

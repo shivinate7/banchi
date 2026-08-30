@@ -235,11 +235,22 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
   `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
   paragraph above exists to prevent.
-- **The three sites that draw this string are decided one at a time.** `.browse-position` is
-  changed; `.review-position` and `.card-locations-label` are not. They sit at 13-16px where the
-  joints are narrow and the complaint was never made, and a 44px figure repeated seven times down
-  a copies list would be a worse defect than the dots. Taking this to them is a decision about
-  all three, not a copy of this one.
+- **It reaches every OWNER site as of 2026-08-29 (D41, amended), and the size is per site.** Six
+  of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28 and
+  slot-first, the capture stage at 32, its undo sidebar at 20, and three in-sentence mentions in a
+  `run` form that keeps the rank and drops the geometry. **The structure is shared and the figure
+  never is** — the warning this paragraph used to carry is measured now: 44px down a seven-copy
+  list costs +86px and drops a copy below the fold.
+- **A sixth site needs two rules, and they are the whole of the scale.** The gap is `--s5` at a
+  figure of 40px or more and `--s3` below, so it always lands on the spacing scale above. And a
+  promoted slot is a slot NUMBER or the label renders whole — without that guard D24's pooled
+  label draws the lowercase word `pooled` as a 300px figure.
+- **The Fulfiller's two sites are not owner sites and never take it.** His labels stay plain text
+  under `app/tests/fulfillment.spec.ts`'s 32px tabular floor, and the guard is that his components
+  do not import the shared one — not a selector prefix, which is the thing a refactor drops.
+- **What is deliberately NOT treated**: `.review-row-position` (11px) and `.review-group-pos`
+  (10px). The mechanism is rank, and a 10px caption has no rank to spend. So `#/review` renders
+  the address two ways, which is a ruling rather than drift.
 
 **And the same deletion reached `.boxops-meta`**, where four label/value pairs and three
 interpuncts were wrapping a 299px column. Horizontal is scarce there and vertical is not, so it
@@ -632,6 +643,21 @@ the card itself untouched — beside D26's **retirement**, whose route existed w
 this screen. The mid-box delete is deliberately not there: it renumbers every card behind the
 one being deleted, which would re-point the worklist the panel is drawn from, and it is the one
 operation here with no undo. D37 carries the whole argument.
+
+**THE ZERO-CANDIDATE CARD IS NO LONGER A DEAD END (D46, 2026-08-29), AND THE COPY THAT SAID IT
+WAS IS GONE.** That arm of the screen drew one paragraph: the only move was to skip, and the way
+out was a command in a terminal. Both halves had gone stale — D37 had put a stand-down on this
+very screen and the copy never mentioned it, and the row the pipeline missed was usually sitting
+in the export the whole time. The screen now looks the card up in the export it was joined
+against, suggests on arrival from the card's own read, and offers a search by name, collector
+number or SKU.
+
+**Those rows go where the candidate rows go, and are answered on the same digits.** Not a panel
+beneath them: nothing may come between the sentence and the rows, and these ARE the rows — found
+by a lookup rather than by the join. One vocabulary, because whether the pipeline or the catalog
+found a row is not something the finger needs to know. The search field is the one control on
+this screen that takes typing, so it carries `field` rather than `line` per the token block
+above, and `isEditableTarget` is what stops a typed digit from answering the card.
 
 **Skip survives, narrowed and no longer load-bearing.** It is still the only move that writes
 nothing, which is right for a card the owner intends to come back to this session; what it is

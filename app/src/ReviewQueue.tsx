@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { PositionLabel } from './PositionLabel'
 import { isEditableTarget } from './keys'
 import type {
   AnswerResult,
   CandidateRow,
+  CatalogLookup,
   QueueEntryWire,
   QueueName,
   QueueRead,
@@ -19,6 +21,7 @@ import {
   getQueues,
   photoUrl,
   retireCard,
+  reviewCatalog,
   standDown,
   undoAnswer,
   undoRetire,
@@ -996,6 +999,19 @@ export function ReviewQueue() {
    * never restored by a page load into a state where the next keystroke closes a card. */
   const [closing, setClosing] = useState(false)
 
+  /* D46 — what this card COULD be, for an entry the pipeline offered nothing for.
+   *
+   * IN THE CONTAINER RATHER THAN IN `Card`, for `closing`'s reason one line up: it is fetched
+   * per card and must be cleared when the card changes, and state that lives in the component
+   * being replaced cannot be cleared by the thing replacing it.
+   *
+   * `lookup` is null until the fetch answers, which is what tells the panel to say it is
+   * looking rather than to draw an empty result — those are different sentences and only one
+   * of them means "this card matches nothing". */
+  const [lookup, setLookup] = useState<CatalogLookup | null>(null)
+  const [lookupFailed, setLookupFailed] = useState<string | null>(null)
+  const [typed, setTyped] = useState('')
+
   /* The key whose photo 404'd rather than a boolean, for PullPreview.tsx's reason: an
    * `onError` for the previous card can land after the queue has advanced, and a boolean
    * would blame the wrong card for a missing file. */
@@ -1289,7 +1305,7 @@ export function ReviewQueue() {
   )
 
   const answer = useCallback(
-    (row: Row, candidate: CandidateRow) => {
+    (row: Row, candidate: CandidateRow, fromCatalog = false) => {
       // One round trip at a time, in both directions — see `loading`.
       if (busyRef.current || loadingRef.current) return
 
@@ -1332,6 +1348,10 @@ export function ReviewQueue() {
         index: row.entry.index,
         sku: candidate.sku,
         condition: candidate.condition,
+        // D46. Only ever set for a row that came out of the catalog lookup, which the server
+        // accepts only for an entry with no candidates of its own — and even then it re-reads
+        // the row out of the export before it writes anything.
+        fromCatalog,
       })
         /* `.then(ok).catch(fail)` AND NOT `.then(ok, fail)`, and this is the one of the four
          * where the two forms are not merely differently safe. The success handler below
@@ -1708,6 +1728,57 @@ export function ReviewQueue() {
    *
    * The URL rather than the row as the dependency: `worklist` is rebuilt whenever a skip
    * changes the order, and a string re-fires only when the next card actually changes. */
+  /* D46 — LOOK THE CARD UP THE MOMENT IT IS DRAWN, for an entry with nothing to choose.
+   *
+   * The owner's ask was that the screen SUGGEST rather than wait to be asked: *"it should've
+   * brought up what cards it could have matched too"*. So this runs on arrival with an empty
+   * query and the server suggests from the card's own read; typing replaces it.
+   *
+   * ONLY FOR A ZERO-CANDIDATE ENTRY. A card the pipeline found rows for has its answer on
+   * screen already, and fetching a catalog beside it would offer a second, looser list beside
+   * a good one — which is how a screen teaches you to stop reading the first.
+   *
+   * `cancelled` rather than an AbortController: the fetch is cheap and idempotent, and what
+   * matters is only that a late answer for the previous card cannot land on this one. */
+  const lookupFor = current && current.entry.candidates.length === 0 ? current : null
+  const lookupKey = lookupFor === null ? '' : lookupFor.key
+  useEffect(() => {
+    setLookup(null)
+    setLookupFailed(null)
+    setTyped('')
+    if (lookupFor === null) return
+    let cancelled = false
+    void reviewCatalog(lookupFor.entry.box, lookupFor.entry.index, '')
+      .then((answer) => {
+        if (!cancelled) setLookup(answer)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setLookupFailed(describeFailure(err).message)
+      })
+    return () => {
+      cancelled = true
+    }
+    // `lookupKey` rather than `lookupFor`: the row object is rebuilt on every queue read, so
+    // depending on it would re-fetch on a poll that changed nothing about this card. The two
+    // are read out of `lookupFor` above, which is derived from the same key — this project
+    // has no exhaustive-deps rule installed, so the omission is argued here rather than
+    // silenced with a disable comment for a rule that does not exist.
+  }, [lookupKey])
+
+  /* The typed search. Deliberately NOT debounced-on-keystroke: it is submitted, because a
+   * lookup per character would fire a CSV read per keypress and because a half-typed name is
+   * a different query rather than a worse one. */
+  const searchCatalog = useCallback(
+    (query: string) => {
+      if (current === null) return
+      setLookupFailed(null)
+      void reviewCatalog(current.entry.box, current.entry.index, query)
+        .then(setLookup)
+        .catch((err: unknown) => setLookupFailed(describeFailure(err).message))
+    },
+    [current],
+  )
+
   const nextPhoto = useMemo(() => {
     const next = worklist[1]
     if (next === undefined) return null
@@ -1842,10 +1913,17 @@ export function ReviewQueue() {
 
       const digit = Number(key)
       if (!Number.isInteger(digit) || digit < 1 || digit > MAX_KEYED_CANDIDATES) return
-      const candidate = current.entry.candidates[digit - 1]
+      /* D46 — the digits mean the SUGGESTED rows when the entry offers none of its own.
+       * One vocabulary rather than two: the operator presses a number beside a row, and
+       * whether the pipeline or the catalog found that row is not something the finger needs
+       * to know. The two lists can never both be on screen — the panel is drawn only in the
+       * zero-candidate arm — so there is nothing here to disambiguate. */
+      const offered = current.entry.candidates
+      const candidate =
+        offered.length > 0 ? offered[digit - 1] : (lookup?.rows ?? [])[digit - 1]
       if (candidate === undefined) return
       event.preventDefault()
-      answer(current, candidate)
+      answer(current, candidate, offered.length === 0)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -1864,6 +1942,8 @@ export function ReviewQueue() {
     grouping,
     groupOffer,
     answerGroup,
+    // D46 — the digits read these rows when the entry offers none of its own.
+    lookup,
   ])
 
   const counts = useMemo(() => {
@@ -2071,6 +2151,14 @@ export function ReviewQueue() {
           onPhotoAbsent={() => setPhotoAbsent(current.key)}
           onChoose={(candidate) => answer(current, candidate)}
           onSkip={() => skip(current)}
+          lookup={lookup}
+          lookupFailed={lookupFailed}
+          typed={typed}
+          onTyped={setTyped}
+          onSearch={() => searchCatalog(typed)}
+          /* `true` — this row came from the catalog, not from the entry. It is the only
+             call site that passes it, which is what keeps every ordinary answer unflagged. */
+          onChooseCatalog={(row) => answer(current, row, true)}
           onClose={() => setClosing((up) => !up)}
           closing={closing}
           onCloseChoice={(choice) => closeCard(current, choice)}
@@ -2111,6 +2199,16 @@ type CardProps = {
    *  to refuse. */
   onChoose: (candidate: CandidateRow) => void
   onSkip: () => void
+
+  /** D46's catalog lookup, for an entry the pipeline offered no rows for. Owned by the
+   *  container for `closing`'s reason: it is per-card and must be cleared by whatever
+   *  replaces the card, which the card itself cannot do. */
+  lookup: CatalogLookup | null
+  lookupFailed: string | null
+  typed: string
+  onTyped: (text: string) => void
+  onSearch: () => void
+  onChooseCatalog: (row: CandidateRow) => void
 
   /** D37's close panel: raise it, whether it is up, and what a choice inside it does.
    *
@@ -2397,6 +2495,126 @@ function GroupConfirm({
  * the finding, rows, panels, actions and facts in theirs, side by side above 900px and
  * stacked below it. docs/DESIGN.md rejected a left/right split by name until 2026-08-24 and
  * now carries the measurement that reversed it. */
+type CatalogPanelProps = {
+  lookup: CatalogLookup | null
+  failed: string | null
+  typed: string
+  onTyped: (text: string) => void
+  onSearch: () => void
+  onChoose: (row: CandidateRow) => void
+  busy: boolean
+}
+
+/** D46 — what this card could be, when the pipeline offered nothing.
+ *
+ *  THREE STATES AND THEY SAY DIFFERENT THINGS, which is the whole reason `lookup` is null
+ *  until the fetch answers rather than starting as an empty array: "still looking", "the
+ *  export holds nothing like this" and "here are the rows" are three different sentences, and
+ *  collapsing the first two teaches the operator that a slow fetch means a card that matches
+ *  nothing.
+ *
+ *  THE ROWS REUSE `.review-candidate` EXACTLY. A row a person found and a row the join found
+ *  look identical once they are on screen and are answered by the same digit — see the
+ *  keyboard handler. Giving these their own look would be inventing a second vocabulary for
+ *  the one gesture this screen is built around.
+ *
+ *  THE SEARCH IS A FORM, so Enter submits it and the browser says so without a key hint. The
+ *  keyboard handler ignores keystrokes inside an editable target (`isEditableTarget`), which
+ *  is what stops a typed `1` from answering the card. */
+function CatalogPanel({
+  lookup,
+  failed,
+  typed,
+  onTyped,
+  onSearch,
+  onChoose,
+  busy,
+}: CatalogPanelProps): ReactNode {
+  const rows = lookup?.rows ?? []
+  return (
+    <div className="review-catalog">
+      <p className="review-note-text">
+        The pipeline found no row for this card, so it has nothing of its own to offer. These
+        are rows from the export it was joined against, matched on what the model read — a
+        person has to say which, if any, is right.
+      </p>
+
+      {failed !== null ? (
+        <p className="review-catalog-empty">{failed}</p>
+      ) : lookup === null ? (
+        <p className="review-catalog-empty">Looking in the export…</p>
+      ) : rows.length === 0 ? (
+        <p className="review-catalog-empty">
+          Nothing in that export matches {lookup.query ? `“${lookup.query}”` : 'this card'}.
+          Search for it by name, collector number or SKU, or close the card below.
+        </p>
+      ) : (
+        <ul className="review-candidates">
+          {rows.map((row, at) => (
+            <li key={`${row.sku}:${at}`}>
+              <button
+                type="button"
+                className="review-candidate"
+                onClick={() => onChoose(row)}
+                disabled={busy}
+              >
+                {at < MAX_KEYED_CANDIDATES ? (
+                  <kbd className="review-key">{at + 1}</kbd>
+                ) : (
+                  <span className="review-key-blank">–</span>
+                )}
+                <span className="review-candidate-name">{row.name}</span>
+                <span className="review-candidate-condition">{row.condition}</span>
+                <span
+                  className={
+                    row.market ? 'review-candidate-price' : 'review-candidate-price is-unpriced'
+                  }
+                >
+                  {row.market ? priceText(row.market) : 'no market price'}
+                </span>
+                <span className="review-candidate-meta">
+                  {row.set} · {row.number}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {lookup !== null && lookup.truncated ? (
+        <p className="review-catalog-more">
+          {lookup.found} rows match; the first {rows.length} are shown, because the digits
+          stop at {MAX_KEYED_CANDIDATES}. Narrow the search to see the rest.
+        </p>
+      ) : null}
+
+      <form
+        className="review-catalog-search"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSearch()
+        }}
+      >
+        <label className="review-catalog-label" htmlFor="review-catalog-q">
+          Search this export
+        </label>
+        <input
+          id="review-catalog-q"
+          className="review-catalog-input"
+          type="search"
+          value={typed}
+          placeholder="name, collector number, or SKU"
+          onChange={(event) => onTyped(event.target.value)}
+          disabled={busy}
+        />
+        <button type="submit" className="review-action" disabled={busy}>
+          Search
+        </button>
+      </form>
+    </div>
+  )
+}
+
 function Card({
   row,
   activity,
@@ -2404,6 +2622,12 @@ function Card({
   onPhotoAbsent,
   onChoose,
   onSkip,
+  lookup,
+  lookupFailed,
+  typed,
+  onTyped,
+  onSearch,
+  onChooseCatalog,
   onClose,
   closing,
   onCloseChoice,
@@ -2452,7 +2676,9 @@ function Card({
           exists to make. Nothing about the pair changes: the label is still the human one
           with the machine string beneath it, at the sizes docs/DESIGN.md sets. */}
       <div className="review-card-head">
-        <p className="review-position">{entry.label}</p>
+        <p className="review-position">
+          <PositionLabel label={entry.label} />
+        </p>
 
         <div className="review-reason">
           {/* Accent at outline and text weight: the system is unsure. The chip carries the
@@ -2476,24 +2702,28 @@ function Card({
       </p>
 
       {entry.candidates.length === 0 ? (
-        /* The card that cannot be answered here, and the copy says so plainly rather than
-           drawing an empty list. `cli/resolve.py:failure_entry` records no candidates for an
-           identification that failed or a card with no position, and the route refuses such
-           an entry as `no_candidates` — so the remedy is a re-shoot or a re-identify, and the
-           only move on this screen is to skip past it. Rejected: hiding the card, which would
-           make a queue count that never goes down with nothing on screen to explain it.
+        /* D46 — THE CARD THE PIPELINE FOUND NOTHING FOR, WHICH IS NO LONGER A DEAD END.
+           This arm drew one paragraph of prose until 2026-08-29: it said the only move was to
+           skip, and pointed at a command in a terminal. Both halves had gone stale. D37 had
+           put a stand-down on this very screen and the copy never mentioned it, and the row
+           the pipeline missed was usually sitting in the export the whole time.
 
-           THE COPY NAMES WHERE THE REMEDY IS, because skip is not one. Skip moves the card
-           and writes nothing; the entry stays open in its file whatever this screen does, so
-           a sentence that stopped at "skip past it" described a loop rather than a way out.
-           The way out is a command in a terminal, and it is worth one clause to say so. */
-        <p className="review-note-text">
-          The pipeline offered no rows for this card, so there is nothing here to choose, and
-          the answer route refuses it rather than inventing one. It needs another photograph or
-          another identification run — neither of which happens on this screen. Skip moves it
-          behind the rest of the worklist and writes nothing; the entry stays open in its queue
-          file until a later run replaces it.
-        </p>
+           THE PANEL GOES IN THE ROWS' OWN SLOT, not below them, and that is what keeps
+           `ReviewQueue.css`'s rule intact: nothing may come between the sentence and the
+           rows. These ARE the rows — found by a catalog lookup rather than by the join, drawn
+           through the same markup, answered on the same digits. The difference that matters is
+           carried by the copy above them, not by the shape of the row.
+
+           The prose that survives says what is true and what to do, in that order. */
+        <CatalogPanel
+          lookup={lookup}
+          failed={lookupFailed}
+          typed={typed}
+          onTyped={onTyped}
+          onSearch={onSearch}
+          onChoose={onChooseCatalog}
+          busy={activity !== null}
+        />
       ) : (
         <ul className="review-candidates">
           {entry.candidates.map((candidate, at) => (

@@ -64,6 +64,7 @@ import json
 import os
 import re
 import subprocess
+from functools import lru_cache
 import sys
 import tempfile
 from fnmatch import fnmatch
@@ -88,9 +89,22 @@ EXIT_USAGE = 64
 # build tree being enumerated at all, and that one stops a finding being *reported* for
 # anything git calls local state. Neither subsumes the other: `app/playwright-report/` is
 # ignored and not listed here, and a scan of a fresh worktree walks it for nothing.
+#
+# `worktrees` IS HERE FOR A DIFFERENT REASON FROM THE REST, AND IT IS THE ONLY ONE ABOUT
+# CORRECTNESS RATHER THAN WASTE (2026-08-29). Everything above is build output or local state:
+# scanning it is pointless. A git worktree under `.claude/worktrees/` is ANOTHER BRANCH'S SOURCE,
+# checked out inside this one — so walking it does not merely waste time, it cross-checks one
+# branch's prose against a different branch's code and reports the disagreement as a defect in
+# yours. Observed: a concurrent session's worktree documented `make worktree-setup`, a target that
+# exists on ITS branch, and this script failed the commit on THIS branch because the Makefile here
+# has no such target. Two branches are allowed to disagree; that is what a branch is.
+#
+# It is not covered by the gitignore filter in `check_map` for the reason the paragraph above
+# gives — that filter stops a finding being REPORTED and this stops the tree being walked — and
+# the finding here was against `make targets`, which never consults it.
 SKIP_DIRS = {
     ".venv", ".git", "node_modules", "captures", "runs", "inventory", "__pycache__",
-    "dist", "test-results",
+    "dist", "test-results", "worktrees",
 }
 
 ALLOWLIST = ROOT / "scripts" / "docs-audit-allow.txt"
@@ -186,6 +200,57 @@ class Report:
 # ------------------------------------------------------------------- file discovery
 
 
+@lru_cache(maxsize=1)
+def nested_worktrees() -> Tuple[Path, ...]:
+    """Every git worktree checked out INSIDE this one, by absolute path.
+
+    THE NAME-BASED SKIP IS THE CONVENTION AND THIS IS THE RULE. `worktrees` in SKIP_DIRS catches
+    Claude Code's own `.claude/worktrees/<name>/`, which is where concurrent sessions put them and
+    is the case that was actually observed breaking a commit. It does NOT catch a worktree made by
+    hand anywhere else under the repo — `git worktree add ./scratch-branch` reproduces the same
+    defect with a directory name nothing can guess. Asking git is the only exact answer.
+
+    WHY THIS IS A CORRECTNESS PRUNE AND NOT A SPEED ONE: a worktree is another BRANCH's source
+    inside this tree, so walking it checks one branch's prose against another branch's code and
+    reports the disagreement as a defect in yours. Two branches are allowed to disagree.
+
+    FAILS OPEN, like `ignored_paths` above and for the same reason. If git is missing, slow, or
+    this is not a repository, the answer is "no nested worktrees" and the name-based skip still
+    stands. A discovery helper that can abort the audit would be worse than one that occasionally
+    walks too much.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    if out.returncode != 0:
+        return ()
+    found: List[Path] = []
+    for line in out.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        path = Path(line[len("worktree ") :].strip()).resolve()
+        if path == ROOT.resolve():
+            continue
+        try:
+            path.relative_to(ROOT.resolve())
+        except ValueError:
+            continue  # outside this tree; os.walk never reaches it
+        found.append(path)
+    return tuple(found)
+
+
+def _inside_nested_worktree(path: Path) -> bool:
+    nested = nested_worktrees()
+    if not nested:
+        return False
+    resolved = path.resolve()
+    return any(resolved == root or root in resolved.parents for root in nested)
+
+
 def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
     """Every file under `root` matching a suffix — from the index in staged mode.
 
@@ -203,7 +268,11 @@ def _walk(root: Path, suffixes: Tuple[str, ...]) -> List[Path]:
         )
     found: List[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in SKIP_DIRS and not _inside_nested_worktree(Path(dirpath) / d)
+        ]
         for name in filenames:
             if name.endswith(suffixes):
                 found.append(Path(dirpath) / name)
@@ -390,6 +459,38 @@ def module_attributes(path: Path) -> Set[str]:
     return names
 
 
+def _git_path(text: str) -> Path:
+    """A `.git/...` reference, resolved where git actually keeps it.
+
+    IN A LINKED WORKTREE `.git` IS A FILE, NOT A DIRECTORY, so `ROOT / ".git/config"`
+    resolves to nothing and a perfectly true sentence reads as a broken path. Measured
+    2026-08-29: `README.md`'s `core.hooksPath` lives in `.git/config` — the line that
+    explains why `make hooks` exists — failed this check in a worktree and passed in the
+    main clone, which is the shape of finding this script exists to prevent, pointing at
+    itself.
+
+    The file holds one line, `gitdir: <path>/.git/worktrees/<name>`, and the config a
+    worktree shares lives two levels up from that. Read rather than shelled out to: this
+    script does not run project code, and `git rev-parse --git-common-dir` would be a
+    subprocess where a 140-byte read answers the same question.
+
+    Falls back to the literal path on anything unexpected, so a malformed pointer reports
+    the missing file it always did rather than raising inside the audit.
+    """
+    dot_git = ROOT / ".git"
+    if dot_git.is_dir():
+        return ROOT / text
+    try:
+        pointer = dot_git.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ROOT / text
+    if not pointer.startswith("gitdir:"):
+        return ROOT / text
+    gitdir = Path(pointer.split(":", 1)[1].strip())
+    common = gitdir.parent.parent if gitdir.parent.name == "worktrees" else gitdir
+    return common / text[len(".git/"):]
+
+
 def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optional[Path]:
     """Repo path for a candidate, or None when it is not ours to check.
 
@@ -410,6 +511,8 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     first = text.split("/", 1)[0]
     if first not in tops:
         return None
+    if first == ".git":
+        return _git_path(text)
     return ROOT / text
 
 
@@ -426,21 +529,50 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
     patterns (`harness/images/`), and git cannot match one of those against a path that is
     absent from disk — which is precisely the fresh-clone case this exists to handle, so
     the bare form silently fails exactly when it matters.
+
+    ONE POISONED CANDIDATE USED TO TAKE THE WHOLE BATCH DOWN, SILENTLY, AND THE FINDING
+    LANDED ON SOMEBODY ELSE. `git check-ignore --stdin` exits 128 and STOPS on a pathspec it
+    refuses — `fatal: pathspec 'app/node_modules/' is beyond a symbolic link`, which is what a
+    worktree's provisioning links are — and the answers for every candidate after it are simply
+    never printed. Read as a plain result that is "not ignored for all of them", so the first
+    unrelated gitignored path further down the list is reported as a dangling reference.
+    Measured 2026-08-30: a decision entry naming `app/node_modules` in prose made the batch
+    abort, and the audit blocked the commit over `harness/.cache/` in a different file, which
+    was correct and had not changed.
+
+    So a batch that did not run cleanly is not evidence about anything. check-ignore's own
+    contract is 0 when something matched and 1 when nothing did; ANY other code means it gave
+    up, and the answer is to ask again one candidate at a time so a refusal is contained to the
+    candidate that caused it. That path is rare and short — it runs only over references that
+    are already missing from the index.
     """
     if not candidates:
         return set()
-    try:
-        done = subprocess.run(
-            ["git", "check-ignore", "--stdin"],
-            cwd=str(ROOT),
-            input="\n".join(candidates).encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    except OSError:
-        return set()  # no git: fall back to checking everything
-    return {line for line in done.stdout.decode("utf-8", errors="replace").splitlines() if line}
+
+    def ask(batch: Sequence[str]) -> Tuple[int, Set[str]]:
+        try:
+            done = subprocess.run(
+                ["git", "check-ignore", "--stdin"],
+                cwd=str(ROOT),
+                input="\n".join(batch).encode("utf-8"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            return 1, set()  # no git: fall back to checking everything
+        got = {line for line in done.stdout.decode("utf-8", errors="replace").splitlines() if line}
+        return done.returncode, got
+
+    code, found = ask(candidates)
+    if code in (0, 1):
+        return found
+
+    for candidate in candidates:
+        one_code, one = ask([candidate])
+        if one_code in (0, 1):
+            found |= one
+    return found
 
 
 def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
@@ -4482,6 +4614,29 @@ def self_test() -> int:
     # produce. Driven through the module globals because that is how audit() drives them.
     print("\nstaged mode answers about the index, not the worktree")
     global _INDEX_PATHS
+    # A WORKTREE IS ANOTHER BRANCH'S SOURCE INSIDE THIS TREE, and walking it checks one branch's
+    # prose against another branch's code. Observed on 2026-08-29: a concurrent session's worktree
+    # documented `make worktree-setup`, a target real on ITS branch, and the `make targets` check
+    # failed a commit on THIS one. Two branches are allowed to disagree.
+    #
+    # THE STAGED PATH IS COVERED HERE AND THE ON-DISK PATH IS COVERED BY `nested_worktrees`, which
+    # asks git rather than guessing a name. Only the first is reachable from a self-test: the
+    # second needs a real repository with a real worktree in it, and was verified by hand — a
+    # worktree named `zz-scratch-wt`, which no name rule could guess, walked zero files. That gap
+    # is named rather than papered over.
+    print("\na worktree inside the tree is another branch, and is not walked")
+    _INDEX_PATHS = {
+        "docs/GATES.md",
+        ".claude/worktrees/other-branch/CLAUDE.md",
+        ".claude/worktrees/other-branch/docs/GATES.md",
+    }
+    walked = [rel(p) for p in _walk(ROOT, (".md",))]
+    ok(
+        walked == ["docs/GATES.md"],
+        "a worktree's markdown is not discovered, however tracked-looking the path",
+        str(walked),
+    )
+    ok("worktrees" in SKIP_DIRS, "the convention is pruned by name as well as by git")
     try:
         _INDEX_PATHS = {"docs/GATES.md", "docs/specs/batch-script.md", "harness/run.py"}
         ok(exists(ROOT / "docs" / "GATES.md"), "a tracked file exists")

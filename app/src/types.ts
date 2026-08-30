@@ -726,6 +726,30 @@ export type ReviewAnswer = {
   index: number
   sku: string
   condition: string
+  /** D46 — this SKU came out of the catalog lookup, not out of the entry's offered rows.
+   *
+   *  Only ever true for an entry with NO candidates. The server re-reads the row out of the
+   *  export the card was joined against and takes the condition from there, so this flag
+   *  widens which rows may be chosen and never what may be written: an unknown SKU still
+   *  refuses, as `sku_not_in_catalog`. Absent on every ordinary answer. */
+  fromCatalog?: boolean
+}
+
+/** One catalog row offered by `GET /review/<box>/<index>/catalog` (D46).
+ *
+ *  DELIBERATELY THE SAME SHAPE AS `CandidateRow`, because the screen draws both through one
+ *  component: a row the pipeline found and a row a person went and found look identical once
+ *  they are on screen, and the difference that matters — whether the machine could find it —
+ *  is carried by the surrounding copy rather than by the row. */
+export type CatalogLookup = {
+  box: number
+  index: number
+  game: string
+  query: string
+  searched?: boolean
+  rows: CandidateRow[]
+  found: number
+  truncated: boolean
 }
 
 /** What the card carried before an answer overwrote it — the pair a reversal puts back.
@@ -1363,6 +1387,57 @@ export type RunLegPreflight = {
    *  than letting the operator press a button that is going to refuse. */
   busy_run: string | null
 }
+
+/** The one card the crop preview is showing, and what this reading does to it.
+ *
+ *  `rect` is in the ORIGINAL frame's pixels and the screen turns it into percentages, so it
+ *  can be drawn over the photograph `GET /photo/<box>/<index>` already serves — which is why
+ *  changing the reading costs no bytes at all: only the rectangle moves.
+ *
+ *  `rect` is null when the reading sends the whole frame, EITHER because the crop is off or
+ *  because detection refused, and `method` is what tells those apart. The two look identical
+ *  in the payload and mean opposite things to an operator: one is the setting they chose, the
+ *  other is a card going at whole-frame cost when they asked for a crop.
+ */
+export type CropSample = {
+  box: number
+  index: number
+  /** Present on a photograph that could not be decoded at all — the run reports the same card
+   *  as `unreadable` and sends nothing for it. Every field below is absent with it. */
+  unreadable?: string
+  /** The card's own game, which decides whether there is a band at all. */
+  game?: string
+  frame?: [number, number]
+  sent?: [number, number]
+  rect?: [number, number, number, number] | null
+  method?: 'edges' | 'tone' | null
+  /** THE BYTES THAT WILL BE SENT, as a data URI — not the stored photograph. The frame draws
+   *  these, so the picture changes when the reading does; the 1:1 view is a region of this
+   *  same file, which is why the two can never disagree about what is being sent. */
+  sent_image?: string
+  /** Where the collector number is INSIDE `sent_image`, for the 1:1 view's resting aim. Null
+   *  where the registry claims no band for this game — the pointer still reaches every pixel. */
+  band_rect?: [number, number, number, number] | null
+  /** Its NATIVE pixels, which is the unit D32's frontier table is measured in. */
+  band_px?: [number, number] | null
+  /** Why there is no band, in the registry's own terms. `pipeline/games.py` holds which bands
+   *  a game claims and only `pokemon` claims a number band — the fractions were measured on a
+   *  Pokemon card, and a band claimed without that measurement is cut over the wrong pixels. */
+  band_absent?: string | null
+}
+
+export type CropPreview = {
+  scope: RunScope
+  capture_dir: string
+  crop: boolean
+  max_edge: number
+  /** Photographs in the scope, so the walk can say what it is one of. */
+  total: number
+  /** Which card is being shown, already wrapped into range by the server. */
+  offset: number
+  sample: CropSample
+}
+
 
 /** The whole send, summed SERVER-SIDE. Never computed here: this is the number the confirm
  *  is gated on, and a `reduce` in TypeScript would be a second cost model that can disagree

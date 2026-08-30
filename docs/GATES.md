@@ -53,6 +53,16 @@ per set and overall.
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
   holdout, 150 together.
+- **A CACHE MISS REFUSES; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
+  `make harness` makes no API call — and when there is nothing to replay it fails with
+  instructions rather than spending. That rule is cause-independent by design, and it was
+  not always: the moved-prompt case was guarded and every other cause of a cold cache fell
+  straight through to a fresh submission of ~150 images, **under the Stop hook, at the end
+  of every turn**. Found on 2026-08-29 in a git worktree, where `harness/.cache/` is
+  gitignored and therefore does not travel; nothing was billed only because that worktree
+  had no key either, which is luck rather than a design. Submitting is now an act —
+  `PKMNSCAN_RERUN_T1=1` — and `make worktree-setup` is how a worktree answers the refusal
+  without paying for an answer this machine already holds.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per configuration — a hinted run and an unhinted run are
   different measurements and must never share a filename. **No date in the name**: git
@@ -202,7 +212,7 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
 
 - **Pass**: detected rectangle within tolerance across the sweep; bands contain their
   target; no card -> not found; a ground the tone path cannot segment is still found by its
-  borders
+  borders; the cut and the rectangle the run panel draws are one computation
 - The sweep is offset, scale and rotation. "Bands" are the title band and the number
   corner, and each must contain its target region. "Not found" must be a refusal, never a
   guess.
@@ -348,6 +358,15 @@ at a temporary directory, so nothing here touches the real inventory.
   matches what the test builds — `position`, `reason`, `read`, `candidates`, `market`,
   `first_seen`, `cleared_by_human`. All 16 were `metadata_detection_disagreement`, all
   parked, and the owner answered every one through the answer route.
+
+  **A third reason code met a real card on 2026-08-29, and it is the one that produced D43.**
+  Box 1's riftbound run queued four zero-candidate `no_catalog_row` entries — cards the
+  answer route refuses outright, so they could not be answered at all, only skipped. Three
+  turned out to be a set code glued to a correct identifier (`UNL • 140/219`) and are now
+  recovered by code with no human involved; the fourth had its champion name dropped by the
+  model and is what the catalog lookup exists for. T7's `check_review_catalog` covers that
+  route and D43's answer path, against the committed riftbound export rather than an invented
+  fixture — the first block in this file whose catalog is a real 10,078-row file.
 
   So the remaining gap is narrower and worth stating exactly: the fixtures are still
   invented, and Gate B's run of one lot produced exactly one reason code. **Box 2 produced a
