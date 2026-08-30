@@ -337,6 +337,37 @@ asks for exactly the cap on one row, and a sold copy survives a re-emit. Three m
 observed failing before it was kept — the original `live_positions` loop, the naive
 `match.positions` loop, and a shared increment — each red on a different assertion.
 
+**THE CAP ITSELF IS THE OWNER'S NEXT QUESTION, AND IT IS RECORDED HERE RATHER THAN BUILT
+(2026-08-30).** On being shown the fix above and the note that a value-dependent cap was the
+other half of their instruction: *"I'd like to make this cap related, but for now what you've
+done is fine."* So the flat 4 stands, and this paragraph is the marker that it stands by
+default rather than by argument.
+
+**What is being questioned is the FLATNESS, not the cap.** The reasoning above it is
+untouched — a cap still blocks the envelope-buster order, and it still bounds how many copies
+a price spike can sell at a stale number. What the owner's own framing calls into doubt is one
+number serving every card: *"this was supposed to be just a gentle heads up to only list four
+as a default mainly for cheap cards."* The measurement that makes it concrete is on their
+store, and it is the same card this amendment is about — Rengar at **$30.81**, capped at four
+by a default that was reasoned about with commons in mind. D9 already draws exactly this line
+one register over, where the threshold and the floor are both derived from a labor bar rather
+than picked; a cap derived the same way would be a number with an argument behind it instead
+of a constant nobody has revisited.
+
+**It is a change to THIS ENTRY when it is made, and the shape is already sitting here.**
+`SkuMatch.live_cap` is a per-match field with `LIVE_QUANTITY_CAP` as its default, and
+`pipeline/join.py:build` takes `live_cap` as an argument — so a rule that reads the row's own
+market price has somewhere to live without a schema change and without a new field on the
+wire. What it would need is the argument: which bands, what the cap is in each, and whether it
+is a per-run choice like D9's sub-threshold disposition or a standing rule. None of that has
+been argued, and **a cap that varies is a cap an operator has to be able to predict**, so the
+screen half is part of the question rather than a follow-up to it.
+
+**Nothing is blocked on it and nothing should wait for it.** The defect above is that the cap
+reached the RECORD, and that is fixed whatever the cap turns out to be — the identity write no
+longer reads `live_cap` at all, so this decision can be taken later without touching that seam
+again.
+
 ## D8 — Pricing source is the TCGplayer Filtered CSV export itself
 
 It carries live, per-SKU, per-variant `TCG Market Price`. Threshold checks and pricing rules
