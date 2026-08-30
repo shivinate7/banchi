@@ -36,7 +36,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Iterable, NamedTuple, Optional
+from typing import Iterable, NamedTuple, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -471,10 +471,67 @@ def port_answering(port: int, timeout: float = 0.25) -> bool:
         return False
 
 
-def wait_for_port(port: int, timeout: float) -> float:
+def port_holder(port: int) -> Optional[Tuple[int, str]]:
+    """The pid and command line of whatever is listening, or None.
+
+    Asked only when something has ALREADY gone wrong, so the cost of shelling out to `lsof`
+    is paid once on a path that is about to print a paragraph anyway. It exists because
+    "port is busy" is not an actionable sentence: the operator needs to know whether the
+    holder is their own supervisor, a stray foreground server, or another checkout — and
+    those three have three different remedies.
+    """
+    try:
+        out = subprocess.run(
+            ["lsof", "-nP", "-tiTCP:%d" % port, "-sTCP:LISTEN"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    first = out.stdout.split()
+    if not first:
+        return None
+    try:
+        pid = int(first[0])
+    except ValueError:
+        return None
+    return pid, _command_of(pid)
+
+
+def short_command(command: str, width: int = 108) -> str:
+    """The TAIL of a command line, not the head.
+
+    `ps` prints the interpreter first, and on this machine that is a 96-character path into
+    CommandLineTools before the script name is even reached — so a head-truncated line
+    identified the process as "Python" and nothing else, on the one screen whose entire job is
+    telling you WHICH process to go and kill. The distinguishing part of every command this
+    supervisor deals with is at the end.
+    """
+    command = command.strip()
+    if len(command) <= width:
+        return command
+    return "…" + command[-(width - 1):]
+
+
+def wait_for_port(port: int, timeout: float,
+                  child: Optional[subprocess.Popen] = None) -> float:
+    """Wait for the port to answer — and, given a child, that OUR child is what answers.
+
+    THE CHILD ARGUMENT IS THE WHOLE POINT, AND ITS ABSENCE WAS A REAL DEFECT. This probed the
+    socket alone, so a port held by somebody else satisfied it: a stray `make server` on :8000
+    answered, `make up` reported "pkmnscan is up", and the capture child it had just spawned
+    was in a retry loop that would never succeed. Observed on the owner's machine — the app
+    served fine off the squatter and silently stopped reloading on edit, which is the exact
+    failure the supervisor exists to prevent.
+
+    A liveness probe another process can satisfy is not a liveness probe.
+    """
     started = time.monotonic()
     deadline = started + timeout
     while time.monotonic() < deadline:
+        if child is not None and child.poll() is not None:
+            # Our child is gone. Anything answering now belongs to someone else, and reporting
+            # success on it is how the half-started stack got called started.
+            return -1.0
         if port_answering(port):
             return time.monotonic() - started
         time.sleep(0.1)
@@ -556,18 +613,51 @@ class Supervisor:
     # -- lifecycle ---------------------------------------------------------
 
     def start(self) -> None:
+        """Capture first, and the app ONLY if capture came up.
+
+        A HALF-STARTED STACK IS NOT A STARTED STACK, and shipping one is worse than failing.
+        This used to start the app unconditionally, so a capture server that could not bind
+        left the operator with a working-looking screen served by whatever else held the port
+        — reading the right store, and never reloading on an edit. The app alone is not a
+        product; the whole reason this supervisor exists is the half that did not start.
+        """
+        capture_port = ports.capture_port(self.root)
         self.capture = spawn_capture(self.root)
-        if self.capture is not None:
-            took = wait_for_port(ports.capture_port(self.root), READY_SECONDS)
-            if took >= 0:
-                log(f"capture server ready on :{ports.capture_port(self.root)} "
-                    f"(pid {self.capture.pid}) in {took:.1f}s")
-            else:
-                log(f"capture server did not answer :{ports.capture_port(self.root)} "
-                    f"within {READY_SECONDS:.0f}s — see {STATE_DIRNAME}/{CAPTURE_LOG}")
+        if self.capture is None:
+            return
+        took = wait_for_port(capture_port, READY_SECONDS, self.capture)
+        if took < 0:
+            self._refuse_capture(capture_port)
+            return
+        log(f"capture server ready on :{capture_port} (pid {self.capture.pid}) in {took:.1f}s")
+
         self.vite = spawn_vite(self.root)
         if self.vite is not None:
             log(f"app starting on :{ports.dev_port(self.root)} (pid {self.vite.pid})")
+
+    def _refuse_capture(self, capture_port: int) -> None:
+        """The capture server did not come up. Say why, and stop — do not retry a wall.
+
+        A PORT SOMEBODY ELSE HOLDS IS NOT A CRASH, and treating it as one is what burned five
+        retries and a backoff on a condition that cannot change without a human. `_note_exit`
+        below is right for a child that started and died; this is for one that never got to
+        start, and the two want opposite behaviour.
+        """
+        self.giving_up = True
+        held = port_holder(capture_port)
+        if held is not None and (self.capture is None or held[0] != self.capture.pid):
+            pid, command = held
+            log(f"NOT STARTING: :{capture_port} is already held by pid {pid}")
+            if command:
+                log(f"  {short_command(command)}")
+            log("  So this supervisor did not start, and neither did the app — a stack that")
+            log("  is half up reads as working and does not reload when you edit Python.")
+            log("  `make status` says whose it is. `make down` if it is a supervisor;")
+            log("  `kill` it if it is a stray `make server`.")
+        else:
+            log(f"capture server did not answer :{capture_port} within "
+                f"{READY_SECONDS:.0f}s — see {STATE_DIRNAME}/{CAPTURE_LOG}")
+            self._tail(CAPTURE_LOG)
 
     def stop(self) -> None:
         self.stopping = True
@@ -703,7 +793,7 @@ class Supervisor:
         self.fast_failures = 0
         self.giving_up = False
         if self.capture is not None:
-            took = wait_for_port(ports.capture_port(self.root), READY_SECONDS)
+            took = wait_for_port(ports.capture_port(self.root), READY_SECONDS, self.capture)
             if took >= 0:
                 log(f"capture server ready on :{ports.capture_port(self.root)} "
                     f"(pid {self.capture.pid}) in {took:.1f}s")
@@ -745,6 +835,27 @@ def do_up(args: argparse.Namespace) -> int:
         print(f"already running (pid {existing}).")
         print_where()
         return 0
+    # PREFLIGHT, BEFORE ANYTHING IS SPAWNED. `supervisor_pid()` above answers "is OUR
+    # supervisor up"; it says nothing about the port, and the port is what actually decides
+    # whether a capture server can start. Checking here means the refusal costs no processes
+    # at all, where discovering it after the spawn left a supervisor and an app running
+    # around a capture server that never bound.
+    capture_port = ports.capture_port()
+    held = port_holder(capture_port)
+    if held is not None:
+        pid, command = held
+        print(f":{capture_port} is already held by pid {pid}")
+        if command:
+            print(f"  {short_command(command)}")
+        print()
+        print("  Started nothing. A stack that is half up reads as working and does not")
+        print("  reload when you edit Python, so this refuses rather than joining it.")
+        print()
+        print("  make status   says whose it is")
+        print("  make down     if it is a supervisor in this checkout")
+        print(f"  kill {pid}       if it is a stray `make server`")
+        return 1
+
     _sweep_orphans()
     state_dir(REPO_ROOT).mkdir(parents=True, exist_ok=True)
     logfile = state_dir(REPO_ROOT) / SUPERVISOR_LOG
@@ -935,6 +1046,41 @@ def do_launch_agent(args: argparse.Namespace) -> int:
     return 0
 
 
+FOREGROUND_ENV = "PKMNSCAN_FOREGROUND"
+
+
+def do_guard_foreground(_args: argparse.Namespace) -> int:
+    """`make dev` and `make server` refuse while this checkout's supervisor is up.
+
+    THIS IS WHERE THE SQUATTER COMES FROM. Both ways of starting a server are legitimate and
+    neither knew about the other, so a foreground `make server` would take :8000 and the
+    supervisor's own capture child could then never bind — leaving the app served by a process
+    that watches no files. The collision itself stays loud and deliberate (D43: a server that
+    quietly moved would serve a DIFFERENT store); what this removes is the ability to create it
+    by accident.
+
+    `PKMNSCAN_FOREGROUND=ok` bypasses, in the shape `PKMNSCAN_MAIN=off` already uses — a guard
+    with no visible way past it gets disarmed somewhere worse.
+    """
+    if os.environ.get(FOREGROUND_ENV, "").strip().lower() in ("ok", "1", "yes"):
+        return 0
+    pid = supervisor_pid()
+    if pid is None:
+        return 0
+    app_url, capture_url = urls()
+    print(f"a supervisor is already running in this checkout (pid {pid}).")
+    print(f"  app       {app_url}")
+    print(f"  capture   {capture_url}")
+    print()
+    print("  Starting a foreground server now would take the port its capture child needs,")
+    print("  and you would be left with an app that does not reload when you edit Python.")
+    print()
+    print("  make restart          bounce the supervisor instead")
+    print("  make down             stop it, then run this again")
+    print(f"  {FOREGROUND_ENV}=ok make …   run anyway")
+    return 1
+
+
 def do_report(args: argparse.Namespace) -> int:
     data = report()
     if args.json:
@@ -966,6 +1112,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     rep = sub.add_parser("report", help="read-only state, for `make status`")
     rep.add_argument("--json", action="store_true")
     rep.set_defaults(func=do_report)
+
+    guard = sub.add_parser("guard-foreground",
+                           help="refuse a foreground server while the supervisor is up")
+    guard.set_defaults(func=do_guard_foreground)
 
     agent = sub.add_parser("launch-agent", help="start at login (main tree only)")
     agent.add_argument("--remove", action="store_true")

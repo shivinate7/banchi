@@ -5137,6 +5137,45 @@ called `capture_server.py` and an `npm run dev` under a directory called `app`. 
 answers *"yes, that's ours"* for another tree's server. Found by reasoning about a main-tree
 server that died during this build, exonerated by the timestamps, and fixed anyway.
 
+**A HALF-STARTED STACK IS NOT A STARTED STACK, AND `make up` REPORTED ONE AS STARTED**
+(found on the owner's machine 2026-08-30, hours after this entry landed). A bare `make server`
+held `:8000`; `make up` then started the app, spawned a capture child that could not bind,
+retried it five times, hit the fast-failure cap and stopped. The end state served the app off
+the SQUATTER — right store, right data, and **no file watching at all**, so a `git pull` would
+not have been picked up. Everything looked healthy.
+
+**THE ROOT DEFECT WAS THE PROBE: `wait_for_port` asked the SOCKET, not the child.** A port
+another process holds answers exactly like one of ours does, so `make up` printed `pkmnscan is
+up` on the strength of the squatter's reply. **A liveness probe another process can satisfy is
+not a liveness probe** — it now takes the child and returns failure the moment that child is
+gone.
+
+**THE COLLISION ITSELF IS UNTOUCHED AND MUST STAY LOUD.** D43 is why: a server that quietly
+moved to a free port would serve a DIFFERENT store. What was wrong was never that two things
+wanted one port; it was that the system settled into a working-looking half of itself and said
+so. Four guards, none of which weakens the collision:
+
+- **The probe takes the child** (above), so a squatter can no longer be mistaken for success.
+- **`start()` will not start the app if capture did not come up.** The app alone is not a
+  product, and the half that failed is the whole reason this supervisor exists.
+- **A held port is not a retryable crash.** `_refuse_capture` says who holds it and stops;
+  burning five retries and a backoff on a condition that cannot change without a human was the
+  old behaviour and it is what produced the silent end state. `_note_exit`'s retry is for a
+  child that started and died, which is the opposite case.
+- **`make dev` and `make server` refuse while this checkout's supervisor is up**, which is
+  where the squatter comes from in the first place. `PKMNSCAN_FOREGROUND=ok` bypasses, the
+  shape `PKMNSCAN_MAIN=off` already uses.
+
+**`make up` PREFLIGHTS THE PORT BEFORE SPAWNING ANYTHING**, so the refusal costs no processes —
+and it prints the TAIL of the holder's command line rather than the head, because `ps` leads
+with a 96-character interpreter path and a head-truncated line identified the process as
+"Python" and nothing else, on the one output whose whole job is telling you which process to
+kill.
+
+**`make launch-agent` IS NOT THIS FIX AND WAS ASKED ABOUT AS THOUGH IT MIGHT BE.** It makes
+`make up` the canonical starter, so a hand-run `make server` becomes rare — it prevents
+nothing, and under `KeepAlive` it would restart the supervisor into the same wall.
+
 **WHAT THIS COSTS, NAMED RATHER THAN DESIGNED AWAY:**
 
 - **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing.

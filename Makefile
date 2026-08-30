@@ -379,6 +379,7 @@ launch-agent:
 # 5174 — where CLAUDE.md, this target and scripts/views.txt would all three be wrong.
 dev:
 	$(NPM_GUARD)
+	@$(PYTHON) scripts/serve.py guard-foreground
 	@npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
@@ -398,6 +399,7 @@ dev:
 # dependency would stop the server booting over a preview nobody asked for. Under bare python3
 # every other route is unaffected and that one says what to do.
 server:
+	@$(PYTHON) scripts/serve.py guard-foreground
 	@$(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
