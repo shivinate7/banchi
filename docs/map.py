@@ -1219,7 +1219,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -1340,6 +1340,33 @@ COMPONENTS = [
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them.",
                 "governed_by": ["D31", "D41"]},
+            "src/PlaceNeighbors.tsx": {
+                "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
+                        "2026-08-30). `after` / `before` as a muted mono key column with the two "
+                        "names beside it, champion at ink and epithet muted, connectives deleted "
+                        "\u2014 the owner could not pick two names out of `between Galio, "
+                        "Indefaticable and Evelynn, Entrancing`, because every Riftbound name is "
+                        "`Champion, Epithet` so the strongest punctuation in the string is the "
+                        "one that is not a boundary. THE KEYS ARE THE COMPOSER'S OWN TWO WORDS: "
+                        "`in front`/`behind` reads better physically and takes the NEIGHBOUR as "
+                        "its subject where `placeParts` takes THIS CARD, which would have put a "
+                        "screen reader's sentence at odds with the row. Draws nothing \u2014 never "
+                        "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
+                        "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
+                        "the joined sentence at 20px body, and the firewall is the component "
+                        "graph rather than a selector.",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58"]},
+            "src/PlaceNeighbors.css": {
+                "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
+                        "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
+                        "copies row 10/12, because a treatment that is right once is not "
+                        "automatically right seven times down a column. Body face and lowercase "
+                        "on the names is docs/DESIGN.md's own line (the body face is for "
+                        "sentences a human reads) and undoes the borrow of "
+                        "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
+                        "only running English in the product a rectangle. A fixed key column so "
+                        "the two names cannot disagree about where they start.",
+                "governed_by": ["D30", "D31", "D41"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -1571,12 +1598,12 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D45"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D31", "D40", "D41", "D45"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's

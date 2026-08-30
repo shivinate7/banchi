@@ -308,6 +308,20 @@
 
 /* What the owner calls the box. A label for humans, never an identifier — quieter than the
    position it sits under, because the position is the thing you walk with. */
+/* D30's neighbours on a copy row. One step below the band's register, for the reason
+   `--pos-slot` is 28px here and 44px there: this is a LIST, and a treatment that is right
+   once is not automatically right seven times down a column. 10px is the key register this
+   row already uses for `.card-locations-state`, and 12px keeps the name a step under the
+   band's 13px without dropping below what the row's other body text draws.
+
+   NO MARGIN AND NO MEASURE. The place cell is a flex column with its own 2px gap, and the
+   cell's width IS the measure — a `max-width` here would be a second opinion about a track
+   the container query already decides. */
+.card-locations-owner .nb {
+  --nb-key: 10px;
+  --nb-name: 12px;
+}
+
 .card-locations-owner .card-locations-boxname {
   font-family: var(--util);
   font-size: 10px;
