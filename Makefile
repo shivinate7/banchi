@@ -32,7 +32,7 @@ help:
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
 	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
-	@echo "  make vale         prose style over the @-loaded docs. Needs vale; never gates."
+	@echo "  make vale         prose style over the four docs. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
@@ -437,7 +437,7 @@ design-check:
 #
 # No `--fix`, here or in the npm script. `check` below runs this target, and D18 keeps
 # anything that writes off the path that decides whether work is done.
-# Vale, the prose linter, over the four docs CLAUDE.md @-references.
+# Vale, the prose linter, over the four docs CLAUDE.md names.
 #
 # NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
 # python3 with nothing installed (D18), and vale is a third-party Go binary — a commit gate

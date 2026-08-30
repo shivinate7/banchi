@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The two guards a prose rewrite of docs/DECISIONS.md needs, and one it does not have.
 
-D60 densifies the four `@`-loaded docs. Two things can go wrong and neither had a guard:
+D60 densifies the four docs CLAUDE.md names, and drops the `@` from three of them. Two
+things can go wrong and neither had a guard:
 
   --structure   the prose is machine-parsed by scripts/decision-context.py, whose failure
                 mode is `except Exception: sys.exit(0)`. A heading that loses its dash
