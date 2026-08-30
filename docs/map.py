@@ -310,6 +310,9 @@ COMPONENTS = [
                                  "condition map from the `pokemon` entry and is the proof the "
                                  "entry is right — the values are byte-identical to the literals "
                                  "it replaced."},
+            # D10's label formula lives here, and as of 2026-08-29 it assumes NO divider size:
+            # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
+            # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
                         "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35", "D49"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
@@ -385,7 +388,9 @@ COMPONENTS = [
                 "behaviour, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
-            "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states",
+            "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
+                                  "`open_section`, which puts one divider in front of the next "
+                                  "card at the index only the store can read (D10)",
                           "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
@@ -807,8 +812,10 @@ COMPONENTS = [
                 "does": "the capture, status, photo, inventory, queue, review-answer, "
                         "mark-sold, undo, search and box routes — including D34's listing "
                         "release and the free plan that must be drawn before it, D37's "
-                        "stand-down in both directions, and D20's box name as an address "
-                        "(`name_taken`, and a number allocated rather than typed); "
+                        "stand-down in both directions, D20's box name as an address "
+                        "(`name_taken`, and a number allocated rather than typed), and D10's "
+                        "one-divider-at-a-time `POST /boxes/<box>/sections`, which takes no "
+                        "index because the store reads `next_index` inside its own lock; "
                         "the sidecar identify reads "
                         "back; the photo store; the origin allowlist that stands between a "
                         "stray browser tab and a hard delete; "
@@ -1069,15 +1076,29 @@ COMPONENTS = [
                     "way, so Pokemon's thirteen rarities are untouched — and shifts the "
                     "twentieth onward by one letter. Skipped rather than shadowed: a literal a-z hands Pokemon's "
                     "thirteenth rarity the capture key, and either resolution of that fires "
-                    "one act while the operator believes the other did.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27"]},
+                    "one act while the operator believes the other did. "
+                    "A THIRD ACT AS OF 2026-08-29 (owner, D10 amended): `S` opens a section — "
+                    "one divider in front of the next card, `POST /boxes/<box>/sections`, no "
+                    "index on the wire — and the set hint moved to `H` to free the letter. It "
+                    "is on the same manual trigger as the shutter and the undo, never on the "
+                    "motion seam, and it takes `s` back out of the option alphabet, which "
+                    "exactly cancels `n` leaving it: twenty-five keys, and the first thirteen "
+                    "are `1234567890ade` through both changes. "
+                    "THE UNDO IS A STACK SINCE THE SAME DAY, also the owner's: the session's "
+                    "ten most recent captures into this box, newest first, every row its own "
+                    "control. `U` and the trigger seam still mean one card; row N undoes N — "
+                    "that card and everything captured after it — by walking the same route N "
+                    "times, because D10 lets undo reach the newest capture in a box and "
+                    "nothing else. The count is drawn on the row, the list is capped and "
+                    "scrolled, and a walk stops at the first refusal and says how far it got.",
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5", "D27"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -1532,11 +1553,32 @@ COMPONENTS = [
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D22", "D23", "D27"],
-                "note": "No box is ever selected and only reads are stubbed, so no capture "
-                        "is ever taken — motion-live.spec.ts's rule, for its reason. It "
+                "note": "The shutter is never pressed, so no capture is ever taken — "
+                        "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
+                        "box and stub the section route, because the act writes to one; "
+                        "nothing here reaches a store either way, and capture-undo.spec.ts is "
+                        "the file that genuinely captures. It "
                         "exists because nothing ran these controls at all: when the claim "
                         "became a set, tsc, eslint and every spec stayed green over a "
                         "control that had never been pressed by anything but a human.",
+            },
+            "tests/capture-undo.spec.ts": {
+                "does": "the undo STACK on the capture screen (D10, the owner's list of ten, "
+                        "2026-08-29): the session's captures newest first and capped at ten, "
+                        "the top row carrying `U` and every other row its own depth, `U` "
+                        "undoing exactly one, a row undoing that card AND everything after "
+                        "it, and a walk refused partway reporting how far it got in the "
+                        "server's own words. Run by `make design-check`.",
+                "governed_by": ["D10", "D41"],
+                "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
+                        "capture-claims.spec.ts's rule rather than an exception to it: "
+                        "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
+                        "nothing reaches a store, and the camera is a canvas behind a stubbed "
+                        "getUserMedia rather than a device. What only a browser can catch "
+                        "here is the ORDER: the walk is N sequential requests where the "
+                        "(N+1)th is legal only because the Nth succeeded, and a Promise.all "
+                        "would type-check, pass, and delete one card of three. Observed "
+                        "failing against exactly that mutation before it was kept.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "

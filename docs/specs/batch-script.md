@@ -487,7 +487,7 @@ report — catching an import that was staged and never moved live.
 | `--rule` | `match` | `decisions.json`, seeded by the flag |
 | threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py` |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
-| cards per section | 25 | D10 |
+| cards per section | *no default* | D10 — dividers are declared, never assumed |
 | staged-stale warning | 14 days | run report only |
 | `--force-resubmit` | off | pay again for an existing batch |
 | `--reidentify-stale` | off | re-read weak uncleared entries after a prompt change |

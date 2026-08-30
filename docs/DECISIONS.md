@@ -295,10 +295,81 @@ and real boxes have dividers where the operator physically put them. A box now c
 list of divider indices — `[1, 31, 56]` means section 2 starts at card 31 — set by a **New
 section** control on the capture screen at the moment the real divider goes in.
 
-**An empty list means undeclared, and the 25-rule renders it.** That is not a leftover: it is
-what keeps every label written before boxes existed byte-identical, and it is what the v1→v2
-migration writes for every box it finds. `pipeline/join.py:Position` is still the only label
-formula in the repo, and it now takes the layout as an argument rather than reading a constant.
+**AN EMPTY LIST MEANS UNDECLARED, AND AN UNDECLARED BOX IS ONE SECTION. THERE IS NO AUTOMATIC
+DIVIDER** (amended 2026-08-29, by the owner: *"delete automatic sectioning"*). This paragraph
+read "an empty list means undeclared, and the 25-rule renders it", defended as the thing that
+kept every label written before boxes existed byte-identical. That was true and it was the
+wrong trade. The 25-rule cut a divider into every undeclared box every twenty-five cards
+whether or not one was in the plastic, and byte-identical labels are worth nothing when what
+they are identical to is a boundary nobody put there.
+
+**The measurement is the owner's own store.** Box 1 holds 133 cards and declares no layout, so
+it rendered as six sections and a person sent to `Section 4 · Card 8` would have been counting
+for a divider that does not exist. Box 2 declares `[1, 86, 171, 253, 394]` and is untouched by
+this, as is every other declared box: the change reaches exactly the boxes that never claimed
+to have dividers.
+
+**What replaces the constant is `(1,)` — the one divider every box really has, at its front.**
+`pipeline/join.py:Position.layout` states the fallback once and `section`, `section_start` and
+`section_end` all read it, where the constant had three branches doing their own arithmetic.
+So `card` is the index, `section` is 1, and `section_end` is None, which is D20's existing
+answer for a final section rather than a new rule — the caller holding the box's capacity
+fills it in. `Position` is still the only label formula in the repo, and the v1→v2 migration
+still writes an empty layout for every box it finds; only what an empty layout RENDERS AS has
+moved.
+
+**The labels of every undeclared box moved once, deliberately, and that is the cost.** It is
+the same risk `harness/tests/t7_store_and_seams.py` names for the migration — every position
+label in a real inventory shifting at once, with the only symptom a person opening the wrong
+slot weeks later — realised on purpose instead of by accident. It is affordable for the reason
+this entry already gives twice: a label was never printed on anything, only ever read live off
+a screen. T7 pins the new strings so that the next such shift is not accidental either.
+
+**THE `New section` CONTROL THIS ENTRY HAS DESCRIBED SINCE 2026-08-23 EXISTS AS OF 2026-08-29,
+AND IT IS `S` ON THE CAPTURE SCREEN.** The owner: *"make sectioning something I can create
+from the capture screen itself, just like C is capture, I want S for Sectioning (remap S for
+set hint to H)"*. Until then the sentence above was aspirational — the only way to declare a
+divider was `PUT /boxes/<box>` with a whole layout, typed into a field on `#/inventory`, which
+is a different operation wearing the same words: performed later, from another screen, and
+needing the operator to remember which card they were on when the divider went in.
+
+**The two halves of that instruction are one design.** Deleting the automatic divider is what
+makes the key worth having — a screen that invents a boundary every 25 cards does not need a
+control for putting one in — and the key is what makes deleting it safe, because the operator
+who loses the invented dividers gains a way to record the real ones at the moment they exist.
+
+- **`POST /boxes/<box>/sections` takes NO INDEX.** `store/master.py:open_section` reads
+  `next_index` inside the store lock, so the divider lands in front of the card the next
+  capture will actually take. A client computing it would read a high-water mark across a
+  round trip and send it back — the lost update `next_index`'s own docstring exists to
+  prevent, and at the feeder's measured 623 ms cadence not a theoretical one.
+- **It is `next_index` and not count+1**, which matters exactly where D10 already matters: a
+  box with permanent gaps in it. A count would put the divider in front of a card that will
+  never be captured.
+- **An undeclared box materialises `[1, at]`, not `[at]`.** `check_sections` requires a layout
+  to start at index 1 and is right to — there is no card before the front of a box. Nothing is
+  invented by that: section 1 already started at card 1, and this is the first time anything
+  needed to write it down.
+- **It logs `resectioned` through `set_sections`**, the event the dividers editor already
+  writes, carrying both layouts. A new event name was considered and rejected on D26's
+  evidence: this store has already been bitten by a state and a history event sharing a word.
+- **Three refusals, each in its own code**: `section_empty` (pressed twice with nothing
+  captured between — the divider you want is already there, and an empty box takes this too,
+  since card 1 is where the first section starts), `section_ahead` (a divider already declared
+  past the next card, which the dividers editor allows and this cannot append behind), and
+  `box_closed` (a sealed box takes no more cards, so a section with none to come is a divider
+  in front of nothing).
+- **No confirm and no undo, and neither is an oversight.** Nothing is spent and nothing is
+  destroyed; the remedy for a mis-press is the dividers editor, which is where a wrong layout
+  is corrected anyway, and `resectioned` carries the layout it moved from. A dialog on the
+  screen the owner shoots a box from at feeder pace is what `docs/DESIGN.md` refuses in as
+  many words.
+
+**The set hint is `H` now, and the swap cost nothing else.** `S` was on a field an operator
+opens a few times a run and was wanted for an act performed at the box. The option alphabet
+(`docs/DESIGN.md`) is every key this screen has not spent, so it lost `s` and gained `h` — and
+because `h` sorts after `e`, the first thirteen option keys are `1234567890ade` before and
+after, which is why `app/tests/capture-claims.spec.ts` pins them and stayed green.
 
 **"Positions are never renumbered" governs the INDEX. The label is a view.** These were the
 same sentence while sections were a global constant and they are not any more, so the entry
@@ -342,6 +413,42 @@ middle leaves a gap the high-water mark cannot reuse — indistinguishable, late
 permanent gap a sale leaves, and the rule above says those mean different things. Restrict
 the operation rather than teach the allocator to fill holes: D10's first paragraph is what
 makes a printed position label worth trusting, and nothing that renumbers may exist.
+
+**THE CAPTURE SCREEN SHOWS TEN OF THEM AS OF 2026-08-29, AND THE RULE ABOVE IS WHY A ROW IS
+NOT A DELETE.** The owner: *"make undo capture actually U undo's the most recent one, but
+it's actually a growing queue, let's say the 10 most recent captures that I can just click
+undo capture on from the sidebar"*. The control was one card and one button; it is the
+session's ten most recent captures into the current box, newest first, every row its own
+control.
+
+**Pressing row N undoes N cards — that row and everything captured after it.** It is the
+same route N times, newest first, which is the only thing the sentence above permits: card
+N-1 is not the newest until card N is gone. A per-row delete of a middle card would be D10
+ruling 1's mid-box remove, which slides every higher card down one index — and putting that
+on this list would renumber the very rows it was pressed from, which is the defect D37
+refuses for the review screen's worklist in as many words. That operation exists and stays
+on `#/inventory`.
+
+**The count is drawn on the row, and that is the whole of the guard.** `docs/DESIGN.md` makes
+capture-undo the one place a destructive act gets no dialog, on the argument that the deleted
+photo is of a card still within reach of the hand that fed it — an argument that is about ONE
+card. A press that deletes five needs the five to be visible before it, not a confirmation
+after it, so the row carries the number of cards it removes. It is also the row's ordinal,
+which is what lets one chip say both. The top row carries `U` instead, because that is the
+key that fires it.
+
+**A walk that is refused partway stops there and says how far it got.** The next delete is
+only legal because the one before it succeeded, so carrying on would aim at a card that is no
+longer the newest. The count is the only thing left that says where the operator is: the
+cards that went and the cards that did not have both left the list either way.
+
+**The stack is this session's captures, and where the server is ahead it collapses to one
+row.** A capture that committed and lost its response, or a capture the other device made
+into the same box (D13 permits both), leaves the store holding cards this session never took
+— no label, no photograph, no count for them. Offering to undo *back to* a row underneath
+them would be offering to delete somebody else's captures sight unseen, from a list that
+cannot draw them. So the depth is exactly one until the two agree again, which one ordinary
+undo restores.
 
 A sale is the opposite case and is unchanged. `sold` is a state, the record stays, and the
 gap is permanent.

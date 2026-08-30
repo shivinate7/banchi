@@ -116,6 +116,20 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   never will: `#/inventory` keeps the only one and hands it over through
   `app/src/runHandoff.ts`. Anything that rebuilds a selection on the runs screen has recreated
   the disagreement D33 named and D39 was built to avoid.
+- **THERE IS NO AUTOMATIC SECTIONING, AND `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
+  amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
+  nothing else: an undeclared box renders as ONE section, `card` is the index, and
+  `pipeline/join.py:Position.layout` falls back to `(1,)` — the divider at the front of every
+  box. The 25-cards-per-divider default that used to render an undeclared box is deleted, so
+  **the labels of every undeclared box moved once, deliberately** (the owner's box 1: 133
+  cards, no dividers, drawn as six sections until this landed).
+
+  **A divider is put in from the capture screen with `S`, at the moment the real one goes into
+  the box** — `POST /boxes/<box>/sections`, which takes NO index because
+  `store/master.py:open_section` reads `next_index` inside the store lock. The set hint moved
+  to `H` to free the letter. A whole layout is still typed on `#/inventory`'s dividers editor;
+  neither path ever invents a divider.
+
 - **A BOX IS ADDRESSED BY ITS NAME, AND NAMES ARE UNIQUE** (D20, amended 2026-08-25). The
   capture screen's Box field is ONE free-text control searching number and name together, and a
   new box is created by name — `store/master.py:next_box_number` allocates the lowest free

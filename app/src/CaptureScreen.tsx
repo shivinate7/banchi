@@ -11,6 +11,7 @@ import {
   getGames,
   getStatus,
   newCaptureId,
+  openSection,
   photoUrl,
   undoCapture,
   updateCard,
@@ -46,9 +47,44 @@ import './CaptureScreen.css'
 const CAPTURE_KEY = 'c'
 const UNDO_KEY = 'u'
 
+/* THE THIRD ACT ON THIS SCREEN, and the owner asked for it in exactly those terms on
+ * 2026-08-29: "just like C is capture, I want S for Sectioning". It puts a divider in front
+ * of the next card, at the moment the real one goes into the box.
+ *
+ * AN ACT, NOT A FIELD, WHICH IS WHY IT IS HERE AND NOT IN `FIELD_KEYS`. Every letter in that
+ * table opens something to choose from and changes what the NEXT photograph will claim. This
+ * one writes to the store on the press, like the shutter and the undo, and it is on the same
+ * `manualTrigger` primitive they are — so auto-repeat, held modifiers and keys typed into an
+ * input are decided once, in one module, rather than in a second listener here that would
+ * have to be kept in step with it. A divider is a physical act; a held `s` is not eleven of
+ * them.
+ *
+ * IT COST THE SET HINT ITS LETTER, and the swap is the owner's: the set hint is `h` now. The
+ * screen had `s` on the field an operator opens a few times a run and needed it for the act
+ * they perform at the box. `h` is not a worse mnemonic for a hint, and nothing else on this
+ * screen had claimed it. */
+const SECTION_KEY = 's'
+
+/* HOW FAR BACK THE UNDO STACK GOES. The owner's number, 2026-08-29: "let's say the 10 most
+ * recent captures that I can just click undo capture on from the sidebar".
+ *
+ * IT IS A DEPTH, NOT A HISTORY. Every row is a card this SESSION captured, newest first, and
+ * pressing one walks the undo back through every card above it — because D10 allows undo to
+ * reach the newest capture in a box and nothing else, and repeated undo is how it reaches
+ * further. A row is therefore "undo this and everything after it", which is what an undo
+ * stack means everywhere else, rather than "delete this one" — that operation exists
+ * (D10 ruling 1's mid-box remove) and deliberately lives on `#/inventory`, because it slides
+ * every higher card down one index and would renumber the very list it was pressed from.
+ *
+ * TEN IS A HEIGHT AS WELL AS A NUMBER. The list is capped and scrolls, and the heading says
+ * how many it holds, so a capped list cannot read as a short one — `BoxOps`' section list,
+ * same problem, same answer. */
+const UNDO_DEPTH = 10
+
 // What the chips say. The key compared against `event.key` is lower case; the chip is not.
 const CAPTURE_KEY_LABEL = 'C'
 const UNDO_KEY_LABEL = 'U'
+const SECTION_KEY_LABEL = 'S'
 
 // Finish strings are rendered VERBATIM rather than as friendly labels: D3 rung 1 treats the
 // claim as trusted, and the string on screen is the string written into the sidecar and
@@ -433,14 +469,15 @@ function blurActive(): void {
  *  the type rather than by bookkeeping. */
 type FieldId = 'box' | 'set' | 'rarity' | 'finish' | 'game' | 'camera' | 'rotation' | 'trigger'
 
-/* The field letters, none of which may be `c` or `u` — those are the run's own keys and
- * stay reserved (see CAPTURE_KEY). `v` for the camera because `c` is taken, and `o` for
- * rotation because `r` is: the mnemonic bends before the shutter does. The `,` leader
- * chord (App.tsx) is consumed in the capture phase before any of these are offered a key,
- * so `,` then `b` navigates and does not also open the box field. */
+/* The field letters, none of which may be `c`, `u` or `s` — those are the run's own keys and
+ * stay reserved (see CAPTURE_KEY). `v` for the camera because `c` is taken, `o` for rotation
+ * because `r` is, and `h` for the set hint because `s` is: the mnemonic bends before an act
+ * does, three times now. The `,` leader chord (App.tsx) is consumed in the capture phase
+ * before any of these are offered a key, so `,` then `b` navigates and does not also open the
+ * box field. */
 const FIELD_KEYS: Readonly<Record<string, FieldId>> = {
   b: 'box',
-  s: 'set',
+  h: 'set',
   r: 'rarity',
   f: 'finish',
   g: 'game',
@@ -456,9 +493,9 @@ const FIELD_KEYS: Readonly<Record<string, FieldId>> = {
  * mouse-only on the screen whose whole keyboard argument is that a claim costs one press.
  * The owner's ruling, 2026-08-24: past nine, carry on with `0` and then the letters.
  *
- * IT IS NOT `a`-`z`, AND THE SKIPS ARE THE POINT. This screen has already spent eleven
- * letters — the eight field letters, `n` for the new-box entry, and `c` and `u`, which are
- * the shutter and the undo. A literal alphabet hands position 13 the key `c`, on the screen
+ * IT IS NOT `a`-`z`, AND THE SKIPS ARE THE POINT. This screen has spent eleven letters:
+ * `b h r f g v o t` are the fields, and `c u s` are the three acts — the shutter, the undo,
+ * and the divider. A literal alphabet hands position 13 the key `c`, on the screen
  * that runs at a 623 ms feeder cadence, where `c` means take the photograph. That is not a
  * collision to settle by precedence: whichever way it settled, one of the two acts would
  * fire while the operator believed the other had, silently, one card at a time. So the
@@ -470,20 +507,28 @@ const FIELD_KEYS: Readonly<Record<string, FieldId>> = {
  * rather than remembered. That is what makes skipping cheaper than shadowing: the skip is
  * visible on screen and the shadow would not have been.
  *
- * Twenty-five keys, against a longest authored vocabulary of thirteen (`pipeline/games.py`).
+ * Twenty-five keys (thirty-six less the eleven above), against a longest authored
+ * vocabulary of thirteen (`pipeline/games.py`).
  * A field that ever out-grows this draws no chip past the end rather than a chip that does
  * nothing — `Opt`'s rule, kept, now at a bound no real vocabulary reaches. */
 const RESERVED_KEYS: ReadonlySet<string> = new Set([
   ...Object.keys(FIELD_KEYS),
   CAPTURE_KEY,
   UNDO_KEY,
+  SECTION_KEY,
 ])
 
 /* `n` USED TO BE RESERVED HERE AND IS NOT ANY MORE, which widens this alphabet by one and
  * is the intended consequence rather than a side effect. It was `NEW_BOX_KEY`, the jump to
  * the Box field's second input — and that input no longer exists: the filter and the new-box
  * entry are one control now, so there is nothing to jump to. A key held back for a control
- * that was deleted is a key no row can ride for no reason anybody could still state. */
+ * that was deleted is a key no row can ride for no reason anybody could still state.
+ *
+ * `s` THEN TOOK THE WIDTH BACK, 2026-08-29 — the divider act. The two cancel, so the option
+ * rows are drawn on the same letters they were before either change: `0 a d e i…`. Worth
+ * knowing when reading `app/tests/capture-claims.spec.ts`, which pins the tenth through
+ * thirteenth rarities to `0 a d e` and stayed green through both. `h` is a field letter now
+ * and sits after `e`, so it could only ever have moved a row past the thirteenth. */
 
 const OPTION_KEYS: readonly string[] = [...'1234567890abcdefghijklmnopqrstuvwxyz'].filter(
   (key) => !RESERVED_KEYS.has(key),
@@ -779,10 +824,31 @@ export function CaptureScreen() {
   // `position` is the rendered label of what was deleted, shown separately from `text` so it
   // can carry the utility face inside a body sentence. Null on a refusal, where the whole
   // message is the server's own and names its own position.
+  // `did` and `want` are 1 and 1 for the ordinary press and differ only for a walk-back that
+  // stopped early — the one outcome the operator cannot see for themselves, because the
+  // cards that went and the cards that did not both leave the list.
   const [undoNote, setUndoNote] = useState<
-    (Note & { done: boolean; position: string | null }) | null
+    (Note & { done: boolean; position: string | null; did: number; want: number }) | null
   >(null)
   const [revision, setRevision] = useState(0)
+
+  /* THE LAST `S`, AS A RECEIPT — `undoNote`'s shape, for the same reason: a sentence beside
+   * the control that produced it, which docs/DESIGN.md permits and a dialog is not. `place`
+   * carries the section and its first card in the utility face, the way `position` does for
+   * the undo, and is null on a refusal because the server's own sentence names the divider
+   * that is in the way.
+   *
+   * ITS BUSY FLAG IS NOT `busy`, AND THAT IS DELIBERATE. `busy` gates the shutter; the note
+   * editor above already keeps its own for the reason that applies here word for word — a
+   * write that blocked the trigger would drop feeder cards while the operator was doing
+   * something else. The cost is that a divider pressed in the same instant as a capture may
+   * land on either side of that one card, which is a corner the operator is not in (a
+   * divider goes in during a gap in feeding) and is one edit in the dividers editor if they
+   * ever are. A dropped card is not recoverable at all. */
+  const [sectionNote, setSectionNote] = useState<
+    (Note & { done: boolean; place: string | null }) | null
+  >(null)
+  const [sectionBusy, setSectionBusy] = useState(false)
 
   // The position a replayed capture came back with, or null. Set only when the server
   // answers `created: false` — see the capture path below for why that is the payoff of
@@ -1652,38 +1718,66 @@ export function CaptureScreen() {
     }
   }, [box, shots])
 
-  const undoTarget = useMemo<UndoTarget | null>(() => {
-    if (box === null) return null
+  /* WHAT UNDO CAN REACH, NEWEST FIRST — up to `UNDO_DEPTH` of them. Row 0 is what `U` and
+   * every trigger fire aim at; row N is reached by undoing through rows 0..N.
+   *
+   * ONLY THIS BOX. The route deletes the newest card in the box it is given, and repeated
+   * undo walks backwards one card per call — which is the whole mechanism a deeper row uses.
+   *
+   * INDICES ARE NOT WALKED DOWNWARD, AND THAT IS THE TRAP THIS AVOIDS. `serverNewest - 1` is
+   * not the next undoable card: sold cards leave permanent gaps (D10) and a mid-box remove
+   * closes one, so the second-newest index in a box is whatever record actually sits there.
+   * The only thing that knows is the store — and, for this session, the shots themselves. So
+   * the stack is built from real records and never from arithmetic on a high-water mark.
+   */
+  const undoStack = useMemo<UndoTarget[]>(() => {
+    if (box === null) return []
 
     // The server's own newest for this box: the high-water mark, minus one. Zero for a box
     // it has never heard of, which is the same thing as empty for the comparison below.
     const serverNewest = nextForBox === undefined ? 0 : nextForBox - 1
 
-    // Newest first, and only this box: the route deletes the newest card in the box it is
-    // given, and repeated undo walks backwards one card per call.
-    for (let i = shots.length - 1; i >= 0; i -= 1) {
-      const shot = shots[i]
-      if (shot !== undefined && shot.card.box === box) {
-        /* THE SERVER WINS WHERE IT IS AHEAD. This session's shots carry a rendered label and
-         * a thumbnail and `/status` carries neither, so a shot is the better thing to show —
-         * but only while the two still agree about which card is newest.
-         *
-         * They stop agreeing in exactly two ways, and both are ordinary. A capture that
-         * committed and lost its response (spec 5.5) is a card the server has and this list
-         * does not; so is a capture the other device made into the same box, which D13
-         * permits by design. In both cases the shot names a position that is no longer the
-         * newest, and the route refuses anything but the newest — so nothing is destroyed,
-         * but the control has shown the operator the wrong card and the press buys a
-         * refusal. Spec 5.4 wants an undo you can aim, and aiming at a stale local guess is
-         * the thing it is arguing against.
-         */
-        if (serverNewest > shot.card.index) break
-        return { box: shot.card.box, index: shot.card.index, label: shot.card.label }
-      }
+    const mine = shots.filter((shot) => shot.card.box === box)
+    const newest = mine[mine.length - 1]
+
+    /* THE SERVER WINS WHERE IT IS AHEAD, AND WHERE IT IS AHEAD THE STACK COLLAPSES TO ONE.
+     * This session's shots carry a rendered label and a thumbnail and `/status` carries
+     * neither, so a shot is the better thing to show — but only while the two still agree
+     * about which card is newest.
+     *
+     * They stop agreeing in exactly two ways, and both are ordinary. A capture that
+     * committed and lost its response (spec 5.5) is a card the server has and this list does
+     * not; so is a capture the other device made into the same box, which D13 permits by
+     * design. In both cases the shot names a position that is no longer the newest, and the
+     * route refuses anything but the newest — so nothing is destroyed, but the control has
+     * shown the operator the wrong card and the press buys a refusal. Spec 5.4 wants an undo
+     * you can aim, and aiming at a stale local guess is the thing it is arguing against.
+     *
+     * ONE ROW RATHER THAN A DEEP STACK IS THE SAFE ANSWER HERE, and it is the reason this
+     * case is worth a paragraph rather than a line. The cards between the newest shot and
+     * the server's high-water mark are cards this session never took: it has no label, no
+     * photograph and no count for them. Offering to undo "back to" a shot underneath them
+     * would be offering to delete somebody else's captures, sight unseen, from a list that
+     * cannot draw them. So the depth is exactly one until the two agree again, which one
+     * ordinary undo restores.
+     */
+    if (newest === undefined || serverNewest > newest.card.index) {
+      if (serverNewest < 1) return []
+      return [{ box, index: serverNewest, label: null }]
     }
-    if (serverNewest < 1) return null
-    return { box, index: serverNewest, label: null }
+
+    return mine
+      .slice(-UNDO_DEPTH)
+      .reverse()
+      .map((shot) => ({ box: shot.card.box, index: shot.card.index, label: shot.card.label }))
   }, [box, nextForBox, shots])
+
+  /* WHAT ONE PRESS OF `U` DELETES IS `undoStack[0]`, and there is deliberately no binding
+   * for it any more. There used to be an `undoTarget`, and every guard on this screen read
+   * it; now the depth is the only thing that varies and `undoBack` takes it as an argument,
+   * so a second name for "the top of the stack" would be a second thing to keep in step
+   * with the first. `doUndo` is the nullary call the trigger seam still needs.
+   */
 
   const doCapture = useCallback(async () => {
     if (busyRef.current) return
@@ -1786,43 +1880,161 @@ export function CaptureScreen() {
     // re-arm the trigger seam, which keys its effect off `doCapture`.
   }, [box, camera, finish, gameEntry, halt, rarityClaim, rememberCaptureId, setHint])
 
+  /* UNDO, `depth` CARDS OF IT, NEWEST FIRST. `depth` is 1 for `U` and for the button on the
+   * top row; it is N for the Nth row of the stack, which means "this card and everything
+   * captured after it".
+   *
+   * SEQUENTIAL, NEVER PARALLEL, and the store is what makes that non-negotiable: the route
+   * deletes the newest card in a box and refuses anything else, so card N-1 is not undoable
+   * until card N is gone. Firing them together would send N requests of which one could
+   * succeed.
+   *
+   * IT HOLDS `busy` FOR THE WHOLE WALK, which is the one place this differs from the note
+   * editor's rule about not blocking the shutter. A capture landing between two deletes
+   * would become the newest card in the box — so the next delete in the plan is no longer
+   * the newest, the server refuses it, and the walk stops halfway with a card the operator
+   * meant to keep already gone. The shutter is held for a few hundred milliseconds instead.
+   *
+   * THE PLAN IS READ ONCE, up front. `undoStack` is derived from state this function is
+   * about to change, so the value that named what would be deleted is the only value
+   * entitled to say what was.
+   */
+  const undoBack = useCallback(
+    async (depth: number) => {
+      if (busyRef.current) return
+      const plan = undoStack.slice(0, Math.max(0, depth))
+      if (plan.length === 0) return
+      busyRef.current = true
+      setBusy(true)
+      setUndoNote(null)
+      let did = 0
+      let failure: unknown = null
+      try {
+        for (const target of plan) {
+          try {
+            /* The response is discarded on purpose. Its `deleted` is the store's own key —
+             * "3/7" — and that is not a thing the operator has ever seen on this screen or
+             * anywhere else; `types.ts` says as much where it defines the field ("Not a
+             * label and not a SKU"). What goes on screen is the rendered position that was
+             * under the control a moment ago, which is the same string the server sent when
+             * the card was captured. */
+            await undoCapture(target.box, target.index)
+          } catch (err) {
+            // STOP, do not carry on down the plan. The next card is only undoable because
+            // this one was going to be gone, so continuing would aim at a card that is no
+            // longer the newest and buy a second refusal — or, worse, be right for the
+            // wrong reason.
+            failure = err
+            break
+          }
+          did += 1
+          setShots((prev) =>
+            prev.filter(
+              (shot) => !(shot.card.box === target.box && shot.card.index === target.index),
+            ),
+          )
+          setNextIndex((prev) => ({ ...prev, [String(target.box)]: target.index }))
+          setRevision((prev) => prev + 1)
+          // Whatever the replay note said is about a card that may be the one just deleted,
+          // and a stale sentence about a position that no longer exists is worse than none.
+          setReplayed(null)
+        }
+
+        const reached = plan[Math.max(0, did - 1)]
+        if (failure === null) {
+          // "Undo capture" produced "Undone" — docs/DESIGN.md's copy rule that an action
+          // keeps its name through the flow. The count rides beside it rather than inside
+          // it, so the one-card press reads exactly as it always did.
+          setUndoNote({
+            done: true,
+            text: 'Undone',
+            position: reached === undefined ? null : positionText(reached),
+            code: null,
+            did,
+            want: plan.length,
+          })
+        } else {
+          /* Deliberately not a halt. Spec 5.5 stops the run when a card may have gone past
+           * unrecorded; a refused undo changed nothing at all, and the refusal names the
+           * position that IS undoable. That is information beside the control, not a
+           * stopped run.
+           *
+           * A PARTIAL WALK IS REPORTED AS ONE. `did` cards really are gone and the rest are
+           * not, and both halves leave the list either way — so the count is the only thing
+           * left that says where the operator actually is. */
+          setUndoNote({
+            done: false,
+            position: did === 0 || reached === undefined ? null : positionText(reached),
+            did,
+            want: plan.length,
+            ...describe(failure),
+          })
+        }
+      } finally {
+        busyRef.current = false
+        setBusy(false)
+      }
+    },
+    [undoStack],
+  )
+
+  /** One card, which is what `U` and the trigger seam mean by undo. Kept as its own
+   *  function so the trigger's ref keeps pointing at a nullary call and D10's "undo stays
+   *  manual forever" reads the same in the wiring below as it always did. */
   const doUndo = useCallback(async () => {
-    if (busyRef.current || undoTarget === null) return
-    // Read once into a local: `undoTarget` is derived from state this function is about to
-    // change, so the value that named what would be deleted is the only value entitled to
-    // say what was.
-    const target = undoTarget
-    busyRef.current = true
-    setBusy(true)
-    setUndoNote(null)
+    await undoBack(1)
+  }, [undoBack])
+
+  /* A DIVIDER, IN FRONT OF THE NEXT CARD. The owner's `S`, 2026-08-29.
+   *
+   * SENDS NO INDEX. `server.ts:openSection` has the argument at length: the store reads
+   * `next_index` inside its own lock, so the divider lands in front of the card the next
+   * capture will actually take, and there is no number here to be stale about. What this
+   * function does with the answer is read back the section the SERVER rendered —
+   * `sections_detail`'s last entry — rather than counting the layout array itself. Section
+   * arithmetic in TypeScript is the second renderer D10 and `BoxOps.tsx` both refuse.
+   *
+   * THE FRESH RECORD GOES BACK INTO `boxRecords`, which is not housekeeping: that list is
+   * read on mount and when the Box field opens, so without this the box the operator is
+   * shooting would carry the layout it had at the top of the run for the rest of it.
+   *
+   * A refusal is information beside the control and never a halt — `doUndo`'s rule, and the
+   * same reasoning: a refused divider changed nothing, and spec 5.5 stops the run for a card
+   * that may have gone past unrecorded. Nothing here can lose a card. */
+  const sectionBusyRef = useRef(false)
+  const doSection = useCallback(async () => {
+    if (box === null || sectionBusyRef.current) return
+    sectionBusyRef.current = true
+    setSectionBusy(true)
+    setSectionNote(null)
     try {
-      /* The response is discarded on purpose. Its `deleted` is the store's own key — "3/7" —
-       * and that is not a thing the operator has ever seen on this screen or anywhere else;
-       * `types.ts` says as much where it defines the field ("Not a label and not a SKU").
-       * What goes on screen is the rendered position that was under the control a moment
-       * ago, which is the same string the server sent when the card was captured. */
-      await undoCapture(target.box, target.index)
-      setShots((prev) =>
-        prev.filter((shot) => !(shot.card.box === target.box && shot.card.index === target.index)),
-      )
-      setNextIndex((prev) => ({ ...prev, [String(target.box)]: target.index }))
-      setRevision((prev) => prev + 1)
-      // Whatever the replay note said is about a card that may be the one just deleted, and
-      // a stale sentence about a position that no longer exists is worse than none.
-      setReplayed(null)
-      // "Undo capture" produced "Undone" — docs/DESIGN.md's copy rule that an action keeps
-      // its name through the flow.
-      setUndoNote({ done: true, text: 'Undone', position: positionText(target), code: null })
+      const record = await openSection(box)
+      setBoxRecords((prev) => {
+        const rest = prev.filter((entry) => entry.box !== record.box)
+        return [...rest, record].sort((left, right) => left.box - right.box)
+      })
+      const spans = record.sections_detail
+      /* `?? null` because `noUncheckedIndexedAccess` is on and is right to be: a record
+       * that came back with no spans at all is a box the server could not render a layout
+       * for, and the receipt then says the act's name with no detail rather than
+       * `Section undefined`. */
+      const opened = spans[spans.length - 1] ?? null
+      setSectionNote({
+        done: true,
+        // The act's own name, kept through the flow (docs/DESIGN.md's copy rule), with what
+        // it produced beside it. `from card N` and not `at card N`: the number is where the
+        // section STARTS, and the next card is the first one in it.
+        text: 'New section',
+        place: opened === null ? null : `Section ${opened.section} · from card ${opened.start}`,
+        code: null,
+      })
     } catch (err) {
-      // Deliberately not a halt. Spec 5.5 stops the run when a card may have gone past
-      // unrecorded; a refused undo changed nothing at all, and the refusal names the position
-      // that IS undoable. That is information beside the control, not a stopped run.
-      setUndoNote({ done: false, position: null, ...describe(err) })
+      setSectionNote({ done: false, place: null, ...describe(err) })
     } finally {
-      busyRef.current = false
-      setBusy(false)
+      sectionBusyRef.current = false
+      setSectionBusy(false)
     }
-  }, [undoTarget])
+  }, [box])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
    * motion trigger is Gate C's, and the screen still does not know which one is armed —
@@ -1845,6 +2057,12 @@ export function CaptureScreen() {
   )
   const captureTrigger = triggerMode === 'motion' ? machineTrigger : keyTrigger
   const undoTrigger = useMemo(() => manualTrigger(UNDO_KEY), [])
+  /* On the same primitive as the shutter and the undo, and never on the motion seam. A
+   * divider is a physical act somebody performs with their hands; there is nothing for a
+   * machine to detect and nothing it could be right about. `manualTrigger` is also what
+   * makes a held `s` one divider rather than a run of them, and what keeps the letter from
+   * firing while it is being typed into the set hint. */
+  const sectionTrigger = useMemo(() => manualTrigger(SECTION_KEY), [])
 
   /* Triggers arm once per identity and dispatch through a ref. Re-arming whenever the
    * closure changes would tear the motion machine down on every keystroke in the set hint
@@ -1891,11 +2109,16 @@ export function CaptureScreen() {
       void doCapture()
     }
   }, [box, camera.ready, doCapture, halt, triggerMode])
+  const fireSectionRef = useRef<() => void>(() => {})
   useEffect(() => {
     fireUndoRef.current = () => void doUndo()
   }, [doUndo])
+  useEffect(() => {
+    fireSectionRef.current = () => void doSection()
+  }, [doSection])
   useEffect(() => captureTrigger.start(() => fireCaptureRef.current()), [captureTrigger])
   useEffect(() => undoTrigger.start(() => fireUndoRef.current()), [undoTrigger])
+  useEffect(() => sectionTrigger.start(() => fireSectionRef.current()), [sectionTrigger])
 
   /* THE NOTE, SAVED AGAINST THE LAST CAPTURE — the one write on this screen aimed at a card
    * other than the next one.
@@ -2710,7 +2933,7 @@ export function CaptureScreen() {
                 without it a collector number that matches rows in two sets reviews as
                 `set_ambiguous`. */}
             {openField === 'set' ? (
-              <OpenField k="S" label="Set hint" meta="optional" onClose={closeField}>
+              <OpenField k="H" label="Set hint" meta="optional" onClose={closeField}>
                 <form
                   className="capture-entry"
                   onSubmit={(event) => {
@@ -2733,7 +2956,7 @@ export function CaptureScreen() {
               </OpenField>
             ) : (
               <Row
-                k="S"
+                k="H"
                 label="Set hint"
                 right={
                   setHint.trim() === '' ? (
@@ -3037,69 +3260,175 @@ export function CaptureScreen() {
               )}
             </div>
 
+            {/* THE THIRD ACT, BETWEEN THE TWO THAT WERE ALREADY HERE, and the order is the
+                order they are performed in: shoot the stack, drop a divider in when you
+                reach one, undo the card you just took. It is in the foot rather than up
+                among the fields because it is not a claim — nothing about it changes what
+                the next photograph will say about itself — and because it is pressed at the
+                box, which is the argument the foot's own comment makes for the other two.
+
+                DISABLED WITHOUT A BOX, WHICH IS THE ONE STATE IT HAS. docs/DESIGN.md's
+                absent-not-disabled rule is about the control that COMMITS to something
+                irreversible — the run panel's spend button, the listing release on the box
+                header — and this is neither: it is free, it is reversible in the dividers
+                editor, and it is the next thing to press. A control that vanished until a box was picked would
+                read as a screen with a missing feature on the one screen the owner cannot
+                afford to look for things on. */}
+            <div className="capture-section">
+              <button
+                type="button"
+                className="capture-go"
+                onClick={() => void doSection()}
+                disabled={box === null || sectionBusy}
+              >
+                New section <kbd className="capture-key">{SECTION_KEY_LABEL}</kbd>
+              </button>
+              {sectionNote === null ? null : (
+                <p className={sectionNote.done ? 'capture-quiet' : 'capture-refused'}>
+                  {sectionNote.text}
+                  {/* The section and its first card in the utility face, inline in a body
+                      sentence — the same treatment the undo receipt gives the position it
+                      deleted, and the same reason: this is metadata, and mixing it into the
+                      body face would make a number read as a word. */}
+                  {sectionNote.place === null ? null : (
+                    <>
+                      {' '}
+                      <span className="capture-inline-label">{sectionNote.place}</span>
+                    </>
+                  )}
+                  {sectionNote.code === null ? null : (
+                    <span className="capture-halt-code"> {sectionNote.code}</span>
+                  )}
+                </p>
+              )}
+            </div>
+
             {/* Always visible, never appearing after a capture: a control that appears and
                 disappears is one you have to look for at the moment you are least inclined
                 to. It was a full-width strip under the frames until the owner said it "can
                 clearly be on the side too", and that strip was ~90px of the height this
                 layout needed back. */}
+            {/* THE UNDO STACK — the owner's ask of 2026-08-29: "a list of 10 rather than the
+                one I can see right now". It was one card with one button; it is every
+                capture this session made into this box, newest first, each row its own
+                control.
+
+                EVERY ROW IS A BUTTON AND A ROW IS NOT A DELETE. Pressing row N undoes N
+                cards — that row and everything captured after it — because D10 lets undo
+                reach the newest capture in a box and nothing else, and walking is how it
+                reaches further. The count is drawn on the row so the press cannot be made
+                without seeing it: the number IS how many cards go, and it is the row's
+                ordinal, which are the same number by construction.
+
+                Still no dialog, still one tap (spec 5.4). The deleted photo is of a card
+                still within reach of the hand that fed it, so the remedy for a wrong undo is
+                to photograph it again — which is why this is the stated exception to the
+                no-confirm rule rather than a violation of it. Allowed while the run is
+                halted: the halt is about capturing, and correcting the last good card is
+                exactly what a stopped run is for. */}
             <footer className="capture-undo">
-              <div className="capture-undo-target">
-                {undoTarget === null ? (
-                  <p className="capture-quiet">Nothing in this box to undo.</p>
-                ) : (
-                  <>
-                    {/* Empty alt on purpose, not by omission: the position beside it is the same
-                        fact in words, and what the thumbnail adds — whether this is the card you
-                        meant — is not a thing alt text can carry. */}
-                    <img
-                      className="capture-undo-thumb capture-undo-thumb-portrait"
-                      src={photoSrc(undoTarget.box, undoTarget.index, revision)}
-                      alt=""
-                    />
-                    <div>
-                      <p className="capture-field-name">Undo deletes</p>
-                      <p className="capture-label">
-                <PositionLabel label={positionText(undoTarget)} />
+              <p className="capture-field-name">
+                Undo
+                {undoStack.length > 1 ? (
+                  /* WHAT THE LIST HOLDS, beside its name, because the list is capped and
+                     scrolls — a capped list that does not say so reads as a short one, which
+                     is `BoxOps`' section list making the same mistake one screen over. */
+                  <span className="capture-undo-depth">{undoStack.length} recent</span>
+                ) : null}
               </p>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="capture-undo-action">
-                {/* No dialog, one tap, repeating (spec 5.4). The deleted photo is of a card still
-                    in your hand, so the remedy for a wrong undo is to photograph it again — which
-                    is why this is the stated exception to the no-confirm rule rather than a
-                    violation of it. Allowed while the run is halted: the halt is about capturing,
-                    and correcting the last good card is exactly what a stopped run is for. */}
-                <button
-                  type="button"
-                  className="capture-undo-go"
-                  onClick={() => void doUndo()}
-                  disabled={undoTarget === null || busy}
-                >
-                  Undo capture <kbd className="capture-key">{UNDO_KEY_LABEL}</kbd>
-                </button>
-                {undoNote === null ? null : (
-                  <p className={undoNote.done ? 'capture-quiet' : 'capture-refused'}>
-                    {undoNote.text}
-                    {/* The position in the utility face, inline in a body sentence — the same
-                        string the server rendered when the card was captured. This used to say
-                        "Undone 3/7": the store's own key, in the body face, naming a thing the
-                        operator has never seen on any screen. */}
-                    {undoNote.position === null ? null : (
-                      <>
-                        {' '}
-                        <span className="capture-inline-label">
-                  <PositionLabel label={undoNote.position} flow="run" />
-                </span>
-                      </>
-                    )}
-                    {undoNote.code === null ? null : (
-                      <span className="capture-halt-code"> {undoNote.code}</span>
-                    )}
-                  </p>
-                )}
-              </div>
+
+              {undoStack.length === 0 ? (
+                <p className="capture-quiet">Nothing in this box to undo.</p>
+              ) : (
+                <>
+                  <ul className="capture-undo-list">
+                    {undoStack.map((target, at) => (
+                      <li key={`${target.box}/${target.index}`}>
+                        <button
+                          type="button"
+                          className="capture-undo-row"
+                          onClick={() => void undoBack(at + 1)}
+                          disabled={busy}
+                          /* The visible row is a thumbnail, a position and a number, and the
+                             number means something a screen reader cannot infer from it. So
+                             the accessible name says the act in full — and says it
+                             differently for the top row, which is the one `U` fires. */
+                          aria-label={
+                            at === 0
+                              ? `Undo the newest capture, ${positionText(target)}`
+                              : `Undo ${at + 1} captures, back to ${positionText(target)}`
+                          }
+                        >
+                          {/* Empty alt on purpose, not by omission: the position beside it is
+                              the same fact in words, and what the thumbnail adds — whether
+                              this is the card you meant — is not a thing alt text can
+                              carry. */}
+                          <img
+                            className="capture-undo-thumb capture-undo-thumb-portrait"
+                            src={photoSrc(target.box, target.index, revision)}
+                            alt=""
+                          />
+                          <span className="capture-undo-pos">
+                            {/* THROUGH THE SHARED COMPONENT, because D41 lists this
+                                sidebar as one of the six owner sites that draw an
+                                address as a rank rather than a dotted list. This branch
+                                predates that entry by 32 commits and drew a bare string;
+                                the stack is the feature and the treatment is a rule about
+                                how any address is drawn, so the row keeps one and gains
+                                the other. The 20px figure is set in the stylesheet, once,
+                                where the site's register belongs. */}
+                            <PositionLabel label={positionText(target)} />
+                          </span>
+                          {/* The top row carries its KEY and every other row carries its
+                              DEPTH. They are different kinds of fact in the same slot, which
+                              is legible only because the top row's is the one letter this
+                              screen has always drawn there and the rest are plain counts. */}
+                          <span className="capture-key">
+                            {at === 0 ? UNDO_KEY_LABEL : at + 1}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {undoStack.length > 1 ? (
+                    <p className="capture-quiet">
+                      A row undoes that card and everything captured after it.
+                    </p>
+                  ) : null}
+                </>
+              )}
+
+              {undoNote === null ? null : (
+                <p className={undoNote.done ? 'capture-quiet' : 'capture-refused'}>
+                  {/* A WALK THAT STOPPED EARLY SAYS SO FIRST, before the server's own
+                      sentence, because it is the half the operator cannot see: the cards
+                      that went and the cards that did not have both left the list. Our
+                      sentence is added to the server's, never folded into it — the copy rule
+                      shows the server's message verbatim. */}
+                  {undoNote.did !== undoNote.want ? (
+                    <span className="capture-undo-partial">
+                      Undid {undoNote.did} of {undoNote.want}.{' '}
+                    </span>
+                  ) : null}
+                  {undoNote.text}
+                  {undoNote.done && undoNote.did > 1 ? ` ${undoNote.did} captures, back to` : null}
+                  {/* The position in the utility face, inline in a body sentence — the same
+                      string the server rendered when the card was captured. This used to say
+                      "Undone 3/7": the store's own key, in the body face, naming a thing the
+                      operator has never seen on any screen. */}
+                  {undoNote.position === null ? null : (
+                    <>
+                      {' '}
+                      <span className="capture-inline-label">
+                        <PositionLabel label={undoNote.position} flow="run" />
+                      </span>
+                    </>
+                  )}
+                  {undoNote.code === null ? null : (
+                    <span className="capture-halt-code"> {undoNote.code}</span>
+                  )}
+                </p>
+              )}
             </footer>
           </div>
         </aside>

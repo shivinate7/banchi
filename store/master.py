@@ -365,6 +365,33 @@ class BoxClosed(ValueError):
     """A write against a sealed box. Capacity is frozen; nothing more goes in."""
 
 
+class SectionEmpty(ValueError):
+    """`open_section` was asked to start a section where one already starts.
+
+    The capture screen's `S` puts a divider in front of the next card, so pressing it twice
+    with no capture between would put two dividers in one slot — which `check_sections`
+    already refuses, in a sentence about a hand-typed layout that names neither the box nor
+    the double press. This is that refusal moved to where it can be explained: the section
+    you just opened is still empty, so the divider you want is already there.
+
+    An EMPTY BOX takes this too, and it is the same fact rather than a special case: card 1
+    is where the first section starts, so a divider in front of it is the one the box
+    already has.
+    """
+
+
+class SectionAhead(ValueError):
+    """`open_section` was asked to start a section behind one that is already declared.
+
+    A layout may legitimately run past the fill — the dividers editor takes `[1, 51]` on a
+    five-card box, and `_section_spans` renders that last section with a count of zero. A
+    divider opened at the rig goes in front of the NEXT card, which in that state is behind
+    a divider that already exists, and appending it would make the layout unsorted.
+    `check_sections` would refuse it as exactly that, which is true and unhelpful; this
+    names the declared divider that is in the way.
+    """
+
+
 class UnknownBox(ValueError):
     """A box number no registry entry covers."""
 
@@ -412,12 +439,12 @@ def check_sections(sections) -> Tuple[int, ...]:
         raise BadSections(f"{sections!r} is not a list of integers") from None
     if not out:
         # UNDECLARED, and legal. An empty layout is what every box migrated from v1 carries
-        # and what a new box starts with; `pipeline/join.py:Position` falls back to
-        # CARDS_PER_SECTION for it, which is what keeps every label written before this
-        # change byte-identical. Materialising the implied dividers is the SERVER's job
-        # (it already imports Position), never this module's — `store/master.py` importing
-        # `pipeline` to learn a divider size would trade the isolation this file is built
-        # on for a constant it can be handed instead.
+        # and what a new box starts with, and `pipeline/join.py:Position` renders it as ONE
+        # section starting at card 1 — the box itself. There is no default divider size any
+        # more (D10, amended 2026-08-29): a box was being cut into sections of 25 that
+        # nobody had put a divider into, and the label sent a hand to count for a boundary
+        # the plastic does not have. Nothing here changed with it, which is the point — this
+        # module never knew the size and still does not.
         return out
     if out[0] != 1:
         raise BadSections(f"the first section starts at index 1, not {out[0]}")
@@ -468,7 +495,9 @@ class Box:
     def layout(self) -> Tuple[int, ...]:
         """The divider indices, validated. What `pipeline/join.py:Position` renders from.
 
-        Empty means undeclared, and `Position` renders those with the default divider size.
+        Empty means undeclared, which `Position` renders as the single section every box
+        has before anybody divides it. Dividers are put in one at a time from the capture
+        screen (`open_section`) or typed as a whole layout in the dividers editor.
         """
         return check_sections(self.sections)
 
@@ -1060,6 +1089,60 @@ class Inventory:
         )
         return layout
 
+    def open_section(self, number) -> Tuple[int, ...]:
+        """Put a divider in front of the next card. The capture screen's `S`.
+
+        THE ACT AND THE RECORD ARE THE SAME GESTURE, which is the whole of D10's amendment
+        of 2026-08-29. A layout was a list of indices typed into a field on another screen,
+        after the fact, from memory — so the operator had to remember which card they were
+        on when the divider went in, and the honest answer was usually "about eighty". This
+        is pressed at the moment the plastic divider goes into the box, and the index it
+        records is the one the next card will take.
+
+        THE INDEX IS `next_index`, NOT A COUNT, and that is D10's high-water mark doing the
+        same job it does for a capture: the next card lands on the end of the stack, so the
+        divider in front of it belongs at the same number. A section opened over a box with
+        gaps in it therefore starts where the hand will actually put the next card.
+
+        AN UNDECLARED BOX MATERIALISES ITS FIRST DIVIDER HERE. `[]` becomes `[1, at]` rather
+        than `[at]`, because `check_sections` requires the first section to start at index 1
+        and it is right to: there is no card before the front of the box. Nothing is
+        invented by that — section 1 already started at card 1, and this is the first time
+        anything needed to write it down.
+
+        LOGS `resectioned` THROUGH `set_sections`, deliberately reusing that event rather
+        than minting `section_opened`. Both facts a reader wants — the layout before and the
+        layout after — are already on it, and a new event name is a real cost in this store:
+        `_state_before_sale` scans history filtering against `STATES`, and D26 records the
+        day a state and an event sharing a word made months-old undo lines parse as states.
+
+        Refuses on a sealed box (`BoxClosed`, the same refusal `allocate_capture` makes, for
+        the same reason — a sealed box takes no more cards, so a section that can only hold
+        future ones is a divider in front of nothing), on a section that is still empty
+        (`SectionEmpty`), and behind a divider already declared past the fill
+        (`SectionAhead`).
+        """
+        entry = self.ensure_box(number)
+        if entry.closed:
+            raise BoxClosed(
+                f"box {entry.box} is sealed, so it takes no more cards — and a section with "
+                f"no cards to come is a divider in front of nothing. Re-open the box first."
+            )
+        at = self.next_index(entry.box)
+        layout = list(entry.layout()) or [1]
+        last = layout[-1]
+        if last == at:
+            raise SectionEmpty(
+                f"section {len(layout)} of box {entry.box} already starts at card {at} and "
+                f"holds nothing yet. Capture a card into it before starting another."
+            )
+        if last > at:
+            raise SectionAhead(
+                f"box {entry.box} already declares a section starting at card {last}, which "
+                f"is past the next card ({at}). Edit the dividers instead."
+            )
+        return self.set_sections(entry.box, layout + [at])
+
     def close_box(self, number) -> Box:
         """Seal a box: capacity freezes at the final high-water mark.
 
@@ -1091,7 +1174,7 @@ class Inventory:
         return max(0, self.next_index(number) - 1)
 
     def sections_for(self, number) -> Tuple[int, ...]:
-        """A box's declared layout, or an empty tuple meaning the default rule renders it."""
+        """A box's declared layout, or an empty tuple meaning it has declared none."""
         entry = self.box(number)
         return entry.layout() if entry is not None else ()
 

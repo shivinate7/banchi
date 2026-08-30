@@ -371,9 +371,10 @@ high-water mark. Not count+1, not first-free.
 
 Indices are 1-based and that is forced, not chosen: section and card are derived from the
 index, so index 0 labels a slot that does not exist. **The arithmetic used to be spelled out
-here as `(index - 1) // 25 + 1` and `(index - 1) % 25 + 1`, and D10's amendment made that a
-special case rather than the rule** — dividers are declared per box now, and the fixed
-25-card window is only what a box that declares none renders with. `pipeline/join.py:Position`
+here as `(index - 1) // 25 + 1` and `(index - 1) % 25 + 1`. D10's amendment made that a
+special case rather than the rule, and D10's amendment of 2026-08-29 deleted the special
+case as well** — dividers are declared per box, an undeclared box is the one undivided
+section it physically is, and no window is assumed at any size. `pipeline/join.py:Position`
 is the formula; this file names it and does not restate it.
 
 *count+1* agrees with the high-water mark for sold cards — nothing deletes a record, `sold`
@@ -398,13 +399,23 @@ and takes down `Store.read()` — which means every route, not just the write pa
 add a repair path for it; just know that a hand-edited inventory file fails loudly and at
 the front door.
 
-### 5.3 — Sections, and the constant
+### 5.3 — Sections, and the constant that is gone
 
-Do not write a new formula or a new constant. `pipeline/join.py:Position` derives section,
-card and the label, and the server calls it — now with the box's own divider layout, since
-D10's amendment made sections per-box: `Position(box, index, sections)`. `CARDS_PER_SECTION`
-survives in that file as the default for a box that has declared no layout, which is what
-keeps every label written before boxes existed byte-identical.
+Do not write a new formula and do not reintroduce a constant. `pipeline/join.py:Position`
+derives section, card and the label, and the server calls it with the box's own divider
+layout, since D10's amendment made sections per-box: `Position(box, index, sections)`.
+
+**`CARDS_PER_SECTION` no longer exists** (deleted 2026-08-29, D10 amended). It was the
+default a box with no declared layout rendered with, and it cut a divider into every such
+box every twenty-five cards whether or not one was in the plastic — the owner's own box 1
+holds 133 cards, no dividers, and read as six sections. An undeclared box is now ONE
+section: `Position.layout` falls back to `(1,)`, `card` is the index, and `section_end` is
+None, which the server fills in from the box's fill exactly as it already did for the final
+section of a declared box.
+
+Dividers are put in one at a time by `POST /boxes/<box>/sections` — the capture screen's
+`S`, pressed at the moment the physical divider goes in — or typed as a whole layout through
+`PUT /boxes/<box>`. Neither invents one.
 
 There is no cycle: `pipeline`, `identify` and `geometry` import `store` nowhere. And the
 label is the one part of this path with harness coverage — `harness/tests/t3_join_coverage.py`

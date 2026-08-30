@@ -75,13 +75,6 @@ from pipeline import games, pricing, routing, tcgcsv, variant
 # D7 — a playset. Configurable, but never guessed at.
 LIVE_QUANTITY_CAP = 4
 
-# D10 — 25 cards per divider. The DEFAULT layout, used for a box that declares none.
-# Sections are per-box and declared at capture time since D10's amendment; this constant is
-# what a box with an empty `sections` list renders with, which is what keeps every label
-# written before boxes existed byte-identical.
-CARDS_PER_SECTION = 25
-
-
 class OutputSuppressed(Exception):
     """emit_import refused: something was unmatched and has not been reported yet."""
 
@@ -109,9 +102,19 @@ class Position:
     D10 (amended) accepts that: correcting a wrong layout is the point, and the label was
     never printed on anything, only ever read live off a screen.
 
-    An EMPTY `sections` means the box has declared no layout, and the default divider size
-    renders it. That is the whole of the v1 compatibility story — every card recorded before
-    boxes existed renders through this branch and comes out unchanged.
+    AN UNDECLARED BOX IS ONE SECTION, AND THERE IS NO SUCH THING AS AN AUTOMATIC DIVIDER
+    ANY MORE (D10, amended 2026-08-29 by the owner). An empty `sections` used to be rendered
+    by `CARDS_PER_SECTION = 25` — a module constant no env var, flag or parameter could
+    reach, which cut a divider into every undeclared box every twenty-five cards whether or
+    not one was physically there. Box 1 holds 133 cards and no dividers at all, and the app
+    drew it as six sections; a person sent to `Section 4 · Card 8` would have been counting
+    for a boundary the plastic does not have.
+
+    So the fallback is `(1,)` — the one divider every box really has, at its front — and a
+    divider now exists only because somebody put one in and said so (the capture screen's
+    `S`, or the dividers editor). `card` is then the index, `section` is 1, and
+    `section_end` is None: an undeclared box's one section runs to wherever the box stops,
+    which is D20's own reason for that None and not a new rule.
 
     THIS IS THE ONLY LABEL FORMULA IN THE REPO (`docs/specs/capture-server.md` §6.3). The
     TypeScript side receives rendered strings and never computes a section.
@@ -122,11 +125,23 @@ class Position:
     sections: Tuple[int, ...] = ()
 
     @property
+    def layout(self) -> Tuple[int, ...]:
+        """The dividers this label is rendered against: the box's own, or the implicit one
+        at the front of an undeclared box.
+
+        The three properties below all read THIS rather than `sections`, so the undeclared
+        case is stated once instead of being re-decided three times — which is what the old
+        default was, and two of its three branches did their own arithmetic. `sections`
+        stays exactly as it was given, because "has this box declared a layout" is a real
+        question with real callers (`BoxOps` draws `undeclared` from it) and normalising it
+        here would answer that question wrongly for all of them.
+        """
+        return self.sections or (1,)
+
+    @property
     def section(self) -> int:
-        if not self.sections:
-            return (self.index - 1) // CARDS_PER_SECTION + 1
         count = 0
-        for start in self.sections:
+        for start in self.layout:
             if self.index >= start:
                 count += 1
             else:
@@ -138,9 +153,7 @@ class Position:
     @property
     def section_start(self) -> int:
         """The index this card's section begins at."""
-        if not self.sections:
-            return (self.section - 1) * CARDS_PER_SECTION + 1
-        return self.sections[self.section - 1]
+        return self.layout[self.section - 1]
 
     @property
     def section_end(self) -> Optional[int]:
@@ -148,11 +161,12 @@ class Position:
 
         None rather than a guess: the final section runs to wherever the box ends, and only
         a sealed box knows where that is (D20). The caller holding the capacity fills it in.
+        An undeclared box has exactly one section, so it takes this None on its first card —
+        correctly, and for the same reason.
         """
-        if not self.sections:
-            return self.section_start + CARDS_PER_SECTION - 1
-        if self.section < len(self.sections):
-            return self.sections[self.section] - 1
+        layout = self.layout
+        if self.section < len(layout):
+            return layout[self.section] - 1
         return None
 
     @property

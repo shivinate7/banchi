@@ -853,7 +853,7 @@ def check_server_routes(checks: Checks) -> None:
             row["label"],
             join.Position(3, 2).label,
             "and each row carries the label pipeline/join.py renders — not a second copy of "
-            "D10's 25-cards-per-section rule living in the app",
+            "D10's divider rule living in the app",
         )
         checks.equal(
             row["section"], join.Position(3, 2).section, "with the section it sits in"
@@ -6121,7 +6121,6 @@ def check_place_neighbors(checks: Checks) -> None:
                 degraded["section"],
                 degraded["card"],
                 degraded["section_start"],
-                degraded["section_end"],
             ],
             [
                 intact["located"],
@@ -6129,11 +6128,31 @@ def check_place_neighbors(checks: Checks) -> None:
                 intact["section"],
                 intact["card"],
                 intact["section_start"],
-                intact["section_end"],
             ],
             "while the label and the rest of the block survive untouched: a label needs "
             "only this record's own two integers and the layout, and one bad row must "
             "not take the route the app polls down to a row of nulls",
+        )
+        # `section_end` WAS IN THAT LIST AND CAME OUT ON 2026-08-29, which is the one place
+        # deleting the 25-card default is visible in this file's degrade story. Box 4
+        # declares no layout, so it used to get a 25-card window that needed no count at all
+        # and survived anything; it is ONE section now, and one section's end IS the box's
+        # end — `_denominator`, the number that degrades. So this field follows the count and
+        # the four above do not, and that split is the assertion rather than a caveat on it:
+        # a label is built from this record's own two integers and the layout, and a number
+        # derived from a whole-store scan cannot honestly outlive the scan.
+        checks.equal(
+            [degraded["section_end"], degraded["box_total"]],
+            [None, 0],
+            "and `section_end` degrades WITH the denominator, because an undeclared box's "
+            "one section ends where the box does — the same degrade `fraction` takes, and "
+            "not the label's",
+        )
+        checks.equal(
+            [intact["section_end"], intact["box_total"]],
+            [6, 6],
+            "where an intact read says that section ends at the fill: no divider is "
+            "invented past the cards that exist (D10, amended)",
         )
         checks.equal(
             rows["4/3"]["label"],
@@ -9051,11 +9070,12 @@ def check_listing_commands(checks: Checks) -> None:
 def check_boxes_and_listings(checks: Checks) -> None:
     """D20's box object, D7's fungible copies, and the v1 -> v2 migration between them.
 
-    THE MIGRATION CASE IS THE LOAD-BEARING ONE. Every label this repo has ever rendered was
-    computed from a global `CARDS_PER_SECTION`, and sections are per-box now. If the
-    migration gets that wrong, every position label in a real inventory shifts at once and
-    the only symptom is a person opening the wrong slot weeks later. So it is asserted
-    against the literal strings, not against the formula that produced them.
+    THE MIGRATION CASE IS THE LOAD-BEARING ONE. Every label this repo rendered before D20 was
+    computed from a global `CARDS_PER_SECTION`; sections became per-box, and on 2026-08-29 that
+    global was deleted outright. If the migration gets this wrong, every position label in a
+    real inventory shifts at once and the only symptom is a person opening the wrong slot weeks
+    later. So it is asserted against the literal strings, not against the formula that produced
+    them — and the strings it pins moved once, deliberately, which the case itself explains.
     """
     checks.note("")
     checks.note("BOXES AND LISTINGS — store/master.py")
@@ -9104,15 +9124,39 @@ def check_boxes_and_listings(checks: Checks) -> None:
 
     # THE LABELS THEMSELVES. Literal strings, because a formula asserted against itself
     # proves nothing about the cards already on a shelf.
+    #
+    # THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-08-29 AND THE REVERSAL IS THE POINT. It
+    # read "a migrated box renders every label byte-identical to before the migration", and
+    # the labels it pinned were `Section 2 · Card 1` at index 26 and `Section 3 · Card 3` at
+    # index 53 — dividers `CARDS_PER_SECTION = 25` cut into a box nobody had divided. The
+    # owner's instruction was to delete automatic sectioning, so those labels are exactly
+    # what had to move, and a test that pinned them is the test that had to change.
+    #
+    # WHAT IT IS STILL FOR is what its docstring says: the migration is load-bearing because
+    # a wrong one shifts every position label in a real inventory at once, and the only
+    # symptom is somebody opening the wrong slot weeks later. That risk did not go away — it
+    # was REALISED, deliberately and once, and box 1 of the owner's own store is the
+    # measurement (133 cards that read as six sections and are now the one section the box
+    # physically is). Pinning the new strings is what keeps the next shift accidental.
     checks.equal(
         [join.Position(1, i, migrated.sections_for(1)).label for i in (1, 25, 26, 53)],
         [
             "Box 1 · Section 1 · Card 1",
             "Box 1 · Section 1 · Card 25",
-            "Box 1 · Section 2 · Card 1",
-            "Box 1 · Section 3 · Card 3",
+            "Box 1 · Section 1 · Card 26",
+            "Box 1 · Section 1 · Card 53",
         ],
-        "and a migrated box renders every label byte-identical to before the migration",
+        "AN UNDECLARED BOX IS ONE SECTION, and `card` is the index: no divider exists "
+        "until somebody puts one in (D10, amended 2026-08-29)",
+    )
+    checks.equal(
+        [
+            join.Position(1, 53, migrated.sections_for(1)).section_start,
+            join.Position(1, 53, migrated.sections_for(1)).section_end,
+        ],
+        [1, None],
+        "its one section starts at card 1 and has no end of its own — it runs to wherever "
+        "the box stops, which is D20's answer for a final section and not a new rule",
     )
 
     # --- declared layouts --------------------------------------------------------------
@@ -9762,6 +9806,194 @@ def check_pipeline_routes(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_open_section(checks: Checks) -> None:
+    """`POST /boxes/<box>/sections` — D10's divider, opened one at a time at the rig.
+
+    THE ROUTE THE DECISION ENTRY HAD ALREADY DESCRIBED. D10 has said since 2026-08-23 that a
+    box's dividers are "set by a **New section** control on the capture screen at the moment
+    the real divider goes in", and until 2026-08-29 the only way to declare one was to type a
+    whole layout into a field on `#/inventory`. This is that control's half of the wire.
+
+    THE INDEX IS THE THING TO TEST, because it is the only thing the route decides. There is
+    no index in the request — the store reads its own high-water mark inside the lock — so
+    the case that matters is a box with a GAP in it, where a count and a high-water mark give
+    different answers and only one of them is where the operator's hand will put the next
+    card.
+
+    ITS OWN ISOLATED HOME, which is this file's own repeated lesson: `check_boxes_and_listings`
+    counts history lines over boxes it builds card by card, and a `resectioned` event written
+    into its store would fail that section on this section's fixture.
+    """
+    checks.note("")
+    checks.note("OPEN SECTION — server/capture_server.py, store/master.py (D10 amended)")
+
+    with isolated_home():
+        capture_server.do_create_box({"box": 4, "name": "S key"})
+        with Store().write() as snapshot:
+            for index in range(1, 41):
+                snapshot.inventory.record_capture(master.Card(box=4, index=index))
+
+        before = capture_server.do_boxes()["boxes"][0]
+        checks.equal(
+            before["sections"],
+            [],
+            "the box starts undeclared — no divider exists because nobody has put one in",
+        )
+        checks.equal(
+            [(d["section"], d["start"], d["end"], d["count"]) for d in before["sections_detail"]],
+            [(1, 1, 40, 40)],
+            "and it renders as ONE section holding all forty cards, not as two of 25 "
+            "(D10, amended 2026-08-29 — the 25-card default is deleted)",
+        )
+
+        row = capture_server.do_open_section(4, {})
+        checks.equal(
+            row["sections"],
+            [1, 41],
+            "one press puts a divider in front of the NEXT card — and materialises the "
+            "implicit first one, because `check_sections` requires a layout to start at 1 "
+            "and there is no card before the front of a box",
+        )
+        checks.equal(
+            [(d["section"], d["start"], d["count"]) for d in row["sections_detail"]],
+            [(1, 1, 40), (2, 41, 0)],
+            "the answer carries the SERVER's own spans, which is what the receipt on the "
+            "capture screen reads — the app does no section arithmetic",
+        )
+        checks.equal(
+            join.Position(4, 41, (1, 41)).label,
+            "Box 4 · Section 2 · Card 1",
+            "so the next card captured is card 1 of section 2",
+        )
+
+        # THE HIGH-WATER MARK, WHICH IS THE WHOLE REASON THE ROUTE TAKES NO INDEX. Box 6
+        # holds four records at 1, 2, 3 and 7 — a shape D10 makes ordinary, since every sale
+        # and every retirement leaves a permanent gap. A count says the next card is 5. The
+        # allocator says 8, and the allocator is the one that is right about where the hand
+        # will put it, so a divider anywhere else would sit in front of a card that never
+        # arrives. Observed failing against a count before this case was kept.
+        with Store().write() as snapshot:
+            for index in (1, 2, 3, 7):
+                snapshot.inventory.record_capture(master.Card(box=6, index=index))
+        checks.equal(
+            capture_server.do_open_section(6, {})["sections"],
+            [1, 8],
+            "THE DIVIDER GOES AT `next_index`, NOT AT COUNT + 1 — a box with gaps in it "
+            "would otherwise be divided in front of a card that will never be captured",
+        )
+
+        # THE STORE RAISES AND `_dispatch` NAMES THE CODE, so each refusal is asserted
+        # twice: the exception here, and the string a client is actually told, on a socket
+        # at the bottom of this section. That is the split `check_box_routes_and_search`
+        # already draws for the sealed box, and it exists because an in-process call proves
+        # nothing about the half that reaches a screen.
+        checks.raises(
+            master.SectionEmpty,
+            lambda: capture_server.do_open_section(4, {}),
+            "a second press with nothing captured between refuses: the section you just "
+            "opened is still empty, so the divider asked for is already there",
+        )
+        checks.equal(
+            capture_server.do_boxes()["boxes"][0]["sections"],
+            [1, 41],
+            "and the refusal moved nothing — no second divider, no rewritten layout",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_open_section(4, {"at": 41}),
+            "field_not_settable",
+            "a body naming an index is refused rather than obeyed: the index is the "
+            "store's to read, and a client that could send one could send a stale one",
+        )
+
+        # A DECLARED DIVIDER PAST THE FILL is legal (`_section_spans` renders it with a
+        # count of zero) and is the one layout this route cannot append to, because the
+        # divider it would add belongs BEHIND one that already exists.
+        with Store().write() as snapshot:
+            snapshot.inventory.record_capture(master.Card(box=5, index=1))
+        capture_server.do_put_box(5, {"sections": [1, 51]})
+        checks.raises(
+            master.SectionAhead,
+            lambda: capture_server.do_open_section(5, {}),
+            "a divider already declared past the next card refuses, naming it — appending "
+            "would make the layout unsorted, and `check_sections` would say so in a "
+            "sentence about a list rather than about this box",
+        )
+
+        capture_server.do_put_box(4, {"state": "closed"})
+        checks.raises(
+            master.BoxClosed,
+            lambda: capture_server.do_open_section(4, {}),
+            "A SEALED BOX TAKES NO DIVIDER, for the reason it takes no card: there are no "
+            "more cards to come, so the section would hold nothing, ever",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_open_section(77, {}),
+            "box_not_found",
+            "and a box nothing in this store has ever seen is not divided into existence",
+        )
+
+        # ONE EVENT NAME, NOT TWO. `set_sections` already logs `resectioned` with both
+        # layouts, which is everything a reader wants, and this store has been bitten by a
+        # new name before: D26 records the day a state and a history event sharing a word
+        # made months-old undo lines parse as states.
+        events = [e for e in Store().history() if e.get("event") == "resectioned"]
+        checks.equal(
+            [(e.get("box"), e.get("sections_from"), e.get("sections_to")) for e in events],
+            [(4, [], [1, 41]), (6, [], [1, 8]), (5, [], [1, 51])],
+            "every press appends `resectioned` carrying both layouts — the same line the "
+            "dividers editor writes, so history has one vocabulary for one fact",
+        )
+        checks.ok(
+            all(e.get("event") not in master.STATES for e in events),
+            "and the event name is not a card state, which is the trap D26 fell into",
+        )
+        checks.ok(
+            all("position" not in e for e in events),
+            "and carries no position: a divider is not at one, and a null there would read "
+            "as a lost card",
+        )
+
+        # ------------------------------------------------------------------ on the wire
+        #
+        # THE PATH AND THE CODES, which are the whole of what a client sees. `do_*` calls
+        # above prove the behaviour; only a socket proves that `POST /boxes/6/sections`
+        # reaches it and that the store's three exceptions arrive as three distinct strings
+        # rather than as one 500. `app/src/server.ts:openSection` branches on all three.
+        # Card 8 of box 6, so the section opened at 8 above holds something and the wire
+        # press below is a real one rather than the replay refusal.
+        capture_server.do_capture(capture_payload(6))
+
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, body, _ = request(port, "POST", "/boxes/6/sections", payload={})
+            checks.equal(
+                (status, json.loads(body)["sections"]),
+                (200, [1, 8, 9]),
+                "the route is reachable at the path the client uses, and answers with the "
+                "box row so the capture screen can redraw the box it is shooting",
+            )
+            for box, code, label in (
+                (6, "section_empty", "a replayed press is a 409 `section_empty`"),
+                (5, "section_ahead", "a divider ahead of the next card is 409 `section_ahead`"),
+                (4, "box_closed", "and a sealed box is 409 `box_closed`, not a 500"),
+            ):
+                status, body, _ = request(port, "POST", f"/boxes/{box}/sections", payload={})
+                checks.equal(
+                    (status, error_code(body)),
+                    (409, code),
+                    label + " — each in its own code, because these strings reach a screen",
+                )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -9791,6 +10023,7 @@ def run() -> Result:
     check_box_names(checks)
     check_box_claims(checks)
     check_place_neighbors(checks)
+    check_open_section(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_cli_seams(checks)

@@ -865,10 +865,9 @@
 /* A secondary action: outline and ink, no fill. The fill belongs to the capture button and
    to the resume button, and only one of those is ever live at a time.
 
-   `.capture-undo-go` shares everything but its height, and takes that height back below:
-   these are settings and it is the run. */
-.capture-go,
-.capture-undo-go {
+   It used to be shared with `.capture-undo-go`, which took its height back below; the undo
+   is a list of rows now and shares none of this. */
+.capture-go {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
@@ -884,16 +883,11 @@
   cursor: pointer;
 }
 
-/* THE ONE CONTROL IN THE APP THAT HARD-DELETES (D10), so it keeps the 44px the chips gave
-   up. It is pressed mid-run, one-handed, at the moment the operator has just seen a bad
-   photograph — which is exactly the press the height was ever for. */
-.capture-undo-go {
-  min-height: 44px;
-  font-size: 14px;
-}
+/* `.capture-undo-go` WAS HERE AND IS GONE. It was the single "Undo capture U" button, and
+   the 44px it kept — argued as the height the one hard-deleting control in the app deserves
+   — moved to `.capture-undo-row`, which is now that control, ten times over. */
 
-.capture-go:disabled,
-.capture-undo-go:disabled {
+.capture-go:disabled {
   color: var(--muted);
   cursor: not-allowed;
 }
@@ -910,7 +904,7 @@
 .capture-filter:focus-visible,
 .capture-text:focus-visible,
 .capture-go:focus-visible,
-.capture-undo-go:focus-visible {
+.capture-undo-row:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
@@ -1304,28 +1298,114 @@
    the true thing: nothing squeezes the one control in the app that hard-deletes, because a
    control you have to go looking for is one you reach for late.
 
-   ONE ROW, WRAPPING: what will be deleted on the left, the control that deletes it on the
-   right. Stacked it was 137px of a column that had none to spare, most of it the gap between
-   a thumbnail and a button that could have sat beside it. `flex-wrap` is what makes that
-   safe rather than clever — at a narrow width the two halves fall back to the stack this
-   replaces, and the server's undo refusals, which are the longest prose the app puts on
-   screen, keep a full-width line of their own inside `.capture-undo-action` either way. */
-.capture-undo {
+   A COLUMN AGAIN SINCE THE STACK, and the paragraph this replaces is why that is not a
+   regression. It read "ONE ROW, WRAPPING: what will be deleted on the left, the control that
+   deletes it on the right", and it was right about ONE target: stacking a thumbnail over its
+   own button cost 137px of a column that had none to spare. There is no separate button any
+   more — every row IS the control — so the saving that argument bought is now paid per row
+   instead of once, which is what the list's own cap and its 32px thumb are for. */
+/* THE DIVIDER CONTROL, between the shutter and the undo. Its own hairline above, which is
+   docs/DESIGN.md's one separation mechanism and the same rule `.capture-undo` below follows
+   — the three acts in this box are separated by lines rather than by panels or by air.
+
+   STACKED, NOT A ROW, and that is the receipt's doing rather than the button's. The button
+   is ~140px in a 288px column, so a note beside it would be four words a line — the same
+   measurement the undo footer records for the same column, and the server's section
+   refusals are the same class of prose (they name the divider that is in the way). The
+   button alone therefore costs 36px and the receipt only exists after a press.
+
+   36px and outline weight, from `.capture-go`: this is a secondary action beside a filled
+   shutter, and it is deliberately NOT the 44px `.capture-undo-row` keeps. That height is
+   argued there on one ground — those are the controls that hard-delete — and a divider
+   writes one integer into a list that is editable from another screen. */
+.capture-section {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--s2);
   flex: 0 0 auto;
   padding-top: var(--s2);
   border-top: 1px solid var(--line);
 }
 
-.capture-undo-target {
+.capture-undo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  flex: 0 0 auto;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+
+/* THE STACK — one row per undoable capture, newest first. It replaces a single target and a
+   single button, and the row IS the button: a list of ten with a control beside each would
+   be ten controls to hit in a 288px column, where the row itself is already a 44px target.
+
+   CAPPED AND SCROLLED AT ~4.5 ROWS. Ten rows is 440px in a column that also carries four
+   session fields, four claims, a shutter and a divider control, and the foot's own rule is
+   that the shutter never scrolls out of reach. Half a row is visible at the cap on purpose:
+   a list clipped at a row boundary reads as a list that ends there. The heading says how
+   many rows there are, which is the other half of not lying about a cap.
+
+   MEASURED AT THE RIG'S OWN SIZE, and the cap costs nothing there. At 1440x900 with ten
+   rows the sidebar is 720px against a stage that is already 838px, so the column is not
+   what sets the page height — the page scrolls 11px with this list and 11px with it
+   removed entirely, which is the stage's, not ours.
+
+   `min(198px, 22vh)` BECAUSE A SHORT WINDOW IS THE CASE THAT BINDS. The sidebar's height is
+   its content and does not shrink with the viewport, and this list is the one thing in the
+   foot that can give height back without taking a control away with it. So it gives it
+   first, and the rows that go are the deepest ones — the least likely to be the card you
+   meant. Measured at 1280x720: the list draws 158px and the whole column 700px, which keeps
+   the shutter, the divider and the top of the stack inside a 720px window. The page still
+   scrolls there and did before this list existed; that is the stage's floor, and
+   docs/DESIGN.md's no-page-scroll rule is the rig's 1440x900, where it does not.
+
+   `overscroll-behavior: contain` so a flick inside the list does not then scroll the page
+   out from under the shutter — the same rig-facing reason the page has for not scrolling at
+   all. */
+.capture-undo-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(198px, 22vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* THE ROW KEEPS THE 44px THE OLD BUTTON HAD, and for the same reason it had it: this is the
+   one control in the app that hard-deletes (D10), pressed mid-run and one-handed at the
+   moment the operator has just seen a bad photograph.
+
+   Hairline-separated rather than gapped, which is docs/DESIGN.md's one separation mechanism
+   and what every other list on this screen does. The first row drops its own line because
+   the footer's border already draws one above it. */
+.capture-undo-row {
   display: flex;
   align-items: center;
-  gap: var(--s3);
-  min-width: 0;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s1) 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.capture-undo-list > li:first-child .capture-undo-row {
+  border-top: 0;
+}
+
+.capture-undo-row:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.capture-undo-row:disabled {
+  cursor: not-allowed;
 }
 
 /* The position, in the sidebar, at the size of a label rather than the size of the stage's.
@@ -1333,11 +1413,44 @@
    reconstructed from the photograph — that argument is the stage's. Here the same string is
    an aiming aid beside a thumbnail, in a column a third as wide, where 20px mono wrapped
    `Box 3 · Section 1 · Card 7` across three lines and made the foot taller than the control
-   it names. */
-/* THE SIDEBAR IS A SMALLER REGISTER, and this fixes that rule's own recorded complaint that a
-   20px mono label wrapped across three lines: the treated block is 195px against 246px. */
-.capture-undo-target .capture-label {
+   it names.
+
+   `min-width: 0` and it may wrap: a two-line position is better than a row that pushes its
+   own count chip off the edge, and at 13px in this column the label fits on one line
+   anyway — it is the no-label fallback (`box 3, index 40`) that is longer. */
+.capture-undo-pos {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* THE SIDEBAR IS A SMALLER REGISTER, and this is main's rule following the element that draws
+   the address. It fixed a recorded complaint that a 20px mono label wrapped across three lines
+   — the treated block measured 195px against 246px — and the complaint is about the COLUMN,
+   which the undo stack sits in exactly as the single target did. D41: the structure is shared
+   and the figure is per site. */
+.capture-undo-pos .position-slot {
   --pos-slot: 20px;
+}
+
+/* HOW MANY ROWS THE LIST HOLDS, beside its heading. Metadata about a control rather than a
+   value the operator sets, so it is the quiet end of the scale — and it exists only because
+   the list is capped. */
+.capture-undo-depth {
+  margin-left: var(--s2);
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: none;
+}
+
+/* The count of what a stopped walk actually deleted, ahead of the server's own sentence.
+   Body face and inherited colour: it is prose, and it belongs to the refusal it prefixes
+   rather than being a second, quieter voice underneath it. */
+.capture-undo-partial {
+  font-weight: 700;
 }
 
 /* Small, and still recognisable as the card you just shot. The point is aiming the undo, not
@@ -1361,22 +1474,22 @@
    landscape thumb was 63px of card in 112px of letterbox. Capped by HEIGHT since the
    pass-D rebuild: 40px wide meant 71px tall, and the sidebar's height is the axis the
    whole column rations — the same aiming-not-judging argument, applied to the dimension
-   that binds. 44 matches the button beside it, so the foot's two rows are one height. */
+   that binds.
+
+   32 SINCE THE STACK, DOWN FROM 44, and the arithmetic is the argument: the height is paid
+   once per ROW now rather than once per screen, so 44 would make the row 52px and ten of
+   them 520px. At 32 the row is its own 44px floor and the thumb sits inside it. What the
+   thumbnail is for survives the cut — it answers "is this the card I meant", which is a
+   glance, not a judgement. */
 .capture-undo-thumb-portrait {
-  height: 44px;
+  height: 32px;
   width: auto;
   aspect-ratio: 9 / 16;
 }
 
-/* Stacked, because the sidebar is one column wide and the server's undo refusals are the
-   longest prose the app puts on screen (see `.capture-refused` below). Beside the button
-   in a 288px column they would be four words a line. */
-.capture-undo-action {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s2);
-}
+/* `.capture-undo-action` WAS HERE AND IS GONE WITH THE BUTTON IT WRAPPED. Its rule — stack,
+   because the sidebar is one column wide and the server's undo refusals are the longest
+   prose the app puts on screen — is `.capture-undo`'s own now: the footer is that column. */
 
 /* A refusal, not a failure of the run: outline weight, beside the control it came from.
    Nothing about a refused undo stops captures.
@@ -1436,13 +1549,11 @@
      scroll box at any width now — and `.capture-undo` went back to a row, which is what the
      wide layout draws as well since the target and its control were put on one line. A
      media query that restates the thing it is inside is a rule the next reader has to prove
-     is doing nothing. */
+     is doing nothing.
 
-  .capture-undo-action {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--s3);
-  }
+     A THIRD went with the undo stack: `.capture-undo-action` turned back into a row here,
+     and there is no such element any more — the footer is a list of full-width rows at
+     every width, which is the one arrangement a 288px column and a 900px one both want. */
 
   .capture-stage {
     grid-template-columns: 1fr;

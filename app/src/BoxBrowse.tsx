@@ -85,9 +85,12 @@ import './BoxBrowse.css'
  * `server.ts:positionLabel` — this file wrote it, the inventory view copied it verbatim, and
  * one rule about one field is one function. The whole argument went across with it, including
  * the part this screen learned the hard way: an earlier draft ported the arithmetic and D10's
- * 25-cards-per-divider constant into TypeScript, which is one divider size living in two
- * languages with nothing keeping them in step — and of the two answers, the one on screen is
- * the one a person walks to a box with.
+ * then-current 25-cards-per-divider constant into TypeScript, which is one divider rule living
+ * in two languages with nothing keeping them in step — and of the two answers, the one on
+ * screen is the one a person walks to a box with. That constant was DELETED on 2026-08-29
+ * (D10, amended: an undeclared box is one section, and dividers exist only where somebody put
+ * one), and this screen needed no edit for it, which is the argument above collecting its
+ * evidence.
  *
  * What stayed here is the fallback at the call sites below, which is this screen's decision
  * rather than the rule's: a row with no label shows its store key with `no label` in front of
@@ -97,8 +100,11 @@ import './BoxBrowse.css'
 
 /* The inventory arrives as a map keyed `"3/1"`. The key is kept for identity and React,
  * and shown verbatim in the one case where a row carries no label — never parsed into a
- * position: a store key and a physical location are two different facts that agree for the
- * first 25 cards in a box and diverge from card 26 on, where `3/26` is Section 2, Card 1. */
+ * position: a store key and a physical location are two different facts that agree until the
+ * box's first divider and diverge behind it, where `3/26` in a box divided at 26 is Section 2,
+ * Card 1. (They agree all the way through an undeclared box, which is not a reason to parse
+ * one — that is a fact about that box's layout today, and a divider is one keypress away on
+ * the capture screen.) */
 export type Row = { key: string; card: InventoryCard }
 
 /* Box-walk order — box, then index. The same order `store/queues.py:sort_key` falls back

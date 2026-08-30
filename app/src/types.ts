@@ -165,10 +165,11 @@ export type CardSummary = {
   /** `"<box>/<index>"`, the store's own key. Not a label and not a SKU. */
   key: string
 
-  /** `Box 3 · Section 2 · Card 17`, rendered by `pipeline/join.py:Position.label` at 25
-   *  cards per section. The app displays this string and never composes a second one
-   *  (capture-app spec section 5.1) — a client-side renderer is a copy of D10's divider
-   *  size that nothing keeps in step with the pipeline's.
+  /** `Box 3 · Section 2 · Card 17`, rendered by `pipeline/join.py:Position.label` against
+   *  the box's own dividers. The app displays this string and never composes a second one
+   *  (capture-app spec section 5.1) — a client-side renderer is a copy of a rule nothing
+   *  keeps in step with the pipeline's, and that rule moved on 2026-08-29 when the
+   *  25-cards-per-divider default was deleted (D10, amended).
    *
    *  STILL A STRING FOR A POOLED CARD (D24), and a different one: the capture screen
    *  prints this for where the card landed, so the server answers the pooled fact —
@@ -1135,13 +1136,17 @@ export type BoxRecord = {
 
   /** THE BOX'S DIVIDER INDICES, not a count of sections. D10 as amended 2026-08-23: a box
    *  "carries its own list of divider indices — `[1, 31, 56]` means section 2 starts at card
-   *  31", set by the New section control at the moment the real divider goes in.
+   *  31", set by the New section control at the moment the real divider goes in — which is
+   *  `S` on the capture screen, built 2026-08-29 and calling `openSection` in `server.ts`.
    *
-   *  AN EMPTY LIST IS "UNDECLARED", NOT "ONE SECTION", and the difference is load-bearing:
-   *  D10 says an empty list is what the 25-rule renders, which is what keeps every label
-   *  written before boxes existed byte-identical. A screen may not read `[]` as a box with no
-   *  dividers and draw one span from it — `sections_detail` is where the rendered answer is,
-   *  computed once by `pipeline/join.py:Position` against whichever rule applies.
+   *  AN EMPTY LIST IS "UNDECLARED", AND SINCE 2026-08-29 THAT RENDERS AS ONE SECTION. The
+   *  paragraph here used to say the difference was load-bearing because `[]` was what the
+   *  25-cards-per-divider rule rendered; that rule is deleted (D10, amended), and an
+   *  undeclared box is now the single undivided section it physically is. The prohibition
+   *  it protected still stands and is the reason this note is rewritten rather than cut: a
+   *  screen may not derive spans from this list. `sections_detail` is the rendered answer,
+   *  computed once by `pipeline/join.py:Position`, and it is the only thing that stays right
+   *  when the rule underneath it moves — as it just did.
    *
    *  ONE FIELD IN THIS RECORD IS TYPED FROM D10 RATHER THAN FROM THE ROUTE CONTRACT, and it
    *  is this one — the contract named `sections` without saying what shape it takes, on the

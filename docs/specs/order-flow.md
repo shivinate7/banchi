@@ -210,9 +210,13 @@ permanent gap, and nothing renumbers it.** Section and Card are a *rendering* of
 against the box's current divider layout, so moving a divider relabels every card behind it
 without touching a single index.
 
-`CARDS_PER_SECTION = 25` survives in `pipeline/join.py` as the default a box that has declared
-no layout renders with. That is not a leftover: it is what keeps every label written before
-boxes existed byte-identical, and it is what the migration writes for every box it finds.
+`CARDS_PER_SECTION = 25` used to survive in `pipeline/join.py` as the default a box that had
+declared no layout rendered with — kept because it made every label written before boxes
+existed byte-identical. **It was deleted on 2026-08-29** (D10, amended by the owner): an
+undeclared box renders as the one undivided section it physically is, and the labels of every
+undeclared box moved once, deliberately, in exchange for never again naming a divider nobody
+put in. The migration still writes an empty layout for every box it finds; what changed is
+only what an empty layout renders as.
 
 `check_sections` refuses rather than repairs. A layout is the indices each section *starts*
 at, so the first is always 1; sorted, because an unsorted list makes the section a scan whose

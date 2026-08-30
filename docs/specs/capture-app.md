@@ -432,6 +432,32 @@ It must show *what it will delete* before you press it: the position, and ideall
 thumbnail, of the card that would go. That is not a confirmation step; it is the difference
 between an undo you can aim and one you fire hopefully.
 
+**IT IS A STACK OF TEN AS OF 2026-08-29, AT THE OWNER'S ASK, AND THE PARAGRAPH ABOVE IS WHAT
+IT IS BUILT ON.** *"Make undo capture actually U undo's the most recent one, but it's
+actually a growing queue, let's say the 10 most recent captures that I can just click undo
+capture on from the sidebar."* The screen drew one card and one button; it draws the
+session's ten most recent captures into the current box, newest first, and every row is its
+own control.
+
+**`U` and the trigger seam still mean exactly one card** — the top row. Row N undoes N: that
+card and everything captured after it, by walking the same route N times, newest first,
+because D10 lets undo reach the newest capture in a box and nothing else. A per-row delete
+of a middle card is a different operation (D10 ruling 1's mid-box remove) and stays on
+`#/inventory`, because it renumbers every card behind it and would re-point the list it was
+pressed from.
+
+**The number of cards a row removes is drawn on the row.** That is the whole guard, and it
+is the direct descendant of "it must show what it will delete before you press it": the
+no-dialog rule is argued for ONE card still within reach of the hand that fed it, so a press
+that deletes five has to make the five visible instead. The count is also the row's ordinal,
+which is what lets one chip say both; the top row carries its key instead.
+
+**A refused walk stops at the refusal and says how far it got**, because the cards that went
+and the cards that did not both leave the list, and the count is then the only thing that
+says where the operator is. **Where the server is ahead of this session the stack is one row
+deep**, unlabelled, exactly as the single control was: the cards in between were never taken
+here, so there is nothing to draw and nothing to promise about them.
+
 ### 5.5 — Failure behaviour
 
 **A failed capture stops the run and says so, loudly.** Rejected: quiet retry, and
@@ -448,6 +474,43 @@ exactly one.
 The retry guard is still worth using. Every capture sends a `capture_id`; when a response is
 lost between commit and client, resending the same id returns the original card with
 `created` false and burns no index. That is a *retry of one request*, not a queue.
+
+### 5.6 — New section, and the key it cost
+
+**BUILT 2026-08-29, at the owner's instruction: "just like C is capture, I want S for
+Sectioning (remap S for set hint to H)".** `S` puts one divider in front of the next card,
+at the moment the physical divider goes into the box. The set hint moved to `H`.
+
+**This is the control D10 has described since 2026-08-23 and nothing had built.** That entry
+said a box "carries its own list of divider indices, set by a New section control on the
+capture screen at the moment the real divider goes in", and what existed instead was a text
+field on `#/inventory` taking a whole layout — a different operation performed later, from
+another screen, needing the operator to remember which card they were on when the divider
+went in. The answer to that question is usually "about eighty".
+
+**It is an ACT and not a field, which is why it takes a letter of its own rather than a row
+in the claims list.** Every field on this screen changes what the NEXT photograph will claim
+about itself; this one writes to the store on the press, like the shutter and the undo, and
+it is on the same trigger primitive they are — so a held key is one divider, a modifier
+chord is the browser's, and the letter typed into the set hint is typing.
+
+**It sends no index.** `POST /boxes/<box>/sections` takes an empty body and the store reads
+its own high-water mark inside the lock. A client that computed the index would be reading
+one number across a round trip and sending it back, and at the feeder's measured 623 ms
+cadence that race is real: one capture in between and the divider lands behind the card it
+was meant to be in front of.
+
+**It refuses rather than guessing, in three named cases**: a second press with nothing
+captured between (`section_empty` — the divider you want is already there), a divider
+already declared past the next card (`section_ahead`), and a sealed box (`box_closed`, the
+same refusal a capture gets, for the same reason). Each is a sentence beside the control and
+never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
+divider changed nothing.
+
+**No undo, and no dialog.** The remedy is the dividers editor on `#/inventory`, which is
+where a wrong layout is corrected anyway, and a `resectioned` history line carries the
+layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
+what `docs/DESIGN.md` refuses in as many words.
 
 ## 6. trigger-seam
 

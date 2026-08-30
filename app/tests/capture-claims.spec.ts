@@ -12,11 +12,19 @@ import type { Page } from '@playwright/test'
  * `docs/GATES.md` records for 7b — four green checks and three screens nobody could open —
  * and this file is the check for this control.
  *
- * ONLY READS ARE STUBBED, AND NO CAPTURE IS EVER TAKEN. `GET /games` is intercepted so the
- * vocabulary is fixed rather than whatever `pipeline/games.py` authors today, and no box is
- * ever selected — the same rule `motion-live.spec.ts` states for the same reason: with a box
- * a capture would POST into a real store. Every assertion here is about what the control
- * HOLDS, which is what decides what the wire would carry.
+ * NO CAPTURE IS EVER TAKEN. `GET /games` is intercepted so the vocabulary is fixed rather
+ * than whatever `pipeline/games.py` authors today, and the shutter is never pressed — the
+ * same rule `motion-live.spec.ts` states for the same reason: a capture would POST into a
+ * real store. Every assertion here is about what the control HOLDS, which is what decides
+ * what the wire would carry.
+ *
+ * "ONLY READS ARE STUBBED, AND NO BOX IS EVER SELECTED" WAS THE RULE AND HALF OF IT MOVED on
+ * 2026-08-29, when the divider act arrived: `S` writes to a BOX, so its cases have to have
+ * one selected and have to stub `POST /boxes/<box>/sections`. The property that mattered is
+ * kept and is stated as itself — nothing here reaches a store — and `/capture` is stubbed to
+ * FAIL in those cases, so a stray press says so instead of writing a card. The spec that
+ * genuinely captures is `capture-undo.spec.ts`, which is a separate file for exactly this
+ * reason.
  *
  * IT IS NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is seven
  * Python tests at the Stop hook; this starts a browser, which `make design-check` runs.
@@ -364,4 +372,190 @@ test('C stays the shutter and B stays the box: an option key never shadows one a
   await page.keyboard.press('b')
   await expect(rarityOpt(page, 'Secret Rare')).toHaveCount(0)
   await expect(page.locator('.capture-open').filter({ hasText: /Box/ })).toBeVisible()
+})
+
+/* ---- THE DIVIDER ACT (owner, 2026-08-29) ---------------------------------------------
+ *
+ * "just like C is capture, I want S for Sectioning (remap S for set hint to H)". Two
+ * things nothing else in the tree can catch:
+ *
+ * THE REMAP IS A SWAP, and a swap has two halves that fail independently. `FIELD_KEYS`
+ * losing `s` without gaining `h` leaves the set hint mouse-only; gaining `h` without the
+ * act taking `s` leaves the letter dead. `tsc` sees a record of strings either way.
+ *
+ * THE ACT IS THE ONLY CONTROL ON THIS SCREEN THAT WRITES TO A BOX RATHER THAN TO A CARD,
+ * so the request it sends is worth pinning: no index in the body, because the store reads
+ * `next_index` inside its own lock (D10 amended, `server.ts:openSection`). A client that
+ * started sending one would still pass a type check and would still look right on screen.
+ *
+ * THE STORE IS STILL NEVER TOUCHED, which is this file's own rule. The box list and the
+ * section route are both stubbed, and `/capture` is stubbed to FAIL — so if a press ever
+ * reached the shutter with a box selected, this spec says so instead of writing a card.
+ */
+
+/** One box, as `GET /boxes` renders it. Every field of `BoxRecord`, because `RunPanel`'s
+ *  spec records what a short fixture costs: the screen reads `sections_detail` and a record
+ *  missing it crashes the render rather than failing an assertion. */
+const ONE_BOX = {
+  boxes: [
+    {
+      box: 3,
+      name: 'S key',
+      sections: [],
+      state: 'open',
+      capacity: null,
+      fill: 40,
+      next_index: 41,
+      cards: 40,
+      sold: 0,
+      retired: 0,
+      listed: 0,
+      sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }],
+    },
+  ],
+}
+
+/** The box row the section route answers with: the same box, now divided at 41. */
+const DIVIDED = {
+  ...ONE_BOX.boxes[0],
+  sections: [1, 41],
+  sections_detail: [
+    { section: 1, start: 1, end: 40, count: 40 },
+    { section: 2, start: 41, end: null, count: 0 },
+  ],
+}
+
+/** The screen with a box selected and every write stubbed. Returns the bodies the section
+ *  route was called with, so a case can assert what went over the wire. */
+async function openWithBox(page: Page): Promise<string[]> {
+  const bodies: string[] = []
+  await page.route(/\/boxes$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(ONE_BOX),
+    })
+  })
+  await page.route(/\/boxes\/\d+\/sections$/, async (route) => {
+    bodies.push(route.request().postData() ?? '')
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(DIVIDED),
+    })
+  })
+  /* A tripwire, not a stub: nothing in these cases should ever reach the shutter, and a
+     404 with a body the screen would render is how this file finds out if one does. */
+  await page.route(/\/capture$/, async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'no capture may happen in this spec' }),
+    })
+  })
+  await open(page)
+
+  await page.keyboard.press('b')
+  await page.keyboard.type('3')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('3')
+  return bodies
+}
+
+function sectionButton(page: Page) {
+  return page.locator('.capture-section button')
+}
+
+test('S is the divider and H is the set hint: the remap, both halves', async ({ page }) => {
+  await open(page)
+
+  /* `s` no longer opens a field. Asserted as an ABSENCE of the set hint's open state rather
+     than as the presence of something else, because that is the half a partial remap
+     breaks: `FIELD_KEYS` still carrying `s` would open this and nothing would say so. */
+  await page.keyboard.press('s')
+  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toHaveCount(0)
+
+  await page.keyboard.press('h')
+  await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toBeVisible()
+
+  /* And the chip says so. The operator never computes a key — they read it off the row, the
+     same rule the option alphabet above is asserted by. */
+  await expect(page.locator('.capture-open').locator('.capture-k').first()).toHaveText('H')
+  await page.keyboard.press('Escape')
+  await expect(sectionButton(page).locator('.capture-key')).toHaveText('S')
+})
+
+test('with no box the divider is disabled — not absent, and it writes nothing', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* docs/DESIGN.md's absent-not-disabled rule is about the control that COMMITS to
+     something irreversible; this one is free and reversible, and a control that vanished
+     until a box was picked would read as a missing feature on the screen the owner cannot
+     afford to hunt on. So: present, named, disabled. */
+  await expect(sectionButton(page)).toBeVisible()
+  await expect(sectionButton(page)).toBeDisabled()
+
+  await page.keyboard.press('s')
+  await expect(page.locator('.capture-section p')).toHaveCount(0)
+})
+
+test('S puts a divider in front of the next card, and sends no index', async ({ page }) => {
+  const bodies = await openWithBox(page)
+  await expect(sectionButton(page)).toBeEnabled()
+
+  await page.keyboard.press('s')
+
+  /* The receipt names the section the SERVER rendered and the card it starts at — read off
+     `sections_detail`, never off `sections.length`, which is the section arithmetic D10
+     keeps out of the app. */
+  await expect(page.locator('.capture-section p')).toContainText('New section')
+  await expect(page.locator('.capture-section .capture-inline-label')).toHaveText(
+    'Section 2 · from card 41',
+  )
+
+  /* THE BODY IS EMPTY, and that is the contract rather than a detail. The divider goes
+     where the store's own high-water mark says the next card lands; an index on the wire
+     would be one read across a round trip, which at a 623 ms feeder cadence is a real race
+     (`server.ts:openSection`). `{}` and not nothing: every write in the capture server
+     refuses an absent body as `body_required`. */
+  expect(bodies).toEqual(['{}'])
+})
+
+test('a refused divider is a sentence beside the control, and never a halt', async ({
+  page,
+}) => {
+  await openWithBox(page)
+  await page.route(/\/boxes\/\d+\/sections$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      /* The server's own envelope — `_fail` writes `{"error": {"code", "message"}}` and
+         `server.ts:describeFailure` reads exactly that. A flatter fixture reaches the
+         screen as a bare "409 Conflict ... http_error", which is what this spec caught the
+         first time it ran and is precisely the sentence the operator must never get. */
+      body: JSON.stringify({
+        error: {
+          code: 'section_empty',
+          message: 'section 2 of box 3 already starts at card 41 and holds nothing yet.',
+        },
+      }),
+    })
+  })
+
+  await page.keyboard.press('s')
+
+  /* The server's own sentence, verbatim, beside the button — docs/DESIGN.md's copy rule for
+     the owner's screens, and the shape the undo refusal already takes. The machine string
+     rides with it so what was seen on screen is greppable. */
+  await expect(page.locator('.capture-section .capture-refused')).toContainText(
+    'already starts at card 41',
+  )
+  await expect(page.locator('.capture-section .capture-halt-code')).toHaveText('section_empty')
+
+  /* AND THE RUN IS NOT HALTED. Spec 5.5 stops the run when a card may have gone past
+     unrecorded; a refused divider changed nothing at all. The halt banner is the thing that
+     must not be here. */
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
 })
