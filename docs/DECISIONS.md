@@ -6463,23 +6463,14 @@ sentence is worse than no count.
 - **A hand-listed copy is still double-counted.** The export reports it live and no stamped card
   backs it, so the pipeline adds another. Unchanged from before this entry and inherent: nothing
   records which physical card backs a listing the pipeline did not make.
-- **A review answer stamps a SKU without sending anything**, so `copies_not_sold` over-states
-  the bound by one per stamp. This entry first published that as *"one card in 715"* and it was
-  wrong by two orders of magnitude: **107 of the 213 stamped cards** got their SKU from an
-  `answered` event rather than from a push. What is genuinely small is where such a stamp
-  EXCEEDS the claim it bounds, because the
-  ceiling only binds above zero — measured across all 117 listings, **one SKU, over by one
-  copy** (`9189797`). It can only ever leave a stale claim standing; it can never let one be
-  exceeded.
-- **`emit` writes a card's IDENTITY only for the copies it sends**, so driving
-  `add_to_quantity` to zero for an at-cap SKU — which is this entry's whole point — leaves a
-  later box's copies of it at `state: captured, sku: null`, invisible to `GET /search` and
-  every SKU-keyed surface. That coupling is D49 Part Two's documented cost and this entry
-  WIDENS the set of cards it reaches. Not fixed here: separating the identity write from the
-  send is a change to D49, and doing it quietly inside an arithmetic fix is how a documented
-  cost becomes an undocumented one.
-  and it is shared with the code this replaces. `retire` does not ask whether the SKU has an
-  outstanding push.
+- **A review answer stamps a SKU without sending anything, AND THAT STOPPED MATTERING WHEN THE
+  CEILING MOVED.** While the bound was the shelf count it over-stated by one per stamp, which
+  this entry first published as *"one card in 715"* and which was wrong by two orders of
+  magnitude — **104 of the 213 stamped cards** got their SKU from an `answered` event rather
+  than from a push. Against a SALES count it cancels: an answer-stamped copy is in
+  `positions_for_sku` and in `copies_not_sold`, on both sides of one subtraction.
+- **A retired copy whose row is in an unimported CSV** is shared with the code this replaces.
+  `retire` does not ask whether the SKU has an outstanding push.
 - **`backstock` changes meaning**, and it is a correction rather than a side effect: it stops
   counting a listed copy as backstock. Rendered in `pricing.json` and read by no component.
 
@@ -6488,10 +6479,27 @@ reconcile-forward projection above (78 rows to 0), the 167 stuck copies, the one
 SKU, and the T3 and T7 cases, each observed failing against the old expressions before it was
 kept.
 
-**What would reopen this: a marker that a copy actually reached an import file.** One field on
-`Card`, written by `cmd_emit`'s push loop beside the `sku` stamp, would make the bound exact and
-retire the review-answer approximation above. That is a schema change and a decision entry, and
-it is the only thing that would make `copies_not_sold` unnecessary rather than merely good enough.
+**IT IS INVARIANT UNDER THE RE-EMIT THAT `d3c5101` LEFT OWED, WHICH IS THE ONE THING WORTH
+CHECKING BEFORE THAT BACKFILL RUNS.** That commit widened the identity stamp and the orders plan's
+Phase 0 calls for re-emitting `runs/2026-08-30-box3-01` to backfill it, which stamps copies that
+were never sent. The sales count cannot move: a newly stamped UNSOLD copy adds one to
+`positions_for_sku` and one to `copies_not_sold` and cancels, and a SOLD copy can never be newly
+stamped at all, because `emit` walks `uncommitted_positions` and `cli/resolve.py` commits every
+terminal card — which is the same guard `d3c5101` cites for not using `match.positions`. Measured:
+one sold card in the store carries no SKU, and no re-emit can reach it.
+
+**WHAT WOULD REOPEN THIS IS NARROWER THAN IT LOOKED, AND THE ORDERS PLAN IS WHY.** The reopener
+named here was a staged quantity the pipeline could read — D34's too. That plan probed every
+candidate and reports that **no third party can supply one**: `Total Quantity` and
+`Add to Quantity` are the owner's own listing state, and no mirror, API or export outside
+TCGplayer's own knows how many copies you have live. So this is not a stopgap with a near expiry;
+it is the answer until TCGplayer itself offers a staged export the pipeline can read, and that
+API is closed to new developers.
+
+**What is left is a marker that a copy actually reached an import file.** One field on `Card`,
+written by `cmd_emit`'s push loop beside the `sku` stamp, would make the bound exact rather than
+inferred. It is worth less now than when this entry was first written — the sales count is exact
+wherever the export corroborates a live copy — so it is recorded as available rather than owed.
 
 ---
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
