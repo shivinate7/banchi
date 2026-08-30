@@ -983,7 +983,7 @@ than the nothing it had.
 
 ---
 
-## The supervisor's known gaps (D50, 2026-08-30)
+## The supervisor's known gaps (D51, 2026-08-30)
 
 Three, none of them closable without more machinery than the failure is worth today. Recorded
 because a green `make up` should not read as a promise none of them exists.
@@ -1000,7 +1000,7 @@ because a green `make up` should not read as a promise none of them exists.
   child, and there is **no rollback to the old one** — the last-good process is already gone by
   then. The containment is the fast-failure cap: after five quick deaths the supervisor stops
   respawning, keeps running, keeps watching, and says so. Fixing it properly means keeping the
-  old child alive until the new one has bound, which is the socket-passing design D50 names and
+  old child alive until the new one has bound, which is the socket-passing design D51 names and
   rejects for v1.
 
 - **The reload notice has no automated case, and three attempts to write one are the reason
@@ -1028,7 +1028,7 @@ because a green `make up` should not read as a promise none of them exists.
 - **The swap gap.** Between the old child exiting and the new one binding, a request gets
   `ECONNREFUSED`, and `app/src/server.ts` deliberately has no retry — so it surfaces as
   `unreachable`, which reads as "the server is down". Measured at tens of milliseconds. Named in
-  D50 with the fix that was considered and declined.
+  D51 with the fix that was considered and declined.
 
 ## Prose that outran the code
 

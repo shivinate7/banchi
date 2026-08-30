@@ -34,6 +34,13 @@ Color      #FCFCFD  bg        the page. Everything sits on this.
            — and one boundary the hairline was too quiet to draw —
            #8C8C8C  field     the border of something you TYPE INTO. Nowhere else.
                               3.36:1 on surface, 3.28:1 on bg, 3.08:1 on hover.
+           — and that boundary's one state, granted against the lock (D50) —
+           #6B6E73  field-hover  the same border, under the pointer. Nowhere else.
+                              5.12:1 on surface, 4.99:1 on bg, 4.69:1 on hover.
+                              3.89:1 against ink, which is the number that chose it:
+                              focus is an ink OUTLINE, so a hover border has to stay
+                              tellable from focus. muted is 2.50:1 there and reads as
+                              focus, which is why the free reuse was refused.
            — and one token that names a value already in use —
            #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
 

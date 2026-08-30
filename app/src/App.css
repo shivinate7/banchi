@@ -231,7 +231,13 @@
  * things. `--muted` on `--bg` is 7.76:1, which is the pairing every label in this nav already
  * sits on — no new pairing is introduced by anything in this file.
  */
-.app-nav-key {
+/* ONE CHIP LOOK, TWO SELECTORS, AND THE SECOND ONE IS NOT `.app-nav-key` FOR A REASON. The
+   step's chips (App.tsx's `.app-nav-step`) are the same key off the same keyboard and take the
+   same 10px bordered chip — but the armed rule below selects `.app-nav-key`, and the step is
+   never armed. Wearing the class would make Cmd-arrow light up whenever a comma had just been
+   pressed, which is a chip claiming a state it does not have. */
+.app-nav-key,
+.app-nav-step kbd {
   font-family: var(--util);
   font-size: 10px;
   font-weight: 500;
@@ -242,6 +248,25 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   color: var(--muted);
+}
+
+/* ---- the step's chips (D50) ----
+ *
+ * `⌘←` `⌘→`, drawn once at the end of the ring they walk — App.tsx's `STEP_HINT_GROUP` puts
+ * them there rather than at the end of the bar, where `.app-nav-group-aside`'s auto margin
+ * would have stood them beside the two routes the step cannot reach.
+ *
+ * `⌘` AND NOT `Ctrl` OR BOTH. The handler takes either, because Ctrl is what a machine that
+ * is not a Mac would press; this rig is a Mac (D13), and a chip naming two modifiers is a chip
+ * that has to be read rather than recognised.
+ *
+ * `align-items: center` because `.app-nav-group` stretches its children and a chip stretched to
+ * the full 46px of the bar is a box around nothing. The 4px gap is `--s1`, the same step that
+ * sits between a route's name and its own chip. */
+.app-nav-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
 }
 
 /* ARMED, AND THE CHROME SAYS SO. The leader eats exactly one following keystroke wherever it

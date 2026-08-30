@@ -620,8 +620,14 @@ command-line path in the project at once — measured, not assumed: mutating the
 require the header turns eleven T7 assertions red, eight of them in the concurrency section
 that sends no origin at all.
 
-**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults — `http://localhost:5173` and
-`http://127.0.0.1:5173` — and cannot replace them. Comma- or whitespace-separated; entries
+**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults and cannot replace them. **Those
+defaults are THIS CHECKOUT's dev origin in both spellings**, `http://localhost:<dev port>`
+and `http://127.0.0.1:<dev port>` — 5173 in the main working tree, and the port
+`server/ports.py:dev_port` derives in a linked worktree. It was the literal 5173 everywhere
+until 2026-08-30, which meant a worktree served an app whose every write its own server then
+refused as `origin_not_allowed`; D43's amendment carries the account. A checkout allows its
+own origin and not another tree's, so pointing one tree's app at another tree's server —
+already a deliberate act, through `VITE_CAPTURE_SERVER` — needs the origin named here. Comma- or whitespace-separated; entries
 are lowercased and lose a trailing slash, because that is what a human types. A port is
 never defaulted in, so `http://localhost` and `http://localhost:80` are different and the
 error is toward refusing. **`*` is not a wildcard here**: the list is compared by exact
@@ -629,7 +635,7 @@ string, so setting the variable to `*` refuses everything rather than re-opening
 asserted in T7, because a wildcard sneaking back through configuration would undo the whole
 control silently.
 
-**`PKMNSCAN_LAN_NAME`** (D50) is the name the owner's own DNS answers with — `pkmnscan.lan` on
+**`PKMNSCAN_LAN_NAME`** (D51) is the name the owner's own DNS answers with — `pkmnscan.lan` on
 their UniFi. `scripts/serve.py` reads it, together with this Mac's Bonjour name, and composes
 `PKMNSCAN_ALLOWED_ORIGINS` from both when it starts the server, so opening the app from a phone
 can WRITE and not only read. It is read through `envfile`, so it belongs in `.env` rather than a
@@ -641,7 +647,7 @@ server reads, still extends rather than replaces, and still cannot be widened to
 
 ### 6.4a — Shutdown, and why it counts requests rather than threads
 
-**`make up` restarts this process whenever a watched Python file changes** (D50), so shutdown
+**`make up` restarts this process whenever a watched Python file changes** (D51), so shutdown
 stopped being a once-a-day event and became a many-times-a-day one. `store/session.py:Store.write()`
 replaces four JSON files in sequence — each atomic alone, none atomic as a set — so a kill landing
 between them leaves a torn store.

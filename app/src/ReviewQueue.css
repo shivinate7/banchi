@@ -1410,8 +1410,12 @@
   background: var(--hover);
 }
 
+/* `not-allowed`, matching the other seventeen disabled controls in the product. See the same
+   correction on `Runs.css:.runs-plain:disabled` — these two were the only pair that disagreed,
+   and this screen is the one where a stand-down choice being refused most needs to read as
+   refused rather than as inert. */
 .review-close-choice:disabled {
-  cursor: default;
+  cursor: not-allowed;
   opacity: 0.6;
 }
 
@@ -1500,6 +1504,14 @@
   border: 1px solid var(--field);
   border-radius: var(--r);
   padding: var(--s2) var(--s3);
+}
+
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.review-catalog-input:hover:not(:disabled) {
+  border-color: var(--field-hover);
 }
 
 .review-catalog-input:disabled {

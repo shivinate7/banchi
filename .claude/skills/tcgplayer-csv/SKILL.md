@@ -36,6 +36,19 @@ Exactly two: `Add to Quantity` and `TCG Marketplace Price`. Everything else roun
 byte-identical. `TCGplayer Id` is the SKU and is never modified — it is what the import
 matches on.
 
+## The price columns are current-state only
+
+Four of them — `TCG Market Price`, `TCG Direct Low`, `TCG Low Price With Shipping`,
+`TCG Low Price` — plus `Total Quantity`, the count of live listings. **Not one carries a
+timestamp, a sale record or a sample size.** The file is what the marketplace looks like at
+the moment the button was pressed, and nothing in it is a window onto anything.
+
+`TCG Market Price` is the only column with sales behind it, and it is TCGplayer's own
+aggregate over recent sales rather than a sale — one number, no window. **There are no
+last-sold rows in this export, and TCGplayer publishes none anywhere**, so this is not a
+gap to be filled from another one of their files. `docs/DECISIONS.md`'s Someday list
+carries what is available instead.
+
 ## Variant lives in the Condition string
 
 One SKU row per variant:

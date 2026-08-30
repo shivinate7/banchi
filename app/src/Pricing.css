@@ -415,6 +415,14 @@
   border-radius: var(--r);
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.pricing-input:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 /* A SUGGESTION READS AS ONE. It is a real value rather than a placeholder — the owner asked
    for a preset that "prefills a box as suggested" — so the only thing that can say it has not
    been chosen is its weight and its colour. */
@@ -452,6 +460,21 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   cursor: pointer;
+}
+
+/* The only control on this screen that did not answer the pointer. `.pricing-plain`,
+   `.pricing-preset` and `.pricing-run` all lift to `--hover` and this one — sitting in the same
+   row as the first of them — did not, which is one screen contradicting itself rather than two
+   screens disagreeing.
+
+   `--muted` on `--hover` is 7.30:1, the tightest pair in the palette and the one docs/DESIGN.md
+   publishes as the reason `--muted` was redrawn. Held, so this introduces no new pairing. The
+   pressed state below keeps its own colour and is `--accent` on `--hover` at 8.00:1.
+
+   Background only: the `aria-pressed` rule beneath draws an inset ring, and a hover that also
+   moved a border would make the two states argue about the same pixel. */
+.pricing-hold:hover:not(:disabled) {
+  background: var(--hover);
 }
 
 .pricing-hold[aria-pressed='true'] {
@@ -525,6 +548,14 @@
   background: var(--bg);
   border: 1px solid var(--field);
   border-radius: var(--r);
+}
+
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.pricing-field input:hover:not(:disabled) {
+  border-color: var(--field-hover);
 }
 
 .pricing-field-wide input {

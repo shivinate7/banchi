@@ -338,6 +338,14 @@
   min-width: 0;
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.boxops-field-input:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 .boxops-field-input::placeholder {
   color: var(--muted);
 }

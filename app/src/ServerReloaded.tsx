@@ -1,4 +1,4 @@
-/* "The server just reloaded" — the client half of `GET /status`'s `boot_id` (D50).
+/* "The server just reloaded" — the client half of `GET /status`'s `boot_id` (D51).
  *
  * WHY IT EXISTS. `make up` restarts the capture server whenever a watched Python file changes,
  * which is many times in a working session. That is the point of it — `docs/GATES.md` records
@@ -15,7 +15,7 @@
  * worth a word. Without that rule every page load would announce a reload that did not happen,
  * and a notice that cries wolf on load is one nobody reads on the day it matters.
  *
- * A SERVER THAT SENDS NO BOOT HEADER IS SILENT, NOT SUSPICIOUS — a server older than D50, or,
+ * A SERVER THAT SENDS NO BOOT HEADER IS SILENT, NOT SUSPICIOUS — a server older than D51, or,
  * far more often, a stubbed route in a spec. Inventing a reload from a missing header would
  * make every test that stubs the wire report one.
  *

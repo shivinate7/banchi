@@ -78,6 +78,9 @@ function card(input: {
    *  assertion in 'the photograph is sized by its column' measures `.browse-facts`, and a note
    *  that wraps adds a row's height to it. */
   note?: string | null
+  /** Which run identified this card, or null for a card no run has read. `pricing.json` is
+   *  per-run, so this is the edge the Market row walks — card -> run -> that run's table. */
+  run?: string | null
   /** D3 rung 1's finish claim as it comes off `inventory.json`. Defaults to the BARE STRING
    *  every record written before the amendment of 2026-08-23 carries — `_card_row` ships
    *  `asdict(card)` raw, so both shapes really do arrive here and the default is the one
@@ -138,7 +141,7 @@ function card(input: {
     state: input.state,
     state_at: '2026-08-22T12:34:00+00:00',
     retire_reason: null,
-    run: null,
+    run: input.run ?? null,
   }
 }
 
@@ -223,6 +226,100 @@ const PLAN = {
     },
   ],
 }
+
+/* THE RUN THAT HAS A PRICING TABLE, and the table it has. Named constants because the stub in
+   `open` and three assertions all read them, and a run name spelled two ways would look like a
+   cache miss rather than like a typo.
+
+   THE SHAPE IS `pricing.json`'s OWN, cut to what the Market row reads. `cli/cmd_join.py` writes
+   every export cell verbatim under `row` and the four other price columns under `snap`; none of
+   that reaches this panel, which asks the table two questions — which positions the join matched,
+   and what the Market cell said — so the fixture answers those and does not pretend to be a
+   whole table. `app/tests/pricing.spec.ts` is where the rest of it is exercised.
+
+   THREE SKUS, ONE PER OUTCOME. `8937370` has a market and holds two positions, which is D7's
+   fungible copies and the case that proves the lookup is by POSITION rather than by card:
+   `2/2` carries no SKU at all on its record and is still found here. `8937371` matched a row
+   whose Market cell is blank — D9's unknown price, which must never render as $0.00 — and
+   `2/5` is in no SKU's positions, which is a card the join matched no catalog row for. */
+const PRICED_RUN = '2026-08-29-box2-01'
+
+/** Two days before the test runs, so the row's age is a stable `2 days` rather than a date that
+ *  goes stale in the fixture. Seconds, because `written_at` is a UNIX second off the file's own
+ *  mtime and the client multiplies. */
+const PRICED_AT = Math.floor((Date.now() - 2 * 86400000) / 1000)
+
+const PRICING = {
+  run: PRICED_RUN,
+  pricing: {
+    run: PRICED_RUN,
+    threshold: '0.40',
+    floor: '0.40',
+    rule: 'match',
+    basis: 'market',
+    presets: [],
+    games: [],
+    bands: [],
+    skus: [
+      {
+        sku: '8937370',
+        game: 'pokemon',
+        row: {},
+        bucket: 'listable',
+        copies: 2,
+        add_to_quantity: 2,
+        backstock: 0,
+        live_before: 0,
+        committed: 0,
+        at_cap: false,
+        condition: 'Near Mint',
+        set_name: 'ME01',
+        name: 'Thievul',
+        snap: { market: '5.47', direct_low: null, low: '5.47', low_with_shipping: null, now: null },
+        presets: {},
+        rule_price: '5.47',
+        positions: [
+          { box: 2, index: 1, label: 'Box 2 · Section 1 · Card 1' },
+          { box: 2, index: 2, label: 'Box 2 · Section 1 · Card 2' },
+        ],
+        listing: null,
+      },
+      {
+        sku: '8937371',
+        game: 'pokemon',
+        row: {},
+        bucket: 'no_market_data',
+        copies: 1,
+        add_to_quantity: 0,
+        backstock: 0,
+        live_before: 0,
+        committed: 0,
+        at_cap: false,
+        condition: 'Near Mint',
+        set_name: 'ME01',
+        name: 'Eiscue',
+        snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null },
+        presets: {},
+        rule_price: null,
+        positions: [{ box: 2, index: 4, label: 'Box 2 · Section 2 · Card 1' }],
+        listing: null,
+      },
+    ],
+  },
+  decisions: null,
+  remembered_sub_threshold: null,
+  written_at: PRICED_AT,
+}
+
+/** The five cards again, every one of them read by `PRICED_RUN`. A separate map rather than a
+ *  `run` on the default fixture, because that fixture's whole point is that its rows are null
+ *  and the fallbacks are assertable — and because a run on it would put a pricing fetch behind
+ *  every one of the fifty cases in this file. */
+const JOINED: Cards = Object.fromEntries(
+  Object.entries(CARDS).map(([key, held]) => [key, { ...held, run: PRICED_RUN }]),
+)
+
+const PRICED_STORE: Store = { cards: JOINED, search: (query) => searchAnswer(query, JOINED) }
 
 const GAMES = {
   default: 'pokemon',
@@ -355,7 +452,17 @@ function searchAnswer(query: string, cards: Cards = CARDS) {
 type Store = { cards: Cards; search: (query: string) => unknown }
 const STORE: Store = { cards: CARDS, search: (query) => searchAnswer(query) }
 
-async function open(page: Page, boxes: unknown = BOXES, store: Store = STORE): Promise<Wire[]> {
+/** What the pricing route answers, called per request. A THUNK rather than a value, because the
+ *  reload case has to change the answer between two requests in one test — and a module-level
+ *  mutable would leak between the tests Playwright runs in one worker. */
+type Priced = () => unknown
+
+async function open(
+  page: Page,
+  boxes: unknown = BOXES,
+  store: Store = STORE,
+  priced: Priced = () => PRICING,
+): Promise<Wire[]> {
   const wire: Wire[] = []
 
   const record = (method: string, url: string, body: unknown) =>
@@ -499,6 +606,36 @@ async function open(page: Page, boxes: unknown = BOXES, store: Store = STORE): P
      run list is `app/tests/run-panel.spec.ts`'s subject and not this file's. */
   await page.route(/\/pipeline\/runs$/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs": []}' })
+  })
+
+  /* THE CARD PANEL'S PRICE READ (2026-08-29), stubbed for the reason every read here is: an
+     unstubbed one is a request to whatever is listening on port 8000, which in this repo is the
+     owner's real capture server over their real runs.
+
+     KEYED ON THE RUN NAME so one handler covers both answers this row has to draw. `PRICED_RUN`
+     gets a table; every other name refuses `pricing_not_written`, which is the real refusal for
+     a run made before `pricing.json` existed or never joined — and the one refusal the panel
+     tells apart from the rest, because its remedy is a join rather than a look at the server.
+
+     THE DEFAULT FIXTURE NEVER REACHES IT. Every card in `CARDS` carries `run: null`, so the
+     panel draws `not joined yet` and issues no request at all; this exists for the cases that
+     hand in cards which do carry one. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/')[3] ?? '')
+    if (name !== PRICED_RUN) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'pricing_not_written',
+            message: `Run ${name} has no pricing.json — join this run and it will appear.`,
+          },
+        }),
+      })
+      return
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(priced()) })
   })
 
   /* THE CARD PANEL'S QUEUE READ, stubbed like everything else and for the reason at the top of
@@ -732,6 +869,50 @@ test('a copy in another box is reached by pressing its position, and the walk go
      does not. */
   await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toBeVisible()
   await expect(page.getByRole('button', { name: `Walk to ${FAR}` })).toHaveCount(0)
+})
+
+test('a walk-to scrolls the walk and never the page — the top bars stay put', async ({
+  page,
+}) => {
+  /* THE OWNER'S REPORT, 2026-08-29: "picking from a copy of a card moves the screen down a
+     little to where it hides the top bars." It did, and by the document's whole scroll range.
+
+     `Element.scrollIntoView` scrolls every scrollable ancestor and the last one is the
+     document — and `.browse-map` is `position: sticky`, so scrolling the page cannot move a
+     row inside it. The browser computed a delta from the row's geometry, spent it on the page,
+     and the row did not move: the press revealed nothing and cost the nav, the screen's header
+     and the search field. `BoxBrowse.tsx:scrollWithin` is the fix and carries the argument.
+
+     MEASURED BEFORE AND AFTER RATHER THAN ASSERTED AS A CLASS NAME. Against the old code this
+     case reads y 0 -> 280 with the nav at -280; the assertion is that the press moves the page
+     by nothing at all, which is the only version of it a later refactor cannot satisfy by
+     accident. */
+  await open(page, TWO_BOXES, ACROSS)
+
+  /* THE PAGE IS AT REST AND THE PRESS IS DISPATCHED RATHER THAN CLICKED. Playwright's own
+     `.click()` scrolls its target into view first, which is a page scroll this test cannot tell
+     from the app's — and it is the reason the first attempt at this measurement read 280 both
+     before and after and proved nothing. */
+  const at = () => page.evaluate(() => window.scrollY)
+  const navTop = () =>
+    page.evaluate(() => document.querySelector('.app-nav')?.getBoundingClientRect().top ?? null)
+
+  expect(await at()).toBe(0)
+  expect(await navTop()).toBe(0)
+
+  await page
+    .getByRole('button', { name: `Walk to ${FAR}` })
+    .evaluate((button: HTMLElement) => button.click())
+
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
+
+  /* THE PAGE HAS NOT MOVED, AND THE CARD ASKED FOR IS ON SCREEN ANYWAY — both halves, because
+     either alone is satisfiable by doing the wrong thing. A screen that scrolled nothing and
+     landed nowhere would pass the first; the old code passed the second. */
+  expect(await at()).toBe(0)
+  expect(await navTop()).toBe(0)
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-row[aria-current="true"]')).toBeInViewport()
 })
 
 test('a filtered walk gives up the filter rather than swallowing the jump', async ({ page }) => {
@@ -1262,6 +1443,77 @@ test('the mid-box delete aims with the target’s own capture id and reports the
   /* `shifted > 0` means every label above the deleted card has changed, and the receipt has to
      say so: it is the one operation in the product that renumbers. */
   await expect(page.locator('.browse-receipt')).toContainText('moved down one index')
+})
+
+test('and the photograph follows the shift, because the URL names the capture', async ({
+  page,
+}) => {
+  /* THE DEFECT THE OWNER REPORTED, AS A CASE. Their words, 2026-08-29: deleting a card
+     "doesn't kick in super quickly and it makes you think you need to delete more but in
+     reality it eventually ... shows that it really was deleted". Nothing was slow —
+     measured against a copy of their store, the delete answered in 288 ms and the walk
+     redrew in 500 ms. What stayed was the PICTURE: `/photo/<box>/<index>` names a SLOT, the
+     renumber puts a different card in it, and the browser went on showing what it had. The
+     screen then read as a delete that had not happened, over the facts of the card that
+     had slid in — and the next press deletes that card, which is a real capture.
+
+     THE ASSERTION IS THE URL AND NOT THE PIXELS, because a stubbed photo route serves one
+     SVG for every slot and a browser test cannot see a stale bitmap. The URL carrying the
+     occupant's id is the whole mechanism: it is what makes the two loads different
+     requests, which is what Chrome's in-document memory cache needs before it will go and
+     ask. A remount alone was built first and measured NOT sufficient — same URL, same
+     bytes, no request — so a version of this case that asserted only `sameDomNode: false`
+     would have passed against the broken screen.
+
+     THE STORE SHIFTS UNDER THE RE-READ, which is what the real one does: `2/3` is deleted,
+     the card behind it slides down into that key, and it brings its own capture id. */
+  const AFTER: Cards = {
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Thievul',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+    }),
+    '2/3': card({
+      index: 3,
+      state: 'identified',
+      name: 'Eiscue',
+      sku: '8937371',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+      captureId: 'cap-slid-into-3',
+    }),
+  }
+  let shifted = false
+  page.on('request', (request) => {
+    if (request.url().includes('/remove')) shifted = true
+  })
+  await open(page, BOXES, {
+    get cards() {
+      return shifted ? AFTER : CARDS
+    },
+    search: (query) => searchAnswer(query),
+  })
+
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Thievul' }).nth(1).click()
+
+  /* Before: the slot's URL carries the id of the card standing in it. */
+  const photo = page.locator('.browse-photo')
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-3$/)
+
+  await page.getByRole('button', { name: 'Remove this card…' }).click()
+  await page.getByRole('button', { name: /^Remove this card and slide/ }).click()
+
+  /* After: the SAME slot, a different card, and therefore a different URL — so the picture
+     is re-fetched rather than reused. The facts beside it moved on their own and always
+     did; it is the photograph that used to lie. */
+  await expect(page.locator('.browse-facts')).toContainText('Eiscue')
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-slid-into-3$/)
 })
 
 test('a sold or retired card is not offered the mid-box delete at all', async ({ page }) => {
@@ -2231,6 +2483,121 @@ test('the card names the run that read it, and the model\'s own hedge', async ({
   )
 })
 
+test('the card carries what its run said the market was, and how old that reading is', async ({
+  page,
+}) => {
+  /* THE OWNER'S ASK, 2026-08-29: "if a join has happened on that set, can I get the TCG Market
+     Price as part of the data summary on the top right of the card (with a note of how
+     stale/fresh that data is?)".
+
+     THE PRICE IS NOT ON THE RECORD AND CANNOT BE. D8 puts every figure in this product in the
+     TCGplayer export and `store/master.py` holds no field shaped like money, so the row is a
+     join: card -> `run` -> that run's `pricing.json` -> the SKU whose positions hold this card.
+
+     BY POSITION, NEVER BY `card.sku`, and this fixture is built to prove it. `2/2` carries
+     `sku: null` on its record — `emit` writes that field only for SKUs that reached an import
+     file — and it is still priced here, because the join's table names the position. A lookup
+     keyed on the card's own SKU would draw nothing for it and would be silently wrong for every
+     sub-threshold and withheld card in the store. */
+  await open(page, BOXES, PRICED_STORE)
+
+  const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
+  await expect(market).toHaveText('$5.47 · read 2 days ago')
+
+  /* THE AGE IS NEVER OPTIONAL, which is the half that makes the row honest. `join` is free,
+     re-runnable and routinely pointed at a refreshed export, so two cards on one shelf can carry
+     prices read a week apart — a bare `$5.47` claims a currency the file cannot support. */
+  expect(await market.innerText()).toContain('read')
+
+  /* THE SECOND COPY OF THE SAME SKU, reached through the walk and priced identically — D7's
+     fungible copies, and the assertion that the table is indexed by every position rather than
+     by the first. `2/2` is also the card with no SKU on its record. */
+  await expandAll(page)
+  await page.locator('.browse-row').nth(1).click()
+  await expect(page.locator('.browse-fact', { hasText: 'Number' })).toBeVisible()
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+    '$5.47 · read 2 days ago',
+  )
+
+  /* A BLANK MARKET CELL IS AN UNKNOWN PRICE AND SAYS SO — D9, in its own words, "a missing price
+     is an unknown price, not a low one". The failure this forbids is rendering it as `$0.00` or
+     as an empty row, which is what hands a chase card away at the floor. `no market data`
+     UNDERSCORE AND ALL, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
+     DESIGN.md's owner-screen rule is the machine string. Spelled `no market data` it would be
+     neither the constant nor a human label — the second vocabulary D22 refuses — and would grep
+     to nothing against `decisions.json`'s own `no_market_data` block, which is where a card in
+     this state is actually priced. */
+  await page.locator('.browse-row').nth(3).click()
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+    'no_market_data',
+  )
+
+  /* A POSITION THE TABLE DOES NOT HOLD IS A CARD THE JOIN MATCHED NO ROW FOR, which is a
+     different fact again from a blank cell and gets a different sentence. */
+  await page.locator('.browse-row').nth(4).click()
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+    'no row matched by this run',
+  )
+})
+
+test('Reload re-reads the price, because a join is what a reload is pressed after', async ({
+  page,
+}) => {
+  /* A LIVE BUG, FOUND BY HAND AGAINST THE REAL STORE AND KEPT AS A CASE. The cache is cleared
+     on the reload counter and the READ was keyed on the run NAME alone — which does not change
+     when a box is re-read, so the cleared entry was never re-fetched and the row sat on
+     `reading…` permanently. A clear and its re-read are one gesture and have to be triggered by
+     the same thing.
+
+     IT IS THE PRESS THAT MATTERS MOST HERE. Reload beside the walk is pressed precisely after
+     something downstream has changed, and a join is the thing that rewrites a price — so the
+     one moment this row is guaranteed to be stale is the one moment the operator is asking for
+     it not to be. */
+  let at = PRICED_AT
+  await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, written_at: at }))
+
+  const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
+  await expect(market).toHaveText('$5.47 · read 2 days ago')
+
+  at = Math.floor((Date.now() - 9 * 86400000) / 1000)
+  await page.getByRole('button', { name: 'Reload' }).click()
+  await expect(market).toHaveText('$5.47 · read 9 days ago')
+})
+
+test('the market row is drawn even for a card no run has read', async ({
+  page,
+}) => {
+  /* NEVER CONDITIONAL, the rule the `Rarity` and `Note` rows above it already follow: a row that
+     disappears leaves "this card has no price" and "this screen does not show prices"
+     indistinguishable, which is the defect those two were added to fix. So every way there is no
+     figure gets a sentence instead of an absence. */
+  await open(page)
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+    'not joined yet',
+  )
+})
+
+test('a run with no pricing table names the remedy rather than reading as an unpriced card', async ({
+  page,
+}) => {
+  /* THE ONE REFUSAL THE PANEL TELLS APART FROM THE REST. `pricing_not_written` means the run
+     predates `pricing.json` or was never joined, and its remedy is a join — where a dead server
+     or a run directory that has gone sends you somewhere else entirely. Naming the remedy on the
+     row is what stops it reading as a card nobody has priced.
+
+     ITS OWN TEST RATHER THAN A SECOND `open` IN THE ONE ABOVE. Two mounts in one case re-register
+     every handler and re-`goto` a URL the page is already at, which is a same-document fragment
+     navigation: the screen does not remount and the assertion measures the first fixture. That
+     was observed, and it read as the feature being broken. */
+  const stale: Cards = Object.fromEntries(
+    Object.entries(CARDS).map(([key, held]) => [key, { ...held, run: '2026-08-22-box1-03' }]),
+  )
+  await open(page, BOXES, { cards: stale, search: (query) => searchAnswer(query, stale) })
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
+    'no pricing table — join this run',
+  )
+})
+
 test('a card with an open question in the queue says so, and says whether it can be answered', async ({
   page,
 }) => {
@@ -2255,3 +2622,4 @@ test('a card with an open question in the queue says so, and says whether it can
     'no_catalog_row · review · candidates 0',
   )
 })
+

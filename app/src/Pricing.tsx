@@ -48,23 +48,39 @@ import './Pricing.css'
  *  is a courtesy and the undo stack behind it is what matters. */
 const UNDO_DEPTH = 10
 
-/** The three presets, named to match `cli/cmd_join.py:PRESETS` key for key. The owner chose
- *  these three and their percentages in the interview; a fourth is a change to that tuple
- *  and to this table, and to nothing else. */
-const PRESETS: { key: string; label: string; says: string }[] = [
+/** The three presets, matching `cli/cmd_join.py:PRESETS` key for key AND rule for rule. The
+ *  owner chose these three and their percentages in the interview; a fourth is a change to
+ *  that tuple and to this table, and to nothing else.
+ *
+ *  THE `rule`/`basis` PAIR IS HERE BECAUSE A PRESS HAS TO WRITE IT, and it is duplicated
+ *  under the same guard D49 put on `WITHHOLD_REASONS`: `scripts/docs-audit.py`'s
+ *  `pricing presets` row reconciles this table against that tuple and BLOCKS on a mismatch.
+ *  `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations agreeing is
+ *  the only thing standing between this screen and a `decisions.json` that `emit` refuses.
+ *
+ *  It is not arithmetic and must never become arithmetic. `cli/cmd_join.py:PRESETS` prices
+ *  every row in Python precisely so `Rule.apply` + `round_money` + `clamp_floor` are not
+ *  re-implemented here; what travels is the NAME of a rule, which the pipeline then applies. */
+const PRESETS: { key: string; label: string; rule: string; basis: string; says: string }[] = [
   {
     key: 'market_match',
     label: 'Match market',
+    rule: 'match',
+    basis: 'market',
     says: 'The recent actual-sale average, matched exactly. What every run has done so far.',
   },
   {
     key: 'market_undercut_5',
     label: 'Market −5%',
+    rule: 'undercut:5',
+    basis: 'market',
     says: '5% under the recent actual-sale average, clamped at the $0.40 floor after rounding.',
   },
   {
     key: 'low_undercut_1',
     label: 'TCG Low −1%',
+    rule: 'undercut:1',
+    basis: 'low',
     says:
       '1% under the cheapest current listing, so you are the cheapest rather than tied with ' +
       'it. Rows with no TCG Low Price are left alone and named.',
@@ -133,7 +149,6 @@ export function Pricing() {
   const [failure, setFailure] = useState<Failure | null>(null)
   const [doc, setDoc] = useState<DecisionsDocument | null>(null)
   const [saving, setSaving] = useState(false)
-  const [dirty, setDirty] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
@@ -141,6 +156,29 @@ export function Pricing() {
   const [filterHeld, setFilterHeld] = useState(false)
 
   const inputs = useRef(new Map<string, HTMLInputElement>())
+  /* THE DOCUMENT THE SERVER LAST CONFIRMED, AND IT IS WHAT `dirty` IS MEASURED AGAINST.
+   * `dirty` was a flag, and a flag cannot tell "the write I just sent" from "the write that
+   * landed while it was in flight" — so clearing it on a response threw away whatever had
+   * been typed since that response left. Comparing the object identity instead makes the
+   * coalescing promise below structural: a write clears the state only for the exact
+   * document it carried, and anything typed during the flight is still unequal when it
+   * lands, so the effect runs again.
+   *
+   * Refs and not state: nothing here draws, and the save loop must not re-render a hundred
+   * rows to bookkeep itself. */
+  const savedDoc = useRef<DecisionsDocument | null>(null)
+  /* ONE PUT IN FLIGHT. This was the `saving` STATE, read inside the effect — which put
+   * `saving` in the dependency list, so raising it re-ran the effect, and the re-run's
+   * CLEANUP set the in-flight closure's `live` to false. The response then landed on a dead
+   * closure: neither the clear nor `setSaving(false)` ever fired, so the indicator read
+   * `saving…` for the rest of the session, on every save, from the first one. The guard has
+   * to be a value the effect can read without depending on it. */
+  const inFlight = useRef(false)
+  /* THE DOCUMENT A WRITE FAILED ON, so a refused PUT is not retried in a spin. `dirty` stays
+   * true after a failure — correctly, the server does not have these answers — and without
+   * this the effect would re-fire the moment `saving` went false, forever. The next keystroke
+   * makes a new document and the retry happens then. */
+  const failedDoc = useRef<DecisionsDocument | null>(null)
   /* WHICH FIELDS HAVE BEEN TYPED INTO THIS SESSION, and it has to be its own fact rather than
    * derived from whether an answer is stored. The first draft asked "is there a committed
    * answer for this SKU?" and cleared the field when there was not — so it cleared on EVERY
@@ -186,11 +224,13 @@ export function Pricing() {
   const load = useCallback(async (name: string) => {
     try {
       const answer = await getPricing(name)
+      const held = answer.decisions ?? {}
       setPayload(answer)
-      setDoc(answer.decisions ?? {})
+      setDoc(held)
+      savedDoc.current = held
+      failedDoc.current = null
       setFailure(null)
       setUndo([])
-      setDirty(false)
     } catch (err) {
       setPayload(null)
       setFailure(describeFailure(err))
@@ -201,27 +241,44 @@ export function Pricing() {
     if (run !== null) void load(run)
   }, [run, load])
 
+  /* UNSAVED IS A COMPARISON, NOT A FLAG: the document on screen is not the document the
+     server confirmed. Derived rather than stored so it cannot be cleared for a write that
+     did not carry it. */
+  const dirty = doc !== null && doc !== savedDoc.current
+
   /* ONE PUT IN FLIGHT, COALESCING. The route replaces the document wholesale, so the screen
      round-trips every key it does not understand — including `_note` and anything a later
      version of `decisions.py` adds. A commit schedules a write; a change during one re-runs
-     when it lands. */
+     when it lands — which is now true of this loop rather than merely intended, because the
+     write clears only the document it sent. */
   useEffect(() => {
-    if (!dirty || doc === null || run === null || saving) return
-    let live = true
+    if (!dirty || doc === null || run === null) return
+    if (inFlight.current || doc === failedDoc.current) return
+    const sent = doc
+    inFlight.current = true
     setSaving(true)
     void (async () => {
       try {
-        await putDecisions(run, doc as Record<string, unknown>)
-        if (live) setDirty(false)
+        await putDecisions(run, sent as Record<string, unknown>)
+        savedDoc.current = sent
+        failedDoc.current = null
+        setFailure(null)
       } catch (err) {
-        if (live) setFailure(describeFailure(err))
+        failedDoc.current = sent
+        setFailure(describeFailure(err))
       } finally {
-        if (live) setSaving(false)
+        inFlight.current = false
+        setSaving(false)
       }
     })()
-    return () => {
-      live = false
-    }
+    /* `saving` IS IN THE LIST TO RE-FIRE THE EFFECT WHEN A WRITE LANDS, AND IT IS ONLY SAFE
+       THERE BECAUSE THE GUARD IS A REF. Everything the completion changes is a ref — the
+       saved document and the in-flight flag — so a re-render is the only thing that can ask
+       "is there more to send?", and lowering `saving` is that re-render. What made this
+       dependency a hazard before was the CLEANUP: the effect owned an in-flight closure, so
+       the extra run tore that closure down mid-write and the response landed on a dead one.
+       There is no cleanup now, the early return above is what the extra runs hit, and the
+       write outlives every one of them. */
   }, [dirty, doc, run, saving])
 
   useEffect(() => {
@@ -264,7 +321,6 @@ export function Pricing() {
         next[target] = table
         return next as DecisionsDocument
       })
-      setDirty(true)
     },
     [],
   )
@@ -347,9 +403,23 @@ export function Pricing() {
       // A PRESET WRITES `rule`/`basis` AND NO OVERRIDE. It re-renders suggestions and is
       // structurally incapable of touching a hand-typed price, which is the payoff of
       // suggestions staying unwritten.
+      //
+      // THIS COMMENT DESCRIBED THE DESIGN AND THE LINE UNDER IT WROTE `preset` — A KEY NO
+      // READER ANYWHERE HAS. `pipeline/decisions.py:parse` does not know the field and
+      // `to_payload` does not emit it, so the next join dropped it, and `rule`/`basis` sat at
+      // `match`/`market` throughout. Pressing `Market -5%` restyled every suggestion on screen
+      // and changed nothing `emit` reads, so a run priced that way emitted at market. Measured
+      // on the owner's riftbound run: that dead key beside `rule: match`, with 2 overrides
+      // across 50 SKUs — 48 cards about to list at a price nobody had chosen.
+      //
+      // It is D49's own named failure — "a run where changing the preset silently changed
+      // nothing" — reached by the other road. That entry refuses to write the suggestions as
+      // overrides, correctly, because an override is layer 1 and beats the rule at layer 4;
+      // what it needs INSTEAD is the rule at layer 4 actually moving, which is this.
+      const chosen = PRESETS.find((row) => row.key === key)
+      if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
-      setDoc((current) => ({ ...(current ?? {}), preset: key }))
-      setDirty(true)
+      setDoc((current) => ({ ...(current ?? {}), rule: chosen.rule, basis: chosen.basis }))
       for (const row of rows) {
         const input = inputs.current.get(row.sku)
         if (input && answerFor(row) === undefined) input.value = row.presets[key] ?? ''
@@ -409,7 +479,6 @@ export function Pricing() {
       return next as DecisionsDocument
     })
     setUndo(rest)
-    setDirty(true)
   }, [undo])
 
   const onKey = useCallback(
@@ -574,6 +643,14 @@ export function Pricing() {
             key={preset.key}
             type="button"
             className="pricing-preset"
+            /* THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis`, NEVER STORED. A remembered
+               selection would be a second answer to "what will an untouched row list at", and
+               the pair the pipeline reads is the only one that can be right — so a rule typed
+               by hand into `decisions.json` on `#/runs` correctly lights no chip rather than
+               lighting a stale one. It is drawn at all because nothing on this screen said
+               which rule was live, which is most of why the dead write survived: pressing a
+               chip appeared to work, because the suggestions really did change. */
+            aria-pressed={doc?.rule === preset.rule && doc?.basis === preset.basis}
             onClick={() => applyPreset(preset.key)}
             title={preset.says}
           >

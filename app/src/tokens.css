@@ -27,17 +27,32 @@
  *   the doc's second block        Step 6's three button states restate five of these values
  *                                 in prose that nothing parses.
  *   every hex outside this :root  The row reads one `:root` in one file, so a literal in any
- *                                 other stylesheet is invisible to it. Paint from
- *                                 var(--token) and never from a hex; PullConfirm.css is the
- *                                 one file that does not, and nothing here can see it.
+ *                                 other stylesheet is invisible TO IT — but no longer to the
+ *                                 audit, and this bullet said otherwise until 2026-08-30. The
+ *                                 `raw colour` row is a BLOCKING check over every stylesheet
+ *                                 that strips comments first, so prose about a colour is not
+ *                                 mistaken for one, and it currently answers clean. This
+ *                                 bullet also named PullConfirm.css as the one file painting
+ *                                 raw hex: that file now has none, so both halves of the
+ *                                 sentence had outlived the state they described. The rule is
+ *                                 unchanged — paint from var(--token), never from a hex — and
+ *                                 it is enforced now rather than asked for.
  *
  * Hand-written on purpose. Generating this file from the doc would put a writer on the
  * path that decides whether a commit proceeds, which D18 forbids by name — and would make
  * the two agree by construction, turning every wrong value into a confidently rendered one.
  * Checking lets them disagree in public.
  *
- * Custom-property names match docs/design-refs/locked.html so the rendered sheet and the
- * app read as one system.
+ * Custom-property names MOSTLY match docs/design-refs/locked.html, and three of them no longer
+ * do: `--on-accent`, `--field` and `--field-hover` all postdate that sheet, which draws neither
+ * boundary token nor the label token. The claim used to be unqualified and stopped being true
+ * the day `--on-accent` was named.
+ *
+ * Left as it is rather than corrected, and that is the bullet above applied rather than an
+ * exception to it: the sheets are DRAWINGS of docs/DESIGN.md and are allowed to lose to it, and
+ * forcing agreement would mean re-drawing the reference before a token could move — which
+ * inverts which of the two is the source. What is fixed here is the sentence claiming they
+ * agree, not the disagreement.
  *
  * Deliberately nothing but tokens: no reset, no element rules. See base.css.
  */
@@ -91,6 +106,43 @@
      been taken by a button border within a session, and that is the weight this product just
      spent a rebuild removing from the box operations. */
   --field: #8c8c8c;
+
+  /* THE SAME BOUNDARY, UNDER THE POINTER — and the ONE token in this file the owner granted
+     against a locked palette rather than chose at the 2026-08-12 interview. D50 carries the
+     argument; this comment carries the numbers, because the value was picked by measurement
+     and the measurement is what a later session needs to disagree with.
+
+     WHY IT COULD NOT BE A TOKEN THAT ALREADY EXISTS. `--field` at 3.36:1 on surface is the
+     quietest edge WCAG 1.4.11 permits, so a field has no hover response at all today: the
+     pointer crosses into the one control on the screen that takes typing and nothing moves.
+     The obvious reuse is `--muted`, which is already a value with two names' worth of jobs and
+     would have cost nothing — and it is REFUSED on a number nobody would think to compute.
+
+     THE NUMBER THAT DECIDED IT IS CONTRAST AGAINST `--ink`, NOT AGAINST THE GROUND. Focus on
+     these controls is `outline: 2-3px solid var(--ink)` (base.css, SearchField.css), so the
+     question a hover border has to answer is not "can it be seen" — every candidate clears
+     1.4.11 — it is "can it be told apart from focus". Measured against `--ink`:
+
+         --field   #8c8c8c   5.93:1 vs ink      rest, and no hover response
+         this      #6b6e73   3.89:1 vs ink      1.52x the rest edge, still clearly not focus
+         --muted   #4e5157   2.50:1 vs ink      2.37x the rest edge, and READS AS FOCUS
+
+     So `--muted` fails the one criterion that matters here while passing every criterion
+     anyone would have checked first. On surface / bg / hover this is 5.12 / 4.99 / 4.69:1,
+     all well over 1.4.11's 3:1, on all three grounds a field is ever drawn on.
+
+     IT COMPOSES WITH FOCUS RATHER THAN COMPETING, which is what makes a border-colour hover
+     safe at all: every focus treatment in this app is an OUTLINE, drawn outside the box at a
+     positive offset, so hover darkens the edge and focus draws a ring around it. Two
+     properties, two places, and a control that is both hovered and focused says both.
+
+     IT IS COOL-GREY, LIKE THE REST OF THE AXIS. `--ink` (8,9,10) and `--muted` (78,81,87) are
+     both cool and `--field` (140,140,140) is the pure-neutral exception; this sits on the
+     majority line, so a darkening field walks toward the palette rather than out of it.
+
+     NAMED FOR THE ONE STATE OF THE ONE JOB, per the rule the block above sets for `--field`
+     itself: `--field-hover` cannot grow into a button border the way `--edge` would have. */
+  --field-hover: #6b6e73;
 
   /* ---- type. Three faces, each with exactly one job. ---- */
   --display: 'Cabinet Grotesk', sans-serif; /* 700/800 only, and only at >= 20px */
