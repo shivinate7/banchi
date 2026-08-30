@@ -965,10 +965,24 @@ COMPONENTS = [
                                      "governed_by": ["D5"]},
 
             # ---- the ground: what everything else reads ----
-            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing else.",
-                               "governed_by": ["D18"]},
-            "src/base.css": {"does": "reset and the page ground. Light only — there is no dark theme.",
-                             "governed_by": ["D5"]},
+            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing "
+                                       "else. 23 of them: 22 chosen at the 2026-08-12 interview, and "
+                                       "--field-hover granted against the lock on 2026-08-29 (D50) and "
+                                       "picked by measurement rather than from rendered alternatives.",
+                               "governed_by": ["D18", "D50"]},
+            # D41 and D45 govern this file because of the CURSOR FLOOR, not the reset. That floor
+            # is written with element selectors on purpose — `button`, `select`, the three input
+            # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
+            # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
+            # rather than things a global rule could quietly breach.
+            "src/base.css": {"does": "reset and the page ground, plus the two app-wide control "
+                                     "defaults: the :focus-visible ring, and the cursor floor "
+                                     "added 2026-08-29 after 39 of 142 interactive elements were "
+                                     "measured with no cursor rule any selector could reach. Both "
+                                     "are one specificity, so every per-screen choice outranks "
+                                     "them and nothing here can take a cursor away from a "
+                                     "stylesheet that named one. Light only — there is no dark theme.",
+                             "governed_by": ["D5", "D41", "D45", "D50"]},
 
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens before base",
@@ -991,12 +1005,20 @@ COMPONENTS = [
                                     "the Fulfiller's view gets no chrome at all. #/boxes WAS "
                                     "the seventh, registered with D20's screen rather than after "
                                     "it; D31 deleted the route and kept the screen — the "
-                                    "registration rule stands, the route does not.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49"]},
+                                    "registration rule stands, the route does not. TWO KEYBOARDS "
+                                    "SINCE 2026-08-30: the `,` chord JUMPS to a route by name, "
+                                    "and D50's Cmd-arrow STEPS along the strip in the order the "
+                                    "nav draws it — the ring derived from `hotkey` and "
+                                    "GROUP_ORDER rather than listed twice, never wrapping, and "
+                                    "the one place this shell takes a modifier.",
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D50"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
-                                    "shadow, and why this nav may never render on the "
-                                    "Fulfillment view",
-                            "governed_by": ["D5", "D10", "D49"]},
+                                    "shadow, why this nav may never render on the "
+                                    "Fulfillment view, and the two chip looks — the chord's, "
+                                    "which lights up when the leader is armed, and D50's step, "
+                                    "which deliberately does not wear that class because it is "
+                                    "never armed",
+                            "governed_by": ["D5", "D10", "D13", "D49", "D50"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
@@ -1105,7 +1127,7 @@ COMPONENTS = [
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5", "D27", "D41"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -1144,9 +1166,20 @@ COMPONENTS = [
                     "ONE INBOUND PROP since 2026-08-29 (D45): `goTo` walks to a card by store "
                     "key, which is how a copy row on the right reaches the box on the left. It "
                     "drops the search filter rather than letting it swallow the jump, and opens "
-                    "the landing's section itself so the scroll has a rendered row to find.",
-            "governed_by": ["D6", "D10", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27",
-                            "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D50"]},
+                    "the landing's section itself so the scroll has a rendered row to find. "
+                    "IT SCROLLS ITS OWN COLUMN AND NEVER THE PAGE since 2026-08-29 "
+                    "(`scrollWithin`): scrollIntoView reaches the document scroller, and on a "
+                    "sticky column that moves the page without moving the row — measured at the "
+                    "document's whole range, which took the nav and this screen's own header "
+                    "off the top. A MARKET PRICE on the card panel the same day: card -> `run` "
+                    "-> that run's pricing.json (D49), indexed by POSITION because `card.sku` "
+                    "is written by emit and is null on every sub-threshold and withheld card. "
+                    "The store holds no price at all (D8), so this is the only place one can "
+                    "come from, and the age of the reading is drawn with it because `join` is "
+                    "re-run against refreshed exports.",
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
+                            "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39",
+                            "D41", "D45", "D46", "D49", "D50"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1197,7 +1230,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46", "D50"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -1284,7 +1317,7 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -1406,7 +1439,7 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -1488,7 +1521,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1506,7 +1539,7 @@ COMPONENTS = [
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
                                     "governed_by": ["D5", "D13"]},
-            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50"]},
             "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
                                      "question every keyboard handler asks first. The three "
                                      "prior copies each recorded the hoist as due; this is "
@@ -1587,6 +1620,26 @@ COMPONENTS = [
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
             },
+            "tests/cursor.spec.ts": {
+                "does": "what every control says to the pointer, in two cases that cover "
+                        "different things. A live sweep walks all seven routes, classifies each "
+                        "rendered control by tag, type and disabled state, and asserts the "
+                        "cursor the rule requires — no selector roster, so a control added next "
+                        "month cannot be missed. A synthetic case then probes base.css's floor "
+                        "with elements it builds itself, because this checkout's store is empty "
+                        "(D43) so no screen renders a DISABLED control — deleting the whole "
+                        "disabled arm was mutation-tested and the live sweep alone PASSED, "
+                        "which is 30 of the 41 original defects invisible. A third case asserts "
+                        "the --field-hover edge responds and that no hover reflows the box. Run "
+                        "by `make design-check`.",
+                "governed_by": ["D28", "D43", "D50"],
+                "note": "NOT a harness test and not registered in harness/run.py:TESTS — it "
+                        "starts a browser. KNOWN LIMIT, so a green run is read for what it is: "
+                        "between the two cases the floor is covered completely and a SCREEN's "
+                        "own override only where that screen renders it. A per-file rule on a "
+                        "control this empty store never draws is unchecked by either, and "
+                        "closing that needs fixtures for seven screens.",
+            },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
                         "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
@@ -1595,6 +1648,26 @@ COMPONENTS = [
                 "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
+            },
+            "tests/nav.spec.ts": {
+                "does": "the shell's keyboard, and the first test this app has had of the strip "
+                        "every screen sits under: D50's Cmd-arrow steps the ring in the order "
+                        "the nav draws it, both ends stop, and the three refusals hold — a bare "
+                        "arrow belongs to the screens, a held Cmd in a text field belongs to the "
+                        "caret, and a screen outside the ring keeps the browser's key. Not a "
+                        "harness test; `make design-check` runs it.",
+                "governed_by": ["D5", "D31", "D39", "D50"],
+                "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
+                        "worth keeping. The leader-disarm case retried an assertion that "
+                        "CHORD_MS satisfies on its own after a second, so it went green against "
+                        "a build with the disarm deleted; it reads the attribute two frames "
+                        "after the hash changes now. A case pressing the step on the "
+                        "Fulfiller's view was deleted outright — `enabled` refuses there AND "
+                        "the ring does, so no single mutation makes it fail. What guards him is "
+                        "the end-of-ring assertion, red the moment a hotkey is added to his "
+                        "row. It cannot see whether the BROWSER honours preventDefault: "
+                        "Playwright presses keys through the debugging protocol, which never "
+                        "fires a browser shortcut at all.",
             },
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
@@ -1634,9 +1707,16 @@ COMPONENTS = [
                         "this file's FIRST geometry assertions (D38): that the photograph is flush "
                         "with the fact rows beside it, and that the box and the runs are a column "
                         "beside the card rather than a row beneath it. Nothing on the commit path "
-                        "can see either.",
-                "governed_by": ["D5", "D7", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D30",
-                                "D31", "D33", "D34", "D37", "D38", "D40", "D41"],
+                        "can see either. TWO MORE MEASUREMENTS since 2026-08-29: that a walk-to "
+                        "moves the page by nothing at all (D45's jump was scrolling the document "
+                        "to the end of its range and taking the top bars with it), and that the "
+                        "Market row draws its price with the age of the join that read it, by "
+                        "POSITION rather than by `card.sku` — the fixture's priced card carries "
+                        "no SKU on its record, which is the case a SKU-keyed lookup loses (D7, "
+                        "D8, D9, D49).",
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24",
+                                "D26", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41",
+                                "D45", "D49"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

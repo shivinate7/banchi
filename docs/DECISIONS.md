@@ -157,6 +157,34 @@ shape of, rather than a threshold moved once for everybody. `join --dry-run` exi
 shape is visible before the choice — it walks the ladder twice, with the flag and without, and
 diffs the two queues, writing nothing at all.
 
+**THE FLAG IS PER-RUN, SO EVERY LATER COMMAND HAS TO READ IT BACK — AND `emit` DID NOT, FROM
+THE DAY THE FLAG SHIPPED** (found by the owner 2026-08-30, pressing *Write the import files*
+on a box they had joined). `cli/cmd_emit.py` does not read what `join` decided; it re-derives
+it, calling `resolve.load` a second time. That call passed no `trust_claim`, so it walked the
+ladder with rung 3 LIVE over a run joined with the flag — inventing a queued position for
+every bypassed card, finding none of them in either queue file because join deliberately
+never wrote them, and refusing with *"Run `pkmnscan join` first"* at an operator who had.
+Re-running join could not clear it, because join was right.
+
+**Measured on box 1: `bypassed: 39` in the manifest, 39 positions invented, 39 absent from
+disk.** The refusal's first ten positions matched what the screen printed character for
+character.
+
+**THE REFUSAL WAS THE SECOND-WORST OUTCOME, and that is the part worth keeping.** The same
+resolution is what writes the import files, so had that check passed, those 39 cards would
+have been routed to review and left out of the CSV — the bypass silently void at the one step
+that produces output. A guard written for one purpose caught a different and quieter failure,
+which is the argument for the guard rather than a lucky escape.
+
+**The fix is one line and its shape is the rule: `emit` reads `bypass_detection` off the
+manifest exactly as it already reads `review_below_confidence`.** Both are per-run choices the
+run recorded, and a command that RE-DERIVES rather than reads must take every input to that
+derivation from the run. **There is deliberately no `--bypass` flag on `emit`**: this entry
+makes the bypass a join-time decision, and a second place to state it is a second thing that
+can disagree with the first. Covered by T7's `check_emit_bypass`, which asserts the card
+reaches the import file at the SKU its claim names — not merely that the command stopped
+refusing, because a fix that only silenced the refusal would have shipped the quieter failure.
+
 **What would reopen this: a rig that measures better.** The flag treats the detector as
 untrustworthy under this lamp, which is what two runs measured. It is not a finding about
 foil detection in general, and a re-measurement after the lighting changes is the evidence
@@ -2741,6 +2769,96 @@ not for judging a card. If the owner finds themselves opening the review queue t
 they were already looking at here, the answer is not a bigger photo in this band — it is that this
 screen has quietly acquired the other screen's job, and that is worth naming before it is resized.
 
+**A TWELFTH ROW ARRIVED ON 2026-08-29 AND IT IS THE FIRST FACT ON THIS PANEL THAT IS NOT ON THE
+RECORD.** The owner: *"if a join has happened on that set, can I get the TCG Market Price as part
+of the data summary on the top right of the card (with a note of how stale/fresh that data is?)"*.
+
+**THE STORE HOLDS NO PRICE, AND THAT IS D8 RATHER THAN A GAP.** Every figure in this product comes
+out of the TCGplayer Filtered Export, and `store/master.py` has not one field shaped like money —
+so *what is this card worth* was answerable on `#/pricing` and on no screen the operator is
+actually standing at when they ask it. The eleven rows above are `asdict(card)`; this one is a
+join.
+
+**THE EDGE IS D46'S, REUSED RATHER THAN REBUILT: card -> `run` -> that run's `pricing.json`.**
+`cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND
+every position holding a copy, so a position resolves to a SKU and to a Market cell with **no new
+route, no new field on the wire and no schema change anywhere**. `GET /pipeline/runs/<name>/
+pricing` is free, read-only and creates nothing, which is what makes it safe to open from a screen
+that is not about running anything.
+
+**KEYED BY POSITION AND NEVER BY `card.sku`, which is the one decision here that could be silently
+wrong.** That field is written by `emit`, for SKUs that reached an import file — so a
+sub-threshold card, a card withheld under D49, and every card in a run that was joined but never
+emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and would look
+correct on the cards it happened to reach. The position is on both sides of the join and is
+written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`,
+which is the case that fails the wrong implementation.
+
+**ONE READ PER RUN, CACHED BY RUN NAME.** `pricing.json` is per-run and every card in a box
+normally names one run, so walking a whole box costs ONE read — the argument `queued` beside it
+already makes, and it matters more here because a real table is ~80KB for 50 SKUs. Keyed by RUN
+and not by box, because a run is what wrote the file: D33 scopes a run to a SELECTION inside a
+box, so two cards on one shelf can carry two tables read at two different moments, which is
+exactly the staleness this row exists to report.
+
+**THE AGE IS NEVER OPTIONAL, AND `read` IS NEVER `as of`.** `join` is free, re-runnable and
+routinely pointed at a refreshed export, so a bare `$5.47` claims a currency the file cannot
+support. What the age measures is the JOIN: `GET .../pricing` answers `written_at`, the mtime of
+`pricing.json`, because the export is a CSV the operator downloaded from TCGplayer at an earlier
+moment nothing on this machine can see. The freshest honest sentence is when the pipeline last
+looked at it, so the row reads `$0.34 · read 3 days ago`.
+
+**THE MTIME RATHER THAN A `joined_at` INSIDE THE TABLE.** A field written into the file would be
+better data and would be absent from every run already on disk — which is precisely the runs a
+screen is opened over. The mtime needs no re-join and cannot drift from the bytes it describes.
+What it does not survive is the run directory being copied; nothing in this repo copies one.
+T7 backdates the file and requires the route to report the backdate, because asserting against
+the live mtime is VACUOUS — the test joins immediately before the request, so a route stamping
+`time.time()` answers the same integer. That version was written, mutated to a clock, and
+**observed passing**.
+
+**FIVE OUTCOMES, FIVE SENTENCES, AND THE ROW IS NEVER CONDITIONAL** — the rule `Rarity` and `Note`
+above it already follow, for the reason stated there: a row that disappears leaves *this card has
+no price* and *this screen does not show prices* indistinguishable. No run on the card is `not
+joined yet`; a run with no table is `no pricing table — join this run`, which is the one refusal
+worth telling apart because its remedy is a join rather than a look at the server; a position the
+table does not hold is `no row matched by this run`, which is `no_catalog_row` and the review
+queue's business rather than a missing price; and a **blank Market cell is `no_market_data`**,
+verbatim and underscore and all, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
+D9 is emphatic that a missing price is an UNKNOWN price rather than a low one. Rendering that as
+`$0.00` is what hands a chase card away at the floor.
+
+**The underscore is a ruling rather than an oversight.** Spelled `no market data` it is neither
+the machine string nor a human label — the second vocabulary D22 refuses and D16 exists to catch
+— and it greps to nothing on the day somebody holds this screen against `decisions.json`'s own
+`no_market_data` block, which is where such a card is actually priced by hand. So the row splits:
+**plain English where THIS SCREEN has nothing** (the shape every other fallback in this list
+takes), and **the pipeline's own word where the PIPELINE said something**.
+
+**A RELOAD RE-READS IT, AND LEAVING THAT OUT WAS A LIVE BUG found by pressing the button against
+the real store.** The cache is cleared on the reload counter and the READ was keyed on the run
+NAME alone, which does not change when a box is re-read — so the cleared entry was never
+re-fetched and the row sat on `reading…` permanently. A clear and its re-read are one gesture and
+must be triggered by the same thing. It matters more than an ordinary staleness bug would: Reload
+is pressed *after* something downstream changed, and a join is the thing that rewrites a price.
+
+**BENEATH `Run` AND ABOVE `Note`.** The same placement argument `Confidence` gets for sitting
+under the read it hedges: the price is not a property of the card, it is what one join found in
+one export, and the age beside it is that join's age — so provenance is a straight read-down
+rather than two glances. Both rows would be inexplicable apart, since `Run` names a directory and
+cannot say what it found, and a price with no run named is a number from nowhere.
+
+**WHAT THIS DOES NOT DO: it does not put pricing on this screen.** No preset, no override, no
+snap, nothing writable — `#/pricing` is where a price is DECIDED (D49) and this is where one is
+READ, on the screen whose question is where a card is. The other four price columns, the
+presets and `decisions.json` stay there. If this row starts growing controls, it has acquired
+that screen's job, which is the failure the paragraph above already names for the photograph.
+
+**What would reopen this: a box whose cards span many runs.** The one-read-per-run cache is sized
+for the ordinary case of a box identified in one go; a box assembled from a dozen ticked
+selections would fetch a dozen tables while the arrow keys walk it. The measurement is how many
+distinct `run` values a single box's records carry — two today, across the whole store.
+
 ---
 
 ## D39 — The pipeline gets a route, and the selection is handed to it
@@ -3298,6 +3416,122 @@ commit. `make status` reports both instead: it reads NOT ARMED whenever the effe
 not the install, and prints which hooks differ from the current tree. That is the one surface
 in this repo whose whole job is saying what state you are actually in.
 
+**A SESSION MAY PERFORM THE MERGE WHEN THE OWNER SAYS THE WORD, AND THIS IS THE OWNER'S
+AMENDMENT OF 2026-08-30**: *"if I explicitly say the word merge to main to you, that you do
+so"*. The sentence that changes is "the owner merges it on GitHub", and only that sentence.
+Everything the rest of this entry is about — the two hooks, what they refuse, why they exist
+and the two incidents that produced them — is untouched, because none of it is about who
+presses the button.
+
+**THE PERMISSION COVERS BOTH HALVES OF THE MERGE, AND THE SECOND HALF IS THE OWNER'S SECOND
+AMENDMENT ON 2026-08-30**: *"Change D42 so that it merges on both local and github"*. This
+paragraph read that the permission was for `gh pr merge` alone, *"which moves a ref on GitHub
+and not in this clone"*, and offered that as the reason the amendment cost nothing. It was an
+accurate reading of a narrower grant, and what it left behind was a clone permanently one
+commit short: a session that merged a PR had to stop and *describe* the `git pull` rather than
+run it, which is a handoff in the middle of one operation and leaves every later session cutting
+branches from a stale main.
+
+**IT CANNOT WIDEN WHAT IS MECHANICALLY POSSIBLE, AND THAT IS THE WHOLE SAFETY ARGUMENT.** Allow
+rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new"
+refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged
+PR produces IS that commit. So this amendment reaches the prose and nothing else. It arms
+nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch:
+the move it licenses is the one that hook has allowed since the day it was written, and
+everything it refuses is refused byte for byte afterwards. The change is **who may run an
+already-permitted move**, not which moves run. **`PKMNSCAN_MAIN=off` is not what a session
+reaches for here and must not become it.** A session that finds itself typing that variable has
+left this amendment behind and is doing something else.
+
+**THE MOVE IS TWO COMMANDS AND MUST BE, AND THE FIRST DRAFT OF THIS PARAGRAPH SHIPPED THE
+ONE-COMMAND FORM AND WAS REFUSED BY THE HOOK WITHIN THE MINUTE.** It said the move is
+`git fetch origin main:main`, which is the right shape for this clone — the hook's own refusal
+message suggests `git switch main && git pull`, and **main is often checked out in no worktree
+at all** here, the main working tree sitting on a feature branch as often as not, so there is
+frequently nowhere to switch. What that draft missed is that the combined refspec updates
+`refs/heads/main` and `refs/remotes/origin/main` **in one transaction**:
+
+    git fetch origin main:main
+      255e33b..8e8973f  main -> main
+      51492d6..8e8973f  main -> origin/main        <- same transaction
+
+At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/origin/main`, and
+that read answers with the PRE-update value — so whenever origin/main has moved since your last
+fetch, `new` is a DESCENDANT of what the hook can see rather than an ancestor, and it refuses. **The
+evidence the hook consults is being written by the transaction it is judging.**
+
+    git fetch origin              # refs/remotes/origin/main only; never touches refs/heads/main
+    git fetch origin main:main    # now origin/main demonstrably holds it, and the hook allows
+
+**THIS IS NOT A HOOK DEFECT AND MUST NOT BE "FIXED" IN THE HOOK.** The repair that suggests
+itself — read the transaction's own `origin/main` line and credit it — is the exact mistake the
+header of `scripts/githooks/reference-transaction` spends its longest section refusing for the
+`old` column: **a transaction may not be a witness for itself.** Trusting a line the caller
+supplied would let one `git update-ref` naming two refs assert its own permission, which is
+strictly worse than the failure it would fix. The hook asking git for state OUTSIDE the
+transaction is precisely what makes it sound, and the cost of that soundness is that the caller
+fetches first. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and
+then a merge, two transactions, in that order.
+
+**Observed 2026-08-30**, in the session that wrote this amendment, against a main that had moved
+under it — PR #22 merged between the write and the run. That is not a rare alignment; it is the
+ordinary state of a clone running seven worktrees, which is the condition this whole entry
+exists for.
+
+**WHAT IT COSTS IS RECORDED RATHER THAN DESIGNED AWAY, because it is real and it is this
+entry's own subject.** Advancing main reshapes what every live worktree is cut from, and both
+incidents at the top of this entry are that happening unasked. What makes it a decision now
+rather than a repeat is the pair of conditions the rest of this entry establishes: it happens on
+an explicit instruction, and it happens only to a commit that was on origin before it was ever
+on your main.
+
+**THE WORD COMES FROM THE OWNER IN THE CONVERSATION, AND IT IS PER-INSTRUCTION.** Not a
+standing grant, not a mode, and never inferred: "ship it", "land it", "looks good" and an
+approving review are not the word. The permission is spent on the merge it was given for, which
+is the same shape D33's `confirm` field has one register down and for a smaller reason — that
+route refuses without an explicit field because the next thing that happens costs money, and
+this refuses without an explicit instruction because the next thing that happens is the branch
+every other session is cut from.
+
+**THE TEST IS WHETHER THE OWNER NAMED THE ACT, NOT WHETHER THEY MATCHED A PHRASE** (added
+2026-08-30, after this paragraph cost a session a round trip). It said *"merge to main" is the
+word*, and a session reading that literally hesitated over a bare **"Merge"** — which is the
+verb itself, given as a direct instruction, in reply to being told main had not moved. That is
+the word. So are "merge it", "merge the PR" and "merge to main". What is NOT the word is
+approval that never names the act: "ship it", "land it", "looks good", "nice", an approving
+review. **The line is naming the operation versus expressing satisfaction with the work**, and
+it was always meant to be — a phrase list is a worse instrument for it, because a session that
+matches on phrases both balks at a plain instruction and can be walked into a merge by anyone
+who happens to say five particular words.
+
+**AND THE MERGE IS ONE OPERATION, PERFORMED WHOLE. A SESSION DOES NOT STOP BETWEEN THE HALVES
+TO ASK AGAIN.** This is the correction the owner asked for in as many words — *"correct the
+prose so that this isn't an issue in the future"* — after a session merged on GitHub, reported
+that local main had not moved, and waited. That session was reading the entry correctly, which
+is what makes it a defect here rather than there. One word, both halves: `gh pr merge`, then the
+fast-forward. If the second half refuses or cannot run, that is reported as the incomplete
+operation it is — not re-asked as though permission were the thing missing.
+
+**WHAT IT DOES NOT LICENSE, stated because a permission to merge reads wider than it is**: a
+direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did
+not name. All four are still refused by a hook, and none becomes available by the owner saying
+this word.
+
+**AND THE LOCAL FAST-FORWARD IS NOW SPLIT RATHER THAN REFUSED WHOLE.** This list read "a local
+fast-forward" flatly, which was loose prose the day it was written and would be actively
+misleading now. The incident it meant is `637e2e4` — a fast-forward to a commit that was on
+NOBODY's origin — and that stays refused, by the hook rather than merely by this paragraph. What
+the word licenses is the fast-forward to the merged commit ON ORIGIN, a different move that
+happens to share a verb. The hook has always drawn exactly this line; the only thing that
+changed today is that the prose draws it too.
+
+**Why this is safe to grant and was not safe to assume.** The hooks were built because main
+moved twice in one day under three live worktrees, with nothing in the repo saying it may not.
+What was missing was not the owner's consent — they had it either time — it was any record that
+consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit
+instruction is a decision rather than a default, which is the distinction this whole entry is
+built on.
+
 **THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
 `PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
 a guard with no visible way past it gets disarmed at the config instead — and a disarmed
@@ -3675,6 +3909,65 @@ a decision about a shared component rather than about three copies of a treatmen
 cheaper to take and easier to take carelessly. **The Fulfiller is not on that list at all**:
 `PositionLabel`'s own header records that his screens never import it, `app/tests/fulfillment.spec.ts`
 floors his position at >=32px plain, and D31 keeps that spec unweakened.
+
+**THE JUMP WAS SCROLLING THE PAGE RATHER THAN THE WALK, AND IT COST THE TOP OF THE SCREEN
+(the owner, 2026-08-29: *"picking from a copy of a card moves the screen down a little to where
+it hides the top bars"*).** The landing effect above ends by scrolling the landed row into view,
+and it did that with `Element.scrollIntoView` — an API that scrolls EVERY scrollable ancestor,
+the document included.
+
+**ON A STICKY COLUMN THAT MOVES THE PAGE WITHOUT MOVING THE ROW, which is why the press cost
+something and bought nothing.** `.browse-map` is `position: sticky`, so a row inside it does not
+change its viewport position when the document scrolls; the browser computes a delta from the
+row's current geometry all the same, spends it on the page, and the row stays exactly where it
+was. Measured at 1280x720 with the page at rest: **`window.scrollY` 0 -> 280, the document's
+whole range**, putting the nav at y=-280 and this screen's own header at y=-218. The landing was
+already going to be visible — the walk's own scroller had done that work — so the entire effect
+of the page scroll was losing the nav, the title row, the search field and the box strip.
+
+**THE FIX IS A CEILING, NOT A FLAG: `BoxBrowse.tsx:scrollWithin`.** It adjusts `scrollTop` by
+hand on each scrollable ancestor from the row up to `.browse-map` inclusive and stops, so the
+document scroller is unreachable **by construction**. `scroll-margin-top` is read off the row
+rather than ignored, because `.browse-row` sets 28px to clear its own sticky section header and a
+hand-rolled scroll that dropped it would park every landing underneath that header. The innermost
+scroller takes `start` and every outer one takes `nearest`: `start` is a statement about where the
+row sits in the LIST, and asking the same of the column outside it would drag the search field and
+the box strip off the top of a column that is only ever scrolled to reach the box's editors.
+
+**THE CEILING HOLDS WITH THE BOUNDARY MISSING, and that is a separate line rather than a null
+check.** The walk stops at `document.body`/`documentElement` before it consults the boundary at
+all, so a ref that has not mounted yet cannot let the walk past — a ceiling that depends on a ref
+being non-null is not a ceiling, and the symptom would have reappeared nowhere near the check
+that failed.
+
+**IT REACHES EVERY GESTURE THAT MOVES THE MARK, not just the walk-to**, because they all land in
+one effect: arrow keys, PageUp/PageDown, Home/End, a box-chip press and a search landing. Verified
+against the owner's own store — a walk-to across 133 real cards moves `.browse-list` 1242px and
+the page zero, and a box-chip press from y=5 leaves the page at y=5.
+
+**`focus()` IS THE SAME DEFECT'S SECOND DOOR AND IS SHUT WITH IT.** Two presses hand the keys to
+the walk, and `HTMLElement.focus()` scrolls the focused element into view by default — the
+document included. Measured, neither fires today: the column is sticky at the top of the viewport,
+so the list it holds is already on screen whenever these run. Latent rather than live, closed for
+one object, and recorded here so it is not read as belt and braces: `scrollWithin` owns where this
+component scrolls and nothing else in it may.
+
+**A COMMENT THAT ARGUED FOR THE DEFECT IS CORRECTED RATHER THAN DELETED.** The landing effect
+ended *"and the page scroll this brings with it is wanted here: the copies list is below the card
+band, and the photograph is what was asked for."* The intention was right and what happened was
+its opposite — the scroll came from the landed ROW, so it moved the page DOWN, away from the card
+band. Kept in the file with that account attached, because a comment that reasons its way to the
+wrong behaviour is more useful than a missing one.
+
+**Asserted as a MEASUREMENT rather than as a class name**: `app/tests/inventory.spec.ts` reads
+`window.scrollY` and the nav's own `top` before and after the press and requires both unchanged,
+AND requires the landed row in the viewport — either alone is satisfiable by doing the wrong
+thing, since a screen that scrolled nothing and landed nowhere would pass the first and the old
+code passed the second. Observed red against `scrollIntoView` before it was kept.
+
+**One trap on the way, worth keeping because it wasted the first attempt.** Playwright's own
+`.click()` scrolls its target into view first, so the first version of this measurement read 280
+both before and after and proved nothing. The case dispatches the press instead.
 
 ---
 
@@ -4240,6 +4533,84 @@ and it matters more here than for the review vocabulary, since `PUT .../decision
 nothing and the screen's only defence against writing an unparseable file is that the two
 declarations agree. Mutation-tested in both directions before it was kept.
 
+**THE SAVE LOOP WAS WEDGED FROM THE DAY IT SHIPPED, AND EVERY CASE IN ITS OWN SPEC WAS GREEN
+THROUGHOUT (found by the owner 2026-08-30: *"any changes to the prices seems to be stuck on
+perpetually saving"*).** The effect that writes `decisions.json` read the `saving` STATE it
+raised itself, so `saving` was in its dependency list — raising it re-ran the effect, and the
+re-run's CLEANUP set the in-flight closure's `live` to false. The response landed on a dead
+closure, so neither the clear nor `setSaving(false)` ever fired. **On the first save of every
+session**: the indicator read `saving…` forever and the guard `if (… || saving) return` then
+refused every later write. The operator could price a box, watch each answer draw, and have one
+row reach the file.
+
+**IT PASSED FIFTEEN CASES BECAUSE THE PUT REALLY DOES GO OUT.** `app/tests/pricing.spec.ts`
+asserted what the screen SENDS — the load-bearing absences this entry rests on, and one body
+with one answer in it — and never that a write COMPLETED. What that suite could not see is
+everything after the request: the indicator returning to `saved`, and a second answer being
+sent at all. Both are asserted now, and both were observed red against the old code with the
+other fifteen still green.
+
+**`dirty` IS A COMPARISON NOW, NOT A FLAG, AND THAT IS THE HALF THAT IS NOT COSMETIC.** The
+effect's own comment promised *"a change during one re-runs when it lands"*, and a flag cannot
+keep that promise: it cannot tell "the write I just sent" from "the write that landed while it
+was in flight", so clearing it on a response discarded whatever had been typed since that
+response left — silently, with the indicator reading `saved`. The screen holds the document the
+server last confirmed and `dirty` is object identity against it, so a write clears only what it
+carried and anything typed during a flight is still unequal when it lands. The guard is a ref,
+which is what lets `saving` stay in the dependency list doing the one job it is good for —
+re-firing the effect when a flight ends, since everything a completion changes is a ref and a
+re-render is the only thing that can ask whether more is owed.
+
+**A REFUSED WRITE IS NOT RETRIED IN A SPIN.** `dirty` correctly stays true after a failure —
+the server does not have those answers — so without a record of the document that failed, the
+loop would re-fire the instant `saving` went false, forever. The next keystroke makes a new
+document and the retry happens then.
+
+**THE PRESET WROTE A KEY NOTHING READS, SO PICKING ONE CHANGED THE SCREEN AND NOT THE RUN**
+(the owner's own analysis, 2026-08-30, and it is exactly right). `applyPreset` wrote
+`preset: <key>` into the document. `pipeline/decisions.py:parse` does not know that field and
+`to_payload` does not emit it, so the next join dropped it — and `rule` and `basis` sat at
+`match`/`market` throughout. Pressing `Market −5%` re-rendered every suggestion on screen and
+moved nothing `emit` reads.
+
+**The comment directly above that line said `A PRESET WRITES rule/basis AND NO OVERRIDE`.** It
+described the design; the line under it did something else, and nothing compared them.
+
+**Measured on the owner's riftbound run, on disk**: `preset: market_undercut_5` sitting beside
+`rule: match`, `basis: market`, with **2 overrides across 50 SKUs** — so 48 cards were about
+to list at a price nobody had chosen, and the screen had shown all of them at −5%.
+
+**IT IS THIS ENTRY'S OWN NAMED FAILURE REACHED BY THE OTHER ROAD, which is why the fix is the
+rule and not the suggestions.** The paragraph above refuses to write the hundred suggestions
+into `overrides`, correctly, because an override is layer 1 of `prices_for` and beats the rule
+at layer 4 — *"a run where changing the preset silently changed nothing"*. That refusal is
+only half an answer: if the suggestions must not move, then **the rule at layer 4 has to**, and
+it never did. A preset now writes `rule` and `basis`, which is what that comment always
+claimed.
+
+**THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis` AND IS NEVER STORED.** Nothing on this screen
+said which rule was live, and that is most of why the dead write survived — pressing a chip
+appeared to work, because the suggestions really did change. A REMEMBERED selection would have
+been a second answer to *what will an untouched row list at*, and the pair the pipeline reads
+is the only one that can answer it; so a rule typed by hand into `decisions.json` on `#/runs`
+correctly lights no chip rather than lighting a stale one.
+
+**`scripts/docs-audit.py` GAINS A `pricing presets` ROW**, reconciling `cli/cmd_join.py:PRESETS`
+against `app/src/Pricing.tsx:PRESETS` on all three fields — key, rule and basis. Blocking, for
+the reason the `withhold reasons` row above gives verbatim: `PUT .../decisions` validates
+nothing, so two declarations agreeing is the whole defence. It reads the Python side by `ast`
+and resolves `pricing.RULE_MATCH` out of `pipeline/pricing.py` rather than importing anything,
+because naming the constant is right and flattening it to a literal to please a checker is the
+inversion D16 forbids. Mutation-tested in both directions.
+
+**WHAT IS STILL NOT BUILT, and the owner found it in the same pass**: `server/pipeline_routes.py`
+computes `remembered_sub_threshold` and ships it on the pricing route, `app/src/types.ts`
+declares it, and **no component reads it**. The sub-threshold disposition is still typed into
+`decisions.json` by hand on `#/runs`, which is what the paragraph above says. It is
+`CLAUDE.md`'s route-is-not-a-feature rule in its mildest form — a server half with no client
+half — and it is named here rather than built because a control that answers D9's per-run
+disposition is a design question, not a wiring one.
+
 **WHAT IS NOT BUILT, named rather than left to be discovered**: no durable home for a hold
 outside the run directory; no cross-run view of what is being held; no search or sort control,
 because the sort is the hierarchy and a re-sort under a finger is D28's defect; and no `Custom`
@@ -4249,6 +4620,234 @@ D33 chose, and a re-join regenerates the suggestions.
 **WHAT WOULD REOPEN THIS: a hold nobody lifts.** If holds accumulate across runs and are re-set by
 hand every time, the per-run home is the wrong one and the deferred durable store becomes the
 answer. The measurement is whether the same SKU is withheld in two runs over one box.
+## D50 — An interactive element's feedback is the product's, not each stylesheet's
+
+**BUILT 2026-08-29, on the owner's report**: *"I hate how my mouse doesn't change correctly
+upon what i'm hovering, and frankly it'd just be a nice to have attention to detail wise."*
+Then, on being shown what it would cost: *"Hover darkening permission granted, with permission
+granted to edit the fixed pallete. Permission also granted for building a guard to retain
+standardization across interactive elements."*
+
+**THE PALETTE HAS BEEN LOCKED SINCE 2026-08-12 AND THIS IS THE FIRST TOKEN ADDED AGAINST THE
+LOCK.** `docs/DESIGN.md` records that every value was chosen by the owner from rendered
+alternatives rather than described in prose, and that a token nobody can argue with is a token
+the next session quietly replaces. `--field-hover` was not chosen that way — it was measured,
+and the owner granted it against the lock. Recorded here so a later session reads it as a
+grant with a reason rather than as drift, and so the interview's authority over the other
+values is not weakened by one addition beside them.
+
+**THE DEFECT WAS NEVER MOSTLY ABOUT COLOUR, AND THE MEASURED PREMISE HAD TO BE CORRECTED IN
+PUBLIC FIRST.** The opening count was "39 interactive elements have no `cursor` rule any
+selector can reach", which is true of the CSS and wrong about the effect: most of those are
+`<a href>` and `<input type="text">`, which the user agent already answers correctly. **The
+real concentration was the DISABLED state, which no per-file rule was looking at.** Of 65
+distinct control shapes the app can draw, 41 had a wrong cursor: 30 clickables went on saying
+`pointer` while refusing the click, 7 text fields read `text` while refusing a character, 2
+`<select>`s read `default`, and 2 buttons read `default` disabled where 18 siblings read
+`not-allowed`. Missing `:focus-visible` was **zero** — `base.css` already had a global ring,
+so keyboard parity was never the gap, which is the one thing everybody would have guessed.
+
+**A DEFAULT IN THE RESET, NOT A NOTE ASKING EACH SCREEN TO REMEMBER.** The six stylesheets
+that declared no cursor at all are not badly written; they are the ones whose author had no
+reason to think about it. `base.css` now answers for `button`, `select`, the three toggle
+input kinds, `[role='button']`, a label that owns a toggle, and the disabled arm. It is the
+same argument the focus ring one block above already makes, and the same one
+`app/eslint.config.js` makes for a bug that earned a rule: **a paragraph in one file guards
+one file.**
+
+**THE FLOOR'S GUARANTEE IS CASCADE ORDER, NOT SPECIFICITY, AND THE FIRST DRAFT GOT THAT WRONG
+IN ITS OWN COMMENT.** It claimed every rule was one specificity (0,0,1) so any class outranks
+it. That is false for eight of the eleven selectors — `input[type='checkbox']` is (0,1,1),
+`[role='button']` is (0,1,0), and the whole disabled arm is (0,1,1). The behaviour was correct
+anyway, for a reason the comment had not stated: `main.tsx` imports `base.css` before every
+component sheet, so a tie goes to the component. **Corrected rather than left standing**, which
+is D41's own recorded failure — a comment whose premise had been deleted while its conclusion
+stayed — caught this time inside the session that wrote it. The property to preserve is the
+import order; moving `base.css` below a component stylesheet silently inverts the floor.
+
+**THE DISABLED ARM OUTRANKS A REST-STATE CLASS ON PURPOSE**, which is the one place the floor
+is deliberately not a floor: `button:disabled` at (0,1,1) beats a bare `.foo { cursor: pointer }`
+at (0,1,0), so off beats on. A screen wanting a different disabled cursor still wins with a
+class of its own.
+
+**THE TOKEN: `--field-hover`, #6B6E73, AND THE FREE REUSE WAS REFUSED ON A NUMBER NOBODY WOULD
+HAVE COMPUTED.** `--field` at 3.36:1 is the quietest edge WCAG 1.4.11 permits, so a text field
+had no hover response at all. The obvious answer is `--muted`, an existing value needing no
+grant — and it fails, because **the criterion here is contrast against `--ink`, not against the
+ground.** Every focus treatment on these controls is an ink `outline`, so the question a hover
+border must answer is whether it can be told apart from focus:
+
+    --field   #8C8C8C   5.93:1 vs ink   rest, and no hover response at all
+    this      #6B6E73   3.89:1 vs ink   1.52x the rest edge, still clearly not focus
+    --muted   #4E5157   2.50:1 vs ink   2.37x the rest edge, and READS AS FOCUS
+
+On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all three grounds
+a field is drawn on. **It composes with focus rather than competing**: hover darkens the
+border, focus draws an outline outside it at a positive offset — two properties in two places,
+so a control that is both says both.
+
+**NAMED FOR ONE STATE OF ONE JOB, per the rule `--field` sets for itself.** `--field-hover`
+cannot grow into a button border the way `--edge` or `--control` would have within a session.
+It reaches the seven typed-into controls and nothing else. **It does not license a hover
+colour for buttons** — those already lift to `--hover` — and it adds no second hover ground,
+so `docs/DESIGN.md`'s rule that every text token clears 7:1 on every ground is untouched: this
+token carries no text and is never painted as a background.
+
+**ONE REST-STATE CHANGE CAME WITH IT AND IS THE OWNER'S TO OVERRULE.**
+`CaptureScreen.css`'s `.capture-entrybox` bordered with `--line` (1.24:1) while every other
+typed-into box in the product used `--field` — so the token created for exactly this control
+had missed one, and the box could not take a hover state that started from a different edge.
+It is `--field` now, which is `docs/DESIGN.md`'s existing rule applied rather than a new one.
+The cost is visible and is on the screen the owner spends the most hours in: that border gets
+darker at rest. Named here rather than buried, because it is the one change in this entry a
+person will SEE without hovering anything.
+
+**THE GUARD IS A SPEC, AND WITHOUT IT THIS ENTRY WOULD HAVE BEEN WRITTEN FOR NOTHING.**
+Nothing in `app/tests/` asserted a cursor anywhere: `make design-check` was green through the
+whole defect and would have stayed green through a total regression of the fix. That is the
+failure mode `base.css`'s own focus-ring comment warns about, and it is the reason the owner's
+second grant matters more than the first. `app/tests/cursor.spec.ts` asserts the CLASSES —
+a clickable reads `pointer`, a disabled control reads `not-allowed`, a text field reads `text`
+— across every route, rather than pinning a selector list that would go stale the day a screen
+adds a button.
+
+**IT ASSERTS THE RULE, NEVER THE ROSTER**, which is the same distinction D40 draws for the
+copies row: pinning today's numbers goes green on any later change that moves the defect
+somewhere else. A new button that forgets its cursor has to fail this spec, and it only can if
+the spec discovers controls rather than being handed them.
+
+**WHAT IS DELIBERATELY NOT DONE.** No `:active` pass — it is neither hover nor cursor, only
+three files have one today, and adding it to ~20 controls is churn with reflow risk. No hover
+state anywhere may change `border-width`, `padding`, `font-size` or `font-weight`: **D28's
+defect was the review queue's list moving under a finger already travelling toward a target**,
+and a hover that reflows is that defect in miniature on every screen. Measured at zero
+reflow offenders across all seven routes.
+
+**What would reopen this: a screen that wants a control to say something else.** The floor is
+overridden by a class, deliberately, so a genuine exception costs one rule and one comment
+saying why. What must not happen is a screen going back to saying nothing at all — that is
+what the guard is for, and a spec that starts skipping routes has repealed this entry without
+anyone arguing with it.
+
+---
+
+
+---
+
+## D50 — Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
+
+**BUILT 2026-08-30, from the owner pressing a key that was already answering them wrongly**:
+*"cmd+arrow keys doesn't have me going in order between c r q p i, can you resolve?"*
+
+**THE SHELL HAD A JUMP AND NO STEP.** `app/src/App.tsx`'s `,` chord names a destination — `,c`,
+`,r`, `,q`, `,p`, `,i` — and it has never had a way to say *the next one along*. That sentence
+is worth having because the nav is not an arbitrary set of links: D31 and D39 order it as the
+work happens, shoot → run → answer → price → look up, and `group` was added so the row says
+that out loud. An ordered row whose only key is a jump is a row whose order the keyboard cannot
+use.
+
+**WHAT WAS ANSWERING THE PRESS INSTEAD WAS THE BROWSER'S HISTORY, WHICH IS A DIFFERENT QUESTION
+WEARING THE SAME SHAPE.** A back stack orders by when a screen was ARRIVED AT, so Cmd-arrow
+walked whichever two routes the last two presses happened to be, in whatever order they were
+visited, and at the bottom of the stack it left the app entirely. It is not that the browser was
+wrong; it is that it was answering "where was I" while the hand was asking "what is next".
+
+**THIS IS THE ONE PLACE THE SHELL TAKES A MODIFIER, AND `LEADER`'s RULE IS NARROWED RATHER THAN
+BROKEN.** That comment read *"MODIFIERS ARE NEVER PART OF IT"* and gave the reason — Cmd-comma
+belongs to the browser and the OS, and a shell that eats it has broken something it does not
+own. It is amended in place to say `NEVER PART OF THE CHORD`, which is where the argument
+actually lives: a chord is two unmodified presses, and a leader needing a modifier would be
+competing for exactly the key space it was invented to escape. The step is not a chord.
+
+**IT COSTS A BROWSER SHORTCUT AND THAT IS PAID RATHER THAN ARGUED AWAY.** Cmd-arrow is Back and
+Forward in Chrome and in Safari. What makes it affordable is that neither browser has only one
+way back — Cmd-[ and Cmd-] and the two-finger swipe are all untouched — and that the key is
+handed to the page at all, which not every Cmd shortcut is: the reserved set that never reaches
+a listener is Cmd-N, Cmd-W, Cmd-T, Cmd-Q and their kind. **The half no test in this repo can
+see is whether the browser then honours `preventDefault`**, because Playwright presses keys
+through the debugging protocol, which never fires a browser shortcut in the first place.
+`app/tests/nav.spec.ts` says so in its own header, and this is the paragraph to reopen if a
+press ever both steps and goes Back — the remedy then is a different pair of keys, not a
+different handler.
+
+**THE RING IS THE ROUTES THAT HAVE A KEY, IN THE ORDER THE NAV DRAWS THEM.** Both halves are
+derived rather than listed a second time:
+
+- **Which** — `hotkey !== undefined` already means "reachable from the keyboard", and the two
+  rows without one are without one for reasons that apply here word for word. Fulfillment must
+  not be arrivable by accident, because it renders no way out; the gallery is not a step in any
+  loop. A second list is a second answer to a question `ROUTES` has already answered, and the
+  first screen added to one and not the other is the defect.
+- **Order** — `GROUP_ORDER` first, then the table, which is what the nav actually renders rather
+  than what the table alone says. They agree today. The day somebody re-orders `ROUTES` without
+  touching `GROUP_ORDER`, a ring built from the table alone would step in an order the strip
+  does not draw — and stepping in the drawn order is the whole of what this is for.
+
+**NEVER A WRAP, AND EVERY END STOPS.** `BoxBrowse` says it in those words about its own arrows
+and the reason transfers: a row that starts again is a row you can no longer count along. **The
+press is consumed at the ends all the same**, which is that file's second rule and the half that
+makes them readable — a refusal is still this handler answering for the key, and letting it fall
+through would mean Cmd-left sometimes steps a route and sometimes leaves the app for whatever
+the history stack holds. That is the "not in order" this entry exists to fix, arriving by
+another road.
+
+**A SCREEN OUTSIDE THE RING KEEPS THE BROWSER'S KEY.** The gallery is the live case: it has
+chrome, so the listener is mounted, and it is deliberately not a step in the loop — so there is
+no next one along, and the honest answer is to leave the press alone rather than invent a
+landing.
+
+**THREE REFUSALS, EACH ANSWERING A KEY THAT IS SOMEBODY ELSE'S.** A bare arrow is the screens' —
+`BoxBrowse` walks a box with them and `RunPanel` steps the crop preview — so the modifier is not
+decoration, it is what keeps the shell out of their key. Alt is excluded outright rather than
+merely not required, because Cmd-Alt-arrow is "previous/next tab" in Chrome and a step that also
+changed tab would be answering for a press it did not read. And in a text field Cmd-arrow is the
+caret going to the start or the end of the line, which is what the hands are doing when they are
+in one.
+
+**IT BUBBLES, WHERE THE LEADER CAPTURES.** The leader takes the capture phase because its whole
+purpose is to consume a key another screen has bound, and that bluntness is bounded by having to
+be armed one press earlier. A step key is never armed, so a permanent capture-phase listener
+would be a standing claim on a key it mostly does not want — and it needs none, because every
+arrow handler in the app returns on a held Cmd before it reads the key. What it does need is
+`preventDefault`, which works from either phase.
+
+**ARRIVING ANYWHERE DISARMS THE LEADER, AND THAT IS A HOLE THIS ENTRY FOUND RATHER THAN MADE.**
+A chord is spent on arriving, so an arm that survives an arrival is an arm nobody is holding —
+and `useLeader`'s own comments already say what that costs: the next keystroke is eaten on a
+screen the operator did not press it from, which on the capture screen is a card that went past
+the lens unrecorded. It was already reachable by the browser's Back and by a nav link; the step
+would have been a third way in. One effect on the path closes all three.
+
+**THE STRIP ADVERTISES IT ONCE, AT THE END OF THE RING.** `docs/DESIGN.md`'s "every choice shows
+its key" — a binding nothing advertises is a binding only the person who asked for it will ever
+press. One hint rather than one per link, because there is one binding and it reaches whichever
+screen is next, where `,C` is per route because the destination is what changes. It trails the
+last route the step can reach rather than the end of the bar, where `.app-nav-group-aside`'s auto
+margin would have stood it beside the two routes it cannot. Drawn in the same 10px chip as every
+other key in this app but **deliberately not wearing `.app-nav-key`**, because that class lights
+up when the leader is armed and the step is never armed — a chip claiming a state it does not
+have is worse than no chip. `aria-keyshortcuts` on the nav carries the same fact for a screen
+reader, which two arrow glyphs could not.
+
+**THE FIRST TEST THIS SHELL HAS EVER HAD IS `app/tests/nav.spec.ts`.** Neither keyboard had an
+assertion of any kind: `make design-check` covered six screens and nothing covered the chrome all
+six sit under. Seven cases, and the strongest are the two ends and the three refusals. Four
+mutations were observed failing before they were kept — a wrapping ring, a dropped
+editable-target guard, a dropped modifier guard, and the leader disarm removed.
+
+**TWO CASES WERE WRITTEN, FOUND TO BE INCAPABLE OF FAILING, AND CHANGED — which is the part of
+this worth reading.** The disarm case asserted `not.toHaveAttribute('data-armed')`, and that
+assertion retries: `CHORD_MS` expires on its own after a second, so it went green against a build
+with the disarm deleted. It now reads the attribute two frames after the hash changes, ~30ms into
+a 1000ms window. And a case pressing the step on the Fulfiller's view was deleted outright: it is
+refused by `enabled` AND by the ring, so no single mutation makes it fail. What guards him
+instead is the end-of-ring assertion, which goes red the moment a `hotkey` is added to his row —
+the mistake that would actually put him in the ring.
+
+**WHAT WOULD REOPEN THIS: a browser that keeps the key.** If Cmd-arrow turns out to both step and
+navigate, the fix is a pair the browser does not claim — and the obvious candidates, Cmd-[ and
+Cmd-], are the same shortcut by another name. `,` plus an arrow is the one that costs nothing,
+since the leader already consumes whatever follows it.
 
 ---
 
@@ -4441,6 +5040,54 @@ stopped being a Someday item and needs a decision entry of its own"* — and eac
   Honest limit, and the reason this is Someday rather than a plan: a cross-check converts
   misses into review-queue taps, not into correct answers. It buys safety, not a higher T1
   number — the mirror image of the trade the set-hint item above warns about.
+
+- **Keep a price series out of the exports runs already hold** (recorded 2026-08-29, from the
+  owner asking whether the export carries last solds). **It does not, and neither does
+  anything else reachable from here.** The Filtered CSV is current-state only — sixteen
+  columns, four of them prices, not one carrying a timestamp, a sale record or a sample size.
+  `TCG Market Price` is the only column with sales behind it and it arrives as TCGplayer's own
+  aggregate over recent sales, so *"what did the last three copies sell for"* is not answerable
+  from it and is not recoverable from it by arithmetic. The `tcgplayer-csv` skill carries the
+  schema half.
+
+  **TCGplayer publishes no price history at all, and that is the fact that decides the rest.**
+  The latest-sales panel on a product page is UI-only, with no export and no API contract — so
+  D2's own rubric answers it before any code is written: a benchmark, never a component. And
+  it would mean scraping the marketplace this project's entire listing path depends on (D11),
+  from the account that depends on it. The exposure is the seller account rather than an IP
+  ban, which is a worse trade than the data is worth.
+
+  **Nothing has to be fetched to start, which is the part worth not forgetting.** D33 makes an
+  app-driven run keep the exact export bytes it joined against, for an unrelated reason — so
+  the archive is already accumulating. Three exports were on disk on 2026-08-29:
+  `runs/2026-08-24-box2-01/` and two inside `runs/2026-08-29-box1-01/`, that run having
+  re-joined against a refreshed export the same morning. Keying `TCG Market Price` by
+  `TCGplayer Id` across run directories is a price series that grows every run and calls
+  nothing.
+
+  **What it cannot cover is the backfill**, holding only SKUs that have been run, on the dates
+  they were run. `tcgcsv.com` is the candidate: a nightly mirror of TCGplayer's own API across
+  89+ games including all three this project captures, sub-type aware — Normal, Holofoil and
+  Reverse Holofoil as separate series, matching how the Condition string carries the variant —
+  with market/low/mid/high per day and an archive back to 2024-02-08. A published mirror, not
+  a scrape.
+
+  **eBay sold listings are a real source and the wrong one.** Officially reachable through the
+  Marketplace Insights API rather than by scraping, but eBay is on the Deferred list above, and
+  an eBay sold price is shipping-inclusive on a different market — it would mislead a
+  TCGplayer listing price rather than inform it.
+
+  **This is Someday rather than a plan because the second half reopens D8**, which names the
+  export as the pricing source and no external pricing API. The two halves are not equally
+  affected and the split is the reason this is written down rather than built: the local
+  series barely touches D8 if at all — same bytes, same column, kept instead of discarded —
+  while `tcgcsv.com` is plainly an external price source whatever it is used for. The owner's
+  call, and a decision entry naming D8 is the shape it takes.
+
+  **What it would be worth**: D49's `bullish` withhold and its `watch_above` threshold are the
+  only things in the product that want a trend, and they have none — a hold is set against the
+  operator's memory of what a card used to cost. **The honest limit is that none of this is
+  last solds**, and no amount of daily aggregate becomes one.
 
 ---
 

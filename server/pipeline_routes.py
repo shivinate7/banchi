@@ -1235,6 +1235,10 @@ def do_pipeline_pricing(name: str) -> dict:
     reader, and `app/src/server.ts` already records that the app may not compute rules the
     pipeline owns — that rule reaches the server that feeds it.
 
+    IT ALSO ANSWERS WHEN THE TABLE WAS WRITTEN, which is what lets a screen say how stale a
+    market price is — see `written_at` below for why that is a file mtime and what it does not
+    claim.
+
     TWO FILES IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER THAN TWO
     DOWNLOADS. `_DOWNLOADABLE` already matches `.json`, so a screen could fetch
     `pricing.json` and `decisions.json` through `GET .../file` and needs neither route nor
@@ -1277,6 +1281,19 @@ def do_pipeline_pricing(name: str) -> dict:
         "pricing": pricing,
         "decisions": answers,
         "remembered_sub_threshold": _remembered_sub_threshold(directory),
+        # WHEN THIS TABLE WAS WRITTEN, WHICH IS THE ONLY AGE THIS SERVER CAN HONESTLY GIVE A
+        # PRICE. `cli/cmd_join.py` rewrites `pricing.json` on every join, so its mtime is the
+        # moment a join last read an export — and every figure under `snap` came out of that
+        # export. It is NOT when TCGplayer computed the price: the export is a file the operator
+        # downloaded at some earlier moment this machine has no way to see, so a screen drawing
+        # this must say "read" and never "as of".
+        #
+        # THE FILE'S OWN MTIME RATHER THAN A FIELD INSIDE IT. A `joined_at` written into the
+        # table would be better data and would be absent from every run already on disk, which
+        # is exactly the runs a screen is opened over. This needs no re-join and cannot drift
+        # from the bytes it describes. What it does not survive is the run directory being
+        # copied, which resets it; nothing in this repo copies one.
+        "written_at": int(table.stat().st_mtime),
     }
 
 
