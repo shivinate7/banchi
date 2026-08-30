@@ -458,3 +458,35 @@
   color: var(--ink);
   font-weight: 600;
 }
+
+/* THE POSITION LABEL AS A CONTROL, where the caller offers a walk to the copy (`onGoTo`).
+   Everything about how the string LOOKS stays in `.card-locations-label` above — this rule only
+   takes the button chrome back off, so the two branches of that cell render the same text at the
+   same size and a row that can be walked to is not louder than one that cannot.
+
+   THE AFFORDANCE IS HOVER AND FOCUS, WHICH IS THE ONE THING DEFENSIBLE HERE. A persistent
+   underline down a column of positions would be the newspaper-link register docs/DESIGN.md
+   rejects, and an accent fill is reserved for a screen with exactly one thing to do. The row
+   already lights on hover — this adds the underline that says the label itself is the target,
+   and `:focus-visible` gives the keyboard the same fact rather than leaving it to the ring
+   alone.
+
+   `text-align: left` because a button centres its text and every other line in this cell is
+   ragged-right against the same edge; `min-width: 0` so the label wraps at its separators
+   exactly as the span does rather than forcing the flex row wider. */
+.card-locations-owner .card-locations-goto {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.card-locations-owner .card-locations-goto:hover,
+.card-locations-owner .card-locations-goto:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

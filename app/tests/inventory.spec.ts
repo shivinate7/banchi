@@ -63,6 +63,14 @@ function card(input: {
   section: number
   sectionStart: number
   sectionEnd: number
+  /** Which box the card is in. Defaults to the one box every case below walks; the jump tests
+   *  are the only ones that need a second, because a walk-to is only interesting when it
+   *  changes what the strip is pointing at. */
+  box?: number
+  boxName?: string
+  /** The box's fill, for the place block's own fraction. A parameter so a one-card box does
+   *  not claim a five-card denominator — the failure D20 spends its entry on, in a fixture. */
+  boxTotal?: number
   captureId?: string | null
   /** D23's rarity claim, as a set. A list here is the shape `pipeline/games.py` authors. */
   rarity?: string[] | null
@@ -76,7 +84,8 @@ function card(input: {
    *  the store is mostly still full of. A row that passes a list is the new shape. */
   finish?: string | string[] | null
 }) {
-  const box = 2
+  const box = input.box ?? 2
+  const boxTotal = input.boxTotal ?? 5
 
   /* `card` IS THE SLOT INSIDE THE SECTION AND `index` IS THE BOX-WIDE ALLOCATOR NUMBER, which
      is what the server sends and what this fixture used to conflate — it set `card: index`, so
@@ -100,12 +109,12 @@ function card(input: {
       index: input.index,
       section: input.section,
       card: slot,
-      box_name: 'ME01 commons',
+      box_name: input.boxName ?? 'ME01 commons',
       section_start: input.sectionStart,
       section_end: input.sectionEnd,
-      box_total: 5,
+      box_total: boxTotal,
       box_closed: false,
-      fraction: input.index / 5,
+      fraction: input.index / boxTotal,
       neighbors: null,
       gaps_in_section: 0,
     },
@@ -141,7 +150,12 @@ function card(input: {
  *   4      sold, 5 retired — the terminal states, which draw a word instead of the controls
  *          and which the mid-box delete must not offer itself on
  */
-const CARDS = {
+/** Whatever `GET /inventory` is answering with for one test — the default five, or a map a
+ *  jump test hands in. Loose in its keys so a second box can be added without the default map's
+ *  key union closing the door on it. */
+type Cards = Record<string, ReturnType<typeof card>>
+
+const CARDS: Cards = {
   '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
   /* THE MISC-SHAPED CARD: no name, no SKU, and the two claims that are the only thing telling it
      apart. D22 makes exactly this the case the note exists for — "it carries a free-text operator
@@ -232,14 +246,23 @@ const GAMES = {
   ],
 }
 
-/** The per-SKU facts `GET /search` reports beside the copies. Only the two-copy SKU carries
- *  interesting numbers; the other two exist so that selecting a card in the SECOND section
- *  reaches a real group and therefore draws a real position bar. */
-const LISTED: Record<string, { listed: { pushed: number; staged: number; live: number }; on_hand: number }> = {
-  '8937370': { listed: { pushed: 0, staged: 2, live: 1 }, on_hand: 2 },
-  '8937371': { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 },
-  '8937372': { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 },
+/** The per-SKU LISTING STAGES `GET /search` reports beside the copies. Only the two-copy SKU
+ *  carries interesting numbers; the other two exist so that selecting a card in the SECOND
+ *  section reaches a real group and therefore draws a real position bar.
+ *
+ *  `on_hand` IS NOT HERE, and used to be. It is D7's count of copies that have not left, which
+ *  is a fact about the copies in the answer — so the answer counts them (see `searchAnswer`)
+ *  rather than restating a number a differently-sized card map would contradict. The three
+ *  literals it replaced all agreed with the count, which is why nothing below moved. */
+const LISTED: Record<string, { pushed: number; staged: number; live: number }> = {
+  '8937370': { pushed: 0, staged: 2, live: 1 },
+  '8937371': { pushed: 0, staged: 0, live: 0 },
+  '8937372': { pushed: 0, staged: 0, live: 0 },
 }
+
+/** The two doors out of inventory — `master.TERMINAL_STATES`. A copy behind either is not on
+ *  hand, which is the one rule `on_hand` applies. */
+const GONE = ['sold', 'retired']
 
 /** Which store keys a query reaches, in the shape `do_search` matches with: the SKU, the name,
  *  or the set hint — three of the six fields the real matcher reads.
@@ -248,10 +271,10 @@ const LISTED: Record<string, { listed: { pushed: number; staged: number; live: n
  *  carries `ME01`, so that one query reaches copies in BOTH sections — which is the only shape
  *  that can test the owner's ask that a search make every match immediately findable. A query
  *  matching one section proves nothing about a match folded away in the other. */
-function keysFor(query: string): string[] {
+function keysFor(query: string, cards: Cards = CARDS): string[] {
   const asked = query.trim().toLowerCase()
   if (asked === '') return []
-  return Object.entries(CARDS)
+  return Object.entries(cards)
     .filter(([, held]) =>
       [held.sku, held.name, held.set_hint].some(
         (field) => typeof field === 'string' && field.toLowerCase() === asked,
@@ -265,18 +288,18 @@ function keysFor(query: string): string[] {
  *  group by `positions_for_sku` and a screen built against a partial group would be built
  *  against a lie. A card with no SKU is in no group at all, which is the 22% of the store the
  *  lone-copy fallback exists for. */
-function searchAnswer(query: string) {
-  const reached = new Set(keysFor(query))
+function searchAnswer(query: string, cards: Cards = CARDS) {
+  const reached = new Set(keysFor(query, cards))
   const skus = [
     ...new Set(
       [...reached]
-        .map((key) => CARDS[key as keyof typeof CARDS].sku)
+        .map((key) => cards[key]?.sku ?? null)
         .filter((sku): sku is string => sku !== null),
     ),
   ]
 
   const copiesOf = (sku: string) =>
-    Object.entries(CARDS)
+    Object.entries(cards)
       .filter(([, held]) => held.sku === sku)
       .map(([key, held]) => ({
         key,
@@ -290,29 +313,31 @@ function searchAnswer(query: string) {
     query,
     groups: skus.map((sku) => {
       const copies = copiesOf(sku)
-      /* The stand-in for the SKU's listing counts, pulled out of the spread below so `listable`
-         can be derived from the SAME `on_hand` the group reports rather than from a second
-         literal that could disagree with it. */
-      const held = LISTED[sku] ?? { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 }
+      const listed = LISTED[sku] ?? { pushed: 0, staged: 0, live: 0 }
+      /* D7's count of copies that have not left, taken off the copies this answer is about to
+         send — so `listable` below is derived from the same number the group reports and the
+         fixture cannot claim a denominator its own rows contradict. */
+      const on_hand = copies.filter((copy) => !GONE.includes(copy.state)).length
       return {
         sku,
         names: [
           ...new Set(
-            Object.values(CARDS)
-              .filter((held) => held.sku === sku && held.name !== null)
-              .map((held) => held.name as string),
+            Object.values(cards)
+              .filter((row) => row.sku === sku && row.name !== null)
+              .map((row) => row.name as string),
           ),
         ],
         number: '090',
         printed_total: '132',
         set_hint: 'ME01',
         condition: 'Near Mint',
-        ...held,
+        listed,
+        on_hand,
         cap: 4,
         /* D7's `min(cap, on hand)`, mirroring what `capture_server.py` computes — the shelf
            binds below a playset, which is most of the store. Derived here rather than written
            as a number so the fixture cannot claim a denominator its own `on_hand` contradicts. */
-        listable: Math.min(4, held.on_hand),
+        listable: Math.min(4, on_hand),
         copies,
       }
     }),
@@ -322,7 +347,15 @@ function searchAnswer(query: string) {
 /** Stub the whole server and open the screen. Every route the view calls is intercepted; a
  *  request that reaches none of them would fail at the fetch, which is itself the assertion
  *  that this screen talks to the routes it claims to. */
-async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
+/** What the server is holding for one test: the cards `GET /inventory` answers with, and what
+ *  `GET /search` says about them. A pair rather than two parameters because they are one fixture
+ *  — a search answer that described cards the walk does not hold would be a store contradicting
+ *  itself, which is the shape of the bug the jump tests are about rather than a fixture to
+ *  build. Defaulted, so every case written before this stays a one-argument `open(page)`. */
+type Store = { cards: Cards; search: (query: string) => unknown }
+const STORE: Store = { cards: CARDS, search: (query) => searchAnswer(query) }
+
+async function open(page: Page, boxes: unknown = BOXES, store: Store = STORE): Promise<Wire[]> {
   const wire: Wire[] = []
 
   const record = (method: string, url: string, body: unknown) =>
@@ -428,7 +461,7 @@ async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(searchAnswer(asked)),
+      body: JSON.stringify(store.search(asked)),
     })
   })
 
@@ -450,7 +483,7 @@ async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ version: 2, cards: CARDS, boxes: {}, listings: {} }),
+      body: JSON.stringify({ version: 2, cards: store.cards, boxes: {}, listings: {} }),
     })
   })
 
@@ -598,6 +631,159 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   await expect(page.locator('.card-locations-owner')).toHaveCount(0)
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Retire' })).toBeVisible()
+})
+
+// ------------------------------------------------ the copies are a way back into the walk
+
+/** A SECOND BOX, FORTY CARDS DEEP, holding a third copy of the two-copy SKU at its far end.
+ *
+ *  D7 keeps every copy at its own position and says nothing about them sharing a box — the
+ *  owner's store spreads them — and a walk-to is only worth testing when it changes what the
+ *  strip is pointing at.
+ *
+ *  THE DEPTH IS THE POINT AND NOT DECORATION. The copy is the LAST of forty so that it sits
+ *  below the fold of the walk's own scroller, which is the only condition under which "the jump
+ *  scrolls to what it landed on" can fail. Against a one-card box that assertion passes whatever
+ *  the code does — and this fixture was one card until the mutation run proved exactly that.
+ *
+ *  The thirty-nine in front of it carry no SKU, so `GET /search` puts them in no group and the
+ *  copies list stays three rows: they are the length of the box and nothing else. */
+const SPARES: Cards = Object.fromEntries(
+  Array.from({ length: 40 }, (_, at) => {
+    const index = at + 1
+    const isCopy = index === 40
+    return [
+      `7/${index}`,
+      card({
+        index,
+        state: 'identified',
+        name: isCopy ? 'Thievul' : `Filler ${index}`,
+        sku: isCopy ? '8937370' : null,
+        section: 1,
+        sectionStart: 1,
+        sectionEnd: 40,
+        box: 7,
+        boxName: 'ME01 spares',
+        boxTotal: 40,
+      }),
+    ]
+  }),
+)
+
+const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
+
+/** Where the third copy sits — named once, because three assertions and a button label read it. */
+const FAR = 'Box 7 · Section 1 · Card 40'
+
+const TWO_BOXES = {
+  boxes: [
+    ...BOXES.boxes,
+    {
+      box: 7,
+      name: 'ME01 spares',
+      sections: [1],
+      state: 'open',
+      capacity: null,
+      fill: 40,
+      next_index: 41,
+      cards: 40,
+      sold: 0,
+      retired: 0,
+      listed: 0,
+      sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }],
+    },
+  ],
+}
+
+const ACROSS: Store = { cards: ELSEWHERE, search: (query) => searchAnswer(query, ELSEWHERE) }
+
+test('a copy in another box is reached by pressing its position, and the walk goes there', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS)
+
+  /* Three copies of one SKU in two boxes, and the walk is standing on the first. The row it is
+     standing on offers no walk-to — it is already here — which is what makes the button that
+     does appear unambiguous about where it goes. */
+  const rows = page.locator('.card-locations-owner .card-locations-row')
+  await expect(rows).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+
+  /* THE BOX, THE CARD AND THE PHOTOGRAPH ALL FOLLOW, which is the whole of the feature: every
+     one of them is drawn for whatever the walk points at, so moving the mark is the only thing
+     the press has to do. */
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
+  await expect(page.locator('.browse-position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
+
+  /* THE LANDING'S SECTION IS OPEN AND THE MARK IS WHERE IT CAN BE SEEN, in a box that arrived
+     collapsed like every other and is forty rows deep. Both halves are the jump's own work: it
+     opens the landing's section in the same pass it moves the mark, which is what leaves a
+     rendered row for the scroll effect to find — that effect runs a commit earlier than the
+     mark-is-never-hidden rule and does not depend on the folds, so a jump that left the opening
+     to it would land forty rows down a scroller showing the top of the box. */
+  const landed = page.locator('.browse-row[aria-current="true"]')
+  await expect(landed).toBeVisible()
+  await expect(landed).toBeInViewport()
+
+  /* And the offer is now the other way round: the copy just left has one, the copy landed on
+     does not. */
+  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Walk to ${FAR}` })).toHaveCount(0)
+})
+
+test('a filtered walk gives up the filter rather than swallowing the jump', async ({ page }) => {
+  /* THE ONE WAY THE COPIES AND THE WALK CAN DISAGREE ABOUT WHAT EXISTS. `do_search` renders a
+     SKU's group WHOLE — every copy, including ones that did not match — so a copy of a matched
+     SKU is always in the walk's own filter. The `sku: null` group is the exception and is built
+     from the cards that matched THEMSELVES, and a named, never-emitted card is most of this
+     store today. This stub is that shape: the query answers with the group minus the copy in
+     box 7.
+
+     WITHOUT THE GUARD THIS LANDS ON THE WRONG CARD, SILENTLY. The two follows-the-filter effects
+     move the mark to the first visible row whenever the selection is not among them, so the
+     press would draw some other card's photograph under some other card's position with nothing
+     saying the one asked for was not reached. */
+  await open(page, TWO_BOXES, {
+    cards: ELSEWHERE,
+    search: (query) => {
+      const answer = searchAnswer(query, ELSEWHERE)
+      if (query.trim().toLowerCase() !== 'me01') return answer
+      return {
+        query,
+        groups: answer.groups.map((group) => ({
+          ...group,
+          copies: group.copies.filter((copy) => copy.key !== '7/40'),
+        })),
+      }
+    },
+  })
+
+  await page.locator('.search-field-input').fill('ME01')
+
+  // The filter reaches box 2 alone, so box 7 has no cell and no row: it is out of the walk.
+  await expect(page.locator('.browse-boxcell')).toHaveCount(1)
+  await expect(page.locator('.browse-boxcell')).toHaveText('2')
+
+  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+
+  /* THE CARD ASKED FOR IS THE CARD REACHED — asserted before anything about the query, because
+     this is the claim that matters and the wrong-card landing is what fails it: unguarded, the
+     mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
+     Card 1` under box 2's photograph. */
+  await expect(page.locator('.browse-position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
+
+  // And the query goes, because it was a way of finding the card and the card has been found.
+  await expect(page.locator('.search-field-input')).toHaveValue('')
+
+  /* AND THE SECTION IS OPEN UNDERNEATH IT, which is the ordering claim `BoxBrowse.tsx` makes at
+     the landing effect: clearing a query fires the collapse-everything effect in the same pass
+     the jump lands in, and the jump is declared after it so the open is the final word. Swap the
+     two and this row is drawn inside a shut section. */
+  await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
 })
 
 // ------------------------------------------------------------------- collapsible sections

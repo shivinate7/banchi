@@ -332,6 +332,24 @@ export function Inventory() {
     [boxRecords],
   )
 
+  /* WALK TO A COPY — the one thing this screen asks the walk to do, and the mirror of `selected`
+   * coming back the other way.
+   *
+   * D7 keeps every copy of a card at its own position, so the copies list under the card is
+   * routinely a list of other boxes. Pressing one of those positions is the shortest way to
+   * "show me THAT one" — the walk switches box, marks the card, and the photograph, the facts,
+   * the box operations and the queue block all follow, because every one of them is already
+   * drawn for whatever the walk points at.
+   *
+   * A COUNTER BESIDE THE KEY because the same copy can be asked for twice: walk to it, arrow
+   * away, press it again. `BoxBrowse` ignores a request it has already answered, so this may be
+   * held in state without a re-render replaying yesterday's jump. */
+  const [goTo, setGoTo] = useState<{ key: string; at: number } | null>(null)
+  const walkTo = useCallback(
+    (copy: SearchCopy) => setGoTo((asked) => ({ key: copy.key, at: (asked?.at ?? 0) + 1 })),
+    [],
+  )
+
   /* Bumped after every write, and read by the walk as a re-read trigger and by the copies panel
    * as a re-search trigger. The walk holds no copy of the inventory to patch and this file holds
    * no copy of anything, so a write's only honest follow-up is to ask again. */
@@ -647,6 +665,7 @@ export function Inventory() {
           retiredKeys={retiredKeys}
           onSell={openSell}
           onRetire={openRetire}
+          onGoTo={walkTo}
         />
       )}
     </div>
@@ -660,6 +679,7 @@ export function Inventory() {
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onScope={setRunScope}
+        goTo={goTo}
         reloadToken={reloads}
         /* THE PIPELINE IS NO LONGER HERE, AND THIS IS WHAT IT LEFT BEHIND (D39). Until 2026-08-29
            this slot held `RunPanel` whole, on D33's reasoning — a run is something you do to
@@ -745,6 +765,7 @@ function CopiesPanel({
   retiredKeys,
   onSell,
   onRetire,
+  onGoTo,
 }: {
   row: Row
   layouts: ReadonlyMap<number, readonly SectionDetail[]>
@@ -759,6 +780,11 @@ function CopiesPanel({
   retiredKeys: ReadonlySet<string>
   onSell: (copy: SearchCopy) => void
   onRetire: (copy: SearchCopy) => void
+
+  /** Point the walk at one copy. Handed straight to `CardLocations`, which draws it on every
+   *  row but the one already selected — the lone-copy fallback below deliberately gets nothing,
+   *  because that copy IS the card the walk is standing on. */
+  onGoTo: (copy: SearchCopy) => void
 }) {
   const { query, setQuery, results, loading, failure, reload } = useSearch()
 
@@ -879,6 +905,7 @@ function CopiesPanel({
           persona="owner"
           sections={layouts}
           currentKey={row.key}
+          onGoTo={onGoTo}
           onSell={onSell}
           busyKey={busyKey}
           soldKeys={soldKeys}

@@ -147,6 +147,25 @@ export type CardLocationsProps = {
    *  a second. */
   currentKey?: string
 
+  /** Walk to this copy: the box strip, the list and the photograph all move to it.
+   *
+   *  OWNER SKIN ONLY, and optional — `Fulfillment.tsx` and `Gallery.tsx` pass nothing and get
+   *  exactly what they got before. His view has no walk to move, and D31's ruling is that the
+   *  Fulfiller's surface is downstream of what the owner's build produces rather than a
+   *  counterpoint to it.
+   *
+   *  WHY THE LABEL AND NOT THE ROW. The row already holds a control — `Mark sold`, the retire
+   *  door, or whatever `renderAction` draws — and a button inside a button is invalid markup,
+   *  which is the same reason `aria-current` sits on the `<li>` rather than on anything
+   *  pressable. So the thing that is clickable is the position label, which is also the thing
+   *  that says where the press is about to send you: `Box 95 · Section 2 · Card 4` is both the
+   *  affordance and its own confirmation.
+   *
+   *  NOT DRAWN ON THE CURRENT COPY, which is where the walk already is, and NEVER ON A POOLED
+   *  ONE — D24 makes it a count rather than a location, so there is no slot to walk to and the
+   *  label slot is carrying the pooled fact instead of a position. */
+  onGoTo?: (copy: SearchCopy) => void
+
   /** Replaces the action slot for EVERY copy, sold ones included.
    *
    *  THE SOLD ONES ARE THE POINT OF THE PROP, not an edge case it happens to cover.
@@ -213,6 +232,7 @@ function OwnerRows({
   soldKeys,
   sections,
   currentKey,
+  onGoTo,
   renderAction,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* The machine line, in the shape `Inventory.tsx` established so that this screen and a
@@ -279,6 +299,13 @@ function OwnerRows({
           /* D30's sentence for this copy, or null — see the render note below. Read once
              per row so the presence test and the rendering cannot disagree. */
           const between = placeSentence(copy.place)
+          /* The walk-to handler for THIS copy, or null when there is nowhere to send anyone:
+             no caller offering one, a pooled copy with no slot, or the copy the walk is already
+             standing on. Computed once per row so the branch below cannot disagree with itself. */
+          const goesTo =
+            onGoTo === undefined || pooled || copy.key === currentKey
+              ? null
+              : () => onGoTo(copy)
           return (
             <li
               className="card-locations-row"
@@ -305,8 +332,28 @@ function OwnerRows({
                     {/* The server's own label, displayed and never composed — types.ts states
                         the rule on `Place.label` and D10 is why it has teeth: Section and Card
                         are a view of the index against the box's current divider layout, and
-                        the only formula for it in this repo is `pipeline/join.py:Position`. */}
-                    <span className="card-locations-label">{copy.place.label}</span>
+                        the only formula for it in this repo is `pipeline/join.py:Position`.
+
+                        THE SAME STRING, AS A CONTROL, WHERE THE CALLER OFFERS ONE — see `onGoTo`
+                        for why it is the label that is pressable and not the row. The two
+                        branches render identical text through the same class, so the walk-to
+                        gesture cannot make a copy row say anything a look-only one does not. */}
+                    {goesTo === null ? (
+                      <span className="card-locations-label">{copy.place.label}</span>
+                    ) : (
+                      <button
+                        className="card-locations-label card-locations-goto"
+                        type="button"
+                        /* The visible word is the position, which is the right label for a list
+                           of them; the accessible name says what pressing it DOES, because a
+                           screen reader reading six identical-shaped buttons off this list gets
+                           no other clue that they are navigation. */
+                        aria-label={`Walk to ${copy.place.label}`}
+                        onClick={goesTo}
+                      >
+                        {copy.place.label}
+                      </button>
+                    )}
                     {copy.place.box_name === null ? null : (
                       <span className="card-locations-boxname">{copy.place.box_name}</span>
                     )}

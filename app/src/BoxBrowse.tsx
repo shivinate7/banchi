@@ -369,6 +369,25 @@ type BoxBrowseProps = {
    *  of the inventory to patch. */
   reloadToken?: number
 
+  /** WALK TO ONE CARD, BY STORE KEY — the inbound half of `onSelect`, and the only way anything
+   *  outside this component moves the mark.
+   *
+   *  `Inventory.tsx` draws the selected card's copies (D7's SKU -> positions map) and one of
+   *  them is in another box; pressing its position label asks for the walk to go there, so the
+   *  photograph, the facts and the box operations all follow. The alternative shapes were an
+   *  imperative ref handle and lifting `selected` into the caller: the first hides a state
+   *  change inside a method call and the second hands a page the walk's own bookkeeping — the
+   *  four effects that keep the mark inside the filter, the shelf and the fold.
+   *
+   *  `at` RATHER THAN THE KEY ALONE, because the same copy may be asked for twice. Walk to it,
+   *  arrow away, press it again: the key has not changed and nothing would fire. The counter is
+   *  the request, the key is its subject, and a request already answered is ignored — so a
+   *  re-render of the caller cannot re-walk a jump the owner made a minute ago.
+   *
+   *  A JUMP THAT CANNOT LAND DOES NOTHING, and the two ways it cannot are handled where they
+   *  are read below. */
+  goTo?: { key: string; at: number } | null
+
   /** WHAT A RUN WOULD BE SCOPED TO: the box being walked, and the ticked cards inside it.
    *
    *  The third thing this component reports upwards, and it exists for the same reason the
@@ -672,6 +691,7 @@ export function BoxBrowse({
   onSelect,
   onBoxes,
   onScope,
+  goTo,
   reloadToken = 0,
 }: BoxBrowseProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -764,6 +784,15 @@ export function BoxBrowse({
    * is right for a step and wrong for a jump — after two hundred rows it parks the landing
    * at the bottom edge, which shows the END of the box before the one just asked for. */
   const jumpRef = useRef<string | null>(null)
+
+  /* THE JUMP THIS SCREEN HAS BEEN ASKED FOR AND HAS NOT LANDED YET, or null. State rather than
+   * a ref because a jump can take two passes — see the landing effect — and the second pass has
+   * to be a render this component actually performs.
+   *
+   * `askedAt` is the last request accepted, so a re-render of the caller holding the same object
+   * cannot replay a jump. A ref because it is bookkeeping about requests and not a fact drawn. */
+  const [jump, setJump] = useState<string | null>(null)
+  const askedAt = useRef<number | null>(null)
 
   /* THE SEARCH IS THE SERVER'S MATCHER FILTERING THIS SCREEN'S OWN LIST — neither of the
    * two shapes already in the app, and argued against both. Inventory.tsx renders the
@@ -1402,6 +1431,86 @@ export function BoxBrowse({
     if (filtered) return
     setOpened((held) => (held.length === 0 ? held : []))
   }, [filtered])
+
+  /* A JUMP IS ACCEPTED HERE AND LANDED BELOW, in two effects rather than one, because accepting
+   * is about the REQUEST — has this `at` been answered — and landing is about the WALK, which
+   * may not be able to take it on the pass the request arrives. */
+  useEffect(() => {
+    if (goTo === undefined || goTo === null) return
+    if (askedAt.current === goTo.at) return
+    askedAt.current = goTo.at
+    setJump(goTo.key)
+  }, [goTo])
+
+  /* WALK TO THE CARD SOMETHING OUTSIDE ASKED FOR — the box, the fold, the mark and the scroll,
+   * in one batch, so no intermediate state exists for another effect to correct.
+   *
+   * DECLARED AFTER THE TWO FOLD EFFECTS ABOVE AND THAT IS LOAD-BEARING. Effects run in
+   * declaration order within a commit, and the pass that clears a query is the same pass the
+   * collapse-on-clear effect fires in. Opening the landing's section first would have that
+   * effect shut it again, and it would not re-run afterwards — its only dependency is
+   * `filtered`. Last means the open is the final word.
+   *
+   * THE FILTER IS THE FAILURE THIS EXISTS TO PREVENT, and it is silent in the worst way. Under a
+   * query the walk holds only matches, and the two follows-the-filter effects above move the
+   * mark to `visible[0]` whenever the selection is not among them — so a jump to a card the
+   * query does not reach would land on WHATEVER CARD IS FIRST, drawn under its own photograph,
+   * with nothing on screen saying the wrong one was reached. Not hypothetical: `do_search`
+   * builds a SKU's group WHOLE, so a copy of a matched SKU is always reachable, but the
+   * `sku: null` group is the matched cards THEMSELVES — and a named, never-emitted card is most
+   * of this store. Two copies of one name in two boxes, a query that reached only one of them,
+   * and the other is a copy row that cannot be walked to.
+   *
+   * SO THE QUERY IS DROPPED RATHER THAN THE JUMP. The owner pressed a position; the filter was
+   * a way of finding it, and it has been found. Clearing re-runs this effect with the whole walk
+   * to land in — the pending `jump` is what carries the request across that second pass.
+   *
+   * A KEY THE WALK DOES NOT HOLD IS DROPPED, with nothing drawn. It means these rows and this
+   * list disagree about the store: the copies come from `GET /search` on every selection and
+   * the walk from `GET /inventory` at mount, so a card deleted from another device sits in one
+   * and not the other until a Reload. Naming it would need a refusal channel out of a component
+   * that reports three things upward and takes one back; the honest cheap answer is that the
+   * press does nothing and the Reload beside the list is the remedy. */
+  useEffect(() => {
+    if (jump === null) return
+    if (rows === null) return
+    const row = rows.find((candidate) => candidate.key === jump)
+    if (row === undefined) {
+      setJump(null)
+      return
+    }
+    if (!inQuery.some((candidate) => candidate.key === jump)) {
+      /* Still filtered out with no query to clear — nothing else can widen the walk, so the
+         request is dropped rather than left pending forever. Unreachable today: `inQuery` IS
+         `rows` when nothing is being searched for, and the row was just found in `rows`. */
+      if (!searching) setJump(null)
+      else setQuery('')
+      return
+    }
+    const landing = shelfOf(row)
+    /* The landing's own sections, computed for the shelf being GONE TO rather than read off
+       `sections` — that memo describes the shelf being left, and on a cross-box jump it holds
+       no row of the box asked for. Opening it here rather than leaving it to the
+       mark-is-never-hidden effect is what lets the scroll below find a rendered row: that
+       effect runs a commit later, and the scroll's dependencies do not include the folds. */
+    const holding = sectionsOf(inQuery.filter((candidate) => shelfOf(candidate) === landing)).find(
+      (section) => section.rows.some((candidate) => candidate.key === jump),
+    )
+    if (holding !== undefined) {
+      setOpened((held) => (held.includes(holding.key) ? held : [...held, holding.key]))
+    }
+    setShelf(landing)
+    /* `block: 'start'` for the same reason a box-chip press takes it — see the scroll effect.
+       A jump is for seeing what surrounds the landing, and 'nearest' after two hundred rows
+       parks it against the bottom edge. */
+    jumpRef.current = jump
+    setSelected(jump)
+    /* The keys, armed. The gesture after "take me to that copy" is walking from it, exactly as
+       `selectShelf` argues, and the page scroll this brings with it is wanted here: the copies
+       list is below the card band, and the photograph is what was asked for. */
+    listRef.current?.focus()
+    setJump(null)
+  }, [jump, rows, inQuery, searching, setQuery])
 
   /* THE SELECTION, REPORTED UPWARDS. `Inventory.tsx` draws the copies of whatever card the walk
    * is pointing at, and it cannot know which one that is without being told. The memo above is
