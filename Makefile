@@ -83,13 +83,12 @@ venv: launch-config
 # brace in a Makefile recipe is one escaping mistake away from a file the harness cannot
 # parse, and the failure would present as "the preview does not work" rather than as a
 # syntax error.
+# FORCES, because somebody typed it. The conservative half — write an absent or stale file,
+# never touch a hand-edited one — is `--if-needed`, and scripts/worktree-guard.sh is what
+# calls it, on every session start, which is what makes a fresh worktree correct without
+# anybody remembering this target exists.
 launch-config:
-	@$(PYTHON) -c 'import json, pathlib, sys; sys.path.insert(0, "."); from server import ports; \
-	path = pathlib.Path(".claude/launch.json"); path.parent.mkdir(parents=True, exist_ok=True); \
-	path.write_text(json.dumps({"version": "0.0.1", "configurations": [{"name": "app", \
-	"runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--prefix", "app"], \
-	"port": ports.dev_port()}]}, indent=2) + "\n", encoding="utf-8"); \
-	print("launch.json written: the Browser pane opens this checkout on {0}".format(ports.dev_port()))'
+	@$(PYTHON) scripts/launch-config.py
 
 # A GIT WORKTREE GETS THE TRACKED FILES AND NOTHING ELSE, which is the whole of the problem
 # this target exists for. Three things `make harness` needs are gitignored by deliberate

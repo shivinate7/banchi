@@ -423,7 +423,8 @@ COMPONENTS = [
                 "audit it runs, the opsec guard that is that hook's disabled PreToolUse "
                 "twin, D42's two-hook guard over main and the throwaway-repo self-test that "
                 "proves it, the Stop hook, the PostToolUse typecheck hook, D17's "
-                "decision-context hook, `make status`, the screenshot runner and its "
+                "decision-context hook, `make status`, the SessionStart worktree guard "
+                "and the launch-config writer it calls, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
         "governed_by": ["D14", "D16", "D17", "D18", "D42"],
         # What the orphan rule covers here, and the one hole no declaration can close.
@@ -744,6 +745,34 @@ COMPONENTS = [
                         "in SOURCES for the same reason: it is a subprocess rather than a "
                         "read, which is exactly why its path sat hardcoded and uncovered "
                         "while every other path here was audited.",
+            },
+            "launch-config.py": {
+                "does": "writes `.claude/launch.json` for THIS checkout's dev port, which is "
+                        "what the Browser pane opens. ONE WRITER, THREE APPETITES: "
+                        "`make launch-config` forces because somebody typed it, "
+                        "`scripts/worktree-guard.sh` passes `--if-needed` because it runs "
+                        "unasked at session start, and `make status` passes `--check` and "
+                        "writes nothing. Only an ABSENT file or this repo's own shape at "
+                        "the wrong port is rewritten; anything a person edited is reported "
+                        "and left alone, which is D44's asymmetry rather than a new one.",
+                # D43 is the whole subject — the port follows the checkout's PATH, and this
+                # file was the sixth reader that entry found after the other five moved. The
+                # amendment naming it says why it is the worst to get wrong: a stale port
+                # previews the MAIN TREE from a worktree and the only signal is the one you
+                # were hoping for. D18 is why the `--check` path reports rather than repairs,
+                # and why none of this is on the commit path at all.
+                # D44 is the asymmetry it borrows for the conservative path: `make
+                # icloud-sweep` deletes only what is provably a duplicate and only ever
+                # reports what differs, because guessing is the one way a cleanup tool
+                # destroys work. A provisioner running unasked has more reason, not less.
+                "governed_by": ["D18", "D43", "D44"],
+                "note": "STDLIB ONLY, AND BARE `python3` MUST RUN IT. The hook calls this "
+                        "BEFORE it builds `.venv`, because the port is wanted whether or "
+                        "not the pip install ever succeeds — so an import needing a package "
+                        "would make the port wrong in exactly the tree that is least set "
+                        "up. It imports server/ports.py rather than re-deriving the slot, "
+                        "for the reason D43 spends its length on: two spellings of one "
+                        "derivation is the drift, not the arithmetic.",
             },
             "audit-history.py": {
                 "does": "replays today's auditor over every historical tree to answer one "

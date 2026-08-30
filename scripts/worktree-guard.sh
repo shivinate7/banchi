@@ -48,6 +48,14 @@
 #   .venv/           BUILT. A network pip install, but small, idempotent, and once per
 #                    worktree — and it is what makes the harness able to run at all, which
 #                    is the thing the Stop hook demands every turn.
+#   .claude/         WRITTEN, and it is the only one wanted in EVERY checkout rather than
+#     launch.json    only in a worktree — `ports.dev_port()` answers the main tree's 5173
+#                    there by construction. It is also the only one whose ABSENCE is worse
+#                    than its presence: the others fail loudly, and a missing launch.json
+#                    gets filled in from a template with a hardcoded port, which previews
+#                    the MAIN TREE from a worktree while looking like it worked (D43).
+#                    Written conservatively — absent or stale only, a hand-edit reported
+#                    and never overwritten — because this runs unasked.
 #   app/node_modules REPORTED, NEVER INSTALLED. ~80 MB. The Makefile's NPM_GUARD already
 #                    argues this and the argument is its own: "an implicit install hides a
 #                    slow, network-touching step", and nothing on the turn-end path needs
@@ -65,6 +73,28 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.." 2>/dev/null || exit 0
+
+# `.claude/launch.json` FIRST, AND ABOVE THE WORKTREE TEST, because it is the one thing here
+# that is wanted in EVERY checkout — `ports.dev_port()` answers 5173 in the main tree by
+# construction, so the same call is right everywhere and there is no branch to get wrong.
+#
+# IT IS ALSO THE ONE PROVISIONED THING WHOSE ABSENCE IS WORSE THAN ITS PRESENCE. The others
+# degrade loudly: no venv and T6 says numpy, no cache and T1 refuses. A missing launch.json
+# degrades into the Browser pane's own instructions, which tell an agent to write one from a
+# template carrying a hardcoded port — and a worktree that names 5173 previews the MAIN TREE
+# while looking like it worked (D43, amended). Measured 2026-08-30 across this clone's five
+# worktrees: four correct, one absent, one holding a 5173 nobody remembered writing.
+#
+# `--if-needed` so it writes an absent or a stale file and REPORTS anything else. This runs
+# unasked on every session start, which is the strongest possible reason not to overwrite
+# something a person put there; `make launch-config` is the deliberate, forcing half.
+# `--quiet` so the ordinary case — already correct — says nothing at all.
+#
+# BEFORE THE VENV IS BUILT, deliberately: the port is wanted whether or not the pip install
+# ever succeeds, and `scripts/launch-config.py` is stdlib-only for exactly that reason.
+if [ -f scripts/launch-config.py ] && [ -f server/ports.py ]; then
+  python3 scripts/launch-config.py --if-needed --quiet 2>/dev/null || true
+fi
 
 # A linked worktree's `.git` is a FILE holding `gitdir: ...`; a normal clone's is a
 # directory. That one fact is the whole detection, and it needs no subprocess.

@@ -3822,6 +3822,69 @@ audit check resolves it — so this cost nothing but the file.
 until `make venv` runs, where before it had a wrong one immediately. That is the right
 direction for a file whose only failure mode is pointing somewhere plausible and wrong.
 
+**AND THAT TRADE WAS WRONG ABOUT WHAT AN ABSENT FILE COSTS, WHICH TOOK TWENTY-THREE DAYS AND
+A MEASUREMENT TO SEE (2026-08-30).** The paragraph above reasons that absent beats wrong. It
+does not, and the reason is that **nothing leaves it absent**: the Browser pane's own
+instructions tell an agent that finds no `launch.json` to create one from a template carrying
+a literal port, so "absent" is a state that lasts until the first `preview_start` and then
+becomes "wrong" — written by a session that had no way to know this repo derives the number.
+Absent is not the safe end of that trade; it is the *entrance* to the unsafe end.
+
+**Measured across the five worktrees of this clone**: four correct, one absent, and one — the
+tree the measurement was taken in — holding a hand-written **5173** nobody remembered writing.
+That is a linked worktree whose Browser pane would start its own dev server on 5470 and then
+open a tab on the MAIN TREE's, which is this entry's own "silent wrong answer" with the only
+signal being the one you were hoping for.
+
+**AND THE ABSENT ONE BECAME A 5173 WHILE THE FIX WAS BEING WRITTEN, WHICH IS THE MEASUREMENT
+THAT SETTLES IT.** `card-sku-stamping-fix-d11945` was the tree with no config at 10:16. At
+10:29 it had one, naming **5173** against a derived **5313** — written by a session in that
+worktree, from the template, in the twenty minutes between the two readings. Nobody was
+careless: the port is a fact about the checkout's path and there is no way to know it from
+inside a tool that offers a template. **The absent state is not a resting state, and it decays
+in exactly one direction.**
+
+**THE FAULT WAS THAT THE FIX WAS A `make` TARGET, AND A TARGET ONLY RUNS WHEN SOMEBODY RUNS
+IT.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls — so it
+reaches a worktree provisioned that way and no other. The five readers this entry moved onto
+one derivation are all *code*, which runs whether or not anyone remembers; this one was a
+file somebody had to ask for.
+
+**SO `scripts/worktree-guard.sh` WRITES IT, AND THAT IS THE WHOLE OF THE REPAIR.** The
+SessionStart hook already runs before any work starts in every checkout, already provisions
+the other gitignored things a tree cannot inherit, and already imports this same
+`server/ports.py` to print the pair. One more provisioned thing, from the one derivation,
+with nobody required to remember a target. **It runs ABOVE the worktree test**, because
+`dev_port()` answers 5173 in the main tree by construction — the same call is right in every
+checkout and there is no branch to get wrong.
+
+**ONE WRITER, THREE APPETITES, AND THE DIFFERENCE IS WHO ASKED.** `scripts/launch-config.py`
+holds the shape; the Makefile target FORCES because somebody typed it, the hook passes
+`--if-needed` because it runs unasked, and `make status` passes `--check` and writes nothing.
+Splitting the appetites rather than the writers is what stops the two from drifting, which is
+the failure this entry is otherwise entirely about.
+
+**IT REWRITES AN ABSENT OR A STALE FILE AND NEVER A HAND-EDITED ONE.** Stale is the narrow
+case — this repo's exact shape at the wrong port, which is precisely what the Browser pane's
+template produces. A second configuration, a different command, a `url`, JSON that does not
+parse: all reported, none touched. That asymmetry is **D44's**, taken deliberately rather than
+reinvented — `make icloud-sweep` deletes only what is provably a duplicate and only ever
+reports what differs, on the grounds that guessing is the one way a cleanup tool destroys
+work. Something that runs on every session start without being asked has more reason to keep
+that rule, not less.
+
+**`make status` REPORTS A DISAGREEMENT, BECAUSE THE HOOK FAILS OPEN BY DESIGN.** That is this
+repo's standing rule for hooks and it is right, and its cost is that a skipped hook is silent.
+The status line closes exactly that gap: it is the surface whose whole job is saying what
+state you are actually in, it already reports NOT ARMED for the git hooks on the same
+argument, and it is silent when the two agree so the ordinary case costs no line.
+
+**WHAT IS STILL NOT CLOSED, named rather than implied: a worktree gets the fixed hook only
+once this lands on the branch it was cut from.** The guard is a tracked file, so a tree cut
+from an older main runs the older guard and goes on needing `make launch-config` by hand.
+Nothing can reach backwards into a checkout that does not have the code; what it does mean is
+that the last hand-run of that target is the one this repair asks for, once.
+
 **AND A SECOND FILE WAS MISSED, WHICH IS THE ONE THAT DECIDES WHETHER A WORKTREE CAN WRITE AT
 ALL** (found and fixed 2026-08-30). `server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the
 literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming
