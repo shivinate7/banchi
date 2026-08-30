@@ -1731,7 +1731,6 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     D33's gate is a field a stray request does not carry rather than a typed string.
     """
     directory = _open_run(name)
-    run = run_files.open_run(directory)
 
     try:
         body = tcg_export.fetch()
@@ -1775,6 +1774,14 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
             "tcg_not_csv",
             f"What TCGplayer sent does not parse as an export: {caught}. Nothing was kept.",
         ) from None
+
+    # THE MANIFEST IS READ AFTER THE FETCH, NOT BEFORE IT. The download can take a minute, and
+    # what it is about to be compared against is whatever this run was last joined with — so
+    # reading the baseline first would compare against a manifest that a join finishing in
+    # that window has already replaced. `cli/runs.py` makes a run an immutable input and its
+    # MANIFEST is the one part that moves, which is exactly why it is read as late as it can
+    # be used.
+    run = run_files.open_run(directory)
 
     # The run's recorded exports for every OTHER game, so a mixed-game run can refresh one
     # game's file without being told it has lost the other. A baseline for a game this file
