@@ -28,6 +28,10 @@ make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
                     #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/.
+                    #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
+                    #   files it is made of changes (D53) — so nothing here goes stale on a
+                    #   `git pull`. The Makefile is not one of them: nothing reads it at run
+                    #   time.
                     #   Prints the link. `make down` stops them, `make restart` bounces them.
                     #   Do NOT run it alongside `make dev`/`make server` — the second loses,
                     #   loudly (strictPort, EADDRINUSE), which is deliberate: a server that

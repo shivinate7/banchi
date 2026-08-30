@@ -112,7 +112,29 @@ WATCH_DIRS = (
     "identify",
     "geometry",
 )
-WATCH_FILES = ("envfile.py",)
+WATCH_FILES = ("envfile.py", "scripts/serve.py")
+
+# THE FILES THIS SUPERVISOR IS ITSELF MADE OF, and a change to any of them means the running
+# process is stale no matter how many times it restarts its children.
+#
+# THE SILENT CASE IS THE ONE THAT MATTERS. `server/ports.py` and `store/files.py` are already
+# watched, so editing one restarts the CAPTURE CHILD — visibly, in the log, looking exactly
+# like the fix landing. But Python caches an imported module, so the supervisor goes on using
+# the code it loaded at boot: the child restarts and the parent stays wrong. That reads as
+# working, which is worse than not restarting at all.
+#
+# `scripts/serve.py` is the loud case and the one the owner asked about: nothing watched it,
+# so a `git pull` that changed this file left the old image running with no signal at all.
+#
+# The Makefile is deliberately NOT here. Three comments in this file mention it and nothing
+# reads it — `make` re-reads it from disk on every invocation, so it cannot make a running
+# process stale. That was claimed once in conversation and is wrong.
+SELF_FILES = (
+    "scripts/serve.py",
+    "envfile.py",
+    "server/ports.py",
+    "store/files.py",
+)
 SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".venv"}
 
 
@@ -147,7 +169,7 @@ def fingerprint(root: Path = REPO_ROOT) -> Fingerprint:
                     # the first time someone runs `git checkout`.
                     continue
                 seen[str(path)] = (stat.st_mtime_ns, stat.st_size)
-    for name in WATCH_FILES:
+    for name in set(WATCH_FILES) | set(SELF_FILES):
         path = root / name
         try:
             stat = path.stat()
@@ -752,6 +774,38 @@ class Supervisor:
             self.pending.clear()
             self._restart_for(changed)
 
+    def _touches_self(self, changed: list[str]) -> list[str]:
+        """Which of the changed paths are files this supervisor is made of."""
+        mine = {str((self.root / name).resolve()) for name in SELF_FILES}
+        return sorted(name for name in changed if str(Path(name).resolve()) in mine)
+
+    def _reexec(self, changed: list[str]) -> None:
+        """Replace this process with a fresh one running the new code.
+
+        `os.execv` REPLACES THE IMAGE AND KEEPS THE PID, which is the whole reason to use it
+        rather than spawning and exiting: `supervisor.pid` stays valid, and launchd sees the
+        same process it started rather than an unexpected exit it would try to restart.
+
+        CHILDREN ARE STOPPED FIRST, because exec throws away every Popen handle — anything
+        still running would be orphaned, holding the ports the new image is about to want, and
+        unreachable from the pidfiles it will write. The drain applies as it always does.
+        """
+        shown = ", ".join(Path(c).name for c in changed)
+        log(f"restarting MYSELF: {shown} changed — the supervisor is made of that file")
+        self.stop()
+        argv = [python_executable(self.root), str(Path(__file__).resolve()), "run"]
+        if not self.watch:
+            argv.append("--no-watch")
+        try:
+            os.execv(argv[0], argv)
+        except OSError as exc:
+            # Exec failed, and the children are already down. Say so and rebuild them rather
+            # than leaving a supervisor that supervises nothing.
+            log(f"could not restart myself: {exc}")
+            log("  running on with the OLD code. `make restart` to pick up the change.")
+            self.stopping = False
+            self.start()
+
     def _restart_for(self, changed: list[str]) -> None:
         bad = self._first_syntax_error(changed)
         if bad is not None:
@@ -779,6 +833,13 @@ class Supervisor:
             self.quiet_since = time.monotonic()
             return
         self.last_syntax_error = None
+
+        # A file this supervisor IMPORTS takes priority over the child restart: re-execing
+        # rebuilds the children anyway, so doing both would restart them twice.
+        mine = self._touches_self(changed)
+        if mine:
+            self._reexec(mine)
+            return
 
         shown = ", ".join(Path(p).relative_to(self.root).as_posix()
                           if Path(p).is_absolute() else p for p in changed[:3])
