@@ -11181,7 +11181,7 @@ def check_drain(checks: Checks) -> None:
 
 
 def check_export_fetch(checks: Checks) -> None:
-    """D61: the Filtered Export fetched instead of downloaded, and every refusal in the way.
+    """D62: the Filtered Export fetched instead of downloaded, and every refusal in the way.
 
     ITS OWN `isolated_home`, this file's own repeated lesson — and its own ENVIRONMENT too,
     which is new. This is the first section that reads `.env`, and one that left
@@ -11200,7 +11200,7 @@ def check_export_fetch(checks: Checks) -> None:
     keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
     file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
     accepts this client when the request carries a real session. That is one live fetch by the
-    owner, and D61 names it as owed rather than implying it has happened.
+    owner, and D62 names it as owed rather than implying it has happened.
     """
     keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT")
     previous = {name: os.environ.get(name) for name in keys}
@@ -11605,7 +11605,7 @@ def check_export_fetch(checks: Checks) -> None:
                 # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
                 #
                 # `capture_server.py`'s CSRF paragraph used to justify itself with "there
-                # are no credentials in this product", and D61 falsified that half: this
+                # are no credentials in this product", and D62 falsified that half: this
                 # route spends the owner's TCGplayer session. The comment is corrected
                 # there; this is the assertion it now leans on. A page in another tab must
                 # not be able to make this server spend that session, and the refusal has

@@ -479,7 +479,7 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
-- **D61's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
+- **D62's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
   TCGplayer.** `POST /pipeline/runs/<name>/export` downloads the Filtered Export with the
   session cookie from `.env` instead of the operator downloading and uploading it.
   `check_export_fetch` has its own `isolated_home` AND its own environment — the first
@@ -506,7 +506,7 @@ at a temporary directory, so nothing here touches the real inventory.
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
   stdlib default User-Agent reaches the endpoint unblocked — which is not evidence about an
-  authenticated one. That is one live fetch by the owner and D61 records it as owed.
+  authenticated one. That is one live fetch by the owner and D62 records it as owed.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This

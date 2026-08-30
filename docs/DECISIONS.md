@@ -2431,7 +2431,7 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 ---
 
-## D61 — The Filtered Export is fetched, and completeness is a delta rather than a claim
+## D62 — The Filtered Export is fetched, and completeness is a delta rather than a claim
 
 **The last manual step in `runs -> join` is gone: the server downloads the export instead of the operator.** Built 2026-08-30.
 

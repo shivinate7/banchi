@@ -280,7 +280,7 @@ COMPONENTS = [
                                    "`realign` (D36), because that file stores position keys and a "
                                    "mid-box delete moves them — reading it raw is the defect that "
                                    "wrote 47 box-2 queue entries one position off.",
-                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D61"], "tested_by": ["T7"]},
+                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D62"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
         },
     },
@@ -1047,7 +1047,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D41", "D52", "D53", "D56", "D58", "D61"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D41", "D52", "D53", "D56", "D58", "D62"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1068,12 +1068,12 @@ COMPONENTS = [
                         "name it lifted out of .env itself, so under D53's long-running "
                         "supervisor the remedy tcg_session_expired prints would not have "
                         "worked.",
-                # D61 is the entry. D16 is why capture_server.py's file-boundary sentence was
+                # D62 is the entry. D16 is why capture_server.py's file-boundary sentence was
                 # rewritten rather than narrowed to "no socket TO ANTHROPIC". D11 is what the
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D61"],
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D62"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1081,7 +1081,7 @@ COMPONENTS = [
                         "T7 and refuses to carry the cookie over plain http anywhere but "
                         "loopback. What T7 CANNOT prove is whether the WAF accepts an "
                         "authenticated request — that is one live fetch by the owner, and "
-                        "D61 records it as owed.",
+                        "D62 records it as owed.",
             },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
@@ -1100,7 +1100,7 @@ COMPONENTS = [
                         "always a list, the total is summed here rather than on the screen, "
                         "and identify spawns one detached child PER BOX — so a run is still "
                         "one box and nothing downstream learns a new shape. AND POST "
-                        ".../export (D61) fetches this run's Filtered Export through "
+                        ".../export (D62) fetches this run's Filtered Export through "
                         "server/tcg_export.py instead of the operator downloading and "
                         "uploading it: free, reported separately from the join so a failure "
                         "is attributable, ruled on by cli/resolve.py:exports_for BEFORE "
@@ -1112,7 +1112,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D12", "D13", "D16", "D20", "D21", "D24", "D25", "D29", "D32", "D33", "D35", "D48", "D54", "D56", "D61"],
+                "governed_by": ["D1", "D2", "D3", "D9", "D12", "D13", "D16", "D20", "D21", "D24", "D25", "D29", "D32", "D33", "D35", "D48", "D54", "D56", "D62"],
                 "tested_by": ["T7"],
             },
         },
