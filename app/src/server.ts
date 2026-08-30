@@ -24,6 +24,7 @@ import type {
   BoxDeleteResult,
   BoxListingPlan,
   ListingReleaseResult,
+  CropPreview,
   CsvUpload,
   RunDetail,
   RunPreflight,
@@ -1327,6 +1328,38 @@ export async function preflightRun(input: {
       max_edge: input.maxEdge,
     }),
   })) as RunPreflight
+}
+
+/**
+ * What this reading actually sends: where the crop cuts, and the collector-number strip at
+ * the resolution it delivers. FREE, writes nothing, shells out to nothing.
+ *
+ * IT IS PRESSED BEFORE `preflightRun`, NOT AFTER IT, and that ordering is the point. D32
+ * gave the crop three named pairs and a sentence each because the controls alone could not
+ * be read; this is the same answer as a picture, and it has to be on screen while the pair
+ * is being CHOSEN. The estimate comes after, over a reading the operator has now seen.
+ *
+ * `offset` steps the sample. Three cards, evenly spaced and deterministic, so that changing
+ * the reading redraws the same three — see the route for why one card cannot stand for a box.
+ */
+export async function cropPreview(input: {
+  box: number
+  indices?: number[]
+  crop?: boolean
+  maxEdge?: number
+  offset?: number
+}): Promise<CropPreview> {
+  return (await request('/pipeline/crop-preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      box: input.box,
+      indices: input.indices,
+      crop: input.crop,
+      max_edge: input.maxEdge,
+      offset: input.offset,
+    }),
+  })) as CropPreview
 }
 
 /**

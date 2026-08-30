@@ -1245,6 +1245,56 @@ export type RunPreflight = {
   busy_run: string | null
 }
 
+/** The one card the crop preview is showing, and what this reading does to it.
+ *
+ *  `rect` is in the ORIGINAL frame's pixels and the screen turns it into percentages, so it
+ *  can be drawn over the photograph `GET /photo/<box>/<index>` already serves — which is why
+ *  changing the reading costs no bytes at all: only the rectangle moves.
+ *
+ *  `rect` is null when the reading sends the whole frame, EITHER because the crop is off or
+ *  because detection refused, and `method` is what tells those apart. The two look identical
+ *  in the payload and mean opposite things to an operator: one is the setting they chose, the
+ *  other is a card going at whole-frame cost when they asked for a crop.
+ */
+export type CropSample = {
+  box: number
+  index: number
+  /** Present on a photograph that could not be decoded at all — the run reports the same card
+   *  as `unreadable` and sends nothing for it. Every field below is absent with it. */
+  unreadable?: string
+  /** The card's own game, which decides whether there is a band at all. */
+  game?: string
+  frame?: [number, number]
+  sent?: [number, number]
+  rect?: [number, number, number, number] | null
+  method?: 'edges' | 'tone' | null
+  /** THE BYTES THAT WILL BE SENT, as a data URI — not the stored photograph. The frame draws
+   *  these, so the picture changes when the reading does; the 1:1 view is a region of this
+   *  same file, which is why the two can never disagree about what is being sent. */
+  sent_image?: string
+  /** Where the collector number is INSIDE `sent_image`, for the 1:1 view's resting aim. Null
+   *  where the registry claims no band for this game — the pointer still reaches every pixel. */
+  band_rect?: [number, number, number, number] | null
+  /** Its NATIVE pixels, which is the unit D32's frontier table is measured in. */
+  band_px?: [number, number] | null
+  /** Why there is no band, in the registry's own terms. `pipeline/games.py` holds which bands
+   *  a game claims and only `pokemon` claims a number band — the fractions were measured on a
+   *  Pokemon card, and a band claimed without that measurement is cut over the wrong pixels. */
+  band_absent?: string | null
+}
+
+export type CropPreview = {
+  scope: RunScope
+  capture_dir: string
+  crop: boolean
+  max_edge: number
+  /** Photographs in the scope, so the walk can say what it is one of. */
+  total: number
+  /** Which card is being shown, already wrapped into range by the server. */
+  offset: number
+  sample: CropSample
+}
+
 export type RunStarted = {
   run: string
   path: string

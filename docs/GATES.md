@@ -212,7 +212,7 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
 
 - **Pass**: detected rectangle within tolerance across the sweep; bands contain their
   target; no card -> not found; a ground the tone path cannot segment is still found by its
-  borders
+  borders; the cut and the rectangle the run panel draws are one computation
 - The sweep is offset, scale and rotation. "Bands" are the title band and the number
   corner, and each must contain its target region. "Not found" must be a refusal, never a
   guess.
