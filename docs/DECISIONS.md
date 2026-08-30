@@ -5589,6 +5589,45 @@ labels on one store and nothing truncates. If a name ever pushes `.run-row`'s th
 a second line, the fix is an ellipsis on the scope cell — `.run-row-name` already has one — and
 not dropping the name, which is the fact the row was added for.
 
+**THREE FALLBACKS WERE DELETED THE SAME DAY, AND THEY WERE WORTH ZERO — MEASURED (2026-08-30).**
+`boxLabel` returned `string | null`, so every call site had to answer for a null box. Three
+did, three different ways: `?? Box ${box}` on the cart leg head and the scope line, a lowercase
+`?? box ${box}` on the console label, and — on the per-box row of the cost breakdown — nothing
+at all. That last one was found by mutation and reported as a reporting defect on the money
+screen: `boxLabel(null, …)` returns null, and a null JSX child renders as an empty term above
+the control that spends.
+
+**The other two were no better, which is what decides this.** Run against a null box they
+render the literal string **`Box null`** and **`box null`**. They read as defensiveness and
+were noise: **there is nothing honest to draw from a box number the server failed to send.**
+So all three are gone and `boxLabel` gains an overload — a real `number` returns a `string` —
+which leaves one shape at four call sites instead of four answers to a question none of them
+can be asked. Every one passes a number the types already guarantee: `CartBox.box` and
+`RunScope.box` are both plain `number`.
+
+**THE OVERLOAD IS NOT A COMPILE-TIME PROOF, AND THE FIRST DRAFT OF THIS PARAGRAPH SAID IT WAS.**
+Removing the signature produces no type error anywhere — JSX renders a null child as nothing
+and a template literal stringifies it, so both shapes these values arrive in swallow a null
+silently. Corrected here rather than quietly softened, because the wrong version of this
+sentence would have a later session trusting `tsc` to catch a class of defect it cannot see.
+
+**SO THE FIX IS AT THE SOURCE AND NOT AT THE FOUR DRAW SITES.** `_resolve_scope`'s ticked-
+selection branch was built five times in T7 and read back zero: every other `indices` payload
+there refuses — an empty array, a bad member, a card with no photograph, and the cart case that
+exists to prove leg two's bad flag tears down leg one — so the dict it returns was never
+asserted. Nulling its `box` left `make harness` at 7 of 7 and `npx playwright test` at 224
+passed. T7 now sends a selection preflight that SUCCEEDS and asserts all three fields; all
+three mutations — `box` to null, `whole_box` to true, and `cards` counting the directory rather
+than the selection — were observed failing against it.
+
+**It is not the double-click guard, which is the tempting guess and is wrong.** `_run_box`
+reads the scope block first and falls back to the capture directory's name, and a scope
+directory is called `box3-1-<stamp>` — so `^box(\d+)` still answers 3 and `_busy_run` still
+fires. `box_name` goes through `_run_box` too. What a wrong box costs is the preflight
+RESPONSE, which `RunPanel.tsx` reads with no fallback: the per-box cost row, each leg's React
+key, each console label, and `_preflight_total`'s `busy` list. D33 makes that the one screen
+whose numbers must be unmissable.
+
 ---
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 

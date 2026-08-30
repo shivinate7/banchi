@@ -9967,6 +9967,60 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "per mis-typed cart, in the one directory identify walks recursively",
             )
 
+            # ---------------------------------- a TICKED SELECTION reports its own scope
+            #
+            # THE SUBSET SCOPE WAS BUILT FIVE TIMES IN THIS FILE AND READ BACK ZERO. Every
+            # other `indices` payload here refuses — an empty array, a bad member, a card with
+            # no photograph, and the cart case directly above, which exists to prove leg two's
+            # bad flag tears down leg one. So `_resolve_scope`'s selection branch returned a
+            # dict nothing ever looked at: nulling its `box` left `make harness` at 7 of 7 and
+            # `npx playwright test` at 224 passed. Measured, not supposed.
+            #
+            # WHAT IT WOULD COST IS NOT THE DOUBLE-CLICK GUARD, which is the tempting guess
+            # and is wrong. `_run_box` reads the scope block FIRST and falls back to the
+            # capture directory's name, and a scope directory is called `box3-1-<stamp>` — so
+            # `^box(\d+)` still answers 3 and the guard below still fires. `_summary`'s `box`
+            # and `box_name` (D56) go through `_run_box` too.
+            #
+            # WHAT IT COSTS IS THE MONEY SCREEN, which reads this block with no fallback at
+            # all: `RunPanel.tsx` draws the per-box row of the cost breakdown from
+            # `leg.scope.box`, keys each leg on it, labels each console with it, and
+            # `_preflight_total` builds the `busy` list from it. D33 makes that the one screen
+            # whose numbers must be unmissable, so a term that renders empty there is worth a
+            # case.
+            status, body, _ = request(
+                port,
+                "POST",
+                "/pipeline/preflight",
+                payload={"scopes": [{"box": 3, "indices": [1]}]},
+            )
+            answer = json.loads(body)
+            checks.equal(
+                (status, answer["scopes"][0]["scope"]),
+                (200, {"box": 3, "whole_box": False, "cards": 1}),
+                "a preflight over a TICKED SELECTION reports the box it is over, that it is "
+                "not the whole box, and how many cards were ticked — the three facts the run "
+                "panel draws per leg above the control that spends, and the three the "
+                "manifest records for a run started this way",
+            )
+            checks.equal(
+                answer["total"]["boxes"],
+                1,
+                "and one leg is one box, so a cart of selections cannot report a count that "
+                "disagrees with the rows beneath it",
+            )
+            # THE COUNT IS OF TICKED CARDS AND NOT OF WHAT IS ON DISK, which is the half a
+            # `whole_box` assertion alone would miss: this box holds two photographs and one
+            # was ticked, so a `cards` that reported the directory's contents would read 2.
+            checks.equal(
+                len(list((home / "captures" / "cards" / "box3").glob("*.jpg"))),
+                2,
+                "— asserted against a box that holds MORE photographs than were ticked, so "
+                "`cards: 1` is a statement about the selection rather than about the box",
+            )
+            # The scope directory this one built is swept with the others below; it is
+            # symlinks, and `_sweep_scopes` is what `_scope_dir` calls on every press.
+
             # ------------------------------------------- the double-click guard, by BOX
             #
             # IT USED TO COMPARE CAPTURE-DIRECTORY PATHS, which works for a whole box and
