@@ -684,6 +684,32 @@ COMPONENTS = [
                 # docs-audit.py above.
                 "governed_by": ["D2", "D3", "D17"],
             },
+            "prose-guard.py": {
+                "does": "D60's two guards over the @-loaded docs. `--structure` asserts "
+                        "what decision-context.py needs and cannot report for itself — a "
+                        "`## D<n> — <title>` heading, every `**bold**` closed on its own "
+                        "line, and at least one ruling per entry — because that hook exits "
+                        "0 on everything and degrades in silence. `--facts` diffs the hard "
+                        "tokens of each entry between two versions of a file, which is the "
+                        "only guard a rewrite has and the only check here that needs a "
+                        "BEFORE. Reads and never writes; stdlib only, so the git hook's "
+                        "bare python3 can run the half that gates. docs-audit.py calls the "
+                        "structure half as `decision structure` and the size half as "
+                        "`entry budget`; `--facts` is on no gate, having nothing to "
+                        "compare against outside a rewrite.",
+                # D60 is the entry it enforces and D17 the hook it exists to protect. D16
+                # is the temperament twice over: mechanical findings blocking by default,
+                # and the rule that nothing may edit a doc to satisfy its own gate — which
+                # is why this reads and the budget half only ever prints. D18 is why it is
+                # stdlib and why the writing half is not on the commit path.
+                #
+                # D10, D57 and D58 are worked examples in the docstrings, not rulings about
+                # this file: D57 supplies the heading whose separator the audit accepts and
+                # the hook drops, and D10/D58 the pair whose facts would net to zero under
+                # a whole-file diff. Cited, so listed — the superset rule takes a citation
+                # at face value, the same trade decision-context.py's entry records.
+                "governed_by": ["D10", "D16", "D17", "D18", "D57", "D58", "D60"],
+            },
             "typecheck-hook.py": {
                 "does": "PostToolUse hook: runs app/'s own tsc --noEmit, and only after a "
                         "`.ts` or `.tsx` under app/ is written. It cannot block — "

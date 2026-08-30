@@ -8,6 +8,8 @@ decision changes — do not append history.
 
 ## D1 — Two-phase architecture
 
+**Capture is fast, offline and dumb; identification and pricing happen later, in batch.**
+
 Capture is fast, offline, and dumb. Identification and pricing happen later in batch.
 Never merge them: speed, cost, and reliability all favor the split.
 
@@ -52,8 +54,8 @@ Resolve normal / reverse holo / holo per card, in order:
    Recorded here because Gate B is what produced it: the answer route wrote answers that
    nothing on the join path ever read back, so sixteen answered cards re-derived their
    disagreement on every join and re-parked forever. An answer that does not outlive the
-   question is not an answer. Tested by T3, not T4 — it is a join behaviour, not a ladder
-   behaviour, which is the same distinction this entry draws.
+   question is not an answer. Tested by T3, not T4 — it is a join behavior, not a ladder
+   behavior, which is the same distinction this entry draws.
 1. **Capture-time metadata** — finish claim in the capture app, stored in the card's JSON
    sidecar. Primary path. `--variant` on the batch script **fills the finish in where a
    sidecar records none, and never overrides one** (clarified 2026-08-03; this entry
@@ -192,16 +194,22 @@ that would make rung 3 worth leaving on.
 
 ## D4 — Review queue is digital-only
 
+**The review queue is digital, and the physical card never leaves its box.**
+
 Shows the stored capture photo beside candidate catalog rows for a one-tap choice. The
 physical card never leaves its box; unresolved cards stay unlisted at a known position.
 
 ## D5 — Two personas
+
+**Two personas share one store: the owner processes, a family member fulfills.**
 
 The owner handles capture, processing, pricing, imports, and settings. A retired,
 non-technical family member handles fulfillment from his own device. Fulfillment-facing
 screens must be self-evident. Constraints in `docs/DESIGN.md`.
 
 ## D6 — Photo service and pull preview
+
+**One photo route serves the review queue and the pull preview alike.**
 
 The capture server serves stored photos at `GET /photo/<box>/<position>`. The review queue
 requires it; the pull modal reuses it, showing the card's own capture photo beside its
@@ -370,13 +378,15 @@ again.
 
 ## D8 — Pricing source is the TCGplayer Filtered CSV export itself
 
+**Pricing comes from the TCGplayer Filtered CSV export and from no external API.**
+
 It carries live, per-SKU, per-variant `TCG Market Price`. Threshold checks and pricing rules
 run directly against it. No external pricing API.
 
 pokemontcg.io data serves identification support (set IDs, collector numbers, printedTotal)
 and eval images only — never pricing. That role is unchanged by D15, which vendors the same
 data locally: the split above is why a snapshot is safe, since nothing price-shaped is in it.
-Read this entry as naming what the data is *for*, not as authorising a call to the live API.
+Read this entry as naming what the data is *for*, not as authorizing a call to the live API.
 
 ## D9 — Threshold and floor are both $0.40
 
@@ -450,7 +460,7 @@ moved.
 **The labels of every undeclared box moved once, deliberately, and that is the cost.** It is
 the same risk `harness/tests/t7_store_and_seams.py` names for the migration — every position
 label in a real inventory shifting at once, with the only symptom a person opening the wrong
-slot weeks later — realised on purpose instead of by accident. It is affordable for the reason
+slot weeks later — realized on purpose instead of by accident. It is affordable for the reason
 this entry already gives twice: a label was never printed on anything, only ever read live off
 a screen. T7 pins the new strings so that the next such shift is not accidental either.
 
@@ -524,7 +534,7 @@ built it). A tombstone would be a third thing the store has to explain — not c
 sold, still occupying a position — and every reader would have to learn it. A deleted
 record is a card that was never captured, which is exactly what the operator means by undo.
 
-This decides index reuse, which is otherwise the allocator's most surprising behaviour.
+This decides index reuse, which is otherwise the allocator's most surprising behavior.
 `next_index` is a high-water mark, `1 + max(index in this box)`, so deleting the newest
 record hands its index straight back to the next capture. That is the correct outcome and
 not an accident of the implementation: the position was assigned to a photo that no longer
@@ -613,6 +623,8 @@ gap is permanent.
    commitments, not clutter.
 
 ## D11 — Listing path is a catalog join, never a from-scratch CSV
+
+**A listing is a catalog join against the export, never a CSV written from scratch.**
 
 TCGplayer flow: Pricing tab → Export Filtered CSV (All Printings, so one file covers every
 variant) → pipeline fills fields → Import to Staged → review → Move to Live. Rows match by
@@ -728,6 +740,8 @@ what tethering would have bought, for free, and glare on the number corner is un
 at any resolution.
 
 ## D14 — Two tracks, one rig
+
+**One rig serves two tracks: singles and code cards share hardware, never schemas.**
 
 Shared: physical rig, capture server, capture app shell (mode toggle), photo storage,
 operating rules. Separate: schemas, identification, sales channel, fulfillment.
@@ -975,8 +989,8 @@ than the code does.
 
 **The hook is advisory and silent by default.** `scripts/decision-context.py` exits 0
 unconditionally — bad input, missing map, its own bugs — and prints nothing for files no
-entry covers. It summarises each decision by lifting the entry's own bolded lead-in
-sentences out of this file, so a summary cannot drift from the decision it summarises;
+entry covers. It summarizes each decision by lifting the entry's own bolded lead-in
+sentences out of this file, so a summary cannot drift from the decision it summarizes;
 nothing is restated by hand. It emits `additionalContext`, never `permissionDecision`:
 `"allow"` would auto-approve every Write and Edit in the project.
 
@@ -1219,7 +1233,7 @@ typing and onto the label they navigate by, which is worse than where it started
 **FOLDED AND STRIPPED TO COMPARE, STORED VERBATIM.** `Commons`, `commons` and `commons ` are
 one box to a person standing at a shelf, so they collide; what is written down is what was
 typed. It is the same split `pipeline/join.py:number_index_key` draws between a matching form
-and a stored one, for the same reason — a normalised value written back is a value the
+and a stored one, for the same reason — a normalized value written back is a value the
 operator cannot correct.
 
 **UNIQUE, NOT REQUIRED, and that boundary was chosen rather than fallen into.** Requiring a
@@ -1758,8 +1772,8 @@ Two halves, and only one is code:
 
 - **Physical**: the operator leaves a marker in the slot a pulled card came out of. Which marker
   is the owner's call and belongs in this entry once made.
-- **Digital, and free**: a position renders with its neighbours and its section's gap count —
-  "Card 17, between Mantine and Thievul · 2 slots in this section are empty". Neighbours make a
+- **Digital, and free**: a position renders with its neighbors and its section's gap count —
+  "Card 17, between Mantine and Thievul · 2 slots in this section are empty". Neighbors make a
   label countable again without anyone learning the rule, and the gap count says why the count
   came out short.
 
@@ -2279,7 +2293,7 @@ only when the batch's status CHANGES, so a console tail written forty minutes ag
 indistinguishable from a hang. Elapsed is measured, not estimated — there is no per-card signal on
 the wire and **no progress bar is invented**.
 
-**Every command's stdout is shown verbatim and nothing summarises one**, which is
+**Every command's stdout is shown verbatim and nothing summarizes one**, which is
 `docs/DESIGN.md`'s copy rule for the owner's screens. The one thing the panel adds on top is the
 download link for a file the console can only name — the gap `docs/GATES.md` records as what
 Gate B did not close: *"emit's import files existed only as filenames in terminal output the
@@ -2511,7 +2525,7 @@ so such a card is indistinguishable on screen from one whose number read fine. C
 lookup onto `QueueEntry` is the fix, and it is a schema change nobody has argued for yet.
 
 **What would reopen this: a name that resolves to two cards in one set.** Measured at zero
-across box 2, but a set with two prints of one name would produce it. The behaviour is already
+across box 2, but a set with two prints of one name would produce it. The behavior is already
 correct — two surviving rows means two candidates and an ordinary one-card review — but it has
 never been seen, and the group offer would correctly refuse it as `group_not_uniform`.
 
@@ -2565,7 +2579,7 @@ card it came with. The rung is for "we could not READ the number"; a product tha
 nothing to fall back from. That is now a declared `name_rung=False` rather than an absence
 somebody has to notice.
 
-**Behaviour-preserving, and checked as such rather than asserted.** `join --dry-run` over both
+**Behavior-preserving, and checked as such rather than asserted.** `join --dry-run` over both
 real runs — box 1's 133 Riftbound cards and box 2's 544 Pokemon cards — produced **byte-identical
 output** before and after the restructure.
 
@@ -2577,7 +2591,7 @@ Covered by T3 in both directions, observed failing against the old code first.
 
 **BUILT 2026-08-24, immediately after D35, because applying D35 exposed it.** A re-join of box
 2 wrote all 47 queue entries **one position off** — every entry carrying the right read with its
-neighbour's slot, photograph and label. On screen: `Wally's Compassion` described over a
+neighbor's slot, photograph and label. On screen: `Wally's Compassion` described over a
 photograph of an Inteleon. It was caught before it was answered; the queue was restored from a
 backup taken minutes earlier.
 
@@ -2751,357 +2765,113 @@ is what finally takes it.
 
 ## D38 — The photograph is sized by the rows beside it, and the box and the runs get the third column
 
-**BUILT 2026-08-25.** `#/inventory` drew two columns — the box walk, and one 1004px column holding
-everything else stacked: the card detail, then the copies, then `BoxOps` and the run panel side by
-side.
+**The card photograph is sized for confirming a slot, not for judging a card.** Built 2026-08-25. `#/inventory` drew two columns — the box walk, and one 1004px column holding the card detail, the copies, then `BoxOps` and the run panel side by side.
 
-**Measured at 1440x900, on box 2 card 1 with its six copies, the body went 1878px -> 1396px**, and
-the photograph **420x587 -> 150x204**. Both are off the running store through one instrument: the
-old arrangement was rebuilt in the live DOM, measured, and reloaded away. The saving is
-data-dependent — most of what remains is the copies list, where a `position-bar` takes a line of
-its own by rule — so read 482px as this card, not as every card.
+Measured at 1440x900 on box 2 card 1 with six copies, by rebuilding the old arrangement in the live DOM: **body 1878px -> 1396px, photograph 420x587 -> 150x204**. The saving is data-dependent — most of what remains is the copies list, where a `position-bar` takes a line by rule — so read 482px as this card, not every card.
 
-**THE PHOTOGRAPH WAS SIZED AGAINST THE WRONG SCREEN, AND THAT IS THE FINDING.** D33's build gave
-it a `minmax(280px, 420px)` track on 2026-08-24, arguing that 280px was small because the review
-queue gives the same job 415x736. The two screens do not have the same job. The review queue is
-where a card is JUDGED — `docs/DESIGN.md` spends a section on making the photograph the largest
-thing on it, because the question is whether the foil matches the toggle. This screen's question
-is *where is this card*, and its photograph confirms you are looking at the right slot. Borrowing
-a floor from a screen with a different job is the same mistake that file names when it refuses to
-draw the Fulfiller's minimums on the owner's screens.
+**The photograph had been sized against the wrong screen.** D33 gave it a `minmax(280px, 420px)` track arguing 280px was small because the review queue gives the same job 415x736. The two screens do not have the same job: the review queue is where a card is JUDGED, and this screen's question is *where is this card*. Borrowing a floor from a screen with a different job is the mistake `docs/DESIGN.md` names when it refuses to draw the Fulfiller's minimums on the owner's screens.
 
-**So the photograph is sized by the seven fact rows beside it** (the owner: *"shrink the preview
-image ... to now be in line with the rows going from card to finish, those should all occupy the
-same vertical space"*). `.browse-facts` measures 203.5px, and 63:88 at that height is 145.7px
-wide — a 150px track, down from 420.
+### Sized by the rows, then by its column
 
-**IT TOOK ITS HEIGHT FROM THE FACTS FOR A FEW HOURS AND IS SIZED BY ITS COLUMN AGAIN**, and the
-middle step is what made the right size findable. Pinned to the rows the photograph was 150x204;
-the owner then asked for it back — *"more space given to the middle (ie photo gets larger)"* —
-which reads as a contradiction and is not. The two are only in conflict while the facts are as
-wide as they were, and they are not: `Captured` printed a full ISO stamp at ~234px and now reads
-`6:35pm · Aug 23` at ~100px, so the widest value on the card is the card's own NAME and the facts
-want ~270px instead of ~426px. The photograph takes the width that frees. `CardOps` moves up
-beside the facts to fill the air under them, and the re-shoot control becomes a 24px icon with its
-words on `aria-label` rather than a full-width button in the photograph's own column.
+`.browse-facts` measures 203.5px, and 63:88 at that height is 145.7px wide — a 150px track, down from 420.
 
-**THE FRAME WENT WITH IT, AND THAT DELETED A CLASS OF DEFECT RATHER THAN AN INSTANCE.** While the
-photograph took its height from the facts, the reservation had to live on a WRAPPER — and a
-wrapper holds whatever `PhotoPanel` returns, so a card whose file was missing got a card-shaped
-box drawn around a paragraph (measured: 424x592 around 424x149, with the re-shoot control pushed
-to y=985 of a 900px viewport). `aspect-ratio` is back on the `<img>`, where it cannot reach
-anything that is not an image. **Moving a reservation off the thing it describes and onto a
-wrapper gives it to everything else that wrapper can hold** — that is the lesson, and it is why
-`align-self: stretch`, `.browse-frame` and a `:not(.is-absent)` media rule are all gone.
+**It took its height from the facts for a few hours and is sized by its column again**, and the middle step is what made the right size findable. Pinned to the rows it was 150x204; the owner then asked for it back, which reads as a contradiction and is not. The two conflict only while the facts are as wide as they were: `Captured` printed a full ISO stamp at ~234px and now reads `6:35pm · Aug 23` at ~100px, so the widest value is the card's own NAME and the facts want ~270px instead of ~426px. `CardOps` moves up beside the facts, and the re-shoot control becomes a 24px icon with its words on `aria-label`.
 
-**`object-fit: cover` STAYS, against the obvious objection.** The frame is no longer guaranteed
-63:88, so `cover` crops by a variable amount and `contain` looks like the honest answer. It is not:
-D32 measured these frames at 2160x3840 with the card filling 80–88% of the width and 61–72% of the
-height, so `contain` would letterbox a frame narrower than its box and shrink the card inside an
-already small photo. `cover` crops the desk off the top and bottom, which is the crop you want.
+**The frame went with it, deleting a class of defect rather than an instance.** While the photograph took its height from the facts the reservation had to live on a WRAPPER — and a wrapper holds whatever `PhotoPanel` returns, so a card with a missing file got a card-shaped box around a paragraph: measured 424x592 around 424x149, with the re-shoot control at y=985 of a 900px viewport. `aspect-ratio` is back on the `<img>`, where it cannot reach anything that is not an image. **Moving a reservation off the thing it describes and onto a wrapper gives it to everything else that wrapper can hold.** `align-self: stretch`, `.browse-frame` and a `:not(.is-absent)` media rule are all gone.
 
-**THE ~270px THE PHOTOGRAPH GAVE UP IS THE THIRD COLUMN**, and that is the trade rather than a
-consequence. `BoxOps` and the run panel move out of the card's column into one of their own —
-which rewrites the last line of D33: the row cost the card's column one panel's height, and the
-column costs it nothing. Nothing folds. The copies list moves to a full-width row beneath the band,
-where D33's argument for keeping it in the facts column (a 587px photograph would push it off a
-900px viewport) is void.
+**`object-fit: cover` stays, against the obvious objection.** The frame is no longer guaranteed 63:88, so `contain` looks honest. D32 measured these frames at 2160x3840 with the card filling 80–88% of the width and 61–72% of the height, so `contain` would letterbox a narrow frame and shrink the card inside an already small photo. `cover` crops the desk off.
 
-**"THE COLUMN COSTS IT NOTHING" WAS TRUE ABOUT WIDTH AND FALSE ABOUT HEIGHT, AND THE THIRD COLUMN
-IS GONE (owner, 2026-08-26: *"solve the dead pixel space in inventory between the card and its
-details, and then the location data that scrolls away after whitespace"*).** This paragraph
-checked one axis. A grid row is as tall as its tallest cell, and the card and the run panel shared
-row 1 while the copies were row 2 — so the copies began wherever the console ended. Measured on
-the owner's store, box 2:
+### The column, and what it cost on the axis nobody checked
 
-    console closed             799px  ->  copies at y=938,  378px of white,  page 1552
-    console with a run PICKED  1461px ->  copies at y=1599, 1039px of white, page 2214
+The ~270px the photograph gave up became a third column for `BoxOps` and the run panel, which rewrites D33's last line: the row cost the card's column one panel's height, and the column costs it nothing.
 
-Picking a run is an ordinary act and the panel polls its own list on a 4s/20s timer, so the second
-row is a resting state — which means the answer to *where is this card* was positioned by
-something that is not about the card, at a height with no cap. A fix that closed 378px would have
-closed the best case only.
+**That was true about width and false about height.** A grid row is as tall as its tallest cell, and the card shared row 1 with the run panel while the copies were row 2 — so the copies began wherever the console ended:
 
-`.browse-body` is now two columns and three rows: the walk, then the card, the copies and the
-console stacked in the content column. **The console pays for its own move** — widened from 370px
-to 1024px it draws 625px closed and 1143px open with no code change at all, because its head stops
-wrapping four command names and its notes and free steps unwrap with it. **What this entry got
-right and the rebuild keeps**: the box belongs in the walk's column, the runs are not the card's
-neighbour, and nothing folds.
+| console state | console | copies at | whitespace | page |
+|---|---|---|---|---|
+| closed | 799px | y=938 | 378px | 1552 |
+| a run picked | 1461px | y=1599 | 1039px | 2214 |
 
-**What it costs, stated because it is the whole price**: `Check cost` was at viewport y=495 and is
-now a page down, below the copies. Identifying is done once per box; the copies answer the
-per-card question this route was merged to ask. If that trade is ever wrong the fix is to swap the
-last two rows, **never to restore the column** — the column is the mechanism.
+Picking a run is ordinary and the panel polls on a 4s/20s timer, so the second row is a resting state — the answer to *where is this card* positioned by something that is not about the card, at a height with no cap.
 
-**THEN THE BOX LEFT THAT COLUMN AGAIN, AND THE SECOND MOVE IS THE ONE WORTH READING** (owner,
-same day): *"merge its functionality (so not visual merge, but rebuild type merge) and all exist
-on the left side"*. The evidence was a duplication nobody had counted: `BoxOps` drew `Section 1
-#1–#85  85 cards` as inert text for every divider, while `.browse-secthead` in the walk drew the
-same five rows — foldable, tickable, walkable — a thousand pixels to the left. **The walk IS the
-sections list.** That is D31's own finding one scale down, and it decides where the box goes: the
-left column is the box (the strip picks it, the list is its cards), so the box's readings and its
-operations belong there and the panel headed `Box 2` was the redundant instance.
+`.browse-body` is two columns and three rows: the walk, then the card, the copies and the console stacked in the content column. That voids D33's argument of 2026-08-24 for keeping the copies in the facts column — a 587px photograph would have pushed them off a 900px viewport, and no photograph here is that tall. **The console pays for its own move** — widened from 370px to 1024px it draws 625px closed and 1143px open with no code change, because its head stops wrapping four command names and its notes and free steps unwrap with it. What this entry got right and the rebuild keeps: the box belongs in the walk's column, the runs are not the card's neighbor, and nothing folds.
 
-`BoxIdentity` is split out of `BoxOps` for it — name, fill, state and the segment track, under the
-strip that names the box. The operations stay in `BoxOps` and sit at the bottom of the walk. They
-sat there *beside `RegisterBox`* until 2026-08-26, when the owner deleted that control from this
-screen outright — nothing is lost by it, because `CaptureScreen.tsx:createOfferedBox` calls the
-same `POST /boxes` from the Box field and makes the same empty box, which is where a person
-reaching for a new drawer already is. The operations are now the last thing in the column. The
-sections list, its
-`Layout and controls` heading, and the `sections 1 86 171 253 394` clause of the meta line are all
-**deleted rather than moved**: three renderings of one fact on one screen. The third column keeps
-the runs alone and narrows to 370px, and the card takes the difference.
+**What it costs:** `Check cost` was at viewport y=495 and is now below the copies. Identifying is done once per box; the copies answer the per-card question. If that trade is wrong the fix is to swap the last two rows, **never to restore the column**, which is the mechanism.
 
-**A REAL DEFECT CAME WITH THAT MOVE AND IS FIXED HERE.** `.browse-map` is sticky and capped at the
-viewport, so anything past the cap renders below the fold and the page scroll cannot bring it back
-— a sticky element does not move. Harmless while the column held a search, a strip and a list;
-not harmless once the box's editors moved in, where opening the claims editor on a 720px-tall
-window put the Apply button permanently off-screen. The column scrolls itself now, and
-`.browse-list` keeps a 6rem floor so an editor below it cannot squeeze the walk to nothing.
-`app/tests/inventory.spec.ts` asserts the escape hatch rather than the button's position.
+### Then the box left that column too
 
-**THE DENSITY WAS TIGHTENED TO EARN THE NARROWER TRACK, at the owner's instruction** — *"there's a
-lot of wasted space in the runs blurb and box blurb ... tighten its spacing / buttons to be more
-efficient, and then allocate space accordingly."* Two cuts did nearly all of it:
+The owner, the same day: the operations should all exist on the left. The evidence was a duplication nobody had counted — `BoxOps` drew `Section 1 #1–#85  85 cards` as inert text for every divider, while `.browse-secthead` drew the same five rows a thousand pixels left, foldable, tickable and walkable. **The walk IS the sections list**, which is D31's finding one scale down, so the panel headed `Box 2` was the redundant instance.
 
-- **`BoxOps` drew one row per section, with no bound at all.** The row is 25.5px, so N dividers
-  cost 25.5N px and nothing stops it — the panel's height was a function of how finely a box
-  happened to be divided, which is not a thing anyone chose. **Be honest about which half of this
-  is measured**: box 2 declares five sections today and the list draws **127px**, so the cap saves
-  nothing at the current layout. What earns it is the other end — D31 records **this same box at
-  22 sections**, ~560px by that row height, more than the rest of the panel put together — and D10
-  makes dividers freely editable from any screen, so that state is one edit away at all times.
-  Capped at six rows and scrolled, with the section total already on the heading beside it so a
-  capped list cannot read as a short one. Its row tracks narrow from 8rem/10rem to 5rem/7rem, which
-  moves the panel's wrap cliff from ~399px to ~280px — the thing that actually decides how narrow
-  the column may be.
-- **The run panel drew four 20px display headings**, the same size as its own panel title, so an
-  open run said the steps and the panel were the same rank. 14px body, matching what `BoxOps`
-  gives the same job one panel down. Its buttons drop to 32px, which is `.boxops-plain`'s height —
-  the two panels in this column disagreed about how tall a control is by 17%.
+`BoxIdentity` splits out of `BoxOps` for it — name, fill, state and the segment track, under the strip that names the box. The operations sit at the bottom of the walk. They sat there beside `RegisterBox` until 2026-08-26, when the owner deleted that control outright; nothing is lost, because `CaptureScreen.tsx:createOfferedBox` calls the same `POST /boxes` from the Box field. The sections list, its `Layout and controls` heading and the `sections 1 86 171 253 394` clause are **deleted rather than moved** — three renderings of one fact on one screen. The third column keeps the runs alone at 370px and the card takes the difference.
 
-The column is then **`minmax(340px, 400px)`**, allocated after the cuts rather than before them.
+**A real defect came with that move.** `.browse-map` is sticky and capped at the viewport, so anything past the cap renders below the fold and the page scroll cannot bring it back. Harmless while the column held a search, a strip and a list; not harmless once the box's editors moved in, where opening the claims editor on a 720px window put the Apply button permanently off-screen. The column scrolls itself now, and `.browse-list` keeps a 6rem floor so an editor cannot squeeze the walk to nothing. `app/tests/inventory.spec.ts` asserts the escape hatch rather than the button's position.
 
-**THREE COLUMNS ARE A >= 1240px LAYOUT and below it the pair goes back under the card.** 1240
-rather than 1440: the owner works at 1440x900, and a breakpoint at exactly the working size is one
-you cross by un-maximising a window. It also puts Playwright's 1280x720 inside the new layout, so
-`make design-check` exercises the three columns rather than only the fallback.
+### Density, to earn the narrower track
 
-**THE NUMBER SURVIVED THE COLUMNS (2026-08-26).** There is no three-column body any more and the
-body has no breakpoint at all — one arrangement at every width, which deleted the `@media
-(max-width: 1239px)` block and the two-rows-versus-three overlap hazard that block spends a
-paragraph documenting. 1240 now governs the CARD BAND's third track, and the reason above transfers
-without a word changed: Playwright's 1280 renders three tracks rather than only the fallback.
+- **`BoxOps` drew one row per section with no bound**, at 25.5px, so the panel's height was a function of how finely a box happened to be divided. Box 2 declares five sections and draws **127px**, so the cap saves nothing today — what earns it is the other end, D31 recording **this same box at 22 sections**, ~560px, and D10 making dividers freely editable from any screen. Capped at six rows and scrolled, with the section total on the heading so a capped list cannot read as a short one. Row tracks narrow from 8rem/10rem to 5rem/7rem, moving the wrap cliff from ~399px to ~280px.
+- **The run panel drew four 20px display headings**, the same size as its own title, so an open run said the steps and the panel were the same rank. 14px body now, matching `BoxOps`. Buttons drop to 32px, which is `.boxops-plain`'s height — the two panels disagreed about how tall a control is by 17%.
 
-**FOUR THINGS THE CARD PANEL GAINED ON 2026-08-25, from a design consultation the owner asked
-for and an adversarial pass over its proposals.** Recorded together because they are one finding
-in four places: this panel had been drawn for the layout and not for what it must SAY.
+The column is then **`minmax(340px, 400px)`**, allocated after the cuts.
 
-- **`Rarity` and `Note` are on it, and `CardOps` could overwrite both without showing either.**
-  `ClaimEditor` writes five claims and the list drew three — and it opens with those fields empty
-  and reads armed-and-empty as a CLEAR, so `Correct claims` was a blind overwrite of two values
-  that appeared nowhere on screen. `rarity_claim` is set on 543 of 543 records, so this was live.
-  Rarity renders verbatim (D22: no second friendly vocabulary), through the same renderer as the
-  finish claim so a second `' · '` join cannot drift from it.
-- **`Run` and `Confidence`.** `run` is on all 543 records and is the join between this panel and
-  the run panel one column right, which lists run directories and cannot say which cards each
-  touched. `Confidence` is the only place a RESOLVED card's hedge is readable — `#/review` draws
-  it only for a card that was queued. Shown FLAT, never as a chip or a colour: T1's and D35's
-  recorded misses are all confident and wrong, so `high` is not reassurance. That is an argument
-  about what the value means, not about whether to print it.
-- **Whether the card has an open question, from `GET /queues`.** A card in the review queue
-  rendered `State: identified` and nothing else — and `state` there is not merely silent, it is
-  MISLEADING, because it describes how far capture and identify got while the question was raised
-  by the JOIN. The candidate count is load-bearing: zero candidates is the difference between "go
-  and answer it" and "it cannot be answered as it stands", which is what points at the re-shoot
-  icon already on this panel. The label map moved to `app/src/reasons.ts` and is IMPORTED by both
-  screens rather than copied — its own docstring says nothing keeps it in step with
-  `pipeline/variant.py`, and the defence is making that drift visible, which a second copy would
-  defeat. `scripts/docs-audit.py`'s reason-codes check follows it there.
-- **The copies list spans the card's column AND the runs'.** Measured: in the middle column it was
-  976px of a 1450px page on the default card and 1713px of 2187px on an eleven-copy one, while
-  778px of viewport sat empty beside it. Wide, the row goes 144px to 82px and eleven copies go
-  1598px to 902px — a 43% cut with nothing removed. That is `CardLocations.css`'s own recorded
-  complaint answered rather than worked around, and it is keyed to a **container query** rather
-  than a breakpoint because that file's promise is to be honest "with no breakpoint to keep in
-  step". It also collapses `detail`'s two render sites into one, which turns the surviving-receipt
-  invariant from a prose promise into a structural fact.
+**Three columns are a >= 1240px layout.** 1240 rather than 1440 because the owner works at 1440x900 and a breakpoint at the working size is one you cross by un-maximizing a window; it also puts Playwright's 1280x720 inside the new layout, so `make design-check` exercises the three columns rather than only the fallback. **The number survived the columns (2026-08-26):** there is no three-column body any more and no body breakpoint at all, which deleted the `@media (max-width: 1239px)` block. 1240 now governs the CARD BAND's third track, and the reason transfers unchanged.
 
-  **Amended 2026-08-26: the copies span the CONTENT COLUMN, which is the same width by another
-  name.** With the third column gone they take 1024px at 1440 and 864px at 1280 — the exact widths
-  they had spanning columns 2 and 3 — so every measurement above is untouched. The container query
-  is what makes the width non-negotiable and it was re-measured on the way past: a row is 83px at
-  >= 940px of container, 115px at 864, 127px at 860 and 159px at 630. **The 860 threshold is
-  therefore mis-set** — it buys a 127px row, not the one-line 83px one — and it is left alone
-  deliberately, because raising it to 940 without guaranteeing the container is that wide would
-  drop 1280 from a 115px row to a 159px one. Recorded as the sharpest known defect in this area.
+### Four things the card panel gained, from one finding seen in four places
 
-**The four new fact rows closed the band's air and slightly overshot**, which is worth recording
-because a test had to change for it: the facts are now 415px against a 349px photograph, so the
-~90px that sat under the facts is ~66px under the photograph instead. Which side is taller was
-never the property worth guarding — it is an accident of how many rows the panel draws, and it has
-now flipped once. What the assertion checks is that the two stay within a band of each other.
+- **`Rarity` and `Note`, which `CardOps` could overwrite without showing.** `ClaimEditor` writes five claims and the list drew three — and it opens with those fields empty and reads armed-and-empty as a CLEAR, so `Correct claims` was a blind overwrite of two values appearing nowhere on screen. `rarity_claim` is set on 543 of 543 records, so this was live. Rarity renders verbatim (D22), through the same renderer as the finish claim so a second `' · '` join cannot drift.
+- **`Run` and `Confidence`.** `run` is on all 543 records and is the join between this panel and the run panel, which lists directories and cannot say which cards each touched. `Confidence` is the only place a RESOLVED card's hedge is readable, since `#/review` draws it only for a queued card. Shown FLAT, never as a chip or a color: T1's and D35's recorded misses are all confident and wrong, so `high` is not reassurance.
+- **Whether the card has an open question, from `GET /queues`.** A queued card rendered `State: identified` and nothing else — and `state` there is MISLEADING, describing how far capture and identify got while the question was raised by the JOIN. The candidate count is load-bearing: zero candidates is the difference between *go and answer it* and *it cannot be answered as it stands*, which points at the re-shoot icon already on this panel. The label map moved to `app/src/reasons.ts` and is IMPORTED by both screens rather than copied — nothing keeps it in step with `pipeline/variant.py`, and the defense is making that drift visible. `scripts/docs-audit.py`'s reason-codes check follows it there.
+- **The copies list spans the card's column AND the runs'.** Measured: in the middle column it was 976px of a 1450px page on the default card and 1713px of 2187px on an eleven-copy one, with 778px of viewport empty beside it. Wide, the row goes 144px to 82px and eleven copies go 1598px to 902px — **43% with nothing removed**. Keyed to a **container query** rather than a breakpoint, because `CardLocations.css` promises to be honest with no breakpoint to keep in step. It also collapses `detail`'s two render sites into one.
 
-**What would reopen this: a photograph nobody can read.** The band is sized for confirming a slot,
-not for judging a card. If the owner finds themselves opening the review queue to look at a card
-they were already looking at here, the answer is not a bigger photo in this band — it is that this
-screen has quietly acquired the other screen's job, and that is worth naming before it is resized.
+  **Amended 2026-08-26: the copies span the CONTENT COLUMN, the same width by another name** — 1024px at 1440 and 864px at 1280, the exact widths they had spanning columns 2 and 3, so every measurement above stands. Re-measured on the way past: a row is 83px at >= 940px of container, 115 at 864, 127 at 860 and 159 at 630. **The 860 threshold is therefore mis-set**, buying a 127px row rather than the one-line 83px one, and is left alone deliberately: raising it to 940 without guaranteeing the container is that wide would drop 1280 from 115px to 159px. The sharpest known defect in this area.
 
-**A TWELFTH ROW ARRIVED ON 2026-08-29 AND IT IS THE FIRST FACT ON THIS PANEL THAT IS NOT ON THE
-RECORD.** The owner: *"if a join has happened on that set, can I get the TCG Market Price as part
-of the data summary on the top right of the card (with a note of how stale/fresh that data is?)"*.
+**The four rows closed the band's air and slightly overshot.** The facts are now 415px against a 349px photograph, so the ~90px under the facts is ~66px under the photograph. Which side is taller was never the property worth guarding; the assertion checks the two stay within a band of each other.
 
-**THE STORE HOLDS NO PRICE, AND THAT IS D8 RATHER THAN A GAP.** Every figure in this product comes
-out of the TCGplayer Filtered Export, and `store/master.py` has not one field shaped like money —
-so *what is this card worth* was answerable on `#/pricing` and on no screen the operator is
-actually standing at when they ask it. The eleven rows above are `asdict(card)`; this one is a
-join.
+**What would reopen this: a photograph nobody can read.** If the owner opens the review queue to look at a card they were already looking at here, this screen has acquired the other screen's job, and that is worth naming before it is resized.
 
-**THE EDGE IS D46'S, REUSED RATHER THAN REBUILT: card -> `run` -> that run's `pricing.json`.**
-`cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND
-every position holding a copy, so a position resolves to a SKU and to a Market cell with **no new
-route, no new field on the wire and no schema change anywhere**. `GET /pipeline/runs/<name>/
-pricing` is free, read-only and creates nothing, which is what makes it safe to open from a screen
-that is not about running anything.
+### The twelfth row is a price, and it is the first fact here that is not on the record
 
-**KEYED BY POSITION AND NEVER BY `card.sku`, which is the one decision here that could be silently
-wrong.** That field is written by `emit`, for SKUs that reached an import file — so a
-sub-threshold card, a card withheld under D49, and every card in a run that was joined but never
-emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and would look
-correct on the cards it happened to reach. The position is on both sides of the join and is
-written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`,
-which is the case that fails the wrong implementation.
+The owner, 2026-08-29, asked for `TCG Market Price` on the card summary with a note of how stale it is.
 
-**ONE READ PER RUN, CACHED BY RUN NAME.** `pricing.json` is per-run and every card in a box
-normally names one run, so walking a whole box costs ONE read — the argument `queued` beside it
-already makes, and it matters more here because a real table is ~80KB for 50 SKUs. Keyed by RUN
-and not by box, because a run is what wrote the file: D33 scopes a run to a SELECTION inside a
-box, so two cards on one shelf can carry two tables read at two different moments, which is
-exactly the staleness this row exists to report.
+**The store holds no price, and that is D8 rather than a gap.** Every figure comes from the Filtered Export and `store/master.py` has no field shaped like money — so *what is this card worth* was answerable on `#/pricing` and on no screen the operator is standing at when they ask. The eleven rows above are `asdict(card)`; this one is a join.
 
-**THE AGE IS NEVER OPTIONAL, AND `read` IS NEVER `as of`.** `join` is free, re-runnable and
-routinely pointed at a refreshed export, so a bare `$5.47` claims a currency the file cannot
-support. What the age measures is the JOIN: `GET .../pricing` answers `written_at`, the mtime of
-`pricing.json`, because the export is a CSV the operator downloaded from TCGplayer at an earlier
-moment nothing on this machine can see. The freshest honest sentence is when the pipeline last
-looked at it, so the row reads `$0.34 · read 3d`.
+**The edge is D46's, reused: card -> `run` -> that run's `pricing.json`.** `cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim AND every position holding a copy, so a position resolves to a SKU and a Market cell with no new route, no new field on the wire and no schema change. `GET /pipeline/runs/<name>/pricing` is free and read-only.
 
-**IT READ `$0.34 · read 3 days ago` UNTIL 2026-08-30, AND IT WRAPPED ONTO TWO LINES ON EVERY
-PRICED CARD** (the owner, with a screenshot: *"this line in inventory needs to be only one
-line"*). Measured at their own 1440: `.browse-facts` is 578px at `column-width: 260px`, which
-takes **two columns of 277px** and leaves a **181px value track** at 9.1px per character — a
-budget of **19 characters**. `$0.34 · read 9 hours ago` is 218.4px. Six of the row's twelve
-outcomes were over the line, so this was the ordinary state of the row rather than a bad case.
+**Keyed by position, never by `card.sku`** — the one decision here that could be silently wrong. That field is written by `emit`, so a sub-threshold card, a card withheld under D49 and every card in a run joined but never emitted all carry `null`. A SKU-keyed lookup would draw nothing for all of them and look correct on the rest. The position is on both sides and written by neither. `app/tests/inventory.spec.ts` prices a fixture card carrying `sku: null`.
 
-**IT WAS NEVER A COPY PROBLEM, AND THAT IS WHY THE CUT IS WHERE IT IS.** The figure is
-variable-width, so no wording holds: `$30.81 · read 9h ago`, with the age already at its
-shortest, measures **182px — one pixel over**. Widening cannot rescue it either, because two
-columns of 277px is what 578 gives; shrinking the label track to its actual ink (80px,
-`CONFIDENCE`) and the gap to `--s2` buys 8px against the 47 needed. The row asks for ~230px in a
-181px track, so something in the string has to go.
+**One read per run, cached by run name.** A real table is ~80KB for 50 SKUs and a box normally names one run, so walking a box costs one read — the argument `queued` beside it already makes. Keyed by RUN and not by box, because D33 scopes a run to a SELECTION inside a box, so two cards on one shelf can carry two tables read at two different moments.
 
-**`ago` GOES AND `read` STAYS, WHICH IS THE TRADE RATHER THAN AN ABBREVIATION.** `read` is what
-the paragraph above spends itself establishing — the age is the JOIN's, not the price's — and
-without it `$0.34 · 12d` could as easily be read as twelve days on the market. `ago` is the
-redundant one, since `read` is already past tense, and it is the wider of the two: 45.5px
-against 36.4px. Measured headroom for the figure, which is the number that decides between the
-candidates: `· read 12d` leaves **8 characters** (`$1234.56` fits), `· 12d ago` leaves 9 but
-spends the verb, and the full `· read 12 days ago` leaves **none at all**.
+**The age is never optional and `read` is never `as of`.** `join` is free and routinely pointed at a refreshed export, so a bare `$5.47` claims a currency the file cannot support. `GET .../pricing` answers `written_at`, the mtime of `pricing.json`, because the export is a CSV downloaded at an earlier moment nothing here can see. The freshest honest sentence is when the pipeline last looked: `$0.34 · read 3d`.
 
-**AND THE WORDS WERE UNBOUNDED WHERE THE COMPACT FORM IS NOT.** `N days ago` grows with N, so a
-year-old join renders `read 400 days ago` — the row got wider the longer it went unattended,
-which is the opposite of what a staleness reading should do. `Nd` is four characters until 2036.
+**It read `$0.34 · read 3 days ago` until 2026-08-30 and wrapped onto two lines on every priced card.** Measured at 1440: `.browse-facts` is 578px at `column-width: 260px`, taking two columns of 277px and leaving a **181px value track** at 9.1px per character — a budget of **19 characters**. `$0.34 · read 9 hours ago` is 218.4px. Six of the row's twelve outcomes were over the line, so this was the ordinary state of the row.
 
-**THE COMPACT FORM IS A SECOND RENDERING OF `sinceText` AND NOT A SECOND VOCABULARY.** That
-function's own comment forbids "two spellings of 'two days' sixteen pixels apart", and this
-panel draws both ages — the queue's wait and the join's age — within one screen of each other.
-So the thresholds, the rounding and the `today` floor stay in one function and only the spelling
-is a parameter; a private helper beside `marketText` would have been the same rule written
-twice. **The queue age keeps its words**: it is drawn in `.browse-queued` below the list, which
-is full-width and has never been short of room.
+**It was never a copy problem.** The figure is variable-width, so no wording holds: `$30.81 · read 9h ago`, with the age already at its shortest, measures **182px — one pixel over**. Widening cannot rescue it either, since two columns of 277px is what 578 gives; shrinking the label track to its ink (80px, `CONFIDENCE`) and the gap to `--s2` buys 8px against the 47 needed. The row asks for ~230px in a 181px track.
 
-**REJECTED: AN ABSOLUTE DATE.** `$0.34 · Aug 29` leaves 10 characters and touches `sinceText`
-not at all, reusing `capturedText`'s house form two rows up — structurally the cheapest option
-on the table. It loses on what the row is FOR: an absolute date answers *when* and the question
-is *how stale*, and it reads as the `as of` this entry refuses by name.
+**`ago` goes and `read` stays, which is a trade rather than an abbreviation.** `read` is what establishes that the age is the JOIN's; without it `$0.34 · 12d` reads as twelve days on the market. `ago` is redundant beside a past tense and is the wider of the two, 45.5px against 36.4px. Measured headroom for the figure: `· read 12d` leaves **8 characters** (`$1234.56` fits), `· 12d ago` leaves 9 but spends the verb, and `· read 12 days ago` leaves none.
 
-**REJECTED: SPLITTING THE AGE ONTO A `READ` ROW OF ITS OWN.** It is the only option that shrinks
-nothing — every wording fits a 181px track standalone — and it costs 9px of list height,
-measured. The owner chose the one line.
+**And the words were unbounded where the compact form is not.** `N days ago` grows with N, so a year-old join renders `read 400 days ago` — wider the longer it went unattended, which is the opposite of what a staleness reading should do. `Nd` is four characters until 2036.
 
-**THE GUARD MEASURES THE ROW AND DOES NOT PIN THE STRING, and it has to pin the VIEWPORT.**
-`app/tests/inventory.spec.ts` already asserted what this row says, in five places, and every one
-of them was green through the whole defect — because a sentence written past the track does not
-fail an assertion about its text, it silently takes a second line. So the new case counts the
-lines the value draws, which goes red on any future wording that overflows and stays green on
-any that does not. **The suite's default 1280 cannot see it**: at that width the list is 506px
-and takes ONE column with a 410px track, where every string this row has ever drawn fits. The
-whole defect lives at a width nothing in that file had rendered, which is how it shipped, so
-1440x900 is the case rather than an incidental setting. Mutation-tested — the old wording takes
-it red at 2 lines and the compact form green at 1.
+**It is a second rendering of `sinceText`, not a second vocabulary.** That function forbids two spellings of *two days* sixteen pixels apart, and this panel draws both ages within one screen. The thresholds, rounding and `today` floor stay in one function and only the spelling is a parameter; a private helper beside `marketText` would have been the same rule written twice. **The queue age keeps its words**, drawn in `.browse-queued`, which is full-width and has never been short of room.
 
-**THE MTIME RATHER THAN A `joined_at` INSIDE THE TABLE.** A field written into the file would be
-better data and would be absent from every run already on disk — which is precisely the runs a
-screen is opened over. The mtime needs no re-join and cannot drift from the bytes it describes.
-What it does not survive is the run directory being copied; nothing in this repo copies one.
-T7 backdates the file and requires the route to report the backdate, because asserting against
-the live mtime is VACUOUS — the test joins immediately before the request, so a route stamping
-`time.time()` answers the same integer. That version was written, mutated to a clock, and
-**observed passing**.
+- **Rejected: an absolute date.** `$0.34 · Aug 29` leaves 10 characters and reuses `capturedText`'s form, the structurally cheapest option. It answers *when* where the question is *how stale*, and reads as the `as of` this entry refuses.
+- **Rejected: splitting the age onto a `READ` row.** The only option that shrinks nothing, at 9px of list height. The owner chose the one line.
 
-**FIVE OUTCOMES, FIVE SENTENCES, AND THE ROW IS NEVER CONDITIONAL** — the rule `Rarity` and `Note`
-above it already follow, for the reason stated there: a row that disappears leaves *this card has
-no price* and *this screen does not show prices* indistinguishable. No run on the card is `not
-joined yet`; a run with no table is `join this run`, which is the one refusal worth telling
-apart because its remedy is a join rather than a look at the server; a position the table does
-not hold is `no row in this run`, which is `no_catalog_row` and the review queue's business
-rather than a missing price; and a **blank Market cell is `no_market_data`**,
-verbatim and underscore and all, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
-D9 is emphatic that a missing price is an UNKNOWN price rather than a low one. Rendering that as
-`$0.00` is what hands a chase card away at the floor.
+**The guard measures the row and pins the viewport.** `app/tests/inventory.spec.ts` already asserted what this row says in five places, and every one was green through the defect — a sentence written past the track does not fail an assertion about its text, it takes a second line. The new case counts the lines the value draws. **The suite's default 1280 cannot see it**: there the list is 506px, one column, a 410px track where every string fits. The whole defect lives at a width nothing in that file had rendered, so 1440x900 is the case. Mutation-tested: the old wording takes it red at 2 lines, the compact form green at 1.
 
-**THREE OF THOSE SENTENCES WERE CUT TO THE SAME 181px, and the refusal lost half of itself.**
-`no row matched by this run` was 236.6px and `no pricing table — join this run` 291.2px — the
-second one wider than any price this row can draw, so it wrapped in the one state an operator
-cannot reproduce by looking at a card. Only one half of it fits, and **the remedy is the half
-that survives**: `MARKET: join this run` already says a table is what is missing, and the
-sentence it is being told apart FROM — `could not be read` — names no remedy at all, so the pair
-still reads as two different failures. `no age` replaces `age unknown` on the same grounds and
-joins `none` and `not recorded` further up the list, which is the register this panel already
-uses for a fact it does not have.
+**The mtime rather than a `joined_at` inside the table.** A field written into the file would be better data and absent from every run already on disk — precisely the runs a screen is opened over. The mtime needs no re-join and cannot drift from the bytes it describes; what it does not survive is the directory being copied, and nothing here copies one. T7 backdates the file and requires the route to report the backdate, because asserting against the live mtime is VACUOUS — the test joins immediately before the request, so a route stamping `time.time()` answers the same integer. That version was written, mutated to a clock, and **observed passing**.
 
-**The underscore is a ruling rather than an oversight.** Spelled `no market data` it is neither
-the machine string nor a human label — the second vocabulary D22 refuses and D16 exists to catch
-— and it greps to nothing on the day somebody holds this screen against `decisions.json`'s own
-`no_market_data` block, which is where such a card is actually priced by hand. So the row splits:
-**plain English where THIS SCREEN has nothing** (the shape every other fallback in this list
-takes), and **the pipeline's own word where the PIPELINE said something**.
+**Five outcomes, five sentences, and the row is never conditional** — the rule `Rarity` and `Note` already follow, because a row that disappears leaves *this card has no price* and *this screen does not show prices* indistinguishable. No run on the card is `not joined yet`; a run with no table is `join this run`, the one refusal worth telling apart since its remedy is a join; a position the table does not hold is `no row in this run`, which is `no_catalog_row` and the review queue's business; and a **blank Market cell is `no_market_data`**, verbatim, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and D9 is emphatic that a missing price is unknown rather than low. Rendering it as `$0.00` is what hands a chase card away at the floor.
 
-**A RELOAD RE-READS IT, AND LEAVING THAT OUT WAS A LIVE BUG found by pressing the button against
-the real store.** The cache is cleared on the reload counter and the READ was keyed on the run
-NAME alone, which does not change when a box is re-read — so the cleared entry was never
-re-fetched and the row sat on `reading…` permanently. A clear and its re-read are one gesture and
-must be triggered by the same thing. It matters more than an ordinary staleness bug would: Reload
-is pressed *after* something downstream changed, and a join is the thing that rewrites a price.
+**Three of those were cut to the same 181px, and the refusal lost half of itself.** `no row matched by this run` was 236.6px and `no pricing table — join this run` 291.2px — the second wider than any price this row can draw, so it wrapped in the one state an operator cannot reproduce. Only one half fits, and **the remedy is the half that survives**: `MARKET: join this run` already says a table is missing, and the sentence it is told apart from — `could not be read` — names no remedy, so the pair still reads as two failures. `no age` replaces `age unknown` on the same grounds, joining `none` and `not recorded`.
 
-**BENEATH `Run` AND ABOVE `Note`.** The same placement argument `Confidence` gets for sitting
-under the read it hedges: the price is not a property of the card, it is what one join found in
-one export, and the age beside it is that join's age — so provenance is a straight read-down
-rather than two glances. Both rows would be inexplicable apart, since `Run` names a directory and
-cannot say what it found, and a price with no run named is a number from nowhere.
+**The underscore is a ruling.** Spelled `no market data` it is neither the machine string nor a human label — the second vocabulary D22 refuses and D16 exists to catch — and it greps to nothing against `decisions.json`'s own `no_market_data` block, which is where such a card is priced by hand. So the row splits: plain English where THIS SCREEN has nothing, and the pipeline's own word where the PIPELINE said something.
 
-**WHAT THIS DOES NOT DO: it does not put pricing on this screen.** No preset, no override, no
-snap, nothing writable — `#/pricing` is where a price is DECIDED (D49) and this is where one is
-READ, on the screen whose question is where a card is. The other four price columns, the
-presets and `decisions.json` stay there. If this row starts growing controls, it has acquired
-that screen's job, which is the failure the paragraph above already names for the photograph.
+**A reload re-reads it, and leaving that out was a live bug.** The cache is cleared on the reload counter and the READ was keyed on the run NAME alone, which does not change when a box is re-read — so the cleared entry was never re-fetched and the row sat on `reading…` permanently. A clear and its re-read are one gesture. It matters more than ordinary staleness: Reload is pressed after something downstream changed, and a join is what rewrites a price.
 
-**What would reopen this: a box whose cards span many runs.** The one-read-per-run cache is sized
-for the ordinary case of a box identified in one go; a box assembled from a dozen ticked
-selections would fetch a dozen tables while the arrow keys walk it. The measurement is how many
-distinct `run` values a single box's records carry — two today, across the whole store.
+**Beneath `Run` and above `Note`**, the placement `Confidence` gets for the same reason: the price is not a property of the card but what one join found in one export, so provenance reads down. Both rows would be inexplicable apart.
+
+**What this does not do: it does not put pricing on this screen.** No preset, no override, no snap, nothing writable — `#/pricing` is where a price is DECIDED (D49) and this is where one is READ. If this row grows controls it has acquired that screen's job.
+
+**What would reopen this: a box whose cards span many runs.** The one-read-per-run cache is sized for a box identified in one go; a box assembled from a dozen ticked selections would fetch a dozen tables while the arrow keys walk it. The measurement is how many distinct `run` values one box's records carry — two today, across the whole store.
 
 ---
 
@@ -4243,7 +4013,7 @@ sites drawing `Position.label` are decided one at a time, and this changes none 
 `.card-locations-label` renders the same string through the same class at the same size"*. Both
 halves went stale in the hours this branch was out: D41's amendment took the treatment to **six**
 owner sites behind `app/src/PositionLabel.tsx`, and the copies list is one of them — so
-`.card-locations-label` carries the SITE rule (`--pos-slot`, the face, the colour) and renders
+`.card-locations-label` carries the SITE rule (`--pos-slot`, the face, the color) and renders
 none of the string itself. Left standing it would have been D41's own recorded failure repeating
 in the entry that cites it: a later change deleting the premise and leaving the conclusion.
 
@@ -4310,7 +4080,7 @@ ended *"and the page scroll this brings with it is wanted here: the copies list 
 band, and the photograph is what was asked for."* The intention was right and what happened was
 its opposite — the scroll came from the landed ROW, so it moved the page DOWN, away from the card
 band. Kept in the file with that account attached, because a comment that reasons its way to the
-wrong behaviour is more useful than a missing one.
+wrong behavior is more useful than a missing one.
 
 **Asserted as a MEASUREMENT rather than as a class name**: `app/tests/inventory.spec.ts` reads
 `window.scrollY` and the nav's own `top` before and after the press and requires both unchanged,
@@ -4478,7 +4248,7 @@ stays comparable. The reason for moving it was D44's: this repository sat in iCl
 **AND MOVING IT GIVES UP THE THING THAT JUST SAVED THE MIRROR, WHICH IS THE HONEST WAY TO RECORD
 THIS TRADE.** iCloud's copy is what restored the directory above. Outside it there is no second
 copy and no version history — the recovery path becomes the re-download, which is exactly what
-D15 says this data is for: derived, reproducible, and never the artefact worth keeping. The
+D15 says this data is for: derived, reproducible, and never the artifact worth keeping. The
 trade is a safety net that costs conflict copies, against a clean tree whose worst case is one
 download. The owner took the second.
 
@@ -4592,7 +4362,7 @@ reference was fine and the ignore was not.
 **So the rule is about the PATH and not about today's provisioning.** All four patterns are
 type-agnostic now. The precision a trailing slash buys is worth nothing on a name nothing else
 in the tree bears, and it is worth less than nothing when it silently depends on a script's
-current behaviour staying what it is.
+current behavior staying what it is.
 
 **AND `make ignore-check` IS THE GUARD THIS ENTRY ASKED FOR**, doing exactly what the paragraph
 above specified: `git check-ignore` over the provisioned set, asserting each is ignored **as a
@@ -4678,7 +4448,7 @@ than one invoice away. Two runs over DIFFERENT boxes stay legal and unblocked �
 takes them in parallel and the cache keys them apart, which is the whole reason a cart is one
 send rather than a queue.
 
-**THE LEGS PREFLIGHT AT ONCE, AND THAT IS A LATENCY FIX RATHER THAN AN OPTIMISATION.** A
+**THE LEGS PREFLIGHT AT ONCE, AND THAT IS A LATENCY FIX RATHER THAN AN OPTIMIZATION.** A
 preflight decodes and crops every photograph in its box — measured at about a minute for 544
 cards — so five boxes in series is a request held open for five minutes with nothing on screen.
 They are separate read-only processes over a lock-free snapshot and `--dry-run` writes nothing at
@@ -4992,7 +4762,7 @@ and the owner granted it against the lock. Recorded here so a later session read
 grant with a reason rather than as drift, and so the interview's authority over the other
 values is not weakened by one addition beside them.
 
-**THE DEFECT WAS NEVER MOSTLY ABOUT COLOUR, AND THE MEASURED PREMISE HAD TO BE CORRECTED IN
+**THE DEFECT WAS NEVER MOSTLY ABOUT COLOR, AND THE MEASURED PREMISE HAD TO BE CORRECTED IN
 PUBLIC FIRST.** The opening count was "39 interactive elements have no `cursor` rule any
 selector can reach", which is true of the CSS and wrong about the effect: most of those are
 `<a href>` and `<input type="text">`, which the user agent already answers correctly. **The
@@ -5014,7 +4784,7 @@ one file.**
 **THE FLOOR'S GUARANTEE IS CASCADE ORDER, NOT SPECIFICITY, AND THE FIRST DRAFT GOT THAT WRONG
 IN ITS OWN COMMENT.** It claimed every rule was one specificity (0,0,1) so any class outranks
 it. That is false for eight of the eleven selectors — `input[type='checkbox']` is (0,1,1),
-`[role='button']` is (0,1,0), and the whole disabled arm is (0,1,1). The behaviour was correct
+`[role='button']` is (0,1,0), and the whole disabled arm is (0,1,1). The behavior was correct
 anyway, for a reason the comment had not stated: `main.tsx` imports `base.css` before every
 component sheet, so a tie goes to the component. **Corrected rather than left standing**, which
 is D41's own recorded failure — a comment whose premise had been deleted while its conclusion
@@ -5045,7 +4815,7 @@ so a control that is both says both.
 **NAMED FOR ONE STATE OF ONE JOB, per the rule `--field` sets for itself.** `--field-hover`
 cannot grow into a button border the way `--edge` or `--control` would have within a session.
 It reaches the seven typed-into controls and nothing else. **It does not license a hover
-colour for buttons** — those already lift to `--hover` — and it adds no second hover ground,
+color for buttons** — those already lift to `--hover` — and it adds no second hover ground,
 so `docs/DESIGN.md`'s rule that every text token clears 7:1 on every ground is untouched: this
 token carries no text and is never painted as a background.
 
@@ -5292,7 +5062,7 @@ stamp. Left alone rather than widened for symmetry.
 
 **Covered by `harness/tests/t7_store_and_seams.py:check_photo_cache` over real sockets** — the
 headers, the 304, the weak comparison, `If-None-Match: *`, and the case that is the defect: the
-same URL with the same tag answers 200 after a shift, under a new tag, with the neighbour's
+same URL with the same tag answers 200 after a shift, under a new tag, with the neighbor's
 bytes. And by `app/tests/inventory.spec.ts`, which asserts the URL carries the occupant before
 and after a delete. **Both were mutation-tested**: a slot-derived ETag takes the T7 case red, a
 dropped `Cache-Control` takes another, and reverting the stamp takes the browser case red.
@@ -5512,7 +5282,7 @@ so. Four guards, none of which weakens the collision:
   product, and the half that failed is the whole reason this supervisor exists.
 - **A held port is not a retryable crash.** `_refuse_capture` says who holds it and stops;
   burning five retries and a backoff on a condition that cannot change without a human was the
-  old behaviour and it is what produced the silent end state. `_note_exit`'s retry is for a
+  old behavior and it is what produced the silent end state. `_note_exit`'s retry is for a
   child that started and died, which is the opposite case.
 - **`make dev` and `make server` refuse while this checkout's supervisor is up**, which is
   where the squatter comes from in the first place. `PKMNSCAN_FOREGROUND=ok` bypasses, the
@@ -5625,7 +5395,7 @@ stated over the class:**
 `add_to_quantity` is above zero. That set is *by construction* the row set `import_rows` will
 produce, so `only` stopped being an estimate. `pipeline/join.py:write_import` is split out of
 `emit_import` so rows can be looked at before a file handle opens; `emit_import`'s signature
-and behaviour are unchanged, because T3 calls it in six places.
+and behavior are unchanged, because T3 calls it in six places.
 
 **REWRITING THE FILE IDENTICALLY WAS CONSIDERED AND IS REFUSED, and this is the load-bearing
 half.** To do it, `emit` would have to exclude this run's own contribution from
@@ -5675,8 +5445,8 @@ by an older checkout, must not send the operator to a step that will turn them a
 worth more than the fix.** It read `len(read_export(IMPORT_LISTED).rows) == 0` under the
 message *"the file holds no zero row"*. **"The file holds 0 rows" is satisfied identically by
 the emitter correctly omitting a zero-quantity row and by the emitter overwriting two good
-rows with a bare header.** A test whose pass condition is met equally by a behaviour and by
-that behaviour's catastrophic opposite is not testing the behaviour, and the destruction lived
+rows with a bare header.** A test whose pass condition is met equally by a behavior and by
+that behavior's catastrophic opposite is not testing the behavior, and the destruction lived
 behind it for as long as it existed. T3 carried the same blindness in its full-cycle case.
 
 Both now assert **byte equality of the file across the two emits** — byte and not row,
@@ -5854,7 +5624,7 @@ that fallback is not hypothetical: `pkmnscan identify captures/cards/box3` write
 
 **BOTH HALVES, NEVER ONE.** `CLAUDE.md` is explicit that the name travels *beside* the number
 rather than replacing it, and both are load-bearing here: the name is what the operator
-recognises, and the number is the shelf they walk to, the capture directory the photographs are
+recognizes, and the number is the shelf they walk to, the capture directory the photographs are
 in, and what every refusal in `server/pipeline_routes.py` says. **An unnamed box draws the
 number ALONE** — no separator and no placeholder — because D20 leaves a name optional, so
 unnamed is an ordinary box and `Box 9 · —` would draw a fault where there is none. Same for a
@@ -5958,138 +5728,57 @@ whose numbers must be unmissable.
 ---
 ## D57 — The sale is one press, and the button becomes the way back
 
-**BUILT 2026-08-30, on the owner's instruction**: *"change how mark sold works on inventory, it
-should be a single tap immediately marks it as sold, with the button changing to undo
-afterwards."* On `#/inventory` only.
+**Mark-sold writes on one press, and the row's control becomes `Undo` for twenty seconds.** Built 2026-08-30 on the owner's instruction, on `#/inventory` only.
 
-**IT IS `docs/DESIGN.md`'s HEADLINE RULE HONOURED ON THIS CONTROL FOR THE FIRST TIME, NOT AN
-EXCEPTION CARVED OUT OF IT.** That file has said since it was written: *"No confirm dialog on a
-reversible action … Undo covers the mistake; a dialog only makes the ninety-nine correct answers
-cost two taps each."* Its Fulfillment paragraph has said **"One-tap mark-sold"** in as many
-words for just as long. A sale is the most reversible write in this product — one route, two
-directions, no expiry, no listing hold — and it was the one carrying a modal.
+**This honors `docs/DESIGN.md`'s headline rule rather than carving an exception out of it.** That file bans a confirm dialog on a reversible action and has specified one-tap mark-sold since it was written. A sale is the most reversible write in the product — one route, two directions, no expiry, no listing hold — and it was the only one carrying a modal. D28 fixed the same asymmetry from the other side by giving the review answer an undo; every guard D28 added stays.
 
-**D28 FIXED THAT ASYMMETRY FROM ONE END AND THIS FIXES IT FROM THE OTHER.** Its complaint,
-verbatim: *"mark-sold, which is reversible, had a photo to confirm against, a two-step control
-and a twenty-second window. The reversible action carried three guards and the irreversible one
-carried none."* It gave the review answer an undo. What it did not do — because it was not
-asked to — was take the redundant press off the reversible write, and this is that half. D28 is
-untouched: every guard it added stays.
+### The modal's photograph was redundant
 
-**THE PHOTOGRAPH WAS THE REAL ARGUMENT AND THE OWNER ANSWERED IT WITH THE SCREEN.**
-`Inventory.tsx`'s panel did not defend itself as an intent check — it said in its own comment
-that *"what is being confirmed is not 'did you mean to press that' — docs/DESIGN.md bans that
-dialog outright — but 'is the card in your hand the card at this position', which is a question
-only a photograph can answer."* That was right when it was written and D38 overtook it: the card
-band draws the selected copy's photograph at **449x627**, on the same screen, feet from the row.
-The owner: *"for my side i literally have the inventory image in front of me already, it was
-redundant."*
+`Inventory.tsx`'s panel confirmed identity rather than intent, and said so in its own comment: the question was *is the card in your hand the card at this position*, which only a photograph answers. D38 overtook it by drawing the selected copy's photograph at 449x627 on the same screen.
 
-**WHAT IS EXACT AND WHAT IS APPROXIMATE, stated because the two are not the same claim.** The
-band shows the photograph of the copy the walk is pointing at (`aria-current`), so for that row
-the redundancy is literal — same bytes, same position, one panel over. For a SECOND copy of the
-same SKU in another box the band shows the same card face at a different slot rather than that
-slot's own photograph. **D45 already makes that copy's own photograph one press away**: the
-position label is a control, and pressing it walks the box browse to that copy. So the check is
-not deleted, it is demoted from mandatory to available — and the operator who wants it presses
-the label that names where they are going.
+- **Exact** for the row the walk points at (`aria-current`) — same bytes, same position, one panel over.
+- **Approximate** for a second copy of the same SKU in another box: same card face, different slot. D45 makes that copy's own photograph one press away, because the position label is a control that walks the browse to it.
 
-**THE UNDO IS DOUBLED RATHER THAN MOVED, AND THAT IS THE OWNER'S CHOICE OVER TWO CHEAPER ONES.**
-The row's slot becomes `Undo` for the window and the screen-level receipt keeps its own.
+The check is demoted from mandatory to available, not deleted.
 
-- **The row's is the one under the hand.** It is where the press was, where the eye is, and it
-  is what the instruction asked for.
-- **The receipt is the only one that survives.** The copy rows are unmounted by stepping the
-  walk to another card, by a query matching nothing, and by a failed re-read — `useSearch`
-  clears its results on a failure, deliberately — and the twenty-second clock stops for none of
-  the three. `Inventory.tsx` and `BoxBrowse.css` have both argued for years that *"a
-  twenty-second promise has to outlive that"*, and `app/tests/inventory.spec.ts` asserts it by
-  selling a copy and then stepping the walk. Deleting the receipt would make the promise good
-  only for as long as the operator stands still.
-- **It is also the only one that can SPEAK.** `already_sold` and `sold_origin_unknown` both come
-  back `canUndo: false`, so the row correctly draws the plain word `sold`; the sentence saying
-  why there is no way back needs a line of prose and a 32px slot in a copy row has none.
+### Undo appears twice, and the second one is not redundant
 
-**TWO CONTROLS, TWO ACCESSIBLE NAMES, DELIBERATELY DIFFERENT.** The receipt's is `Undo <place>`
-and the row's is `Undo the sale at <place>`. Identical names would leave a screen reader unable
-to tell one sale's two ways back from two different sales — which is the failure the receipt's
-own label was written to avoid one register down. The visible word stays `Undo` on both, which
-is what the copy rules ask of a control.
+| site | why |
+|---|---|
+| the row's slot | where the press was and where the eye is |
+| the screen receipt | the only one that survives unmount, and the only one that can explain a refusal |
 
-**`Undo` ALONE IN THE SLOT, WITH NO `Retire` BESIDE IT**, because that is what the slot already
-did for a sold copy: the server refuses the retirement of a sold card, so the second control
-could only fail.
+Copy rows unmount on three paths — stepping the walk, a query matching nothing, and a failed re-read, since `useSearch` clears its results on failure. The twenty-second clock stops for none of them, which is why `Inventory.tsx` and `BoxBrowse.css` have both argued that the promise has to outlive the list. `app/tests/inventory.spec.ts` asserts it by selling a copy and then stepping the walk.
 
-**IT IS DRAWN INSIDE THE `sold` BRANCH AND THAT IS FORCED RATHER THAN STYLISTIC.** `doSell` sets
-the optimistic `soldKeys` overlay in the same continuation as the receipt, so the very next
-render is already past the sold guard — a branch above it would be unreachable, and unreachable
-code that looks like the feature is worse than none. Found by pressure-testing the design before
-it was built rather than by the screen doing nothing.
+`already_sold` and `sold_origin_unknown` return `canUndo: false`, so the row draws the plain word `sold`. The sentence saying why there is no way back needs prose, and a 32px slot has none.
 
-**THE RETIREMENT IS UNCHANGED AND THE ASYMMETRY IS THE RULING.** D26's write keeps its panel,
-its photograph and its undo-on-the-receipt-only. The reason is not symmetry and not caution: a
-retirement without a reason is refused (`retire_reason_invalid`), so the four reason buttons are
-not an acknowledgement to dismiss, they are **the only input the write has**. Take them away and
-there is nothing to send. This entry removed a press that asked a question already answered; that
-panel asks one with four answers.
+**Accessible names differ deliberately:** the receipt's is `Undo <place>` and the row's is `Undo the sale at <place>`. Identical names would leave a screen reader unable to tell one sale's two ways back from two different sales. The visible word is `Undo` on both.
 
-**THE OVERSHOOT GUARD IS `busyKey` AND NOTHING ELSE — the owner's choice, and the honest caveat
-is recorded rather than argued away.** `Fulfillment.css` records the opposite ruling for the same
-failure one screen over, and it was earned: *"Pull" and "Mark sold" were the same control in the
-same place, one state apart, so a double-tap on Pull sold the card — one tap of overshoot between
-looking at a photo and recording a sale.* `app/tests/fulfillment.spec.ts` measures the two
-rectangles. Displacing the control the same way here was offered and declined.
+**No `Retire` sits beside it**, because the server refuses to retire a sold card and the control could only fail.
 
-What actually covers it, in descending order of how much it is worth: every control in the slot
-is disabled while a write is in flight, and `doSell` returns early besides; the slot SHRINKS to
-one right-packed control, vacating the coordinate `Mark sold` was under; and a receipt appearing
-above pushes the whole copies list down. **What does not cover it: the busy gate against a local
-server, which reopens in milliseconds and does not span a human double-tap.**
+**It renders inside the `sold` branch, which is forced rather than stylistic.** `doSell` sets the optimistic `soldKeys` overlay in the same continuation as the receipt, so the next render is already past the sold guard and a branch above it would be unreachable.
 
-**TWO RESIDUAL RISKS, NAMED SO THEY ARE NOT DISCOVERED AS SURPRISES.** `Mark sold` is an ordinary
-`<button>` in the tab order, so Tab-then-Enter now writes where it used to open a modal; and a
-HELD Enter can oscillate sell → `Undo` → sell as the slot changes meaning under it. Neither is
-reachable from a key binding — `BoxBrowse`'s window handler is arrow/PageUp/Home navigation that
-writes nothing, and `App.tsx`'s leader chord only sets a hash — so nothing about the keyboard
-walk is armed by this. **The focus drop is the accidental brake**: the slot's two-buttons-to-one
-change replaces the DOM node, so focus falls to `<body>` and a held Enter stops. The arrow keys
-still walk the box from there, because that listener is on `window`.
+### Retirement is unchanged, and the asymmetry is the ruling
 
-**WHAT WOULD REOPEN THIS: a sale recorded against a copy the owner did not mean.** The fix to
-reach for then is `.fulfillment-step`'s displacement — put the `Undo` outside the footprint
-`Mark sold` occupied — and **not** the panel this replaced, which guarded a photograph the screen
-already draws.
+D26's write keeps its panel, its photograph and its receipt-only undo. A retirement without a reason is refused (`retire_reason_invalid`), so its four reason buttons are the write's only input rather than an acknowledgement to dismiss. This entry removed a press that asked an already-answered question; that panel asks one with four answers.
 
-**WHAT IT OVERTURNS, NAMED RATHER THAN QUIETLY STEPPED OVER.**
-`docs/specs/order-flow.md` §13 says *"Do not add a second sale path without both guards. Section
-8.1 answers the objection by bringing the guards, not by dismissing them."* One of the two guards
-is being dismissed, on the owner's ruling, and §8.1's actual argument survives intact: the guards
-belong to the WRITE rather than to the Fulfillment view, and nothing in D5 says the owner may
-have the write without them. What moved is *which* guard this screen needs, on a screen that
-already draws the photograph. `#/fulfillment` is untouched — D31 is explicit that its downstream
-rule *"is about which arguments may decide architecture, not about which tests may go red"*.
+### Overshoot
 
-**IT IS A CLIENT CHANGE AND ONLY A CLIENT CHANGE.** `POST /inventory/<box>/<index>/sold` is not
-touched: it already takes `{}` and `{"undo": true}` on one path, already answers `restores_to` so
-a caller knows before drawing an Undo whether one will work, and its own docstring already said
-*"NO CONFIRM DIALOG IS IMPLIED BY ANY OF THIS. `docs/DESIGN.md` bans one on a reversible action,
-and this route is what makes the action reversible."* The store, the harness and every Python
-test are unaffected.
+**The guard is `busyKey` and nothing else**, which is the owner's choice over displacing the control. `Fulfillment.css` records the opposite ruling for the same failure one screen over, and it was earned: `Pull` and `Mark sold` occupied one position one state apart, so a double-tap sold a card whose photo was never seen. `app/tests/fulfillment.spec.ts` measures those two rectangles.
 
-**THE ACCENT FILL LEFT THE SCREEN WITH THE PANEL, AND THAT IS THE RULE SATISFIED.** The confirm
-was the one place `#/inventory` drew a solid fill; `Inventory.css`'s header has now said both
-things and records why. `docs/DESIGN.md` reserves the fill for a screen with exactly one thing to
-do — it says where one MAY go, never that a screen must have one, and `#/runs` draws none either.
+What covers it here, in descending order of worth: every control in the slot is disabled while a write is in flight and `doSell` returns early besides; the slot shrinks to one right-packed control, vacating the coordinate `Mark sold` occupied; and a receipt appearing above pushes the copies list down. **What does not cover it is the busy gate**, which against a local server reopens in milliseconds and does not span a human double-tap.
 
-**AND THE CHANGE WAS MAKEABLE WITH EVERY CHECK GREEN, WHICH IS THE FINDING WORTH MORE THAN THE
-FEATURE.** `app/tests/inventory.spec.ts` asserted that `Mark sold` and `Retire` were *visible*
-and stopped there. It never pressed either, so the confirm panel, the receipt, the undo window,
-`canUndo` and the `already_sold` path on this screen were **entirely unasserted** — a control
-could change what it does to a real card and no check in the repo would notice. `open()` did not
-even stub the sale route. Six cases now cover it, and three mutations were observed failing
-before they were kept: dropping the `canUndo` filter (an Undo offered for a sale the server said
-cannot be reversed — caught twice), never drawing the row's Undo, and a press that writes
-nothing.
+**Two residual risks, named so they are not found as surprises.** `Mark sold` is an ordinary `<button>` in the tab order, so Tab-then-Enter now writes where it used to open a modal, and a held Enter can oscillate sell to `Undo` to sell. Neither is reachable from a key binding: `BoxBrowse`'s window handler navigates and writes nothing, and `App.tsx`'s leader chord only sets a hash. The slot's two-controls-to-one change replaces the DOM node, so focus falls to `<body>` and a held Enter stops; the arrow keys still walk, because that listener is on `window`.
+
+### Consequences
+
+- **It overturns `docs/specs/order-flow.md` §13**, which forbids a second sale path without both guards. One guard is dismissed on the owner's ruling, and §8.1's argument survives intact: the guards belong to the write rather than to the Fulfillment view, and nothing in D5 says the owner may have the write without them. `#/fulfillment` is untouched, per D31.
+- **It is a client change only.** `POST /inventory/<box>/<index>/sold` already took `{}` and `{"undo": true}` on one path and already answered `restores_to`. Store, harness and every Python test are unaffected.
+- **The accent fill left the screen with the panel**, and `Inventory.css` records why. `docs/DESIGN.md` says where a fill may go, never that a screen must have one; `#/runs` draws none either.
+
+**The change was makeable with every check green, which is worth more than the feature.** `app/tests/inventory.spec.ts` asserted only that `Mark sold` and `Retire` were visible and never pressed either, so the confirm panel, the receipt, the undo window, `canUndo` and the `already_sold` path were entirely unasserted, and `open()` did not even stub the sale route. Six cases now cover it. Three mutations were observed failing before they were kept: dropping the `canUndo` filter, never drawing the row's `Undo`, and a press that writes nothing.
+
+**What would reopen this: a sale recorded against a copy the owner did not mean.** The fix to reach for is `.fulfillment-step`'s displacement, not the panel this replaced.
 ---
 
 ## D58 — A card's number counts the cards in the box, not the slots
@@ -6341,7 +6030,7 @@ being measured against a local count.
   against a cap of four**, in a file `emit` then tells the operator to import. This is an
   OVER-SEND, which is Gate B's double-staging defect, and it is the most serious of the four.
   `harness/tests/t3_join_coverage.py` holds it as a case and observed the old code offering
-  two. **A randomised sweep was run while this was being designed and its figures are
+  two. **A randomized sweep was run while this was being designed and its figures are
   deliberately NOT published**: the instrument was a scratch script that is not in the tree,
   and a number nobody can re-derive is not evidence.
 - **A departed copy occupied room under the cap forever.** `cli/resolve.py` commits every
@@ -6502,6 +6191,64 @@ inferred. It is worth less now than when this entry was first written — the sa
 wherever the export corroborates a live copy — so it is recorded as available rather than owed.
 
 ---
+## D60 — The @-loaded docs are dense American technical English, and an entry cites rather than restates
+
+**Every session loads these four documents in full before any work starts, so their length is a standing cost rather than a style question.** Built 2026-08-30, on the owner's instruction to rewrite the prose denser.
+
+`CLAUDE.md` `@`-references `docs/DECISIONS.md`, `docs/GATES.md` and `docs/DESIGN.md`, so all four enter context in every checkout, on every turn, before a word of work. Measured the day this landed: **635,411 bytes, roughly 165,000 tokens.**
+
+**The `@`-references stay.** That was the owner's call, taken against the alternative of an index and on-demand reads. It decides the shape of everything below: a cited entry is already in context, so restating its argument is duplication rather than a service to a reader who cannot reach it.
+
+### The rule
+
+- **An entry opens with a bold sentence stating its ruling.** One line, over twelve characters, ending in a period.
+- **American standard technical English.** Declarative. No rhetorical framing, no declamatory capitals, no chains of em-dash asides.
+- **Structure carries what signposting used to.** Headings, tables and lists.
+- **The owner is quoted as evidence, never as decoration.**
+- **Cite, do not restate.**
+
+### Why the opening sentence is a rule and not a preference
+
+`scripts/decision-context.py` builds each entry's summary from its bold runs, ranking sentences ahead of labels and taking the first three. Measured before this landed: **36 of 59 entries led with a ruling, 16 led with a cross-reference or an amendment note, and 7 gave the hook nothing but their title** — D1, D4, D5, D6, D8, D11 and D14.
+
+**That hook reads per line, so a bold run split across a wrap is invisible to it.** These documents wrap at 96 columns, and **270 bold runs — 20% of all 1,318 — were lost that way**, silently, with `make docs-audit` green throughout. Short single-line bold sentences are what fix it.
+
+### Cite, do not restate
+
+**A short citation does real work in one clause and is kept.** *D10 makes their gaps permanent* and *D18's rule: it writes* are the form.
+
+**What goes is the paragraph that re-argues an entry it cites.** Measured at **94 paragraphs over 600 bytes, 77,811 bytes**, across 433 cross-references. Keep how a cited rule bears on this entry; cut the re-derivation of why that rule exists.
+
+**Two limits on cutting one.** A removed citation must leave at least one `D<n>` token wherever `docs/map.py` names the entry in `governed_by`, and must not remove the last mention the audit resolves.
+
+### The structural invariants
+
+**Breaking the hook is silent and breaking the audit is loud, so the silent half is the one that needs a guard.** `scripts/prose-guard.py` is that guard, wired into `scripts/docs-audit.py` as the `decision structure` row.
+
+Frozen because a parser reads them: the `## D<n> — <title>` heading with its dash separator; `docs/GATES.md`'s seven pass-criteria sentences, word for word; its `### Tn` headings, its `Gate X … PASSED` heading lines and every line there beginning with a digit and a period; `docs/DESIGN.md`'s `## Tokens` heading with the first fenced block under it, and its two parenthesised reason-code lists.
+
+**Three phrasings fail a commit and are easy to write by accident.** A sentence naming an audit row by its position rather than its label. An unbalanced fence, which reclassifies every later prose line as code. And an ordinary English phrase beginning *make* placed inside backticks, which reads as a Makefile target.
+
+### Evidence is never reworded
+
+**`docs/GATES.md`'s gate sections are exempt from this entry.** That file rules that its numbers are evidence about a run on a date and are never rewritten, and this rewrite does not touch Gate A, Gate B, Box 2 or Gate C.
+
+### The budget
+
+**A rewrite alone does not hold, which is why the size of a new entry is reported.** Growth over the two days before this landed was **+45,580 and +44,460 tokens**, and **80% of it was new entries** — 21 of them, averaging 11.6KB. A 49% cut is spent in under two days at that rate.
+
+`entry budget` is **advisory**, printing and allowing. A long entry is a judgement call rather than something provably wrong, which is D16's test for what may block; and a blocking row here would teach `--no-verify`, which takes the three opsec rules with it.
+
+### What this is not
+
+**It is editing for concision, not generation.** D18's seam list stays empty and this does not open it. Nothing here is derived from a constant, and no argument is computed.
+
+**It is not licence to cut reasoning.** D16 forbids editing a document to satisfy a gate, and the budget row is advisory so that it can never become one.
+
+**What would reopen this: the `@`-references being dropped.** Cite-rather-than-restate rests on the cited entry being in context. Remove the `@` and an entry read alone gets less than it used to, and this entry has to be argued again.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
