@@ -94,7 +94,7 @@ const CARD = {
     box_closed: false,
     fraction: 1,
     neighbors: null,
-    gaps_in_section: 0,
+    section_gaps: 0,
   },
   photo: 'photos/2/1.jpg',
   set_hint: 'ME01',

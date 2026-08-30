@@ -676,11 +676,39 @@ D4's digital-only, one-tap choice beside the photo is unchanged for every card t
 
 **Closed by D58 on 2026-08-30, and not by the marker this entry was waiting for.** The problem below is real and is stated better here than anywhere else in this file — *`Card 17` is the seventeenth slot, not the seventeenth card you can count* — and the answer turned out to be upstream of both halves: a card's number now counts the cards in the box, so selling one makes the card behind it take its number and every label stays countable by hand. There is no gap to put a marker in.
 
-**The digital half stays built and is not deleted.** `neighbors` is still drawn and still worth having for confirming a slot; `section_gaps` is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero, so the sentence quietly stops carrying a clause D58 made empty rather than needing a change.
+**The digital half stays built and is not deleted.** `neighbors` is still drawn and still worth having for confirming a slot.
+
+**And the sentence about `section_gaps` was false the day it was written — the clause is now deleted outright (owner, 2026-08-30).** This paragraph read that the count "is structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero, so the sentence quietly stops carrying a clause D58 made empty rather than needing a change". It is not zero. `server/capture_server.py:_company` counts the TERMINAL RECORDS between the section's bounds, so a box that has had a sale reports one per departed card — and the server's own comment beside it, *"it answers zero for a box where nothing has left"*, is true and describes the uninteresting case. **Measured on the owner's store: box 1 holds 133 records with 2 sold, so every card in it drew `· 2 slots in this section are empty`** — four times on one screen, since three copy rows and the card band each carry it.
+
+**It had also stopped being TRUE, which is why deleting beats fixing the arithmetic.** Under D58 the box closes up over a departed card, so `Card 19` really is the nineteenth card a hand can count to. The clause's one stated job in this entry — *"the gap count says why the count came out short"* — is void, and a clause telling an operator their count will come up two short now sends them looking for slots the numbering has already absorbed.
+
+**What it cost, measured before it went**: 15px on every copy row in any box that had ever had a sale, and it was the whole reason the line wrapped to three lines rather than one. It is gone from `server.ts:placeParts`, so it reaches no site — not the band, not the copy rows, and not the Fulfiller's card, which renders the joined sentence as visible text. `Place.section_gaps` stays on the wire and on the type, unread, because the field is a fact about the store and this is a ruling about a sentence.
 
 **The physical half is void rather than answered**, which is why the owner never had to choose a marker: the retroactivity problem this entry names — *a convention adopted after fifty gaps exist cannot be applied to them* — is what made a marker unworkable, and it is exactly the problem a rendering does not have. Every existing gap closed the day D58 landed.
 
 **The box audit is easier and still not built.** What is physically in a section and what the record says are the same count again, which is what that check compares.
+
+**The neighbors are ranked rather than joined as of 2026-08-30, which is D41's move one line down.** The owner could not read the sentence this entry specifies: *"it's hard seeing galio and evelynn or between kha and poppy, maybe we make longer (y axis) for them?"*
+
+**The cause is the catalog and not the length.** Every Riftbound name is `Champion, Epithet` — 494 of 1368 carry a comma and none carries two — so the composed sentence holds commas INSIDE names and connectives BETWEEN them, and **the strongest punctuation in the string is the one that is not a boundary**. It fires a median five characters in; the real boundary (`and`) is thirty characters later, so the reader parses grammar to find two proper nouns and then regresses left to recover where the first began.
+
+**So the connectives are deleted rather than restyled, which is exactly what D41 already ruled for the address above it.** `after` and `before` become a muted mono key column, the two names start at one x, the champion carries the ink and the epithet demotes to muted. Finding the second name is a vertical saccade instead of a hunt for a word. `app/src/PlaceNeighbors.tsx` is the renderer and `server.ts:placeParts` is the composer.
+
+**Setting the champions in bold inside the running sentence was the alternative, and it is the move D41 already declined.** It adds a cue on top of the parse instead of deleting the parse: having landed on `Galio`, the reader must still read the grammar to learn which side he is on.
+
+**The keys are the composer's own two words, and that overruled the better-reading pair.** `in front` / `behind` was built first and renders better as a physical pair — and it takes the NEIGHBOR as its subject where `placeParts` takes THIS CARD, so a screen reader would have announced `before Conscription` over a row reading `BEHIND Conscription`. Two true framings of one fact, sixteen pixels apart, is the second-vocabulary drift D22 refuses for reason codes.
+
+**One departure from D41: its payload got size and this one gets position.** Two thirty-character strings cannot take a 44px treatment, and D41's own amendment measured what that costs a list — 44px in the copies row is +86px and drops a copy below the fold.
+
+**The owner kept both sites**, having first said the band's copy was repetitive. Offered the choice with the measurements, they chose to keep the band and the copy rows and restyle both. What that avoids is named here because it was nearly missed: `Inventory.tsx`'s lone-copy branch draws no copies row at all — its own comment puts that at 22% of the store — so a card with no name and no SKU has the band as its ONLY site, and deleting the band would have broken this entry for most of the boxes the owner walks.
+
+**Measured at 1440x900 on box 1 card 19, the owner's own screenshot**: the copy row goes 173.2px to 177.5px, and the neighbor block from two or three lines of 10px uppercase tracked mono to two lines of 12px body. The row is +4px and its height is now CONSTANT, where it used to vary with how long two names happened to be — which is not a fact about the card.
+
+**The Fulfiller is untouched and keeps the joined sentence**, at 20px body through `.card-locations-say`, which `app/tests/fulfillment.spec.ts` floors and D31 keeps unweakened. The firewall is the component graph rather than a selector prefix — `FulfillerCard` does not import the renderer — for the reason `PositionLabel` already records: a prefix is what a refactor drops and an import is not.
+
+**Nothing had ever asserted any of this.** Every Playwright fixture passed `neighbors: null`, which is a real wire state the app draws as no block at all, and the four fixtures that tried to pin the gap count spelled it `gaps_in_section` — **a field that exists in no server, no type and no component** — so they set nothing and the behavior happened to match. Four cases now cover the vocabulary, the split, the single-neighbor end and the deleted clause. Three mutations were observed failing first, and the gap case had to be strengthened to earn its place: asserted against visible text alone it PASSED the re-added clause, because on this screen `said` only ever reaches an `aria-label` — it is the Fulfiller who renders that string as text.
+
+**A hazard found and deliberately not fixed: `PlaceNeighbor.index` is the store key.** `_company` builds it from the allocator index while D58 made every drawn number a count of cards, so on a box with departures the two diverge — box 3 has 9 — and the `#41` a neighbor degrades to when nothing has identified it can name something that is not the slot a hand would count to. It is wrong exactly as it was before this change, and correcting it is a decision about what the server sends rather than about how a screen draws it.
 
 ---
 
@@ -1289,6 +1317,8 @@ The owner reopened it in those words. The paragraph this replaces named `.review
 **One site is untreated for a structural reason rather than a design one.** `CaptureScreen.tsx:1931` composes `Note saved on ${target.card.label}.` as a plain STRING inside a notice payload — there is no element to style and no JSX to return, so it cannot take even the `run` form without changing the notice type across the component. Named here rather than silently left, because it is the one place the owner's *all* is not satisfied.
 
 **What would reopen this: a two-part label, or a box with no name.** Both collapse a measurement this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row. Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
+
+**The mechanism was reused on the sentence under the label — see D30 (2026-08-30), which owns that argument.** Named here only so the trail exists; the one thing it does not share is that its payload takes position rather than size, two thirty-character names being unable to carry a 44px figure.
 
 ---
 
@@ -2428,6 +2458,313 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 **It is not license to cut reasoning.** D16 forbids editing a document to satisfy a gate, and the budget row is advisory so that it can never become one.
 
 **What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles — or worse, re-litigated because nobody opened the entry — the honest answer is not a longer index but a louder instruction, and `CLAUDE.md` is where it would go.
+
+---
+
+## D61 — The shipping lane is three lanes, and the third answer is "I cannot tell"
+
+**Built 2026-08-30.** `pipeline/shipping.py` reads the TCGplayer Export Shipping CSV and routes one order into one lane; `pipeline/pirateship.py` writes the Pirate Ship import spreadsheet. Every number below is measured against `fixtures/orders-shipping.csv`, 331 real orders.
+
+**The number is the third lane, not the $50 line.** The obvious build is a comparison — under fifty an envelope, over fifty tracking — and it is wrong about two real orders at once:
+
+    < $50, all cards           tcgtracking IMb envelope    (not this entry's to build)
+    < $50, contains non-card   Pirate Ship parcel
+    >= $50                     Pirate Ship parcel
+
+A **playmat cannot go in an envelope whatever it cost**, and a **$600 single may not go untracked whatever it weighs** — TCGplayer mandates tracking above $49.99. Two independent facts about one order, so a rule reading only the money puts a $12 sealed booster box in a stamped mailer and a rule reading only the contents ships the single. Neither signal subsumes the other.
+
+### The two signals are not the same strength of claim, and the order they are asked in is the whole design
+
+**`Value Of Products` is a fact.** Present on all 331 rows, needs no weight, and $50 is a threshold TCGplayer publishes rather than one this project fitted.
+
+**`Product Weight / Item Count` is a proxy, and it abstains.** It is a summed per-product **catalog constant**, so the ratio proxies *does this order contain a non-single*; the derivation, the five exact values and the empty band are `docs/specs/shipping-export.md`'s and are not restated here. Two numbers cross the seam because the router compares against them: the cut is **0.30**, the geometric midpoint of an empty band 18.4x wide, and the singles constant is **0.07**. Derived from where a real distribution is empty rather than picked, which is D19's rule. Missing on **97 of 331 rows**.
+
+**So the fact is asked before the proxy, and that is worth 58 orders.** Measured: **58 of the 97 weightless orders are at or over $50** and are answered with certainty by a rule that never needed a weight. **Abstention falls from 97 orders (29%) to 39 (11.8%).**
+
+**It also answers the case that spec names as its own worst** — *"it abstains on 29% of orders, and one of them is a $1750 order."* That order is `A2FFC195-0000F4-006AC`, one item, no weight, $1750.00, and this router sends it to a tracked parcel **without consulting the proxy at all**. T7 asserts it by name, because a router that abstained first would still produce three lanes, still count correctly on every weight-bearing row, and still look right.
+
+**The proxy says "heavier than cards alone" and may never say "contains a playmat".** Even at 18x that is an inference. `non_card_signal` produces the same lane the value rule does, so nothing downstream needs the guess sharper than it is.
+
+### Abstention is a third answer, never a default to a lane
+
+`LANE_UNJUDGED` is returned, named and counted. Defaulting it to the envelope ships a playmat in a stamped mailer; defaulting it to the parcel spends postage nobody asked for. **Both are decisions this module is not entitled to make** — the operator is. `parcel_lane` hands the emitter the 126 the router placed there and nothing else.
+
+**Five reasons, because two lanes are reached on different grounds and three abstentions have different remedies.** `Routing.certain` is the split that matters — `value_at_threshold` reads a published price against a published threshold, everything else is the inference — and a screen that cannot tell them apart cannot show which answers are worth checking.
+
+**Two of the three abstentions are latent, and saying so is the point of counting them.** Both report zero over the fixture, and neither is speculative machinery: each is one comparison standing between a silent wrong answer and a visible refusal.
+
+- **`sub_single_weight` is the spec's own named false-negative, turned into an abstention.** `docs/specs/shipping-export.md` records the mechanism and has no row for it: one card plus one weightless non-card reads 0.035 oz/item, *below* the singles constant, so it reads as safer than pure singles. No summed catalog constant can come out below 0.07, so a ratio that does means a product carries less than a card's weight — the weightless non-card itself. Compared only against the 0.30 cut it reads `cards_only`: a playmat in a stamped envelope, silently. The model does not apply, so the router has nothing to say.
+
+- **`no_value_data` was a comment before it was a line of code, and T7 caught the difference.** `route` carried a comment claiming a missing `Value Of Products` landed in the unjudged lane. It did not: a valueless order of pure singles fell past the threshold check, past the proxy, and out as `cards_only` — **a $600 single going out untracked**, from a router whose comment said otherwise. D41's failure (a premise deleted, the conclusion left standing), caught inside the session that wrote it by a test written before the code was believed. **The proxy may not rescue it**, which is why the guard sits above the ratio: a cards-only ratio is the shape an expensive single takes.
+
+### Exact rational arithmetic, never floats
+
+`docs/specs/shipping-export.md` records a float pass **reporting a phantom sub-0.07 row** on a distribution whose true minimum is exactly 0.07 — the one band this router treats as impossible, so **a float manufactures the outcome the bullet above exists to refuse**. Not decoration: T7 run with `Fraction(float(weight))` substituted moves the **lane counts themselves**. `Fraction` and not `Decimal`, because a ratio of two decimals is not a decimal — 45.14/20 terminates, 115/86 does not, and that row is real.
+
+### The emitter: a spreadsheet, because there is no API
+
+**Pirate Ship has no API**, and this is not a gap to work around. Their three first-class entry points are a typed address, a marketplace connection and a **spreadsheet import**; the third is the only one this project can drive, and it is supported rather than improvised.
+
+**`Name` is pre-joined from `FirstName` + `LastName`.** Their auto-mapper is good and it is a guess made on the far side of a seam no committed fixture can test. We own the columns, so it need not work out that two of ours make one of theirs — a recipient addressed as a first name alone is a package at the right street with the wrong person on it, and the failure is invisible from this end.
+
+**`Order ID` is what closes the loop.** `Tracking #` and `Carrier` are empty on **all 331 rows** of the export, structurally rather than incidentally, so carrying the TCGplayer order number across is what lets the tracking number Pirate Ship mints be matched back.
+
+**The rubber stamp makes the label the pick instruction.** Pirate Ship prints three in the label corners, so `Box 3 · Card 31` is read off the thing already in the picker's hand rather than off a second screen. **No label is composed here**: `pipeline/join.py:Position` is the only label formula in this repo and D58 makes drawing one need the box's whole occupancy, so a second formula here is the second-renderer failure already recorded three times. A stamp is an opaque string written out unchanged.
+
+**No length is enforced on a stamp, because nobody has measured one** — truncating at an invented number cuts the end off a pick instruction, and a wrong shelf reads as a right one. Too many stamps refuses, because *that* is knowable from the format.
+
+### Three things the emitter may never do, and all three are D49 in another lane
+
+D49 states it as *"nothing here is ever defaulted on your behalf — that is the entire point"*.
+
+- **It never selects insurance.** An insurance-shaped column **raises** rather than being dropped, matched folded and stripped so a differently-spelled header cannot slip past. Dropping it silently is an operator who believes they asked for insurance and did not; it is a per-order judgement made inside Pirate Ship, looking at the card.
+
+**The named list is a deny list over a set already closed by `COLUMNS`, and what it adds is the reason.** A refusal reading *"not a Pirate Ship column"* invites the fix of adding it. One naming this entry does not.
+
+- **It never buys a label.** No API exists to buy one with, and it would be spending.
+
+- **It never derives a weight, which is the one most likely to be "fixed" later.** The obvious candidate is `Product Weight`, and it is wrong **in the expensive direction**: the catalog constant counts the cardboard and not the mailer, the toploader or the tape, so it is a **lower bound**. Writing it buys postage for less than the package weighs — returned or postage due, at the far end, weeks later. `Package Weight` is whatever the caller measured and blank until they have; Pirate Ship's import sets one weight across every row after the fact, which is where a number off a scale belongs.
+
+T7 asserts the blank **on an order routed by its weight**, so the temptation is strongest where the assertion stands. The first draft took the first order in the lane and passed vacuously: 58 of the 126 carry no weight at all, so it asserted that a blank column stayed blank.
+
+### Buyer PII passes through and is not persisted
+
+Names and addresses enter as arguments and leave as the bytes the caller asked for. Neither module reaches `store/` and neither caches, and `render` returns **bytes rather than a path**, so a buyer's name need never touch a disk. `write_csv` is the one function that writes, and only where it is told.
+
+### The one-way edge, and why this is two modules
+
+`shipping.py` imports `pirateship.py` and never the reverse, so the Pirate Ship format knows nothing about TCGplayer and can be fed by the Bridge untouched. `tcgcsv.py` is the precedent: a foreign format gets its own module.
+
+### This is a pre-line-data stopgap, and it is to be RETIRED rather than tuned
+
+**The export carries no line items at all** — no SKUs, no product names, only `Item Count`, confirmed against a real export. That is what makes a weight ratio the best signal available rather than a proper answer. `pipeline/orders.py` already answers the same question correctly from declared line kinds (`OrderResolution.ships_in_an_envelope`). The day a feed supplies them, **the cut here is the thing to delete, not the thing to re-fit.**
+
+### IT IS A LIBRARY AND NOT A FEATURE
+
+No route, no client function in `app/src/server.ts`, and no screen reaches either module. By `CLAUDE.md`'s route-is-not-a-feature rule it is **not landed**, and this entry says so rather than letting a green harness read as a shipped lane. The remaining half is the unfinished part of this task, not a follow-up to it. `docs/specs/shipping-export.md` said *"nothing reads this file and nothing reads the fixture"*; that is now false in its second half and true in its first, and the spec is amended to say which.
+
+### What would reopen this
+
+**Line items, which retire the cut.** **A measured stamp length**, which makes the unenforced limit enforceable. **Or Pirate Ship refusing the file** — the one thing no committed fixture can hold, because nobody has fed their importer this CSV. Same standing as T6's synthetic composites, and the reason `Name` is pre-joined.
+
+### On this entry's own number
+
+Taken as D61, free now that the number below it has merged; it was contested by two unmerged branches when this was written, which is the heading collision D16 records, in progress again. **The owner's rule, given when asked: always renumber YOUR OWN branch, never another's.** That is narrower than D16's renumber-by-position rule and does not conflict with it — D16 settles headings that have **already** landed, and this settles who yields **before** they do: the incoming branch, always. The alternative is each session moving whichever entry it finds easiest, which is how a cited id comes to point at a different entry.
+
+---
+
+## D63 — The order ledger is two maps, and the sync writes only one of them
+
+**Built 2026-08-30, as the durable half of the order flow.** `pipeline/orders.py` resolves
+an order line to the copies that fill it and stores nothing; this is `inventory/orders.json`
+and `store/orders.py`, one record per `{source}:{order_number}`, upserted, read and written
+through the existing `Store` session in the shape `store/queues.py` uses.
+
+**The split is the design and not a packaging choice.** The resolver's answer is a set of
+positions true of ONE `Inventory` snapshot and of no other — D36, which exists because a run
+directory's own slot numbers stopped being the truth the moment a mid-box delete slid every
+higher card down one — so it is recomputed on every read. An ORDER is the opposite kind of
+fact: it happened outside this machine, it outlives every snapshot, and re-deriving it is
+not possible at all. One of those must be stored and the other must never be.
+
+### The file has two top-level maps, and `ingest` can name only one
+
+    orders      what the FEED said.  Replaced wholesale on every sync.
+    fulfilment  what WE did.         `ingest` cannot reach it.
+
+**One record holding both is the defect this entry exists to prevent.** Ingest replaces by
+key, so a fulfilment count living inside the replaced record is destroyed on the next sync —
+and the consequence is not a lost statistic. It is the resolver handing out a copy that is
+already in an envelope, and a picker walked to a slot whose card left the building on
+Tuesday. **The same physical card sold twice**, discovered by the second buyer.
+
+**A careful merge inside `ingest` WOULD ALSO WORK, AND IS REFUSED.** `Queue.upsert` is
+exactly that shape — it preserves `first_seen` and refuses to touch a cleared entry — and it
+has held for months, so this is not an argument that merges are unsafe. It is an argument
+about which property a later session can check. "Two maps, and this method touches one of
+them" is verifiable by reading eleven lines; "this merge preserves everything it should" is
+verifiable only by knowing every field that must survive, which is a list that grows. The
+merge is one refactor from being wrong and the split is not.
+
+**`first_seen` is the deliberate exception and is marked as one.** It is preserved across an
+ingest, by the same mechanism `Queue.upsert` uses, because losing a date is cosmetic and
+losing a card is not. Naming the exception is what keeps the rule readable: exactly one
+field is carried over, and it is the one whose loss costs nothing.
+
+### Ingest writes no card state and no listing count
+
+**NOT `set_state`, NOT `Listing.bump`, NOT ONE BYTE OF `inventory.json`.** Pressing sync
+twice is therefore a no-op **by construction** rather than by a guard somebody has to keep
+true: `store/orders.py` holds no `Inventory` and imports nothing that does, so it cannot
+reach a card. A ledger that moved a card to `sold` on ingest would re-sell every order in
+the file on every sync, and a guard against that is one refactor from being wrong. Not
+having the capability is not.
+
+**And an unchanged re-ingest rewrites no bytes.** `changed_at` is stamped only where the
+feed's content actually differs — T1's own rule for `harness/results/`, which does not
+restamp `generated_at` on a cached re-scoring, for the reason that file gives: a one-line
+diff on every run is how a real change stops being visible. There is deliberately no
+`last_synced_at`, because when the sync ran is a property of the sync rather than of an
+order, and storing it would defeat this paragraph to record something no reader needs.
+
+**T7 asserts that as byte equality of three files, which is D54's LESSON APPLIED.** That
+entry's guard read `len(rows) == 0` under the message "the file holds no zero row", and "the
+file holds 0 rows" is satisfied **identically** by the emitter correctly omitting a row and
+by the emitter overwriting two good rows with a bare header; the destruction lived behind it
+for as long as it existed. So a second sync here must leave `orders.json`, `inventory.json`
+**and** `history.jsonl` byte-for-byte as they were. A row count would go green on a ledger
+that threw its fulfilment away and re-ingested the same order over the top.
+
+### Fulfilment is a count, and the one identity it holds is a `capture_id`
+
+**`LineProgress.fulfilled` is a number and is never a list of positions.** D10 ruling 1 lets
+a junk capture be deleted from the middle of a box and slides every higher index down one, so
+a position written down today names a different card tomorrow. A count survives that because
+it names no slot, and it still tells a filled order from an unfillable one — which is the
+only thing anybody asks of it.
+
+**`LineProgress.copies` CARRIES `capture_id`s, THE ONE IDENTITY THIS MODULE HOLDS.**
+It is minted once per `POST /capture`, it is unique store-wide
+(`master.Inventory.card_by_capture_id` refuses a duplicate rather than picking one), and it
+survives a renumber by construction: the shift rewrites `box` and `index` and the record keeps
+its id. `server/capture_server.py:_drop_from_stores` exists precisely because the two queues
+and the answer cache **are** position-keyed and must be remapped by hand at every delete;
+a fourth store in that condition is a fourth thing to remember at three call sites, and this
+one declines to be it.
+
+**Measured in T7 rather than argued.** Five cards, two pulled at 3/2 and 3/3, then a real
+`POST /inventory/3/1/remove`: both pulled copies slide down one, and
+**position 3/3 now holds a card that was never pulled**. A ledger storing `["3/2", "3/3"]` ships
+it. The case asserts both halves, because the first alone is satisfied by a ledger that
+stores nothing at all.
+
+**WHAT `capture_id` DOES NOT SURVIVE, named rather than left to be found: a re-shoot.**
+`do_reshoot` requires the NEW photograph's id and writes it onto the record (D26), so a copy
+re-shot after being pulled reads as one this ledger has never seen. It is not reachable
+through any sequence that makes sense — a pulled copy is in the post and is not
+re-photographed — and it is the honest limit on the paragraph above.
+
+### No order state, and no history line
+
+**Nothing is added to `master.STATES`, AND THE TRAP IS D26's EXACTLY.**
+`server/capture_server.py:_state_before_sale` and `_state_before_retirement` scan
+`history.jsonl` for the last event whose name is in that tuple, so a new member makes both
+reversals restore a card to something that is not a state. That is why `removed` was renamed
+`retired` on 2026-08-23, and this module stays on the other side of it by holding no states
+at all. T7 ingests orders either side of a real sale and requires the reversal to still read
+`identified` back out of the log.
+
+**And it logs nothing to `history.jsonl`.** Two reasons, both load-bearing. A sync appending a
+line per order would not be the no-op the section above promises, however small the line is.
+And this module changes nothing about a card, so there is nothing for that log to describe —
+when the pull route is built, **it** touches a card and **it** logs, through `Inventory._log`,
+in the same locked session.
+
+### The refusals, each of which is a different way to ship the wrong card
+
+`record_pull` validates everything and then writes everything, which is D29's rule for the
+group answer and for D29's reason: a refusal partway through would leave copies recorded
+against a pull the operator was told had failed.
+
+- **`CopyAlreadyPulled`** — this physical card is already recorded against another line. The
+  thing this module exists to prevent, said out loud rather than counted twice.
+- **`CopyNotIdentifiable`** — a copy carrying no `capture_id`. Refused rather than counted
+  blind: without an identity the pull cannot be made idempotent, and a silent double-pull is
+  the worst outcome this feature has. Every record on the owner's store carries one, so this
+  guards a legacy card rather than a common path.
+- **`OverFulfilled`** — more copies than the buyer ordered. Refused rather than clamped;
+  you cannot ship the fourth, so there is nothing to be gained by hiding it.
+  **`Ledger.over` exists anyway**, because a later ingest can REDUCE a quantity under a pull that was
+  legitimate when it was made: refuse to create the state, tolerate and report it where it
+  arises.
+- **`DuplicateOrderLine`** — one order carrying two lines for one SKU. Fulfilment is keyed by
+  SKU because that is the only line identity stable across two ingests — a line's POSITION in
+  the list is whatever order the feed serialised it in — so two lines sharing a SKU make "how
+  many of this have we pulled" a question with two answers.
+  **Summing them was the alternative and is worse**: a merged line loses which one was filled.
+- **`UnknownOrder` / `UnknownOrderLine`** — a pull against an order never ingested, or a SKU
+  the buyer did not order.
+- **`BadOrderKey`** — a source carrying the key separator, or an empty half. The key splits on
+  the FIRST colon, so a source containing one makes two different orders share a record; an
+  order NUMBER may contain one, and that asymmetry is what the refusal buys.
+
+**The key folds case and strips to compare, and stores verbatim** — D20's rule for a box
+name, one register over and for the same reason: `TCGplayer` and `tcgplayer` are one
+marketplace to a person, and a normalized value written back is a value the operator cannot
+correct.
+
+### What it deliberately does not do
+
+**Nothing clears an order.** No `drop`, no `release`. That is `store/queues.py`'s arrangement
+for `store/queues.py`'s reason — the queues only grow, because a card in a queue is at a known
+position in a box and is not lost — and a cancellation is not a deletion either: `status`
+carries the feed's own word for it, verbatim and unvalidated. Deciding what "open" means from
+a marketplace's status string is the guessing `CLAUDE.md` forbids, so `Ledger.unfulfilled`
+answers the question this ledger actually owns — which orders still owe copies — out of its
+own two halves, in the same sequence `pipeline/orders.py:order_sequence` serves them.
+
+**It imports nothing from `pipeline/`, WHICH IS WHY `OrderLine` IS DECLARED TWICE.** The edge
+runs the other way and `docs/map.py` records that `store/` imports nothing from `pipeline/`,
+so reusing the resolver's frozen `OrderLine` would be a cycle. They are not redundant: the
+same split `QueueEntry` has against `pipeline/join.py`'s carriers, for the same reasons — one
+is a mutable dataclass that `asdict` round-trips and `__annotations__` filters, the other is a
+frozen domain object whose `__post_init__` coerces the SKU. `kind` is carried verbatim and
+validated nowhere here, because `pipeline/orders.py` owns `LINE_KINDS` and a second copy is
+two lists nothing reconciles — the drift D16 exists to catch.
+
+**AND `parse` FILTERS ON `__annotations__` AT ALL THREE LEVELS.** `store/master.py` records
+what one missing filter costs: a field written but not declared is served, persisted, and
+**silently dropped** on the next reload, so it looks live right up until the process restarts.
+`OrderLine` and `LineProgress` are nested, so filtering only the record lets exactly that
+through one level down.
+
+**No buyer, no address, no email.** The ledger holds a SKU, a quantity and what the feed
+called the card. `inventory/` being gitignored whole is a reason to keep bearer instruments
+out of a commit (`store/files.py`'s code ledger) and not a license to accumulate somebody's
+postal address on this disk.
+
+**It does no i/o and holds no lock.** Like `queues.py` it is a data structure; `session.py`
+reads it and writes it back inside the lock it already holds. `files.exclusive` polls at 50ms
+and gives up at 30s while the feeder captures a card every 623ms, so a module down here that
+fetched an order feed would stall real capture — the fetch belongs to the caller, ABOVE the
+lock, and `ingest` takes records already in memory. T7 asserts that as an import check rather
+than behaviourally, because a behavioural test would have to hang in order to fail.
+
+### What it costs: a fifth file in a set that is not atomic
+
+**`Store.write()` replaces four JSON files in sequence and the set is not one transaction.**
+**This is a fifth, and it widens that window by a fifth.** Said here rather than discovered
+later. Each file is atomic alone — `files.write_atomic` stages beside the target and
+`os.replace`s — and nothing makes the set atomic, so a kill between two calls leaves the store
+internally inconsistent. The exposure is live at Ctrl-C frequency rather than theoretical,
+which is why D53's supervisor drains in-flight requests before restarting a child, and it is
+why the Someday list refuses to put this store on a NAS.
+
+**The only mitigation is an ORDERING, and it is a preference among losses rather than a fix.**
+The ledger is written LAST, so a torn write loses the order feed — which can simply be
+ingested again, this entry's whole second section being that re-ingesting is free — rather
+than the inventory, which names photographs nothing can regenerate. Closing it properly means
+one transaction over all five: a staged directory swapped by a single `os.replace`, or a real
+embedded store. Neither has been argued, and this entry is not the place to argue it.
+
+### It is RECORDED, not BUILT
+
+**Nothing calls `store/orders.py`. No route serves it, and no screen draws it.**
+`CLAUDE.md`'s rule is that a wrap-up claiming BUILT for something unreachable is
+wrong rather than merely incomplete, so this entry does not claim it. What is genuinely built
+is a store module and its coverage; what is genuinely done is this decision. The precedent is
+`pipeline/pricehistory.py`, which the Someday list records the same way and in the same words,
+and `pipeline/orders.py` itself, which is reachable only from `cli/resolve.py`'s imports.
+
+**The unfinished part of this same task, named as such rather than as a follow-up**: a route
+that ingests a feed, a client function in `app/src/server.ts`, and a control on a screen. Until
+those exist there is no order flow — there is a ledger that would hold one.
+
+**What would reopen this: a feed that reorders or re-keys its lines.** Everything above rests
+on the SKU being the stable per-line identity across two ingests, which `DuplicateOrderLine`
+enforces at the boundary. A marketplace that issues its own per-line id would be a better key,
+and adopting one is a schema change plus a migration for every record already written — worth
+taking if a real feed offers it, and not worth inventing before one does.
 
 ---
 

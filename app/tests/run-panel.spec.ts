@@ -90,7 +90,7 @@ function inventoryPayload() {
           box_closed: false,
           fraction: 0,
           neighbors: null,
-          gaps_in_section: 0,
+          section_gaps: 0,
         },
         photo: `photos/${box}/1.jpg`,
         set_hint: 'ME01',

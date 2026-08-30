@@ -381,6 +381,69 @@ COMPONENTS = [
                                   "IT IS A LIBRARY AND NOT A FEATURE — no route, no client function "
                                   "and no screen reaches it, which by CLAUDE.md's own rule means it "
                                   "is not landed and must not be reported as such."},
+            # THE ONE-WAY EDGE INSIDE THIS PACKAGE: shipping.py imports pirateship.py and
+            # never the reverse, so the Pirate Ship format knows nothing about TCGplayer and
+            # can be fed by the Bridge without being touched. Same direction store/ and
+            # pipeline/ have, for the same reason.
+            "shipping.py": {"does": "the TCGplayer Export Shipping reader, and the router that "
+                                    "puts one order in one of THREE lanes: a tcgtracking envelope "
+                                    "(<$50, all cards), a Pirate Ship parcel (contains a non-card, "
+                                    "OR >=$50 because TCGplayer mandates tracking above $49.99), or "
+                                    "UNJUDGED. Abstention is a third answer and never a default to "
+                                    "a lane — sweeping an unplaceable order into the parcel lane is "
+                                    "postage the operator did not choose. The value question is "
+                                    "asked BEFORE the weight proxy, which is not a style choice: 58 "
+                                    "of the fixture's 97 weightless orders are >=$50 and are answered "
+                                    "with certainty by a rule that needs no weight, so abstention "
+                                    "falls from 97 orders (29%) to 39 (11.8%) — including the $1750 "
+                                    "order docs/specs/shipping-export.md names as its own worst case.",
+                            # D24 for the pooled/located split the non-card signal proxies at
+                            # postage scale; D19 for the rule that a cut is derived from where
+                            # a real distribution is empty rather than picked.
+                            "governed_by": ["D9", "D19", "D24", "D49", "D61"],
+                            "tested_by": ["T7"],
+                            "note": "EXACT RATIONAL ARITHMETIC, NEVER FLOATS, and that is a defect "
+                                    "already paid for: docs/specs/shipping-export.md records a float "
+                                    "pass reporting a phantom sub-0.07 row on a distribution whose "
+                                    "true minimum is exactly 0.07 — and sub-0.07 is the one band "
+                                    "this router treats as impossible, so a float manufactures the "
+                                    "outcome. THE WEIGHT IS A PROXY AND NOT A PACKAGE: it is a summed "
+                                    "per-product CATALOG CONSTANT, so it says `heavier than cards "
+                                    "alone` and may never say `contains a playmat`. A PRE-LINE-DATA "
+                                    "STOPGAP — the export carries no line items at all, and the cut "
+                                    "is to be RETIRED rather than re-fitted the day a feed supplies "
+                                    "them, because pipeline/orders.py already answers this properly "
+                                    "from line kinds. IT IS A LIBRARY AND NOT A FEATURE: no route, no "
+                                    "client function and no screen reaches it, which by CLAUDE.md's "
+                                    "own rule means it is not landed and must not be reported as such."},
+            "pirateship.py": {"does": "the Pirate Ship import spreadsheet — the one supported entry "
+                                      "point, because Pirate Ship has NO API. A closed column set, "
+                                      "T2's byte format, `Name` PRE-JOINED from the two columns "
+                                      "TCGplayer holds it in rather than left to their auto-mapper, "
+                                      "the TCGplayer order number carried through as `Order ID` so "
+                                      "the tracking number it mints can be matched back, and up to "
+                                      "three Rubber Stamps that print on the label corners — so a "
+                                      "label reading `Box 3 · Card 31` IS the pick instruction.",
+                              # D49 is the rule all three refusals below are instances of; D58
+                              # is why no label is composed here.
+                              "governed_by": ["D49", "D58", "D61"],
+                              "tested_by": ["T7"],
+                              "note": "THREE THINGS IT MAY NEVER DO, and all three are D49's "
+                                      "`nothing here is ever defaulted on your behalf` in another "
+                                      "lane. IT NEVER SELECTS INSURANCE — an insurance-shaped column "
+                                      "RAISES rather than being dropped, because dropping it "
+                                      "silently is an operator who believes they asked for insurance "
+                                      "and did not. IT NEVER BUYS A LABEL — no API exists and it "
+                                      "would be spending. IT NEVER DERIVES A WEIGHT, which is the "
+                                      "one most likely to be `fixed` later and is wrong in the "
+                                      "EXPENSIVE direction: TCGplayer's Product Weight counts the "
+                                      "cardboard and not the mailer, so it is a LOWER BOUND and "
+                                      "writing it buys postage for less than the parcel weighs. It "
+                                      "renders no position label either — pipeline/join.py:Position "
+                                      "is the only label formula in this repo (D58) and a stamp is "
+                                      "an opaque string somebody else composed. Buyer PII passes "
+                                      "through and is NOT persisted: `render` returns bytes so a "
+                                      "caller need never put a name on a disk."},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
                                      "and as of D49 the AUTHORITY for rule and basis rather than "
                                      "a copy of them. `overrides` holds a price OR a `Withheld`: "
@@ -484,8 +547,8 @@ COMPONENTS = [
     {
         "path": "store/",
         "status": "built",
-        "does": "the master store: inventory, cache, standing queues",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
+        "does": "the master store: inventory, cache, standing queues, order ledger",
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
@@ -501,9 +564,39 @@ COMPONENTS = [
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
+            # THE DURABLE HALF OF THE ORDER FLOW, and the split from pipeline/orders.py is
+            # the design rather than a packaging choice: the resolver's answer is true of
+            # one Inventory snapshot and of no other (D36), so it is recomputed on every
+            # read, while an order outlives every snapshot. Imports nothing from pipeline/,
+            # which is why OrderLine is declared in both — the edge runs the other way.
+            "orders.py": {"does": "inventory/orders.json — one record per {source}:{order_number}, "
+                                  "upserted. TWO TOP-LEVEL MAPS and the separation IS the guard: "
+                                  "`orders` is the feed's and is replaced wholesale on every sync, "
+                                  "`fulfilment` is ours and `ingest` cannot name it — a count "
+                                  "living in the replaced record dies on the next sync, and the "
+                                  "consequence is the picker sent to a slot whose card is already "
+                                  "in the post. Ingest writes NO card state and NO listing count, "
+                                  "so a second press is a no-op BY CONSTRUCTION rather than by a "
+                                  "guard, and an unchanged re-ingest rewrites no bytes because "
+                                  "`changed_at` is stamped only where the feed's content moved. "
+                                  "Fulfilment is a COUNT, never a list of positions (D36); where "
+                                  "an identity is unavoidable it is a `capture_id`, which survives "
+                                  "a renumber by construction. No order state reaches "
+                                  "`master.STATES` and nothing here logs to history.jsonl — both "
+                                  "would corrupt the sale and retirement reversals that scan that "
+                                  "log filtering on that tuple (D26). No I/O and no lock: "
+                                  "session.py writes it, fifth and last of five files whose set is "
+                                  "not atomic.",
+                          "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
+                                          "D29", "D36", "D53", "D63"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
-            "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
+            # D53 and D63 because the header now prices what this module does NOT promise:
+            # the five files it replaces are each atomic and the SET of them is not, which
+            # is why D53's supervisor drains before it restarts and why the ledger is last.
+            "session.py": {"does": "lock-free read, or locked read-modify-write, over five files "
+                                   "that are each atomic and are not one transaction",
+                           "governed_by": ["D13", "D53", "D63"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1245,7 +1338,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -1366,6 +1459,33 @@ COMPONENTS = [
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them.",
                 "governed_by": ["D31", "D41"]},
+            "src/PlaceNeighbors.tsx": {
+                "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
+                        "2026-08-30). `after` / `before` as a muted mono key column with the two "
+                        "names beside it, champion at ink and epithet muted, connectives deleted "
+                        "\u2014 the owner could not pick two names out of `between Galio, "
+                        "Indefaticable and Evelynn, Entrancing`, because every Riftbound name is "
+                        "`Champion, Epithet` so the strongest punctuation in the string is the "
+                        "one that is not a boundary. THE KEYS ARE THE COMPOSER'S OWN TWO WORDS: "
+                        "`in front`/`behind` reads better physically and takes the NEIGHBOUR as "
+                        "its subject where `placeParts` takes THIS CARD, which would have put a "
+                        "screen reader's sentence at odds with the row. Draws nothing \u2014 never "
+                        "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
+                        "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
+                        "the joined sentence at 20px body, and the firewall is the component "
+                        "graph rather than a selector.",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58"]},
+            "src/PlaceNeighbors.css": {
+                "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
+                        "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
+                        "copies row 10/12, because a treatment that is right once is not "
+                        "automatically right seven times down a column. Body face and lowercase "
+                        "on the names is docs/DESIGN.md's own line (the body face is for "
+                        "sentences a human reads) and undoes the borrow of "
+                        "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
+                        "only running English in the product a rectangle. A fixed key column so "
+                        "the two names cannot disagree about where they start.",
+                "governed_by": ["D30", "D31", "D41"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -1597,12 +1717,12 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D45"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D31", "D40", "D41", "D45"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
