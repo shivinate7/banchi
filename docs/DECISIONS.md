@@ -6680,6 +6680,21 @@ and that split is the honest shape rather than a compromise.** `join` is free, r
 routinely pointed at a refreshed export — which is where the fetch does its work, and where a
 baseline exists.
 
+**THE GUARD COMPOSES WITH THE RECORDED EXPORTS AND THE JOIN DOES NOT, WHICH IS A SEAM WORTH
+NAMING BEFORE SOMEBODY FINDS IT.** The fetch rules on the fetched file PLUS whichever of the
+run's recorded exports it does not replace, because that is the only thing that makes the
+check meaningful on a mixed-game run — otherwise refreshing Pokemon would refuse for want of
+a Riftbound file the run already holds. `join` does not do the same: `cli/resolve.py:exports_for`
+replaces the recorded mapping outright the moment any `--export` is passed, which is
+pre-existing behaviour the upload path has always had.
+
+**So on a mixed-game run, fetching ONE game's export and joining with that file alone passes
+the fetch and refuses at the join**, naming the uncovered game card by card. That refusal is
+correct and legible, and the remedy is the one this entry already describes: fetch or upload
+one file per game and send them together, which is what "the sources compose" means. Making a
+recorded export compose with an explicit `--export` is a change to that function's contract
+and has not been argued.
+
 ---
 
 ### What it costs, and one bug the coverage caught
