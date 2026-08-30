@@ -965,10 +965,24 @@ COMPONENTS = [
                                      "governed_by": ["D5"]},
 
             # ---- the ground: what everything else reads ----
-            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing else.",
-                               "governed_by": ["D18"]},
-            "src/base.css": {"does": "reset and the page ground. Light only — there is no dark theme.",
-                             "governed_by": ["D5"]},
+            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing "
+                                       "else. 23 of them: 22 chosen at the 2026-08-12 interview, and "
+                                       "--field-hover granted against the lock on 2026-08-29 (D50) and "
+                                       "picked by measurement rather than from rendered alternatives.",
+                               "governed_by": ["D18", "D50"]},
+            # D41 and D45 govern this file because of the CURSOR FLOOR, not the reset. That floor
+            # is written with element selectors on purpose — `button`, `select`, the three input
+            # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
+            # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
+            # rather than things a global rule could quietly breach.
+            "src/base.css": {"does": "reset and the page ground, plus the two app-wide control "
+                                     "defaults: the :focus-visible ring, and the cursor floor "
+                                     "added 2026-08-29 after 39 of 142 interactive elements were "
+                                     "measured with no cursor rule any selector could reach. Both "
+                                     "are one specificity, so every per-screen choice outranks "
+                                     "them and nothing here can take a cursor away from a "
+                                     "stylesheet that named one. Light only — there is no dark theme.",
+                             "governed_by": ["D5", "D41", "D45", "D50"]},
 
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens before base",
@@ -1105,7 +1119,7 @@ COMPONENTS = [
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5", "D27", "D41"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -1197,7 +1211,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46", "D50"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -1284,7 +1298,7 @@ COMPONENTS = [
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -1406,7 +1420,7 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -1488,7 +1502,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1506,7 +1520,7 @@ COMPONENTS = [
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
                                     "governed_by": ["D5", "D13"]},
-            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50"]},
             "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
                                      "question every keyboard handler asks first. The three "
                                      "prior copies each recorded the hoist as due; this is "
@@ -1586,6 +1600,26 @@ COMPONENTS = [
                         "(N+1)th is legal only because the Nth succeeded, and a Promise.all "
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
+            },
+            "tests/cursor.spec.ts": {
+                "does": "what every control says to the pointer, in two cases that cover "
+                        "different things. A live sweep walks all seven routes, classifies each "
+                        "rendered control by tag, type and disabled state, and asserts the "
+                        "cursor the rule requires — no selector roster, so a control added next "
+                        "month cannot be missed. A synthetic case then probes base.css's floor "
+                        "with elements it builds itself, because this checkout's store is empty "
+                        "(D43) so no screen renders a DISABLED control — deleting the whole "
+                        "disabled arm was mutation-tested and the live sweep alone PASSED, "
+                        "which is 30 of the 41 original defects invisible. A third case asserts "
+                        "the --field-hover edge responds and that no hover reflows the box. Run "
+                        "by `make design-check`.",
+                "governed_by": ["D28", "D43", "D50"],
+                "note": "NOT a harness test and not registered in harness/run.py:TESTS — it "
+                        "starts a browser. KNOWN LIMIT, so a green run is read for what it is: "
+                        "between the two cases the floor is covered completely and a SCREEN's "
+                        "own override only where that screen renders it. A per-file rule on a "
+                        "control this empty store never draws is unchecked by either, and "
+                        "closing that needs fixtures for seven screens.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "

@@ -4231,6 +4231,117 @@ D33 chose, and a re-join regenerates the suggestions.
 **WHAT WOULD REOPEN THIS: a hold nobody lifts.** If holds accumulate across runs and are re-set by
 hand every time, the per-run home is the wrong one and the deferred durable store becomes the
 answer. The measurement is whether the same SKU is withheld in two runs over one box.
+## D50 — An interactive element's feedback is the product's, not each stylesheet's
+
+**BUILT 2026-08-29, on the owner's report**: *"I hate how my mouse doesn't change correctly
+upon what i'm hovering, and frankly it'd just be a nice to have attention to detail wise."*
+Then, on being shown what it would cost: *"Hover darkening permission granted, with permission
+granted to edit the fixed pallete. Permission also granted for building a guard to retain
+standardization across interactive elements."*
+
+**THE PALETTE HAS BEEN LOCKED SINCE 2026-08-12 AND THIS IS THE FIRST TOKEN ADDED AGAINST THE
+LOCK.** `docs/DESIGN.md` records that every value was chosen by the owner from rendered
+alternatives rather than described in prose, and that a token nobody can argue with is a token
+the next session quietly replaces. `--field-hover` was not chosen that way — it was measured,
+and the owner granted it against the lock. Recorded here so a later session reads it as a
+grant with a reason rather than as drift, and so the interview's authority over the other
+values is not weakened by one addition beside them.
+
+**THE DEFECT WAS NEVER MOSTLY ABOUT COLOUR, AND THE MEASURED PREMISE HAD TO BE CORRECTED IN
+PUBLIC FIRST.** The opening count was "39 interactive elements have no `cursor` rule any
+selector can reach", which is true of the CSS and wrong about the effect: most of those are
+`<a href>` and `<input type="text">`, which the user agent already answers correctly. **The
+real concentration was the DISABLED state, which no per-file rule was looking at.** Of 65
+distinct control shapes the app can draw, 41 had a wrong cursor: 30 clickables went on saying
+`pointer` while refusing the click, 7 text fields read `text` while refusing a character, 2
+`<select>`s read `default`, and 2 buttons read `default` disabled where 18 siblings read
+`not-allowed`. Missing `:focus-visible` was **zero** — `base.css` already had a global ring,
+so keyboard parity was never the gap, which is the one thing everybody would have guessed.
+
+**A DEFAULT IN THE RESET, NOT A NOTE ASKING EACH SCREEN TO REMEMBER.** The six stylesheets
+that declared no cursor at all are not badly written; they are the ones whose author had no
+reason to think about it. `base.css` now answers for `button`, `select`, the three toggle
+input kinds, `[role='button']`, a label that owns a toggle, and the disabled arm. It is the
+same argument the focus ring one block above already makes, and the same one
+`app/eslint.config.js` makes for a bug that earned a rule: **a paragraph in one file guards
+one file.**
+
+**THE FLOOR'S GUARANTEE IS CASCADE ORDER, NOT SPECIFICITY, AND THE FIRST DRAFT GOT THAT WRONG
+IN ITS OWN COMMENT.** It claimed every rule was one specificity (0,0,1) so any class outranks
+it. That is false for eight of the eleven selectors — `input[type='checkbox']` is (0,1,1),
+`[role='button']` is (0,1,0), and the whole disabled arm is (0,1,1). The behaviour was correct
+anyway, for a reason the comment had not stated: `main.tsx` imports `base.css` before every
+component sheet, so a tie goes to the component. **Corrected rather than left standing**, which
+is D41's own recorded failure — a comment whose premise had been deleted while its conclusion
+stayed — caught this time inside the session that wrote it. The property to preserve is the
+import order; moving `base.css` below a component stylesheet silently inverts the floor.
+
+**THE DISABLED ARM OUTRANKS A REST-STATE CLASS ON PURPOSE**, which is the one place the floor
+is deliberately not a floor: `button:disabled` at (0,1,1) beats a bare `.foo { cursor: pointer }`
+at (0,1,0), so off beats on. A screen wanting a different disabled cursor still wins with a
+class of its own.
+
+**THE TOKEN: `--field-hover`, #6B6E73, AND THE FREE REUSE WAS REFUSED ON A NUMBER NOBODY WOULD
+HAVE COMPUTED.** `--field` at 3.36:1 is the quietest edge WCAG 1.4.11 permits, so a text field
+had no hover response at all. The obvious answer is `--muted`, an existing value needing no
+grant — and it fails, because **the criterion here is contrast against `--ink`, not against the
+ground.** Every focus treatment on these controls is an ink `outline`, so the question a hover
+border must answer is whether it can be told apart from focus:
+
+    --field   #8C8C8C   5.93:1 vs ink   rest, and no hover response at all
+    this      #6B6E73   3.89:1 vs ink   1.52x the rest edge, still clearly not focus
+    --muted   #4E5157   2.50:1 vs ink   2.37x the rest edge, and READS AS FOCUS
+
+On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all three grounds
+a field is drawn on. **It composes with focus rather than competing**: hover darkens the
+border, focus draws an outline outside it at a positive offset — two properties in two places,
+so a control that is both says both.
+
+**NAMED FOR ONE STATE OF ONE JOB, per the rule `--field` sets for itself.** `--field-hover`
+cannot grow into a button border the way `--edge` or `--control` would have within a session.
+It reaches the seven typed-into controls and nothing else. **It does not license a hover
+colour for buttons** — those already lift to `--hover` — and it adds no second hover ground,
+so `docs/DESIGN.md`'s rule that every text token clears 7:1 on every ground is untouched: this
+token carries no text and is never painted as a background.
+
+**ONE REST-STATE CHANGE CAME WITH IT AND IS THE OWNER'S TO OVERRULE.**
+`CaptureScreen.css`'s `.capture-entrybox` bordered with `--line` (1.24:1) while every other
+typed-into box in the product used `--field` — so the token created for exactly this control
+had missed one, and the box could not take a hover state that started from a different edge.
+It is `--field` now, which is `docs/DESIGN.md`'s existing rule applied rather than a new one.
+The cost is visible and is on the screen the owner spends the most hours in: that border gets
+darker at rest. Named here rather than buried, because it is the one change in this entry a
+person will SEE without hovering anything.
+
+**THE GUARD IS A SPEC, AND WITHOUT IT THIS ENTRY WOULD HAVE BEEN WRITTEN FOR NOTHING.**
+Nothing in `app/tests/` asserted a cursor anywhere: `make design-check` was green through the
+whole defect and would have stayed green through a total regression of the fix. That is the
+failure mode `base.css`'s own focus-ring comment warns about, and it is the reason the owner's
+second grant matters more than the first. `app/tests/cursor.spec.ts` asserts the CLASSES —
+a clickable reads `pointer`, a disabled control reads `not-allowed`, a text field reads `text`
+— across every route, rather than pinning a selector list that would go stale the day a screen
+adds a button.
+
+**IT ASSERTS THE RULE, NEVER THE ROSTER**, which is the same distinction D40 draws for the
+copies row: pinning today's numbers goes green on any later change that moves the defect
+somewhere else. A new button that forgets its cursor has to fail this spec, and it only can if
+the spec discovers controls rather than being handed them.
+
+**WHAT IS DELIBERATELY NOT DONE.** No `:active` pass — it is neither hover nor cursor, only
+three files have one today, and adding it to ~20 controls is churn with reflow risk. No hover
+state anywhere may change `border-width`, `padding`, `font-size` or `font-weight`: **D28's
+defect was the review queue's list moving under a finger already travelling toward a target**,
+and a hover that reflows is that defect in miniature on every screen. Measured at zero
+reflow offenders across all seven routes.
+
+**What would reopen this: a screen that wants a control to say something else.** The floor is
+overridden by a class, deliberately, so a genuine exception costs one rule and one comment
+saying why. What must not happen is a screen going back to saying nothing at all — that is
+what the guard is for, and a spec that starts skipping routes has repealed this entry without
+anyone arguing with it.
+
+---
+
 
 ---
 

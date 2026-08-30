@@ -61,3 +61,105 @@ body {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* THE CURSOR EVERY CONTROL WAS ASSUMED TO HAVE, AND IT IS THE SAME ARGUMENT AS THE RING ABOVE.
+ *
+ * The owner's report, 2026-08-29: "I hate how my mouse doesn't change correctly upon what I'm
+ * hovering". Measured across the 17 component files, 142 natively-interactive elements are
+ * rendered and 39 of them had no `cursor` rule any selector could reach — because a cursor was
+ * something each stylesheet had to REMEMBER to declare on each control it drew, and the six
+ * files that declare none at all (`base.css`, `App.css`, `Gallery.css`, `SearchField.css`,
+ * `PositionBar.css`, `PositionLabel.css`) are not badly written, they are the ones whose author
+ * had no reason to think about it.
+ *
+ * A DEFAULT IN THE RESET RATHER THAN A NOTE ASKING EACH SCREEN TO REMEMBER, for the reason the
+ * focus block above already gives at length: the failure mode of the note is silent, and there
+ * is no screen in this app where a button that does not say it is a button is the intended
+ * design. Same shape as `eslint.config.js` turning a bug into a rule — "a paragraph in one file
+ * guards one file".
+ *
+ * ELEMENT SELECTORS, WHICH IS WHAT MAKES THIS A FLOOR AND NOT AN OVERRIDE — and the guarantee
+ * is the CASCADE ORDER, not the specificity alone. `main.tsx` imports this file before any
+ * component sheet, so where the two tie the component wins by coming later. That is the property
+ * to preserve: moving this import below a component stylesheet would silently invert it.
+ *
+ * The specificities are not uniform and it is worth being exact, because the tempting one-line
+ * version of this paragraph is wrong. `button` and `select` are (0,0,1) and lose to any class.
+ * `input[type='checkbox' | 'radio' | 'file']` is (0,1,1) and `[role='button']` is (0,1,0) — both
+ * could outrank a bare class, and neither does today: no component sheet sets a cursor on a
+ * toggle input, and nothing in the app renders `role='button'` at all. Measured, not assumed.
+ *
+ * THE DISABLED ARM OUTRANKS A REST-STATE CLASS ON PURPOSE. `button:disabled` is (0,1,1) against
+ * a bare `.foo { cursor: pointer }` at (0,1,0), so off beats on — which is the whole point, and
+ * is why 30 controls stopped saying "click me" while refusing the click. A screen that wants a
+ * different disabled cursor still wins with a class of its own at (0,2,0), which is exactly what
+ * `Runs.css` and `ReviewQueue.css` now do.
+ *
+ * So every deliberate per-screen choice already written survives untouched — `ReviewQueue.css`'s
+ * `zoom-in` loupes, `RunPanel.css`'s crop preview, and all 18 controls that already say
+ * `not-allowed` when they are off. Nothing here takes a cursor AWAY from a screen that chose
+ * one. What it does is answer for the ones that never said.
+ *
+ * IT REACHES THE FULFILLER'S BUTTONS AND THAT IS CORRECT. docs/DESIGN.md makes his screens
+ * touch — they show no keyboard hints — but touch is what they are DESIGNED for, not the only
+ * device that can reach them, and a mouse over his pull-confirm should say the same thing a
+ * mouse over the owner's says. Nothing here is a floor from his constraints table and nothing
+ * here can weaken one: a cursor is not a text size, a tap target, a contrast ratio or a route.
+ *
+ * IT DOES NOT REACH `PositionLabel`. That component renders `<span role="group">`, and its
+ * walk-to control (D45) is a `<button>` in `CardLocations` that WRAPS it — so `button` below
+ * hits the wrapper and the five sites offering no walk-to stay exactly as plain as D41 and D45
+ * require. The firewall those entries describe is a component-graph fact, and no selector here
+ * is aimed at a `.position-*` class.
+ */
+
+/* Everything the user agent already draws as text keeps the cursor it earns natively:
+   `<input type="text">` is `text`, `<a href>` is `pointer`, and neither needs restating. What
+   the user agent gets WRONG for this product is the list below. */
+button,
+select,
+input[type='checkbox'],
+input[type='radio'],
+input[type='file'],
+/* Zero of these today, and that is why it is here rather than after the first one. A div
+   promoted to a control by hand is the case that cannot be caught by looking at a tag name
+   later. `<summary>` is deliberately absent: `app/tests/run-panel.spec.ts` asserts `<details>`
+   and `<summary>` at zero inside the run panel, so a rule for one would be styling something
+   this repo has committed to not drawing. */
+[role='button'] {
+  cursor: pointer;
+}
+
+/* A LABEL THAT OWNS A TOGGLE IS THE TOGGLE. Clicking `Crop to the card` in the run panel checks
+   the box beside it, and the words are most of the target — so the words have to say so.
+
+   ONLY THE THREE INPUT KINDS WHERE A CLICK CHANGES SOMETHING. A `<label>` bound to a text or
+   number field also does something — it moves the caret — but that is what `text` already means
+   and `pointer` over a caption above a field you are about to type in is the wrong promise.
+   `RunPanel.css`'s `.run-field` (Max edge) and `Pricing.css`'s `.pricing-field` are exactly that
+   case and are deliberately left alone. */
+label:has(> input[type='checkbox']),
+label:has(> input[type='radio']),
+label:has(> input[type='file']) {
+  cursor: pointer;
+}
+
+/* OFF MEANS OFF, AND TWO SCREENS DISAGREED ABOUT HOW TO SAY IT. Of the 20 disabled controls in
+   the product 18 read `not-allowed` and two read `default` — `.runs-plain` and
+   `.review-close-choice`, neither with a comment claiming it meant to. Both are corrected in
+   their own files rather than here, because a class rule outranks this one; this is what
+   answers for the disabled controls that said nothing at all, of which `.review-catalog-input`
+   was one — a text field that went on reading `text` while refusing to take a character.
+
+   `[aria-disabled]` BESIDE `:disabled` BECAUSE THIS APP USES BOTH, and for good reasons it
+   records: `CaptureScreen.css`'s track cell stays rendered and refuses the click so the option
+   does not vanish mid-feed, and `BoxRuns.css`'s link is an anchor that cannot be `disabled` at
+   all. The anchor draws no cursor from this rule — it carries `pointer-events: none`, so the
+   pointer never lands on it — and that is left as it is rather than engineered around. */
+button:disabled,
+select:disabled,
+textarea:disabled,
+input:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
