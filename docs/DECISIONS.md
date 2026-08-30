@@ -5117,9 +5117,31 @@ would outlive it, leaving launchd retrying a path that is gone. `up`, `down`, `r
 
 **`KeepAlive: {SuccessfulExit: false}` AND NOT `true`, WHICH IS WHAT LETS `make down` WIN.** A
 process terminated by a signal is an *unsuccessful* exit to launchd, so `true` would restart the
-very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, `make
-down` prefers `launchctl bootout` when a plist exists, and it says — before the operator finds
-out tomorrow morning — that the agent will start it again at the next login.
+very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, and
+`make down` says — before the operator finds out tomorrow morning — that the agent will start it
+again at the next login.
+
+**IT ALSO SAID `make down` PREFERS `launchctl bootout` WHEN A PLIST EXISTS, AND THAT CLAUSE IS
+DELETED RATHER THAN REPAIRED (2026-08-30).** Both halves of its reasoning were wrong.
+
+**Wrong about the premise.** With the handler exiting 0, a signalled supervisor is a SUCCESSFUL
+exit and launchd leaves it alone — so signalling never needed avoiding. Measured rather than
+reasoned: SIGTERM to a launchd-started supervisor left no process, no pid in `launchctl print`,
+and no listener on either port.
+
+**Wrong about which process.** `bootout` acts on the SERVICE, not on whatever is running — so
+when the live supervisor had been started by `make up` rather than by launchd, bootout applied
+to nothing and `down` printed `stopped.` over a supervisor that was still up. `make
+launch-agent` then bootstrapped a second one, whose capture child could not bind, gave up after
+five retries, and overwrote `supervisor.pid` with its own pid. Two supervisors: one serving, one
+supervising nothing, and the pidfile naming the wrong one.
+
+**IT IS THE SAME DEFECT AS THE LIVENESS PROBE, ONE COMMIT LATER, AND THAT IS THE PART WORTH
+KEEPING.** Both are an action reporting success on the strength of something that did not apply
+to the process in question — the probe asked the socket instead of the child, this asked launchd
+about a service instead of the pid that was there. The probe was fixed and this survived,
+because it sat in a branch nobody re-read while fixing its twin. One path now, acting on the pid
+that is actually running.
 **`EnvironmentVariables.PATH` is baked because launchd gives an agent a minimal PATH and `npm` is
 otherwise not found**, so the app half never starts while the capture server looks fine. If npm
 comes from nvm, an `nvm install` moves it and the agent needs regenerating.

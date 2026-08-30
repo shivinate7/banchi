@@ -960,24 +960,28 @@ def _sweep_orphans() -> None:
 
 
 def do_down(_args: argparse.Namespace) -> int:
-    # WHERE AN AGENT IS INSTALLED, launchctl IS THE ONE THAT HAS TO BE TOLD. Signalling the
-    # supervisor directly would work for about a second and then launchd would bring it back:
-    # a signalled exit is an unsuccessful one, and `KeepAlive {SuccessfulExit: false}` restarts
-    # exactly that case. `bootout` is how you say "and stay down".
-    if agent_installed():
-        label = ports.agent_label()
-        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{label}"],
-                       capture_output=True)
-        deadline = time.monotonic() + DRAIN_GRACE_SECONDS + 5
-        while time.monotonic() < deadline and supervisor_pid() is not None:
-            time.sleep(0.2)
-        _sweep_orphans()
-        clear_pidfile(Child("supervisor", SUPERVISOR_PID, SUPERVISOR_LOG))
-        print("stopped.")
-        # Said here rather than left to be discovered tomorrow morning.
-        print("  the launch agent starts it again at your next login —")
-        print("  `make launch-agent ARGS=--remove` to stop that.")
-        return 0
+    # THIS SIGNALS THE SUPERVISOR THAT IS RUNNING, WHATEVER STARTED IT, and the special case
+    # that used to sit here is deleted rather than repaired.
+    #
+    # It read: where an agent is installed, launchctl is the one that has to be told, because
+    # `bootout` is how you say "and stay down". Both halves were wrong.
+    #
+    # WRONG ABOUT THE PREMISE. `KeepAlive` is `{SuccessfulExit: false}` and the SIGTERM handler
+    # exits 0, so a signalled supervisor is a SUCCESSFUL exit and launchd leaves it alone.
+    # Measured: SIGTERM to a launchd-started supervisor left no process, no pid in `launchctl
+    # print`, and no listener. Signalling was always safe.
+    #
+    # WRONG ABOUT WHICH PROCESS. `bootout` acts on the SERVICE, not on whatever is running —
+    # so when the live supervisor had been started by `make up` rather than by launchd, bootout
+    # applied to nothing and this printed `stopped.` over a supervisor that was still up.
+    # `make launch-agent` then bootstrapped a second one, whose capture child could not bind,
+    # gave up after five retries, and overwrote `supervisor.pid` with its own pid. Observed on
+    # the owner's machine 2026-08-30.
+    #
+    # That is the SAME defect as the liveness probe one commit earlier — an action reporting
+    # success on the strength of something that did not apply to the process in question — and
+    # it survived that fix by living in a branch nobody re-read. Deleting the branch is the
+    # repair: one path, and it acts on the pid that is actually there.
 
     pid = supervisor_pid()
     if pid is None:
@@ -1005,6 +1009,12 @@ def do_down(_args: argparse.Namespace) -> int:
     clear_pidfile(Child("supervisor", SUPERVISOR_PID, SUPERVISOR_LOG))
     _sweep_orphans()
     print("stopped.")
+    # Said here rather than left to be discovered tomorrow morning. The service stays loaded
+    # with no process, which is harmless — a clean exit does not trip KeepAlive — and RunAtLoad
+    # starts it again at the next login.
+    if agent_installed():
+        print("  the launch agent starts it again at your next login —")
+        print("  `make launch-agent ARGS=--remove` to stop that.")
     return 0
 
 
