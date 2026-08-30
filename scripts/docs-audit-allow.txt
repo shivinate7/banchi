@@ -17,4 +17,3 @@
 # names in order to say it does not exist. It goes stale when the code starts referencing
 # it, which is the moment the thing became real.
 
-PKMNSCAN_IMAGE_MIRROR  # build-order step 9 (D15) overrides the image mirror destination. Documented in docs/GATES.md before the mirror exists; step 9 is deliberately after Gate B.

@@ -1,4 +1,11 @@
-node_modules/
+# NO TRAILING SLASH, ON THIS AND ON `harness/images` BELOW, AND THAT IS THE WHOLE OF WHY
+# THEY READ THAT WAY. A pattern ending in `/` matches DIRECTORIES ONLY — and a worktree
+# provisions both of these as SYMLINKS (scripts/worktree-guard.sh), which git does not count
+# as directories. So `node_modules/` did not match `app/node_modules` when it was a link, one
+# `git add -A` in a worktree committed it as an absolute path into this Mac, and checking that
+# commit out in the MAIN tree replaced the real directory with a link pointing at itself. See
+# D46: it cost the 133 MB image mirror before anybody noticed the mechanism.
+node_modules
 dist/
 .claude/settings.local.json
 __pycache__/
@@ -14,7 +21,7 @@ output/
 
 # opsec: never track raw captures or UI renders
 captures/
-harness/images/
+harness/images
 
 # Derived, reproducible from a public API. The artefact worth committing is the score in
 # harness/results/, not the images that produced it or the raw model responses.

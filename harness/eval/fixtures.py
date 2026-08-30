@@ -56,7 +56,32 @@ HTTP_BACKOFF_CAP = 20.0
 # the environment or `.env`. Sent to the API host only, never to the image CDN.
 API_KEY_ENV = "POKEMONTCG_API_KEY"
 
-IMAGES_DIR = Path(__file__).resolve().parents[2] / "harness" / "images"
+# WHERE THE MIRROR LIVES, AND IT IS A KNOB BECAUSE OF ITS SIZE (D15). `PKMNSCAN_IMAGE_MIRROR`
+# has been documented since build-order step 9 was written and read by nothing until 2026-08-30,
+# when D46 made moving it the remedy rather than a preference: this repository is inside iCloud
+# Drive, and 133 MB of derived binaries syncing there is what produced the conflict copies D44
+# refuses at the commit.
+#
+# THE DEFAULT IS UNCHANGED, so a tree that sets nothing behaves exactly as it always did — which
+# is what keeps every banked score comparable across the change. An empty value reads as unset
+# rather than as the current directory: `Path("")` is `.`, and silently mirroring into the CWD is
+# the kind of wrong nobody would look for.
+#
+# EXPANDED BUT NOT RESOLVED. `~` and `$VARS` are what a person types in a shell profile; a
+# symlink in the path is deliberately left alone, because resolving it here would make the
+# stored manifest name a path the operator did not write.
+#
+# THROUGH `envfile` AND NOT `os.environ`, so `.env` is a place to set it. That file is this
+# repo's existing per-machine location — gitignored, and PER CHECKOUT, which is the property
+# that matters here: a mirror path is a fact about one machine's disk and a worktree that
+# inherited one from a tree it does not share would be worse than having none. A real
+# environment variable still wins, which is what `envfile.get` already guarantees.
+_MIRROR = envfile.get("PKMNSCAN_IMAGE_MIRROR")
+IMAGES_DIR = (
+    Path(os.path.expandvars(os.path.expanduser(_MIRROR)))
+    if _MIRROR
+    else Path(__file__).resolve().parents[2] / "harness" / "images"
+)
 MANIFEST = IMAGES_DIR / "manifest.json"
 SETS_DIR = IMAGES_DIR / ".sets"  # per-set API responses, banked so a flake is resumable
 
