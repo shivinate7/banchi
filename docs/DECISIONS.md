@@ -2941,7 +2941,91 @@ This is cookie-session auth, not the order-management API, which is another host
 
 ---
 
-## D65 — The order screen comes before the transport, and the shipping lane needs neither
+## D65 — The export is asked for, and the box's own claims are the scope
+
+**The export request names what it wants, so completeness stops being an inference.** Built 2026-08-30.
+
+D64 fetched whatever the portal's saved filter last produced and then tried to judge it. This names a category and a set in the request, so the file is complete within that scope by construction.
+
+### D64 shipped against the wrong endpoint
+
+**`/Admin/Pricing/DownloadMyExportCSV` ignores every parameter, measured across eight spellings that returned byte-identical output.** It is a different, unscoped endpoint that serves the saved filter. It entered D64 as a verified fact, it does return a CSV, and that is how it survived.
+
+**What the Export Filtered CSV button sends is `POST /admin/pricing/downloadexportcsv`**, captured off the wire in the owner's browser. The scope travels in the body, which is why every query string was ignored.
+
+### The body was guessed wrong five times
+
+**Captured by intercepting the portal's own form submit rather than inferred from its bundle.** The bundle gives the field names; it does not give the types, and the types are the part that matters.
+
+| field | inferred | actual |
+|---|---|---|
+| `PricingType` | `1` | `"Pricing"` |
+| `CategoryId` | `89` | `"89"` |
+| `SetNameIds` for all | `[]` | `["0"]` |
+| `PriceToCompare` | `null` | `3` |
+| `ExportLowestListingNotMe` | `false` | `true` |
+
+**Every value is a string, and "all of them" is `["0"]` rather than the empty list.** `0` is the "All Set Names" row's own id, so the portal asks for a filter matching everything rather than for no filter.
+
+**Two fields are never negotiable.** `MyInventory: false` makes it the catalog rather than the operator's current listings, which is what a join exists to add to. `PrintingIds: ["0"]` is All Printings, because a number stocked in several finishes must arrive with all of them or D3 rung 2 decides it from whichever survived.
+
+### The guard flips from a delta to a positive check
+
+**D64 compared a fetch against the run's previous export because nothing better was available.** Three filters narrow an export independently and one leaves no trace in it, so completeness could not be read off the contents.
+
+**A scope this process named can be checked against what arrived.** The question becomes "did I get the sets I asked for", which the file answers. `export_scope_incomplete` refuses rather than warns: a set asked for and absent means every card in it queues as `no_catalog_row`, a whole box silently, from a fetch that reported success.
+
+**The delta guard stays for exports that arrive by upload**, where nobody named a scope.
+
+### The scope is the claims the operator already made
+
+**A card carries its game and, where the operator set one, a set hint.** A box captured as Riftbound/Unleashed already says which category and which set its export needs, so nothing new is asked of them.
+
+**`match_sets` reads a hint against TCGplayer's own set names in three rules** — case-folded equality, then prefix, then the name's leading token before a colon. Measured on the two the store holds: `UNL` resolves to `Unleashed`, and `ME01` resolves to `ME01: Mega Evolution` across 220 Pokemon sets.
+
+**Substring is deliberately not one of the rules.** `Origins` appears inside `Origins: Proving Grounds`, so a substring test makes every hint naming a base set ambiguous with its own sub-sets and resolves nothing.
+
+**An ambiguous hint matches nothing and the fetch widens to the whole category.** Widening is slower and always correct; narrowing onto a set the box is not in is not. Riftbound entire is 10,118 rows against Unleashed's 2,201, and that is the whole price of being wrong in the safe direction.
+
+### One category per fetch
+
+**`CategoryId` is scalar in the portal's own request, so a mixed-game run fetches once per game.** The request takes `game` and refuses `game_required` when a run holds more than one, naming them. The join composes what the fetches leave behind.
+
+### A refusal that blamed the operator's credential
+
+**The portal answers a malformed request with HTTP 200 carrying an HTML page titled `System Error`, and D64 read any HTML as a login page.** Five different bad bodies were each reported as `tcg_session_expired`, which sends the operator to re-copy a cookie that was working. `tcg_request_rejected` now says the session is fine and the defect is here.
+
+### What it costs
+
+**The category ids are registry data that only the portal knows.** `tcgplayer_category_id` sits beside `product_line` in `pipeline/games.py` — Pokemon 3, One Piece 68, Riftbound 89 — because the two are independent identifiers for the same thing and neither derives from the other.
+
+**This module now makes two calls rather than one.** `getjsonfilters?categoryId=N` reads the vocabulary; without a category it returns one "All Set Names" row and nothing else, which is why it takes the argument.
+
+**The hint vocabulary is not TCGplayer's, and a table is the only bridge.** Measured against the live category lists: `UNL`, `ME01`, `SV05` and `SV09` resolve by shape, while `OGN`, `MEG`, `TEF` and `JTG` — the community short codes — resolve to nothing and widen to every set in the category.
+
+**No derivation rule reaches them.** `MEG` is not a prefix, an initialism or a colon-token of `ME01: Mega Evolution`, and `TEF` is none of those for `SV05: Temporal Forces`. So `set_aliases` sits in the registry beside the game's other hand-authored vocabulary, which is D22's rule for exactly this.
+
+**It is deliberately partial and maps a code to another HINT rather than to an id.** There is no machine-readable source for community codes, so it covers what the owner types and grows as they type more; and resolving `MEG` to `ME01` lets the three shape rules do the matching without the table repeating a full set name that TCGplayer may re-word. An absent alias costs a wider export, never a wrong one.
+
+### The whitelist at capture time
+
+**The capture screen offers the real set names, so a new hint is exact by construction.** `GET /tcg/sets` serves the game's vocabulary and the hint field is a `datalist` over it, with the alias codes listed beside the names so the field is searchable by either.
+
+**A datalist rather than a select, because the rig may not be constrained.** It suggests without restricting: free text still works, and an empty list is indistinguishable from the control before this entry.
+
+**Every failure answers 200 with an empty list and a reason.** No cookie, no network, the portal down — the operator keeps typing. D19 measures this screen's cadence in milliseconds and a hint field that would not open because an autocomplete failed is a worse product than one with no autocomplete.
+
+**And the reason is drawn, because degrading to empty is correct and degrading invisibly is not.** The first build carried the reason on the response and threw it away, so an expired session and a game with no sets produced the identical empty list and silence was the only signal. The session case names `.env`, since it is the one the operator can act on. It stays a note: the field takes text exactly as before.
+
+**`#/runs` already said so and the capture screen did not**, which is the asymmetry worth recording. The fetch refuses with `tcg_session_expired` and the screen renders the sentence verbatim with no control, because re-copying a cookie happens outside the app. The capture screen had no equivalent, and the hint field is the surface an operator touches long before they ever press Fetch.
+
+**The load follows the field being OPEN, not the row being tapped**, which was a real defect caught by its own test. `H` opens the field from the key handler and never reaches the row's `onToggle`, so hanging the load there left the list empty for every operator using the keyboard — which on this screen is all of them.
+
+**`match_sets` stays regardless.** 677 of the store's cards already carry free-text hints and those runs must keep joining; an exact hint costs the matcher nothing, because rule one matches and the other two never run.
+
+---
+
+## D66 — The order screen comes before the transport, and the shipping lane needs neither
 
 **Recorded 2026-08-30, and nothing here is built.** `docs/specs/order-pipeline.md` is the plan that produced it — steps 8 to 14, order in to tracking back — landed out of a planning session whose findings were living in a chat transcript. This entry settles the ORDER the remaining work is done in, because a five-session sequence had already been written down and two of its dependencies do not exist.
 
@@ -3002,6 +3086,14 @@ Distinct from Deferred above: those need an argument and a decision entry first.
   So: attach the crop alongside the downscaled card every time, and let the model read the number from pixels that were not thrown away. T1 measures it directly, the same A/B shape as the set-hint item above. Cost is roughly double the image tokens on a job D2 prices at $5–15 per 10k cards, so the downside is a few dollars and the upside is the number the gate rests on.
 
   Honest limit, and why this is Someday rather than a plan: it might do nothing. The crop-retry path was built on the assumption that enlarging the number helps, and that assumption has never been measured on its own — which is exactly what makes it worth an experiment rather than an edit.
+
+- **Refresh prices against a scheduled pull, and keep the push out of it.** D65 made the export a scoped request, so fetching fresh prices on a schedule is now small — `fetch(Scope(...))` on a cron, storing a dated export, so a pricing decision is made against today's market rather than a file from three days ago.
+
+  **The useful, safe half stops there: surface which SKUs have moved.** *These 23 have moved more than 10% since you listed them*, on `#/pricing`. The staleness gets answered and the decision stays with a person.
+
+  **The push is a different thing and needs its own entry.** Three facts make it so, each checked rather than assumed. Nothing in the pipeline reprices anything — `join` picks a price at the moment it lists a card and `emit` writes it once, so "change the price of something already live" is a concept this product does not have rather than a feature it is missing. The import path is `initializeexportcsv`, `uploadexportcsv`, `finalizeexportcsv`, `rollbackexportcsv`, none of which appear anywhere in this repo; TCGplayer wrapping it in a transaction with a rollback is their own statement about how consequential it is. And `pipeline/pricing.py` has the arithmetic — match, undercut, markup, the $0.40 floor — but no opinion on *when* a live price should move, which is the part that decides whether a loop is useful or expensive.
+
+  **If it is built, it takes D33's shape**: a free preflight showing exactly which prices would change and by how much, and a confirm that is not a default. An unattended loop that moves live marketplace prices is the one thing in this product that could lose money while nobody is looking.
 
 **Three items left this list by being built, and they are struck here rather than deleted so that a later session reading an older copy does not reinstate them as open work.** Each one did what this list's own header says it must — *"if an item starts blocking something, it has stopped being a Someday item and needs a decision entry of its own"* — and each got one:
 

@@ -1830,6 +1830,21 @@ export function RunPanel({ cart }: RunPanelProps) {
                           An unverified game was accepted because this run had no previous
                           export to compare against — an absence of evidence, which reads as a
                           clean bill of health if it is reported as one. */}
+                      {/* WHAT WAS ASKED FOR, ABOVE WHAT ARRIVED (D65). The export is scoped
+                          by this box's own capture claims, so this line is the operator's own
+                          input read back — and the place a wrong hint becomes visible. */}
+                      <p className="run-step-note run-step-fine">
+                        Asked TCGplayer for {fetched.asked.game}
+                        {fetched.asked.sets.length > 0
+                          ? ` · ${fetched.asked.sets.join(', ')}`
+                          : ' · every set'}
+                        {fetched.asked.widened && fetched.asked.hints.length > 0
+                          ? ` (no hint resolved: ${fetched.asked.unresolved_hints.join(', ')})`
+                          : ''}
+                        {!fetched.asked.widened && fetched.asked.unresolved_hints.length > 0
+                          ? ` (unmatched: ${fetched.asked.unresolved_hints.join(', ')})`
+                          : ''}
+                      </p>
                       <p className="run-step-note run-step-fine">
                         {fetched.verified.length > 0
                           ? `Checked against this run's last export: ${fetched.verified.join(', ')}.`

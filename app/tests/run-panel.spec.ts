@@ -1205,7 +1205,16 @@ function fetchedBody(over: Record<string, unknown> = {}) {
     verified: ['riftbound'],
     unverified: [],
     accepted_narrower: false,
-    source: 'https://store.tcgplayer.com/Admin/Pricing/DownloadMyExportCSV',
+    source: 'https://store.tcgplayer.com/admin/pricing/downloadexportcsv',
+    asked: {
+      game: 'riftbound',
+      category_id: 89,
+      hints: ['UNL'],
+      set_ids: [24560],
+      unresolved_hints: [],
+      sets: ['Unleashed'],
+      widened: false,
+    },
     ...over,
   }
 }
@@ -1341,4 +1350,43 @@ test('a refusal an operator cannot answer draws a sentence and nothing to press'
      refusal the screen does not understand — which is why `FETCH_ACK` lists two codes rather
      than being a boolean on the refusal. */
   await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+})
+
+test('the receipt says what was asked for, not only what arrived', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await page.locator('.run-row').first().click()
+  await fetchButton(page).click()
+
+  /* THE SCOPE IS THE OPERATOR'S OWN CAPTURE CLAIMS READ BACK (D65). A receipt showing only
+     the result cannot be read for whether the request was right, and the request is the half
+     they can correct — a set hint that resolved to the wrong set is invisible otherwise. */
+  await expect(page.locator('.run-fetched')).toContainText('Asked TCGplayer for riftbound')
+  await expect(page.locator('.run-fetched')).toContainText('Unleashed')
+})
+
+test('a hint that resolved to nothing says so, because the export silently widened', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, {
+    status: 200,
+    body: fetchedBody({
+      asked: {
+        game: 'riftbound', category_id: 89, hints: ['OGN'], set_ids: [],
+        unresolved_hints: ['OGN'], sets: [], widened: true,
+      },
+    }),
+  })
+  await page.locator('.run-row').first().click()
+  await fetchButton(page).click()
+
+  /* WIDENING IS SAFE AND SILENT, WHICH IS EXACTLY WHY IT IS DRAWN. `OGN` is a community set
+     code and TCGplayer calls that set `Origins`, so it resolves to nothing and the fetch
+     takes the whole category — correct, larger, and indistinguishable from a hint that
+     worked unless the screen says which happened. */
+  await expect(page.locator('.run-fetched')).toContainText('every set')
+  await expect(page.locator('.run-fetched')).toContainText('OGN')
 })

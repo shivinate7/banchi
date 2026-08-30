@@ -130,7 +130,7 @@ waiting for a location. **The >=$50 lane is complete apart from a screen.**
 
 ## 3. The work, in order
 
-The order below is D65's, and D65 carries the argument. Three claims decide it: a transport-first
+The order below is D66's, and D66 carries the argument. Three claims decide it: a transport-first
 session cannot state a Done this repo accepts, the shipping lane depends on neither the screen nor
 the transport, and the transport question is one probe rather than one session.
 

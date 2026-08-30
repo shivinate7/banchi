@@ -2048,6 +2048,144 @@ def _export_report(path: Path, games: Sequence[str]) -> dict:
     }
 
 
+# The set vocabulary, cached for this process. TCGplayer's set list for a category changes
+# when a set releases, which is monthly at most, and the capture screen asks for it every time
+# the operator opens the hint field. Cached rather than re-fetched because the rig is the
+# latency-sensitive surface in this product (D19's 623 ms cadence) and because a screen that
+# fetched per keystroke would spend the owner's session on autocomplete.
+_SETS_CACHE: Dict[int, list] = {}
+
+
+def do_tcg_sets(game: str) -> dict:
+    """`GET /tcg/sets?game=<game>` — the real set names for a game, for the capture screen.
+
+    THE WHITELIST HALF OF D65. A hint typed free-hand has to be matched against TCGplayer's
+    vocabulary later, and the two do not agree: `OGN` is the community code for the set
+    TCGplayer calls `Origins`. Offering the real names at capture time makes the stored hint
+    exact by construction, so the matching that follows is an equality test rather than three
+    rules and an alias table.
+
+    IT DEGRADES TO NOTHING AND MUST. The capture screen is the rig, and D19 measures its
+    cadence in milliseconds; a set list that cannot be fetched — no cookie, no network, the
+    portal down — has to leave the operator typing free text exactly as before rather than
+    blocking a capture. So every failure here answers 200 with an empty list and a reason,
+    and the screen renders a plain input when the list is empty.
+    """
+    entry = game_registry.get(game) or {}
+    category = entry.get("tcgplayer_category_id")
+    if not category:
+        return {"game": game, "sets": [], "reason": "no_category"}
+    category = int(category)
+    if category not in _SETS_CACHE:
+        try:
+            vocabulary = tcg_export.filters(category)
+        except tcg_export.FetchRefusal as caught:
+            # NOT AN ERROR TO THE SCREEN. The operator is mid-capture; a refusal here is a
+            # missing convenience, not a failed capture, and the reason is carried so the
+            # screen can say why the list is empty rather than pretending the game has no sets.
+            return {"game": game, "sets": [], "reason": caught.code}
+        _SETS_CACHE[category] = [
+            {"name": str(row.get("Text") or ""), "id": str(row.get("Value") or "")}
+            for row in (vocabulary.get("Sets") or [])
+            if str(row.get("Value") or "") != "0"
+        ]
+    aliases = entry.get("set_aliases") or {}
+    return {
+        "game": game,
+        "sets": _SETS_CACHE[category],
+        # The codes the owner types, offered beside the names so the list is searchable by
+        # either. A hint stored as an alias still resolves — `match_sets` folds it first.
+        "aliases": {str(k): str(v) for k, v in aliases.items()},
+        "reason": None,
+    }
+
+
+def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
+    """What to ask TCGplayer for, derived from what the box was captured as (D65).
+
+    THE CLAIMS THE OPERATOR ALREADY MADE ARE THE SCOPE. A card carries its game and, where
+    the operator set one, a set hint — so a box captured as Riftbound/Unleashed already says
+    which category and which set its export needs. Nothing new is asked of them.
+
+    ONE CATEGORY PER FETCH, because `CategoryId` is scalar in the portal's own request. A
+    mixed-game run therefore fetches once per game, which the join composes; the game is
+    chosen by `game` in the request or is the run's only one.
+
+    WIDENING IS ALWAYS SAFE AND NARROWING NEVER IS. A hint that resolves to no set, or a box
+    with no hints at all, drops the set filter and takes the whole category. That is slower
+    and larger — Riftbound entire is 10,118 rows against Unleashed's 2,201 — and it cannot
+    miss a card. Guessing a set the box is not in would.
+    """
+    payload_game = payload.get("game")
+    cards = (files.read_json(directory / run_files.IDENTIFICATIONS) or {}).get("cards") or {}
+    if not cards:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "export_refused",
+            f"{directory / run_files.IDENTIFICATIONS} does not exist — run `pkmnscan "
+            f"identify` first.",
+        )
+
+    by_game: Dict[str, set] = {}
+    for record in cards.values():
+        game = record.get("game") or game_registry.DEFAULT_GAME
+        hint = (record.get("set_hint") or "").strip()
+        by_game.setdefault(game, set())
+        if hint:
+            by_game[game].add(hint)
+
+    catalogued = {g: h for g, h in by_game.items() if (game_registry.get(g) or {}).get("catalogued", True)
+                  and (game_registry.get(g) or {}).get("tcgplayer_category_id")}
+    if not catalogued:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "export_no_category",
+            f"No game in this run has a TCGplayer category id, so there is nothing to ask "
+            f"for. Games held: {', '.join(sorted(by_game)) or 'none'}.",
+        )
+    if payload_game is not None:
+        if payload_game not in catalogued:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "game_not_in_run",
+                f"This run holds no {payload_game} card that needs a catalog. It holds: "
+                f"{', '.join(sorted(catalogued))}.",
+            )
+        game = payload_game
+    elif len(catalogued) == 1:
+        game = next(iter(catalogued))
+    else:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "game_required",
+            f"This run holds more than one game and one fetch answers for one category. "
+            f"Send `game` as one of: {', '.join(sorted(catalogued))}. Each is fetched "
+            f"separately and the join takes them together.",
+        )
+
+    category = int(game_registry.get(game)["tcgplayer_category_id"])
+    hints = sorted(catalogued[game])
+    vocabulary = tcg_export.filters(category)
+    set_ids, unresolved = tcg_export.match_sets(
+        hints, vocabulary.get("Sets") or [], game_registry.get(game).get("set_aliases")
+    )
+    scope = tcg_export.Scope(category_id=category, set_ids=set_ids)
+    asked = {
+        "game": game,
+        "category_id": category,
+        "hints": list(hints),
+        "set_ids": list(set_ids),
+        "unresolved_hints": list(unresolved),
+        "sets": [
+            str(e.get("Text"))
+            for e in (vocabulary.get("Sets") or [])
+            if str(e.get("Value")) in {str(i) for i in set_ids}
+        ],
+        "widened": not set_ids,
+    }
+    return scope, asked
+
+
 def do_pipeline_export(name: str, payload: dict) -> dict:
     """`POST /pipeline/runs/<name>/export` — fetch this run's export from TCGplayer.
 
@@ -2079,7 +2217,8 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     directory = _open_run(name)
 
     try:
-        body = tcg_export.fetch()
+        scope, asked = _scope_for_run(directory, payload)
+        body = tcg_export.fetch(scope)
     except tcg_export.FetchRefusal as caught:
         # A BAD GATEWAY AND NOT A 500. The failure is at TCGplayer or in the credential this
         # machine holds for it, and every one of these carries a sentence saying which.
@@ -2163,6 +2302,30 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     lost: Dict[str, list] = {}
     thinned: Dict[str, list] = {}
     fetched_export = tcgcsv.read_export(target)
+
+    # ---------------------------------------------- THE POSITIVE CHECK (D65)
+    #
+    # ASKED-FOR RATHER THAN INFERRED, WHICH IS THE WHOLE POINT OF SCOPING THE REQUEST. D64's
+    # delta guard exists because completeness could not be read off a file somebody else had
+    # filtered: three axes narrow an export and one leaves no trace in it. A file fetched to a
+    # scope this process NAMED is complete within that scope by construction, so the question
+    # stops being "what might be missing" and becomes "did I get what I asked for", which the
+    # file can answer.
+    #
+    # It refuses rather than warns because a set that was asked for and did not arrive means
+    # the cards in it will queue as `no_catalog_row` — a whole box's worth, silently, from a
+    # fetch that reported success.
+    if asked["sets"]:
+        arrived = {str(row.get(tcgcsv.SET_COLUMN) or "") for row in fetched_export.rows}
+        absent = [name for name in asked["sets"] if name not in arrived]
+        if absent:
+            raise refuse(
+                HTTPStatus.CONFLICT,
+                "export_scope_incomplete",
+                f"This export was asked for {', '.join(asked['sets'])} and came back without "
+                f"{', '.join(absent)}. Every card of a missing set would queue as "
+                f"no_catalog_row. Nothing was kept.",
+            )
     for game in answers_for:
         previous = run.exports_by_game.get(game)
         if previous is None or not Path(previous).is_file():
@@ -2230,6 +2393,10 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
             "unverified": unverified,
             "accepted_narrower": bool(lost or thinned),
             "source": tcg_export.endpoint(),
+            # WHAT WAS ASKED FOR, beside what arrived. A receipt that showed only the result
+            # cannot be read for whether the scope was right — and the scope is the operator's
+            # own capture claims, so it is the half they can correct.
+            "asked": asked,
         }
     )
     return report

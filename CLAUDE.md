@@ -396,7 +396,8 @@ D61  The shipping lane is three lanes, and the third answer is "I cannot tell"
 D62  The price history is reachable, and it is drawn beside the hold rather than beside the location
 D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
-D65  The order screen comes before the transport, and the shipping lane needs neither
+D65  The export is asked for, and the box's own claims are the scope
+D66  The order screen comes before the transport, and the shipping lane needs neither
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
@@ -406,7 +407,7 @@ D65  The order screen comes before the transport, and the shipping lane needs ne
 - `docs/specs/order-pipeline.md` — steps 8 to 14: an order arrives, a card is pulled, an
   envelope is stamped, tracking goes back. **Recorded, not built**, and every number in it was
   measured rather than carried forward — section 6 names what it could not check. Three modules
-  under `pipeline/` have full T7 coverage and no route, no client function and no screen — D65,
+  under `pipeline/` have full T7 coverage and no route, no client function and no screen — D66,
   which settles the order the rest is built in. Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new

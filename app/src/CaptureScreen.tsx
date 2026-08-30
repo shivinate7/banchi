@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 
 import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
 import {
+  getTcgSets,
   ServerError,
   capture,
   createBox,
@@ -262,6 +263,20 @@ type BoxOption = {
  * key read out of devtools says which store it belongs to. Two stores with one prefix is a
  * boundary you have to remember, which is the thing this block exists to stop.
  */
+/* Why the set suggestions are missing, in the operator's terms (D65).
+ *
+ * THE SESSION ONE IS THE ONLY ACTIONABLE CASE AND IT NAMES THE FILE. The others are stated
+ * plainly and no more: this is the rig's screen, the field still works, and a paragraph about
+ * a cookie would be louder than the thing it describes. The raw code is kept on the end
+ * because `docs/DESIGN.md` shows reason codes beside names — what you saw stays greppable. */
+function hintReason(code: string | null): string {
+  if (!code) return ''
+  if (code === 'tcg_session_expired') return 'TCGplayer session expired — replace it in .env'
+  if (code === 'tcg_cookie_missing') return 'no TCGplayer session — set one in .env'
+  if (code === 'no_category') return 'no TCGplayer category for this game'
+  return `set list unavailable (${code})`
+}
+
 const SESSION_KEYS = {
   box: 'pkmnscan.session.box',
   setHint: 'pkmnscan.session.setHint',
@@ -731,6 +746,42 @@ export function CaptureScreen() {
   // (`name_taken`). This gates the entry's Enter so a double press cannot post twice.
   const [boxBusy, setBoxBusy] = useState(false)
   const [setHint, setSetHint] = useState(readSessionSetHint)
+
+  /* D65's whitelist: the real set names for the claimed game, offered in the hint field.
+   *
+   * WHY THE HINT NEEDED A VOCABULARY AT ALL. A hint typed free-hand is matched against
+   * TCGplayer's set names later, and the two disagree — `OGN` is the community code for the
+   * set TCGplayer calls `Origins`, and a hint that resolves to nothing widens the export to
+   * every set in the category. Offering the real names makes the stored hint exact.
+   *
+   * LAZY, CACHED AND UNABLE TO FAIL LOUDLY. Loaded when the field is first opened rather than
+   * at mount, because most sessions never touch it; kept per game; and a failure leaves the
+   * list empty so the control is the plain text input it has always been. The rig does not
+   * stop for an autocomplete. */
+  const [tcgSets, setTcgSets] = useState<
+    Record<string, { names: string[]; reason: string | null }>
+  >({})
+  const loadSets = useCallback(
+    (forGame: string) => {
+      if (!forGame || tcgSets[forGame] !== undefined) return
+      void getTcgSets(forGame)
+        .then((answer) => {
+          const names = answer.sets.map((row: { name: string }) => row.name)
+          const codes = Object.keys(answer.aliases ?? {})
+          setTcgSets((prev) => ({
+            ...prev,
+            [forGame]: { names: [...codes, ...names], reason: answer.reason },
+          }))
+        })
+        .catch(() =>
+          setTcgSets((prev) => ({
+            ...prev,
+            [forGame]: { names: [], reason: 'unreachable' },
+          })),
+        )
+    },
+    [tcgSets],
+  )
   // EMPTY, not ['normal']. See NO_CLAIM_LABEL above: the default has to be "the operator
   // has said nothing", or D3's rungs 2 and 3 are dead for every card this rig ever sees.
   // A SET since the amendment of 2026-08-23 — any number of members is legal, including all
@@ -1304,8 +1355,15 @@ export function CaptureScreen() {
 
   useEffect(() => {
     if (openField === 'box') boxEntryRef.current?.focus()
-    else if (openField === 'set') hintRef.current?.focus()
-  }, [openField])
+    else if (openField === 'set') {
+      hintRef.current?.focus()
+      /* THE VOCABULARY FOLLOWS THE FIELD BEING OPEN, not the row being tapped. `H` opens it
+         from the key handler and never touches the row's `onToggle`, so hanging the load off
+         the tap left the list empty for every operator who uses the keyboard — which on this
+         screen is all of them. Keyed on the effect that already fires for both paths. */
+      if (game !== null) loadSets(game)
+    }
+  }, [openField, game, loadSets])
 
   /* WHAT THE BOX FILTER SHOWS. Substring on the box number — `9` keeps 9, 19, 95 and 99,
    * which is the mockup's own worked example — capped at nine rows, and the reason for the
@@ -2949,9 +3007,27 @@ export function CaptureScreen() {
                     type="text"
                     placeholder="sv09"
                     aria-label="Set hint"
+                    list="capture-set-names"
                     value={setHint}
                     onChange={(event) => setSetHint(event.target.value)}
                   />
+                  {/* A DATALIST AND NOT A SELECT, which is the whole reason this is safe to
+                      add to the rig's own screen. It suggests without constraining: free text
+                      still works, an empty list is indistinguishable from the control before
+                      D65, and nothing here can refuse a capture. */}
+                  <datalist id="capture-set-names">
+                    {(game === null ? [] : tcgSets[game]?.names ?? []).map((name: string) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                  {/* WHY THERE ARE NO SUGGESTIONS, WHICH SILENCE DOES NOT SAY. The list
+                      degrading to empty is the correct behaviour — the rig never stops for an
+                      autocomplete — but degrading INVISIBLY is a different thing, and an
+                      expired session looks exactly like a game that has no sets. The reason
+                      already rides on the response and was being thrown away. */}
+                  {game !== null && tcgSets[game]?.reason ? (
+                    <em className="capture-sub">{hintReason(tcgSets[game].reason)}</em>
+                  ) : null}
                 </form>
               </OpenField>
             ) : (
