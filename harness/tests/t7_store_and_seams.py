@@ -190,7 +190,7 @@ from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
-from pipeline import games, join, tcgcsv, variant  # noqa: E402
+from pipeline import games, join, orders, tcgcsv, variant  # noqa: E402
 from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
@@ -11178,6 +11178,333 @@ def check_drain(checks: Checks) -> None:
     checks.ok(capture_server.drain(0.5), "and the drain then returns true")
 
 
+def check_order_resolver(checks: Checks) -> None:
+    """`pipeline/orders.py` — an order line resolved to the copies that fill it.
+
+    ITS OWN `isolated_home`, this file's own repeated lesson: the second half writes
+    photographs and a run directory, and the blocks above count records and history lines
+    over boxes they build card by card. The FIRST half needs no home at all — the resolver
+    reads an `Inventory` it is handed and touches no disk — and that is itself the property
+    worth having: a pure core is testable without a store.
+
+    THE CASE THAT MATTERS IS THE FIRST ONE. Two open orders for one SKU, resolved
+    per-order, are handed THE SAME PHYSICAL CARDS and both report success — the picker
+    walks to box 3 card 3 twice. It is the whole reason `resolve_all` takes every order at
+    once and `resolve_one` does not exist, so it is asserted as three facts that a
+    per-order resolver fails on separately: the second order reports `short`, its
+    fulfilment count is the copies that were actually left, and not one position appears
+    on both orders.
+
+    OBSERVED FAILING FIRST. Every case here was run against a mutation of the code it
+    covers before it was kept — a per-order pool, a dropped SKU coercion, a dropped
+    terminal filter, a paperwork lookup that reads `pricing.json` raw instead of through
+    `realign`. A test that cannot fail is not coverage, and this repo has already paid for
+    that lesson at the multi-game prompt seam.
+
+    The domain objects are constructed here rather than parsed from a fixture, and that is
+    not the hand-authored-fixture problem the owner declined: `Order` and `OrderLine` have
+    a confirmed shape (a real observed line — Moonfall, UNL #198/219, Foil, Near Mint,
+    Epic, SKU 9191486, qty 3, $11.88), and the order CSVs carry no line items at all, so
+    there is no wire format here to guess at.
+    """
+    checks.note("")
+    checks.note("ORDER RESOLVER — pipeline/orders.py")
+
+    def card(box, index, sku, **extra):
+        fields = {
+            "box": box,
+            "index": index,
+            "sku": sku,
+            "capture_id": f"C{box}-{index}",
+            "state": master.IDENTIFIED,
+        }
+        fields.update(extra)
+        return master.Card(**fields)
+
+    def stock(*cards) -> master.Inventory:
+        return master.Inventory(cards={c.key: c for c in cards})
+
+    def line(sku, quantity, **extra) -> orders.OrderLine:
+        return orders.OrderLine(sku=sku, quantity=quantity, **extra)
+
+    with isolated_home() as home:
+        # ---------------------------------------------------- 1. no cross-order allocation
+        #
+        # The proven real join: sku 9191486 (Moonfall) is four copies in box 3. Two open
+        # orders want three each, and there are four.
+        inventory = stock(
+            card(3, 3, "9191486"),
+            card(3, 31, "9191486"),
+            card(3, 34, "9191486"),
+            card(3, 35, "9191486"),
+        )
+        first = orders.Order(
+            number="A-1",
+            placed_at="2026-08-28T10:00:00+00:00",
+            lines=(
+                line(
+                    "9191486", 3,
+                    name="Moonfall", number="UNL #198/219", printing="Foil",
+                    condition="Near Mint", rarity="Epic", unit_price="11.88",
+                ),
+            ),
+        )
+        second = orders.Order(
+            number="B-2",
+            placed_at="2026-08-29T10:00:00+00:00",
+            lines=(line("9191486", 3),),
+        )
+
+        # DELIBERATELY HANDED OVER NEWEST-FIRST, so the sequencing is doing work rather
+        # than agreeing with the argument order by luck.
+        answer = orders.resolve_all(inventory, [second, first])
+        a = answer.for_order("A-1")
+        b = answer.for_order("B-2")
+
+        checks.equal(
+            (a.lines[0].reason, a.lines[0].fulfilled),
+            (orders.RESOLVED, 3),
+            "the OLDER order is served first and takes three of the four copies — the "
+            "sequence is placed_at, not whatever order the feed handed them over in",
+        )
+        checks.equal(
+            (b.lines[0].reason, b.lines[0].fulfilled, b.lines[0].outstanding),
+            (orders.SHORT, 1, 2),
+            "and the second order gets the ONE copy that is left, and says `short` — a "
+            "per-order resolver reports `resolved` here, having promised three cards twice",
+        )
+        taken_a = {(p.box, p.index) for p in a.lines[0].picks}
+        taken_b = {(p.box, p.index) for p in b.lines[0].picks}
+        checks.equal(
+            sorted(taken_a | taken_b),
+            [(3, 3), (3, 31), (3, 34), (3, 35)],
+            "between them they name all four copies and no copy twice — the pool is SHARED, "
+            "which is the property a per-order pass cannot have at any level of care",
+        )
+        checks.equal(
+            len(taken_a & taken_b), 0, "no physical card is promised to two buyers"
+        )
+        checks.ok(
+            not answer.complete and a.complete and not b.complete,
+            "the resolution is incomplete because one order is, and says which",
+        )
+        checks.equal(
+            [(p.box, p.index) for p in orders.resolve_all(inventory, [first, second])
+             .for_order("A-1").lines[0].picks],
+            sorted(taken_a),
+            "re-running over an unchanged inventory allocates identically — the answer is "
+            "a function of the store and the orders, never of the walk order",
+        )
+        checks.equal(
+            a.lines[0].picks[0].capture_id,
+            "C3-3",
+            "a pick carries the capture_id, which is what a caller that must record "
+            "something records: a position key is a fourth thing no renumber path remaps",
+        )
+        checks.equal(
+            answer.counts(),
+            {orders.RESOLVED: 1, orders.SHORT: 1, orders.NO_COPIES_ON_HAND: 0,
+             orders.SKU_UNKNOWN: 0, orders.SKU_UNSEEN: 0, orders.NOT_A_SINGLE: 0},
+            "and every reason is reported including the zeros, so `nothing was short` and "
+            "`nothing was checked` are not the same output",
+        )
+
+        # -------------------------------------------------------- 2. the SKU is coerced
+        #
+        # `Card.sku` is a string out of a CSV; a JSON order payload carries the int.
+        # `"9191486" == 9191486` is False, so without this every line resolves to zero,
+        # raises nothing and logs nothing — a silent total failure.
+        integer = orders.Order(number="C-3", lines=(orders.OrderLine(sku=9191486, quantity=1),))
+        coerced = orders.resolve_all(inventory, [integer]).for_order("C-3")
+        checks.equal(
+            (coerced.lines[0].sku, coerced.lines[0].reason, coerced.lines[0].fulfilled),
+            ("9191486", orders.RESOLVED, 1),
+            "a line built from an int SKU resolves — uncoerced, it silently finds nothing",
+        )
+
+        # ---------------------------------------- 3. an empty result gets the right word
+        departed = stock(
+            card(4, 1, "SOLDOUT", state=master.SOLD),
+            card(4, 2, "SOLDOUT", state=master.RETIRED, retire_reason="damaged"),
+        )
+        gone = orders.resolve_all(
+            departed, [orders.Order(number="D-4", lines=(line("SOLDOUT", 1),))]
+        ).lines[0]
+        checks.equal(
+            (gone.reason, gone.fulfilled, gone.on_hand, gone.sold, gone.retired),
+            (orders.NO_COPIES_ON_HAND, 0, 0, 1, 1),
+            "every copy has left, so the reason says so and the BREAKDOWN says how — "
+            "deliberately not `already_pulled`, because D26 makes a retirement a departure "
+            "WITHOUT a sale and calling it filled tells the owner to ship nothing and "
+            "believe it shipped",
+        )
+
+        pooled = stock(card(9, 1, "CODECARD", game="pokemon_code"))
+        code = orders.resolve_all(
+            pooled, [orders.Order(number="E-5", lines=(line("CODECARD", 1),))]
+        ).lines[0]
+        checks.equal(
+            (code.reason, code.fulfilled, code.pooled),
+            (orders.NO_COPIES_ON_HAND, 0, 1),
+            "a pooled game's copy is never walked to (D24) — it is a count, not a place, "
+            "and the breakdown says pooled rather than sold so nobody hunts for it",
+        )
+
+        unseen = orders.resolve_all(
+            inventory, [orders.Order(number="F-6", lines=(line("NOSUCHTHING", 1),))]
+        ).lines[0]
+        checks.equal(
+            (unseen.reason, unseen.fulfilled),
+            (orders.SKU_UNSEEN, 0),
+            "a SKU nothing anywhere knows is `sku_unseen`",
+        )
+
+        sealed = orders.resolve_all(
+            inventory,
+            [orders.Order(
+                number="G-7",
+                lines=(line("BOOSTERBOX", 1, kind=orders.LINE_KIND_SEALED),),
+            )],
+        ).lines[0]
+        checks.equal(
+            (sealed.reason, sealed.fulfilled),
+            (orders.NOT_A_SINGLE, 0),
+            "a sealed line routes as `not_a_single` and is NOT looked for among the cards — "
+            "`sku_unseen` there would send the owner hunting boxes for a booster box, and "
+            "the signal that matters is that this order cannot ship in an envelope",
+        )
+        checks.raises(
+            orders.UnknownLineKind,
+            lambda: orders.OrderLine(sku="1", quantity=1, kind="mystery"),
+            "and a kind the resolver does not know is refused rather than defaulted to "
+            "`single`: a feed that has learned a new category is telling us something",
+        )
+        checks.equal(
+            sorted(orders.LINE_REASONS),
+            sorted(["resolved", "short", "no_copies_on_hand", "sku_unknown",
+                    "sku_unseen", "not_a_single"]),
+            "six reasons, because an empty result has several causes with different remedies",
+        )
+
+        # ------------------------------- 4. the run paperwork is the backup, and it is named
+        #
+        # A card whose run was joined and never emitted carries `sku: null` — invisible to
+        # every SKU-keyed surface, which is 498 of the owner's 502 unstamped records. The
+        # paperwork is what finds it, and the source is recorded so a screen can say
+        # "matched via run X, not stamped" rather than answering from an invisible fallback.
+        unstamped = stock(
+            card(3, 3, "9191486"),
+            card(5, 7, None),
+        )
+        paper = [orders.PaperworkEntry(
+            sku="9191486", run="2026-08-30-box5-01", positions=("3/3", "5/7")
+        )]
+        backed = orders.resolve_all(
+            unstamped,
+            [orders.Order(number="H-8", lines=(line("9191486", 2),))],
+            paperwork=paper,
+        ).lines[0]
+        checks.equal(
+            (backed.reason, backed.fulfilled),
+            (orders.RESOLVED, 2),
+            "the paperwork finds the copy no stamp names, so the line fills",
+        )
+        checks.equal(
+            [(p.box, p.index, p.source, p.run) for p in backed.picks],
+            [(3, 3, orders.SOURCE_CARD, None),
+             (5, 7, orders.SOURCE_RUN, "2026-08-30-box5-01")],
+            "CARD-FIRST, then the run, and each pick says which answered — a silent "
+            "fallback is what makes a later disagreement unexplainable",
+        )
+        checks.equal(
+            len({(p.box, p.index) for p in backed.picks}),
+            2,
+            "and a position the paperwork ALSO names is not drawn twice — 3/3 is in both",
+        )
+        unknown = orders.resolve_all(
+            stock(card(1, 1, "OTHER")),
+            [orders.Order(number="I-9", lines=(line("9191486", 1),))],
+            paperwork=paper,
+        ).lines[0]
+        checks.equal(
+            (unknown.reason, unknown.fulfilled),
+            (orders.SKU_UNKNOWN, 0),
+            "no card carries it and a run's pricing.json does: `sku_unknown`, whose remedy "
+            "is to look at what happened to the box rather than at the order",
+        )
+
+        # -------------------------- 5. paperwork_for realigns, because positions MOVE (D36)
+        #
+        # `pricing.json` stores position keys and a mid-box delete slides every higher index
+        # in the box down one (D10 ruling 1). Reading that file raw is the defect that wrote
+        # all 47 of box 2's queue entries one position off, each carrying the right read with
+        # its NEIGHBOUR's photograph. So the loader re-binds through `cli/resolve.py:realign`.
+        photos = home / "captures" / "cards" / "box3"
+        photos.mkdir(parents=True)
+        bodies = {i: f"order-resolver-card-{i}".encode() for i in (1, 2, 3)}
+        for i, body in bodies.items():
+            (photos / f"{i:04d}.jpg").write_bytes(body)
+        run = runs.create("orders")
+        run.write_identifications({
+            "cards": {
+                f"3/{i}": {
+                    "box": 3,
+                    "index": i,
+                    "photo": f"captures/cards/box3/{i:04d}.jpg",
+                    "photo_sha256": hashlib.sha256(body).hexdigest(),
+                }
+                for i, body in bodies.items()
+            }
+        })
+        files.write_json(run.path(runs.PRICING), {"skus": [
+            {"sku": "9191486", "positions": [
+                {"box": 3, "index": 2}, {"box": 3, "index": 3},
+            ]},
+        ]})
+
+        checks.equal(
+            [(e.sku, e.run, e.positions) for e in resolve.paperwork_for(run)],
+            [("9191486", run.name, ("3/2", "3/3"))],
+            "an unmoved box reads back exactly what the run wrote",
+        )
+
+        # Card 1 is deleted mid-box: 2 and 3 slide down to 1 and 2.
+        (photos / "0001.jpg").write_bytes(bodies[2])
+        (photos / "0002.jpg").write_bytes(bodies[3])
+        (photos / "0003.jpg").unlink()
+        checks.equal(
+            [e.positions for e in resolve.paperwork_for(run)],
+            [("3/1", "3/2")],
+            "after a mid-box delete the SAME paperwork names where those photographs are "
+            "NOW — read raw, it would send a picker one slot past every card (D36)",
+        )
+
+        # And a copy whose photograph is on no slot at all has left the box.
+        (photos / "0002.jpg").unlink()
+        checks.equal(
+            [e.positions for e in resolve.paperwork_for(run)],
+            [("3/1",)],
+            "and a departed copy is dropped rather than named — there is no card at its "
+            "old slot to walk to, and its successor is a different card",
+        )
+
+        files.write_json(run.path(runs.PRICING), {"skus": [
+            {"sku": "9191486", "positions": [{"box": 3, "index": 3}]},
+        ]})
+        checks.equal(
+            resolve.paperwork_for(run), [],
+            "a SKU every one of whose positions has departed contributes no entry at all, "
+            "rather than an entry naming nothing",
+        )
+
+        run_without = runs.create("orders")
+        checks.equal(
+            resolve.paperwork_for(run_without), [],
+            "and a run that was identified and never joined has no pricing table, which is "
+            "an ordinary state and not a complaint (D49) — the card-first pass needs none",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -11223,6 +11550,7 @@ def run() -> Result:
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
+    check_order_resolver(checks)
     check_crop_preview(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
