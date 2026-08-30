@@ -723,9 +723,19 @@ def iter_code_lines(text: str):
             yield number, line
             continue
         # Outside a fence, keep only the spans between backticks.
+        #
+        # JOINED BY A NEWLINE, BECAUSE TWO ADJACENT SPANS ARE TWO REFERENCES AND NOT ONE.
+        # A space let every caller's regex match straight across a span boundary, so
+        # `make` beside `docs/GATES.md` read as a target called `docs` and
+        # `~/Developer/pkmnscan` beside `make icloud-sweep` read as a subcommand called
+        # `make`. Both are phantoms — nobody wrote either reference — and both blocked a
+        # commit. Latent until D60 unwrapped the prose: the docs used to wrap at 96
+        # columns, which kept most spans on separate lines and hid it. Every caller here
+        # matches a literal space after the command word, so a newline cannot be crossed,
+        # and one yield per source line keeps the reported line numbers right.
         spans = re.findall(r"`([^`]+)`", line)
         if spans:
-            yield number, " ".join(spans)
+            yield number, "\n".join(spans)
 
 
 def phony_gaps(text: str) -> Tuple[Set[str], Set[str]]:
