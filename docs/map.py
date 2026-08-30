@@ -444,7 +444,9 @@ COMPONENTS = [
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
             "githooks/pre-commit": {
                 "does": "the commit gate: fixtures read-only, no image staged outside "
-                        "captures/, no printed code-card layout in the staged diff, then "
+                        "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
+                        "the repo still lives there, no printed code-card layout in the "
+                        "staged diff, then "
                         "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
                         "the coupling question, 64 warning loudly that the auditor was "
                         "invoked with a flag it does not accept. Tracked and reviewable "
@@ -623,7 +625,10 @@ COMPONENTS = [
                 # next" through — which is why an entry without one prints a dead end. D16
                 # is the audit it shells out to for its health line, and the reason SOURCES
                 # is pure literals: a check that verifies a reader must not execute it.
-                "governed_by": ["D16", "D17"],
+                # D42 joins because hooks() no longer merely reports a config: it encodes where
+                # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
+                # arrangement that entry started with and then had to retract.
+                "governed_by": ["D16", "D17", "D42"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

@@ -51,7 +51,7 @@ claude
 `scripts/githooks/pre-commit` as a tracked file with nothing pointing at it, and the opsec
 rules it enforces are off. That failure is silent: nothing prints, nothing exits 1, and the
 commit that leaks a live code looks like every commit before it. `make status` prints an
-`Opsec hook` line so an unarmed clone says so, rather than being found out by a leak.
+`Git hooks` line so an unarmed clone says so, rather than being found out by a leak.
 
 `make status` first, especially after time away: it prints the next build-order step, the
 last T1 score and the branch — all read from the repo, none of it written

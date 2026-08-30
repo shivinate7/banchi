@@ -19,7 +19,11 @@
 
 set -uo pipefail
 
-HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/githooks" && pwd)"
+# Defaults to the TRACKED hooks beside this script. Overridable so the same nineteen cases
+# can be run against the INSTALLED copy in the git common dir — `make hooks` copies rather
+# than points now (D42, amended), and a copy that lands wrong is a guard that reads as armed
+# and does nothing. Proving the files behave is not the same claim as proving the install did.
+HOOKS_DIR="${PKMNSCAN_HOOKS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/githooks" && pwd)}"
 pass=0
 fail=0
 

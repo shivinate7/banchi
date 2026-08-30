@@ -44,6 +44,31 @@ if [ -n "$changed_fixtures" ]; then
   If the schema genuinely changed, re-export from TCGplayer and commit that as a new fixture."
 fi
 
+# iCloud Drive conflict copies. This repo lives in iCloud Drive until the owner moves it off,
+# and iCloud resolves a same-file race by writing a SECOND file beside the original with " 2"
+# appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`. They are untracked, so they
+# are invisible until something says `git add -A`, which is exactly what an agent session
+# says. Measured on 2026-08-29: three appeared in one afternoon, and one of them was
+# installed as a git hook by `make hooks` before that target learned to enumerate through
+# `git ls-files`.
+#
+# Refused rather than reported, because the failure is silent and permanent: a committed
+# `foo 2.py` is a second copy of a module that no import reaches and no test runs, and it
+# will be read later as a file somebody meant to write. Deleting it is always right; the
+# original is the tracked one.
+#
+# The pattern is the stem ending in a space and digits, before an optional extension. A
+# deliberate `Section 2.md` would trip it — the bypass below is the answer, and nothing in
+# this repo is named that way today.
+[ "${PKMNSCAN_DUPES:-}" = "off" ] && icloud_dupes="" || icloud_dupes="$(printf '%s\n' "$staged" | grep -E '(^|/)[^/]* [0-9]+(\.[A-Za-z0-9]+)?$' || true)"
+if [ -n "$icloud_dupes" ]; then
+  fail "iCloud Drive conflict copies staged:
+$(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
+  These are duplicates iCloud wrote beside the real file, not files anyone authored.
+  Delete them — the tracked original is the one you want.
+  If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
+fi
+
 while IFS= read -r path; do
   [ -z "$path" ] && continue
 

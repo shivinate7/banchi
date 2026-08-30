@@ -37,8 +37,8 @@ while IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do
   echo "  $remote  ${local_ref:-<deleting>} -> refs/heads/main" >&2
   echo "" >&2
   echo "  main advances by merging a pull request on GitHub, never by a push from a" >&2
-  echo "  session. Two sessions pushed straight to it today; both moved main under" >&2
-  echo "  worktrees that were cut from it." >&2
+  echo "  session. D42 has the count and the reasoning; a refusal message is not the" >&2
+  echo "  place for a number that ages." >&2
   echo "" >&2
   echo "  Push your branch instead and open one:" >&2
   echo "" >&2

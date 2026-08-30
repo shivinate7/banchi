@@ -117,29 +117,103 @@ worktree-setup:
 # the commit that leaks a live code looks exactly like every commit before it.
 #
 # This is the one setup step that cannot itself be committed, so it cannot be made automatic —
-# `make status` reports the unarmed state instead, which is why that target grew an Opsec hook
+# `make status` reports the unarmed state instead, which is why that target grew a Git hooks
 # line. Idempotent: running it on an armed clone is free.
 #
 # The chmod is not padding. git skips a non-executable hook WITHOUT A WORD, so a correct
 # hooksPath over a non-executable file is the same silent failure by another route.
-# THE PATH IS ABSOLUTE, AND RESOLVED TO THE MAIN WORKTREE RATHER THAN TO WHEREVER YOU RAN
-# THIS. core.hooksPath lives in the common .git dir, so ONE value governs every worktree of
-# this clone — and git resolves a relative one against each worktree's own root. Left
-# relative, a worktree checked out from a commit before the main guard existed finds no
-# `reference-transaction` file and runs unguarded, which is the exact population the guard is
-# for: concurrent sessions on branches cut from an older main. Absolute, main's copy governs
-# all of them whatever commit they sit on. Resolved through `git worktree list` rather than
-# $(CURDIR) so that running this FROM a worktree does not point the whole clone at a
-# checkout that is about to be deleted.
+# THE HOOKS ARE INSTALLED INTO THE GIT COMMON DIR, NOT POINTED AT IN A WORKING TREE.
+#
+# D42 first pointed core.hooksPath at the MAIN worktree's scripts/githooks, on the argument
+# that one absolute path then governs every worktree of the clone whatever commit each sits
+# on. That argument was right about worktrees and wrong about the main checkout, and it was
+# falsified within the hour: the moment D42 landed on main, the main checkout was sitting on
+# another session's WIP branch that predated it, so the directory git actually read held one
+# hook out of three. THE GUARD WAS ARMED AT ZERO AND NOTHING SAID SO — which is the silent
+# failure this repo refuses everywhere else, reproduced by the fix for it.
+#
+# A working tree is the wrong home for this because its contents are a function of somebody
+# else's checkout. `.git` is not: it is per-clone, shared by every worktree, and no branch
+# can empty it. So `make hooks` COPIES the tracked hooks there and aims the config at the
+# copy — the install pattern husky and pre-commit both use, for this reason.
+#
+# WHAT IS GIVEN UP, NAMED RATHER THAN DESIGNED AWAY: the copy can go stale. Editing
+# scripts/githooks does not change what git runs until this target is run again. There is no
+# check that closes this without lying — the tracked file legitimately differs between
+# branches, so "installed does not match this tree" is not an error and must never gate a
+# commit. `make status` reports the difference instead, which is the one place in this repo
+# whose whole job is telling you the state you are actually in.
+#
+# IT INSTALLS WHAT GIT TRACKS, NEVER WHAT THE DIRECTORY HOLDS, and that distinction was
+# earned rather than anticipated. The first version copied `scripts/githooks/*` and this repo
+# lives in iCloud Drive, which had quietly made `pre-push 2` and `reference-transaction 2`
+# beside the originals — so the first run installed five hooks from three files, two of them
+# untracked and reviewed by nobody. Git would not have RUN those two (it dispatches on exact
+# names), so the damage was cosmetic this time; the mechanism is not. A hook directory whose
+# contents are decided by whatever is lying on disk has given up the reviewability that is
+# the entire reason D42 keeps these files tracked instead of writing them into .git by hand.
+# `git ls-files` is the only enumeration that means "the thing someone reviewed".
+#
+# Untracked files present are REPORTED, not silently skipped and not a failure: a new hook
+# being written is a normal state, and the honest thing is to say it was not installed.
+#
+# AND IT CLEARS THE PER-WORKTREE OVERRIDE, BECAUSE THIS REPO HAS `extensions.worktreeConfig`
+# ON AND SOMETHING WRITES ONE PER WORKTREE. D42 asserted that core.hooksPath "lives in the
+# common .git dir, so ONE value governs every worktree of this clone". That is false here.
+# Measured 2026-08-29, after the install below reported success: all four
+# .claude/worktrees/*/config.worktree carried their own `core.hooksPath` — alongside a
+# `core.longpaths`, so whatever creates those worktrees writes it — and a per-worktree value
+# BEATS the common one. `git config --get core.hooksPath` in a worktree still answered the
+# old path, and the guard was still armed at zero in exactly the checkouts it exists for.
+# Caught by running the self-test against the installed directory rather than by reading the
+# config, which is the argument for that override existing at all.
+#
+# Unsetting rather than overwriting: one value in the common config is the property D42
+# wanted, and re-pointing four copies just recreates four things that can drift. A NEW
+# worktree will be handed the override again by whatever creates it, so this is a repair and
+# not a fix — `make status` is what reports the state, and it now reads NOT ARMED whenever
+# the effective path is not the install.
+#
+# The chmod is not padding. git skips a non-executable hook WITHOUT A WORD, so a correct
+# hooksPath over a non-executable file is the same silent failure by another route. Neither
+# is the verify at the end: an install that half-worked must not print "armed".
 hooks:
-	@root="$$(git worktree list --porcelain | sed -n '1s/^worktree //p')"; \
-	  [ -n "$$root" ] || root="$$(pwd)"; \
-	  git config core.hooksPath "$$root/scripts/githooks"; \
-	  chmod +x "$$root"/scripts/githooks/*; \
-	  echo "hooks armed: core.hooksPath = $$(git config --get core.hooksPath)"; \
-	  echo "  pre-commit             fixtures, code-card opsec, docs audit"; \
-	  echo "  reference-transaction  main does not move locally"; \
-	  echo "  pre-push               nothing pushes to main"
+	@set -e; \
+	  common="$$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || git rev-parse --git-common-dir)"; \
+	  case "$$common" in /*) ;; *) common="$$(cd "$$common" && pwd)" ;; esac; \
+	  dest="$$common/hooks-armed"; \
+	  src="$$(pwd)/scripts/githooks"; \
+	  [ -d "$$src" ] || { echo "no scripts/githooks in this tree — run this from a checkout that has them"; exit 1; }; \
+	  case "$$dest" in */hooks-armed) ;; *) echo "refusing to install into $$dest"; exit 1 ;; esac; \
+	  tracked="$$(git ls-files scripts/githooks)"; \
+	  [ -n "$$tracked" ] || { echo "git tracks no file under scripts/githooks — nothing to install"; exit 1; }; \
+	  mkdir -p "$$dest"; \
+	  find "$$dest" -mindepth 1 -maxdepth 1 -delete; \
+	  echo "$$tracked" | while IFS= read -r f; do \
+	    [ -n "$$f" ] || continue; \
+	    install -m 755 "$$f" "$$dest/$$(basename "$$f")"; \
+	  done; \
+	  git config core.hooksPath "$$dest"; \
+	  git worktree list --porcelain | sed -n 's|^worktree ||p' | while IFS= read -r w; do \
+	    [ -n "$$w" ] || continue; \
+	    git -C "$$w" config --worktree --unset-all core.hooksPath 2>/dev/null || true; \
+	  done; \
+	  echo "$$tracked" | while IFS= read -r f; do \
+	    [ -n "$$f" ] || continue; \
+	    n="$$(basename "$$f")"; \
+	    [ -x "$$dest/$$n" ] || { echo "install failed: $$n is not executable"; exit 1; }; \
+	    cmp -s "$$f" "$$dest/$$n" || { echo "install failed: $$n differs from its source"; exit 1; }; \
+	  done; \
+	  printf '%s\n' "$$src" > "$$dest/.installed-from"; \
+	  echo "hooks armed: core.hooksPath = $$dest"; \
+	  echo "  installed from $$src"; \
+	  echo "$$tracked" | sed 's|.*/|  |'; \
+	  untracked="$$(git ls-files --others --exclude-standard scripts/githooks)"; \
+	  if [ -n "$$untracked" ]; then \
+	    echo "  NOT installed — untracked, so nobody has reviewed them:"; \
+	    echo "$$untracked" | sed 's|.*/|    |'; \
+	  fi; \
+	  echo "  re-run \`make hooks\` after any change under scripts/githooks — the copy does not follow it"
 
 
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
