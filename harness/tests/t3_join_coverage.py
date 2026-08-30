@@ -199,37 +199,59 @@ def _isolated_home():
                 os.environ[files.HOME_ENV] = previous
 
 
-def _capture(copies):
-    """`copies` bare capture records at box 3, carrying no identity at all."""
+def _capture_at(box, copies):
+    """`copies` bare capture records in `box`, carrying no identity at all.
+
+    CALLED DIRECTLY, THE POINT IS THAT THE COPIES ARE UNSTAMPED. `cli/cmd_emit.py` writes a
+    SKU onto `match.live_positions` and onto nothing else, so copies that have never been
+    emitted are invisible to `Inventory.positions_for_sku` — which is the ordinary state of
+    the box a second run is pointed at, and what makes `committed_positions` zero there
+    however the SKU's counts are read.
+    """
     with Store().write() as snapshot:
         for index in range(1, copies + 1):
             snapshot.inventory.record_capture(
                 master.Card(
-                    box=BOX, index=index, photo=f"captures/box{BOX}/{index:04d}.jpg"
+                    box=box, index=index, photo=f"captures/box{box}/{index:04d}.jpg"
                 )
             )
 
 
-def _stock(sku, condition, copies, *, pushed=0, staged=0, live=0, sold=()):
-    """Record `copies` copies of one SKU at box 3, with the SKU's listing counts set.
+def _capture(copies):
+    """`_capture_at` at box 3, which is where every single-box case in this file lives."""
+    _capture_at(BOX, copies)
+
+
+def _stock_at(box, sku, condition, copies, *, pushed=0, staged=0, live=0, sold=()):
+    """Record `copies` copies of one SKU in `box`, with the SKU's listing counts set.
 
     Exactly the shape `cli/cmd_emit.py` leaves behind — the IDENTITY on each card, the
     PROGRESS on the SKU — and written through the store rather than assembled as an
     `Inventory` literal, so `cli/resolve.py` reads it the way a real run does.
+
+    THE BOX IS A PARAMETER BECAUSE THE CAP IS NOT PER BOX (D7, D59). A playset is what
+    TCGplayer may hold of one SKU, and TCGplayer has never heard of a box — so the case
+    that tells a per-SKU cap from a per-run one needs a SKU whose copies are split across
+    two, one of which the run under test never looks at.
     """
-    _capture(copies)
+    _capture_at(box, copies)
     with Store().write() as snapshot:
         for index in range(1, copies + 1):
             snapshot.inventory.set_state(
-                master.position_key(BOX, index),
+                master.position_key(box, index),
                 master.IDENTIFIED,
                 sku=sku,
                 condition=condition,
             )
         for index in sold:
-            snapshot.inventory.set_state(master.position_key(BOX, index), master.SOLD)
+            snapshot.inventory.set_state(master.position_key(box, index), master.SOLD)
         entry = snapshot.inventory.listing(sku, condition=condition)
         entry.pushed, entry.staged, entry.live = pushed, staged, live
+
+
+def _stock(sku, condition, copies, **counts):
+    """`_stock_at` at box 3 — the box `_identifications` and `_resolve_in` speak."""
+    _stock_at(BOX, sku, condition, copies, **counts)
 
 
 def _identifications(copies, name, number):
@@ -405,6 +427,15 @@ def _check_committed_from_counts(c, export) -> None:
     and every SKU that has ever been live under-lists by its live quantity forever. Let a
     sold copy back into the sellable set, and the import file offers a card that is in the
     post.
+
+    AND TWO MORE THAT ARE ABOUT THE CAP RATHER THAN ABOUT THE SET (D59). Measure the cap
+    against the positions ONE RUN happens to hold, and a SKU whose copies sit in two boxes
+    is capped once per box — an OVER-SEND, six rows against a playset of four, in a file
+    `emit` then tells the operator to import. Correct that by adding the store's claim to
+    the export's live quantity and stopping there, and a `pushed` nobody reconciled away
+    makes the SKU permanently un-refillable. The two errors pull in opposite directions,
+    which is why both are asserted rather than one: a fix aimed at either alone lands on
+    the other.
     """
     # --- the count picks that many copies, and no more --------------------------------
     with _isolated_home() as home:
@@ -427,7 +458,14 @@ def _check_committed_from_counts(c, export) -> None:
                 "and the copies offered are the ones the count did not already claim",
             )
 
-    # --- `live` is subtracted once, by the export, and never again here ----------------
+    # --- `live` is subtracted EXACTLY ONCE, and `copies_out` is where ------------------
+    # This block asserted `live` COMMITS NOTHING until D59, on a reason that was right about
+    # the arithmetic and wrong about the set: while `add_to_quantity` separately subtracted
+    # `live_before`, counting the stored live number here too really would have subtracted
+    # the same copies twice. The cost of leaving it out was that no copy TCGplayer had
+    # actually LISTED was ever marked held — so once `pushed` and `staged` reached zero, a
+    # SKU with fewer copies than the cap had its own live copies handed back to the import
+    # file. One reconcile forward on the owner's store: 83 rows across 64 SKUs.
     with _isolated_home() as home:
         _stock(SEVEN_COPY_SKU, "Near Mint", 6, live=3)
         resolved = _resolve_in(
@@ -436,10 +474,11 @@ def _check_committed_from_counts(c, export) -> None:
         held = resolved.report.matches[SEVEN_COPY_SKU]
         c.equal(
             len(held.committed_positions),
-            0,
-            "`live` COMMITS NOTHING. `SkuMatch.add_to_quantity` already subtracts the "
-            "export's Total Quantity, so counting the stored live number here would "
-            "subtract the same copies twice",
+            3,
+            "`live` COMMITS ITS OWN COPIES. Three are for sale on TCGplayer, so three of "
+            "this run's copies are not the pipeline's to offer again — and it is counted "
+            "ONCE, inside `cli/resolve.py:_copies_out`, which is what lets "
+            "`add_to_quantity` stop subtracting `live_before` a second time",
         )
         c.equal(
             held.add_to_quantity,
@@ -447,7 +486,44 @@ def _check_committed_from_counts(c, export) -> None:
             "three live against a cap of four leaves room for exactly one more — counting "
             "live twice would say zero and under-list this SKU forever",
         )
-        c.equal(held.backstock, 5, "and the rest is backstock, not lost")
+        c.equal(
+            held.backstock,
+            2,
+            "and the rest is backstock, not lost — TWO, not five. Six copies, three live "
+            "and one added leaves two unlisted; the old five counted the three live copies "
+            "as backstock as well, which is the same double-count read from the other end",
+        )
+
+    # --- a copy that is ALREADY LISTED is not offered a second time --------------------
+    # THE 83 ROWS, AT THE SIZE THEY ACTUALLY OCCUR. The block above holds six copies against
+    # a cap of four, so the most it can measure is how much room is LEFT — and almost nothing
+    # in the owner's store looks like that. A SKU is held in ones and twos, every copy of it
+    # is already for sale, and the only honest answer is that this run has nothing to send.
+    # `room = 4 - 1 - 0 = 3` said otherwise and wrote the row again: one `reconcile` forward
+    # on the real store, 83 rows across 64 SKUs, each one a second listing of a card the
+    # owner owns exactly one of.
+    for copies in (1, 3):
+        with _isolated_home() as home:
+            _stock(SEVEN_COPY_SKU, "Near Mint", copies, live=copies)
+            resolved = _resolve_in(
+                home,
+                copies,
+                _export_file(home / "export.csv", export, live_quantity=copies),
+            )
+            held = resolved.report.matches[SEVEN_COPY_SKU]
+            c.equal(
+                held.add_to_quantity,
+                0,
+                f"{copies} on hand and {copies} live ADDS NOTHING — every copy this run "
+                "holds is already for sale, so there is no second one to send",
+            )
+            c.equal(
+                len(held.committed_positions),
+                copies,
+                "and the zero is a statement about COPIES rather than an accident of the "
+                "cap arithmetic: all of them are committed, so there is nothing left to "
+                "offer even where the cap has room",
+            )
 
     # --- a sold copy is gone, whatever any count says ----------------------------------
     with _isolated_home() as home:
@@ -466,6 +542,72 @@ def _check_committed_from_counts(c, export) -> None:
             "and it reaches neither the import file nor the backstock — the one thing a "
             "card that has left the building may never do",
             f"live: {[p.index for p in held.live_positions]}",
+        )
+        c.equal(
+            held.add_to_quantity,
+            4,
+            "AND A DEPARTED COPY TAKES NO ROOM UNDER THE CAP. Six copies on hand against a "
+            "Total Quantity of zero offers four, not three — TCGplayer decremented on that "
+            "sale, so `live_before` had already counted it and `room` counted it a second "
+            "time. `Listing.held` forbids exactly this double-subtraction for `live`; it "
+            "arrived here by a third road, and needed no listing record to do it",
+        )
+
+    # --- the cap is a QUANTITY PER SKU, not a count of one run's positions -------------
+    # THE MOST SERIOUS CASE IN D59, AND NO SINGLE-BOX RUN CAN SEE IT.
+    # `len(self.committed_positions)` is scoped to the cards THIS run holds while the cap it
+    # was subtracted from is global, so a SKU split across two boxes had the cap enforced
+    # once per box: box 1 writes four rows, a later run over box 3 writes two more, and the
+    # import file `emit` hands the operator carries six against a playset of four. That is an
+    # OVER-SEND rather than an under-list, which is why it goes first — the file is imported
+    # before anybody can count it, and D7 caps a SKU at four for the two reasons it gives.
+    #
+    # BOX 3's COPIES ARE UNSTAMPED ON PURPOSE — see `_capture_at`. It is the ordinary state
+    # of a box that has never been emitted, and it is what makes `committed_positions` zero
+    # here however the SKU's counts are read.
+    with _isolated_home() as home:
+        _stock_at(1, SEVEN_COPY_SKU, "Near Mint", 4, pushed=4)
+        _capture_at(BOX, 2)
+        resolved = _resolve_in(
+            home, 2, _export_file(home / "export.csv", export, live_quantity=0)
+        )
+        held = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            len(held.committed_positions),
+            0,
+            "a run over box 3 holds NO committed position — box 1's four pushed copies are "
+            "not among the cards it is looking at, which is exactly why a `len()` over them "
+            "could never enforce a cap that belongs to the SKU",
+        )
+        c.equal(
+            held.add_to_quantity,
+            0,
+            "AND IT ADDS NOTHING ANYWAY. Four copies of this SKU are already out under a "
+            "cap of four, so the room is zero wherever those copies physically sit — "
+            "`copies_out` is a quantity read off the SKU across every box, where the old "
+            "expression saw an empty run-scoped list and offered two more",
+        )
+
+    # (b) THE REFILL SURVIVES, which is what a conservative fix breaks. Two of box 1's four
+    # have SOLD, so TCGplayer is holding two and there is room for two more — while `pushed`
+    # still claims four, because `cli/cmd_reconcile.py` is the only thing that draws it down
+    # and an operator who never exports from Staged never runs it. The physical ceiling in
+    # `cli/resolve.py:_copies_out` is what corrects the stale claim, on the one fact that
+    # needs no second CSV: we cannot have sent more copies than we own and have not sold.
+    with _isolated_home() as home:
+        _stock_at(1, SEVEN_COPY_SKU, "Near Mint", 4, pushed=4, sold=(1, 2))
+        _capture_at(BOX, 2)
+        resolved = _resolve_in(
+            home, 2, _export_file(home / "export.csv", export, live_quantity=2)
+        )
+        held = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            held.add_to_quantity,
+            2,
+            "two sold leaves room for two, and box 3's two copies fill it. A fix that just "
+            "added the store's claim to the export's live quantity would read six copies "
+            "out against a cap of four and refuse to refill this SKU ever again — the "
+            "opposite error to the one above, from the same reading",
         )
 
     # --- the post-import re-emit, as counts --------------------------------------------

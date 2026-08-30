@@ -150,7 +150,24 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                     "backstock": match.backstock,
                     "live_before": match.live_before,
                     "committed": len(match.committed_positions),
+                    # WHAT TCGPLAYER ACTUALLY HOLDS, AND WHY `live_before` BESIDE IT IS NOT
+                    # THAT NUMBER. `live_before` is the export's live column alone, which
+                    # reads 0 for every copy sitting on an import nobody has reconciled —
+                    # measured at 167 pushed copies across 72 SKUs of the owner's store,
+                    # zero of them live, so a screen drawing it said TCGplayer holds
+                    # nothing about SKUs it holds several of. `copies_out` is live plus
+                    # pending, per SKU and across every box. Both ship: the screen names
+                    # the export's own figure where it means the export, and this one
+                    # where it means the shelf (D59).
+                    "copies_out": match.copies_out,
                     "at_cap": match.add_to_quantity == 0,
+                    # The SENTENCE, composed where the numbers are, never re-derived from
+                    # the three fields above. `at_cap` says a row was not written and
+                    # cannot say why — at the cap, or held out by an unreconciled push, or
+                    # every copy in this run already gone. A screen reassembling that from
+                    # parts is a second copy of `SkuMatch.nothing_to_add`'s reasoning with
+                    # nothing auditing the two against each other.
+                    "nothing_to_add": match.nothing_to_add,
                     "condition": match.condition,
                     "set_name": match.set_name,
                     "name": match.name,

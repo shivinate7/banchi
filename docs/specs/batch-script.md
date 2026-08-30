@@ -481,6 +481,52 @@ Collapsing `staged` and `live` would make D7's refill math wrong — `Add to Qua
 min(cap - live, backstock)` reads the *live* number, and an import staged but never moved
 live has no live quantity.
 
+**THAT PARAGRAPH IS THE DIRECT COUNTER-ARGUMENT TO D59, AND D59 ANSWERS IT RATHER THAN
+REPEALING IT** (2026-08-30). The two are easy to mistake for each other, so the answer is
+put here in one place: **`min(cap - live, backstock)` is what this pipeline computes again
+as of D59, and it is not what it computed before.** `SkuMatch.add_to_quantity` read
+`cap - live - len(committed_positions)` — a count of the positions in front of THIS RUN,
+standing where a per-SKU quantity belongs. **The sentence above was right and the pipeline
+was not obeying it**, and it had stopped obeying it without anyone collapsing a state: a SKU
+split across two boxes had the cap enforced once per box, a SOLD copy shrank what its SKU
+could ever list, and `pushed` was subtracted a second time the moment the import landed.
+D7's arithmetic is the thing D59 restored, not the thing it argues with.
+
+**Nothing in this section moves.** Three states, not two; `reconcile` still moves
+`pushed → staged` off the Export From Staged; `cli/cmd_join.py` still draws `staged` down
+by the **rise** in live quantity a fresh Filtered Export reports; and `live` is still read
+from `Total Quantity` and from nowhere else. An import staged but never moved live still
+has no live quantity, which is still the reason the two states are not one.
+
+**WHAT IS NEW IS A CEILING OVER `pushed`, AND `pushed` IS THE ONE ROW THIS TABLE'S OWN LEAD
+SENTENCE DOES NOT COVER.** "Each confirmed by something outside this script" is true of
+`staged` and of `live`, and false of the row above them: `emit` writes `pushed` and
+`reconcile` is the only thing that clears it, so an operator who never downloads an Export
+From Staged never clears it at all. The claim then stands forever over an import that went
+live months ago. Measured on the owner's store when this was found: **167 copies across 72
+SKUs at `pushed`, with `staged` and `live` both zero.**
+
+`cli/resolve.py:_copies_out` answers, per SKU:
+
+    min(live + pushed + staged, max(live, copies not sold))
+
+- **The export is a FLOOR and cannot be argued below.** D8 and D11 put the authority in
+  `Total Quantity`, so the store may never talk the live quantity down — which is also
+  what makes a stale export harmless here, since the store's own claim is still standing
+  beside it.
+- **The physical count is a CEILING, and it is the only thing that can correct a claim
+  with no drawdown.** TCGplayer cannot be holding more copies of a SKU than this Mac owns
+  and has not sold. No write, no second CSV, and no inference about whether an import
+  landed — `store/master.py:Inventory.copies_not_sold` is a fact about cardboard.
+- **A RETIRED copy still counts as sent** (D26). It left this box; TCGplayer was never told,
+  so its row is still out there and freeing a slot under the cap for it would be wrong.
+
+**It is not a reason to collapse `staged` into `live`, and the distinction is exactly the
+one the paragraph above draws.** The ceiling bounds what this pipeline may CLAIM is out
+there. It says nothing about which stage a given copy is at, and it could not — that is
+the question only an Export From Staged answers. Two different questions, and only one of
+them has an answer that can be inferred locally.
+
 `reconcile <run-dir> <staged-export.csv>` uses the existing `join.reconcile_import` and
 reports both directions: rows TCGplayer has that the run did not send, and rows the run sent
 that did not land. This is the machine-checkable round trip against the real system that

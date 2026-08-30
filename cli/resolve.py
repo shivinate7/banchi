@@ -27,7 +27,9 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union,
+)
 
 from cli import runs
 from pipeline import games, join, pricing, routing, tcgcsv, variant
@@ -425,7 +427,124 @@ def box_views(inventory: master.Inventory) -> Dict[int, join.BoxView]:
     return views
 
 
-def _committed_keys(inventory: master.Inventory) -> set:
+def _live_by_sku(exports: Iterable[tcgcsv.Export]) -> Dict[str, int]:
+    """`Total Quantity` per SKU, across every export this run was handed (D59).
+
+    Unioned across files without a per-game partition, which is safe for exactly one
+    reason: a `TCGplayer Id` is unique across the marketplace, so two games' exports cannot
+    collide on one. D25's partition is about which CATALOG a card is joined against, and
+    nothing here joins anything.
+    """
+    out: Dict[str, int] = {}
+    for export in exports:
+        for row in export.rows:
+            sku = row.get(tcgcsv.SKU_COLUMN)
+            if not sku:
+                continue
+            try:
+                out[sku] = tcgcsv.parse_quantity(row[tcgcsv.LIVE_QUANTITY_COLUMN])
+            except (ValueError, TypeError, KeyError):
+                # AN UNREADABLE CELL ON A ROW THIS RUN NEVER TOUCHES MAY NOT TAKE THE JOIN
+                # DOWN. `live_before` used to read this column lazily, for matched SKUs
+                # only; walking every row of a 10,000-row export widens what one bad cell
+                # can reach, so the widening is paid for here rather than by the operator.
+                # SKIPPING AND DEFAULTING TO ZERO ARE THE SAME THING HERE, and an earlier
+                # version of this comment claimed otherwise: `_copies_out` reads this map
+                # with `.get(sku, 0)`, so an absent SKU and a zero one are indistinguishable
+                # to the only consumer. What is actually bought is narrower and worth
+                # stating plainly — an unreadable cell on a row this run never matches no
+                # longer decides anything, where before it took the whole join down. A cell
+                # on a row the run DOES match still raises, from `SkuMatch.live_before`, and
+                # that is right: the cap for a SKU being joined may not be computed from a
+                # number nobody could read.
+                continue
+    return out
+
+
+def _copies_out(
+    inventory: master.Inventory, live_by_sku: Mapping[str, int]
+) -> Dict[str, int]:
+    """Per SKU: how many copies TCGplayer is holding right now, live AND pending (D59).
+
+    ONE NUMBER, TWO CONSUMERS, AND THAT IS THE WHOLE OF D59. `_committed_keys` below spends
+    it on positions so a run knows which of its copies not to re-send, and
+    `pipeline/join.py:SkuMatch.add_to_quantity` subtracts it from the cap. They were two
+    different numbers before: the cap was measured against `live_before`, which is global,
+    MINUS `len(committed_positions)`, which is whatever the box in front of the run happens
+    to hold — so a SKU split across two boxes had its cap enforced once per box, and box 1's
+    four pushed copies were invisible to a run over box 3.
+
+        min(live + pushed + staged, max(live, copies not sold))
+
+    THE FLOOR IS THE EXPORT AND IT CANNOT BE ARGUED BELOW. D8 and D11 put the authority in
+    `Total Quantity`, so `out` is never less than it — which is what makes a STALE export
+    harmless here. A reading that has gone backwards cannot re-open the cap, because the
+    store's own claim is still standing beside it.
+
+    THE CEILING IS PHYSICAL, AND IT IS WHAT CORRECTS A STUCK `pushed`. `Listing.held` is a
+    claim this Mac made when it wrote a CSV; `cli/cmd_reconcile.py` is the only thing that
+    clears it, and an operator who never exports from Staged never does. Once the import
+    LANDS, the export reports those copies live and the claim double-counts them. It cannot
+    be true that TCGplayer holds more copies than we sent and have not sold, so
+    `copies_not_sold` is what says so — no write, no inference about what landed, and no
+    second CSV. A RETIRED copy still counts as sent: see that method for why.
+
+    `Listing.held` rather than `pushed + staged` spelled out again. That property is the
+    closest thing this pipeline has to a spec for this arithmetic and it had no caller.
+    """
+    out: Dict[str, int] = {}
+    for sku in set(live_by_sku) | set(inventory.listings):
+        entry = inventory.listings.get(sku)
+        # THE STORE'S OWN `live` IS DELIBERATELY NOT A SECOND FLOOR, AND IT WAS TRIED.
+        # After the canonical cycle — emit, import, reconcile, join — `pushed` and `staged`
+        # are both zero, and a LATER join whose export under-reports then re-opens the cap
+        # and sends the SKU again. Taking `max(export, entry.live)` closes exactly that and
+        # opens its mirror image: `cli/cmd_join.py` sets `entry.live` from whatever export it
+        # was last handed, so a stale-HIGH stored value would then outrank a fresh-LOW export
+        # and the SKU would never refill after a sale. T7's own stale-export case is that
+        # shape, and it went red.
+        #
+        # The two are indistinguishable from the data — nothing here knows which of the two
+        # readings is the newer one — so the tie goes to D8 and D11, which put the authority
+        # in the export and make `entry.live` an estimate the export corrects. What is left
+        # standing is a real hazard AFTER a reconcile, and D59 names it rather than claiming
+        # a protection this does not provide.
+        live = max(0, int(live_by_sku.get(sku, 0)))
+        claim = entry.held if entry is not None else 0
+        if live <= 0 and claim <= 0:
+            continue
+        # THE CEILING IS THE SALES, NOT THE STAMPED COPIES, AND THAT CHANGED UNDER THIS
+        # BRANCH. It was `max(live, len(copies_not_sold(sku)))`, on the premise that we
+        # cannot have SENT more copies than we own and have not sold — which held only while
+        # `cli/cmd_emit.py` stamped a SKU onto exactly the copies it wrote into a file. D7's
+        # 2026-08-30 amendment moved that stamp to `uncommitted_positions`, correctly: the cap
+        # bounds the LISTING, not the IDENTITY, and copies past the fourth were invisible to
+        # every SKU-keyed surface. A stamp now means MATCHED, so counting stamped copies
+        # counts backstock that was never in any import file, the ceiling stops binding, and
+        # the stuck-`pushed` correction this entry exists for quietly disappears.
+        #
+        # What survives the change is the arithmetic that never needed a stamp. `pushed` is
+        # a count of copies SENT and it has no drawdown; a SALE is the one event that proves
+        # a sent copy has left TCGplayer, because a copy cannot sell without having been
+        # listed. So the claim is aged by the sales rather than bounded by the shelf, and
+        # `live` remains the floor D8 and D11 make it.
+        # AND IT ONLY AGES A CLAIM THE EXPORT CORROBORATES. A sale reduces what TCGplayer
+        # holds only if the copy was LIVE there, and with `Total Quantity` at zero nothing
+        # of ours ever was — the copies are sitting in Staged, and a card marked sold
+        # against that state did not leave TCGplayer's hands. Ageing regardless would
+        # double-count every sale the export has already decremented for us, and it takes
+        # `check_listing_commands`' own re-emit idempotence case red: four pushed, one sold,
+        # export silent, and the claim would drop to three and offer a fifth row.
+        sold = (
+            len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
+            if live > 0
+            else 0
+        )
+        out[sku] = max(live, claim - sold)
+    return out
+
+
+def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) -> set:
     """Positions the join must treat as copies TCGplayer already holds or has pending.
 
     `SkuMatch.committed_positions` is per-position and the store's counts are per-SKU, so
@@ -441,19 +560,20 @@ def _committed_keys(inventory: master.Inventory) -> set:
     committed, room for two more, exactly what the per-position model computed before it was
     removed.
 
-    `live` IS DELIBERATELY NOT COUNTED HERE, and this is the one place the old model was
-    wrong rather than merely address-shaped. `SkuMatch.add_to_quantity` already subtracts
-    `live_before` — the export's `Total Quantity`, which D8 and D11 make authoritative —
-    so adding the stored `live` count would subtract the same copies twice and under-list
-    every SKU that has ever been live. `pushed` and `staged` are the two TCGplayer holds
-    that its live quantity does not report.
+    `live` USED TO BE DELIBERATELY EXCLUDED HERE, ON A REASON THAT WAS RIGHT ABOUT THE
+    ARITHMETIC AND WRONG ABOUT THE SET (D59). Adding the stored `live` count while
+    `add_to_quantity` was separately subtracting `live_before` really would have subtracted
+    the same copies twice — but the consequence of leaving it out was that no copy TCGplayer
+    had actually LISTED was ever marked as held, so once `pushed` and `staged` reached zero
+    a SKU with fewer copies than the cap had its own live copies handed straight back to the
+    import file. One copy, live, nothing pending: `room = 4 - 1 - 0` offered it again.
+    Measured on the owner's store, one `reconcile` away: 83 rows across 64 SKUs.
+
+    `live` is counted ONCE now, inside `_copies_out`, and this spends that same number.
     """
     keys = set()
-    for entry in inventory.listings.values():
-        held = max(0, entry.pushed) + max(0, entry.staged)
-        if held <= 0:
-            continue
-        for card in inventory.copies_on_hand(entry.sku)[:held]:
+    for sku, out in copies_out.items():
+        for card in inventory.copies_on_hand(sku)[:out]:
             keys.add(card.key)
     return keys
 
@@ -919,9 +1039,20 @@ def load(
     # answered cards re-parked on every join. Both writers leave the card in `identified`;
     # the listing progress lives on the SKU now, which is what `_committed_keys` reads.
     # Read here rather than in the loop so the store is opened once.
+    # THE EXPORTS, READ ONCE AND UP FRONT (D59). `parsed` used to fill lazily inside the join
+    # loop, and `_copies_out` below needs every file's `Total Quantity` before the first card
+    # is built. It costs nothing new: `exports_for` has already read each of these files to
+    # map its `Product Line` cells, and `_refuse_uncovered` still runs before a single
+    # catalog is cut, still touches nothing, and still refuses on the same grounds.
+    parsed: Dict[Path, tcgcsv.Export] = {}
+    for _path in mapping.values():
+        if _path not in parsed:
+            parsed[_path] = tcgcsv.read_export(_path)
+
     snapshot = Store().read()
     held_cards = snapshot.inventory.cards
-    committed_keys = _committed_keys(snapshot.inventory)
+    copies_out = _copies_out(snapshot.inventory, _live_by_sku(parsed.values()))
+    committed_keys = _committed_keys(snapshot.inventory, copies_out)
     # D58's label coordinates, off the same snapshot for the same reason — one read, and
     # every position this run renders counted against the box as it stands right now.
     views = box_views(snapshot.inventory)
@@ -1094,7 +1225,6 @@ def load(
         list(mapping),
     )
 
-    parsed: Dict[Path, tcgcsv.Export] = {}
     joins_out: "OrderedDict[str, GameJoin]" = OrderedDict()
     for game, game_cards in needed.items():
         path = mapping[game]
@@ -1112,6 +1242,7 @@ def load(
             rule=rule,
             basis=basis,
             trust_claim=trust_claim,
+            copies_out=copies_out,
         )
         joins_out[game] = GameJoin(
             game=game,

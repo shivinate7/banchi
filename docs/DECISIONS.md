@@ -6316,6 +6316,184 @@ owner dropped is the cheapest version of it.
 
 ---
 
+
+## D59 — The live cap is a per-SKU quantity, and a count of one run's positions was answering for it
+
+**BUILT 2026-08-30, from the owner asking what `reconcile` is actually for.** They do not run
+it, and said so plainly: *"I'd prefer to never have to send an excel back to my app at this
+time, like i don't want to use that functionality, just the inventory part."* That is a
+legitimate workflow — `emit`, import the CSV, move Staged to Live, mark cards sold — and this
+entry is what it costs, which turned out to be four defects rather than the tidiness problem
+it looked like.
+
+**THE EXPRESSION, AND IT WAS WRONG THREE WAYS AT ONCE.** `pipeline/join.py` read:
+
+    room = self.live_cap - self.live_before - len(self.committed_positions)
+
+`live_before` is the export's `Total Quantity` — **global**, authoritative, D8 and D11.
+`len(committed_positions)` is **run-scoped**: whatever the box in front of this run happens to
+hold, derived from the store's per-SKU `pushed + staged` by
+`cli/resolve.py:_committed_keys`, plus every sold or retired copy in the run. A global cap was
+being measured against a local count.
+
+- **A SKU split across two boxes had its cap enforced once per box.** Box 1 emits four copies;
+  a run over box 3 cannot see them, reads zero committed, and offers two more — **six rows
+  against a cap of four**, in a file `emit` then tells the operator to import. This is an
+  OVER-SEND, which is Gate B's double-staging defect, and it is the most serious of the four.
+  `harness/tests/t3_join_coverage.py` holds it as a case and observed the old code offering
+  two. **A randomised sweep was run while this was being designed and its figures are
+  deliberately NOT published**: the instrument was a scratch script that is not in the tree,
+  and a number nobody can re-derive is not evidence.
+- **A departed copy occupied room under the cap forever.** `cli/resolve.py` commits every
+  `TERMINAL_STATES` card, and `room` subtracted it a SECOND time — a SOLD copy TCGplayer had
+  already decremented and `live_before` had already counted, and a RETIRED one whose row is
+  still out there and belongs inside the ceiling rather than in a term of its own (TCGplayer is
+  never told about a retirement, which is the whole argument for `copies_not_sold` filtering
+  `SOLD` alone). It fires with **no listing record at all**: five copies, four retired, never
+  listed, offers nothing. That card is permanently unlistable.
+- **`pushed` has no drawdown, so once an import landed the same copies were subtracted twice.**
+  `cli/cmd_reconcile.py` is the only thing that clears it. Measured on the owner's store:
+  **167 copies across 72 SKUs at `pushed`, with `staged` and `live` both zero.**
+- **And after a `reconcile`, every SKU with fewer copies than the cap was re-offered.**
+  `_committed_keys` deliberately excluded `live`, so once `pushed` and `staged` reached zero
+  nothing marked an already-live copy as held: one copy, live, `room = 4 - 1 - 0 = 3`, and it
+  went back into the import file. Played forward on the real store one reconcile away — every
+  pushed SKU's copies moved to `staged`, then a join against an export reporting them live —
+  **78 duplicate rows across 61 SKUs, and 0 after this change.** Re-derived directly from
+  `inventory.json`, so it can be recomputed by anyone.
+
+**THE FIX IS ONE NUMBER WITH TWO CONSUMERS.** `cli/resolve.py:_copies_out`:
+
+    min(live + pushed + staged, max(live, copies not sold))
+
+*TCGplayer holds at most everything we have claimed, and at most the copies carrying this SKU
+that have not sold — but never fewer than the export reports live.* `_committed_keys` spends it
+on positions so a run knows which of its copies not to re-send, and `add_to_quantity` subtracts
+it from the cap. They were two different numbers before, and that is the whole defect.
+
+**THE FLOOR IS THE EXPORT AND CANNOT BE ARGUED BELOW.** D8 and D11 put the authority in
+`Total Quantity`, so the answer is never less than it. **A stale or under-reporting export is
+therefore harmless WHILE THE PIPELINE'S OWN CLAIM IS STILL STANDING** — `live + pushed +
+staged` keeps the cap shut even when the export reads zero.
+
+**AND AFTER A `reconcile` NOTHING IS STANDING, WHICH IS A HAZARD THIS ENTRY DOES NOT CLOSE.**
+That corrects a sentence this entry first published as an unqualified guarantee. Once `pushed`
+and `staged` are both zero, `Listing.live` is the only record left that TCGplayer holds
+anything, and `_copies_out` does not read it — so a later join whose export under-reports
+computes `room = cap - 0` and sends the SKU again. **Reading `Listing.live` as a second floor
+was built and reverted**: `cli/cmd_join.py` sets that field from whatever export it was last
+handed, so a stale-HIGH stored value would outrank a fresh-LOW export and the SKU would never
+refill after a sale — T7's own stale-export case went red on it. The two hazards are mirror
+images and nothing in the data says which reading is newer, so the tie goes to D8 and D11.
+**Pre-existing, unreachable for an operator who never reconciles, and named here rather than
+claimed away.**
+
+**THE CEILING WAS THE SHELF AND IS NOW THE SALES, BECAUSE D7's AMENDMENT MOVED THE STAMP.**
+It was `max(live, copies not sold)` — "we cannot have SENT more copies than we own and have
+not sold" — which held only while `emit` stamped a SKU onto exactly the copies it wrote into
+a file. D7's 2026-08-30 amendment stamps `uncommitted_positions` instead, correctly, so a stamp
+means MATCHED rather than SENT and the shelf count silently stopped binding. Measured on the
+branch before it was fixed: seven copies with four pushed and one sold went from `room = 1` to
+`room = 0`, and the correction this entry exists for disappeared without a single test going
+red until the rebase. **The ceiling is `max(live, pushed + staged - sold)`**, aged by the one
+event that proves a sent copy has left TCGplayer — a copy cannot sell without having been
+listed — and the sale count survives the stamp move because an unsent backstock copy is on
+both sides of the subtraction and cancels.
+
+**AND IT ONLY AGES A CLAIM THE EXPORT CORROBORATES.** With `Total Quantity` at zero nothing of
+ours was ever live, so the copies are sitting in Staged and a card marked sold against that
+state did not leave TCGplayer's hands; ageing regardless would double-count every sale the
+export has already decremented. That guard is load-bearing rather than defensive — dropping it
+takes `check_listing_commands`' re-emit idempotence case red, which is main's own test.
+
+**THE CEILING IS WHAT CORRECTS A STUCK `pushed` WITHOUT A SECOND CSV.**
+`Listing.held` is a claim this Mac made when it wrote a file. It cannot be true that TCGplayer
+holds more copies than we sent and have not sold, so `store/master.py:Inventory.copies_not_sold`
+says so. **No write, no inference about what landed, and no Export From Staged.** `pushed` is
+never cleared and no refusal changes: a box held open by a listing stays held, `renumber_blocked`
+stands, and D34's release is still the only way to give a commitment up.
+
+**A RETIRED COPY STILL COUNTS AS SENT, AND THAT IS THE OPPOSITE OF `copies_on_hand`.** A sale is
+proof a copy reached TCGplayer and left it. A retirement (D26) is the other door: the card left
+the BOX and TCGplayer was never told, so its row is still out there, and counting it as gone
+would free a slot under the cap that is not free.
+
+**WHAT WAS REFUSED, AND IT WAS THIS SESSION'S OWN FIRST PROPOSAL: clearing `pushed` whenever the
+export reports the SKU live.** It is the obvious fix and it over-sends. `pushed = 4, live = 2` is
+produced *both* by "four went live and two sold" *and* by "two landed and two are still sitting
+in Staged", and those want opposite answers — the second is a partial import, and clearing the
+claim re-offers two copies TCGplayer is already holding. `harness/tests/t7_store_and_seams.py`
+keeps that as a negative case, green in both builds, for exactly that reason. Two rise-based
+variants were also tried and under-correct: the drawdown at `cli/cmd_join.py` runs inside the
+write block, **after** the matches are computed, so it cannot affect the join it runs in.
+
+**`committed_positions` KEEPS THE JOB IT IS GOOD AT.** It still keeps a copy out of the sellable
+set, which `uncommitted_positions` reads it for, and D54's delta guarantee is strengthened rather
+than weakened — no committed copy becomes uncommitted. What it lost is answering for the cap,
+which is a quantity.
+
+**THE PLACEMENT IS INSIDE THE EXISTING SNAPSHOT AND BEFORE THE WRITE BLOCK, AND BOTH HALVES
+MATTER.** Before the write, so it fixes the join it runs in; `cli/cmd_emit.py` re-derives through
+the same `resolve.load`, so join and emit cannot disagree about the committed set, which is D3's
+rule for `--bypass` one register down. And entirely inside the one snapshot, because a placement
+that zeroed `pushed` between two write blocks would open a window in which
+`server/capture_server.py:_stages_held` is empty — and that is the only thing arming
+`box_not_empty_of_commitments`, `renumber_blocked` and D28's undo refusal. A join that died there
+would silently disarm three guards on destructive operations.
+
+**TWO T3 ASSERTIONS GO RED AND ARE REWRITTEN, WHICH IS NAMED HERE RATHER THAN CHANGED QUIETLY.**
+`t3` asserted *"`live` COMMITS NOTHING"* and `backstock == 5`. That first sentence is the only
+place the repo had written the rule down, and this entry is what makes it false: its stated
+reason — counting the stored live number here would subtract the same copies twice — is still
+honoured, because `live` is now counted **exactly once**, inside `_copies_out`, and
+`add_to_quantity` no longer subtracts `live_before` separately. `backstock` goes 5 to 2, which is
+the same double-count read from the other end: six copies with three live and one added leaves
+two unlisted, and the old five counted the three live copies as backstock as well. **The
+assertion that carries the real guarantee — `add_to_quantity == 1` — stays green and unchanged.**
+
+**AND `at_cap` STOPPED PRINTING A FALSE SENTENCE.** It said *"already at the live cap"* for every
+zero, and under an operator who does not reconcile that is almost never the reason: `live_before`
+reads 0 on all 167 pushed copies, so the run report and `#/pricing` both told the owner TCGplayer
+already holds nothing. `SkuMatch.nothing_to_add` names the actual reason per SKU. A card that
+stops appearing in import files is the silent drop `CLAUDE.md` forbids, and a count under a false
+sentence is worse than no count.
+
+**WHAT IT GIVES UP, NAMED RATHER THAN DESIGNED AWAY:**
+
+- **A hand-listed copy is still double-counted.** The export reports it live and no stamped card
+  backs it, so the pipeline adds another. Unchanged from before this entry and inherent: nothing
+  records which physical card backs a listing the pipeline did not make.
+- **A review answer stamps a SKU without sending anything**, so `copies_not_sold` over-states
+  the bound by one per stamp. This entry first published that as *"one card in 715"* and it was
+  wrong by two orders of magnitude: **107 of the 213 stamped cards** got their SKU from an
+  `answered` event rather than from a push. What is genuinely small is where such a stamp
+  EXCEEDS the claim it bounds, because the
+  ceiling only binds above zero — measured across all 117 listings, **one SKU, over by one
+  copy** (`9189797`). It can only ever leave a stale claim standing; it can never let one be
+  exceeded.
+- **`emit` writes a card's IDENTITY only for the copies it sends**, so driving
+  `add_to_quantity` to zero for an at-cap SKU — which is this entry's whole point — leaves a
+  later box's copies of it at `state: captured, sku: null`, invisible to `GET /search` and
+  every SKU-keyed surface. That coupling is D49 Part Two's documented cost and this entry
+  WIDENS the set of cards it reaches. Not fixed here: separating the identity write from the
+  send is a change to D49, and doing it quietly inside an arithmetic fix is how a documented
+  cost becomes an undocumented one.
+  and it is shared with the code this replaces. `retire` does not ask whether the SKU has an
+  outstanding push.
+- **`backstock` changes meaning**, and it is a correction rather than a side effect: it stops
+  counting a listed copy as backstock. Rendered in `pricing.json` and read by no component.
+
+**What is published here is what can be re-derived from the repository and the store**: the
+reconcile-forward projection above (78 rows to 0), the 167 stuck copies, the one over-stated
+SKU, and the T3 and T7 cases, each observed failing against the old expressions before it was
+kept.
+
+**What would reopen this: a marker that a copy actually reached an import file.** One field on
+`Card`, written by `cmd_emit`'s push loop beside the `sku` stamp, would make the bound exact and
+retire the review-answer approximation above. That is a schema change and a decision entry, and
+it is the only thing that would make `copies_not_sold` unnecessary rather than merely good enough.
+
+---
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

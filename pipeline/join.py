@@ -69,7 +69,9 @@ import re
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from typing import (
+    Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple,
+)
 
 from pipeline import games, pricing, routing, tcgcsv, variant
 
@@ -1289,10 +1291,18 @@ class SkuMatch:
     live_cap: int = LIVE_QUANTITY_CAP
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
-    # Copies TCGplayer already holds (staged/live/sold records) — see
-    # `IdentifiedCard.committed`. Subset of `positions`; they occupy room under the cap
-    # and take nothing from the import file.
+    # Copies TCGplayer already holds, plus the copies that have left inventory — see
+    # `IdentifiedCard.committed`. Subset of `positions`; they take nothing from the import
+    # file, which is where `cli/cmd_emit.py`'s idempotence actually lives (D54).
+    #
+    # THEY NO LONGER OCCUPY ROOM UNDER THE CAP, and that clause used to be in this comment.
+    # `add_to_quantity` below says why (D59).
     committed_positions: List[Position] = field(default_factory=list)
+    # `cli/resolve.py:_copies_out` for this SKU: what TCGplayer holds, live and pending,
+    # across EVERY box. `None` for a match built without a store — every synthetic
+    # `join_batch` in the harness — and the answer there is `live_before` alone, which is
+    # D7's own `min(cap - live, backstock)` and what those cases have always asserted.
+    held_out: Optional[int] = None
 
     @property
     def condition(self) -> str:
@@ -1344,13 +1354,62 @@ class SkuMatch:
         return [p for p in self.positions if (p.box, p.index) not in held]
 
     @property
+    def copies_out(self) -> int:
+        """Copies TCGplayer is holding for this SKU right now — live plus pending, per SKU
+        and across every box. `max` because the export's `Total Quantity` is a FLOOR that
+        D8 and D11 make authoritative: the store may know about copies it cannot see, and
+        may never argue it down."""
+        if self.held_out is None:
+            return self.live_before
+        return max(self.live_before, self.held_out)
+
+    @property
     def add_to_quantity(self) -> int:
-        """New copies only. Committed copies occupy room under the cap alongside what the
-        export reports live, and contribute nothing to the file — re-importing a copy
-        TCGplayer already holds doubles it in Staged, which is the failure the first real
-        post-import re-emit produced."""
-        room = self.live_cap - self.live_before - len(self.committed_positions)
+        """New copies only: what the cap has room for, bounded by what this run holds.
+
+        `len(self.committed_positions)` used to stand where `copies_out` does, and it was
+        wrong in three ways in one expression (D59). It is RUN-SCOPED against a global cap,
+        so a SKU split across two boxes was capped once per box — box 1 wrote four rows and
+        a run over box 3 wrote two more. It subtracted every departed copy a SECOND time: a
+        SOLD one TCGplayer had already decremented and `live_before` had already counted,
+        and a RETIRED one whose row is still out there and is therefore inside
+        `copies_not_sold`'s ceiling rather than a separate term. Either way a card that had
+        left shrank what its SKU could ever list — five copies with four retired and nothing
+        ever pushed offered nothing at all. And it read `pushed`, which has no drawdown, so
+        once the import landed the same copies were subtracted twice.
+
+        `committed_positions` KEEPS THE JOB IT IS GOOD AT — keeping a copy out of the
+        sellable set, which `uncommitted_positions` reads it for. The cap reads a quantity.
+        """
+        room = self.live_cap - self.copies_out
         return max(0, min(room, len(self.uncommitted_positions)))
+
+    @property
+    def nothing_to_add(self) -> Optional[str]:
+        """Why this run adds no row for a SKU it matched — or None when it adds one.
+
+        NAMED RATHER THAN COUNTED (D59). `at_cap` printed "already at the live cap" for
+        every zero, and under an operator who does not reconcile that is almost never the
+        reason: `live_before` reads 0 on all 167 pushed copies in the owner's store, so the
+        report and `#/pricing` both said TCGplayer already holds nothing. A card that stops
+        appearing in import files is the silent drop `CLAUDE.md` forbids, and a count under a
+        false sentence is worse than no count.
+        """
+        if self.add_to_quantity or not self.copies:
+            return None
+        if not self.uncommitted_positions:
+            return "every copy in this run is already listed or has left the box"
+        pending = self.copies_out - self.live_before
+        if pending <= 0:
+            return f"{self.live_before} live, at the cap of {self.live_cap}"
+        # `min` because `copies_out` is not clamped to the cap and a store can exceed it —
+        # "6 of the 4 this SKU may have out" is not a sentence, and the operator's question
+        # is how much of the cap is spoken for rather than by how much it is overrun.
+        return (
+            f"{self.live_before} live and {pending} on an import this pipeline has not "
+            f"seen land — {min(self.copies_out, self.live_cap)} of the {self.live_cap} "
+            f"this SKU may have out"
+        )
 
     @property
     def backstock(self) -> int:
@@ -1574,7 +1633,8 @@ class JoinReport:
 
     @property
     def at_cap(self) -> List[SkuMatch]:
-        """Matched SKUs already at the live cap, so this run adds nothing. Not written to
+        """Matched SKUs this run adds nothing for. The cap is only one of the reasons —
+        `SkuMatch.nothing_to_add` names the actual one per SKU (D59). Not written to
         the import file, and reported rather than skipped — the copies are real cards
         sitting at real positions."""
         return [m for m in self.matches.values() if m.copies and m.add_to_quantity == 0]
@@ -1639,10 +1699,16 @@ class JoinReport:
                 for m in self.no_market_data
             ]
         if self.at_cap:
-            lines.append(f"already at the live cap, nothing added: {len(self.at_cap)}")
+            # THE HEADING WAS THE FALSE SENTENCE AND ONLY THE ROWS BENEATH IT WERE FIXED
+            # FIRST (D59). "already at the live cap" is almost never the reason under an
+            # operator who does not reconcile — `live_before` reads 0 on all 167 pushed
+            # copies in the owner's store — so a corrected row under an uncorrected heading
+            # is this repo's standing failure shape: a premise deleted while its conclusion
+            # is left standing, which two other entries record and neither is about joins.
+            lines.append(f"matched but added nothing: {len(self.at_cap)}")
             lines += [
-                f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]} live={m.live_before} "
-                f"copies={m.copies}"
+                f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]} copies={m.copies} — "
+                f"{m.nothing_to_add}"
                 for m in self.at_cap
             ]
         if self.below_threshold:
@@ -1694,6 +1760,7 @@ def join_batch(
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,
     trust_claim: bool = False,
+    copies_out: Optional[Mapping[str, int]] = None,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
 
@@ -1848,6 +1915,9 @@ def join_batch(
                 live_cap=live_cap,
                 rule=rule,
                 basis=basis,
+                # A store fact, and `pipeline/` may not read the store, so it arrives as a
+                # value; absent means the export alone decides (D59).
+                held_out=None if copies_out is None else copies_out.get(sku),
             )
             report.matches[sku] = match
         match.positions.append(card.position)
@@ -1986,7 +2056,7 @@ def import_rows(
             continue
         if only is not None and match.sku not in only:
             continue
-        if match.add_to_quantity == 0:  # already at the live cap; report.at_cap has it
+        if match.add_to_quantity == 0:  # nothing to add; `report.at_cap` and its row say why
             continue
         row = tcgcsv.set_writable(
             match.row,
