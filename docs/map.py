@@ -280,7 +280,7 @@ COMPONENTS = [
                                    "`realign` (D36), because that file stores position keys and a "
                                    "mid-box delete moves them — reading it raw is the defect that "
                                    "wrote 47 box-2 queue entries one position off.",
-                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59"], "tested_by": ["T7"]},
+                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D64"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
         },
     },
@@ -1142,8 +1142,41 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D52", "D53", "D56", "D58", "D62"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D56", "D58", "D62", "D64"],
                 "tested_by": ["T7"],
+            },
+            "tcg_export.py": {
+                "does": "the ONE outbound call this server makes, and the only place allowed "
+                        "to make it: GET the operator's own Filtered Export off "
+                        "store.tcgplayer.com with the session cookie in .env. Stdlib urllib, "
+                        "one host, one method. Redirects are NOT followed blindly — a 302 to "
+                        "the logon page is what an expired session looks like, and following "
+                        "it would deliver an HTML login page to be parsed as a CSV — and one "
+                        "deliberate hop drops the cookie on a host change. Every anticipated "
+                        "failure has its own code: tcg_cookie_missing, tcg_session_expired "
+                        "(the redirect AND a login page served as a 200), tcg_blocked (the "
+                        "WAF, naming PKMNSCAN_TCG_USER_AGENT as the remedy), tcg_unavailable, "
+                        "tcg_unreachable, tcg_not_csv, tcg_export_empty. The cookie is in no "
+                        "return value, no message and no run directory, and it is read "
+                        "through envfile.get_live rather than envfile.get because a "
+                        "SESSION EXPIRES: get caches per process and cannot replace a "
+                        "name it lifted out of .env itself, so under D53's long-running "
+                        "supervisor the remedy tcg_session_expired prints would not have "
+                        "worked.",
+                # D64 is the entry. D16 is why capture_server.py's file-boundary sentence was
+                # rewritten rather than narrowed to "no socket TO ANTHROPIC". D11 is what the
+                # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
+                # listing path's own input. D24 is the opsec rule this borrows: a bearer
+                # instrument does not go in a file anyone else reads.
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64"],
+                "tested_by": ["T7"],
+                "note": "Stdlib only, like the rest of the server: requirements.txt names the "
+                        "absence of `requests` on purpose and one more fetch is not a reason "
+                        "to spend it. PKMNSCAN_TCG_EXPORT_URL aims it at a local socket for "
+                        "T7 and refuses to carry the cookie over plain http anywhere but "
+                        "loopback. What T7 CANNOT prove is whether the WAF accepts an "
+                        "authenticated request — that is one live fetch by the owner, and "
+                        "D64 records it as owed.",
             },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
@@ -1161,12 +1194,20 @@ COMPONENTS = [
                         "max_edge?}]`, a bare `box` reads as a cart of one, the response is "
                         "always a list, the total is summed here rather than on the screen, "
                         "and identify spawns one detached child PER BOX — so a run is still "
-                        "one box and nothing downstream learns a new shape.",
+                        "one box and nothing downstream learns a new shape. AND POST "
+                        ".../export (D64) fetches this run's Filtered Export through "
+                        "server/tcg_export.py instead of the operator downloading and "
+                        "uploading it: free, reported separately from the join so a failure "
+                        "is attributable, ruled on by cli/resolve.py:exports_for BEFORE "
+                        "anything is joined, guarded by a per-run coverage delta rather than "
+                        "by inspecting the file (completeness cannot be read off an export "
+                        "— three filters narrow it and one leaves no trace), and deleting "
+                        "what it wrote on every refusal.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D13", "D16", "D20", "D21", "D22", "D25", "D29", "D32", "D43", "D47", "D48", "D49", "D54", "D56"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64"],
                 "tested_by": ["T7"],
             },
         },
@@ -1340,11 +1381,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1914,7 +1955,13 @@ COMPONENTS = [
                                          "escape hatch (D32 amended), because the crop and the "
                                          "max edge are one decision and pairing them wrongly "
                                          "costs 26% MORE for asking for less; the estimate is "
-                                         "void when either moves.",
+                                         "void when either moves. AND THE EXPORT IS FETCHED "
+                                         "RATHER THAN DOWNLOADED AND UPLOADED (D64): one press "
+                                         "fetches and then joins with the file by name, the "
+                                         "receipt says what came back and which games were "
+                                         "checked, and the control that waves a refusal through "
+                                         "is ABSENT unless the refusal is one of the two an "
+                                         "operator can answer.",
                                  # D1 is why one step spawns and three answer in the request. D9 is
                                  # the decisions document this panel edits as text rather than as a
                                  # form. D3 is the finish-claim bypass its join control offers. D31
@@ -1922,7 +1969,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1941,7 +1988,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -2105,11 +2152,13 @@ COMPONENTS = [
                         "the control that spends does not EXIST, absent rather than disabled. "
                         "The spend route is intercepted and its body read; no real request is "
                         "ever made, which matters more here than on any other screen because "
-                        "one of these routes costs money.",
+                        "one of these routes costs money. D64's fetch is covered the same "
+                        "way and for the same reason: the case that matters is the ABSENCE of "
+                        "the acknowledging control for a refusal an operator cannot answer.",
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

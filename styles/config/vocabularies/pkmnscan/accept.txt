@@ -52,6 +52,7 @@ Discogs
 [Ee]rrored
 [Ee]slint
 [Ee]val
+[Ee]xfiltration
 Eiscues
 Elgato
 ETag
@@ -77,6 +78,7 @@ Grotesk
 [Hh]olo
 [Hh]olofoil
 [Hh]ostname
+https
 Hyperlegible
 Idempotence
 [Ii]Cloud
@@ -96,6 +98,7 @@ Liveness
 [Ll]edes
 [Ll]etterforms
 [Ll]istable
+[Ll]oopback
 [Ll]uma
 Makefile
 Mantine
@@ -105,6 +108,7 @@ Metamorfoze
 [Mm]iddot
 [Mm]islist
 [Mm]islisted
+[Mm]islisting
 [Mm]ispricing
 [Mm]ockup
 [Mm]oreso

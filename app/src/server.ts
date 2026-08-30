@@ -27,6 +27,7 @@ import type {
   ListingReleaseResult,
   CropPreview,
   CsvUpload,
+  ExportFetched,
   RunDetail,
   PriceHistoryPayload,
   PricingPayload,
@@ -1666,12 +1667,48 @@ export async function getRun(name: string): Promise<RunDetail> {
  * keeps `join` free and re-runnable from a screen: change the rule, clear a review, press
  * it again. An empty array is refused rather than read as that, because a selection that
  * failed to send must not silently become "use the old file".
+ *
+ * `fetched` names files this run already holds, put there by `fetchExport` (D64). A name
+ * rather than a re-upload: the server has the bytes. The two compose, which is what a
+ * mixed-game run needs — one game fetched beside another uploaded.
  */
+/**
+ * Fetch this run's Filtered Export from TCGplayer instead of downloading and uploading it
+ * (D64). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
+ * can. Reported separately from the join so a failure is attributable to one or the other.
+ *
+ * THE TWO ACKNOWLEDGEMENTS ARE NOT DEFAULTS AND MUST NOT BECOME ONE. `acceptUnverified` says
+ * this run has no previous export to check against; `acceptNarrower` says this file covers
+ * less than the last one and the operator means it. Sending either unasked would turn a guard
+ * that refuses a silently variant-thinned export — the one that mislists a reverse holo at
+ * the normal row's price — into a field nobody reads.
+ *
+ * Refusals worth branching on: `export_unverified` and `export_narrower`, which are the two
+ * an operator can answer, and which the screen answers by calling this again with the
+ * matching flag. Everything else — `tcg_cookie_missing`, `tcg_session_expired`,
+ * `tcg_blocked`, `export_wrong_game` — is a `ServerError` carrying a sentence to read and no
+ * control to press.
+ */
+export async function fetchExport(
+  name: string,
+  options: { acceptUnverified?: boolean; acceptNarrower?: boolean } = {},
+): Promise<ExportFetched> {
+  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      accept_unverified: options.acceptUnverified,
+      accept_narrower: options.acceptNarrower,
+    }),
+  })) as ExportFetched
+}
+
 export async function runStep(
   name: string,
   step: 'join' | 'emit' | 'reconcile',
   options: {
     exports?: CsvUpload[]
+    fetched?: string[]
     stagedExport?: CsvUpload
     rule?: string
     basis?: 'market' | 'low'
@@ -1685,6 +1722,7 @@ export async function runStep(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       exports: options.exports,
+      fetched: options.fetched,
       staged_export: options.stagedExport,
       rule: options.rule,
       basis: options.basis,

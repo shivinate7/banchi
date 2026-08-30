@@ -1181,3 +1181,164 @@ test('nothing is scoped on arrival, and the free preflight refuses until a box i
   await expect(page.locator('.runs-scope')).toContainText('Box 9 · the whole box')
   await expect(page.getByRole('button', { name: 'Check cost' })).toBeEnabled()
 })
+
+// ----------------------------------------- the export, fetched rather than downloaded (D64)
+
+/** The control that fetches. A helper because four cases press it or assert its absence. */
+function fetchButton(page: Page) {
+  return page.getByRole('button', { name: 'Fetch from TCGplayer' })
+}
+
+/** A receipt in the shape `POST /pipeline/runs/<name>/export` answers with. */
+function fetchedBody(over: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    run: '2026-08-24-box9-01',
+    file: 'export-tcgplayer-20260830-121500-a1b2c3d4.csv',
+    bytes: 26192,
+    rows: 153,
+    skus: 153,
+    games: ['riftbound'],
+    sets: ['Origins', 'Unleashed'],
+    conditions: ['Near Mint', 'Near Mint Foil'],
+    product_lines: ['Riftbound League of Legends Trading Card Game'],
+    verified: ['riftbound'],
+    unverified: [],
+    accepted_narrower: false,
+    source: 'https://store.tcgplayer.com/Admin/Pricing/DownloadMyExportCSV',
+    ...over,
+  }
+}
+
+/** Register the fetch route for one case. Not in `open()`: every case here wants a different
+ *  answer from it, and registering per case avoids depending on Playwright's precedence
+ *  between two patterns that could both match. Pushes into `wire` so an assertion can read
+ *  what the screen SENT, which is the whole point of the acknowledgement cases. */
+async function routeFetch(
+  page: Page,
+  wire: { method: string; path: string; body: unknown }[],
+  answer: { status: number; body: unknown },
+) {
+  await page.route(/\/pipeline\/runs\/[^/]+\/export$/, async (route) => {
+    wire.push({
+      method: 'POST',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(answer.body),
+    })
+  })
+}
+
+test('the export is fetched, and the join is handed the file rather than the bytes', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await page.locator('.run-row').first().click()
+
+  await fetchButton(page).click()
+
+  /* The receipt names the file, because that name is what the join is then handed and what
+     `GET .../file` will serve if the operator wants to read the bytes themselves. */
+  await expect(page.locator('.run-fetched')).toContainText(
+    'export-tcgplayer-20260830-121500-a1b2c3d4.csv',
+  )
+  await expect(page.locator('.run-fetched')).toContainText('153')
+
+  /* ONE PRESS IS TWO CALLS, and the join must take the file BY NAME. Sending `exports` here
+     would mean the browser had read a megabyte back off the server and posted it again to
+     arrive at bytes the server already had. */
+  const join = wire.filter((row) => row.path.endsWith('/join')).pop()
+  expect(join?.body).toMatchObject({
+    fetched: ['export-tcgplayer-20260830-121500-a1b2c3d4.csv'],
+  })
+  expect((join?.body as { exports?: unknown }).exports).toBeUndefined()
+})
+
+test('the acknowledging control does not exist until a refusal earns it', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await page.locator('.run-row').first().click()
+
+  /* THE LOAD-BEARING ABSENCE. `docs/DESIGN.md` puts a control that commits ABSENT rather than
+     disabled, which is D33's money gate one register down: a disabled button is one attribute
+     away from pressable and that attribute is what a later refactor drops. Asserted at rest
+     AND after a clean fetch, because a control that appeared once the panel had merely been
+     used would be just as wrong as one that was always there. */
+  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+  await fetchButton(page).click()
+  await expect(page.locator('.run-fetched')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+})
+
+test('a refusal an operator can answer draws the control that answers it', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, {
+    status: 409,
+    body: {
+      error: {
+        code: 'export_unverified',
+        message:
+          'This run has never been joined against a riftbound export, so there is nothing '
+          + 'to check this one against.',
+      },
+    },
+  })
+  await page.locator('.run-row').first().click()
+  await fetchButton(page).click()
+
+  /* The server's sentence verbatim, which is `docs/DESIGN.md`'s copy rule for owner screens,
+     with the machine string beneath it so what was seen can be grepped. */
+  await expect(page.locator('.run-result-refused')).toContainText('nothing to check this one')
+  await expect(page.locator('.run-result-refused')).toContainText('export_unverified')
+
+  /* A REFUSED FETCH MUST NOT JOIN. It wrote nothing, so joining after one would silently
+     re-use the previous export and look exactly like the fetch had worked. */
+  expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
+
+  const ack = page.getByRole('button', { name: /Fetch anyway/ })
+  await expect(ack).toBeVisible()
+  await ack.click()
+
+  /* THE ACKNOWLEDGEMENT IS THE FIELD THE REFUSAL NAMES, and never the other one. Sending
+     `accept_narrower` for an unverified run would wave through a different fact than the one
+     the operator was shown. */
+  const second = wire.filter((row) => row.path.endsWith('/export')).pop()
+  expect(second?.body).toMatchObject({ accept_unverified: true })
+  expect((second?.body as { accept_narrower?: unknown }).accept_narrower).toBeUndefined()
+})
+
+test('a refusal an operator cannot answer draws a sentence and nothing to press', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, {
+    status: 502,
+    body: {
+      error: {
+        code: 'tcg_session_expired',
+        message:
+          'TCGplayer redirected the download to its login page, which means the session in '
+          + 'TCGPLAYER_STORE_COOKIE has expired.',
+      },
+    },
+  })
+  await page.locator('.run-row').first().click()
+  await fetchButton(page).click()
+
+  await expect(page.locator('.run-result-refused')).toContainText('has expired')
+
+  /* An expired session, a WAF block and an export for the wrong product line are all fixed
+     somewhere other than this screen. A button here would be offering to wave through a
+     refusal the screen does not understand — which is why `FETCH_ACK` lists two codes rather
+     than being a boolean on the refusal. */
+  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+})

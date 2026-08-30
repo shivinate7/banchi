@@ -2041,6 +2041,16 @@ Added 2026-08-30, from the owner asking how they would know whether a change tou
 
 **`scripts/docs-audit.py`'s `supervisor self-watch` row is what keeps the list honest.** A hand-written list of a file's own imports goes stale the next time somebody adds one, and the failure it would reintroduce is the invisible one above. The row parses `serve.py` with `ast`, resolves its module-scope imports against the tree, and blocks on any project-local import missing from `SELF_FILES`. Mutation-tested: dropping `server/ports.py` from the list takes it red and names the file.
 
+### The screen
+
+**One press fetches and then joins, and the two are reported separately.** `#/runs`' join step carries the control. The fetch draws a receipt naming the file, the rows, the SKUs, the sets and the finishes, and says which games were checked against a previous export and which were not. A fetch that refuses does not join: it wrote nothing, so joining after one would silently re-use the previous export and look exactly like the fetch had worked.
+
+**The join is handed the file by name, not the bytes.** The server already holds them.
+
+**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable.
+
+**`app/tests/run-panel.spec.ts` asserts that absence at rest and after a clean fetch.** A control appearing once the panel had merely been used would be as wrong as one always there. Two mutations were observed failing: drawing the acknowledgement for every refusal, and joining after a refused fetch.
+
 ### What it costs
 
 - **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing. Inherent to D13, written down now rather than found as a bug in three weeks.
@@ -2808,6 +2818,99 @@ on the SKU being the stable per-line identity across two ingests, which `Duplica
 enforces at the boundary. A marketplace that issues its own per-line id would be a better key,
 and adopting one is a schema change plus a migration for every record already written — worth
 taking if a real feed offers it, and not worth inventing before one does.
+
+---
+
+## D64 — The Filtered Export is fetched, and completeness is a delta rather than a claim
+
+**The last manual step in `runs -> join` is gone: the server downloads the export instead of the operator, and one press on `#/runs` fetches and joins.** Built 2026-08-30.
+
+`identify` spawns detached (D33) and the three free steps are re-runnable, so the only thing left between a finished batch and a joined run was opening TCGplayer, pressing Export Filtered CSV, waiting, and uploading the file back. `POST /pipeline/runs/<name>/export` fetches it.
+
+**It is autonomous for single-game runs, and this entry claims no more than that.** One fetch returns one file, and a file answers for the games its own `Product Line` cells claim. All eleven of the owner's historical exports carry a single product line. D21 allows a mixed box, so a mixed-game run needs one fetch per game.
+
+### What replaces the promise
+
+**This process now holds a secret and opens a socket, and the sentence that said otherwise is rewritten rather than narrowed.** D33 already broke the money half of `capture_server.py`'s header. What survived was a file-boundary claim beside the import: no key, no socket, no child. `server/tcg_export.py` reads a TCGplayer session cookie from `.env` and opens a socket to `store.tcgplayer.com`.
+
+**Narrowing it to "no socket to Anthropic" was available and is refused.** That is the drift D16 exists to catch.
+
+What holds instead: one host, one method, one route, in one module with one caller, and it cannot cause a charge. `POST /pipeline/identify` is still the only route that can.
+
+### The probe that would make this simpler is still open
+
+**Every seller-admin route answers `302 -> /admin/account/logon` unauthenticated, before any parameter is read.**
+
+| route | unauthenticated |
+|---|---|
+| `GET /Admin/Pricing/DownloadMyExportCSV` | 302 to logon |
+| `GET /admin/pricing/getjsonfilters` | 302 to logon |
+| `GET`/`POST /admin/pricing/productsearch` | 302 to logon |
+
+This is cookie-session auth, not the order-management API, which is another host answering `www-authenticate: Bearer`. The two were conflated once while this was scoped and reached the wrong conclusion.
+
+**Whether export scope can be set by request is therefore unanswered.** It needs one authenticated probe, which needs the cookie, which only the owner can place. If scope can be set, the better design is to ask for a scoped export rather than inspect a broad one: fetch the sets the run needs with printings and conditions unfiltered, and the file is complete within scope by construction. That is recorded and not built, because a path that has never run must not carry a comment claiming a property nobody measured.
+
+**Its scope source does not exist yet either, which is the second finding.** No identification profile returns a set. Measured across all four runs on disk: `pokemon_card_v1` answers `{name, number, printed_total, finish, confidence}` and `riftbound_card_v1` answers `{name, number, finish, confidence}`. `printed_total` is a denominator. The set is knowable only after a join, from the export's own `Set Name` column, which is circular for deciding what to fetch. `set_hint` is the only pre-join source and covers 676 of 715 cards; box 3 carries none and spans six Riftbound sets.
+
+### Completeness cannot be read off an export
+
+**Three filters narrow a Filtered Export independently, and one leaves no trace in the file.**
+
+| axis | visible in the file |
+|---|---|
+| printings (All Printings off) | yes |
+| condition | yes |
+| listings with photos | no — `Photo URL` is empty in all eleven exports, filtered and unfiltered |
+
+**The obvious guard fails because the axes are independent.** Refusing a file with no non-Near-Mint condition row passes an All-Printings-off export, which still carries every condition for the printings it does contain.
+
+**What missing printings cost is a silent mislisting.** D3 rung 2 fires when exactly one condition row exists for a number, so a variant-thinned file manufactures single-row numbers and a reverse holo with no finish claim resolves to the normal row. A missing SKU is loud by comparison: the card queues as `no_catalog_row`.
+
+### The guard
+
+**Completeness against the catalog is unknowable; completeness against this run's own previous export is arithmetic.** Two readings, per game the fetch answers for.
+
+- SKUs the baseline carried and this file does not.
+- Numbers that had several finish rows and now have one. Counted over `condition_by_finish`'s own values, and keyed the way the row would be found: by `(Set Name, Number)` where there is a number, by name where there is not.
+
+**One refusal code covers both, because a condition row is a SKU.** A number cannot lose a printing without losing the row that carried it, so a second code could never fire alone.
+
+**`cli/resolve.py:exports_for` does the ruling, so the check is the real rule rather than a second approximation.** It runs over the fetched file plus whichever recorded exports it does not replace, before anything is joined. `games_claimed` is extracted from it for the one thing the route must know first.
+
+**Two acknowledgements, each named for the fact it answers.** `accept_narrower` says the file covers less than the last one and the operator means it. `accept_unverified` says the run has nothing to compare against. Separate fields because one is evidence and the other is its absence.
+
+**The first join of a run costs one acknowledgement and every re-join is autonomous.** `join` is free and routinely pointed at a refreshed export, which is where the fetch does its work and where a baseline exists.
+
+### Both readings were wrong in the first build
+
+**Measuring against the owner's real exports found two defects that a three-row fixture could not.** Both made the check look like it worked: one fired on everything, one on nothing.
+
+**Play conditions are not finishes.** D12 scopes the product to Near Mint and the committed fixtures are Near-Mint-only; a wide export carries eleven to sixteen conditions because it also lists Lightly Played through Damaged. Measured on box 3's export against the wide Riftbound file: all 153 numbers read as thinned and **not one had lost a finish**. The refusal would have fired on an operator doing the right thing, carrying a sentence about mispricing that was false.
+
+**The key carried `Product Name`, which loses real cases.** Finish variants usually share a product name, 143 of sv09's 144 multi-row numbers. Keyed `(set, number)` the wide Riftbound export has **550** numbers stocked in more than one finish; keyed with the name, **522**. Twenty-eight were invisible to the check written to find them.
+
+**The guard does not fire on the owner's own refresh.** Run `2026-08-29-box1-01` holds two real exports taken four minutes apart, 60 rows then 2,008. It allows them. A guard that refused a legitimate widening would be read past rather than read.
+
+### Three defects this branch found in itself
+
+**A one-second filename stamp let a second fetch overwrite the export the run was joined against.** That file is the baseline the guard compares to, so the check then compared a file to itself and passed. The name carries a content digest now, and a refusal deletes only what the request created. T7 found it before the route had run for real.
+
+**The remedy `tcg_session_expired` prints did not work.** It tells the operator to replace the value in `.env`, and `envfile.get` could not see them do it: `load` returns early once loaded, and it will not overwrite a name it set itself. Neither cache had mattered before, because an API key and a mirror path are placed before anything starts. A session expires, and D53's supervisor runs for days without watching `.env`. `envfile.get_live` reads the file fresh; `_from_file` keeps a real environment variable winning.
+
+**The CSRF gate's stated reason was falsified by this branch.** `capture_server.py` justified the origin check with "there are no credentials in this product", which now understates what it guards: a page in another tab could otherwise make this server spend the owner's marketplace session. The conclusion is unchanged and the reason is corrected. T7 asserts the refusal lands before the cookie is read.
+
+### What it costs
+
+**The fetch composes with the recorded exports and `join` does not.** `exports_for` replaces the recorded mapping outright once any `--export` is passed, which the upload path has always done. So on a mixed-game run, fetching one game's file and joining with it alone passes the fetch and refuses at the join, naming the uncovered game. Making a recorded export compose with an explicit `--export` changes that function's contract and has not been argued.
+
+**The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
+
+**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+
+**The live fetch is not verified.** Measured unauthenticated, the stdlib `Python-urllib` User-Agent reaches the endpoint unblocked, which is not evidence about an authenticated request against an AWS WAF. `tcg_blocked` names `PKMNSCAN_TCG_USER_AGENT` as the first remedy. One live fetch by the owner is owed.
+
+**What would reopen this: an authenticated probe of `getjsonfilters` and `productsearch`.** If scope can be set by request, the scoped-export design replaces this guard with a positive one, and the one-fetch-one-game limit may soften with it.
 
 ---
 

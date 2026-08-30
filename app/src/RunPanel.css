@@ -752,6 +752,20 @@
   border-color: var(--ink);
 }
 
+/* D64's fetch receipt. `.run-note`'s box rather than a treatment of its own: it is the same
+ * kind of thing — a bounded block of prose and figures the panel puts under a control — and a
+ * second container idiom in one panel is one more thing to keep in step for no gain.
+ *
+ * NO ACCENT AND NO FILL. `docs/DESIGN.md` reserves the solid fill for a screen with exactly
+ * one thing to do, and this panel already spends its single fill on the control that starts a
+ * paid run. A receipt reporting a free download may not compete with it. */
+.run-fetched {
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+}
+
 .run-result-head {
   margin: 0 0 var(--s2);
   font-family: var(--util);

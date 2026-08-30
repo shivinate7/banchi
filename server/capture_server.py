@@ -42,6 +42,7 @@
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
+    POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
@@ -150,8 +151,21 @@ backup — and nothing here could tell it from the capture app. POST, PUT and DE
 require an `Origin` this server knows (or none at all, which is what a non-browser client
 sends); GET is unchanged and still `*`, because `GET /photo` is loaded as an image by two
 screens. The argument, the allowlist and the environment variable that extends it are at
-`SAFE_METHODS` below. It is a CSRF gate, NOT authentication — there are no credentials in
-this product and this adds none.
+`SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
+
+THE REASON IT USED TO GIVE FOR THAT IS NOW FALSE, AND IT IS CORRECTED RATHER THAN LEFT
+STANDING (D64). This sentence read "there are no credentials in this product and this adds
+none", and the first half was deleted by a change made later: `server/tcg_export.py` reads a
+TCGplayer session cookie out of `.env` and `POST /pipeline/runs/<name>/export` spends it. A
+premise quietly falsified by a later change, with its conclusion left in place, is the
+failure D41 records for a comment that had outlived a layout — and here it would understate
+what this gate is for, by telling a reader there is nothing behind it worth reaching.
+
+WHAT IS BEHIND IT NOW: a page in another tab could otherwise make this server spend the
+owner's marketplace session. The gate answers 403 before the route runs, so the cookie is
+never read for a request whose origin this server does not know — which is why the export
+route needs no check of its own, and why weakening `SAFE_METHODS` is a bigger decision than
+it was when this paragraph was written.
 
 EVERY WRITE GOES THROUGH `store.session.Store.write()`. The server never touches
 `inventory.json` and never writes a photo outside that lock. `store/__init__.py` calls it
@@ -240,6 +254,15 @@ from store import Store, files, master, queues  # noqa: E402
 # header used to make. Imported here rather than inlined so that the boundary is a file
 # boundary: everything above this line still holds no key, opens no socket, and starts no
 # child process.
+#
+# THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
+# than qualified (D64). `server/tcg_export.py` reads the TCGplayer session cookie out of
+# `.env` and opens a socket to `store.tcgplayer.com` to download the operator's own Filtered
+# Export — so this server does hold a secret and does make an outbound call, and saying "no
+# socket TO ANTHROPIC" instead would be the technicality-narrowing D16 exists to catch. What
+# still holds, and what the boundary is for: the call is one host, one method, one route, in
+# one module reached only from `pipeline_routes`, and it cannot cause a charge. The one route
+# that can is still `POST /pipeline/identify`, and it is still named for it.
 # `from server import ...` and not a bare `import pipeline_routes`: this file is run BOTH
 # ways — by path as `make server` does, where sys.path[0] is server/, and as a package
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
@@ -452,6 +475,11 @@ _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
 # run-item pattern for the same reason the download is: the more specific path reads
 # first, for whoever is following this list rather than the regex engine.
 _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
+# MATCHED BEFORE `_RUN_STEP_RE`, WHICH WOULD OTHERWISE SWALLOW IT. That pattern's second
+# group is `[a-z]+` and `export` is `[a-z]+`, so the order of the two `if`s at the dispatch
+# site is what keeps this route from being refused as `no_such_step` — the same care
+# `_RUN_DECISIONS_RE` needs one line down, and the reason both are declared here together.
+_RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # The price history for ONE SKU, named on the query string (D62). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
 # path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
@@ -7292,6 +7320,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)
+            # THE ONE OUTBOUND CALL, and it is not the one that spends. It fetches the
+            # operator's own Filtered Export from TCGplayer with the session cookie in
+            # `.env`, so `join` no longer needs a file downloaded and uploaded by hand.
+            # Before `_RUN_STEP_RE`, whose `[a-z]+` would match `export` and refuse it as a
+            # step that does not exist.
+            match = _RUN_EXPORT_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_export(match.group(1), self._body()),
+                )
             match = _RUN_STEP_RE.match(path)
             if match:
                 return self._json(

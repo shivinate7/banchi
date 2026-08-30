@@ -1689,3 +1689,32 @@ export type RunStepResult = {
  *  the server's disk, and a route that opened any absolute path a request named would be a
  *  file-read primitive guarded by an origin header. */
 export type CsvUpload = { name: string; content: string }
+
+/** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
+ *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
+ *
+ *  `verified` and `unverified` are the halves of the guard's answer and both are lists, so a
+ *  mixed-game run can report per game. A game in `unverified` was accepted on the operator's
+ *  acknowledgement because this run had no previous export to compare against — an absence of
+ *  evidence rather than evidence, which is why it is reported separately rather than folded
+ *  into `verified`.
+ *
+ *  `file` is the name the join is then handed. It is a name and not the bytes: the server
+ *  already holds them, and sending a megabyte back through the browser to arrive at them is
+ *  not a step. */
+export type ExportFetched = {
+  ok: boolean
+  run: string
+  file: string
+  bytes: number
+  rows: number
+  skus: number
+  games: string[]
+  sets: string[]
+  conditions: string[]
+  product_lines: string[]
+  verified: string[]
+  unverified: string[]
+  accepted_narrower: boolean
+  source: string
+}
