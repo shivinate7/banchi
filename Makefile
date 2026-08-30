@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check ignore-check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks
+.PHONY: help status harness check ignore-check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -44,6 +44,11 @@ help:
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
+	@echo "  make up           BOTH servers, detached, and the capture server reloads itself"
+	@echo "                    when you edit Python. Prints the link. Start here."
+	@echo "  make down         stop them.  make restart  stop and start."
+	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
+	@echo "                    ARGS=--remove to undo it."
 	@echo "  make dev          Vite app on :5173. Blocks — background it in a session."
 	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
@@ -336,6 +341,36 @@ port-agreement:
 # belongs. Deleting is opt-in: `make icloud-sweep ARGS=--delete`.
 icloud-sweep:
 	@python3 scripts/icloud-sweep.py $(ARGS)
+
+# BOTH SERVERS, DETACHED, AND THE CAPTURE SERVER RESTARTS ITSELF WHEN YOU EDIT PYTHON.
+# `make dev` and `make server` below are untouched and still work; this is additive.
+#
+# The restart is the point rather than the convenience. docs/GATES.md records a run whose
+# whole-second timestamps came from a server started before the millisecond fix landed — "a
+# long-running `make server` outlives the fix that was written for it", filed there as a
+# discipline. A discipline nobody can keep is what this replaces.
+#
+# DO NOT RUN THESE ALONGSIDE `make dev` / `make server`. The second one loses: strictPort on
+# the Vite side and EADDRINUSE on the capture side, both loudly. That is deliberate — a second
+# server that quietly moved to another port would serve a DIFFERENT store (D43).
+#
+# None of these four goes near `make check` or the git hook. D18: nothing that writes may run
+# on the path that decides whether a commit proceeds, and `launch-agent` writes to ~/Library,
+# which is the strongest form of that rule this repo has had to apply.
+up:
+	@$(PYTHON) scripts/serve.py up
+
+down:
+	@$(PYTHON) scripts/serve.py down
+
+restart:
+	@$(PYTHON) scripts/serve.py restart
+
+# Generated, never tracked, and written OUTSIDE the repo into ~/Library/LaunchAgents. A
+# tracked plist would carry an absolute path baked on one Mac, which is D47's failure verbatim
+# — and a worktree's plist would outlive the worktree, so this refuses in a linked checkout.
+launch-agent:
+	@$(PYTHON) scripts/serve.py launch-agent $(ARGS)
 
 # Foreground and blocking, like `server` below — background it from an agent session, or
 # the Stop hook's harness run never gets to happen.

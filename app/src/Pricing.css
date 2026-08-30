@@ -206,7 +206,7 @@
   background: var(--hover);
 }
 
-/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D50). Derived from `rule`/`basis` rather than
+/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D52). Derived from `rule`/`basis` rather than
    from a stored key, so it cannot disagree with what `emit` will actually price at — see
    `Pricing.tsx`'s `aria-pressed`.
 
@@ -440,6 +440,14 @@
   border-radius: var(--r);
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.pricing-input:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 /* A SUGGESTION READS AS ONE. It is a real value rather than a placeholder — the owner asked
    for a preset that "prefills a box as suggested" — so the only thing that can say it has not
    been chosen is its weight and its colour. */
@@ -477,6 +485,21 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   cursor: pointer;
+}
+
+/* The only control on this screen that did not answer the pointer. `.pricing-plain`,
+   `.pricing-preset` and `.pricing-run` all lift to `--hover` and this one — sitting in the same
+   row as the first of them — did not, which is one screen contradicting itself rather than two
+   screens disagreeing.
+
+   `--muted` on `--hover` is 7.30:1, the tightest pair in the palette and the one docs/DESIGN.md
+   publishes as the reason `--muted` was redrawn. Held, so this introduces no new pairing. The
+   pressed state below keeps its own colour and is `--accent` on `--hover` at 8.00:1.
+
+   Background only: the `aria-pressed` rule beneath draws an inset ring, and a hover that also
+   moved a border would make the two states argue about the same pixel. */
+.pricing-hold:hover:not(:disabled) {
+  background: var(--hover);
 }
 
 .pricing-hold[aria-pressed='true'] {
@@ -552,6 +575,14 @@
   border-radius: var(--r);
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.pricing-field input:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 .pricing-field-wide input {
   flex: 1 1 20rem;
 }
@@ -571,7 +602,7 @@
      of it costs the least; and the panel is a picture of that card, so it sits beside what it
      is about. */
   left: var(--s4);
-  /* ABOVE THE SHIP BAR, NOT UNDER IT (D50). The corner above was chosen by looking at it and
+  /* ABOVE THE SHIP BAR, NOT UNDER IT (D52). The corner above was chosen by looking at it and
      that argument is untouched — what changed is that the bottom edge is now occupied. The
      bar's height varies with its receipt, so this is a floor rather than an exact clearance:
      `--pricing-ship-h` is the closed height, and a bar grown by a receipt overlaps the
@@ -614,7 +645,7 @@
   gap: var(--s2);
 }
 
-/* ---- the ship bar (D50) ---------------------------------------------------------------
+/* ---- the ship bar (D52) ---------------------------------------------------------------
  *
  * STICKY AND IN FLOW, NOT `fixed`. A sticky last child reserves its own height in the
  * document, so the space under a ~6,500px list is exactly this bar's height BY CONSTRUCTION

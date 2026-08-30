@@ -142,8 +142,18 @@ records, and the owner named the problem: they read as three instances of one th
 modes of `#/inventory` now — *"it's basically find a card in a box-based system if anything"*
 — with the box walk as the spine and search narrowing it rather than replacing it.
 
-`make dev` serves it on :5173, `make screenshot` renders `scripts/views.txt` into
-`captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
+**`make up` is how you run it.** It starts both servers detached, prints the link to bookmark,
+and — the half worth having — **restarts the capture server by itself whenever you edit Python**
+under `server/`, `store/`, `pipeline/`, `cli/`, `identify/` or `geometry/`. `docs/GATES.md`
+records what that replaces: a run whose timestamps came from a server started before the fix
+that was written for it. `make down` stops both; `make launch-agent` starts them at login, from
+the main checkout only.
+
+`make dev` and `make server` still run the two halves in the foreground, one terminal each, and
+neither watches anything — use them when you want a server you are looking at. Running either
+beside `make up` fails loudly rather than quietly moving to another port, because a server that
+moved would be serving a **different** store (D43). `make screenshot` renders `scripts/views.txt`
+into `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
 real browser.
 
 All five open at a hash, and the Fulfillment view opens **without the nav strip** the other

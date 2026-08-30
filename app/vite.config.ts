@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { CAPTURE_URL, DEV_PORT } from './devPort'
+import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
 
 // Port 5173 is not Vite's default acting by accident — CLAUDE.md and the Makefile's `dev`
 // target both promise :5173, and scripts/views.txt points the screenshot runner there.
@@ -16,10 +16,39 @@ import { CAPTURE_URL, DEV_PORT } from './devPort'
 // VITE_CAPTURE_SERVER still wins over this. That is the operator's explicit override and the
 // case docs/specs/capture-app.md §11 leaves open — the Fulfiller's device pointed at this Mac
 // by address. A derived default is a better default; it is not a reason to take the knob away.
+// THE PORT IS INJECTED BESIDE THE URL, AND app/src/server.ts PREFERS IT. The URL's host is
+// `localhost`, which is right at the desk and wrong from anywhere else — on a phone
+// `localhost` is the phone. Composing the base from `location.hostname` plus this port keeps
+// the per-checkout guarantee above (the port still comes from this tree's slot, so a
+// worktree's UI still cannot be answered by another tree's server) while letting the page be
+// opened by any name that reaches this Mac. The URL stays for callers that have no `location`
+// — `tsc`, the specs' module imports — where there is no address bar to follow.
+//
+// `server.host` so Vite answers on the LAN at all. The capture server has bound 0.0.0.0 since
+// it was written; Vite was the half still listening only on the loopback, so the app could not
+// be opened from the phone even though its server could be reached.
 export default defineConfig({
   plugins: [react()],
-  server: { port: DEV_PORT, strictPort: true },
+  server: {
+    port: DEV_PORT,
+    strictPort: true,
+    host: true,
+    // `host: true` makes Vite LISTEN on every interface; it does not make it ACCEPT every
+    // name. Vite refuses a request whose Host header it does not recognise — DNS-rebinding
+    // protection — so reaching this app at `pkmnscan.lan` returned "Blocked request. This
+    // host is not allowed." while the bare IP worked fine. Found by opening the real
+    // hostname rather than the address, which is the only test that could have caught it.
+    //
+    // TWO LOCAL SUFFIXES, NOT `true`. `true` switches the protection off for every name;
+    // a leading dot allows a domain and its subdomains, so this admits `pkmnscan.lan` and
+    // `MacBook-Pro-2.local` and still refuses an arbitrary public hostname pointed at this
+    // machine. Both suffixes are non-routable on the public internet, which is what makes
+    // the narrowing meaningful rather than decorative. Localhost and bare IPs are allowed
+    // by Vite already and need no entry.
+    allowedHosts: ['.lan', '.local'],
+  },
   define: {
     'import.meta.env.VITE_CAPTURE_DEFAULT': JSON.stringify(CAPTURE_URL),
+    'import.meta.env.VITE_CAPTURE_PORT': JSON.stringify(CAPTURE_PORT),
   },
 })

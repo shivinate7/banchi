@@ -191,7 +191,7 @@ from harness.tests import Checks, Result  # noqa: E402
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import games, join, tcgcsv, variant  # noqa: E402
-from server import capture_server, pipeline_routes  # noqa: E402
+from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
 
@@ -725,8 +725,12 @@ def check_server_routes(checks: Checks) -> None:
 
         photo = capture_server.photo_path(3, 1)
         checks.ok(photo.is_file(), "the photo is on disk at its position-derived path")
-        checks.equal(
-            capture_server.do_photo(3, 1), JPEG, "GET /photo returns the stored bytes"
+        served, tag = capture_server.do_photo(3, 1)
+        checks.equal(served, JPEG, "GET /photo returns the stored bytes")
+        checks.ok(
+            tag.startswith('"') and tag.endswith('"') and len(tag) == 34,
+            "and a quoted strong ETag beside them — the validator that lets a browser find "
+            "out a slot's occupant changed under a URL that did not",
         )
 
         refusal(
@@ -837,6 +841,21 @@ def check_server_routes(checks: Checks) -> None:
         checks.equal(report["cards"], 3, "GET /status counts every card, and a replay is not one")
         checks.equal(report["next_index"]["3"], 4, "and reports the next index per box")
         checks.ok("problem" not in report, "and reports no problem on a healthy store")
+
+        # WHICH PROCESS IS ANSWERING. `scripts/serve.py` restarts this server whenever a
+        # watched Python file changes, and the app tells a restart from a reload by watching
+        # this value — the failure it exists for is docs/GATES.md's box 95, where whole-second
+        # timestamps were written two hours after the millisecond fix landed because the
+        # process predated it and nothing on any screen could say so.
+        checks.ok(
+            isinstance(report.get("boot_id"), str) and report["boot_id"],
+            "GET /status names the process answering it, so a stale server can be seen",
+        )
+        checks.equal(
+            report["boot_id"],
+            capture_server.BOOT_ID,
+            "and it is this process's own id rather than a value recomputed per request",
+        )
 
         # GET /inventory decorates every row with its rendered position. Asserted against
         # `join.Position` itself and never against a literal string: the whole point of the
@@ -6254,7 +6273,7 @@ def allowed_origins_env(value):
             os.environ[capture_server.ORIGINS_ENV] = previous
 
 
-def request(port, method, path, *, origin=None, payload=None):
+def request(port, method, path, *, origin=None, payload=None, extra_headers=None):
     """One request against the running server. Returns `(status, body, headers)`.
 
     Both outcomes are collapsed here rather than one of them raising: an origin refusal is a
@@ -6266,6 +6285,9 @@ def request(port, method, path, *, origin=None, payload=None):
     headers = {"Content-Type": "application/json", "Connection": "close"}
     if origin is not None:
         headers["Origin"] = origin
+    # `extra_headers` exists for the conditional GET on /photo, which is the one route in
+    # this server whose answer depends on a request header other than Origin.
+    headers.update(extra_headers or {})
     outgoing = urllib.request.Request(
         f"http://127.0.0.1:{port}{path}",
         data=None if payload is None else json.dumps(payload).encode("utf-8"),
@@ -6330,11 +6352,40 @@ def check_origin_gate(checks: Checks) -> None:
     )
     checks.equal(
         sorted(capture_server.DEFAULT_ALLOWED_ORIGINS),
-        ["http://127.0.0.1:5173", "http://localhost:5173"],
-        "and BOTH spellings of this machine are allowed by default: a browser's Origin is "
-        "the literal string in the address bar, so localhost and 127.0.0.1 are the same "
-        "host and not the same origin, and the owner types both",
+        [
+            f"http://127.0.0.1:{ports.dev_port()}",
+            f"http://localhost:{ports.dev_port()}",
+        ],
+        "BOTH spellings of this machine are allowed by default — a browser's Origin is the "
+        "literal string in the address bar, so localhost and 127.0.0.1 are the same host "
+        "and not the same origin, and the owner types both — AT THE PORT THIS CHECKOUT'S "
+        "APP IS ACTUALLY SERVED ON, which is the whole of D43's amendment: the list was the "
+        "constant 5173 while D43 made the dev port per-checkout, so a linked worktree "
+        "served an app whose every write its own server then refused",
     )
+    with tempfile.TemporaryDirectory() as plain:
+        checks.equal(
+            ports.dev_port(Path(plain)),
+            5173,
+            "AND THE MAIN TREE IS UNMOVED: a root that is not a linked worktree still "
+            "derives 5173, so this list is byte-identical to the constant it replaced "
+            "wherever the owner actually works, and every doc naming that number stays true",
+        )
+    if ports.is_linked_worktree(ports.REPO_ROOT):
+        checks.ok(
+            "5173" not in "".join(capture_server.DEFAULT_ALLOWED_ORIGINS),
+            "and a WORKTREE allows its own origin and not the main tree's — letting a page "
+            "served by the main checkout write into a branch's store is the cross-tree "
+            "write D43 exists to prevent, arriving through the one control meant to stop "
+            "it. Pointing one tree's app at another's is already deliberate "
+            "(VITE_CAPTURE_SERVER) and takes the deliberate answer: name the origin in "
+            "PKMNSCAN_ALLOWED_ORIGINS",
+        )
+    else:
+        checks.note(
+            "        (the worktree case is not exercised here: this IS the main checkout, "
+            "and 5173 being correct in it is exactly how the defect stayed hidden)"
+        )
 
     with isolated_home(), allowed_origins_env(None):
         capture_server.captures_root().mkdir(parents=True, exist_ok=True)
@@ -6575,6 +6626,117 @@ def check_origin_gate(checks: Checks) -> None:
 
 
 # ------------------------------------------------------------------------- command seams
+
+
+def check_photo_cache(checks: Checks) -> None:
+    """`GET /photo` is a conditional request, because its URL names a SLOT, not a card.
+
+    THE DEFECT THIS EXISTS FOR WAS FOUND FROM THE FAR END, by the owner reporting that a
+    mid-box delete on `#/inventory` "doesn't kick in super quickly ... it makes you think
+    you need to delete more". Measured against a copy of their real store on 2026-08-29:
+    the delete answered in 288 ms and the walk redrew in 500 ms, and the screen went on
+    drawing the photograph of the deleted card over the facts of its replacement. Nothing
+    was slow. The response carried no `ETag`, no `Last-Modified` and no `Cache-Control`, so
+    the browser reused what it had for a URL whose bytes had moved underneath it.
+
+    THE READING THAT MAKES IT DANGEROUS RATHER THAN UNTIDY: the operator sees the same
+    picture at the same position label and presses again — and the second press aims at the
+    card that slid in, which is a real capture with a real photograph, and is not refused,
+    because the aim check is satisfied by the freshly re-read record.
+
+    SOCKETS, NOT THE `do_*` FUNCTION, and for `check_origin_gate`'s exact reason: the whole
+    behaviour is a request header, a status code and two response headers, none of which an
+    in-process call has. The in-process case up in `check_store` asserts only that a
+    validator comes back at all.
+
+    THE PHOTOS CARRY DISTINGUISHABLE BYTES, `check_remove_and_delete`'s rule, and here it is
+    the entire assertion: "the browser is told the bytes changed" is only worth checking if
+    the test can tell two photographs apart.
+    """
+    checks.note("")
+    checks.note("GET /photo — the validator that survives a renumber")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        for i in (1, 2):
+            capture_server.do_capture(
+                {"box": 3, "capture_id": f"p{i}", "image": blob(i), "set_hint": "sv9"}
+            )
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            status, body, headers = request(port, "GET", "/photo/3/1")
+            first = headers.get("ETag")
+            checks.equal(status, 200, "a photo answers 200 with its bytes")
+            checks.equal(
+                body, b"\xff\xd8\xff" + bytes([1]) * 64, "and the bytes are card 1's"
+            )
+            checks.ok(
+                first is not None and first.startswith('"') and first.endswith('"'),
+                "and a quoted strong ETag — without one a browser has nothing to ask about "
+                "and reuses a slot's previous occupant",
+            )
+            checks.equal(
+                headers.get("Cache-Control"),
+                "no-cache",
+                "`no-cache` and not `no-store`: keep the bytes, ask before reusing them. "
+                "`no-store` would re-send 1.9 MB per arrow key on the Fulfiller's LAN",
+            )
+
+            status, body, _ = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": first}
+            )
+            checks.equal(status, 304, "an unchanged photo revalidates to 304")
+            checks.equal(body, b"", "and carries no body — that is what makes it cheap")
+
+            status, _, _ = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": f"W/{first}"}
+            )
+            checks.equal(
+                status, 304, "the comparison is weak, as RFC 9110 requires of If-None-Match"
+            )
+            status, _, _ = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": "*"}
+            )
+            checks.equal(status, 304, "and `*` matches any existing resource, not a tag")
+
+            status, body, _ = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": '"stale"'}
+            )
+            checks.equal(status, 200, "a tag we never issued gets the bytes")
+            checks.equal(len(body), 67, "all of them")
+
+            # ------------------------------------------------------ the renumber itself
+            # D10 ruling 1: deleting card 1 slides card 2 down into slot 1. The URL does not
+            # change and its bytes do, which is the whole case.
+            capture_server.do_remove_card(3, 1, {"capture_id": "p1"})
+
+            status, body, headers = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": first}
+            )
+            checks.equal(
+                status,
+                200,
+                "AFTER THE SHIFT THE SAME URL WITH THE SAME TAG ANSWERS 200, NOT 304 — the "
+                "browser is told the slot's occupant changed, which is the defect",
+            )
+            checks.equal(
+                body,
+                b"\xff\xd8\xff" + bytes([2]) * 64,
+                "and the bytes are card 2's, which slid down into slot 1",
+            )
+            checks.ok(
+                headers.get("ETag") not in (None, first),
+                "under a new ETag, so the next request revalidates against the right "
+                "photograph rather than the one that was deleted",
+            )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 def check_cli_seams(checks: Checks) -> None:
@@ -8079,6 +8241,112 @@ def _stages(inventory) -> str:
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
 
 
+def check_emit_bypass(checks: Checks) -> None:
+    """`emit` re-derives the run, so every input to that derivation comes from the run.
+
+    THE DEFECT, FOUND BY THE OWNER PRESSING `Write the import files` ON A BOX THEY HAD JOINED.
+    `cli/cmd_emit.py` called `resolve.load` without `trust_claim`, so it walked the ladder with
+    D3 rung 3 LIVE over a run joined with `--bypass` — inventing a queued position for every
+    bypassed card, finding none of them in either queue file (join deliberately never wrote
+    them), and refusing with *"Run `pkmnscan join` first"* at an operator who had. Re-running
+    join could not clear it, because join was right.
+
+    Measured on the owner's box 1 before the fix: `bypassed: 39` in the manifest, 39 positions
+    invented, 39 absent from disk, and the refusal's first ten positions matched what the screen
+    printed character for character.
+
+    THE REFUSAL WAS THE SECOND-WORST OUTCOME, which is why the case asserts the OUTPUT and not
+    just the exit code. That same resolution is what writes the import files, so had the check
+    passed, those cards would have been routed to review and left out of the CSV — the bypass
+    silently void at the one step that produces output. So this asserts the bypassed card is IN
+    the file, at the SKU its claim names.
+
+    Its own isolated home, this file's own lesson yet again: it emits, which writes `pushed`
+    counts that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
+    """
+    checks.note("")
+    checks.note("EMIT BYPASS — the run's own resolution decides, not this command's defaults")
+
+    # Dunsparce 120/159 stocks two condition rows, so a claim of `normal` is a claim the
+    # catalog cannot settle on its own and detection is what contradicts it — D3 rung 3, the
+    # exact rung `--bypass` switches off. A holofoil-only number could not produce the case.
+    cards = [(3, 1, "Dunsparce", "120", "normal")]
+
+    with isolated_home():
+        for box, index, *_ in cards:
+            while Store().read().inventory.next_index(box) <= index:
+                capture_server.do_capture(capture_payload(box))
+
+        run_dir = runs.create("t7-bypass")
+        payload = identifications_for(cards)
+        # THE CLAIM AND THE DETECTION MUST DISAGREE, and `identifications_for` sets both from
+        # one field by design — a null finish is its rung-2 case. Patched here rather than by
+        # widening that helper, because every other block in this file wants the agreeing shape.
+        payload["cards"][master.position_key(3, 1)]["identification"]["finish"] = "reverse_holo"
+        run_dir.write_identifications(payload)
+        export = write_export(run_dir.path("export.csv"))
+
+        said = command(
+            checks, "join", str(run_dir.directory), "--export", str(export), "--bypass"
+        )
+        run_dir = runs.open_run(run_dir.directory)
+
+        checks.ok(
+            run_dir.manifest.get("bypass_detection") is True,
+            "the run RECORDS that it was joined with --bypass. Without this on the manifest "
+            "there is nothing for a later command to read, and every later command re-derives",
+        )
+        checks.equal(
+            run_dir.manifest.get("bypassed"),
+            1,
+            "and records how many cards it cleared, so the count is reported rather than "
+            "inferred from a smaller queue (D3)",
+        )
+
+        snapshot = Store().read()
+        checks.equal(
+            (len(snapshot.review.entries), len(snapshot.parked.entries)),
+            (0, 0),
+            "A BYPASSED CARD IS QUEUED NOWHERE, which is the whole point of the flag and the "
+            "fact that made emit refuse: the position emit invented could not be on disk",
+        )
+
+        said = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "REFUSING to write" not in said,
+            "`emit` DOES NOT REFUSE a run joined with --bypass. It read the flag off the "
+            "manifest exactly as it already read `review_below_confidence`, rather than "
+            "defaulting rung 3 back on and re-deriving a run that is not the one on disk",
+        )
+
+        # GUARDED, because the failure this case exists for is a REFUSAL — and a refusal
+        # writes no file, so reading one unconditionally turns a clean red line into a
+        # traceback that hides every check behind it. `answers()` above states the same rule.
+        listed = run_dir.path(runs.import_listed_name("pokemon"))
+        written = (
+            {row[tcgcsv.SKU_COLUMN] for row in tcgcsv.read_export(listed).rows}
+            if listed.is_file()
+            else set()
+        )
+        checks.ok(
+            listed.is_file(),
+            "an import file EXISTS at all — the refusal wrote nothing, so this is what a "
+            "regression looks like before any SKU can be asserted about",
+        )
+        checks.ok(
+            DUNSPARCE_SKU in written,
+            "AND THE CARD IS IN THE FILE AT THE SKU ITS CLAIM NAMES. This is the assertion "
+            "that matters: the refusal was the second-worst outcome, and a fix that only "
+            "silenced it would have left the card routed to review and out of the CSV — the "
+            "bypass void at the one step that writes",
+        )
+        checks.ok(
+            DUNSPARCE_REVERSE_SKU not in written,
+            "and NOT at the finish detection claimed. `--bypass` is one rule — detection may "
+            "not contradict a claim — so the claim decides, and rung 3's other job is untouched",
+        )
+
+
 def check_pricing_authority(checks: Checks) -> None:
     """`decisions.json` decides the price, and `join` may not take that decision back.
 
@@ -8279,6 +8547,36 @@ def check_pricing_route(checks: Checks) -> None:
                 "with no earlier run there is nothing to remember, and the answer is null "
                 "rather than a guess — D9 forbids a default and this is a LABEL, not one",
             )
+            # WHEN THE TABLE WAS WRITTEN, WHICH IS THE ONLY AGE A PRICE CAN HONESTLY CARRY.
+            # `#/inventory`'s card panel draws `$5.47 · read 2 days ago` off this, and the
+            # second half is not decoration: `join` is free, re-runnable and routinely pointed
+            # at a REFRESHED export, so two cards on one shelf can carry prices read a week
+            # apart and a bare figure claims a currency the file cannot support.
+            #
+            # BACKDATED FIRST, AND THAT IS THE WHOLE OF THE CASE. Asserting the field against
+            # the file's live mtime is VACUOUS here: `seam_run` joins immediately before the
+            # request, so a route that stamped `time.time()` instead would answer the same
+            # integer and pass. That version was written, mutated to a clock, and observed
+            # PASSING — which is the shape this repo has paid for before at the multi-game
+            # prompt seam. Backdating the file by a week separates the two answers, so what is
+            # checked is that the number describes THIS TABLE rather than THIS REQUEST.
+            #
+            # The failure it forbids is invisible from the screen: a price whose age resets to
+            # `read today` every time the panel is opened is a stale figure wearing a fresh
+            # stamp, which is worse than no stamp at all.
+            table_file = run_dir.path(runs.PRICING)
+            backdated = int(table_file.stat().st_mtime) - 7 * 86400
+            os.utime(table_file, (backdated, backdated))
+            status, body, _ = request(
+                port, "GET", f"/pipeline/runs/{run_dir.directory.name}/pricing"
+            )
+            checks.equal(
+                (status, json.loads(body).get("written_at")),
+                (200, backdated),
+                "and it says WHEN the table was written, off that file's own mtime — a week-old "
+                "table reads a week old, where a clock read at request time would call every "
+                "price fresh forever",
+            )
 
             # A second run whose answer is on disk, so the label has something to find.
             answered = run_dir.path(runs.DECISIONS)
@@ -8418,7 +8716,7 @@ def check_withholding(checks: Checks) -> None:
             "it on the first free command the operator pressed",
         )
 
-        # --- a re-emit that HAS something new to say (D50) --------------------------------
+        # --- a re-emit that HAS something new to say (D52) --------------------------------
         #
         # THE CASE THAT STOPS THE FIX BEING "EMIT ONCE, EVER". The block above proves a
         # no-op re-emit leaves the file alone; on its own, that assertion is satisfied just
@@ -10108,9 +10406,67 @@ def check_open_section(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_drain(checks: Checks) -> None:
+    """The shutdown seam `scripts/serve.py` restarts through.
+
+    Its own block and not part of `check_server_routes`, because it asserts nothing about a
+    route: it is about what happens to a request that is ALREADY RUNNING when the process is
+    told to stop. `store/session.py:Store.write()` replaces four JSON files in sequence — each
+    atomic alone, none atomic as a set — so a kill landing between them leaves a torn store.
+    That risk exists at Ctrl-C frequency today and the supervisor multiplies it, which is what
+    makes this seam worth an assertion rather than a comment.
+
+    THE OBVIOUS IMPLEMENTATION CANNOT WORK AND THAT IS WHY THIS IS TESTED. `ThreadingHTTPServer`
+    sets `daemon_threads = True`, and `socketserver._Threads.append` discards a daemon thread —
+    so the join inside `server_close()` is already a no-op and looks exactly like a drain that
+    works. A version that counted threads would pass a smoke test and lose requests in
+    production.
+    """
+    checks.note("")
+    checks.note("GRACEFUL DRAIN — server/capture_server.py")
+
+    checks.equal(capture_server.inflight(), 0, "nothing is in flight at rest")
+    checks.ok(capture_server.drain(0.2), "and a drain over an idle server returns at once")
+
+    # DERIVED, NOT A LITERAL. A capture posted while `./pkmnscan identify` holds the store lock
+    # legitimately waits `LOCK_TIMEOUT_SECONDS` before answering `store_busy`, so a drain
+    # shorter than that would cut a request that was behaving correctly. Asserting the
+    # arithmetic rather than the number means it moves the day the lock timeout does.
+    checks.equal(
+        capture_server.DRAIN_SECONDS,
+        files.LOCK_TIMEOUT_SECONDS + 5,
+        "the drain outlasts the store lock, so a legitimate store_busy is never cut short",
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def occupy() -> None:
+        capture_server._inflight_enter()
+        entered.set()
+        release.wait(10)
+        capture_server._inflight_leave()
+
+    worker = threading.Thread(target=occupy, daemon=True)
+    worker.start()
+    entered.wait(5)
+
+    checks.equal(capture_server.inflight(), 1, "a request in flight is counted")
+    checks.ok(
+        not capture_server.drain(0.3),
+        "and a drain REFUSES to return while it is still running — the whole point",
+    )
+
+    release.set()
+    worker.join(5)
+    checks.equal(capture_server.inflight(), 0, "the counter falls when the request finishes")
+    checks.ok(capture_server.drain(0.5), "and the drain then returns true")
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
+    check_emit_bypass(checks)
     check_pricing_authority(checks)
     check_withholding(checks)
     check_pricing_route(checks)
@@ -10118,6 +10474,7 @@ def run() -> Result:
     check_boxes_and_listings(checks)
     check_store(checks)
     check_server_routes(checks)
+    check_drain(checks)
     check_undo(checks)
     check_remove_and_box_delete(checks)
     check_queues(checks)
@@ -10140,6 +10497,7 @@ def run() -> Result:
     check_open_section(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
+    check_photo_cache(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_review_stand_down(checks)

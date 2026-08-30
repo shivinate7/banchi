@@ -98,9 +98,6 @@ async function open(
   options: {
     skus?: unknown[]
     decisions?: Record<string, unknown> | null
-    /** Overridable so a case can serve the PRE-D50 shape — bare strings — and assert the
-     *  screen refuses to guess a rule rather than writing one `emit` would reject. */
-    presets?: unknown[]
     /** Whether the run already carries an emit record — the double-press guard's input. */
     emitted?: boolean
   } = {},
@@ -156,14 +153,7 @@ async function open(
           floor: '0.40',
           rule: 'match',
           basis: 'market',
-          // THE PAIR, NOT THE NAME (D50). `cli/cmd_join.py` serves `{key, rule, basis}` so
-          // the screen can write what a preset MEANS; it wrote `preset: <key>` before, a
-          // document key nothing in `pipeline/` reads.
-          presets: options.presets ?? [
-            { key: 'market_match', rule: 'match', basis: 'market' },
-            { key: 'market_undercut_5', rule: 'undercut:5', basis: 'market' },
-            { key: 'low_undercut_1', rule: 'undercut:1', basis: 'low' },
-          ],
+          presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
           games: [
             {
               game: 'pokemon',
@@ -293,61 +283,7 @@ test('a suggested row carries the rule price and writes no key at all', async ({
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
-// -------------------------------------------------- the preset writes the rule (D50)
-
-test('a preset writes rule and basis, and never a `preset` key', async ({ page }) => {
-  const wire = await open(page)
-
-  await page.getByRole('button', { name: 'Market −5%' }).click()
-  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
-
-  const body = wire.filter((r) => r.method === 'PUT')[0]?.body as {
-    decisions: Record<string, unknown>
-  }
-  expect(body.decisions.rule).toBe('undercut:5')
-  expect(body.decisions.basis).toBe('market')
-
-  /* THE LOAD-BEARING ABSENCE, AND THE DEFECT THIS CASE EXISTS FOR. The screen wrote
-     `preset: 'market_undercut_5'` and nothing else — a key `Decisions.parse` does not read
-     and `to_payload` drops on the next join — so the run went on pricing at `match`/`market`
-     while these buttons showed the preset's own figures. D49 leaves an untouched row
-     unwritten on purpose, which is correct ONLY if the preset moves the rule instead. */
-  expect(body.decisions).not.toHaveProperty('preset')
-})
-
-test('the pressed preset is lit from rule and basis, not from a stored key', async ({ page }) => {
-  await open(page, { decisions: { rule: 'undercut:5', basis: 'market', overrides: {} } })
-
-  /* Derived, so it cannot disagree with what `emit` will price at. A pair typed by hand into
-     the textarea on `#/runs` lights the matching preset here with nothing having stored it,
-     and a pair matching no preset correctly lights none. */
-  await expect(page.getByRole('button', { name: 'Market −5%' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  await expect(page.getByRole('button', { name: 'Match market' })).toHaveAttribute(
-    'aria-pressed',
-    'false',
-  )
-})
-
-test('a run joined before presets carried their rule cannot be priced from one', async ({
-  page,
-}) => {
-  const wire = await open(page, {
-    presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
-  })
-
-  /* REFUSES RATHER THAN GUESSING. The pair is genuinely unknown for such a run, and a guessed
-     `rule` written here reaches `emit` as `UnknownRule` — a refusal the operator would read
-     on another screen, about a press they made on this one. `join` is free and re-runnable,
-     so the remedy is a re-join and the sentence says so. */
-  await expect(page.getByRole('button', { name: 'Market −5%' })).toBeDisabled()
-  await expect(page.locator('.pricing-preset-says')).toContainText('Re-join it on Runs')
-  expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
-})
-
-// -------------------------------------------------- shipping the run (D50)
+// -------------------------------------------------- shipping the run (D52)
 
 test('the sub-threshold answer is settable here, and emit says what it still owes', async ({
   page,
@@ -417,7 +353,7 @@ test('an already-emitted run takes two presses, and the first is not it', async 
 
   /* ABSENT, NOT DISABLED. A second emit used to overwrite the good CSV with a header-only
      file and blank the manifest, after which `reconcile` refused a run that had emitted
-     perfectly. D50 fixed the command; this stops the press being made by momentum. */
+     perfectly. D52 fixed the command; this stops the press being made by momentum. */
   await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Write them again' }).click()
   expect(wire.filter((r) => r.method === 'POST')).toHaveLength(0)
@@ -435,7 +371,7 @@ test('an import file is offered as a download, which is the gap Gate B left open
   /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as
      filenames in terminal output the owner never saw. This is the link that closes it —
      RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 with the press that writes them
-     (D50), because the gap was never "the file must be at address X"; it was that the press
+     (D52), because the gap was never "the file must be at address X"; it was that the press
      and the receipt were in different places. */
   const file = page.locator('.run-file-import')
   await expect(file).toBeVisible()
@@ -783,4 +719,69 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
   const sent = wire.pop()?.body as { decisions?: { overrides?: Record<string, unknown> } }
   expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
   await expect(page.locator('.pricing-save')).toHaveText('saved')
+})
+
+// ------------------------------------------------------- a preset reaches what emit reads
+
+test('a preset writes the rule and the basis, which is what the pipeline reads', async ({
+  page,
+}) => {
+  const wire = await open(page)
+
+  await page.getByRole('button', { name: 'Market −5%' }).click()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
+
+  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
+    decisions?: Record<string, unknown>
+  }
+  /* THE PRESS USED TO WRITE `preset: <key>`, WHICH NO READER ANYWHERE HAS.
+     `pipeline/decisions.py:parse` does not know the field and `to_payload` does not emit it,
+     so the next join dropped it and `rule`/`basis` stayed at `match`/`market` — the
+     suggestions on screen moved and nothing `emit` reads did. Measured on the owner's
+     riftbound run: that dead key beside `rule: match`, 2 overrides across 50 SKUs, 48 cards
+     about to list at a price nobody chose. The rule at layer 4 is the thing that has to
+     move, because D49 correctly refuses to write the suggestions as overrides at layer 1. */
+  expect(sent.decisions?.rule).toBe('undercut:5')
+  expect(sent.decisions?.basis).toBe('market')
+  expect(sent.decisions).not.toHaveProperty('preset')
+
+  /* AND NO ROW GAINED AN OVERRIDE. The whole reason the preset must move the RULE is that
+     writing the suggestions would beat it — layer 1 over layer 4 — and produce a run where
+     changing the preset silently changed nothing. */
+  expect(sent.decisions?.overrides).toEqual({})
+})
+
+test('the chip says which rule is live, and it is derived rather than remembered', async ({
+  page,
+}) => {
+  await open(page)
+
+  const match = page.getByRole('button', { name: 'Match market' })
+  const under = page.getByRole('button', { name: 'Market −5%' })
+
+  /* The run loads at `match`/`market`, so that chip is the live one before anything is
+     pressed — read off `decisions.json`, not off a selection this screen remembers. */
+  await expect(match).toHaveAttribute('aria-pressed', 'true')
+  await expect(under).toHaveAttribute('aria-pressed', 'false')
+
+  await under.click()
+  await expect(under).toHaveAttribute('aria-pressed', 'true')
+  await expect(match).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('a hand-typed rule lights no chip rather than a stale one', async ({ page }) => {
+  /* `#/runs` edits `decisions.json` as text (D33), so a rule no preset names is ordinary and
+     must not be drawn as one of the three. A remembered selection would have lit whichever
+     chip was pressed last, which is a claim about what untouched rows will list at — and the
+     pair the pipeline reads is the only thing that can answer that. */
+  await open(page, {
+    decisions: { rule: 'markup:100', basis: 'market', sub_threshold: null, overrides: {} },
+  })
+
+  for (const label of ['Match market', 'Market −5%', 'TCG Low −1%']) {
+    await expect(page.getByRole('button', { name: label })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  }
 })

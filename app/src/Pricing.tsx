@@ -61,23 +61,39 @@ import './Pricing.css'
  *  is a courtesy and the undo stack behind it is what matters. */
 const UNDO_DEPTH = 10
 
-/** The three presets, named to match `cli/cmd_join.py:PRESETS` key for key. The owner chose
- *  these three and their percentages in the interview; a fourth is a change to that tuple
- *  and to this table, and to nothing else. */
-const PRESETS: { key: string; label: string; says: string }[] = [
+/** The three presets, matching `cli/cmd_join.py:PRESETS` key for key AND rule for rule. The
+ *  owner chose these three and their percentages in the interview; a fourth is a change to
+ *  that tuple and to this table, and to nothing else.
+ *
+ *  THE `rule`/`basis` PAIR IS HERE BECAUSE A PRESS HAS TO WRITE IT, and it is duplicated
+ *  under the same guard D49 put on `WITHHOLD_REASONS`: `scripts/docs-audit.py`'s
+ *  `pricing presets` row reconciles this table against that tuple and BLOCKS on a mismatch.
+ *  `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations agreeing is
+ *  the only thing standing between this screen and a `decisions.json` that `emit` refuses.
+ *
+ *  It is not arithmetic and must never become arithmetic. `cli/cmd_join.py:PRESETS` prices
+ *  every row in Python precisely so `Rule.apply` + `round_money` + `clamp_floor` are not
+ *  re-implemented here; what travels is the NAME of a rule, which the pipeline then applies. */
+const PRESETS: { key: string; label: string; rule: string; basis: string; says: string }[] = [
   {
     key: 'market_match',
     label: 'Match market',
+    rule: 'match',
+    basis: 'market',
     says: 'The recent actual-sale average, matched exactly. What every run has done so far.',
   },
   {
     key: 'market_undercut_5',
     label: 'Market −5%',
+    rule: 'undercut:5',
+    basis: 'market',
     says: '5% under the recent actual-sale average, clamped at the $0.40 floor after rounding.',
   },
   {
     key: 'low_undercut_1',
     label: 'TCG Low −1%',
+    rule: 'undercut:1',
+    basis: 'low',
     says:
       '1% under the cheapest current listing, so you are the cheapest rather than tied with ' +
       'it. Rows with no TCG Low Price are left alone and named.',
@@ -152,7 +168,7 @@ export function Pricing() {
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
-  /* ------------------------------------------------------------------ shipping this run (D50)
+  /* ------------------------------------------------------------------ shipping this run (D52)
    *
    * `emit`'s press and its import CSVs live HERE now, on the screen where every answer it
    * refuses without is made. `#/runs` keeps the step's head, its note and a link over, so the
@@ -244,7 +260,7 @@ export function Pricing() {
   const load = useCallback(async (name: string) => {
     try {
       const answer = await getPricing(name)
-      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D50). This was
+      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D52). This was
          `answer.decisions ?? {}`, so the first write `PUT` a document carrying no `rule` and
          no `basis` — and `Decisions.parse` then defaults them to `match`/`market` while
          `cli/cmd_join.py` treats the FILE as authoritative. A run joined at `markup:100` was
@@ -327,7 +343,7 @@ export function Pricing() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, saving])
 
-  /* ------------------------------------------------------------------- shipping this run (D50) */
+  /* ------------------------------------------------------------------- shipping this run (D52) */
 
   /** What pricing still owes, recomputed live from the document on screen — never fetched.
    *  See `app/src/readiness.ts` for why this is a second implementation and what audits it. */
@@ -524,28 +540,9 @@ export function Pricing() {
     [],
   )
 
-  /** The rule and basis a named preset stands for, off the payload, or null.
-   *
-   *  NULL IS A REAL ANSWER: a run joined before 2026-08-30 carries `presets` as bare strings
-   *  (D50), so the pair is genuinely unknown for it. Guessing one here would put a `rule`
-   *  into `decisions.json` that `emit` may refuse as `UnknownRule` — the screen disables the
-   *  presets and says to re-join instead, which is free and re-runnable.
-   */
-  const servedPreset = useCallback(
-    (key: string): { rule: string; basis: string } | null => {
-      const entry = (table?.presets ?? []).find(
-        (p) => typeof p !== 'string' && p.key === key,
-      )
-      return typeof entry === 'string' || entry === undefined
-        ? null
-        : { rule: entry.rule, basis: entry.basis }
-    },
-    [table],
-  )
-
   /** The suggestion a row opens carrying.
    *
-   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D50). Pressing a preset now
+   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D52). Pressing a preset now
    *  writes `rule`/`basis` into the document, and `pricing.json` is not rewritten until the
    *  next join — so a screen that only ever read `rule_price` would say `decisions.json`
    *  prices at `undercut:5` while every suggestion on it showed `match`. Where the document's
@@ -557,14 +554,11 @@ export function Pricing() {
    */
   const suggestionFor = useCallback(
     (sku: PricingSku): string => {
-      const match = PRESETS.find((p) => {
-        const pair = servedPreset(p.key)
-        return pair !== null && pair.rule === doc?.rule && pair.basis === doc?.basis
-      })
+      const match = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis)
       if (match !== undefined) return sku.presets[match.key] ?? ''
       return sku.rule_price ?? ''
     },
-    [doc, servedPreset],
+    [doc],
   )
 
   const applyPreset = useCallback(
@@ -574,26 +568,22 @@ export function Pricing() {
       // structurally incapable of touching a hand-typed price, which is the payoff of
       // suggestions staying unwritten.
       //
-      // THIS COMMENT WAS ASPIRATIONAL UNTIL 2026-08-30 AND THE LINE UNDER IT WROTE
-      // `preset: key` (D50). `preset` is read by NOTHING in `pipeline/`, `cli/` or
-      // `server/` — `Decisions.parse` reads five keys and drops the rest, and `to_payload`
-      // rebuilds the document from six, so every join deleted it. The run went on pricing at
-      // `match`/`market` while this screen showed the preset's figures, and because D49
-      // deliberately leaves an untouched row unwritten, a preset pressed over rows nobody
-      // typed into changed NOTHING that `emit` reads. That is D49's own stated failure
-      // arriving by the other road.
+      // THIS COMMENT DESCRIBED THE DESIGN AND THE LINE UNDER IT WROTE `preset` — A KEY NO
+      // READER ANYWHERE HAS. `pipeline/decisions.py:parse` does not know the field and
+      // `to_payload` does not emit it, so the next join dropped it, and `rule`/`basis` sat at
+      // `match`/`market` throughout. Pressing `Market -5%` restyled every suggestion on screen
+      // and changed nothing `emit` reads, so a run priced that way emitted at market. Measured
+      // on the owner's riftbound run: that dead key beside `rule: match`, with 2 overrides
+      // across 50 SKUs — 48 cards about to list at a price nobody had chosen.
       //
-      // THE PAIR COMES OFF THE PAYLOAD, never from a table in this file: a rule and a basis
-      // are a rule the pipeline owns (`cli/cmd_join.py:PRESETS`), and declaring them here
-      // would be the same fact in two languages with nothing auditing the second.
-      const served = servedPreset(key)
-      if (served === null) return
+      // It is D49's own named failure — "a run where changing the preset silently changed
+      // nothing" — reached by the other road. That entry refuses to write the suggestions as
+      // overrides, correctly, because an override is layer 1 and beats the rule at layer 4;
+      // what it needs INSTEAD is the rule at layer 4 actually moving, which is this.
+      const chosen = PRESETS.find((row) => row.key === key)
+      if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
-      setDoc((current) => ({
-        ...(current ?? {}),
-        rule: served.rule,
-        basis: served.basis,
-      }))
+      setDoc((current) => ({ ...(current ?? {}), rule: chosen.rule, basis: chosen.basis }))
       for (const row of rows) {
         const input = inputs.current.get(row.sku)
         if (input && answerFor(row) === undefined) input.value = row.presets[key] ?? ''
@@ -610,7 +600,7 @@ export function Pricing() {
             },
       )
     },
-    [rows, table, answerFor, servedPreset],
+    [rows, table, answerFor],
   )
 
   const toggleHold = useCallback(
@@ -817,22 +807,14 @@ export function Pricing() {
             key={preset.key}
             type="button"
             className="pricing-preset"
-            /* WHICH PRESET IS LIT IS DERIVED FROM `rule`/`basis`, NEVER STORED (D50). A
-               stored `preset` key beside the pair it stands for is two sources for one fact,
-               free to disagree the moment somebody types `undercut:7` into the textarea on
-               `#/runs` — which D49 provides deliberately as the only route to a custom rule.
-               Derivation from the authority cannot disagree with the authority, and a pair
-               matching no preset correctly lights none. */
-            aria-pressed={
-              doc?.rule === servedPreset(preset.key)?.rule &&
-              doc?.basis === servedPreset(preset.key)?.basis
-            }
-            /* DISABLED RATHER THAN GUESSING A PAIR. A run joined before 2026-08-30 carries
-               `presets` as bare strings, so the rule this button stands for is genuinely
-               unknown — and a guessed `rule` written into `decisions.json` reaches `emit` as
-               `UnknownRule`. `join` is free and re-runnable, so the remedy is one press on
-               another screen rather than a wrong write here. */
-            disabled={servedPreset(preset.key) === null}
+            /* THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis`, NEVER STORED. A remembered
+               selection would be a second answer to "what will an untouched row list at", and
+               the pair the pipeline reads is the only one that can be right — so a rule typed
+               by hand into `decisions.json` on `#/runs` correctly lights no chip rather than
+               lighting a stale one. It is drawn at all because nothing on this screen said
+               which rule was live, which is most of why the dead write survived: pressing a
+               chip appeared to work, because the suggestions really did change. */
+            aria-pressed={doc?.rule === preset.rule && doc?.basis === preset.basis}
             onClick={() => applyPreset(preset.key)}
             title={preset.says}
           >
@@ -840,11 +822,9 @@ export function Pricing() {
           </button>
         ))}
         <span className="pricing-preset-says">
-          {PRESETS.every((p) => servedPreset(p.key) === null)
-            ? 'This run was joined before presets carried their rule. Re-join it on Runs — ' +
-              'free and re-runnable — to price from one.'
-            : 'A preset only fills rows you have not set, and sets the run’s rule. Anything ' +
-              'else — a different rule or basis — is typed into decisions.json on Runs.'}
+          A preset only fills rows you have not set, and sets the run’s rule. Anything else —
+          a different rule or basis — is typed into <code>decisions.json</code> on{' '}
+          <a href="#/runs">Runs</a>.
         </span>
       </div>
 
@@ -1030,7 +1010,7 @@ export function Pricing() {
         </aside>
       )}
 
-      {/* ------------------------------------------------------- the ship bar (D50)
+      {/* ------------------------------------------------------- the ship bar (D52)
           STICKY AND IN FLOW, NOT `fixed`, AND THAT IS THE ANSWER TO "HOW DOES THE LIST AVOID
           BEING COVERED". A sticky last child reserves its own height in the document, so the
           padding under a ~6,500px list is exactly the bar's height BY CONSTRUCTION —
@@ -1160,7 +1140,7 @@ export function Pricing() {
               <>
                 {/* ABSENT, NOT DISABLED. A second press used to overwrite the good CSV with a
                     header-only file and blank the manifest, after which `reconcile` refused a
-                    run that had emitted perfectly — D50 fixed that in the command, and this
+                    run that had emitted perfectly — D52 fixed that in the command, and this
                     is the half that stops the press being made by momentum. */}
                 <span className="pricing-ship-key">
                   This run has already written its import files.

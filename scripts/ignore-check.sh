@@ -34,7 +34,8 @@ PATHS='node_modules
 app/node_modules
 harness/images
 harness/.cache
-.venv'
+.venv
+.serve'
 
 failed=0
 checked=0

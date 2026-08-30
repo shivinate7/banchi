@@ -120,3 +120,20 @@ def dev_port(root: Path = REPO_ROOT) -> int:
     slot is the property most likely to be broken by an edit to one of them.
     """
     return _port(root, DEV_BASE_PORT, DEV_LOW)
+
+
+def agent_label(root: Path = REPO_ROOT) -> str:
+    """The LaunchAgent's label for this checkout — `make launch-agent` installs under it.
+
+    THE LABEL FOLLOWS THE PATH EXACTLY AS THE PORT FOLLOWS THE STORE, and it is here rather
+    than in `scripts/serve.py` for that reason: it is the same `slot_for` answering the same
+    question about which checkout this is, and a second derivation of that would be a second
+    thing to keep in step. Two checkouts installing one label would have the later one
+    silently replace the earlier's agent.
+
+    `scripts/port-agreement.py` compares `slot_for`, `capture_port` and `dev_port` across the
+    two languages and is untouched by this — `app/devPort.ts` has no reason to know about
+    launchd, so this is deliberately Python-only and the agreement test stays a comparison of
+    the three things both sides really do compute.
+    """
+    return f"com.pkmnscan.serve.{slot_for(root)}"

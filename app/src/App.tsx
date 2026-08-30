@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { isEditableTarget } from './keys'
 import type { ComponentType } from 'react'
 
+import { ServerReloaded } from './ServerReloaded'
 import { CaptureScreen } from './CaptureScreen'
 import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
@@ -300,11 +301,18 @@ function hasChrome(route: Route | undefined): boolean {
  * WHAT IS BOUND AND WHAT IS NOT: the four routes of the run and the lookups, none of the
  * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
  *
- * MODIFIERS ARE NEVER PART OF IT. A held Cmd, Ctrl or Alt returns before anything else
- * happens, exactly as trigger.ts, ReviewQueue.tsx and BoxBrowse.tsx all do: Cmd-comma is
+ * MODIFIERS ARE NEVER PART OF THE CHORD. A held Cmd, Ctrl or Alt returns before anything
+ * else happens, exactly as trigger.ts, ReviewQueue.tsx and BoxBrowse.tsx all do: Cmd-comma is
  * the browser's and the OS's, and a shell that eats it has broken something it does not own.
  * Shift is left off that list for trigger.ts's reason — it does not change which key was
  * pressed, and a held Shift silently killing the nav is the worse of the two failures.
+ *
+ * THAT SENTENCE SAID "NEVER PART OF IT" UNTIL 2026-08-30, AND `IT` HAD TO BE NARROWED TO THE
+ * CHORD. `useRouteStep` below takes Cmd-arrow deliberately, at the owner's instruction, and
+ * the amendment is what keeps this paragraph from reading as a rule that thing breaks. It is
+ * still the rule HERE and for the reason given: a chord is two unmodified presses, and a
+ * leader that needed a modifier would be competing for the key space it was invented to
+ * escape.
  */
 const LEADER = ','
 
@@ -368,8 +376,10 @@ function useHashPath(): string {
  * place in the app that does not know whose it is, which is the whole of the argument at
  * `hasChrome`. Both fall out of one condition, which is the reason that function returns a
  * boolean about chrome rather than an answer about personas.
+ *
+ * `path` is here for the disarm at the foot of this function and for nothing else.
  */
-function useLeader(enabled: boolean): number | null {
+function useLeader(enabled: boolean, path: string): number | null {
   const [arm, setArm] = useState<number | null>(null)
 
   useEffect(() => {
@@ -436,6 +446,18 @@ function useLeader(enabled: boolean): number | null {
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [enabled, arm])
 
+  /* A THIRD WAY, AND IT IS THE ROUTE ITSELF MOVING. A chord is spent on arriving somewhere,
+   * so an arm that survives an arrival is an arm nobody is holding: the next key is eaten on
+   * a screen the operator did not press it from, which is the trap the two effects below are
+   * already written against. It fires for every arrival and not only for the chord's own —
+   * a nav link, the browser's Back, and `useRouteStep`'s Cmd-arrow all land here, and the
+   * last of those is why this is not merely tidiness. The chord's own navigation has already
+   * set the arm to null one line earlier, so this is a no-op on that path and React bails on
+   * the identical state rather than re-rendering. */
+  useEffect(() => {
+    setArm(null)
+  }, [path])
+
   /* Two ways to disarm without pressing anything: time, and leaving. The blur case is the one
    * that would otherwise be a trap — tab away with a leader armed, come back an hour later,
    * and the first key you press is eaten by a chord you have forgotten starting. */
@@ -452,6 +474,118 @@ function useLeader(enabled: boolean): number | null {
   }, [arm])
 
   return arm
+}
+
+/* ---- stepping the strip ---- */
+
+/* CMD-ARROW WALKS THE STRIP IN THE ORDER IT IS DRAWN — D50, and the owner said it of the five
+ * keys the chord already had (2026-08-30): "cmd+arrow keys doesn't have me going in order
+ * between c r q p i, can you resolve?"
+ *
+ * The chord is a JUMP — five destinations, each reached by naming it. What the shell has never
+ * had is a STEP, and the nav is drawn in the order the work happens: shoot, run the pipeline,
+ * answer what it could not, price it, then look up where a card is. "The next one along" was
+ * the one thing about that row a key could not say. Cmd-arrow was already being pressed for
+ * it and was being answered by the browser's history, which is a different question wearing
+ * the same shape: a back stack orders by when a screen was ARRIVED AT, so it walks the same
+ * two routes forever if that is what the last two presses were, and it leaves the app
+ * entirely at the bottom of it.
+ *
+ * THIS IS THE ONE PLACE THE SHELL TAKES A MODIFIER, AND IT COSTS SOMETHING REAL. Cmd-arrow is
+ * Back and Forward in Chrome and in Safari, so this is not a free key — it is taken on the
+ * owner's instruction, and what makes it affordable is that neither browser has only one way
+ * back: Cmd-[ and Cmd-] and the two-finger swipe are all untouched, and none of them is a
+ * shortcut the browser refuses to hand the page (the reserved list is Cmd-N, Cmd-W, Cmd-T,
+ * Cmd-Q and their kind). It is bounded to the owner's own routes by `enabled`, exactly as the
+ * chord is: the Fulfiller's view and the unresolved-hash page have no keys at all.
+ *
+ * IT BUBBLES, WHERE THE LEADER CAPTURES, and the difference is not an oversight. The leader
+ * takes the capture phase because its whole purpose is to consume a key another screen has
+ * bound, and that bluntness is bounded by having to be armed one press earlier. A step key is
+ * never armed, so a permanent capture-phase listener would be a standing claim on a key it
+ * mostly does not want; it does not need one either, because every arrow handler in the app —
+ * BoxBrowse's walk, RunPanel's crop preview — returns on a held Cmd before it reads the key.
+ * What this does need is `preventDefault`, which is what stops the browser navigating, and
+ * that works from either phase.
+ */
+const STEP_KEYS = [
+  { key: 'ArrowLeft', delta: -1 },
+  { key: 'ArrowRight', delta: 1 },
+] as const
+
+/* THE RING IS THE ROUTES THAT HAVE A KEY, IN THE ORDER THE NAV DRAWS THEM. Both halves are
+ * derived rather than written down a second time, and each closes something the other cannot.
+ *
+ *   WHICH   `hotkey !== undefined` already means "reachable from the keyboard", and the two
+ *           rows without one are without one for reasons that apply here word for word:
+ *           Fulfillment must not be arrivable by accident, because it renders no way out
+ *           (see its row in ROUTES), and the gallery is not a step in any loop. A separate
+ *           list would be a second answer to a question the table has already answered, and
+ *           the first screen added without being put in both would be the bug.
+ *   ORDER   GROUP_ORDER first, then the table — which is what the nav actually renders, and
+ *           NOT what the table alone says. They agree today. The day somebody re-orders
+ *           ROUTES without touching GROUP_ORDER, a ring built from the table would step in an
+ *           order the strip does not draw, and stepping in the drawn order is the whole of
+ *           what this is for.
+ */
+const RING: readonly Route[] = GROUP_ORDER.flatMap((group) =>
+  ROUTES.filter((candidate) => candidate.group === group && candidate.hotkey !== undefined),
+)
+
+/** The group the hint trails, so the chips sit at the end of the ring they describe rather
+ *  than at the end of the bar — where `.app-nav-group-aside` would put them next to the two
+ *  routes the step cannot reach. Derived from the ring for that reason. */
+const STEP_HINT_GROUP: Group | undefined = RING[RING.length - 1]?.group
+
+/** What the nav advertises and what the handler binds, in one place. `aria-keyshortcuts`
+ *  takes DOM key values, which is also what `STEP_KEYS` matches on. */
+const STEP_SHORTCUTS = STEP_KEYS.map((step) => `Meta+${step.key}`).join(' ')
+
+function useRouteStep(enabled: boolean, path: string): void {
+  useEffect(() => {
+    if (!enabled) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      /* Cmd on this rig (D13: the Mac), Ctrl for anything that is not one. Alt is excluded
+       * outright rather than merely not required: Cmd-Alt-arrow is "previous/next tab" in
+       * Chrome, and a step that also changed tab would be answering for a press it did not
+       * read. Shift is not inspected, for trigger.ts's reason — it does not change which key
+       * was pressed. */
+      if (event.altKey) return
+      if (!event.metaKey && !event.ctrlKey) return
+      // In a field this is the caret going to the start or the end of the line, which is the
+      // thing the hands are doing when they are in one.
+      if (isEditableTarget(event.target)) return
+
+      const step = STEP_KEYS.find((candidate) => candidate.key === event.key)
+      if (step === undefined) return
+
+      /* A SCREEN OUTSIDE THE RING KEEPS THE BROWSER'S KEY. The gallery is the live case: it
+       * has chrome, so this listener is mounted, and it is deliberately not a step in the
+       * loop — so there is no "next one along" from it, and the honest answer is to leave the
+       * press alone rather than to invent a landing. */
+      const at = RING.findIndex((candidate) => candidate.path === path)
+      if (at === -1) return
+
+      /* PREVENTED EVEN WHERE THE MOVE REFUSES, which is BoxBrowse's rule for its own arrows
+       * and is the half that makes the two ends readable. A refusal at the end is still this
+       * handler answering for the key; letting it fall through would mean Cmd-left sometimes
+       * steps a route and sometimes leaves the app for whatever the history stack holds,
+       * which is precisely the "not in order" this exists to fix. */
+      event.preventDefault()
+
+      /* NEVER A WRAP, AND EVERY END STOPS — BoxBrowse says it in those words and the reason
+       * transfers: the strip is a row with a first and a last, and a row that starts again is
+       * a row you can no longer count along. Falling off either end is `undefined` here
+       * rather than a clamp, so nothing has to know the length. */
+      const target = RING[at + step.delta]
+      if (target === undefined) return
+      window.location.hash = `#${target.path}`
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [enabled, path])
 }
 
 /* An unknown hash renders this rather than falling back to the capture screen.
@@ -520,7 +654,8 @@ export function App() {
   const path = useHashPath()
   const route = ROUTES.find((candidate) => candidate.path === path)
   const chrome = hasChrome(route)
-  const arm = useLeader(chrome)
+  const arm = useLeader(chrome, path)
+  useRouteStep(chrome, path)
 
   return (
     <>
@@ -532,6 +667,10 @@ export function App() {
         <nav
           className="app-nav"
           aria-label="Screens"
+          /* The step, said once on the element it acts on. The chips below are aria-hidden
+             and could not carry it: two arrow glyphs announce as nothing a listener could
+             act on, and this attribute is the one form of the same fact that does. */
+          aria-keyshortcuts={STEP_SHORTCUTS}
           /* The armed leader, on the element the keys belong to. An attribute rather than a
              class for aria-current's reason one line down: it is a fact about the document,
              App.css selects on it, and the two cannot drift. Undefined rather than "false"
@@ -570,12 +709,38 @@ export function App() {
                   )}
                 </a>
               ))}
+              {/* THE STEP'S OWN HINT, drawn once and trailing the ring rather than sitting on
+                  every link. docs/DESIGN.md's "every choice shows its key" is what puts it on
+                  screen at all — a binding nothing advertises is a binding only the person
+                  who asked for it will ever use — and it is one hint because there is one
+                  binding, where `,C` is per route because the destination is what changes.
+
+                  aria-hidden for the reason the chips inside the links are: it is drawn for an
+                  eye, and `aria-keyshortcuts` on the nav above says the same thing in the form
+                  a screen reader can use. NOT `.app-nav-key`, deliberately: that class lights
+                  up when the leader is armed, and the step is never armed — wearing the class
+                  would make these two chips claim a state they do not have. */}
+              {group === STEP_HINT_GROUP ? (
+                <span className="app-nav-step" aria-hidden="true">
+                  <kbd>⌘←</kbd>
+                  <kbd>⌘→</kbd>
+                </span>
+              ) : null}
             </div>
           ))}
         </nav>
       ) : null}
 
       {route === undefined ? <NoSuchView path={path} /> : <route.view />}
+
+      {/* "The capture server reloaded" (D51), and it hangs off `chrome` — the SAME condition
+          the nav does — rather than off a route test of its own. That is not tidiness: the
+          Fulfiller's view would fail three rows of docs/DESIGN.md's constraints table at once
+          if this drew there. It is 11px against a 20px floor on every text node, it says
+          "server", which is on that table's banned-word list, and D31 keeps that spec
+          unweakened. Reusing `hasChrome` means a route added to the Fulfiller's side of the
+          product cannot acquire this by being forgotten about. */}
+      {chrome ? <ServerReloaded /> : null}
     </>
   )
 }

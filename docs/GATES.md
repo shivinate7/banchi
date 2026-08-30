@@ -286,6 +286,20 @@ at a temporary directory, so nothing here touches the real inventory.
   photos following their records byte-for-byte, the `renumbered` mapping and the
   per-position roll-call lines that keep the state reversals reading the right card) and
   the whole-box delete behind `box_not_empty_of_commitments`.
+- **The pricing route's `written_at` is covered as of 2026-08-30, and the case had to be
+  rewritten before it was worth anything.** `GET /pipeline/runs/<name>/pricing` now reports the
+  mtime of `pricing.json`, so `#/inventory`'s card panel can say `$0.34 · read 3 days ago`
+  rather than a bare figure — `join` is free, re-runnable and routinely pointed at a refreshed
+  export, so two cards on one shelf can carry prices read a week apart.
+
+  **The first assertion compared the field against the file's live mtime and was VACUOUS.**
+  `seam_run` joins immediately before the request, so a route stamping `time.time()` answers the
+  same integer — that version was written, mutated to a clock, and **observed passing**. It
+  backdates the file by a week now, so what is checked is that the number describes THIS TABLE
+  rather than THIS REQUEST. The failure it forbids is invisible from the screen: a price whose
+  age resets to `read today` every time the panel is opened is a stale figure wearing a fresh
+  stamp, which is worse than no stamp at all. Same lesson this file already records at the
+  multi-game prompt seam — a check that cannot fail is not coverage.
 - **The queue's starvation tier is covered as of 2026-08-24, in its own isolated home.**
   `store/queues.py:sort_key` gained a tier that promotes an entry past `STARVATION_DAYS`
   ahead of price, because price alone never releases an unpriced card: `no_catalog_row` has
@@ -608,6 +622,23 @@ started before 20:16 and was holding the old code in memory, which no commit can
 restart discipline, not a bug, and it belongs beside the money rules: restart the capture
 server after any change under `store/` or `server/`, or the run you are about to do is
 served by whatever was true when you started it.
+
+**THE DISCIPLINE IS MACHINERY AS OF 2026-08-30, FOR ONE OF THE TWO WAYS TO START A SERVER
+(D51).** `make up` runs the server under a supervisor that watches `server/`, `store/`,
+`pipeline/`, `cli/`, `identify/` and `geometry/` and restarts it when they change, and
+`GET /status` now carries a `boot_id` so a stale process is visible rather than inferred.
+Re-scored against this section's own case: the millisecond change would have been picked up
+in about a second, and the 22:08 run would have written the stamps the 20:16 commit intended.
+
+**`make server` is untouched and the paragraph above still governs it in full.** It does not
+watch anything, by choice — a foreground server in a terminal somebody is looking at is a
+different tool from one that starts at login. So the rule is now: under `make up` the restart
+is automatic, and under `make server` it is still yours to remember.
+
+**None of the numbers above move.** They are evidence about a run on a date, and this file's
+own rule is that evidence is never rewritten to match a later tree. Box 95's 85 records still
+read `T03:08:22+00:00` with no fractional part, and the cadence figures still come off APFS
+`st_birthtime`.
 
 ---
 

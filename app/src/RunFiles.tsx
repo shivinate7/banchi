@@ -2,7 +2,7 @@ import { runFileUrl } from './server'
 import type { RunFile } from './types'
 import './RunFiles.css'
 
-/* A RUN'S FILES, AS DOWNLOADS. Extracted from `RunPanel.tsx` on 2026-08-30 (D50) so two
+/* A RUN'S FILES, AS DOWNLOADS. Extracted from `RunPanel.tsx` on 2026-08-30 (D52) so two
  * screens can draw them, because the import CSVs moved to `#/pricing` with the button that
  * writes them and everything else stayed on `#/runs` with the commands that wrote IT.
  *

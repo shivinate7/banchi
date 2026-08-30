@@ -111,9 +111,14 @@
   background: var(--hover);
 }
 
+/* `not-allowed`, NOT `default`, and the change is about the product rather than this button.
+   Twenty controls in this app can be disabled and eighteen of them said `not-allowed`; this one
+   and `.review-close-choice` said `default`, neither with a comment claiming to have meant it.
+   Two answers to one question is the "attention to detail" complaint in its purest form — the
+   same control shape, one screen apart, telling the pointer two different things. */
 .runs-plain:disabled {
   color: var(--muted);
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .runs-lede {

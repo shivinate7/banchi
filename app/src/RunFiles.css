@@ -1,6 +1,6 @@
 /* A run's files, as downloads — the rules for `app/src/RunFiles.tsx`.
  *
- * MOVED HERE VERBATIM FROM `RunPanel.css` ON 2026-08-30 (D50), when the component was
+ * MOVED HERE VERBATIM FROM `RunPanel.css` ON 2026-08-30 (D52), when the component was
  * extracted so `#/pricing` could draw the import CSVs beside the button that writes them.
  * Every class name survives the move, so the two specs that select `.run-file-import` and
  * `.run-file` still select what they always did — one of them just looks on another screen.

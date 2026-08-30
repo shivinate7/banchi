@@ -528,7 +528,7 @@ def _check_committed_from_counts(c, export) -> None:
             "files. This asserted `len(rows) == 0` until 2026-08-30, which measured "
             "something else entirely: the emitter was BLANKING the file, and 'no rows' is "
             "satisfied identically by 'no second row was written' and by 'the first row was "
-            "destroyed'. D50 makes a no-op re-emit leave the file alone, so the property is "
+            "destroyed'. D52 makes a no-op re-emit leave the file alone, so the property is "
             "byte equality — the file still holds exactly what was sent",
         )
         c.equal(

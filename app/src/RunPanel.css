@@ -246,6 +246,14 @@
   border-radius: var(--r);
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.run-field input[type='number']:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 /* 32px, WHICH IS `.boxops-plain`'s HEIGHT. These two panels are stacked in one column now and
    disagreed about how tall a control is by 17% — this one was padding-driven at 37.5px with no
    min-height, that one is 32px with one. A min-height rather than padding alone, so a label that
@@ -454,6 +462,18 @@
   border: none;
   cursor: pointer;
   text-decoration: underline;
+}
+
+/* COLOUR, BECAUSE THE UNDERLINE IS ALREADY SPENT. `.browse-quiet` is the same idea one screen
+   over — a borderless text button — and it hovers by ADDING an underline, which this control
+   cannot do because it wears one at rest. So the channel left is the one `.app-nav-link` uses
+   for the same reason: `--muted` to `--ink`, no ground, nothing that reflows.
+
+   Not `--hover` behind it: this is a run of underlined text and not a row, and painting a
+   background swatch behind an inline label would be the first use of that token outside the
+   case tokens.css derived it for. */
+.run-plain:hover:not(:disabled) {
+  color: var(--ink);
 }
 
 /* The file inputs are hidden and their labels are the control — a native file input cannot
@@ -762,10 +782,18 @@
   resize: vertical;
 }
 
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.run-textarea:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
 /* ------------------------------------------------------------------------------- files */
 
 /* `.run-files`, `.run-files-head`, `.run-file`, `.run-file-name`, `.run-file-import` and
- * `.run-file-size` MOVED TO `app/src/RunFiles.css` on 2026-08-30 (D50), with the component
+ * `.run-file-size` MOVED TO `app/src/RunFiles.css` on 2026-08-30 (D52), with the component
  * that draws them. Tombstoned rather than deleted silently, the way this file already
  * tombstones `.run-head` and its neighbours above: the obvious repair when somebody finds a
  * `.run-file` rule missing is to write a new one here, and a second copy is what the

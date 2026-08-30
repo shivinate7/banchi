@@ -944,7 +944,7 @@ test('this run\'s own receipts download here; the import CSVs do not', async ({ 
   await expect(file).toHaveAttribute('download', 'reconcile.txt')
   expect(await file.getAttribute('href')).toContain('/pipeline/runs/')
 
-  /* AND THE IMPORT CSVs ARE NOT HERE, ASSERTED AS AN ABSENCE (D50). They went to
+  /* AND THE IMPORT CSVs ARE NOT HERE, ASSERTED AS AN ABSENCE (D52). They went to
      `#/pricing` with the press that writes them; `app/tests/pricing.spec.ts` carries the
      Gate B case verbatim at its new address. A deliberate removal that a later edit must
      not quietly undo — which is what an absence is for, and why this is not a weakening of

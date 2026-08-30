@@ -95,7 +95,7 @@ def _game_only(report, priced):
     THREE THINGS DROP A SKU AFTER THIS POINT AND THIS FUNCTION USED TO KNOW ABOUT ONE:
 
       - it is WITHHELD (D49) — `prices_for` leaves it out of the price mapping. Subtracted
-        here since 2026-08-29, which is the version of this docstring D50 replaces.
+        here since 2026-08-29, which is the version of this docstring D52 replaces.
       - it is `no_market_data` ANSWERED `"unlisted"` — `prices_for` drops it too, and
         nothing subtracted it. LIVE ON A FIRST EMIT for a game whose only above-threshold
         entries are unpriced-and-unlisted.
@@ -119,7 +119,7 @@ def _game_only(report, priced):
 def _write(game_join, path, only, choice, say, label):
     """Write one import file, or leave it alone. Returns the SKUs that reached it.
 
-    ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D50:
+    ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D52:
     `emit` never opens an import file until it has at least one row for it, because
     `tcgcsv.render` emits the header before it iterates and an empty write therefore replaces
     a good file with a valid CSV of nothing.
@@ -205,6 +205,29 @@ def run(args, say) -> int:
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
+            # THE RUN'S BYPASS IS PART OF ITS RESOLUTION, AND DROPPING IT MADE THIS COMMAND
+            # RE-DERIVE A DIFFERENT RUN THAN THE ONE ON DISK. `join --bypass` resolves a
+            # contradicted claim at rung 1 (D3) and queues nothing; this call defaulted
+            # `trust_claim` to False, so it walked the ladder with rung 3 live, invented a
+            # queued position for every bypassed card, found none of them in either queue file
+            # — because join deliberately never wrote them — and refused with "Run `pkmnscan
+            # join` first" at an operator who had.
+            #
+            # Measured on the owner's box 1: `bypassed: 39` in the manifest, 39 positions
+            # invented here, 39 absent from disk, emit refused every time. Re-running join
+            # could not clear it, because join was right.
+            #
+            # The refusal was the SECOND-worst outcome and that is why it is worth stating:
+            # had the check passed, this resolution is also what writes the import files, so
+            # those 39 cards would have been routed to review and left out of the CSV — the
+            # bypass silently void at the one step that produces output.
+            #
+            # Read from the manifest exactly as `review_below` above is, and for the same
+            # reason: both are per-run choices the run recorded, and `emit` re-derives rather
+            # than reads, so every input to that derivation has to come from the run. There is
+            # no `--bypass` flag here on purpose — D3 makes it a join-time decision, and a
+            # second place to state it is a second thing that can disagree.
+            trust_claim=bool(run_dir.manifest.get("bypass_detection", False)),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -397,7 +420,7 @@ def run(args, say) -> int:
         queue_line = writable.queue_summary
         stages = writable.inventory.listing_counts()
 
-    # ONLY WHEN SOMETHING REACHED A FILE. D50: the record is created by the first emit that
+    # ONLY WHEN SOMETHING REACHED A FILE. D52: the record is created by the first emit that
     # writes a row and is afterwards only ever added to. Writing it unconditionally is what
     # blanked it on every second press — and `reconcile` reads it, so a blank record made a
     # run that had emitted perfectly an hour ago refuse with "this run has emitted nothing".

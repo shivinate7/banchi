@@ -202,6 +202,17 @@ export type CardSummary = {
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
 export type ServerStatus = {
+  /** WHICH PROCESS ANSWERED. `make up` restarts the capture server whenever a watched Python
+   *  file changes (D51), and a restart is otherwise invisible from here — same port, same
+   *  store, and the only symptom of NOT having restarted is the one `docs/GATES.md` records:
+   *  whole-second timestamps written two hours after the millisecond fix landed, because the
+   *  process predated it.
+   *
+   *  Optional because a server older than D51 does not send it, and the honest response to
+   *  its absence is to say nothing rather than to claim a reload. */
+  boot_id?: string
+  started_at?: number
+
   captures_root: string
   store: string
   store_exists: boolean
@@ -1268,17 +1279,7 @@ export type PricingTable = {
   floor: string
   rule: string
   basis: string
-  /** The named presets, each carrying the RULE AND BASIS it stands for (D50).
-   *
-   *  It was `string[]` — names alone — so the screen could not learn what a preset MEANT and
-   *  pressing one wrote `preset: <key>`, a key `pipeline/decisions.py` does not read. The
-   *  pair is served rather than declared here because a rule and a basis are a rule the
-   *  pipeline owns, and `app/src/server.ts` records that this app may not compute one.
-   *
-   *  A run joined before 2026-08-30 carries bare strings. `Pricing.tsx` reads this
-   *  tolerantly and disables the presets rather than guessing a pair — a wrong `rule` written
-   *  into `decisions.json` reaches `emit` as `UnknownRule`. */
-  presets: ({ key: string; rule: string; basis: string } | string)[]
+  presets: string[]
   games: { game: string; import_listed: string; import_subthreshold: string }[]
   skus: PricingSku[]
   bands: { game: string; label: string; skus: number; copies: number }[]
@@ -1312,6 +1313,17 @@ export type PricingPayload = {
    *  forbids defaulting this on the operator's behalf, so this removes the time spent
    *  deciding and not the press. */
   remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
+  /** When `pricing.json` was last written, as a UNIX SECOND — `cli/cmd_join.py` rewrites it on
+   *  every join, so this is the moment a join last read an export and therefore the age of
+   *  every figure under `snap`.
+   *
+   *  IT IS NOT WHEN TCGPLAYER PRICED THE CARD. The export is a file the operator downloaded at
+   *  some earlier moment nothing on this machine can see, so a screen drawing this says READ
+   *  rather than AS OF — `BoxBrowse.tsx:marketText` is the one that does.
+   *
+   *  Optional, because a server older than 2026-08-29 answers without it and this type is cast
+   *  rather than validated. */
+  written_at?: number
 }
 
 /** What a run was scoped to. `whole_box` is the common case and costs no temporary

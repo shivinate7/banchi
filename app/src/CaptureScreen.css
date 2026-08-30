@@ -519,10 +519,39 @@
   align-items: center;
   gap: var(--s1);
   min-height: 32px;
-  border: 1px solid var(--line);
+  /* `--field`, NOT `--line`, AND THIS IS THE ONE VISIBLE REST-STATE CHANGE D50 MAKES. Every
+     other typed-into box in the product — the search field, the box-ops fields, the run
+     panel's number input and textarea, the catalog search — borders with `--field`, the token
+     docs/DESIGN.md created for exactly this and describes as "the border of something you TYPE
+     INTO. Nowhere else." This box was the one it missed, at `--line`'s 1.24:1 against WCAG
+     1.4.11's 3:1, so it was findable only by its placeholder.
+
+     It also could not take a hover state while it started from a different edge than its seven
+     siblings, which is how the omission was found rather than noticed. The cost is that this
+     border is darker at rest on the screen the owner spends the most hours in — named in D50
+     as theirs to overrule, because it is the one change here a person sees without hovering. */
+  border: 1px solid var(--field);
   border-radius: var(--r);
   padding: 0 var(--s2);
   background: var(--surface);
+
+  /* The same repair `SearchField.css` makes to `.search-field-box`, and the same reason: the
+     border is out here, so the 8px of padding either side of the input is part of what looks
+     like a field, and it was reading `default` while the middle read `text`. It costs one
+     declaration to stop one rectangle giving two answers.
+
+     It reaches `.capture-entrymeta` — the live match count pinned to the right end — and that
+     is correct rather than incidental. The comment above says input and count "read as one
+     control", and a count that read `default` beside an input that read `text` would be that
+     sentence contradicted by the pointer. */
+  cursor: text;
+}
+
+/* The edge darkens under the pointer (D50), as every other typed-into box now does.
+   `border-color` only: this screen runs at a 623 ms feeder cadence and a hover that
+   reflowed the Box field would move a target under a hand working at that pace. */
+.capture-entrybox:hover {
+  border-color: var(--field-hover);
 }
 
 .capture-entrybox:focus-within {
@@ -886,6 +915,28 @@
 /* `.capture-undo-go` WAS HERE AND IS GONE. It was the single "Undo capture U" button, and
    the 44px it kept — argued as the height the one hard-deleting control in the app deserves
    — moved to `.capture-undo-row`, which is now that control, ten times over. */
+
+/* THE ONE OUTLINE BUTTON IN THE PRODUCT THAT DID NOT ANSWER THE POINTER, and it is the shape
+   seven other screens draw. `.browse-reload`, `.boxops-plain`, `.pricing-plain`, `.runs-plain`,
+   `.run-button`, `.run-upload span`, `.review-action` and `.boxruns-go` are all the same
+   control — body face, 700, surface on a `--line` hairline, 32-36px — and every one of them
+   lifts to `--hover` under the pointer. This one, drawn seven times on the screen the owner
+   spends the most hours in, did nothing at all.
+
+   `--ink` on `--hover` is 18.27:1, and the ground is `--hover`'s own case: a raised row-shaped
+   control with one label. `:not(:disabled)` because the disabled state has somewhere else to
+   be, and the rule two blocks down is where it goes.
+
+   BACKGROUND ONLY, WHICH IS THE FEEDER CONSTRAINT RATHER THAN A PREFERENCE. This screen runs at
+   a measured 623 ms cadence over 84 intervals (docs/GATES.md, Gate C's confirmation run), so
+   nothing here may reflow under a hand that is already moving — the border is already 1px and
+   stays 1px, the padding does not move, and the weight does not change. `ReviewQueue.css` keeps
+   the same rule for its candidate rows on the same reasoning; this is that reasoning applied to
+   the screen where the hand is fastest. No transition either, for the reason `PullConfirm.css`
+   gives: an action that reports late reads as an action that did not fire. */
+.capture-go:hover:not(:disabled) {
+  background: var(--hover);
+}
 
 .capture-go:disabled {
   color: var(--muted);

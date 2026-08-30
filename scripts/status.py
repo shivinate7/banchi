@@ -122,6 +122,15 @@ SOURCES = (
                "one file",
     },
     {
+        "path": "scripts/serve.py",
+        "kind": "defs",
+        "requires": ("report", "live_pid"),
+        "why": "whether the servers are actually up — `make up`'s supervisor, asked through "
+               "its read-only report(). Declared here rather than reached by a hardcoded "
+               "path so a rename fails the audit instead of silently deleting the SERVING "
+               "block from this output",
+    },
+    {
         "path": "server/ports.py",
         "kind": "file",
         "requires": (),
@@ -661,6 +670,66 @@ def hooks() -> List[str]:
     return out
 
 
+def serving() -> List[str]:
+    """Whether anything is actually up, and whose store it is answering for.
+
+    THIS FILE HAD NO LIVENESS PROBE AT ALL UNTIL `make up` EXISTED. `ports_and_store()` below
+    prints which ports this tree WOULD use and has never had any idea who actually holds them
+    — which is fine while a server is a thing you start in a terminal you are looking at, and
+    not fine once one starts at login and stays up for weeks.
+
+    THE THIRD BRANCH IS WHY THIS EARNS ITS PLACE. A port that answers while no pidfile in THIS
+    checkout claims it is D43's fault made visible for the first time: another tree's server,
+    or a stray `make server`, holding the port this tree's UI addresses — over a DIFFERENT
+    store. That was previously undetectable from inside the tree it was happening to.
+
+    Read-only, like everything else here: `serve.report()` opens nothing for writing, signals
+    nothing and starts nothing.
+    """
+    found = resolve("scripts/serve.py")
+    if not found:
+        return [field("Serving", "MISSING: scripts/serve.py")]
+    spec = importlib.util.spec_from_file_location("_pkmnscan_serve", found[0])
+    if spec is None or spec.loader is None:
+        return [field("Serving", "scripts/serve.py could not be loaded")]
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+        data = module.report()
+    except Exception as exc:  # a broken probe is not a reason to kill `make status`
+        return [field("Serving", f"scripts/serve.py raised: {exc}")]
+
+    out: List[str] = []
+    sup = data.get("supervisor")
+    if sup:
+        out.append(field("supervisor", f"up (pid {sup}) — `make up`"))
+    else:
+        out.append(field("supervisor", "not running — `make up` starts both servers"))
+
+    for label, pid_key, port_key, live_key in (
+        ("capture", "capture_pid", "capture_port", "capture_answering"),
+        ("app", "app_pid", "dev_port", "app_answering"),
+    ):
+        port = data.get(port_key)
+        answering = data.get(live_key)
+        pid = data.get(pid_key)
+        if answering and pid:
+            out.append(field(label, f":{port} answering (pid {pid})"))
+        elif answering:
+            # The D43 case. Named as the hazard it is rather than reported as "up".
+            out.append(field(label, f":{port} is answering, but no pidfile in THIS checkout"))
+            out.append(cont("claims it — another checkout, or a stray `make server`."))
+            out.append(cont("D43: it is serving a DIFFERENT store."))
+        else:
+            out.append(field(label, f":{port} not answering"))
+
+    if data.get("agent_installed"):
+        out.append(field("launch agent", f"plist installed — {data.get('agent_label')}"))
+    for name in data.get("lan_names") or []:
+        out.append(field("on the network", f"http://{name}:{data.get('dev_port')}"))
+    return out
+
+
 def ports_and_store() -> List[str]:
     """Which ports this checkout serves on, and whose inventory it is serving.
 
@@ -763,6 +832,7 @@ def render() -> str:
     lines += t1_blocks()
     lines += blind_spots(mapdata)
     lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
+    lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()
 
     if MISSING:

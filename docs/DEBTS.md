@@ -983,6 +983,53 @@ than the nothing it had.
 
 ---
 
+## The supervisor's known gaps (D51, 2026-08-30)
+
+Three, none of them closable without more machinery than the failure is worth today. Recorded
+because a green `make up` should not read as a promise none of them exists.
+
+- **A request accepted but not yet inside `_dispatch` is uncounted by the drain.** The counter
+  wraps the dispatch seam, which every verb funnels through — but a connection that has been
+  accepted and whose request line is still being parsed is in neither state. The window is
+  microseconds and closing it means reimplementing `handle_one_request`, which is a
+  reimplementation of stdlib in the one file that most wants to stay boring.
+
+- **The parse pre-check catches syntax errors only.** `scripts/serve.py` refuses to restart into
+  a file that does not `compile()`, which is what makes editing safe while the watcher is
+  running. An `ImportError`, a module-scope `NameError` or a bad constant still kills the new
+  child, and there is **no rollback to the old one** — the last-good process is already gone by
+  then. The containment is the fast-failure cap: after five quick deaths the supervisor stops
+  respawning, keeps running, keeps watching, and says so. Fixing it properly means keeping the
+  old child alive until the new one has bound, which is the socket-passing design D51 names and
+  rejects for v1.
+
+- **The reload notice has no automated case, and three attempts to write one are the reason
+  this entry exists rather than a green test.** `ServerReloaded` renders nothing until the boot
+  header CHANGES between two responses, which makes it unusually hard to drive from Playwright:
+  a stub layered over `fulfillment.spec.ts`'s helpers did not win the route, `route.fetch()` to
+  decorate a real response fails outright, and a body-stubbing version left the screens making
+  too few requests to produce a second header. **Two of those attempts PASSED against a build
+  with the notice rendered unconditionally** — vacuous in two different ways — and were deleted
+  rather than kept, because a case that cannot fail is worse than no case: it is a green row
+  asserting nothing.
+
+  **What is actually verified, and how.** The header is observed reaching the browser and being
+  readable cross-origin (a request-log probe over the real server: eight responses, all carrying
+  `X-Pkmnscan-Boot`). The notice was rendered and photographed appearing on `#/inventory` after
+  a real watcher restart, and photographed NOT appearing on `#/fulfillment` under the same
+  conditions. **What guards it structurally** is that it hangs off `hasChrome`, the same
+  condition the nav uses — and `fulfillment.spec.ts:noWayOut` already asserts `.app-nav` is
+  hidden on his view, so the condition itself is covered even though this consumer of it is not.
+
+  The breach that would evade all of that is somebody rendering `<ServerReloaded />`
+  unconditionally in the shell. If this is worth closing, the tractable route is a spec that
+  serves the whole capture wire itself rather than layering over another file's stubs.
+
+- **The swap gap.** Between the old child exiting and the new one binding, a request gets
+  `ECONNREFUSED`, and `app/src/server.ts` deliberately has no retry — so it surfaces as
+  `unreachable`, which reads as "the server is down". Measured at tens of milliseconds. Named in
+  D51 with the fix that was considered and declined.
+
 ## Prose that outran the code
 
 - `docs/specs/audit-retirement.md` restates a check roster and a count that the shipped
