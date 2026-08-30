@@ -83,3 +83,8 @@ test-results
 # tree, which is the fault D43 exists to prevent. `make launch-config` writes it from
 # `server/ports.py`, the same derivation Vite and Playwright read.
 .claude/launch.json
+
+# Vale packages sync into styles/ ; only the repo-local style is tracked.
+styles/*
+!styles/PKMNSCAN/
+!styles/config/
