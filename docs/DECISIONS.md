@@ -6623,6 +6623,38 @@ game the fetch answers for:
   `(Set Name, Number, Product Name)` because a collector number repeats across sets and a
   blank one repeats across every code card in a file (D24).
 
+**THE SECOND READING WAS WRONG TWICE IN ITS FIRST BUILD, AND BOTH WERE FOUND BY MEASURING
+AGAINST THE OWNER'S REAL EXPORTS RATHER THAN THE THREE-ROW FIXTURE.** Recorded rather than
+quietly corrected, because the shape of the mistake is the useful part: both defects made the
+check *look* like it was working — one by firing on everything, one by firing on nothing.
+
+**It counted every condition string, so filtering to Near Mint read as thinning.** D12 scopes
+this product to Near Mint and the committed fixtures are Near-Mint-only (sv09 carries exactly
+`Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`), while a WIDE export carries
+eleven to sixteen conditions because it also lists Lightly Played, Moderately Played, Heavily
+Played and Damaged. **Measured on the owner's box-3 export against the wide riftbound file:
+all 153 of its numbers read as thinned, and NOT ONE had lost a finish** — 145 are stocked only
+in the foil family and 8 only in the plain one, and everything the wide file added was a play
+condition. The refusal would have fired on an operator doing exactly the right thing, carrying
+a sentence about a reverse holo listing at the normal row's price that was **false**. The
+scope is `condition_by_finish`'s own values now, which is the vocabulary
+`pipeline/variant.py` actually resolves between.
+
+**And the key carried `Product Name`, which loses real cases.** Finish variants usually share
+a product name — **143 of sv09's 144 multi-row numbers do** — so the third leg looked free. It
+is not: keyed `(set, number)` the wide riftbound export has **550** numbers stocked in more
+than one finish, and keyed with the name it has **522**. Twenty-eight numbers whose foil and
+non-foil are listed under different product names were invisible to the very check written to
+find them. **The key mirrors the LOOKUP instead** — number where there is one, name where
+there is not, which is how `pipeline/join.py` finds the row in the first place — so it cannot
+be a third opinion about what identifies a card.
+
+**AND THE GUARD DOES NOT FIRE ON THE OWNER'S OWN REFRESH, which was the thing most worth
+checking and had not been.** Run `2026-08-29-box1-01` holds two real exports taken four
+minutes apart, 60 rows then 2,008 — the operator noticing their filter was too narrow and
+re-exporting. **The guard allows it**: nothing lost, nothing thinned. A guard that refused a
+legitimate widening would be resented, and a resented guard is read past rather than read.
+
 **ONE REFUSAL CODE FOR BOTH, AND THAT IS FORCED RATHER THAN CHOSEN.** A condition row IS a
 SKU, so a number cannot lose a printing without losing the row that carried it — the two lists
 can never disagree about WHETHER the file is narrower, only about what the narrowing costs. A

@@ -11284,6 +11284,84 @@ def check_export_fetch(checks: Checks) -> None:
                         payload=payload or {},
                     )
 
+                # ------------------------------ THE GUARD'S OWN ARITHMETIC, ON BUILT ROWS
+                #
+                # `_coverage` DIRECTLY RATHER THAN THROUGH THE ROUTE, because what these
+                # three cases separate is invisible from the outside: all three REFUSE, and
+                # what differs is whether the refusal claims a FINISH was lost. Both
+                # defects they pin shipped in the first build and both were found by
+                # measuring against the owner's real exports rather than against a fixture.
+                nm = tcgcsv.read_export(FIXTURE_EXPORT).by_sku()
+                fc = pipeline_routes._finish_conditions(["pokemon"])
+
+                def built(rows, name):
+                    path = home / name
+                    tcgcsv.write_csv(path, tcgcsv.read_export(FIXTURE_EXPORT).header, rows)
+                    return tcgcsv.read_export(path)
+
+                plain, reverse = dict(nm[DUNSPARCE_SKU]), dict(nm[DUNSPARCE_REVERSE_SKU])
+                played = dict(plain)
+                played[tcgcsv.CONDITION_COLUMN] = "Lightly Played"
+                played[tcgcsv.SKU_COLUMN] = "9000001"
+                renamed = dict(reverse)
+                renamed[tcgcsv.NAME_COLUMN] = plain[tcgcsv.NAME_COLUMN] + " (Reverse)"
+
+                # 1. A PLAY CONDITION IS NOT A FINISH. D12 scopes this product to Near Mint
+                #    and the committed fixtures are Near-Mint-only, so filtering to Near
+                #    Mint is the operator doing the right thing. The first build counted
+                #    every condition string and called it thinning: measured on the owner's
+                #    box-3 export, all 153 of its numbers read as thinned against the wide
+                #    riftbound file and NOT ONE had lost a finish.
+                only_played_went = pipeline_routes._coverage(
+                    built([plain, reverse], "cov-fetch-1.csv"),
+                    built([plain, reverse, played], "cov-base-1.csv"),
+                    fc,
+                )
+                checks.equal(
+                    only_played_went["thinned"],
+                    [],
+                    "losing a PLAY CONDITION is not losing a finish — the refusal may still "
+                    "fire on the row that went, but it may not claim a reverse holo is "
+                    "about to list at the normal row's price when the finishes are intact",
+                )
+                checks.equal(
+                    only_played_went["lost_skus"],
+                    ["9000001"],
+                    "and the row that went is still reported, because it did go",
+                )
+
+                # 2. A FINISH GOING IS THE THING THIS EXISTS FOR.
+                finish_went = pipeline_routes._coverage(
+                    built([plain], "cov-fetch-2.csv"),
+                    built([plain, reverse], "cov-base-2.csv"),
+                    fc,
+                )
+                checks.equal(
+                    len(finish_went["thinned"]),
+                    1,
+                    "a number that had Near Mint AND Near Mint Reverse Holofoil and now has "
+                    "one is D3 rung 2's input, and it is exactly what the operator cannot "
+                    "see from anywhere else",
+                )
+
+                # 3. THE KEY MIRRORS THE LOOKUP, AND `Product Name` IN IT LOSES REAL CASES.
+                #    Finish variants usually share a name — 143 of sv09's 144 multi-row
+                #    numbers do, which is why the third leg looked free. Keyed (set, number)
+                #    the wide riftbound export has 550 numbers stocked in more than one
+                #    finish; keyed with the name it has 522. This is one of the 28.
+                differently_named = pipeline_routes._coverage(
+                    built([plain], "cov-fetch-3.csv"),
+                    built([plain, renamed], "cov-base-3.csv"),
+                    fc,
+                )
+                checks.equal(
+                    len(differently_named["thinned"]),
+                    1,
+                    "a finish listed under a DIFFERENT product name is still that number's "
+                    "finish — a key carrying the product name calls them two products and "
+                    "reports no thinning at all",
+                )
+
                 # ------------------------------------------------ the transport refusals
                 for mode, expected, label in (
                     (

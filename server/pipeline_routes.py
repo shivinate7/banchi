@@ -90,7 +90,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import tcgcsv  # noqa: E402
+from pipeline import games as game_registry, tcgcsv  # noqa: E402
 from server import tcg_export  # noqa: E402
 from store import Store, files, master  # noqa: E402
 
@@ -1581,21 +1581,65 @@ def _sku_set(export) -> set:
     }
 
 
-def _printings(export) -> Dict[Tuple[str, str, str], set]:
-    """(set, number, product) -> the condition strings stocked for it.
+def _finish_conditions(claimed: Sequence[str]) -> set:
+    """Every condition string that names a FINISH, for the games a file answers for.
 
-    KEYED ON THREE COLUMNS AND NOT ON THE NUMBER, because a collector number repeats across
-    sets and a blank one repeats across every code card in a file (D24). The product name is
-    the third leg for the blank case, where the first two collapse.
+    THE REGISTRY'S ANSWER, NOT A GUESS AND NOT EVERY CONDITION IN THE FILE. This is what
+    `pipeline/variant.py` resolves between — `condition_by_finish` is the whole vocabulary
+    the ladder can choose from — and it is the distinction the first build of this guard got
+    wrong.
     """
-    out: Dict[Tuple[str, str, str], set] = {}
+    out: set = set()
+    for game in claimed:
+        entry = game_registry.get(game) or {}
+        out.update((entry.get("condition_by_finish") or {}).values())
+    return out
+
+
+def _printings(export, finishes: set) -> Dict[tuple, set]:
+    """key -> the FINISH conditions stocked for it. Play conditions are not finishes.
+
+    TWO THINGS HERE WERE WRONG IN THE FIRST BUILD AND BOTH WERE FOUND BY MEASURING AGAINST
+    THE OWNER'S REAL EXPORTS RATHER THAN THE THREE-ROW FIXTURE.
+
+    **It counted every condition, so filtering to Near Mint read as thinning.** D12 scopes
+    this product to Near Mint and the committed fixtures are Near-Mint-only (sv09 carries
+    exactly `Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`), while a WIDE
+    export carries eleven to sixteen conditions because it also lists Lightly Played,
+    Moderately Played, Heavily Played and Damaged. Measured on the owner's box-3 export: all
+    153 of its numbers looked "thinned" against the wide riftbound file, and **not one of
+    them had lost a finish** — 145 are stocked only in the foil family and 8 only in the
+    plain one, and what the wide file added was play conditions. So the refusal would have
+    fired on an operator doing exactly the right thing, carrying a sentence about a reverse
+    holo listing at the normal row's price that was simply untrue.
+
+    **And the key carried `Product Name`, which loses real cases.** Finish variants usually
+    share a product name — 143 of sv09's 144 multi-row numbers do — so the third leg looked
+    free. It is not: keyed `(set, number)` the wide riftbound export has **550** numbers
+    stocked in more than one finish, and keyed with the name it has **522**. Twenty-eight
+    numbers whose foil and non-foil are listed under different product names were invisible
+    to the check written to find them.
+
+    SO THE KEY MIRRORS THE LOOKUP INSTEAD. A card with a number is found by its number
+    (`pipeline/join.py`'s composed key), so its finishes group under `(set, number)`. A card
+    with a BLANK number is found by name — D24's code cards, and the blank-`Number` rows
+    D35's rung falls back to — so those group under the name, which is both what
+    distinguishes them and what the ladder actually matched them on. Deriving the key from
+    how the row would be FOUND is what stops it being a third opinion about identity.
+    """
+    out: Dict[tuple, set] = {}
     for row in export.rows:
+        condition = str(row.get(tcgcsv.CONDITION_COLUMN) or "")
+        if condition not in finishes:
+            continue
+        set_name = str(row.get(tcgcsv.SET_COLUMN) or "")
+        number = str(row.get(tcgcsv.NUMBER_COLUMN) or "").strip()
         key = (
-            str(row.get(tcgcsv.SET_COLUMN) or ""),
-            str(row.get(tcgcsv.NUMBER_COLUMN) or ""),
-            str(row.get(tcgcsv.NAME_COLUMN) or ""),
+            (set_name, number)
+            if number
+            else (set_name, "", str(row.get(tcgcsv.NAME_COLUMN) or ""))
         )
-        out.setdefault(key, set()).add(str(row.get(tcgcsv.CONDITION_COLUMN) or ""))
+        out.setdefault(key, set()).add(condition)
     return out
 
 
@@ -1609,7 +1653,7 @@ def _distinct(export, column: str) -> List[str]:
     return seen
 
 
-def _coverage(fetched, baseline) -> dict:
+def _coverage(fetched, baseline, finishes: set) -> dict:
     """What this file covers that the run's previous export did not, and what it lost.
 
     THE GUARD IS A DELTA AGAINST A KNOWN-GOOD FILE, AND IT IS NOT A COMPLETENESS CHECK — the
@@ -1634,7 +1678,7 @@ def _coverage(fetched, baseline) -> dict:
         that reads as a failure anywhere downstream.
     """
     lost_skus = sorted(_sku_set(baseline) - _sku_set(fetched))
-    before, after = _printings(baseline), _printings(fetched)
+    before, after = _printings(baseline, finishes), _printings(fetched, finishes)
     thinned = sorted(
         key
         for key, conditions in before.items()
@@ -1771,7 +1815,11 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         if previous is None or not Path(previous).is_file():
             unverified.append(game)
             continue
-        delta = _coverage(fetched_export, tcgcsv.read_export(Path(previous)))
+        delta = _coverage(
+            fetched_export,
+            tcgcsv.read_export(Path(previous)),
+            _finish_conditions([game]),
+        )
         if delta["lost_skus"]:
             lost[game] = delta["lost_skus"]
         if delta["thinned"]:
@@ -1793,7 +1841,7 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
                 f"Cards matching them would queue as no_catalog_row."
             )
         for game, keys in sorted(thinned.items()):
-            shown = ", ".join(f"{s or '?'} {n or '?'}" for s, n, _ in keys[:6])
+            shown = ", ".join(f"{k[0] or '?'} {k[1] or k[-1] or '?'}" for k in keys[:6])
             lines.append(
                 f"  {game}: and {len(keys)} of them thin a number that had SEVERAL condition "
                 f"rows down to one — {shown}. A number left with one row is decided by that "

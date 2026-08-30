@@ -976,7 +976,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D20", "D21", "D24", "D25", "D29", "D32", "D33", "D48", "D54", "D56", "D60"],
+                "governed_by": ["D1", "D2", "D3", "D9", "D12", "D13", "D16", "D20", "D21", "D24", "D25", "D29", "D32", "D33", "D35", "D48", "D54", "D56", "D60"],
                 "tested_by": ["T7"],
             },
         },
