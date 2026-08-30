@@ -3298,6 +3298,42 @@ commit. `make status` reports both instead: it reads NOT ARMED whenever the effe
 not the install, and prints which hooks differ from the current tree. That is the one surface
 in this repo whose whole job is saying what state you are actually in.
 
+**A SESSION MAY PERFORM THE MERGE WHEN THE OWNER SAYS THE WORD, AND THIS IS THE OWNER'S
+AMENDMENT OF 2026-08-30**: *"if I explicitly say the word merge to main to you, that you do
+so"*. The sentence that changes is "the owner merges it on GitHub", and only that sentence.
+Everything the rest of this entry is about — the two hooks, what they refuse, why they exist
+and the two incidents that produced them — is untouched, because none of it is about who
+presses the button.
+
+**WHAT THE PERMISSION IS FOR IS `gh pr merge`, WHICH MOVES A REF ON GITHUB AND NOT IN THIS
+CLONE.** That is the whole reason this amendment costs nothing: after it, `main` still arrives
+here by `git pull` and by no other route, so the local guard is not weakened, not bypassed, and
+not consulted. The allow rule above already covers what follows — *the one legitimate move is
+to a commit origin already has* — and a merged PR is precisely that commit. **`PKMNSCAN_MAIN=off`
+is not what a session reaches for here and must not become it.** A session that finds itself
+typing that variable has left this amendment behind and is doing something else.
+
+**THE WORD COMES FROM THE OWNER IN THE CONVERSATION, AND IT IS PER-INSTRUCTION.** Not a
+standing grant, not a mode, and never inferred: "ship it", "land it", "looks good" and an
+approving review are not the word. The permission is spent on the merge it was given for, which
+is the same shape D33's `confirm` field has one register down and for a smaller reason — that
+route refuses without an explicit field because the next thing that happens costs money, and
+this refuses without an explicit instruction because the next thing that happens is the branch
+every other session is cut from.
+
+**WHAT IT DOES NOT LICENSE, stated because a permission to merge reads wider than it is**: a
+local fast-forward, a direct push, a force push, `git branch -f`, `git update-ref`, or a merge
+of a PR the owner did not name. The first incidents in this entry were a local fast-forward and
+a direct push — neither is a merge, both are still refused by a hook, and neither becomes
+available by the owner saying this word.
+
+**Why this is safe to grant and was not safe to assume.** The hooks were built because main
+moved twice in one day under three live worktrees, with nothing in the repo saying it may not.
+What was missing was not the owner's consent — they had it either time — it was any record that
+consent was required, and any mechanism that noticed its absence. Both now exist, so an explicit
+instruction is a decision rather than a default, which is the distinction this whole entry is
+built on.
+
 **THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
 `PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
 a guard with no visible way past it gets disarmed at the config instead — and a disarmed
