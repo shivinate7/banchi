@@ -11602,6 +11602,40 @@ def check_export_fetch(checks: Checks) -> None:
                     "went unchecked rather than reporting them as verified",
                 )
 
+                # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
+                #
+                # `capture_server.py`'s CSRF paragraph used to justify itself with "there
+                # are no credentials in this product", and D60 falsified that half: this
+                # route spends the owner's TCGplayer session. The comment is corrected
+                # there; this is the assertion it now leans on. A page in another tab must
+                # not be able to make this server spend that session, and the refusal has
+                # to land BEFORE the cookie is read — which is what `_dispatch` doing the
+                # origin check ahead of the handler buys, and why the export route carries
+                # no check of its own.
+                stub["seen"] = []
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{directory.name}/export",
+                    origin="https://evil.example",
+                    payload={},
+                )
+                checks.equal(
+                    (status, error_code(raw)),
+                    (403, "origin_not_allowed"),
+                    "a POST from an origin this server does not know is refused — the route "
+                    "that spends the owner's marketplace session is behind the same gate as "
+                    "the hard delete, and weakening SAFE_METHODS is a bigger decision than "
+                    "it was before this route existed",
+                )
+                checks.equal(
+                    stub["seen"],
+                    [],
+                    "and the cookie was never read for it: the gate is in `_dispatch`, "
+                    "ahead of the handler, so a refused request reaches nothing that could "
+                    "spend a credential",
+                )
+
                 # ------------------------------------- a run that cannot answer for itself
                 #
                 # A 500 IS THE ONE ANSWER THIS ROUTE MAY NOT GIVE. `exports_for` reaches

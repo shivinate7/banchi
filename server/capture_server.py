@@ -150,8 +150,21 @@ backup — and nothing here could tell it from the capture app. POST, PUT and DE
 require an `Origin` this server knows (or none at all, which is what a non-browser client
 sends); GET is unchanged and still `*`, because `GET /photo` is loaded as an image by two
 screens. The argument, the allowlist and the environment variable that extends it are at
-`SAFE_METHODS` below. It is a CSRF gate, NOT authentication — there are no credentials in
-this product and this adds none.
+`SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
+
+THE REASON IT USED TO GIVE FOR THAT IS NOW FALSE, AND IT IS CORRECTED RATHER THAN LEFT
+STANDING (D60). This sentence read "there are no credentials in this product and this adds
+none", and the first half was deleted by a change made later: `server/tcg_export.py` reads a
+TCGplayer session cookie out of `.env` and `POST /pipeline/runs/<name>/export` spends it. A
+premise quietly falsified by a later change, with its conclusion left in place, is the
+failure D41 records for a comment that had outlived a layout — and here it would understate
+what this gate is for, by telling a reader there is nothing behind it worth reaching.
+
+WHAT IS BEHIND IT NOW: a page in another tab could otherwise make this server spend the
+owner's marketplace session. The gate answers 403 before the route runs, so the cookie is
+never read for a request whose origin this server does not know — which is why the export
+route needs no check of its own, and why weakening `SAFE_METHODS` is a bigger decision than
+it was when this paragraph was written.
 
 EVERY WRITE GOES THROUGH `store.session.Store.write()`. The server never touches
 `inventory.json` and never writes a photo outside that lock. `store/__init__.py` calls it
