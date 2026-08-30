@@ -7,7 +7,7 @@ can CAUSE money to be spent, by starting a child that spends it — and the temp
 that landed, was to keep the promise alive by qualifying it to "no socket TO ANTHROPIC",
 which is exactly the drift D16 exists to catch. It was rewritten instead.
 
-BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D60). `POST /pipeline/runs/<name>/export`
+BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D61). `POST /pipeline/runs/<name>/export`
 reads the TCGplayer session cookie out of `.env` and fetches the operator's own Filtered
 Export from `store.tcgplayer.com` — a secret, and a socket, in the file that used to be able
 to say it had neither. What replaces THAT promise is stated where the call lives
@@ -1561,7 +1561,7 @@ def _pricing_flags(payload: dict) -> List[str]:
 
 # ------------------------------------------------------------ the export, fetched not typed
 #
-# THE LAST MANUAL STEP IN `runs -> join`, AND WHAT REMOVING IT COSTS (D60). `identify` spawns
+# THE LAST MANUAL STEP IN `runs -> join`, AND WHAT REMOVING IT COSTS (D61). `identify` spawns
 # detached, `join`, `emit` and `reconcile` are free and re-runnable, and every artefact is
 # downloadable — so the one thing an operator still had to do by hand between a finished
 # batch and a joined run was open TCGplayer, press Export Filtered CSV, wait, and upload the
@@ -1657,7 +1657,7 @@ def _coverage(fetched, baseline, finishes: set) -> dict:
     """What this file covers that the run's previous export did not, and what it lost.
 
     THE GUARD IS A DELTA AGAINST A KNOWN-GOOD FILE, AND IT IS NOT A COMPLETENESS CHECK — the
-    difference is the whole reason D60 exists as an entry rather than as a function. An
+    difference is the whole reason D61 exists as an entry rather than as a function. An
     export's completeness against the CATALOG cannot be certified from its contents: the
     Pricing tab can narrow by set, by printing, by condition and by whether a listing has a
     photo, at least one of those leaves no trace in the file at all (`Photo URL` is empty in

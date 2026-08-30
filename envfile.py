@@ -67,7 +67,7 @@ def load(path: Path = ENV_FILE, *, force: bool = False) -> None:
 def get(name: str) -> str:
     """Value for `name` from the environment or `.env`, or "" if unset.
 
-    READ ONCE PER PROCESS, which is right for everything that was in this file before D60: an
+    READ ONCE PER PROCESS, which is right for everything that was in this file before D61: an
     API key and a mirror path are set before anything starts and do not change under a
     running process. For a value that DOES change while the process runs, see `get_live`.
     """
@@ -78,7 +78,7 @@ def get(name: str) -> str:
 def get_live(name: str) -> str:
     """Value for `name`, re-read from `.env` every time. For a secret that ROTATES.
 
-    `get` CANNOT SEE A REPLACED VALUE, AND THAT MADE A REFUSAL'S OWN REMEDY NOT WORK (D60).
+    `get` CANNOT SEE A REPLACED VALUE, AND THAT MADE A REFUSAL'S OWN REMEDY NOT WORK (D61).
     Two caches sit in the way and they fail differently, so both had to go:
 
       - `load` returns early once `_loaded` is set, so a value ADDED to `.env` while the

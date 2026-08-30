@@ -263,7 +263,7 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
   still find nothing.
 
   **T6 could not have caught it, and that is the part worth keeping.** `_scene` paints one
-  flat colour behind a uniformly bright card — precisely the premise the tone path assumes —
+  flat color behind a uniformly bright card — precisely the premise the tone path assumes —
   so the test constructed the one condition under which the method works. A green harness
   was not wrong; it was answering a question nobody had asked it.
 
@@ -349,6 +349,49 @@ at a temporary directory, so nothing here touches the real inventory.
   age resets to `read today` every time the panel is opened is a stale figure wearing a fresh
   stamp, which is worse than no stamp at all. Same lesson this file already records at the
   multi-game prompt seam — a check that cannot fail is not coverage.
+- **The price-history reader is covered as of 2026-08-30, in its own isolated home, and
+  OFFLINE.** `pipeline/pricehistory.py` walks a SKU to a productId against tcgcsv.com's
+  mirror and reads the public `infinite-api` price-history endpoint. Every assertion runs
+  against two committed fixtures and a fetcher the test supplies, so the harness opens no
+  socket — which is not a style preference: this suite runs behind the Stop hook at the end
+  of every turn, and a case that reached a third party would put a stranger's uptime on the
+  path that decides whether work is done, and hammer a free public mirror once per turn.
+
+  **What is real here and what is constructed, because the two prove different things.** The
+  fixtures are verbatim upstream captures and carry the SHAPE — every number arriving as a
+  string, a literal zero written into a bucket that sold nothing, and **the buckets arriving
+  NEWEST FIRST**. The arithmetic is asserted against small literal buckets whose answer is
+  computable in the assertion's own label, because a real series' VWAP is a number nobody can
+  check by hand and a fixture cannot tell a correct weighted mean from a plausible one.
+
+  **The case that would otherwise fail silently is the bucket order**, and it is why the real
+  capture is committed rather than described: `momentum` subtracts one end of the list from
+  the other, so a parser trusting the wire order reports every rising card as falling — no
+  exception, no missing field, nothing on screen to see. The fixture is asserted newest-first
+  ON DISK and the parse ascending, so an upstream change goes red and says so rather than the
+  parser quietly starting to pass for a new reason.
+
+  **The `/prices` half is covered by its ABSENCES.** The same mirror serves current prices per
+  product per PRINTING, and the cases assert what the payload does NOT carry — no
+  `TCGplayer Id`, no `Total Quantity` — because that is what makes it a supplement to an export
+  rather than a replacement for one. A real two-printing product in the fixture (Arena Kingpin,
+  Foil $0.11 against Normal $0.08) is what makes the composite key load-bearing rather than
+  tidy.
+
+  **Thirteen mutations were observed failing before the block was kept**, each on a named
+  assertion: the sort dropped, `"0"` read as a price, `find()` picking the first of an
+  ambiguous pair, the name rung deleted, the VWAP unweighted, the cache never reaching disk, a
+  corrupt cache entry raising instead of missing, an unresolvable row dropped without being
+  named, `momentum` comparing a window against itself, an unknown range fetched anyway, the
+  printing dropped from the price key, a null direct low read as $0.00, and the group's prices
+  re-fetched rather than cached.
+
+  **What it does NOT cover, named so a green harness is not misread**: whether the endpoint is
+  still public, whether tcgcsv still mirrors these groups, and whether the figures are right.
+  All three are facts about someone else's server on the day you ask, and no committed fixture
+  holds them. The module is also a LIBRARY — nothing calls it and no screen draws it — so this
+  is coverage of a reader, not of a feature.
+
 - **The queue's starvation tier is covered as of 2026-08-24, in its own isolated home.**
   `store/queues.py:sort_key` gained a tier that promotes an entry past `STARVATION_DAYS`
   ahead of price, because price alone never releases an unpriced card: `no_catalog_row` has
@@ -436,7 +479,7 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
-- **D60's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
+- **D61's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
   TCGplayer.** `POST /pipeline/runs/<name>/export` downloads the Filtered Export with the
   session cookie from `.env` instead of the operator downloading and uploading it.
   `check_export_fetch` has its own `isolated_home` AND its own environment — the first
@@ -463,7 +506,7 @@ at a temporary directory, so nothing here touches the real inventory.
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
   stdlib default User-Agent reaches the endpoint unblocked — which is not evidence about an
-  authenticated one. That is one live fetch by the owner and D60 records it as owed.
+  authenticated one. That is one live fetch by the owner and D61 records it as owed.
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This
@@ -563,7 +606,7 @@ has no test runner outside the browser `make design-check` starts, and nothing u
 beside the code and by nothing that runs, which is the weakest guard in this section and
 the reason it is named here rather than left to be inferred from the commit stats.
 
-**BOX 1'S RECORDS WERE DELETED ON 2026-08-24, AND EVERY NUMBER ABOVE STANDS.** Recorded so a
+**Box 1's records were deleted on 2026-08-24, and every number above stands.** Recorded so a
 later session that goes looking for the 53 records does not conclude the run never happened.
 The box was a shakedown lot the owner wanted gone, and it could not go: its 45 listing records
 still claimed 53 staged copies and one live, so `box_not_empty_of_commitments` refused it, and
@@ -914,7 +957,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     repeatable `--export` with per-game catalogs and one import file per game (D25), step 7's
     pooled non-located inventory and both opsec discharges, step 8's rarity clause — built
     behind its A/B flag, MEASURED, and switched off because it lost (holdout 0.9706 → 0.9559,
-    $0.17; the numbers are in the T1 section above) — and step 9's per-game finalisation:
+    $0.17; the numbers are in the T1 section above) — and step 9's per-game finalization:
     `riftbound_card_v1` and `one_piece_card_v1` exist, are registered, are dispatched to by
     the registry and carry parsers.
 
@@ -963,7 +1006,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     exist — the strongest of its cases being negative: **before the free preflight has answered,
     the control that spends does not exist.** Absent, not disabled.
 
-    **THE PANEL'S ADDRESS MOVED TWICE AFTER THIS STEP AND THIS PARAGRAPH NAMED THE FIRST ONE.**
+    **The panel's address moved twice after this step and this paragraph named the first one.**
     It read "on `#/inventory` — sharing one `.browse-boxrun` row with `BoxOps`", which D38
     superseded within a day and D39 superseded outright: the pipeline has its own route, `#/runs`,
     as of 2026-08-29. Corrected rather than left standing, because this is a build-order note

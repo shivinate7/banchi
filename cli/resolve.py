@@ -32,7 +32,7 @@ from typing import (
 )
 
 from cli import runs
-from pipeline import games, join, pricing, routing, tcgcsv, variant
+from pipeline import games, join, orders, pricing, routing, tcgcsv, variant
 from store import files, master, queues
 from store.session import Store
 
@@ -1021,6 +1021,83 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
         rebuilt[now] = moved_record
     rebound["cards"] = rebuilt
     return rebound, moved, departed, unverified
+
+
+def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
+    """A run's `pricing.json`, read back as SKU -> the positions those copies are at NOW.
+
+    THE BACKUP SOURCE FOR `pipeline/orders.py`, and it lives here rather than there because
+    it does the one thing a pure resolver may not: it reads a run directory off disk and it
+    hashes photographs. The resolver takes the ANSWER and never the lookup.
+
+    WHY IT GOES THROUGH `realign` AND NOT STRAIGHT AT THE FILE. `pricing.json` stores
+    position keys — `cli/cmd_join.py:_pricing_table` writes `{"box": .., "index": ..}` per
+    matched SKU — and positions MOVE. A mid-box delete (D10 ruling 1) slides every higher
+    index in the box down one, and the run directory is immutable by design, so its own
+    slot numbers are exactly the thing that goes stale. That is D36 in full, and it is not
+    hypothetical: a re-join of box 2 wrote all 47 queue entries one position off, every one
+    carrying the right read with its neighbour's photograph, because a run's positions were
+    read as truth. Reading this file without realigning it would resurrect that defect on
+    the one screen whose whole job is sending a person to a physical slot.
+
+    So the run's own identifications are realigned first — that is what knows each record's
+    `photo_sha256` and can therefore say where that photograph is today — and the mapping
+    it produces is applied to the pricing table's keys. A position the realignment reports
+    DEPARTED is dropped: there is no card there to walk to, and naming it would send
+    somebody to the slot its successor now occupies.
+
+    IT RAISES WHAT `realign` RAISES. An ambiguous digest or two records landing on one slot
+    refuses the whole run rather than answering for part of it, which is that function's own
+    contract and the right one here: paperwork nobody can place is not a weaker answer, it
+    is a question.
+
+    A RUN WITH NO PRICING TABLE ANSWERS NOTHING, WITHOUT COMPLAINT. `pricing.json` is
+    written by `join` and by nothing else (D49), so a run that was identified and never
+    joined legitimately has none — and the resolver's card-first pass does not need it.
+    """
+    table = files.read_json(run.path(runs.PRICING))
+    if not isinstance(table, dict):
+        return []
+
+    # Realign the run's OWN records, then reuse the mapping. `moved` is old key -> new key
+    # and `departed` names the records whose photograph is on no slot in a box whose other
+    # photographs are present. A box realign could not check at all is `unverified`: its
+    # records pass through as the run recorded them, which is the same answer this file
+    # gave before realignment existed, and the honest one — a missing photograph tells you
+    # the photograph is missing.
+    try:
+        payload = run.read_identifications()
+    except runs.RunError:
+        # No identifications to check the table against. The positions are then unverified
+        # in exactly realign's sense, so they are passed through rather than discarded:
+        # every consumer re-checks the card it lands on anyway.
+        moved, gone = {}, set()
+    else:
+        _, moved, departed, _ = realign(payload)
+        gone = set(departed)
+
+    found: List[orders.PaperworkEntry] = []
+    for row in table.get("skus") or []:
+        if not isinstance(row, dict) or not row.get("sku"):
+            continue
+        places = []
+        for position in row.get("positions") or []:
+            if not isinstance(position, dict):
+                continue
+            box, index = position.get("box"), position.get("index")
+            if box is None or index is None:
+                continue
+            key = master.position_key(int(box), int(index))
+            if key in gone:
+                continue
+            places.append(moved.get(key, key))
+        if places:
+            found.append(
+                orders.PaperworkEntry(
+                    sku=str(row["sku"]), run=run.name, positions=tuple(places)
+                )
+            )
+    return found
 
 
 def load(

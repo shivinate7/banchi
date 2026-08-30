@@ -28,7 +28,7 @@ WHY THIS EXISTS. `runs -> join` is otherwise autonomous: `identify` spawns detac
 `join`, `emit` and `reconcile` are free and re-runnable, and the queues, the pricing table
 and the import files are all reachable from a screen. The one step nobody could automate was
 the operator going to TCGplayer, pressing Export Filtered CSV, waiting for the download and
-uploading the file back. That is the manual step this removes, and D60 is the decision entry
+uploading the file back. That is the manual step this removes, and D61 is the decision entry
 — including the part it does NOT remove, which is that one fetch answers for one game.
 
 STDLIB ONLY, like the rest of the server. `urllib.request` and not `requests`:

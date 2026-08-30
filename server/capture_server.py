@@ -153,7 +153,7 @@ screens. The argument, the allowlist and the environment variable that extends i
 `SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
 
 THE REASON IT USED TO GIVE FOR THAT IS NOW FALSE, AND IT IS CORRECTED RATHER THAN LEFT
-STANDING (D60). This sentence read "there are no credentials in this product and this adds
+STANDING (D61). This sentence read "there are no credentials in this product and this adds
 none", and the first half was deleted by a change made later: `server/tcg_export.py` reads a
 TCGplayer session cookie out of `.env` and `POST /pipeline/runs/<name>/export` spends it. A
 premise quietly falsified by a later change, with its conclusion left in place, is the
@@ -255,7 +255,7 @@ from store import Store, files, master, queues  # noqa: E402
 # child process.
 #
 # THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
-# than qualified (D60). `server/tcg_export.py` reads the TCGplayer session cookie out of
+# than qualified (D61). `server/tcg_export.py` reads the TCGplayer session cookie out of
 # `.env` and opens a socket to `store.tcgplayer.com` to download the operator's own Filtered
 # Export — so this server does hold a secret and does make an outbound call, and saying "no
 # socket TO ANTHROPIC" instead would be the technicality-narrowing D16 exists to catch. What
