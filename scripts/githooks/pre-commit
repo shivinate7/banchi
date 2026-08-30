@@ -70,7 +70,7 @@ $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
 fi
 
 # A SYMLINK THAT LEAVES THE REPOSITORY. Refused, and it is the rule this hook was missing
-# on 2026-08-29 when a tracked one cost the 133 MB image mirror (D46).
+# on 2026-08-29 when a tracked one cost the 133 MB image mirror (D47).
 #
 # THE SHAPE OF THE FAULT, because it is not obvious that a symlink is dangerous. A worktree
 # provisions `app/node_modules` and `harness/images` as links into the MAIN working tree
@@ -97,7 +97,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
         fail "symlink with an absolute target staged: $link -> $target
   Committed, that path is baked into the tree — and in the working tree it names, it
   points at itself. Checking it out replaces the real directory with a loop, silently.
-  This is how the image mirror was lost (D46). Ignore the path instead of tracking it.
+  This is how the image mirror was lost (D47). Ignore the path instead of tracking it.
   If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..."
         ;;
       *)

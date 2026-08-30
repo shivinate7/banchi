@@ -726,6 +726,30 @@ export type ReviewAnswer = {
   index: number
   sku: string
   condition: string
+  /** D46 — this SKU came out of the catalog lookup, not out of the entry's offered rows.
+   *
+   *  Only ever true for an entry with NO candidates. The server re-reads the row out of the
+   *  export the card was joined against and takes the condition from there, so this flag
+   *  widens which rows may be chosen and never what may be written: an unknown SKU still
+   *  refuses, as `sku_not_in_catalog`. Absent on every ordinary answer. */
+  fromCatalog?: boolean
+}
+
+/** One catalog row offered by `GET /review/<box>/<index>/catalog` (D46).
+ *
+ *  DELIBERATELY THE SAME SHAPE AS `CandidateRow`, because the screen draws both through one
+ *  component: a row the pipeline found and a row a person went and found look identical once
+ *  they are on screen, and the difference that matters — whether the machine could find it —
+ *  is carried by the surrounding copy rather than by the row. */
+export type CatalogLookup = {
+  box: number
+  index: number
+  game: string
+  query: string
+  searched?: boolean
+  rows: CandidateRow[]
+  found: number
+  truncated: boolean
 }
 
 /** What the card carried before an answer overwrote it — the pair a reversal puts back.

@@ -495,6 +495,49 @@ def _key_number_and_printed_total(card: "IdentifiedCard") -> Optional[str]:
     return join_key(card.number, card.printed_total)
 
 
+# The separators a model reaches for when it glues a set code to the identifier. NO EXPORT
+# CELL CONTAINS EITHER — measured across all 1,237 distinct Riftbound `Number` cells and both
+# One Piece fixtures — which is the entire licence for the strip below. A character that can
+# never be part of a real identifier cannot be destroyed by removing it.
+_SET_CODE_SEPARATORS = ("\u2022", "\u00b7")  # bullet, middle dot
+
+
+def _strip_set_code(text: str) -> str:
+    """`UNL \u2022 140/219` -> `140/219`. The identifier, with the set code the card also prints.
+
+    THE MODEL WAS TOLD NOT TO DO THIS AND DID IT ANYWAY. `identify/prompt.py`'s Riftbound
+    contract says in as many words *"Do not add a set code printed elsewhere on the card"*, and
+    3 of run `2026-08-29-box1-01`'s 133 reads did — twice with a bullet, once with a middle dot.
+    Each produced a well-formed key that matched nothing, and each landed as a zero-candidate
+    `no_catalog_row`, which the answer route refuses outright. Three cards that could not be
+    answered at all, one of them listable at $2.86.
+
+    RECOVERING THE NUMBER IS BETTER THAN FALLING BACK TO THE NAME, and that is why this exists
+    even though D35's rung already rescued these three. The number is the field that tells one
+    card from another; the name is the field that survives a bad read. Matching on a recovered
+    number is an exact join and lists the card, where the name rung deliberately only ever
+    queues it (the owner's ruling). Same three cards, one press cheaper, and on stronger
+    evidence.
+
+    IT IS A STRIP, NOT A SEARCH, AND THAT BOUNDARY IS THE SAFETY. Only text up to and including
+    a separator that no real identifier contains is removed. A general "find the number-shaped
+    substring" rule would have to decide what to do with `T02 // T03` — a real double-sided
+    token whose two halves are both number-shaped and whose spaces the prompt explicitly asks
+    for — and deciding that on a guess is how a fold starts destroying identifiers it was meant
+    to repair. 13 export cells carry that form.
+
+    A SPACE-SEPARATED SET CODE IS THE SAME CLASS AND IS DELIBERATELY NOT HANDLED. `UNL 140/219`
+    has not been observed, and a space is exactly the character `T02 // T03` needs, so splitting
+    on one would trade a measured repair for an unmeasured risk. If it turns up, the evidence to
+    check first is whether the remainder still parses as an identifier.
+    """
+    out = text.strip()
+    for separator in _SET_CODE_SEPARATORS:
+        if separator in out:
+            out = out.rsplit(separator, 1)[1]
+    return out.strip()
+
+
 def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
     """Riftbound and One Piece: the identifier exactly as printed, matched verbatim.
 
@@ -524,7 +567,7 @@ def _key_printed_code(card: "IdentifiedCard") -> Optional[str]:
     """
     if card.number is None:
         return None
-    return str(card.number).strip() or None
+    return _strip_set_code(str(card.number)) or None
 
 
 def _key_none(card: "IdentifiedCard") -> Optional[str]:
