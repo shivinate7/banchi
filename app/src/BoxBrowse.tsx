@@ -2654,7 +2654,7 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
    * the one moment it knows, appending the id of the photograph it expects: that is
    * cache-busting as a statement of fact, not as a workaround, and photoUrl's comment now
    * names it as the standing exception. */
-  /* THE URL NAMES THE PHOTOGRAPH, NOT THE SLOT (D50), AND THAT IS THE WHOLE OF THE FIX HERE.
+  /* THE URL NAMES THE PHOTOGRAPH, NOT THE SLOT (D52), AND THAT IS THE WHOLE OF THE FIX HERE.
    * `photoUrl` answers `/photo/<box>/<index>`, which is an address that CHANGES ITS
    * MEANING: D10 ruling 1's mid-box delete slides a different card into the slot this
    * screen is still pointing at, and D10's undo releases an index the next capture reuses.

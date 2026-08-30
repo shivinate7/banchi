@@ -2064,7 +2064,7 @@ def do_games() -> dict:
 
 
 def do_photo(box: int, index: int) -> Tuple[bytes, str]:
-    """The stored capture, and a validator for it. D6's route, D50's validator.
+    """The stored capture, and a validator for it. D6's route, D52's validator.
 
     THE URL NAMES A SLOT, NOT A PHOTOGRAPH, AND THAT IS WHY THE SECOND RETURN VALUE EXISTS.
     `/photo/2/180` means "whatever is in box 2's slot 180 today", and three operations move
@@ -6665,7 +6665,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         # WHICH PROCESS ANSWERED, ON EVERY RESPONSE — the same `boot_id` `GET /status` reports,
         # here so the app can notice a restart WITHOUT ASKING. `make up` restarts this server on
-        # every Python edit (D51), and the alternative was a client that polled `/status` on a
+        # every Python edit (D53), and the alternative was a client that polled `/status` on a
         # timer: it worked, and it made every owner-side screen issue a request nothing had
         # asked for, in every Playwright spec, against whatever real server is listening —
         # which is the hazard `app/tests/inventory.spec.ts` documents in its own comment. A

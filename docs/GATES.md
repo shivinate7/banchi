@@ -624,7 +624,7 @@ server after any change under `store/` or `server/`, or the run you are about to
 served by whatever was true when you started it.
 
 **THE DISCIPLINE IS MACHINERY AS OF 2026-08-30, FOR ONE OF THE TWO WAYS TO START A SERVER
-(D51).** `make up` runs the server under a supervisor that watches `server/`, `store/`,
+(D53).** `make up` runs the server under a supervisor that watches `server/`, `store/`,
 `pipeline/`, `cli/`, `identify/` and `geometry/` and restarts it when they change, and
 `GET /status` now carries a `boot_id` so a stale process is visible rather than inferred.
 Re-scored against this section's own case: the millisecond change would have been picked up
