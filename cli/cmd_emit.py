@@ -178,6 +178,29 @@ def run(args, say) -> int:
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
+            # THE RUN'S BYPASS IS PART OF ITS RESOLUTION, AND DROPPING IT MADE THIS COMMAND
+            # RE-DERIVE A DIFFERENT RUN THAN THE ONE ON DISK. `join --bypass` resolves a
+            # contradicted claim at rung 1 (D3) and queues nothing; this call defaulted
+            # `trust_claim` to False, so it walked the ladder with rung 3 live, invented a
+            # queued position for every bypassed card, found none of them in either queue file
+            # — because join deliberately never wrote them — and refused with "Run `pkmnscan
+            # join` first" at an operator who had.
+            #
+            # Measured on the owner's box 1: `bypassed: 39` in the manifest, 39 positions
+            # invented here, 39 absent from disk, emit refused every time. Re-running join
+            # could not clear it, because join was right.
+            #
+            # The refusal was the SECOND-worst outcome and that is why it is worth stating:
+            # had the check passed, this resolution is also what writes the import files, so
+            # those 39 cards would have been routed to review and left out of the CSV — the
+            # bypass silently void at the one step that produces output.
+            #
+            # Read from the manifest exactly as `review_below` above is, and for the same
+            # reason: both are per-run choices the run recorded, and `emit` re-derives rather
+            # than reads, so every input to that derivation has to come from the run. There is
+            # no `--bypass` flag here on purpose — D3 makes it a join-time decision, and a
+            # second place to state it is a second thing that can disagree.
+            trust_claim=bool(run_dir.manifest.get("bypass_detection", False)),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))

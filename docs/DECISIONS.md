@@ -157,6 +157,34 @@ shape of, rather than a threshold moved once for everybody. `join --dry-run` exi
 shape is visible before the choice — it walks the ladder twice, with the flag and without, and
 diffs the two queues, writing nothing at all.
 
+**THE FLAG IS PER-RUN, SO EVERY LATER COMMAND HAS TO READ IT BACK — AND `emit` DID NOT, FROM
+THE DAY THE FLAG SHIPPED** (found by the owner 2026-08-30, pressing *Write the import files*
+on a box they had joined). `cli/cmd_emit.py` does not read what `join` decided; it re-derives
+it, calling `resolve.load` a second time. That call passed no `trust_claim`, so it walked the
+ladder with rung 3 LIVE over a run joined with the flag — inventing a queued position for
+every bypassed card, finding none of them in either queue file because join deliberately
+never wrote them, and refusing with *"Run `pkmnscan join` first"* at an operator who had.
+Re-running join could not clear it, because join was right.
+
+**Measured on box 1: `bypassed: 39` in the manifest, 39 positions invented, 39 absent from
+disk.** The refusal's first ten positions matched what the screen printed character for
+character.
+
+**THE REFUSAL WAS THE SECOND-WORST OUTCOME, and that is the part worth keeping.** The same
+resolution is what writes the import files, so had that check passed, those 39 cards would
+have been routed to review and left out of the CSV — the bypass silently void at the one step
+that produces output. A guard written for one purpose caught a different and quieter failure,
+which is the argument for the guard rather than a lucky escape.
+
+**The fix is one line and its shape is the rule: `emit` reads `bypass_detection` off the
+manifest exactly as it already reads `review_below_confidence`.** Both are per-run choices the
+run recorded, and a command that RE-DERIVES rather than reads must take every input to that
+derivation from the run. **There is deliberately no `--bypass` flag on `emit`**: this entry
+makes the bypass a join-time decision, and a second place to state it is a second thing that
+can disagree with the first. Covered by T7's `check_emit_bypass`, which asserts the card
+reaches the import file at the SKU its claim names — not merely that the command stopped
+refusing, because a fix that only silenced the refusal would have shipped the quieter failure.
+
 **What would reopen this: a rig that measures better.** The flag treats the detector as
 untrustworthy under this lamp, which is what two runs measured. It is not a finding about
 foil detection in general, and a re-measurement after the lighting changes is the evidence
@@ -4254,6 +4282,51 @@ re-render is the only thing that can ask whether more is owed.
 the server does not have those answers — so without a record of the document that failed, the
 loop would re-fire the instant `saving` went false, forever. The next keystroke makes a new
 document and the retry happens then.
+
+**THE PRESET WROTE A KEY NOTHING READS, SO PICKING ONE CHANGED THE SCREEN AND NOT THE RUN**
+(the owner's own analysis, 2026-08-30, and it is exactly right). `applyPreset` wrote
+`preset: <key>` into the document. `pipeline/decisions.py:parse` does not know that field and
+`to_payload` does not emit it, so the next join dropped it — and `rule` and `basis` sat at
+`match`/`market` throughout. Pressing `Market −5%` re-rendered every suggestion on screen and
+moved nothing `emit` reads.
+
+**The comment directly above that line said `A PRESET WRITES rule/basis AND NO OVERRIDE`.** It
+described the design; the line under it did something else, and nothing compared them.
+
+**Measured on the owner's riftbound run, on disk**: `preset: market_undercut_5` sitting beside
+`rule: match`, `basis: market`, with **2 overrides across 50 SKUs** — so 48 cards were about
+to list at a price nobody had chosen, and the screen had shown all of them at −5%.
+
+**IT IS THIS ENTRY'S OWN NAMED FAILURE REACHED BY THE OTHER ROAD, which is why the fix is the
+rule and not the suggestions.** The paragraph above refuses to write the hundred suggestions
+into `overrides`, correctly, because an override is layer 1 of `prices_for` and beats the rule
+at layer 4 — *"a run where changing the preset silently changed nothing"*. That refusal is
+only half an answer: if the suggestions must not move, then **the rule at layer 4 has to**, and
+it never did. A preset now writes `rule` and `basis`, which is what that comment always
+claimed.
+
+**THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis` AND IS NEVER STORED.** Nothing on this screen
+said which rule was live, and that is most of why the dead write survived — pressing a chip
+appeared to work, because the suggestions really did change. A REMEMBERED selection would have
+been a second answer to *what will an untouched row list at*, and the pair the pipeline reads
+is the only one that can answer it; so a rule typed by hand into `decisions.json` on `#/runs`
+correctly lights no chip rather than lighting a stale one.
+
+**`scripts/docs-audit.py` GAINS A `pricing presets` ROW**, reconciling `cli/cmd_join.py:PRESETS`
+against `app/src/Pricing.tsx:PRESETS` on all three fields — key, rule and basis. Blocking, for
+the reason the `withhold reasons` row above gives verbatim: `PUT .../decisions` validates
+nothing, so two declarations agreeing is the whole defence. It reads the Python side by `ast`
+and resolves `pricing.RULE_MATCH` out of `pipeline/pricing.py` rather than importing anything,
+because naming the constant is right and flattening it to a literal to please a checker is the
+inversion D16 forbids. Mutation-tested in both directions.
+
+**WHAT IS STILL NOT BUILT, and the owner found it in the same pass**: `server/pipeline_routes.py`
+computes `remembered_sub_threshold` and ships it on the pricing route, `app/src/types.ts`
+declares it, and **no component reads it**. The sub-threshold disposition is still typed into
+`decisions.json` by hand on `#/runs`, which is what the paragraph above says. It is
+`CLAUDE.md`'s route-is-not-a-feature rule in its mildest form — a server half with no client
+half — and it is named here rather than built because a control that answers D9's per-run
+disposition is a design question, not a wiring one.
 
 **WHAT IS NOT BUILT, named rather than left to be discovered**: no durable home for a hold
 outside the run directory; no cross-run view of what is being held; no search or sort control,
