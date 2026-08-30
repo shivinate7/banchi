@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test githooks-selftest audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
+.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement audit-history dev server screenshot design-check lint typecheck venv worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -34,14 +34,16 @@ help:
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
-	@echo "  make check        harness + docs-audit + both self-tests + lint + typecheck"
+	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
 	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make dev          Vite app on :5173. Blocks — background it in a session."
-	@echo "  make server       Python capture server on :8000. Blocks — background it in a session."
+	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
+	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
 	@echo "  make lint         eslint over app/: the two v1-bug rules. No Python linter."
@@ -258,6 +260,7 @@ check:
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 
@@ -272,6 +275,15 @@ audit-self-test:
 # refusing its own commits.
 githooks-selftest:
 	@bash scripts/githooks-selftest.sh
+
+# HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
+# Python serves the capture port, TypeScript addresses it, and a disagreement is silent and
+# total — the app asks for a port nothing is listening on, or one ANOTHER tree is listening
+# on, which is the defect the whole decision exists to remove. It runs node, so it is not on
+# the commit path: the git hook runs bare, and a check that needs a toolchain would fail
+# on a machine that has none rather than on a defect.
+port-agreement:
+	@python3 scripts/port-agreement.py
 
 # Foreground and blocking, like `server` below — background it from an agent session, or
 # the Stop hook's harness run never gets to happen.

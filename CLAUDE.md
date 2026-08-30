@@ -26,8 +26,9 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
                     #   three errors that never mention the worktree.
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
-make dev            # Vite app on :5173. Blocks — background it.
-make server         # Python capture server on :8000. Blocks — background it.
+make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
+make server         # Python capture server. :8000 in the main tree, its own port in a
+                    #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
@@ -74,6 +75,23 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
   `claude-haiku-4-5-20251001`.
+- **EVERY CHECKOUT HAS ITS OWN STORE AND ITS OWN PORTS, AND THE FIRST HALF HAS ALWAYS BEEN
+  TRUE** (D43). `store/files.py:home()` defaults to the checkout the code runs from, so a
+  worktree's `inventory/`, `runs/` and `captures/` are its own — usually empty. The ports
+  follow it now: the main tree keeps `:5173` and `:8000`, and a linked worktree derives both
+  from one slot off its path (`app/devPort.ts` and `server/ports.py`, kept in step by
+  `make port-agreement`).
+
+  **What this prevents is data loss, not a busy port.** While the port was the constant 8000
+  in every tree, whichever server won the bind answered every tree's UI — so a branch could
+  drive the owner's real 767-card inventory, or, worse, the MAIN tree's capture screen could
+  be answered by a worktree's server and write real card photographs into a directory that is
+  deleted with the branch.
+
+  `make status` prints this tree's ports and says when it is a worktree; the SessionStart
+  guard prints them before any work starts; `make server` prints them and names the store it
+  is about to serve. **If you are looking at an empty inventory in a worktree, that is
+  correct** — the real one is the main checkout's.
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact**: no `window.storage`, no `facingMode: "environment"`, and
   nothing about a card or the inventory in `localStorage`. Inventory state is server-side

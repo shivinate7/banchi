@@ -114,6 +114,14 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
+        "path": "server/ports.py",
+        "kind": "file",
+        "requires": (),
+        "why": "which ports THIS checkout serves on — imported by ports_and_store() below. "
+               "Imported rather than ast-parsed because the answer is a function of where "
+               "the checkout is, not a literal; stdlib-only, so it cannot need `make venv`",
+    },
+    {
         "path": "scripts/githooks/*",
         "kind": "file",
         "requires": (),
@@ -645,6 +653,46 @@ def hooks() -> List[str]:
     return out
 
 
+def ports_and_store() -> List[str]:
+    """Which ports this checkout serves on, and whose inventory it is serving.
+
+    THE THREE FACTS THAT DECIDE WHETHER YOU ARE ABOUT TO CORRUPT SOMETHING (D43). The store
+    defaults to the checkout the code runs from, so every worktree has its own inventory —
+    and until D43 the capture port was the constant 8000 in all of them, so whichever server
+    won the bind answered every tree's UI. One direction drives the owner's real inventory
+    from a branch; the other writes real capture photographs into a directory that is deleted
+    with the worktree.
+
+    Printed here rather than left derivable because none of it is visible at a glance: the
+    paths differ by one segment in the middle of a long absolute path, and the ports are
+    numbers nobody has memorised. `make status` is what CLAUDE.md tells a cold session to run
+    first, which makes it the right place to say which tree it has landed in.
+    """
+    found = resolve("server/ports.py")
+    if not found:
+        return [field("Ports", "MISSING: server/ports.py")]
+    spec = importlib.util.spec_from_file_location("_pkmnscan_ports", found[0])
+    if spec is None or spec.loader is None:
+        return [field("Ports", "server/ports.py could not be loaded")]
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # a broken derivation is not a reason to kill `make status`
+        return [field("Ports", f"server/ports.py raised: {exc}")]
+
+    linked = module.is_linked_worktree(module.REPO_ROOT)
+    out = [
+        field("Ports", f"capture {module.capture_port()} · dev {module.dev_port()}"),
+    ]
+    if linked:
+        out += [
+            cont(f"THIS IS A WORKTREE — {module.REPO_ROOT.name}"),
+            cont(f"the main checkout serves capture {module.CAPTURE_BASE_PORT} / "
+                 f"dev {module.DEV_BASE_PORT}, over a DIFFERENT store"),
+        ]
+    return out
+
+
 def store() -> List[str]:
     out = []
     for name, absent in (("inventory", "nothing captured yet"), ("runs", "no identify run yet")):
@@ -673,7 +721,7 @@ def render() -> str:
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
-    lines += ["", "REPO"] + repo() + hooks()
+    lines += ["", "REPO"] + repo() + hooks() + ports_and_store()
     lines += ["", "STORE"] + store()
 
     if MISSING:
