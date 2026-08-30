@@ -241,7 +241,7 @@ numbers, counts, ages. `Box 3 · Section 2 · Card 17` is built by
 until 2026-08-29, when D10's amendment deleted that default — and it must not shift width
 between cards, which a mono gives for free rather than by remembering to set `tnum`.
 
-**THAT STRING IS THE RECORD; HOW A SCREEN DRAWS IT IS A VIEW (D41, 2026-08-29).** The owner:
+**That string is the record; HOW A SCREEN DRAWS IT IS A VIEW (D41, 2026-08-29).** The owner:
 *"i didn't ever like the dot theme to separate"*. On `#/inventory` the interpuncts are now
 deleted rather than restyled — the box and section become an 11px muted stack and the card
 number a 44px figure beside them — and `pipeline/join.py` still emits the identical string,

@@ -166,7 +166,10 @@ says the same thing about 7b that a green T6 says about geometry: it is self-con
 
 from __future__ import annotations
 
+import ast
 import base64
+import codecs
+import csv
 import io
 import json
 import hashlib
@@ -176,12 +179,14 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
 
@@ -192,9 +197,22 @@ from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
-from pipeline import games, join, orders, pricehistory, tcgcsv, variant  # noqa: E402
+from pipeline import (  # noqa: E402
+    games,
+    join,
+    orders,
+    pirateship,
+    pricehistory,
+    shipping,
+    tcgcsv,
+    variant,
+)
 from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
+# `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
+# — the resolver computes and stores nothing, this one persists — so it takes an alias
+# rather than shadowing the name half this file's order cases are written against.
+from store import orders as order_store  # noqa: E402
 from store.session import Store  # noqa: E402
 
 NAME = "T7"
@@ -11181,7 +11199,7 @@ def check_drain(checks: Checks) -> None:
 
 
 def check_export_fetch(checks: Checks) -> None:
-    """D62: the Filtered Export fetched instead of downloaded, and every refusal in the way.
+    """D64: the Filtered Export fetched instead of downloaded, and every refusal in the way.
 
     ITS OWN `isolated_home`, this file's own repeated lesson — and its own ENVIRONMENT too,
     which is new. This is the first section that reads `.env`, and one that left
@@ -11200,7 +11218,7 @@ def check_export_fetch(checks: Checks) -> None:
     keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
     file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
     accepts this client when the request carries a real session. That is one live fetch by the
-    owner, and D62 names it as owed rather than implying it has happened.
+    owner, and D64 names it as owed rather than implying it has happened.
     """
     keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT")
     previous = {name: os.environ.get(name) for name in keys}
@@ -11605,7 +11623,7 @@ def check_export_fetch(checks: Checks) -> None:
                 # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
                 #
                 # `capture_server.py`'s CSRF paragraph used to justify itself with "there
-                # are no credentials in this product", and D62 falsified that half: this
+                # are no credentials in this product", and D64 falsified that half: this
                 # route spends the owner's TCGplayer session. The comment is corrected
                 # there; this is the assertion it now leans on. A page in another tab must
                 # not be able to make this server spend that session, and the refusal has
@@ -12114,6 +12132,724 @@ def _riftbound_row(sku: str) -> tcgcsv.Row:
         if row.get(tcgcsv.SKU_COLUMN) == sku:
             return row
     raise AssertionError(f"{RIFTBOUND_EXPORT.name} carries no SKU {sku}")
+
+
+def _seed_market_cache(directory, product_id: int, month: dict, annual: dict) -> None:
+    """Warm `Market`'s on-disk cache so the route below opens no socket.
+
+    THE SLUGS ARE `Market`'s OWN AND ARE WRITTEN HERE BY HAND, which is the one thing in this
+    block that could rot: a rename there makes this seed miss, the route fetches, and
+    `urlopen` — patched to raise — takes the case red rather than letting it quietly reach the
+    network. That is the failure mode wanted. A seed that silently stopped seeding would turn
+    an offline test into an online one, which is the thing `check_price_history` says the
+    harness must never do.
+    """
+    at = time.time()
+    for slug, payload in (
+        ("tcgcsv/categories", {"results": [{"categoryId": 89,
+                                            "name": "Riftbound League of Legends Trading Card Game"}]}),
+        ("tcgcsv/89/groups", {"results": [{"groupId": 24560, "name": "Unleashed"}]}),
+        ("tcgcsv/89/24560/products", json.loads(TCGCSV_PRODUCTS.read_text("utf-8"))),
+        (f"history/{product_id}-month", month),
+        (f"history/{product_id}-annual", annual),
+    ):
+        path = directory / f"{slug}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"fetched_at": at, "payload": payload}), "utf-8")
+
+
+def check_history_route(checks: Checks) -> None:
+    """`GET /pipeline/runs/<name>/history` — D62's route, and the reading it serves.
+
+    OFFLINE, AND NOT MERELY BY HABIT. `check_price_history` above states why the harness may
+    not reach a third party: it runs behind the Stop hook at the end of every turn, so a case
+    that opened a socket would put a stranger's uptime on the path that decides whether work
+    is done and would hammer a free public mirror once per turn. That section can simply pass
+    a fetcher; this one cannot, because the ROUTE constructs its own `Market`. So the cache is
+    seeded from committed fixtures and `urlopen` is patched to raise — belt and braces, and
+    the braces are what makes it a guarantee rather than an intention.
+
+    WHAT THIS COVERS THAT `check_price_history` CANNOT: that the route reads its export row
+    off the RUN rather than from anywhere else, that each refusal carries its own code, and
+    that the payload a screen casts is the shape `app/src/types.ts` declares. The module's own
+    section owns the arithmetic; this owns the seam.
+
+    THE ASCENDING ASSERTION IS THE ONE THAT WOULD FAIL SILENTLY. `infinite-api` sends buckets
+    newest-first and `Series.parse` sorts them; a route that passed the wire order through
+    would draw every rising card falling, with no exception and nothing on screen to see. It
+    is asserted here as well as in the module because this is the payload the screen actually
+    reads — the sort could be correct in `pipeline/` and undone by a serializer.
+    """
+    checks.note("")
+    checks.note("PRICE HISTORY ROUTE — D62's seam, offline against committed fixtures")
+
+    month = json.loads(PRICE_HISTORY.read_text("utf-8"))
+    # THE SAME CAPTURE SERVES BOTH RANGES, and it is the honest thing to do rather than
+    # inventing a weekly fixture: what this section asserts about `annual` is that a SECOND
+    # range is fetched, keyed separately and reported separately. The buckets' width is the
+    # endpoint's business and `check_price_history` owns the arithmetic over them.
+    annual = json.loads(PRICE_HISTORY.read_text("utf-8"))
+
+    with isolated_home() as home:
+        run_dir = runs.create("t7-history")
+        for _ in range(1):
+            capture_server.do_capture(capture_payload(7, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+            snapshot.inventory.cards["7/1"].game = "riftbound"
+        run_dir.write_identifications(
+            {
+                "prompt_fingerprint": "t7-history",
+                "cards": {
+                    "7/1": {
+                        "photo": str(capture_server.photo_path(7, 1)),
+                        "box": 7,
+                        "index": 1,
+                        "set_hint": None,
+                        # THE FINISH CLAIM IS REQUIRED HERE AND THAT IS THE LADDER WORKING.
+                        # Every Vilemaw row in the riftbound export is a Foil — Near Mint
+                        # through Damaged — so a card with no claim reaches five candidates
+                        # and D3 routes it `ambiguous_no_signal` rather than guessing a
+                        # condition. That is the correct outcome and it leaves no SKU to read
+                        # a history for, so this card carries the toggle an operator sets on
+                        # the stack.
+                        "metadata_finish": "foil",
+                        "status": "ok",
+                        "error": None,
+                        "identification": {
+                            "name": "Vilemaw",
+                            "number": "060/219",
+                            "printed_total": "219",
+                            "confidence": "high",
+                            "finish": "foil",
+                        },
+                    }
+                },
+            }
+        )
+        # A REAL JOIN, so `pricing.json` is written by `cli/cmd_join.py` rather than by this
+        # file. The row the route reads is therefore the row that command stores — which is
+        # the whole reason the route needs no export of its own, and the one coupling worth
+        # asserting against the real writer instead of a hand-made fixture.
+        command(checks, "join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT))
+        name = run_dir.directory.name
+
+        _seed_market_cache(pipeline_routes.market_cache_dir(), 684125, month, annual)
+
+        real_urlopen = urllib.request.urlopen
+
+        def no_sockets(*args, **kwargs):  # noqa: ANN001, ANN003
+            raise AssertionError("the history route opened a socket in the harness")
+
+        urllib.request.urlopen = no_sockets
+        try:
+            answer = pipeline_routes.do_pipeline_history(name, "9189317")
+            checks.ok(True, "a warm cache answers without opening a socket")
+
+            checks.equal(answer["sku"], "9189317", "the payload names the SKU asked for")
+            checks.equal(answer["product_id"], 684125, "and the productId the walk resolved")
+            checks.equal(answer["name"], "Vilemaw", "the card's name comes off the run's table")
+            # THE EXPORT'S OWN FIGURE, CARRIED SO THE PANEL CAN DRAW IT BESIDE THE READING.
+            # `snap.market` is what `cli/cmd_join.py` stored out of the export, so asserting
+            # it here is asserting the route reads the RUN rather than re-deriving a price.
+            checks.ok(
+                answer["market"] is not None,
+                "and the export's own market price, for the panel to draw beside it",
+            )
+            checks.equal(answer["never_sold"], False, "a card with sales is not `never_sold`")
+
+            ranges = [r["range"] for r in answer["ranges"]]
+            checks.equal(
+                ranges,
+                list(pricehistory.DEFAULT_RANGES),
+                "both ranges are served, finest first, in DEFAULT_RANGES order",
+            )
+
+            recent = answer["ranges"][0]
+            starts = [p["at"] for p in recent["points"] if p["at"]]
+            checks.equal(
+                starts,
+                sorted(starts),
+                "THE BUCKETS ARE ASCENDING — the wire order is newest-first, and passing it "
+                "through would draw every rising card falling",
+            )
+            # And the fixture really is the other way round on disk, so the assertion above is
+            # about the ROUTE sorting rather than about the endpoint having changed its mind.
+            raw = [b["bucketStartDate"] for b in month["result"][0]["buckets"]]
+            checks.ok(
+                raw != sorted(raw),
+                "and the committed fixture is newest-first on disk, so that was a real sort",
+            )
+
+            checks.ok(recent["vwap"] is not None, "the anchor is present")
+            checks.ok(
+                recent["bound"] is not None
+                and recent["bound"]["width_of_vwap"] is not None
+                and recent["bound"]["width_of_low"] is not None,
+                "and the bound names BOTH denominators, per `Bound`'s own rule",
+            )
+            checks.ok(
+                "window" in recent["momentum"],
+                "momentum carries the window it was measured over",
+            )
+            checks.ok(
+                isinstance(recent["liquidity"], int),
+                "liquidity is the endpoint's own total rather than a recomputation",
+            )
+
+            # MONEY IS A STRING ON THIS WIRE. `cli/cmd_join.py` writes every figure in
+            # `pricing.json` this way for the reason `pipeline/pricing.py` computes in
+            # `Decimal`: a price through a JSON float comes back as binary floating point.
+            checks.ok(
+                all(
+                    isinstance(v, str)
+                    for v in (recent["vwap"], recent["bound"]["low"], recent["bound"]["high"])
+                ),
+                "and every figure crosses the wire as a string, never a float",
+            )
+
+            # A SECOND PRESS IS FREE, which is what makes the panel's toggle affordable.
+            pipeline_routes.do_pipeline_history(name, "9189317")
+            checks.ok(True, "and a second read is served from the same warm cache")
+
+            for sku, code, why in (
+                ("", "sku_required", "no SKU at all"),
+                ("1", "sku_not_in_run", "a SKU this run never matched"),
+            ):
+                try:
+                    pipeline_routes.do_pipeline_history(name, sku)
+                    checks.ok(False, f"the route refuses {why}", "it answered instead")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(refusal.code, code, f"the route refuses {why} as `{code}`")
+
+            try:
+                pipeline_routes.do_pipeline_history("2026-01-01-nope-01", "9189317")
+                checks.ok(False, "the route refuses an unknown run", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(refusal.code, "no_such_run", "the route refuses an unknown run")
+
+            # A `misc` CARD HAS NO CATALOGUE AND THAT IS D22 RATHER THAN A GAP. Checked by
+            # rewriting the stored row's product line, because the refusal is about the CELL —
+            # a line no registered, catalogued game names has no category to look up, and
+            # `misc` carries `product_line: None` by construction.
+            table = run_dir.directory / runs.PRICING
+            stored = json.loads(table.read_text("utf-8"))
+            for entry in stored["skus"]:
+                entry["row"][tcgcsv.PRODUCT_LINE_COLUMN] = "Yu-Gi-Oh!"
+            table.write_text(json.dumps(stored), "utf-8")
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "an uncatalogued product line refuses", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "not_catalogued",
+                    "an uncatalogued product line refuses as `not_catalogued`, before any fetch",
+                )
+
+            # AND A RUN WITH NO PRICING TABLE REFUSES BY NAME. `join` is what writes it, so
+            # this is the run that predates the file or has never been joined — the same
+            # refusal `do_pipeline_pricing` makes, because it is the same missing file.
+            table.unlink()
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "a run with no pricing table refuses", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "pricing_not_written",
+                    "a run with no pricing table refuses as `pricing_not_written`",
+                )
+        finally:
+            urllib.request.urlopen = real_urlopen
+def check_order_ledger(checks: Checks) -> None:
+    """`store/orders.py` — `inventory/orders.json`, the durable half of the order flow.
+
+    ITS OWN `isolated_home`, and this file has now paid for that lesson twice: a block that
+    writes into a store another block counts records and history lines over fails on the
+    fixture rather than on the code. The queue-starvation cases and the listing-release
+    cases both took sibling assertions red before they were moved out, and this one writes
+    cards, a listing, a sale and a mid-box renumber.
+
+    IDEMPOTENCE IS ASSERTED AS BYTE EQUALITY, NEVER AS A COUNT, which is D54's lesson said
+    out loud: that entry's guard read `len(rows) == 0` under the message "the file holds no
+    zero row", and "the file holds 0 rows" is satisfied IDENTICALLY by the emitter correctly
+    omitting a row and by the emitter overwriting two good rows with a bare header. The
+    destruction lived behind it for as long as it existed. A second sync here must therefore
+    leave `orders.json` AND `inventory.json` AND `history.jsonl` byte-for-byte as they were
+    — a row count would go green on a ledger that had thrown its fulfilment away and
+    re-ingested the same order over the top.
+
+    THE CASE THAT MATTERS MOST IS THE RENUMBER. A pull is recorded, a junk capture is then
+    deleted from the middle of the box through the real route, and every higher card slides
+    down one — so the position key the pulled copy used to have now belongs to a DIFFERENT
+    physical card. A ledger keyed by position reports that the wrong card is in the post; a
+    ledger keyed by `capture_id` still names the right one. It is asserted as both halves,
+    because the first alone is satisfied by a ledger that stores nothing at all.
+
+    OBSERVED FAILING FIRST, AND EACH ONE THROUGH THE ASSERTION THAT OWNS IT. Six mutations
+    were run against this block before it was kept:
+
+      fulfilment moved inside the replaced record   7 red, headed by the survival case
+      `changed_at` restamped unconditionally        2 red, headed by the byte comparison
+      the pull's dedup dropped                      1 red, the idempotence case
+      `holder_of` not consulted                     1 red, the two-buyers refusal
+      the nested `__annotations__` filter removed   1 red, the LINE case
+      capture ids stored as POSITION KEYS (D36)     7 red, headed by the renumber
+
+    THREE OF THEM FIRST FAILED BY ABORTING THE BLOCK RATHER THAN BY NAMING ANYTHING, and
+    two assertions were changed for it — the repeat pull is caught as a value and the line
+    case tests the list before it indexes it. A mutation that raises out of the middle of a
+    block leaves the assertion that covers it unrun and everything after it unreported: it
+    is loud, so it is not the silent pass this repo fears most, but it is coverage of the
+    traceback rather than of the defect. A test that cannot fail is not coverage, and a
+    test that fails somewhere other than the case is barely better.
+    """
+    checks.note("")
+    checks.note("ORDER LEDGER — store/orders.py")
+
+    def line(sku, quantity, **extra) -> order_store.OrderLine:
+        return order_store.OrderLine(sku=sku, quantity=quantity, **extra)
+
+    def record(number, *lines, **extra) -> order_store.OrderRecord:
+        fields = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": "2026-08-28T10:00:00.000+00:00",
+            "lines": list(lines),
+        }
+        fields.update(extra)
+        return order_store.OrderRecord(**fields)
+
+    # ------------------------------------------------------ 1. the key, and its refusals
+    checks.equal(
+        order_store.order_key("TCGplayer", "A-1"),
+        order_store.order_key("tcgplayer", " a-1 "),
+        "the key folds case and strips to COMPARE — D20's box-name rule one register over, "
+        "because TCGplayer and tcgplayer are one marketplace to a person",
+    )
+    checks.raises(
+        order_store.BadOrderKey,
+        lambda: order_store.order_key("tcg:player", "A-1"),
+        "a source carrying the separator refuses — the key splits on the FIRST colon, so "
+        "such a source makes two different orders share one record",
+    )
+    checks.equal(
+        order_store.order_key("TCGplayer", "A:1"),
+        "tcgplayer:a:1",
+        "and an order NUMBER may carry one, which is the asymmetry that refusal buys",
+    )
+    for bad in (("", "A-1"), ("TCGplayer", "  ")):
+        checks.raises(
+            order_store.BadOrderKey,
+            lambda pair=bad: order_store.order_key(*pair),
+            f"an empty half refuses ({bad!r}) — every empty-half key is the same key",
+        )
+
+    with isolated_home():
+        # A real store to ingest beside: one identified card carrying the proven SKU, and a
+        # listing record with counts on it, so "ingest writes no card state and no listing
+        # count" is a comparison this block can lose rather than an absence it assumes.
+        for i in range(1, 6):
+            capture_server.do_capture(
+                {"box": 3, "capture_id": f"o{i}", "image": base64.b64encode(
+                    b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")}
+            )
+        with Store().write() as snapshot:
+            for i in range(1, 6):
+                snapshot.inventory.record_identification(
+                    f"3/{i}", name="Moonfall", number="198/219", printed_total="219",
+                    confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{i}"].sku = "9191486"
+            snapshot.inventory.listing("9191486").set(master.PUSHED, 4)
+
+        store = Store()
+        moonfall = record(
+            "A-1",
+            line("9191486", 3, name="Moonfall", number="UNL #198/219",
+                 printing="Foil", condition="Near Mint", rarity="Epic",
+                 unit_price="11.88"),
+        )
+
+        # ------------------------------------------- 2. the first sync, and what it wrote
+        with store.write() as snapshot:
+            report = snapshot.ledger.ingest([moonfall])
+        checks.equal(
+            (report.added, report.changed, report.unchanged, report.wrote_nothing),
+            (1, 0, 0, False),
+            "the first sync reports the order as new",
+        )
+
+        key = order_store.order_key("TCGplayer", "A-1")
+        after = store.read()
+        checks.ok(
+            after.ledger.get(key) is not None
+            and after.ledger.get(key).source == "TCGplayer",
+            "the record round-trips through the session, storing the source VERBATIM "
+            "while the key that found it was folded",
+        )
+        checks.equal(
+            [c.state for c in sorted(after.inventory.cards.values(), key=lambda c: c.index)],
+            [master.IDENTIFIED] * 5,
+            "INGEST WROTE NO CARD STATE — not one of the five moved, which is what makes a "
+            "second press a no-op by construction rather than by a guard",
+        )
+        checks.equal(
+            (after.inventory.listing_for("9191486").pushed,
+             after.inventory.listing_for("9191486").staged,
+             after.inventory.listing_for("9191486").live),
+            (4, 0, 0),
+            "and no listing count — a ledger that bumped one would re-list every order in "
+            "the file on every sync",
+        )
+
+        # --------------------------------------- 3. IDEMPOTENCE, AS BYTES AND NOT A COUNT
+        ledger_bytes = store.ledger_path.read_bytes()
+        inventory_bytes = store.inventory_path.read_bytes()
+        history_bytes = store.history_path.read_bytes()
+
+        with store.write() as snapshot:
+            second = snapshot.ledger.ingest([record(
+                "A-1",
+                line("9191486", 3, name="Moonfall", number="UNL #198/219",
+                     printing="Foil", condition="Near Mint", rarity="Epic",
+                     unit_price="11.88"),
+            )])
+        checks.equal(
+            (second.added, second.changed, second.unchanged, second.wrote_nothing),
+            (0, 0, 1, True),
+            "the SECOND sync of the same order reports it unchanged",
+        )
+        checks.equal(
+            store.ledger_path.read_bytes(),
+            ledger_bytes,
+            "and orders.json is BYTE-IDENTICAL — a row count would go green on a ledger "
+            "that threw its fulfilment away and re-ingested over the top (D54)",
+        )
+        checks.equal(
+            store.inventory_path.read_bytes(),
+            inventory_bytes,
+            "and so is inventory.json, which is the half a count could never see",
+        )
+        checks.equal(
+            store.history_path.read_bytes(),
+            history_bytes,
+            "and history.jsonl — a sync appending a line per order is not the no-op the "
+            "module promises, however small the line is",
+        )
+
+        # ---------------------------------------------- 4. the pull, and its idempotence
+        with store.write() as snapshot:
+            newly = snapshot.ledger.record_pull(key, "9191486", ["o2", "o3"])
+        checks.equal(newly, 2, "a pull records the copies it was handed")
+        # THE REPEAT IS CAUGHT AS A VALUE RATHER THAN AS A TRACEBACK, deliberately. A pull
+        # that has stopped deduping does not return the wrong number, it RAISES — the same
+        # two copies counted twice overshoot the line and trip `OverFulfilled` — and an
+        # exception here would abort this block, leaving the assertion that owns the defect
+        # unrun and everything after it unreported. Turning it into a value is what makes
+        # the named case the one that goes red.
+        try:
+            with store.write() as snapshot:
+                again = snapshot.ledger.record_pull(key, "9191486", ["o2", "o3"])
+        except Exception as exc:  # noqa: BLE001 - reported as the failure it is
+            again = f"raised {type(exc).__name__}"
+        checks.equal(
+            again,
+            0,
+            "and recording the SAME pull again records nothing — idempotent because a "
+            "capture id already on the line is skipped, not because a caller checked",
+        )
+        after = store.read()
+        checks.equal(
+            (after.ledger.fulfilled(key, "9191486"),
+             after.ledger.outstanding(key, "9191486")),
+            (2, 1),
+            "two of the three copies are recorded and one is still owed",
+        )
+
+        # -------------------------------------- 5. A COUNT, AND NOT A LIST OF POSITIONS
+        stored = json.loads(store.ledger_path.read_text("utf-8"))
+        row = stored["fulfilment"][key]["9191486"]
+        checks.equal(
+            sorted(row.keys()),
+            ["at", "copies", "fulfilled"],
+            "the stored row is a COUNT, its capture ids, and a stamp — nothing else",
+        )
+        checks.equal(
+            [c for c in row["copies"] if "/" in str(c)],
+            [],
+            "and not one value is a position key — D36: a stored position names a "
+            "different card the moment a mid-box delete slides the box down one",
+        )
+        checks.ok(
+            isinstance(row["fulfilled"], int),
+            "`fulfilled` is a number rather than a length somebody has to trust",
+        )
+
+        # ------------------------------ 6. THE RENUMBER — capture_id, never position_key
+        #
+        # The real route, not a simulated shift. `renumber_blocked` refuses while the SKU
+        # carries a listing hold, so the pushed count set above is cleared first — D10
+        # ruling 1's own boundary, and clearing it here is what lets the shift happen at
+        # all rather than a convenience.
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.PUSHED, 0)
+
+        pulled_before = {
+            c.capture_id: c.key for c in store.read().inventory.cards.values()
+        }
+        checks.equal(
+            (pulled_before["o2"], pulled_before["o3"]),
+            ("3/2", "3/3"),
+            "the two pulled copies sit at 3/2 and 3/3 before the shift",
+        )
+        body = capture_server.do_remove_card(3, 1, {"capture_id": "o1"})
+        checks.equal(body["shifted"], 4, "the mid-box delete slides four records down one")
+
+        moved = store.read()
+        checks.equal(
+            moved.inventory.card_by_capture_id("o2").key,
+            "3/1",
+            "so both pulled copies moved: the one that WAS 3/2 is now 3/1",
+        )
+        checks.equal(
+            moved.inventory.cards["3/3"].capture_id,
+            "o4",
+            "AND POSITION 3/3 NOW HOLDS A CARD THAT WAS NEVER PULLED — a ledger storing "
+            "['3/2', '3/3'] would name o4 here and send that card to the buyer",
+        )
+        recorded = moved.ledger.recorded(key, "9191486")
+        checks.equal(
+            sorted(recorded.copies),
+            ["o2", "o3"],
+            "the ledger still names the same two physical cards, unmoved by the shift — "
+            "which is the whole reason it keys by capture_id",
+        )
+        checks.ok(
+            "o4" not in recorded.copies,
+            "and does not name the card that inherited a pulled position",
+        )
+        checks.equal(
+            recorded.fulfilled,
+            2,
+            "with the count untouched: `_drop_from_stores` remaps the three position-keyed "
+            "stores at every delete, and this one does not need remapping",
+        )
+
+        # --------------------------------- 7. THE LOAD-BEARING ONE: ingest cannot clobber
+        with store.write() as snapshot:
+            changed = snapshot.ledger.ingest([record(
+                "A-1", line("9191486", 3, name="Moonfall"), status="Shipped"
+            )])
+        checks.equal(
+            (changed.changed, changed.added), (1, 0), "a feed that says something new updates"
+        )
+        survived = store.read()
+        checks.equal(
+            (survived.ledger.fulfilled(key, "9191486"),
+             sorted(survived.ledger.recorded(key, "9191486").copies)),
+            (2, ["o2", "o3"]),
+            "AND THE FULFILMENT SURVIVES IT. Ingest replaces the feed's half by key, so a "
+            "count living in that record dies on the next sync — and the consequence is "
+            "the picker being sent to a slot whose card is already in the post",
+        )
+        checks.equal(
+            survived.ledger.get(key).status,
+            "Shipped",
+            "while the feed's own word is carried verbatim and unvalidated",
+        )
+        checks.ok(
+            survived.ledger.get(key).first_seen == after.ledger.get(key).first_seen,
+            "`first_seen` is the ONE field ingest preserves, exactly as Queue.upsert does",
+        )
+
+        # ------------------------------------------------------------- 8. the refusals
+        checks.raises(
+            order_store.UnknownOrder,
+            lambda: store.read().ledger.record_pull("tcgplayer:nope", "9191486", ["o3"]),
+            "a pull against an order the ledger has never ingested refuses — inventing it "
+            "would record a shipment for a purchase nobody can produce",
+        )
+        checks.raises(
+            order_store.UnknownOrderLine,
+            lambda: store.read().ledger.record_pull(key, "8608859", ["o3"]),
+            "and a pull against a SKU the buyer did not order",
+        )
+        checks.raises(
+            order_store.CopyNotIdentifiable,
+            lambda: store.read().ledger.record_pull(key, "9191486", [None]),
+            "a copy with no capture_id refuses rather than being counted blind — without "
+            "an identity the pull cannot be made idempotent, and a silent double-pull is "
+            "the worst outcome this feature has",
+        )
+        checks.raises(
+            order_store.OverFulfilled,
+            lambda: store.read().ledger.record_pull(key, "9191486", ["o4", "o5"]),
+            "and recording more copies than the buyer ordered refuses rather than clamping "
+            "— you cannot ship the fourth, so there is nothing to be gained by hiding it",
+        )
+
+        # THE ONE THIS MODULE EXISTS FOR: one physical card against two orders.
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("B-2", line("9191486", 2),
+                                           placed_at="2026-08-29T10:00:00.000+00:00")])
+        other = order_store.order_key("TCGplayer", "B-2")
+        caught = checks.raises(
+            order_store.CopyAlreadyPulled,
+            lambda: store.read().ledger.record_pull(other, "9191486", ["o2"]),
+            "a copy already recorded against ANOTHER order refuses — this is selling the "
+            "same physical card twice, said out loud rather than counted twice",
+        )
+        if caught is not None:
+            checks.ok(
+                key in str(caught) and "o2" in str(caught),
+                "and the refusal names the order and the copy holding it, so the operator "
+                "can go and look rather than guess",
+            )
+
+        checks.raises(
+            order_store.DuplicateOrderLine,
+            lambda: store.read().ledger.ingest([
+                record("C-3", line("9191486", 1), line("9191486", 2))
+            ]),
+            "an order carrying two lines for one SKU refuses — fulfilment is keyed by SKU, "
+            "so a count against it would have two owners and no way to say which",
+        )
+
+        # ----------------------------------------------------- 9. the reversal, and D26
+        with store.write() as snapshot:
+            gone = snapshot.ledger.forget_pull(key, "9191486", ["o3", "never-pulled"])
+        checks.equal(gone, 1, "the reversal removes what is there and skips what is not")
+        reversed_ = store.read()
+        checks.equal(
+            (reversed_.ledger.fulfilled(key, "9191486"),
+             reversed_.ledger.recorded(key, "9191486").copies),
+            (1, ["o2"]),
+            "moving the count and the ids TOGETHER — nothing else in the module writes "
+            "either, so they cannot come apart anywhere but there",
+        )
+        checks.equal(
+            store.read().ledger.holder_of("o3"),
+            None,
+            "and the released copy is free for another order, which is what makes the "
+            "reversal a reversal rather than a decrement",
+        )
+
+        # ------------------------- 10. NO ORDER STATE REACHES `master.STATES` (D26's trap)
+        #
+        # The failure this is aimed at is not abstract: `_state_before_sale` scans
+        # history.jsonl for the last event whose name is in `master.STATES`, so a ledger
+        # that logged an order state would make a sale's reversal restore a card to it.
+        checks.equal(
+            sorted(master.STATES),
+            sorted([master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED]),
+            "the state tuple is still the four — the ledger adds none",
+        )
+        capture_server.do_mark_sold(3, 2, {})
+        sold_at = store.read()
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("D-4", line("9191486", 1),
+                                           placed_at="2026-08-30T10:00:00.000+00:00")])
+        checks.equal(
+            capture_server._state_before_sale(Store().history(), "3/2"),
+            master.IDENTIFIED,
+            "and a sale's reversal still reads the right state back out of the log with "
+            "orders ingested either side of it — D26's removed/retired collision, refused "
+            "by this module holding no states at all",
+        )
+        checks.ok(
+            sold_at.inventory.cards["3/2"].state == master.SOLD,
+            "(the sale itself landed, so the assertion above is about a real reversal)",
+        )
+
+        # ------------------------------------------------- 11. unfulfilled, and its order
+        owing = [r.number for r in store.read().ledger.unfulfilled()]
+        checks.equal(
+            owing,
+            ["A-1", "B-2", "D-4"],
+            "orders still owing copies come back oldest-placed first — the same sequence "
+            "pipeline/orders.py:order_sequence serves them in, so a screen listing what is "
+            "outstanding and the resolver deciding who gets the last copy cannot disagree",
+        )
+
+    # ------------------------------- 12. parse drops what the dataclasses do not declare
+    #
+    # `store/master.py:parse` filters on `__annotations__`, and a field written but not
+    # declared is served, persisted, and SILENTLY DROPPED on the next reload — live-looking
+    # right up until the process restarts. Asserted at all THREE levels, because filtering
+    # only the record lets exactly that through one level down.
+    payload = {
+        "version": 1,
+        "orders": {
+            "tcgplayer:z-9": {
+                "source": "TCGplayer", "number": "Z-9", "invented": "gone",
+                "lines": [{"sku": "1", "quantity": 2, "also_invented": "gone"}],
+            },
+            "_note": {"source": "x", "number": "y"},
+        },
+        "fulfilment": {
+            "tcgplayer:z-9": {"1": {"fulfilled": 1, "copies": ["z"], "third": "gone"}}
+        },
+    }
+    parsed = order_store.Ledger.parse(payload)
+    got = parsed.get("tcgplayer:z-9")
+    checks.ok(
+        got is not None and not hasattr(got, "invented"),
+        "an undeclared field on the RECORD is dropped rather than carried",
+    )
+    checks.ok(
+        # `got.lines` rather than `got.lines[0]` first: without the filter the line's
+        # constructor raises TypeError and `parse` skips it, so the list is EMPTY — and an
+        # IndexError here would abort the block instead of naming the defect.
+        got is not None and got.lines and not hasattr(got.lines[0], "also_invented"),
+        "and on a LINE, which filtering only the record would have let through",
+    )
+    checks.ok(
+        not hasattr(parsed.recorded("tcgplayer:z-9", "1"), "third"),
+        "and on a PROGRESS row, which is the half holding the physical claim",
+    )
+    checks.equal(
+        parsed.get("_note"), None, "and an underscore key is skipped, as in Queue.parse"
+    )
+    checks.equal(
+        order_store.Ledger.parse(parsed.to_payload()).to_payload(),
+        parsed.to_payload(),
+        "and the round trip is exact, so to_payload and parse are each other's inverse",
+    )
+    checks.equal(
+        order_store.Ledger.parse({"orders": {"bad": {"number": "no source"}}}).orders,
+        {},
+        "a record that cannot be constructed is SKIPPED rather than raising — one "
+        "malformed order must not take every other order's fulfilment off the screen",
+    )
+
+    # ------------------------------------ 13. the lock is never held across I/O, checked
+    #
+    # `files.exclusive` polls at 50ms and gives up at 30s while the feeder captures a card
+    # every 623ms, so a fetch down here would stall real capture. It is a property of the
+    # module's imports rather than of its behaviour, so it is asserted that way — a
+    # behavioural test would have to hang to fail.
+    tree = ast.parse(Path(order_store.__file__).read_text("utf-8"))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    checks.equal(
+        sorted(imported & {"urllib", "http", "socket", "requests", "subprocess", "pathlib"}),
+        [],
+        "store/orders.py imports nothing that can reach the network or the filesystem — "
+        "the ledger is a data structure and session.py does its I/O, inside the lock it "
+        "already holds",
+    )
+    checks.equal(
+        sorted(n for n in imported if n in {"store", "pipeline"}),
+        [],
+        "and nothing from `pipeline`, which is why OrderLine is declared twice: the edge "
+        "runs the other way and a cycle is what reusing the resolver's would cost",
+    )
 
 
 def check_price_history(checks: Checks) -> None:
@@ -12669,6 +13405,364 @@ def check_price_history(checks: Checks) -> None:
     )
 
 
+# ------------------------------------------------------- the shipping lane (D61)
+
+# A relative literal, which is what `scripts/docs-audit.py`'s `tested_by reach` row can
+# actually see — see the note above the price-history fixtures for why a path assembled
+# from segments is invisible to it.
+SHIPPING_FIXTURE = "fixtures/orders-shipping.csv"
+SHIPPING_EXPORT = Path(__file__).resolve().parents[2] / SHIPPING_FIXTURE
+
+
+def _shipment(**overrides) -> shipping.Shipment:
+    """One synthetic export row. Every column present, so the reader's contract holds.
+
+    CONSTRUCTED, AND THE BLOCK BELOW SAYS SO EVERY TIME IT USES ONE. The fixture is 331
+    real orders and carries the SHAPE — five exact ratios, the empty band, 97 weightless
+    rows — and it is what the lane counts are asserted against. What it cannot carry is a
+    row that has never occurred, and `sub_single_weight` is exactly that: `docs/specs/
+    shipping-export.md` names it as a real mechanism with no example. A case for it has to
+    be built, and building one is not evidence that it happens.
+    """
+    cells = {column: "" for column in shipping.CANONICAL_HEADER}
+    cells.update(
+        {
+            "Order #": "TEST-0001",
+            "FirstName": "Buyer001",
+            "LastName": "Placeholder",
+            "Address1": "101 Example St",
+            "City": "Springfield",
+            "State": "WV",
+            "PostalCode": "17919",
+            "Country": "US",
+            "Product Weight": "0.70",
+            "Item Count": "10",
+            "Value Of Products": "10.00",
+        }
+    )
+    cells.update(overrides)
+    return shipping.Shipment(cells=cells)
+
+
+def check_shipping_lane(checks: Checks) -> None:
+    """`pipeline/shipping.py` and `pipeline/pirateship.py` — the router and the emitter.
+
+    THREE LANES, NOT A $50 LINE, and the middle lane is why this is a router: a $12 sealed
+    booster box may not go in a stamped envelope and a $600 single may not go untracked, so
+    a rule reading only the money and a rule reading only the contents are each wrong about
+    one real order.
+
+    THE ASSERTIONS THAT MATTER MOST ARE THE ONES ABOUT ORDER AND ABOUT ABSENCE, because
+    both are satisfiable by a plausible wrong build:
+
+      THE SEQUENCE. Asking the value question before the weight question is not a style
+      choice — 58 of the fixture's 97 weightless orders are at or over $50 and are answered
+      with certainty by a rule that needs no weight. A router that abstained first would
+      still produce three lanes, still count correctly on every weight-bearing row, and
+      still look right; it would abstain on 97 orders instead of 39, one of which is the
+      $1750 order `docs/specs/shipping-export.md` names as its own worst case. So the
+      $1750 order is asserted BY NAME.
+
+      THE WEIGHT IS NEVER DERIVED. `Package Weight` comes out blank even though the
+      shipment in hand carries a `Product Weight`, and that emptiness is asserted. It is
+      the single most likely thing for a later session to "fix", and it is wrong in the
+      expensive direction: the catalog constant counts the cardboard and not the mailer, so
+      it buys postage for less than the parcel weighs and the bill arrives at the far end.
+
+      INSURANCE IS REFUSED. D49's rule in another lane. A row carrying an insurance column
+      raises rather than being dropped, because dropping it silently is an operator who
+      believes they asked for insurance and did not.
+
+    WHAT THIS BLOCK DOES NOT COVER, named so a green harness is not misread: whether Pirate
+    Ship's importer accepts these headers. Nobody has fed it this file. Their wizard maps
+    column names on their side of a seam no committed fixture can hold — the same standing
+    as T6's synthetic composites, and the reason `Name` is PRE-JOINED here rather than left
+    to their mapper to work out from two of ours.
+    """
+    checks.note("")
+    checks.note("SHIPPING LANE — the router over a real Export Shipping, and the emitter")
+
+    with isolated_home() as home:
+        export = shipping.read_shipping(SHIPPING_EXPORT)
+
+        # ---------------------------------------------------------------- the reader
+        checks.equal(len(export), 331, "the committed Export Shipping reads 331 orders")
+        checks.equal(
+            export.header,
+            shipping.CANONICAL_HEADER,
+            "and its header is the documented 17 columns, in order",
+        )
+        checks.raises(
+            shipping.MalformedShipping,
+            lambda: shipping.parse(b"Order #,FirstName\r\n"),
+            "a header that is not that one refuses, rather than reading every order as "
+            "unjudgeable — 331 silent abstentions look like a quiet afternoon",
+        )
+        checks.raises(
+            shipping.MalformedShipping,
+            lambda: shipping.parse(
+                b"\xef\xbb\xbf" + ",".join(shipping.CANONICAL_HEADER).encode() + b"\n"
+            ),
+            "and a BOM refuses; the real export has none",
+        )
+
+        # ----------------------------------------------------------------- the lanes
+        routings = shipping.route_all(export.shipments)
+        checks.equal(
+            shipping.lane_counts(routings),
+            {"envelope": 166, "parcel": 126, "unjudged": 39},
+            "331 real orders land 166 envelope / 126 parcel / 39 unjudged",
+        )
+        checks.equal(
+            shipping.reason_counts(routings),
+            {
+                "value_at_threshold": 112,
+                "non_card_signal": 14,
+                "cards_only": 166,
+                "no_weight_data": 39,
+                "no_value_data": 0,
+                "sub_single_weight": 0,
+            },
+            "and every lane carries its grounds — two reasons reach `parcel`, and one of "
+            "them is a fact while the other is an 18x inference",
+        )
+
+        # THE SEQUENCE, ASSERTED AS THE ARITHMETIC RATHER THAN AS A NUMBER. 97 rows report
+        # no weight and only 39 survive to abstain, which is the value rule doing its work
+        # ahead of the proxy. Pinning 39 alone would go green on a build that abstained
+        # first and happened to be re-fitted; this cannot.
+        weightless = [s for s in export.shipments if s.weight is None]
+        rescued = [r for s, r in zip(export.shipments, routings) if s.weight is None and r.judged]
+        checks.equal(len(weightless), 97, "97 of the 331 report no weight at all")
+        checks.equal(
+            len(rescued),
+            58,
+            "and 58 of those 97 are still answered — with certainty, by a rule that never "
+            "needed a weight. Abstention is 39 of 331 (11.8%), not 97 (29%)",
+        )
+        checks.ok(
+            all(r.reason == shipping.VALUE_AT_THRESHOLD for r in rescued),
+            "every one of the 58 is answered by the value, which is the only fact a "
+            "weightless row carries",
+        )
+
+        # THE SPEC'S OWN WORST CASE, BY NAME. `docs/specs/shipping-export.md`: "It abstains
+        # on 29% of orders, and one of them is a $1750 order." It does not abstain on that
+        # one, and this is the assertion that says so.
+        big = next(r for r in routings if r.order == "A2FFC195-0000F4-006AC")
+        checks.equal(
+            (big.lane, big.reason, big.certain, str(big.value)),
+            ("parcel", "value_at_threshold", True, "1750.00"),
+            "the $1750 weightless order the spec names as unjudgeable is judged — tracked, "
+            "with certainty, without consulting the proxy",
+        )
+
+        # THE BOUNDARY. TCGplayer mandates tracking above $49.99, so exactly 50.00 is
+        # tracked. The fixture holds exactly one such row, which is why it is worth pinning.
+        fifty = [r for r in routings if r.value == Decimal("50.00")]
+        checks.equal(len(fifty), 1, "the fixture holds exactly one order at exactly $50.00")
+        checks.equal(
+            (fifty[0].lane, fifty[0].reason),
+            ("parcel", "value_at_threshold"),
+            "and $50.00 is ON the tracked side — the mandate is above $49.99",
+        )
+        checks.equal(
+            shipping.route(_shipment(**{"Value Of Products": "49.99"})).lane,
+            "envelope",
+            "a constructed $49.99 order of pure singles is not — the two sit either side "
+            "of one comparison",
+        )
+
+        # ------------------------------------------------- abstention is a third answer
+        unjudged = [r for r in routings if not r.judged]
+        checks.equal(len(unjudged), 39, "39 orders cannot be placed by either signal")
+        parcel_orders = {routing.order for _, routing in shipping.parcel_lane(export)}
+        checks.ok(
+            not (parcel_orders & {r.order for r in unjudged}),
+            "and not one of them is swept into the Pirate Ship lane. Sweeping them in is a "
+            "postage charge the operator did not choose, which is the objection insurance "
+            "gets one module over",
+        )
+        checks.equal(
+            len(parcel_orders), 126,
+            "the emitter's input is the 126 the router placed there, and nothing else",
+        )
+
+        # -------------------------------------------- exact arithmetic, never a float
+        # `docs/specs/shipping-export.md` records that a float pass "reported a phantom
+        # sub-0.07 row" on a distribution whose true minimum is exactly 0.07 — and sub-0.07
+        # is the one band this router treats as impossible, so a float would manufacture
+        # the outcome. 115/86 is the fixture's non-terminating ratio and is the row that
+        # cannot survive a float round trip intact.
+        ratios = {s.weight_per_item for s in export.shipments if s.weight_per_item is not None}
+        checks.ok(
+            Fraction(115, 86) in ratios,
+            "the fixture's non-terminating ratio parses to exactly 115/86",
+        )
+        checks.ok(
+            all(r >= shipping.SINGLES_WEIGHT for r in ratios),
+            "and no observed ratio is below the singles constant — the floor the spec "
+            "confirmed with rational arithmetic after floats reported a phantom row",
+        )
+
+        # THE FALSE-NEGATIVE PATH THE SPEC NAMES, WHICH THE FIXTURE CANNOT SHOW. One card
+        # plus one weightless non-card reads 0.035 oz/item — BELOW the singles constant, so
+        # a router comparing only against the 0.30 cut calls it `cards_only` and puts a
+        # playmat in a stamped envelope, silently. CONSTRUCTED, because no such row occurs.
+        sub = shipping.route(_shipment(**{"Product Weight": "0.07", "Item Count": "2"}))
+        checks.equal(
+            (sub.lane, sub.reason),
+            ("unjudged", "sub_single_weight"),
+            "a ratio below the singles constant abstains rather than reading as safer than "
+            "pure singles — no combination of catalog weights can produce it, so the proxy "
+            "does not apply and this router has nothing to say",
+        )
+        checks.equal(
+            shipping.route(_shipment(**{"Product Weight": "0.00"})).reason,
+            "no_weight_data",
+            "and a zero weight is absent data rather than a light order — a different "
+            "abstention with a different remedy",
+        )
+        # THIS CASE FOUND A REAL DEFECT AND IS WHY IT IS PINNED ON THE REASON RATHER THAN
+        # ON THE LANE. The guard was a COMMENT in `route` before it was a line of code, and
+        # a valueless order of pure singles fell through to `cards_only` — a $600 single
+        # going out untracked in a stamped envelope. CONSTRUCTED: `Value Of Products` is
+        # present on all 331 fixture rows, so nothing observed reaches it.
+        valueless = shipping.route(_shipment(**{"Value Of Products": ""}))
+        checks.equal(
+            (valueless.lane, valueless.reason),
+            ("unjudged", "no_value_data"),
+            "an order whose value nobody knows is exactly the one not to make a postage "
+            "decision about — and the proxy may not rescue it, because a cards-only ratio "
+            "is the shape an expensive single takes",
+        )
+
+        # -------------------------------------------------------------- the emitter
+        # CHOSEN FOR ITS WEIGHT, NOT TAKEN FIRST, and the first draft of this block took
+        # the first row and failed: 58 of the 126 in this lane are `value_at_threshold` and
+        # carry no weight at all, so the negative below would have been asserting that a
+        # blank column stayed blank. The order that makes it mean something is one the
+        # router reached THROUGH the weight — those are the ones whose `Product Weight` is
+        # most tempting to carry across.
+        shipment, routing = next(
+            (s, r) for s, r in shipping.parcel_lane(export)
+            if r.reason == shipping.NON_CARD_SIGNAL
+        )
+        parcel = shipping.to_parcel(shipment, stamps=("Box 3 · Card 31",))
+        data = pirateship.render([parcel])
+        rows = list(csv.DictReader(io.StringIO(data.decode("utf-8"), newline="")))
+
+        checks.equal(
+            tuple(rows[0]), pirateship.COLUMNS,
+            "every column is written, blanks included — a column absent from the file is "
+            "one Pirate Ship's wizard cannot map and cannot show the operator",
+        )
+        checks.equal(
+            rows[0]["Name"],
+            f"{shipment.cells['FirstName']} {shipment.cells['LastName']}",
+            "`Name` is PRE-JOINED from the two columns TCGplayer holds it in, because we "
+            "own the columns and their mapper does not have to guess",
+        )
+        checks.equal(
+            pirateship.Parcel.from_parts(
+                "Buyer001", "", address="", city="", state="", zipcode="", country="",
+                order_id="x",
+            ).name,
+            "Buyer001",
+            "and a record carrying only one half joins to one word, not to a word and a "
+            "trailing space that survives onto the printed label",
+        )
+        checks.equal(
+            rows[0]["Order ID"], shipment.order,
+            "the TCGplayer order number rides along, which is what closes the loop — "
+            "`Tracking #` and `Carrier` are empty on all 331 rows of the export",
+        )
+        checks.equal(
+            rows[0]["Rubber Stamp 1"], "Box 3 · Card 31",
+            "and the physical location prints on the label, so the label IS the pick "
+            "instruction",
+        )
+
+        # THE NEGATIVE THIS BLOCK EXISTS FOR. The shipment in hand carries a real
+        # `Product Weight` and the emitted cell is still blank.
+        checks.ok(
+            shipment.weight is not None and routing.reason == shipping.NON_CARD_SIGNAL,
+            "this order reports a Product Weight AND was routed by it, so the temptation to "
+            "carry it across is at its strongest",
+        )
+        checks.equal(
+            rows[0]["Package Weight"], "",
+            "and `Package Weight` is STILL BLANK. The catalog constant counts the cardboard "
+            "and not the mailer, so writing it buys postage for less than the parcel "
+            "weighs — under-paid at the far end, weeks later. Nothing is defaulted on the "
+            "owner's behalf (D49)",
+        )
+
+        # ------------------------------------------------------------ what is refused
+        # ASSERTED ON THE GUARD RATHER THAN THROUGH `render`, and that is the point of the
+        # guard existing separately. `to_row` builds only `COLUMNS`, so no `Parcel` can
+        # carry an insurance cell — the case this closes is a row that reached the writer by
+        # some OTHER path, which is `tcgcsv.check_only_writable_changed`'s shape and the
+        # same argument: the rule that matters is the one the bytes have to pass.
+        checks.raises(
+            pirateship.InsuranceRefused,
+            lambda: pirateship.check_no_insurance({"Insured Value": "50.00"}),
+            "an insurance column is REFUSED, not dropped — the owner chooses insurance per "
+            "order inside Pirate Ship, looking at the card",
+        )
+        checks.raises(
+            pirateship.InsuranceRefused,
+            lambda: pirateship.check_no_insurance({" insured  VALUE ": "50.00"}),
+            "and the match folds case and whitespace, so a differently-spelled column "
+            "cannot slip past the one guard that stops it",
+        )
+        checks.raises(
+            pirateship.MalformedParcel,
+            lambda: pirateship.Parcel(
+                name="x", address="1 St", city="Springfield", state="WV", zipcode="17919",
+                country="US", order_id="TEST-0001", stamps=("a", "b", "c", "d"),
+            ),
+            "a fourth rubber stamp refuses — the label has three corners, which is knowable "
+            "from the format, unlike a stamp's length, which nobody here has measured",
+        )
+
+        # ------------------------------------------------------------- the byte format
+        # T2's rules, and the one case a naive writer corrupts silently: a street address
+        # carries a comma by construction, and the symptom is a package at another building.
+        comma = pirateship.render([pirateship.Parcel(
+            name='O\'Nare, Billy', address="Apt 4, Building C", city="Springfield",
+            state="WV", zipcode="17919", country="US", order_id="TEST-0001",
+        )])
+        checks.equal(
+            list(csv.DictReader(io.StringIO(comma.decode(), newline="")))[0]["Address"],
+            "Apt 4, Building C",
+            "an address with a comma round-trips — real CSV library only (v1 bug 2)",
+        )
+        checks.ok(
+            comma.endswith(b"\r\n") and comma.count(b"\n") == comma.count(b"\r\n"),
+            "CRLF throughout including the final record, with no bare LF — the IMPORT "
+            "shape (T2), which is not the LF the export it was read from uses",
+        )
+        checks.ok(
+            not comma.startswith(b'"') and not comma.startswith(codecs.BOM_UTF8),
+            "unquoted header, no BOM",
+        )
+        checks.ok(
+            comma.split(b"\r\n")[1].startswith(b'"') and comma.split(b"\r\n")[1].endswith(b'"'),
+            "and every data field quoted, empties included",
+        )
+
+        # `write_csv` is the only thing here that touches a disk, and it writes exactly
+        # where it is told — buyer PII passes through and is not persisted, so nothing in
+        # either module reaches the store.
+        out = home / "pirateship-import.csv"
+        written = pirateship.write_csv(out, [parcel])
+        checks.equal(
+            out.read_bytes(), written,
+            "`write_csv` writes exactly the bytes it returns, and only where it is told",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -12715,9 +13809,12 @@ def run() -> Result:
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_order_resolver(checks)
+    check_order_ledger(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)
+    check_history_route(checks)
+    check_shipping_lane(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

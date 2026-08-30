@@ -280,7 +280,7 @@ COMPONENTS = [
                                    "`realign` (D36), because that file stores position keys and a "
                                    "mid-box delete moves them — reading it raw is the defect that "
                                    "wrote 47 box-2 queue entries one position off.",
-                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D62"], "tested_by": ["T7"]},
+                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D64"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
         },
     },
@@ -381,6 +381,69 @@ COMPONENTS = [
                                   "IT IS A LIBRARY AND NOT A FEATURE — no route, no client function "
                                   "and no screen reaches it, which by CLAUDE.md's own rule means it "
                                   "is not landed and must not be reported as such."},
+            # THE ONE-WAY EDGE INSIDE THIS PACKAGE: shipping.py imports pirateship.py and
+            # never the reverse, so the Pirate Ship format knows nothing about TCGplayer and
+            # can be fed by the Bridge without being touched. Same direction store/ and
+            # pipeline/ have, for the same reason.
+            "shipping.py": {"does": "the TCGplayer Export Shipping reader, and the router that "
+                                    "puts one order in one of THREE lanes: a tcgtracking envelope "
+                                    "(<$50, all cards), a Pirate Ship parcel (contains a non-card, "
+                                    "OR >=$50 because TCGplayer mandates tracking above $49.99), or "
+                                    "UNJUDGED. Abstention is a third answer and never a default to "
+                                    "a lane — sweeping an unplaceable order into the parcel lane is "
+                                    "postage the operator did not choose. The value question is "
+                                    "asked BEFORE the weight proxy, which is not a style choice: 58 "
+                                    "of the fixture's 97 weightless orders are >=$50 and are answered "
+                                    "with certainty by a rule that needs no weight, so abstention "
+                                    "falls from 97 orders (29%) to 39 (11.8%) — including the $1750 "
+                                    "order docs/specs/shipping-export.md names as its own worst case.",
+                            # D24 for the pooled/located split the non-card signal proxies at
+                            # postage scale; D19 for the rule that a cut is derived from where
+                            # a real distribution is empty rather than picked.
+                            "governed_by": ["D9", "D19", "D24", "D49", "D61"],
+                            "tested_by": ["T7"],
+                            "note": "EXACT RATIONAL ARITHMETIC, NEVER FLOATS, and that is a defect "
+                                    "already paid for: docs/specs/shipping-export.md records a float "
+                                    "pass reporting a phantom sub-0.07 row on a distribution whose "
+                                    "true minimum is exactly 0.07 — and sub-0.07 is the one band "
+                                    "this router treats as impossible, so a float manufactures the "
+                                    "outcome. THE WEIGHT IS A PROXY AND NOT A PACKAGE: it is a summed "
+                                    "per-product CATALOG CONSTANT, so it says `heavier than cards "
+                                    "alone` and may never say `contains a playmat`. A PRE-LINE-DATA "
+                                    "STOPGAP — the export carries no line items at all, and the cut "
+                                    "is to be RETIRED rather than re-fitted the day a feed supplies "
+                                    "them, because pipeline/orders.py already answers this properly "
+                                    "from line kinds. IT IS A LIBRARY AND NOT A FEATURE: no route, no "
+                                    "client function and no screen reaches it, which by CLAUDE.md's "
+                                    "own rule means it is not landed and must not be reported as such."},
+            "pirateship.py": {"does": "the Pirate Ship import spreadsheet — the one supported entry "
+                                      "point, because Pirate Ship has NO API. A closed column set, "
+                                      "T2's byte format, `Name` PRE-JOINED from the two columns "
+                                      "TCGplayer holds it in rather than left to their auto-mapper, "
+                                      "the TCGplayer order number carried through as `Order ID` so "
+                                      "the tracking number it mints can be matched back, and up to "
+                                      "three Rubber Stamps that print on the label corners — so a "
+                                      "label reading `Box 3 · Card 31` IS the pick instruction.",
+                              # D49 is the rule all three refusals below are instances of; D58
+                              # is why no label is composed here.
+                              "governed_by": ["D49", "D58", "D61"],
+                              "tested_by": ["T7"],
+                              "note": "THREE THINGS IT MAY NEVER DO, and all three are D49's "
+                                      "`nothing here is ever defaulted on your behalf` in another "
+                                      "lane. IT NEVER SELECTS INSURANCE — an insurance-shaped column "
+                                      "RAISES rather than being dropped, because dropping it "
+                                      "silently is an operator who believes they asked for insurance "
+                                      "and did not. IT NEVER BUYS A LABEL — no API exists and it "
+                                      "would be spending. IT NEVER DERIVES A WEIGHT, which is the "
+                                      "one most likely to be `fixed` later and is wrong in the "
+                                      "EXPENSIVE direction: TCGplayer's Product Weight counts the "
+                                      "cardboard and not the mailer, so it is a LOWER BOUND and "
+                                      "writing it buys postage for less than the parcel weighs. It "
+                                      "renders no position label either — pipeline/join.py:Position "
+                                      "is the only label formula in this repo (D58) and a stamp is "
+                                      "an opaque string somebody else composed. Buyer PII passes "
+                                      "through and is NOT persisted: `render` returns bytes so a "
+                                      "caller need never put a name on a disk."},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
                                      "and as of D49 the AUTHORITY for rule and basis rather than "
                                      "a copy of them. `overrides` holds a price OR a `Withheld`: "
@@ -424,10 +487,12 @@ COMPONENTS = [
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49"],
                                 "tested_by": ["T7"],
-                                "note": "RECORDED RATHER THAN BUILT: a library with T7 "
-                                        "coverage that nothing calls, no route serves and no "
-                                        "screen draws, which CLAUDE.md says must be reported in "
-                                        "those words. THE RANGES OVERLAP — `annual` INCLUDES "
+                                "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
+                                        "RECORDED RATHER THAN BUILT for one day, and the whole "
+                                        "chain now exists: GET /pipeline/runs/<name>/history, "
+                                        "getPriceHistory in app/src/server.ts, and a T key and a "
+                                        "panel on #/pricing beside the hold that needed it. "
+                                        "THE RANGES OVERLAP — `annual` INCLUDES "
                                         "`month`'s days at a coarser width, so concatenating them "
                                         "double-counts the recent window; nothing here merges two "
                                         "series and the wider range is also the staler one. "
@@ -484,14 +549,14 @@ COMPONENTS = [
     {
         "path": "store/",
         "status": "built",
-        "does": "the master store: inventory, cache, standing queues",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
+        "does": "the master store: inventory, cache, standing queues, order ledger",
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
                 "through a route, which is what earned queues.py its tested_by. cache.py is "
                 "still only read through a session there, with nothing asserting its own "
-                "behaviour, so it carries no tested_by: an unenforced claim is the defect "
+                "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
@@ -501,9 +566,39 @@ COMPONENTS = [
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
+            # THE DURABLE HALF OF THE ORDER FLOW, and the split from pipeline/orders.py is
+            # the design rather than a packaging choice: the resolver's answer is true of
+            # one Inventory snapshot and of no other (D36), so it is recomputed on every
+            # read, while an order outlives every snapshot. Imports nothing from pipeline/,
+            # which is why OrderLine is declared in both — the edge runs the other way.
+            "orders.py": {"does": "inventory/orders.json — one record per {source}:{order_number}, "
+                                  "upserted. TWO TOP-LEVEL MAPS and the separation IS the guard: "
+                                  "`orders` is the feed's and is replaced wholesale on every sync, "
+                                  "`fulfilment` is ours and `ingest` cannot name it — a count "
+                                  "living in the replaced record dies on the next sync, and the "
+                                  "consequence is the picker sent to a slot whose card is already "
+                                  "in the post. Ingest writes NO card state and NO listing count, "
+                                  "so a second press is a no-op BY CONSTRUCTION rather than by a "
+                                  "guard, and an unchanged re-ingest rewrites no bytes because "
+                                  "`changed_at` is stamped only where the feed's content moved. "
+                                  "Fulfilment is a COUNT, never a list of positions (D36); where "
+                                  "an identity is unavoidable it is a `capture_id`, which survives "
+                                  "a renumber by construction. No order state reaches "
+                                  "`master.STATES` and nothing here logs to history.jsonl — both "
+                                  "would corrupt the sale and retirement reversals that scan that "
+                                  "log filtering on that tuple (D26). No I/O and no lock: "
+                                  "session.py writes it, fifth and last of five files whose set is "
+                                  "not atomic.",
+                          "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
+                                          "D29", "D36", "D53", "D63"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
-            "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
+            # D53 and D63 because the header now prices what this module does NOT promise:
+            # the five files it replaces are each atomic and the SET of them is not, which
+            # is why D53's supervisor drains before it restarts and why the ledger is last.
+            "session.py": {"does": "lock-free read, or locked read-modify-write, over five files "
+                                   "that are each atomic and are not one transaction",
+                           "governed_by": ["D13", "D53", "D63"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1047,7 +1142,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D41", "D52", "D53", "D56", "D58", "D62"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D56", "D58", "D62", "D64"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1068,12 +1163,12 @@ COMPONENTS = [
                         "name it lifted out of .env itself, so under D53's long-running "
                         "supervisor the remedy tcg_session_expired prints would not have "
                         "worked.",
-                # D62 is the entry. D16 is why capture_server.py's file-boundary sentence was
+                # D64 is the entry. D16 is why capture_server.py's file-boundary sentence was
                 # rewritten rather than narrowed to "no socket TO ANTHROPIC". D11 is what the
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D62"],
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1081,7 +1176,7 @@ COMPONENTS = [
                         "T7 and refuses to carry the cookie over plain http anywhere but "
                         "loopback. What T7 CANNOT prove is whether the WAF accepts an "
                         "authenticated request — that is one live fetch by the owner, and "
-                        "D62 records it as owed.",
+                        "D64 records it as owed.",
             },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "
@@ -1100,7 +1195,7 @@ COMPONENTS = [
                         "always a list, the total is summed here rather than on the screen, "
                         "and identify spawns one detached child PER BOX — so a run is still "
                         "one box and nothing downstream learns a new shape. AND POST "
-                        ".../export (D62) fetches this run's Filtered Export through "
+                        ".../export (D64) fetches this run's Filtered Export through "
                         "server/tcg_export.py instead of the operator downloading and "
                         "uploading it: free, reported separately from the join so a failure "
                         "is attributable, ruled on by cli/resolve.py:exports_for BEFORE "
@@ -1112,7 +1207,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D12", "D13", "D16", "D20", "D21", "D24", "D25", "D29", "D32", "D33", "D35", "D48", "D54", "D56", "D62"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64"],
                 "tested_by": ["T7"],
             },
         },
@@ -1286,11 +1381,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D62"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1407,6 +1502,33 @@ COMPONENTS = [
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them.",
                 "governed_by": ["D31", "D41"]},
+            "src/PlaceNeighbors.tsx": {
+                "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
+                        "2026-08-30). `after` / `before` as a muted mono key column with the two "
+                        "names beside it, champion at ink and epithet muted, connectives deleted "
+                        "\u2014 the owner could not pick two names out of `between Galio, "
+                        "Indefaticable and Evelynn, Entrancing`, because every Riftbound name is "
+                        "`Champion, Epithet` so the strongest punctuation in the string is the "
+                        "one that is not a boundary. THE KEYS ARE THE COMPOSER'S OWN TWO WORDS: "
+                        "`in front`/`behind` reads better physically and takes the NEIGHBOUR as "
+                        "its subject where `placeParts` takes THIS CARD, which would have put a "
+                        "screen reader's sentence at odds with the row. Draws nothing \u2014 never "
+                        "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
+                        "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
+                        "the joined sentence at 20px body, and the firewall is the component "
+                        "graph rather than a selector.",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58"]},
+            "src/PlaceNeighbors.css": {
+                "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
+                        "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
+                        "copies row 10/12, because a treatment that is right once is not "
+                        "automatically right seven times down a column. Body face and lowercase "
+                        "on the names is docs/DESIGN.md's own line (the body face is for "
+                        "sentences a human reads) and undoes the borrow of "
+                        "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
+                        "only running English in the product a rectangle. A fixed key column so "
+                        "the two names cannot disagree about where they start.",
+                "governed_by": ["D30", "D31", "D41"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -1638,12 +1760,12 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D45"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D31", "D40", "D41", "D45"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -1694,7 +1816,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D54", "D56", "D58", "D59"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -1704,7 +1826,41 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62"]},
+            # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
+            # entry names the export as the pricing source: this draws a reading BESIDE that
+            # figure and writes nothing, and the day it prices anything is a change to D8.
+            # D49 because the hold it sits against is what wanted a trend and had none.
+            "src/PriceHistory.tsx": {"does": "the price-history panel on #/pricing: what one SKU "
+                                             "has actually been selling for, over a daily range "
+                                             "and a weekly one, drawn beside the hold. A "
+                                             "volume-weighted average as the ANCHOR, its bound as "
+                                             "a muted sanity check beneath, a momentum reading in "
+                                             "words as well as a sign, liquidity and within-bucket "
+                                             "spread, and a sparkline over the buckets. PINNED to "
+                                             "the SKU it was opened for and deliberately NOT "
+                                             "follow-focus: a read leaves the machine, so a panel "
+                                             "that re-read on the focused row would fire one "
+                                             "request per arrow key.",
+                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62"],
+                                     "note": "IT PRICES NOTHING AND WRITES NOTHING. The two "
+                                             "ranges OVERLAP and are drawn side by side with a "
+                                             "sentence saying so — measured on Vilemaw the day it "
+                                             "was built, up 71% over the month and down 34% over "
+                                             "the year, which is the panel working rather than a "
+                                             "contradiction. DIRECTION IS A SIGN AND A WORD, "
+                                             "NEVER A COLOR: the palette has no red and no green "
+                                             "and accent already means `unsure`."},
+            "src/PriceHistory.css": {"does": "that panel at owner density. It shares the "
+                                            "photograph's bottom-left corner and the two are "
+                                            "mutually exclusive, for the reason Pricing.css "
+                                            "chose that corner: bottom-right covers the four "
+                                            "reference columns and the price field. The 26px "
+                                            "average against the 11px bound is the "
+                                            "anchor-versus-sanity-check rule expressed as type "
+                                            "sizes, and is the property to preserve if this is "
+                                            "ever re-laid-out.",
+                                     "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -1800,7 +1956,7 @@ COMPONENTS = [
                                          "max edge are one decision and pairing them wrongly "
                                          "costs 26% MORE for asking for less; the estimate is "
                                          "void when either moves. AND THE EXPORT IS FETCHED "
-                                         "RATHER THAN DOWNLOADED AND UPLOADED (D62): one press "
+                                         "RATHER THAN DOWNLOADED AND UPLOADED (D64): one press "
                                          "fetches and then joins with the file by name, the "
                                          "receipt says what came back and which games were "
                                          "checked, and the control that waves a refusal through "
@@ -1813,7 +1969,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D62"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1832,7 +1988,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D62"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1988,7 +2144,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D9", "D20", "D28", "D33", "D49", "D54", "D56", "D57", "D58", "D59"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -1996,13 +2152,13 @@ COMPONENTS = [
                         "the control that spends does not EXIST, absent rather than disabled. "
                         "The spend route is intercepted and its body read; no real request is "
                         "ever made, which matters more here than on any other screen because "
-                        "one of these routes costs money. D62's fetch is covered the same "
+                        "one of these routes costs money. D64's fetch is covered the same "
                         "way and for the same reason: the case that matters is the ABSENCE of "
                         "the acknowledging control for a refusal an operator cannot answer.",
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D62"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
@@ -2078,7 +2234,7 @@ COMPONENTS = [
             },
             "tests/fulfillment.spec.ts": {
                 "does": "all nine rows of the Fulfillment constraints table against the "
-                        "rendered view, with every contrast ratio computed from the colours "
+                        "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41"],

@@ -1,7 +1,20 @@
 extends: existence
-message: "Bold lead in capitals — D60 asks for sentence case. Use a heading if it is a section."
+message: "Bold lead opens in capitals — D60 asks for sentence case. Use a heading if it is a section."
 level: warning
 scope: raw
 nonword: true
+# A shouting LEAD opens in capitals. Capitals later in a sentence are emphasis and are
+# house style — "The join key is PER-GAME" stays, "PER-GAME IS THE JOIN KEY" is what D60
+# replaces. Anchoring on the opening is what separates them; a ratio cannot, and a plain
+# all-caps class cannot either.
+#
+# The first version was that plain class and missed 53 of 53 leads that open in capitals
+# and then continue in lower case, or that open with a backticked identifier. Reported by
+# the pirate-ship-shipping-lane session, which found four in one entry; measured across the
+# four docs it was 53. Verified 53 caught, 0 false positives, against every bold run of 25
+# characters or more in those files.
+#
+# The optional leading backtick span is for `name_only` KEEPS ITS EXEMPTION and its kind —
+# an identifier, then at most three non-letters ("'s "), then the shout.
 tokens:
-  - '\*\*[A-Z][A-Z0-9 ,\x27`\-—:/\.]{24,}\*\*'
+  - '\*\*(?:`[^`]*`[^A-Za-z]{0,3})?[A-Z][A-Z0-9 ,''\-—:/\.\$%\(\)]{14,}[^*\n]*\*\*'

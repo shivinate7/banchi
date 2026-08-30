@@ -1244,6 +1244,108 @@ export type RunPhase =
 
 /** One SKU, priced. Every figure here was computed by `pipeline/pricing.py` at join time;
  *  the client performs no arithmetic on money, anywhere. */
+/** ONE BUCKET — a day on `month`, a week on `annual`. What the endpoint said, coerced.
+ *
+ *  `market` is a STANDING figure and is present on buckets that sold nothing, which is why
+ *  `quantity` is beside it rather than implied: every weighted figure in the payload filters
+ *  on `quantity > 0`, because including a bucket with no sales weights TCGplayer's opinion
+ *  equally with a transaction. A sparkline may draw the standing price; a mean may not. */
+export type HistoryPoint = {
+  /** ISO date, or null for a bucket whose stamp would not parse. */
+  at: string | null
+  market: string | null
+  quantity: number
+  low: string | null
+  high: string | null
+}
+
+/** ONE RANGE OF ONE SKU. `points` is ASCENDING — oldest first.
+ *
+ *  THE WIRE ORDER IS THE OPPOSITE AND THE SERVER ALREADY TURNED IT. `infinite-api` sends
+ *  newest-first and `Series.parse` sorts; nothing on this side may re-sort or reverse it,
+ *  because a list read backwards inverts the sign of every reading with no symptom at all —
+ *  a rising card drawn falling. */
+export type HistoryRange = {
+  range: string
+  buckets: number
+  /** The span the buckets actually cover, so a caption needs no width table in TypeScript.
+   *  The WIDER range is the STALER one: weekly buckets are stamped at the start of their
+   *  week, so `annual`'s `to` ran six days behind `month`'s on the same card at one moment. */
+  from: string | null
+  to: string | null
+  latest_market: string | null
+  /** THE ANCHOR. A volume-weighted mean of each bucket's market price — the best point
+   *  estimate available, and the figure to draw at size. Null when nothing sold in the
+   *  range, never zero: D9 is emphatic that a missing price is an UNKNOWN price rather than
+   *  a low one, and $0.00 is the reading that hands a chase card away at the floor. */
+  vwap: string | null
+  /** A SANITY CHECK AND NEVER A RESULT — see `pipeline/pricehistory.py`'s header, which
+   *  says so at length. We hold per-bucket lows and highs rather than fills, so a true VWAP
+   *  is not computable, only BOUNDED. Measured on Moonfall: $12.54..$20.35 around a point
+   *  estimate of $16.33. Drawing this as a price with an error bar of comparable authority
+   *  to `vwap` is that paragraph being ignored. */
+  bound: {
+    low: string
+    high: string
+    /** The same interval over two denominators, both named, because one card's bound is
+     *  honestly "48% wide" and "62% wide" and a bare percentage invites the two to be read
+     *  as a disagreement about the same card. */
+    width_of_vwap: string
+    width_of_low: string
+  } | null
+  /** Where the price went: the first `window` SOLD buckets against the last. POSITIVE IS
+   *  RISING — stated because the wire order is newest-first, so a sign here is one unsorted
+   *  list away from meaning its opposite. Nulls when the series holds fewer sold buckets
+   *  than one window, rather than a zero that would read as a measurement. */
+  momentum: {
+    early: string | null
+    late: string | null
+    change: string | null
+    fraction: string | null
+    window: number
+  }
+  /** Copies sold across the range, as the endpoint reports it. How fast this moves. */
+  liquidity: number
+  transactions: number
+  /** Copies per order. Above 1 is playsets rather than singles, which is what decides
+   *  whether D7's four-copy cap is actually binding on this card. */
+  units_per_transaction: string | null
+  /** Volume-weighted mean of (high - low) WITHIN a bucket — sellers disagreeing on one day,
+   *  not movement across the range, which is `momentum`'s job. */
+  dispersion: string | null
+  points: HistoryPoint[]
+}
+
+/** What one SKU has been selling for, read from two PUBLIC mirrors on an explicit press.
+ *
+ *  IT IS A READING BESIDE THE EXPORT AND NEVER A PRICE. D8 makes the Filtered CSV the
+ *  pricing source and nothing here reopens that: `market` below is the export's own figure,
+ *  carried so the panel can put the two side by side, and no field in this type is ever
+ *  written back or fed to a rule.
+ *
+ *  THE RANGES OVERLAP AND NOTHING MAY MERGE THEM. `annual` is not the year before `month` —
+ *  it is 357 days that INCLUDE the same recent days at a coarser width, so concatenating
+ *  them double-counts the recent window and skews every weighted figure over the result.
+ *  Two readings to present side by side, never two halves to add up. */
+export type PriceHistoryPayload = {
+  run: string
+  sku: string
+  product_id: number
+  name: string | null
+  set_name: string | null
+  condition: string | null
+  /** The export's `TCG Market Price` for this SKU — what the card is priced against TODAY.
+   *  Read at the moment of the join, where every figure under `ranges` was read just now. */
+  market: string | null
+  /** Finest range first, so `ranges[0]` is the daily one. */
+  ranges: HistoryRange[]
+  /** A real, catalogued product the endpoint has never seen SELL — measured on two of them.
+   *  It answers HTTP 200 with a null result there, so an empty `ranges` is not a failure and
+   *  a screen reading it as one would report a join defect over a card that is merely
+   *  illiquid. */
+  never_sold: boolean
+}
+
 export type PricingSku = {
   sku: string
   game: string
@@ -1589,7 +1691,7 @@ export type RunStepResult = {
 export type CsvUpload = { name: string; content: string }
 
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
- *  portal in (D62). Free: it downloads the owner's own Filtered Export and spends nothing.
+ *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
  *
  *  `verified` and `unverified` are the halves of the guard's answer and both are lists, so a
  *  mixed-game run can report per game. A game in `unverified` was accepted on the operator's

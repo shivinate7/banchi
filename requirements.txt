@@ -25,7 +25,7 @@ numpy>=1.21
 
 # Deliberately absent:
 #   requests   stdlib urllib covers both fetches this repo makes — pokemontcg.io, and
-#              D62's TCGplayer Filtered Export in server/tcg_export.py; one fewer
+#              D64's TCGplayer Filtered Export in server/tcg_export.py; one fewer
 #              dependency between a clean clone and a green harness. A second caller is
 #              not a reason to spend the dependency the first one was refused for.
 #   csv libs   Python's own `csv` is the real CSV library CLAUDE.md requires.

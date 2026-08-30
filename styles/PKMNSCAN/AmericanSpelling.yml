@@ -1,5 +1,11 @@
 extends: substitution
-message: "'%s' is British; D60 sets American spelling. Use '%s'."
+# `extends: substitution` fills the two %s as (REPLACEMENT, FOUND) — not the order the
+# swap map is written in. The first phrasing here read "'neighbor' is British … use
+# 'neighbour'", naming the American form as the British one and telling you to use the
+# British one. Every row was affected. Reported independently by two sessions; the second
+# said following the message literally would have taken the file further from D60 while
+# vale kept complaining. Phrased so the order is stated rather than implied.
+message: "'%s' is the American spelling D60 sets; '%s' is the British form found here."
 level: error
 ignorecase: false
 swap:

@@ -43,6 +43,7 @@
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
     POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
+    GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
@@ -153,7 +154,7 @@ screens. The argument, the allowlist and the environment variable that extends i
 `SAFE_METHODS` below. It is a CSRF gate, NOT authentication, and it still adds none.
 
 THE REASON IT USED TO GIVE FOR THAT IS NOW FALSE, AND IT IS CORRECTED RATHER THAN LEFT
-STANDING (D62). This sentence read "there are no credentials in this product and this adds
+STANDING (D64). This sentence read "there are no credentials in this product and this adds
 none", and the first half was deleted by a change made later: `server/tcg_export.py` reads a
 TCGplayer session cookie out of `.env` and `POST /pipeline/runs/<name>/export` spends it. A
 premise quietly falsified by a later change, with its conclusion left in place, is the
@@ -255,7 +256,7 @@ from store import Store, files, master, queues  # noqa: E402
 # child process.
 #
 # THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
-# than qualified (D62). `server/tcg_export.py` reads the TCGplayer session cookie out of
+# than qualified (D64). `server/tcg_export.py` reads the TCGplayer session cookie out of
 # `.env` and opens a socket to `store.tcgplayer.com` to download the operator's own Filtered
 # Export — so this server does hold a secret and does make an outbound call, and saying "no
 # socket TO ANTHROPIC" instead would be the technicality-narrowing D16 exists to catch. What
@@ -479,6 +480,13 @@ _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
 # site is what keeps this route from being refused as `no_such_step` — the same care
 # `_RUN_DECISIONS_RE` needs one line down, and the reason both are declared here together.
 _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
+# The price history for ONE SKU, named on the query string (D62). Matched before the
+# run-item and step patterns for the same reason the two above are: the more specific
+# path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
+# `[a-z]+` matches it exactly — and a GET never reaches that pattern, so the collision
+# is latent rather than live. Ordered defensively all the same: the day somebody adds a
+# GET step, the specific path is already above it.
+_RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -7189,6 +7197,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_pricing(match.group(1))
+                )
+            match = _RUN_HISTORY_RE.match(path)
+            if match:
+                # THE ONE READ HERE THAT LEAVES THIS MACHINE. It is free, both hosts are
+                # public, and it answers one press about one SKU — `server/pipeline_routes.py`'s
+                # header carries the argument and names what it may not become. The SKU is a
+                # query parameter rather than a path segment because it is a FILTER on the run
+                # rather than a thing the run contains: `/history` with no `?sku=` is a
+                # question this route refuses by name rather than a path that does not exist.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or [""]
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_history(match.group(1), asked[0]),
                 )
             match = _RUN_ITEM_RE.match(path)
             if match:

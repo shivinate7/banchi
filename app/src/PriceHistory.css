@@ -1,0 +1,245 @@
+/* The price-history panel on `#/pricing`. See `PriceHistory.tsx` for what it may and may not
+   say; this file is where the anchor-versus-sanity-check rule becomes type sizes.
+
+   IT SHARES THE PHOTOGRAPH'S CORNER AND THE TWO ARE MUTUALLY EXCLUSIVE. `Pricing.css` chose
+   bottom-left by looking at it, and the reasoning transfers whole: bottom-right covers the
+   four reference columns, the quantity and the price field — every number the operator is
+   pricing FROM and the one they are typing INTO — and the left edge holds the card name,
+   which is ellipsised already and is the least precise thing on the row. This panel is about
+   the same card as that photograph, so it wants the same corner, and two fixed panels
+   overlapping in one corner is worse than one at a time. `Pricing.tsx` closes each when the
+   other opens.
+
+   ABOVE THE SHIP BAR, the same floor the photograph takes and for D54's reason: the bar's
+   height varies with its receipt, so `--pricing-ship-h` is its closed height and a bar grown
+   by a receipt overlaps this panel's lower edge only while the operator is reading a console
+   rather than a card. */
+
+.pricehistory {
+  position: fixed;
+  left: var(--s4);
+  bottom: calc(var(--pricing-ship-h, 64px) + var(--s4));
+  z-index: 20;
+  /* WIDE ENOUGH FOR TWO RANGES ABREAST AND CAPPED SO IT CANNOT EAT THE ROW. The two ranges
+     are side by side because they are two readings to COMPARE — a card up over the month and
+     down over the year is the ordinary case, and stacking them puts a scroll between the two
+     halves of one glance. `max-width` rather than a fixed width so a narrow window shrinks
+     the panel instead of pushing it off screen; the ranges wrap at that point. */
+  width: min(30rem, calc(100vw - 2 * var(--s4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 2px 16px rgb(8 9 10 / 12%);
+  /* THE PANEL SCROLLS RATHER THAN THE PAGE. It is fixed, so content past the viewport would
+     be unreachable — a sticky element does not move with the document scroll, which is the
+     defect D45 records for the box walk one screen over. */
+  max-height: calc(100vh - var(--pricing-ship-h, 64px) - 4 * var(--s4));
+  overflow-y: auto;
+}
+
+.pricehistory-head h3 {
+  margin: 0;
+  /* The display face, at its own published floor of 20px. The card's NAME is the one thing on
+     this panel that is a name rather than a number. */
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+/* THE MACHINE STRING, SMALL, BENEATH ITS LABEL — docs/DESIGN.md's owner-screen rule, and the
+   same treatment `#/review` gives a reason code. `sku 9189317` and `month` grep to the payload
+   and to `pipeline/pricehistory.py:RANGES`, which a friendly relabelling would not. */
+.pricehistory-machine,
+.pricehistory-span {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pricehistory-state {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* THE EXPORT'S OWN FIGURE, ON ONE LINE AT THE TOP. Drawn at the metadata register and not at
+   the anchor's, deliberately: it is the number the operator already has on the row behind this
+   panel, and repeating it at size would make the panel look like it were pricing the card. */
+.pricehistory-listed {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-family: var(--util);
+  font-size: 12px;
+}
+
+.pricehistory-listed-key {
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.pricehistory-listed-value {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pricehistory-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+
+.pricehistory-range {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.pricehistory-range-head h4 {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* THE HAIRLINE IS THE ONLY SEPARATION, per docs/DESIGN.md — no shadow, no fill, no rule of a
+   second weight anywhere in this panel. */
+.pricehistory-spark {
+  width: 100%;
+  height: 44px;
+  display: block;
+  border-bottom: 1px solid var(--line);
+}
+
+.pricehistory-spark polyline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  /* The viewBox is stretched by `preserveAspectRatio: none`, which would scale the stroke with
+     it and leave a fat line on a wide panel and a hairline on a narrow one. */
+  vector-effect: non-scaling-stroke;
+}
+
+/* ------------------------------------------------------------------ the anchor, and only it
+
+   THE ONE FIGURE ON THIS PANEL AT SIZE. `pipeline/pricehistory.py`'s header: rendering the
+   vwap and its bound "as though they were a price and an error bar of comparable authority"
+   is that paragraph being ignored. The ratio between this and `.pricehistory-bound` below is
+   what enforces it — 26px against 11px — and it is the property to preserve if this panel is
+   ever re-laid-out.
+
+   MONO AND NOT THE DISPLAY FACE. docs/DESIGN.md: "Martian Mono carries every number in the
+   product... prices". The display face is for names, and this is money. */
+.pricehistory-vwap {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.pricehistory-figure {
+  font-family: var(--util);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pricehistory-vwap-key {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pricehistory-none {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* THE SANITY CHECK. Muted, 11px, directly under the anchor — see the block above for why the
+   size gap is the whole point rather than a taste. */
+.pricehistory-bound {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.pricehistory-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.pricehistory-facts div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.pricehistory-facts dt {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  /* Fixed so the three values line up as a column, which is what makes them scannable. */
+  width: 3.5rem;
+  flex: none;
+}
+
+.pricehistory-facts dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE WORD BESIDE THE NUMBER, AND IT IS CARRYING DIRECTION. The palette has no red and no
+   green and docs/DESIGN.md locks it, so `rising` and `falling` are WORDS rather than colors —
+   which is also the honest choice for a reader who cannot tell the two apart. */
+.pricehistory-word {
+  font-family: var(--body);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.pricehistory-note {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s2);
+}
+
+.pricehistory-controls {
+  display: flex;
+  gap: var(--s2);
+}

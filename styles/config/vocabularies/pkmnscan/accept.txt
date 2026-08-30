@@ -9,6 +9,7 @@
 [Aa]rrivable
 [Aa]uditable
 [Aa]utocorrected
+another's
 Archivo
 [Bb]ackoff
 [Bb]ackroad
@@ -30,6 +31,7 @@ Canonicalization
 Cmd
 Collectr
 CSVs
+[Dd]ataclass
 [Dd]ebounce
 [Dd]ebounced
 [Dd]edup
@@ -54,6 +56,7 @@ Discogs
 Eiscues
 Elgato
 ETag
+Evelynn
 [Ff]ocusable
 [Ff]ootgun
 [Ff]ULFILLER
@@ -61,6 +64,7 @@ ETag
 Fontshare
 Fraunces
 FSEvents
+Galio
 [Gg]itignored
 [Gg]itignoring
 [Gg]reppable
@@ -83,8 +87,10 @@ Idempotence
 [Ii]nterpunct
 [Ii]nterpuncts
 Inteleon
+Kha'Zix
 [Kk]eyless
 [Kk]eypress
+[Kk]ha
 Liveness
 [Ll]aunchd
 [Ll]earnable
@@ -125,6 +131,7 @@ Postgres
 [Pp]id
 [Pp]idfile
 [Pp]kmnscan
+[Pp]laymat
 [Pp]layset
 [Pp]list
 [Pp]refetch
@@ -149,7 +156,10 @@ Repo
 [Rr]enderers
 [Rr]eopener
 [Rr]eplayable
+[Rr]esolver
 [Rr]espawning
+[Rr]estamp
+[Rr]estamped
 [Rr]estamping
 [Rr]etryable
 [Rr]etuned
@@ -160,11 +170,14 @@ Schwarz
 SKU
 SKUs
 Someday
+[Ss]accade
 [Ss]crollable
 [Ss]crollbar
 [Ss]croller
 [Ss]ellable
 [Ss]olds
+[Ss]parkline
+[Ss]parklines
 [Ss]tdlib
 [Ss]tdout
 [Ss]teppable
@@ -180,6 +193,7 @@ Thievuls
 [Tt]extarea
 [Tt]ickable
 [Tt]oolchain
+[Tt]oploader
 [Tt]raceback
 [Tt]riaged
 [Tt]ruthy
@@ -190,19 +204,23 @@ Unimodal
 [Uu]nclaimable
 [Uu]ncommons
 [Uu]ndeletable
+[Uu]nfillable
 [Uu]ngated
 [Uu]nhinted
 [Uu]nimported
 [Uu]nioned
+[Uu]njudged
 [Uu]nkillable
 [Uu]nlistable
 [Uu]nlogged
+[Uu]nmerged
 [Uu]nmount
 [Uu]npadded
 [Uu]nparseable
 [Uu]nplaceable
 [Uu]nrepaired
 [Uu]nreviewed
+[Uu]nrun
 [Uu]nselectable
 [Uu]nstubbed
 [Uu]nticking
@@ -213,6 +231,7 @@ Unimodal
 [Uu]nwired
 [Uu]ppercased
 [Uu]pscales
+[Uu]pserted
 Vilemaw
 Vite
 [Vv]alidator

@@ -53,7 +53,7 @@ per set and overall.
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
   holdout, 150 together.
-- **A CACHE MISS REFUSES; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
+- **A cache miss refuses; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
   `make harness` makes no API call — and when there is nothing to replay it fails with
   instructions rather than spending. That rule is cause-independent by design, and it was
   not always: the moved-prompt case was guarded and every other cause of a cold cache fell
@@ -479,7 +479,7 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
-- **D62's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
+- **D64's export fetch is covered as of 2026-08-30, aimed at a local socket and never at
   TCGplayer.** `POST /pipeline/runs/<name>/export` downloads the Filtered Export with the
   session cookie from `.env` instead of the operator downloading and uploading it.
   `check_export_fetch` has its own `isolated_home` AND its own environment — the first
@@ -506,7 +506,37 @@ at a temporary directory, so nothing here touches the real inventory.
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the
   stdlib default User-Agent reaches the endpoint unblocked — which is not evidence about an
-  authenticated one. That is one live fetch by the owner and D62 records it as owed.
+  authenticated one. That is one live fetch by the owner and D64 records it as owed.
+- **The order ledger is covered as of 2026-08-30, in its own isolated home (D63).**
+  `store/orders.py` persists what `pipeline/orders.py` deliberately does not, and the
+  cases work hardest on the two rules that make it safe to re-run. **Idempotence is
+  asserted as BYTE EQUALITY of `orders.json`, `inventory.json` and `history.jsonl` across
+  two syncs, never as a count** — D54's lesson said out loud, where a guard reading
+  `len(rows) == 0` was satisfied identically by the emitter correctly omitting a row and
+  by it overwriting two good rows with a bare header. A row count here goes green on a
+  ledger that threw its fulfilment away and re-ingested the same order over the top.
+
+  **The renumber case drives the real route rather than simulating a shift.** Five cards,
+  two copies pulled at 3/2 and 3/3, then `POST /inventory/3/1/remove`: both pulled copies
+  slide down one and **position 3/3 ends up holding a card that was never pulled**. A
+  ledger keyed by position ships that card; one keyed by `capture_id` does not. Asserted
+  as both halves, because the first alone is satisfied by a ledger that stores nothing.
+
+  **Six mutations were observed failing first, each through the assertion that owns it** —
+  fulfilment moved inside the replaced record (7 red), `changed_at` restamped
+  unconditionally (2), the pull's dedup dropped (1), `holder_of` not consulted (1), the
+  nested `__annotations__` filter removed (1), and capture ids stored as position keys
+  (7). **Three of them first failed by ABORTING the block rather than naming anything**,
+  and two assertions were changed for it: a mutation that raises out of the middle leaves
+  the case that covers it unrun and everything after it unreported. It is loud, so it is
+  not the silent pass this file fears most — but it is coverage of the traceback rather
+  than of the defect.
+
+  **What it does NOT cover, so a green harness is not misread**: nothing calls this module.
+  No route serves it, no screen draws it, and no command reads it, so these cases assert a
+  data structure and not a feature — the same standing `pipeline/pricehistory.py` carries,
+  and the same one the order resolver beside it has.
+
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This
@@ -635,7 +665,7 @@ what the cards actually are.
 1,315,698 input and 20,698 output tokens — **$0.71**, against a $0.62 estimate; `SYSTEM_TOKENS`
 was 500 where the real turn is ~1,000, and is now the measured figure.
 
-**FINISH DETECTION IS WRONG ON 42% OF A BOX WHOSE TRUTH IS KNOWN.** The owner, after the run:
+**Finish detection is wrong on 42% of a box whose truth is known.** The owner, after the run:
 *"all of the cards provided in box 2 were normal by the way no reverse holo / foils etc"*.
 Every capture carried the claim `normal`, and every card was in fact normal. Detection said:
 
@@ -738,7 +768,7 @@ by accident and the next run should not have to.
   jitter: Gate B's manual loop averaged 661.9 ms over its last eight gaps at σ 34 ms;
   this runs at 623 ms and σ 43 ms. The operator was the slower component.
 
-**WHAT THIS RUN DID NOT DO, and it is half of what this section used to ask for.** Box 95
+**What this run did not do, and it is half of what this section used to ask for.** Box 95
 holds 85 records and **every one of them is still `captured`**: zero identified, zero
 carrying a SKU, and `runs/` holds no run directory for that box. The cards were photographed
 at feeder pace and the pipeline was never pointed at them.
@@ -929,7 +959,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     object and its retroactive capacity (D20), per-box section layouts (D10 amended), the
     search-and-sell screens on both sides, and the operations D26-D30 ratify.
 
-    **EVERY ITEM THIS STEP WAS SCOPED AROUND IS BUILT AND REACHABLE as of 2026-08-23**:
+    **Every item this step was scoped around is built and reachable as of 2026-08-23**:
     schema v2 with its migration, the server routes, the shared search components, the
     Fulfiller's search, D26 (`retired` and re-shoot in place, both with controls on the
     owner's screen), D27 (session state in `sessionStorage`), D28 in both halves (the
@@ -953,7 +983,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     registry with four real TCGplayer exports behind it, four audit rows, per-game dispatch,
     and `game` through all ten capture hops with the picker on the capture bar.
 
-    **EVERY STEP IS NOW BUILT** (2026-08-23): step 5's rarity claim end to end, step 6's
+    **Every step is now built** (2026-08-23): step 5's rarity claim end to end, step 6's
     repeatable `--export` with per-game catalogs and one import file per game (D25), step 7's
     pooled non-located inventory and both opsec discharges, step 8's rarity clause — built
     behind its A/B flag, MEASURED, and switched off because it lost (holdout 0.9706 → 0.9559,

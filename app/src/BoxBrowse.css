@@ -1100,10 +1100,20 @@
    footnote and a footnote may run to two lines. What the measurement rules out is the opposite
    fix: widening the cap to the 630px band would buy nothing at 1280px, where the middle column
    is 470px wide, and would give the longest shapes a measure far past what prose is read at. */
-.browse-between {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
+/* D30's neighbours, which are `PlaceNeighbors` now rather than a sentence in this file.
+   `.browse-between` is retired with the joined string it drew: 13px body, muted, one run of
+   words carrying `between` and `and` between two names the reader had to find. What is left
+   here is the two things a SITE owns — the register and the measure — which is the split
+   `--pos-slot` already makes for the label directly above it.
+
+   11px / 13px is exactly what this block drew before: 13px was `.browse-between`'s own size,
+   and 11px is `.browse-position-path`'s, so the key column lands in the register the address
+   above it already uses. They are also the component's defaults, restated here rather than
+   inherited silently — a site that stops declaring its own register is a site that moves the
+   day somebody retunes another one. */
+.browse-position-said {
+  --nb-key: 11px;
+  --nb-name: 13px;
   margin-top: var(--s1);
   max-width: 420px;
 }

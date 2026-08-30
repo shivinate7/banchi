@@ -115,7 +115,7 @@ export function runningFor(row: { created_at?: string | null }): string {
  * `phase`, because `phase` answers "what is this run waiting for" and this answers "what are
  * the four things there are" — a screen that only drew the current step would leave the
  * operator unable to see that emit exists until join had finished. */
-/* The two fetch refusals an operator may answer, and the field each is answered with (D62).
+/* The two fetch refusals an operator may answer, and the field each is answered with (D64).
  *
  * A MAP RATHER THAN TWO CONDITIONS IN THE JSX, which is what makes "absent for everything
  * else" structural. `POST .../export` has ten refusal codes and only these two have an answer
@@ -379,7 +379,7 @@ export function RunPanel({ cart }: RunPanelProps) {
   const [trouble, setTrouble] = useState<Failure | null>(null)
   /** Boxes whose child could not be spawned, from the last send. See `doStart`. */
   const [partial, setPartial] = useState<RunStartFailure[] | null>(null)
-  /* THE FETCH'S TWO OUTCOMES, HELD APART FROM THE JOIN'S AND FROM `trouble` (D62).
+  /* THE FETCH'S TWO OUTCOMES, HELD APART FROM THE JOIN'S AND FROM `trouble` (D64).
    *
    * One press is two calls, and a failure has to be attributable to one of them: `trouble` is
    * the panel-wide banner and would say "the session expired" in the same place a join failure
@@ -862,7 +862,7 @@ export function RunPanel({ cart }: RunPanelProps) {
       await loadRuns()
     })
 
-  /* THE LAST MANUAL STEP IN `runs -> join`, PRESSED (D62).
+  /* THE LAST MANUAL STEP IN `runs -> join`, PRESSED (D64).
    *
    * ONE PRESS IS TWO CALLS AND THAT IS THE WHOLE FEATURE. What it replaces: open TCGplayer,
    * press Export Filtered CSV, wait, find the download, come back, pick it. The fetch reports
@@ -1792,7 +1792,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                       />
                       <span>Join with an export…</span>
                     </label>
-                    {/* D62: the export fetched rather than downloaded and uploaded. Beside the
+                    {/* D64: the export fetched rather than downloaded and uploaded. Beside the
                         picker because it is the same decision — which file this run joins
                         against — and one press does both halves, fetch then join. */}
                     <button

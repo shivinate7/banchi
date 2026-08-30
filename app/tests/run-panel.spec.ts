@@ -90,7 +90,7 @@ function inventoryPayload() {
           box_closed: false,
           fraction: 0,
           neighbors: null,
-          gaps_in_section: 0,
+          section_gaps: 0,
         },
         photo: `photos/${box}/1.jpg`,
         set_hint: 'ME01',
@@ -1182,7 +1182,7 @@ test('nothing is scoped on arrival, and the free preflight refuses until a box i
   await expect(page.getByRole('button', { name: 'Check cost' })).toBeEnabled()
 })
 
-// ----------------------------------------- the export, fetched rather than downloaded (D62)
+// ----------------------------------------- the export, fetched rather than downloaded (D64)
 
 /** The control that fetches. A helper because four cases press it or assert its absence. */
 function fetchButton(page: Page) {
