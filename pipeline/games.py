@@ -249,6 +249,26 @@ GAMES = (
         # scopes on (D65), and it is NOT derivable from `product_line` — the two are
         # independent identifiers for the same thing and only the portal knows the pairing.
         "tcgplayer_category_id": 3,
+        # THE CODES THE OPERATOR TYPES, MAPPED TO THE NAMES TCGPLAYER USES (D65). These are
+        # two different vocabularies and no string rule bridges them: `MEG` is the community
+        # short code for the set TCGplayer calls `ME01: Mega Evolution`, and `TEF` is theirs
+        # for `SV05: Temporal Forces`. Measured 2026-08-30 against the live category list —
+        # TCGplayer-style codes (`ME01`, `SV05`, `SV09`) already resolve by shape and need no
+        # entry here; the three-letter ones resolve to nothing without it and the fetch
+        # silently widens to all 220 Pokemon sets.
+        #
+        # HAND-AUTHORED AND DELIBERATELY PARTIAL, which is D22's rule for a per-game
+        # vocabulary. There is no machine-readable source for community set codes, so this
+        # covers what the owner actually types and grows as they type more. An absent alias
+        # costs a wider export, never a wrong one.
+        #
+        # The VALUE is matched against TCGplayer's set name by the same three rules a typed
+        # hint takes, so `MEG -> ME01` works without repeating the full name here.
+        "set_aliases": {
+            "MEG": "ME01",
+            "TEF": "SV05",
+            "JTG": "SV09",
+        },
         # No `product_line_rarities`: `pokemon` is the unrestricted claimant of the
         # `Pokemon` line. Narrowing it to the thirteen below would drop the `Code Card`
         # rows out of the Pokemon catalog, and those rows are the blank-`Number` case
@@ -411,6 +431,11 @@ GAMES = (
         "product_line": "Riftbound League of Legends Trading Card Game",
         # See `pokemon` for what this is. Riftbound is 89.
         "tcgplayer_category_id": 89,
+        # See `pokemon` for what this is. Riftbound's community codes; `UNL` already
+        # resolves by prefix and needs no entry.
+        "set_aliases": {
+            "OGN": "Origins",
+        },
         # Seven cells; six are claimed. Counts across the whole English catalogue:
         # Common 2850, Uncommon 2625, Rare 1310, Showcase 1305, Promo 1090, Epic 765,
         # None 133.

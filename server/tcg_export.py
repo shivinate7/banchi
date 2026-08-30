@@ -447,7 +447,7 @@ def filters(category_id: int) -> Dict[str, Any]:
     return parsed
 
 
-def match_sets(hints, sets) -> Tuple[Tuple[int, ...], Tuple[str, ...]]:
+def match_sets(hints, sets, aliases=None) -> Tuple[Tuple[int, ...], Tuple[str, ...]]:
     """Capture-time set hints -> TCGplayer set ids. Returns (matched ids, hints that missed).
 
     THE HINT IS THE OPERATOR'S SHORTHAND AND THE SET NAME IS TCGPLAYER'S, and nothing
@@ -469,9 +469,15 @@ def match_sets(hints, sets) -> Tuple[Tuple[int, ...], Tuple[str, ...]]:
     ambiguous with its own sub-sets and resolves nothing.
     """
     by_id = [(str(entry.get("Text") or ""), str(entry.get("Value") or "")) for entry in sets]
+    # RULE ZERO: the game's own alias table, folded before the shape rules run. `MEG` and
+    # `ME01` name one set in two vocabularies and no string rule bridges them, so the registry
+    # carries the pairing (D65). An alias resolves to another HINT rather than to an id, so
+    # the three rules below still do the matching and the table never repeats a full set name.
+    folded = {str(k).strip().casefold(): str(v) for k, v in (aliases or {}).items()}
     matched, missed = [], []
     for hint in hints:
-        needle = str(hint or "").strip().casefold()
+        raw = str(hint or "").strip()
+        needle = folded.get(raw.casefold(), raw).strip().casefold()
         if not needle:
             continue
         found = [v for t, v in by_id if t.casefold() == needle]

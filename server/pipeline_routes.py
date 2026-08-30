@@ -2037,7 +2037,9 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     category = int(game_registry.get(game)["tcgplayer_category_id"])
     hints = sorted(catalogued[game])
     vocabulary = tcg_export.filters(category)
-    set_ids, unresolved = tcg_export.match_sets(hints, vocabulary.get("Sets") or [])
+    set_ids, unresolved = tcg_export.match_sets(
+        hints, vocabulary.get("Sets") or [], game_registry.get(game).get("set_aliases")
+    )
     scope = tcg_export.Scope(category_id=category, set_ids=set_ids)
     asked = {
         "game": game,

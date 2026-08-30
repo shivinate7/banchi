@@ -3001,6 +3001,12 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **This module now makes two calls rather than one.** `getjsonfilters?categoryId=N` reads the vocabulary; without a category it returns one "All Set Names" row and nothing else, which is why it takes the argument.
 
+**The hint vocabulary is not TCGplayer's, and a table is the only bridge.** Measured against the live category lists: `UNL`, `ME01`, `SV05` and `SV09` resolve by shape, while `OGN`, `MEG`, `TEF` and `JTG` — the community short codes — resolve to nothing and widen to every set in the category.
+
+**No derivation rule reaches them.** `MEG` is not a prefix, an initialism or a colon-token of `ME01: Mega Evolution`, and `TEF` is none of those for `SV05: Temporal Forces`. So `set_aliases` sits in the registry beside the game's other hand-authored vocabulary, which is D22's rule for exactly this.
+
+**It is deliberately partial and maps a code to another HINT rather than to an id.** There is no machine-readable source for community codes, so it covers what the owner types and grows as they type more; and resolving `MEG` to `ME01` lets the three shape rules do the matching without the table repeating a full set name that TCGplayer may re-word. An absent alias costs a wider export, never a wrong one.
+
 **What is owed: a whitelist at capture time.** The hint is free text today and `match_sets` is what reads it. The owner's proposal is to offer the real set and rarity vocabulary on the capture screen so a hint is exact by construction. The matcher stays regardless, because 676 of 715 stored cards already carry free-text hints and an exact hint costs it nothing — rule one matches and the other two never run.
 
 ---

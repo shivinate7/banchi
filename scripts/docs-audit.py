@@ -1964,7 +1964,7 @@ GAME_REQUIRED_KEYS = frozenset({
     "condition_by_finish", "finish_by_rarity", "located", "join_key", "prompt",
     "crop_bands", "card_aspect", "catalogued", "unverified",
 })
-GAME_OPTIONAL_KEYS = frozenset({"product_line_rarities", "tcgplayer_category_id"})
+GAME_OPTIONAL_KEYS = frozenset({"product_line_rarities", "tcgplayer_category_id", "set_aliases"})
 
 # The `join_key` an uncatalogued game must name. Written here rather than read out of the
 # module for the same reason GAME_REQUIRED_KEYS is: renaming the strategy in the registry

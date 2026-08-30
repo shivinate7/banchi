@@ -207,7 +207,7 @@ from pipeline import (  # noqa: E402
     tcgcsv,
     variant,
 )
-from server import capture_server, pipeline_routes, ports  # noqa: E402
+from server import capture_server, pipeline_routes, ports, tcg_export  # noqa: E402
 from store import files, master, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
@@ -11742,6 +11742,57 @@ def check_export_fetch(checks: Checks) -> None:
                     before,
                     "and that refusal keeps nothing either",
                 )
+                # ------------------------------ THE HINT VOCABULARY IS NOT TCGPLAYER'S
+                #
+                # `match_sets` DIRECTLY, because it is pure and the interesting inputs are the
+                # ones the store does not happen to hold. Two vocabularies name one set: the
+                # operator types the community code and TCGplayer publishes its own name, and
+                # NO STRING RULE BRIDGES THEM — `MEG` is not a prefix, an initialism or a
+                # colon-token of `ME01: Mega Evolution`. Measured against the live category
+                # list before the alias table existed: `OGN`, `MEG`, `TEF` and `JTG` all
+                # resolved to nothing and silently widened to every set in the category.
+                catalog_sets = [
+                    {"Text": "All Set Names", "Value": "0"},
+                    {"Text": "SV09: Journey Together", "Value": "4242"},
+                    {"Text": "Origins", "Value": "77"},
+                    {"Text": "Origins: Proving Grounds", "Value": "78"},
+                ]
+                aliases = {"JTG": "SV09"}
+                for hint, expected, label in (
+                    (
+                        "SV09",
+                        (4242,),
+                        "a TCGplayer-style code resolves by SHAPE and needs no alias — the "
+                        "name's own token before the colon",
+                    ),
+                    (
+                        "JTG",
+                        (4242,),
+                        "and the community code resolves only through the table, which is "
+                        "why the table exists rather than a cleverer rule",
+                    ),
+                    (
+                        "Origins",
+                        (77,),
+                        "an exact name beats the prefix it shares with its own sub-set — "
+                        "`Origins` against `Origins: Proving Grounds`, which is why "
+                        "substring is not one of the rules",
+                    ),
+                ):
+                    got, _ = tcg_export.match_sets([hint], catalog_sets, aliases)
+                    checks.equal(got, expected, label)
+
+                widened_ids, widened_missed = tcg_export.match_sets(
+                    ["ZZZ"], catalog_sets, aliases
+                )
+                checks.equal(
+                    (widened_ids, widened_missed),
+                    ((), ("ZZZ",)),
+                    "a hint nothing matches resolves to NO set and is reported unresolved, "
+                    "so the fetch widens to the whole category — slower, larger and correct, "
+                    "where guessing a set the box is not in would not be",
+                )
+
                 # ------------------------------ THE SCOPE THE RUN IMPLIES IS THE SCOPE SENT
                 #
                 # D65's whole claim in one assertion. The export is no longer whatever the

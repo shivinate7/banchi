@@ -1717,4 +1717,18 @@ export type ExportFetched = {
   unverified: string[]
   accepted_narrower: boolean
   source: string
+  /** What was ASKED FOR, beside what arrived (D65). The scope is derived from the box's own
+   *  capture claims — its game, and the set hints the operator set — so this is the half they
+   *  can correct. `widened` is true where no hint resolved and the whole category was taken,
+   *  which is slower and always correct; `unresolved_hints` names the hints that did not
+   *  match a TCGplayer set, which is the thing worth seeing. */
+  asked: {
+    game: string
+    category_id: number
+    hints: string[]
+    set_ids: number[]
+    unresolved_hints: string[]
+    sets: string[]
+    widened: boolean
+  }
 }
