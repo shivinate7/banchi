@@ -170,6 +170,7 @@ import base64
 import io
 import json
 import hashlib
+import http.server
 import os
 import shutil
 import sys
@@ -11178,6 +11179,382 @@ def check_drain(checks: Checks) -> None:
     checks.ok(capture_server.drain(0.5), "and the drain then returns true")
 
 
+def check_export_fetch(checks: Checks) -> None:
+    """D60: the Filtered Export fetched instead of downloaded, and every refusal in the way.
+
+    ITS OWN `isolated_home`, this file's own repeated lesson — and its own ENVIRONMENT too,
+    which is new. This is the first section that reads `.env`, and one that left
+    `TCGPLAYER_STORE_COOKIE` or `PKMNSCAN_TCG_EXPORT_URL` set behind it would point every
+    later fetch in this process somewhere unexpected.
+
+    THE FETCH IS AIMED AT A LOCAL SOCKET AND NEVER AT TCGPLAYER. `server/tcg_export.py` takes
+    its URL from an override that refuses to carry the cookie over plain http anywhere but
+    loopback, and that guard is what makes this testable at all: a real fetch would need the
+    owner's live session, would run at the end of every turn, and would be measuring their
+    portal filter rather than this code.
+
+    WHAT IS PROVABLE HERE AND WHAT IS NOT, said plainly so a green run is not misread.
+    Provable: that a session redirected to a login page never becomes a parsed CSV, that a WAF
+    403 has its own name, that a narrower export refuses before it can mislist, that a refusal
+    keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
+    file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
+    accepts this client when the request carries a real session. That is one live fetch by the
+    owner, and D60 names it as owed rather than implying it has happened.
+    """
+    keys = ("PKMNSCAN_TCG_EXPORT_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_USER_AGENT")
+    previous = {name: os.environ.get(name) for name in keys}
+
+    # THE FAKE PORTAL. It serves whatever `stub["mode"]` currently says, which is how one
+    # socket covers a good download, an expired session in BOTH of its shapes, a WAF block and
+    # an export that has quietly narrowed. Real fixture rows throughout — `write_export`
+    # builds them out of the committed SV09 file — because the guard counts SKUs and condition
+    # rows per number, and invented rows would be testing the fixture.
+    stub = {"mode": "csv", "body": b"", "seen": []}
+
+    class Portal(http.server.BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # noqa: A003
+            pass
+
+        def do_GET(self):  # noqa: N802
+            stub["seen"].append(self.headers.get("Cookie"))
+            mode = stub["mode"]
+            if mode == "logon":
+                self.send_response(302)
+                self.send_header("Location", "/admin/account/logon?ReturnUrl=%2fAdmin")
+                self.end_headers()
+                return
+            if mode == "html200":
+                body = b"<html><body>Please sign in</body></html>"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+            elif mode == "waf":
+                body = b""
+                self.send_response(403)
+            elif mode == "boom":
+                body = b""
+                self.send_response(503)
+            else:
+                body = stub["body"]
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+    portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
+    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
+    portal_thread.start()
+
+    cookie = "TCGAuthTicket_Production=t7-not-a-real-session"
+    os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
+        f"http://127.0.0.1:{portal.server_address[1]}/Admin/Pricing/DownloadMyExportCSV"
+    )
+    os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
+    os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
+
+    try:
+        with isolated_home() as home:
+            httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+            port = httpd.server_address[1]
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            try:
+                cards = [
+                    (3, 1, "Dunsparce", "120/159", "normal"),
+                    (3, 2, "Articuno ex", "161/159", None),
+                ]
+                run, _ = seam_run(checks, cards)
+                directory = run.directory
+                whole = write_export(home / "whole.csv")
+                stub["body"] = whole.read_bytes()
+
+                def fetched_files():
+                    return sorted(
+                        entry.name
+                        for entry in directory.iterdir()
+                        if entry.name.startswith(pipeline_routes.FETCHED_PREFIX)
+                    )
+
+                def fetch(payload=None):
+                    return request(
+                        port,
+                        "POST",
+                        f"/pipeline/runs/{directory.name}/export",
+                        payload=payload or {},
+                    )
+
+                # ------------------------------------------------ the transport refusals
+                for mode, expected, label in (
+                    (
+                        "logon",
+                        "tcg_session_expired",
+                        "a session redirected to the login page refuses BY NAME rather than "
+                        "following the redirect — an HTML login page parsed as a CSV is the "
+                        "failure this exists to prevent, and it would have arrived as an "
+                        "empty catalog blaming the export",
+                    ),
+                    (
+                        "html200",
+                        "tcg_session_expired",
+                        "and a login page served as a 200 refuses the same way: the portal "
+                        "does not have to redirect for the session to be the thing that is "
+                        "wrong, so the body is read as well as the status",
+                    ),
+                    (
+                        "waf",
+                        "tcg_blocked",
+                        "a 403 gets its own code, because the WAF declining this client and "
+                        "the session expiring have different remedies — and one of them is "
+                        "an environment variable this refusal names",
+                    ),
+                    (
+                        "boom",
+                        "tcg_unavailable",
+                        "and a 5xx says it is TCGplayer's end rather than this one",
+                    ),
+                ):
+                    stub["mode"] = mode
+                    status, raw, _ = fetch()
+                    checks.equal((status, error_code(raw)), (502, expected), label)
+                checks.equal(
+                    fetched_files(),
+                    [],
+                    "and NOT ONE of those refusals left a file in the run directory — a run "
+                    "accumulating a dead export per failed press stops explaining itself, "
+                    "which is the whole reason a run directory is worth keeping",
+                )
+
+                # ------------------------------------------------------- the good download
+                stub["mode"] = "csv"
+                status, raw, _ = fetch()
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("ok"), body.get("verified")),
+                    (200, True, ["pokemon"]),
+                    "the ordinary case: the export downloads, `exports_for` rules on it "
+                    "before anything is joined, and it comes back VERIFIED — this run had a "
+                    "previous export to check against and this one lost nothing",
+                )
+                checks.equal(
+                    (body.get("skus"), body.get("games")),
+                    (3, ["pokemon"]),
+                    "and the report is in the terms the operator filters the portal in: how "
+                    "many SKUs came back, and which game the file answers for off its own "
+                    "Product Line cells rather than off its name",
+                )
+                kept = fetched_files()
+                checks.equal(
+                    len(kept), 1, "exactly one file is kept, and it is the one just fetched"
+                )
+                checks.equal(
+                    kept[0] if kept else None,
+                    body.get("file"),
+                    "the response NAMES the file it wrote, which is what the join is then "
+                    "handed — a fetch that kept a file the client could not name would be a "
+                    "server-only capability",
+                )
+                checks.ok(
+                    any(seen == cookie for seen in stub["seen"]),
+                    "the cookie reached the socket — a fetch that quietly sent none would "
+                    "look identical here against a stub that does not check it",
+                )
+
+                # ------------------------------------- THE OPSEC RULE, ASSERTED NOT ASSUMED
+                leaked = sorted(
+                    entry.name
+                    for entry in directory.iterdir()
+                    if entry.is_file() and cookie.encode() in entry.read_bytes()
+                )
+                checks.equal(
+                    leaked,
+                    [],
+                    "and the session cookie is in NO file this run holds. It is a bearer "
+                    "instrument, `.env` is the only place it lives, and a run directory is "
+                    "the one thing here meant to be read later by somebody else",
+                )
+
+                # ------------------------------------------- the fetched file reaches join
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{directory.name}/join",
+                    payload={"fetched": [kept[0]]},
+                )
+                checks.equal(
+                    (status, json.loads(raw or b"{}").get("ok")),
+                    (200, True),
+                    "the join takes the fetched file BY NAME rather than by re-upload — the "
+                    "server already holds the bytes, and sending a megabyte back through the "
+                    "browser to arrive at them is not a step",
+                )
+                recorded = runs.open_run(directory).exports_by_game.get("pokemon")
+                checks.equal(
+                    recorded.name if recorded else None,
+                    kept[0],
+                    "and the manifest now records THAT file as what pokemon was joined "
+                    "against, which is the seam: a route that fetched a file the join never "
+                    "used would report success and change nothing",
+                )
+
+                # --------------------------------------------------- naming a file by hand
+                for wanted, expected_status, expected, label in (
+                    (
+                        ["../../etc/passwd"],
+                        400,
+                        "fetched_invalid",
+                        "a name that is not a fetched export refuses by SHAPE, so nothing "
+                        "built from a request is ever joined onto a path",
+                    ),
+                    (
+                        ["export-uploaded.csv"],
+                        400,
+                        "fetched_invalid",
+                        "and an ordinary uploaded export cannot be named here either: only "
+                        "a file THIS route wrote carries the prefix",
+                    ),
+                    (
+                        [pipeline_routes.FETCHED_PREFIX + "19700101-000000.csv"],
+                        404,
+                        "no_such_file",
+                        "a well-shaped name for a file the run does not hold is a 404 — "
+                        "which is exactly what a client holding the name from a fetch that "
+                        "later refused would send",
+                    ),
+                    (
+                        [],
+                        400,
+                        "fetched_invalid",
+                        "and an EMPTY list is refused rather than read as `use the old "
+                        "file`, the rule `exports` already follows: a selection that failed "
+                        "to send must not silently become the previous answer",
+                    ),
+                ):
+                    status, raw, _ = request(
+                        port,
+                        "POST",
+                        f"/pipeline/runs/{directory.name}/join",
+                        payload={"fetched": wanted},
+                    )
+                    checks.equal(
+                        (status, error_code(raw)), (expected_status, expected), label
+                    )
+
+                # ------------------------------------------------------ THE NARROWING GUARD
+                #
+                # The measured hazard, and the reason this route has a guard at all.
+                # Completeness against the CATALOG cannot be read off a file: the Pricing tab
+                # narrows by set, by printing, by condition and by whether a listing carries a
+                # photo, the axes are independent, and the last of them leaves no trace at all
+                # (`Photo URL` is empty in every export this project has ever read, filtered
+                # and unfiltered alike). What CAN be checked is this run's own previous
+                # export. The case below is the QUIET failure rather than the loud one:
+                # Dunsparce has a Near Mint row and a Near Mint Reverse Holofoil row, and a
+                # file carrying only the first turns it into a number the CATALOG decides.
+                source = tcgcsv.read_export(FIXTURE_EXPORT)
+                by_sku = source.by_sku()
+                thinner = home / "thinner.csv"
+                tcgcsv.write_csv(
+                    thinner, source.header, [by_sku[DUNSPARCE_SKU], by_sku[ARTICUNO_SKU]]
+                )
+                stub["body"] = thinner.read_bytes()
+                status, raw, _ = fetch()
+                checks.equal(
+                    (status, error_code(raw)),
+                    (409, "export_narrower"),
+                    "an export that lost a printing REFUSES against the file this run was "
+                    "last joined against — and it refuses at the fetch, where the fault is "
+                    "attributable, rather than at the join where it would read as a pricing "
+                    "result",
+                )
+                message = str(
+                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                )
+                checks.ok(
+                    "rung 2" in message and DUNSPARCE_REVERSE_SKU in message,
+                    "and the refusal says which SKU went AND what losing it costs: a number "
+                    "left with one condition row is decided by that row, so a reverse holo "
+                    "with no finish claim would resolve to the normal row and list at its "
+                    "price, silently",
+                    message[:400],
+                )
+                checks.equal(
+                    len(fetched_files()),
+                    1,
+                    "the refused download is deleted, and the file the last GOOD fetch wrote "
+                    "is untouched — a refusal may not take a working export with it",
+                )
+                status, raw, _ = fetch({"accept_narrower": True})
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("ok"), body.get("accepted_narrower")),
+                    (200, True, True),
+                    "and it is an acknowledgement rather than a wall: an operator who "
+                    "narrowed the portal filter on purpose says so in a field, which is "
+                    "D33's gate one register down — a field a stray request does not carry",
+                )
+
+                # ---------------------------------------- nothing to check a first fetch against
+                stub["body"] = whole.read_bytes()
+                bare = runs.create("t7-unjoined")
+                bare.write_identifications(identifications_for(cards))
+                status, raw, _ = request(
+                    port, "POST", f"/pipeline/runs/{bare.directory.name}/export", payload={}
+                )
+                checks.equal(
+                    (status, error_code(raw)),
+                    (409, "export_unverified"),
+                    "a run with no previous export has NOTHING to check a fetch against and "
+                    "says so, rather than accepting one quietly — an absence of evidence is "
+                    "not evidence, and this is the one state where the guard can say nothing",
+                )
+                status, raw, _ = request(
+                    port,
+                    "POST",
+                    f"/pipeline/runs/{bare.directory.name}/export",
+                    payload={"accept_unverified": True},
+                )
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("ok"), body.get("unverified")),
+                    (200, True, ["pokemon"]),
+                    "and that acknowledgement is SEPARATE from the narrowing one, because "
+                    "they are separate sentences — and the report still says which games "
+                    "went unchecked rather than reporting them as verified",
+                )
+
+                # ---------------------------------------------------------- the wrong file
+                before = len(fetched_files())
+                stub["body"] = (
+                    Path(FIXTURE_EXPORT).parent / "riftbound_export_untouched.csv"
+                ).read_bytes()
+                status, raw, _ = fetch()
+                checks.equal(
+                    (status, error_code(raw)),
+                    (409, "export_wrong_game"),
+                    "an export for a game this run holds no card of is refused by name — the "
+                    "portal's filter pointed at the wrong product line, which is a thing to "
+                    "fix in the portal rather than a file to join against",
+                )
+                checks.equal(
+                    len(fetched_files()),
+                    before,
+                    "and that refusal keeps nothing either",
+                )
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join(5)
+    finally:
+        portal.shutdown()
+        portal.server_close()
+        portal_thread.join(5)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -11224,6 +11601,7 @@ def run() -> Result:
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_crop_preview(checks)
+    check_export_fetch(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

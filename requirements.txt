@@ -24,8 +24,10 @@ Pillow>=9
 numpy>=1.21
 
 # Deliberately absent:
-#   requests   stdlib urllib covers the pokemontcg.io fetch; one fewer dependency
-#              between a clean clone and a green harness.
+#   requests   stdlib urllib covers both fetches this repo makes — pokemontcg.io, and
+#              D60's TCGplayer Filtered Export in server/tcg_export.py; one fewer
+#              dependency between a clean clone and a green harness. A second caller is
+#              not a reason to spend the dependency the first one was refused for.
 #   csv libs   Python's own `csv` is the real CSV library CLAUDE.md requires.
 #   opencv     see the §4.5 note above — the fallback's trigger fired and it was
 #              declined anyway, because the tone path failed on a false premise

@@ -42,6 +42,7 @@
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
+    POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
@@ -239,6 +240,15 @@ from store import Store, files, master, queues  # noqa: E402
 # header used to make. Imported here rather than inlined so that the boundary is a file
 # boundary: everything above this line still holds no key, opens no socket, and starts no
 # child process.
+#
+# THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
+# than qualified (D60). `server/tcg_export.py` reads the TCGplayer session cookie out of
+# `.env` and opens a socket to `store.tcgplayer.com` to download the operator's own Filtered
+# Export — so this server does hold a secret and does make an outbound call, and saying "no
+# socket TO ANTHROPIC" instead would be the technicality-narrowing D16 exists to catch. What
+# still holds, and what the boundary is for: the call is one host, one method, one route, in
+# one module reached only from `pipeline_routes`, and it cannot cause a charge. The one route
+# that can is still `POST /pipeline/identify`, and it is still named for it.
 # `from server import ...` and not a bare `import pipeline_routes`: this file is run BOTH
 # ways — by path as `make server` does, where sys.path[0] is server/, and as a package
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
@@ -451,6 +461,11 @@ _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
 # run-item pattern for the same reason the download is: the more specific path reads
 # first, for whoever is following this list rather than the regex engine.
 _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
+# MATCHED BEFORE `_RUN_STEP_RE`, WHICH WOULD OTHERWISE SWALLOW IT. That pattern's second
+# group is `[a-z]+` and `export` is `[a-z]+`, so the order of the two `if`s at the dispatch
+# site is what keeps this route from being refused as `no_such_step` — the same care
+# `_RUN_DECISIONS_RE` needs one line down, and the reason both are declared here together.
+_RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -7271,6 +7286,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)
+            # THE ONE OUTBOUND CALL, and it is not the one that spends. It fetches the
+            # operator's own Filtered Export from TCGplayer with the session cookie in
+            # `.env`, so `join` no longer needs a file downloaded and uploaded by hand.
+            # Before `_RUN_STEP_RE`, whose `[a-z]+` would match `export` and refuse it as a
+            # step that does not exist.
+            match = _RUN_EXPORT_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_export(match.group(1), self._body()),
+                )
             match = _RUN_STEP_RE.match(path)
             if match:
                 return self._json(

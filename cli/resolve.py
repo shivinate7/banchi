@@ -681,6 +681,31 @@ def _refuse_uncovered(
     raise runs.RunError("\n".join(lines))
 
 
+def games_claimed(export: tcgcsv.Export) -> Tuple[str, ...]:
+    """Which registered games this file's `Product Line` cells claim, in registry order.
+
+    THE MAPPING `exports_for` DECIDES ON, EXTRACTED SO IT HAS ONE OWNER. D25's rule is that a
+    file answers for its games off its own cells and never off its filename, and this is that
+    rule as four lines. It is public because a second caller arrived: `server/pipeline_routes.py`
+    has to know which games a freshly fetched export answers for BEFORE it can compose the
+    list `exports_for` then rules on — which of the run's previously recorded exports are
+    still needed, and which this file replaces. A private copy there would be two answers to
+    "which game is this file", disagreeing at exactly the moment a run joined the wrong
+    catalog.
+
+    A game whose registry entry carries `product_line: None` (D22's `misc`) can never match,
+    because `None` is not a `str` — which is the whole reason that field is None rather than
+    the empty string a row could actually carry.
+    """
+    lines = tcgcsv.product_lines(export)
+    return tuple(
+        game
+        for game in games.keys()
+        if isinstance(games.get(game)["product_line"], str)
+        and games.get(game)["product_line"] in lines
+    )
+
+
 def exports_for(
     run: runs.Run, overrides: Optional[Sequence[str]]
 ) -> ExportPlan:
@@ -726,14 +751,10 @@ def exports_for(
     for path in distinct:
         if not path.is_file():
             raise runs.RunError(f"export not found: {path}")
-        lines = tcgcsv.product_lines(tcgcsv.read_export(path))
+        export = tcgcsv.read_export(path)
+        lines = tcgcsv.product_lines(export)
         lines_of[path] = lines
-        matched = [
-            game
-            for game in games.keys()
-            if isinstance(games.get(game)["product_line"], str)
-            and games.get(game)["product_line"] in lines
-        ]
+        matched = list(games_claimed(export))
         if not matched:
             known = sorted(
                 {
