@@ -396,6 +396,7 @@ D61  The shipping lane is three lanes, and the third answer is "I cannot tell"
 D62  The price history is reachable, and it is drawn beside the hold rather than beside the location
 D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
+D65  The export is asked for, and the box's own claims are the scope
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

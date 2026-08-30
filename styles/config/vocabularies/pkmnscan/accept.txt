@@ -45,6 +45,7 @@ CSVs
 [Dd]rawdown
 Dev
 Discogs
+downloadexportcsv
 [Ee]lse
 [Ee]mit
 [Ee]num
@@ -65,6 +66,7 @@ Fontshare
 Fraunces
 FSEvents
 Galio
+getjsonfilters
 [Gg]itignored
 [Gg]itignoring
 [Gg]reppable
@@ -186,6 +188,7 @@ Someday
 [Ss]tylesheet
 [Ss]ubcommand
 [Ss]ubsteps
+[Ss]ubstring
 [Ss]uperset
 Thievul
 Thievuls
@@ -200,6 +203,7 @@ Thievuls
 [Tt]ruthy
 [Tt]ypecheck
 Unimodal
+Unleashed
 [Uu]nasserted
 [Uu]nbuilt
 [Uu]nclaimable
@@ -222,6 +226,7 @@ Unimodal
 [Uu]nrepaired
 [Uu]nreviewed
 [Uu]nrun
+[Uu]nscoped
 [Uu]nselectable
 [Uu]nstubbed
 [Uu]nticking

@@ -2941,6 +2941,70 @@ This is cookie-session auth, not the order-management API, which is another host
 
 ---
 
+## D65 — The export is asked for, and the box's own claims are the scope
+
+**The export request names what it wants, so completeness stops being an inference.** Built 2026-08-30.
+
+D64 fetched whatever the portal's saved filter last produced and then tried to judge it. This names a category and a set in the request, so the file is complete within that scope by construction.
+
+### D64 shipped against the wrong endpoint
+
+**`/Admin/Pricing/DownloadMyExportCSV` ignores every parameter, measured across eight spellings that returned byte-identical output.** It is a different, unscoped endpoint that serves the saved filter. It entered D64 as a verified fact, it does return a CSV, and that is how it survived.
+
+**What the Export Filtered CSV button sends is `POST /admin/pricing/downloadexportcsv`**, captured off the wire in the owner's browser. The scope travels in the body, which is why every query string was ignored.
+
+### The body was guessed wrong five times
+
+**Captured by intercepting the portal's own form submit rather than inferred from its bundle.** The bundle gives the field names; it does not give the types, and the types are the part that matters.
+
+| field | inferred | actual |
+|---|---|---|
+| `PricingType` | `1` | `"Pricing"` |
+| `CategoryId` | `89` | `"89"` |
+| `SetNameIds` for all | `[]` | `["0"]` |
+| `PriceToCompare` | `null` | `3` |
+| `ExportLowestListingNotMe` | `false` | `true` |
+
+**Every value is a string, and "all of them" is `["0"]` rather than the empty list.** `0` is the "All Set Names" row's own id, so the portal asks for a filter matching everything rather than for no filter.
+
+**Two fields are never negotiable.** `MyInventory: false` makes it the catalog rather than the operator's current listings, which is what a join exists to add to. `PrintingIds: ["0"]` is All Printings, because a number stocked in several finishes must arrive with all of them or D3 rung 2 decides it from whichever survived.
+
+### The guard flips from a delta to a positive check
+
+**D64 compared a fetch against the run's previous export because nothing better was available.** Three filters narrow an export independently and one leaves no trace in it, so completeness could not be read off the contents.
+
+**A scope this process named can be checked against what arrived.** The question becomes "did I get the sets I asked for", which the file answers. `export_scope_incomplete` refuses rather than warns: a set asked for and absent means every card in it queues as `no_catalog_row`, a whole box silently, from a fetch that reported success.
+
+**The delta guard stays for exports that arrive by upload**, where nobody named a scope.
+
+### The scope is the claims the operator already made
+
+**A card carries its game and, where the operator set one, a set hint.** A box captured as Riftbound/Unleashed already says which category and which set its export needs, so nothing new is asked of them.
+
+**`match_sets` reads a hint against TCGplayer's own set names in three rules** — case-folded equality, then prefix, then the name's leading token before a colon. Measured on the two the store holds: `UNL` resolves to `Unleashed`, and `ME01` resolves to `ME01: Mega Evolution` across 220 Pokemon sets.
+
+**Substring is deliberately not one of the rules.** `Origins` appears inside `Origins: Proving Grounds`, so a substring test makes every hint naming a base set ambiguous with its own sub-sets and resolves nothing.
+
+**An ambiguous hint matches nothing and the fetch widens to the whole category.** Widening is slower and always correct; narrowing onto a set the box is not in is not. Riftbound entire is 10,118 rows against Unleashed's 2,201, and that is the whole price of being wrong in the safe direction.
+
+### One category per fetch
+
+**`CategoryId` is scalar in the portal's own request, so a mixed-game run fetches once per game.** The request takes `game` and refuses `game_required` when a run holds more than one, naming them. The join composes what the fetches leave behind.
+
+### A refusal that blamed the operator's credential
+
+**The portal answers a malformed request with HTTP 200 carrying an HTML page titled `System Error`, and D64 read any HTML as a login page.** Five different bad bodies were each reported as `tcg_session_expired`, which sends the operator to re-copy a cookie that was working. `tcg_request_rejected` now says the session is fine and the defect is here.
+
+### What it costs
+
+**The category ids are registry data that only the portal knows.** `tcgplayer_category_id` sits beside `product_line` in `pipeline/games.py` — Pokemon 3, One Piece 68, Riftbound 89 — because the two are independent identifiers for the same thing and neither derives from the other.
+
+**This module now makes two calls rather than one.** `getjsonfilters?categoryId=N` reads the vocabulary; without a category it returns one "All Set Names" row and nothing else, which is why it takes the argument.
+
+**What is owed: a whitelist at capture time.** The hint is free text today and `match_sets` is what reads it. The owner's proposal is to offer the real set and rarity vocabulary on the capture screen so a hint is exact by construction. The matcher stays regardless, because 676 of 715 stored cards already carry free-text hints and an exact hint costs it nothing — rule one matches and the other two never run.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **The heading read "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN CURRENT SINCE 2026-08-23.** All three passed; `CLAUDE.md` and `docs/GATES.md` both say the gating system is retired and that nothing is blocked behind one. A list whose whole force came from a control that no longer exists reads as either binding or void, and neither is right. What actually holds these items back is `CLAUDE.md`'s standing rule — *scope is argued, not gated* — so the bar is a decision entry and an argument, not a gate that will never fire.

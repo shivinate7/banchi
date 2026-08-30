@@ -315,7 +315,7 @@ COMPONENTS = [
                                  "falling back to Pokemon's — riftbound and one_piece ship "
                                  "unverified because no export for either has ever been seen.",
                          "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18",
-                                         "D21", "D22", "D23", "D24", "D25"],
+                                         "D21", "D22", "D23", "D24", "D25", "D65"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -1154,7 +1154,7 @@ COMPONENTS = [
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
-                "does": "the ONE outbound call this server makes, and the only place allowed "
+                "does": "the TWO outbound calls this server makes, and the only place allowed "
                         "to make it: GET the operator's own Filtered Export off "
                         "store.tcgplayer.com with the session cookie in .env. Stdlib urllib, "
                         "one host, one method. Redirects are NOT followed blindly — a 302 to "
@@ -1176,7 +1176,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64"],
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64", "D65"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1215,7 +1215,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64", "D65"],
                 "tested_by": ["T7"],
             },
         },

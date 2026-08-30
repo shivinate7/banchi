@@ -244,6 +244,11 @@ GAMES = (
         "key": "pokemon",
         "display": "Pokémon",
         "product_line": "Pokemon",
+        # TCGplayer's own category id for that product line, read off the Pricing tab's
+        # category picker on 2026-08-30. It is what `POST /admin/pricing/downloadexportcsv`
+        # scopes on (D65), and it is NOT derivable from `product_line` — the two are
+        # independent identifiers for the same thing and only the portal knows the pairing.
+        "tcgplayer_category_id": 3,
         # No `product_line_rarities`: `pokemon` is the unrestricted claimant of the
         # `Pokemon` line. Narrowing it to the thirteen below would drop the `Code Card`
         # rows out of the Pokemon catalog, and those rows are the blank-`Number` case
@@ -362,6 +367,11 @@ GAMES = (
         # `product_line_rarities` is for, and it is why the registry cannot be partitioned
         # on `Product Line` alone.
         "product_line": "Pokemon",
+        # TCGplayer's own category id for that product line, read off the Pricing tab's
+        # category picker on 2026-08-30. It is what `POST /admin/pricing/downloadexportcsv`
+        # scopes on (D65), and it is NOT derivable from `product_line` — the two are
+        # independent identifiers for the same thing and only the portal knows the pairing.
+        "tcgplayer_category_id": 3,
         "product_line_rarities": ("Code Card",),
         "rarities": ("Code Card",),
         "rarities_not_claimed": (),
@@ -399,6 +409,8 @@ GAMES = (
         # A shortened form here would filter an export to zero rows, which under D25 is the
         # one case where the join refuses instead of continuing.
         "product_line": "Riftbound League of Legends Trading Card Game",
+        # See `pokemon` for what this is. Riftbound is 89.
+        "tcgplayer_category_id": 89,
         # Seven cells; six are claimed. Counts across the whole English catalogue:
         # Common 2850, Uncommon 2625, Rare 1310, Showcase 1305, Promo 1090, Epic 765,
         # None 133.
@@ -499,6 +511,8 @@ GAMES = (
         "display": "One Piece",
         # Verbatim off all 3622 rows of fixtures/onepiece_export_untouched.csv.
         "product_line": "One Piece Card Game",
+        # See `pokemon` for what this is. One Piece is 68.
+        "tcgplayer_category_id": 68,
         # Ten cells; nine are claimed. Counts across the three sets in the file: C 920,
         # R 780, SR 545, DON!! 530, UC 465, PR 160, SEC 120, L 80, None 17, TR 5.
         #
