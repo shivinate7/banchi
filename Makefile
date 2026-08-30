@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks
+.PHONY: help status harness check ignore-check docs-audit audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -36,6 +36,7 @@ help:
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
 	@echo
@@ -294,8 +295,15 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory port-agreement
+	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
+
+# The other half of D47: every path a worktree provisions is ignored whatever kind of thing is
+# at it. In `check` and never in the git hook — D18 forbids a commit gate that depends on local
+# state, and this asks about provisioning, so a fresh clone would fail a commit over nothing.
+ignore-check:
+	@sh scripts/ignore-check.sh
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:

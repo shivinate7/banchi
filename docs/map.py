@@ -540,6 +540,21 @@ COMPONENTS = [
                 # git hook.
                 "governed_by": ["D18", "D44"],
             },
+            "ignore-check.sh": {"does": "the other half of D47: `git check-ignore` over every path "
+                                        "a worktree provisions, asserting each is ignored WHATEVER "
+                                        "kind of thing is at it. That entry's own reopening "
+                                        "condition named this check and did not build it, and the "
+                                        "condition fired the same day — `harness/.cache/` and "
+                                        "`.venv/` kept directory-only patterns on the reasoning "
+                                        "that the guard copies one and builds the other, which is "
+                                        "true of the script and silent about the path. Asks the "
+                                        "BARE name only: the trailing-slash form means traversing "
+                                        "the path, and git refuses it exactly when a symlink is "
+                                        "there, which is the case being guarded. In `make check` "
+                                        "and never in the git hook (D18) — it asks about local "
+                                        "provisioning, so a fresh clone would fail a commit over "
+                                        "nothing.",
+                                "governed_by": ["D18", "D47"]},
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "

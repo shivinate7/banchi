@@ -3705,6 +3705,32 @@ the reverse direction: a path that ought to be ignored and is not, which is what
 one through. `git check-ignore` over the provisioned set, run somewhere off the commit path,
 would close that half.
 
+**IT REOPENED THE SAME DAY, BY THE REVERSE DIRECTION THIS PARAGRAPH NAMED, AND THE OTHER HALF IS
+NOW BUILT (2026-08-30).** Two of the four provisioned paths kept their directory-only patterns —
+`harness/.cache/` and `.venv/` — on the reasoning that `scripts/worktree-guard.sh` COPIES the
+first and BUILDS the second, so neither is ever a link. That reasoning is sound about the script
+and says nothing about the path. A session that provisioned a worktree by hand linked both, and
+got this entry's own state straight back: **untracked rather than ignored**, one `git add -A`
+from committing an absolute path into one Mac.
+
+**It also broke something this entry did not predict.** `scripts/docs-audit.py`'s ignore filter
+exists so a gitignored path is not reported as a dangling reference — and it had nothing to
+match, so every doc reference to `harness/.cache/` read as a broken path and the pre-commit hook
+blocked a commit over two of them. That is the audit being right for the wrong reason: the
+reference was fine and the ignore was not.
+
+**So the rule is about the PATH and not about today's provisioning.** All four patterns are
+type-agnostic now. The precision a trailing slash buys is worth nothing on a name nothing else
+in the tree bears, and it is worth less than nothing when it silently depends on a script's
+current behaviour staying what it is.
+
+**AND `make ignore-check` IS THE GUARD THIS ENTRY ASKED FOR**, doing exactly what the paragraph
+above specified: `git check-ignore` over the provisioned set, asserting each is ignored **as a
+file, as a directory and as a symlink**. It is in `make check` and deliberately NOT in the git
+hook — D18's rule, and a second reason of its own: what it checks is a property of the local
+worktree's provisioning, so a fresh clone with none of these paths present would fail a commit
+over something that is not wrong. Off the commit path is where a check about local state belongs.
+
 ---
 
 ## D48 — A send is a cart of boxes; a run is still one box
