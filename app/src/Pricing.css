@@ -1,0 +1,585 @@
+/* #/pricing — the hand-pricing worklist (D49).
+ *
+ * PAGE CHROME TO docs/DESIGN.md's NUMBERS, LITERALLY, and copied from `Runs.css` rather than
+ * re-derived: that file is the second owner route to solve this header and it copied
+ * `ReviewQueue.css`'s rather than inventing a third. 16px on all four sides, a 20px display
+ * title sharing its line with the screen's controls and counts, a one-line lede, and the
+ * first row of real content inside 150px of the top.
+ *
+ * NO SOLID ACCENT FILL ANYWHERE ON THIS SCREEN, and that is a positive finding rather than an
+ * omission. docs/DESIGN.md reserves the fill for "exactly one thing to do" and reasons about
+ * the harm on the review queue: filling the pricier candidate teaches the queue to drift
+ * toward over-listing. Every state of this screen is a choice among prices, so the same harm
+ * is available at run scale — a fill on any preset teaches the run to drift toward it. A
+ * hundred-row worklist is the definition of more than one answer.
+ */
+
+.pricing {
+  padding: var(--s4);
+}
+
+.pricing-head {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* `display: contents` on the controls, which is `Runs.css`'s trick and its reason: the row
+   wraps BETWEEN controls and never inside one, so a long run name pushes the Reload button to
+   a second line rather than breaking its own label in half. */
+.pricing-head-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.pricing-controls {
+  display: contents;
+}
+
+.pricing-controls > :first-child {
+  margin-left: auto;
+}
+
+.pricing-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.pricing-scope,
+.pricing-save {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.pricing-lede {
+  margin: var(--s2) 0 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pricing-lede code {
+  font-family: var(--util);
+  font-size: 12px;
+}
+
+/* 32px, which is `.runs-plain`'s height and `.run-button`'s — the settled control height in
+   this product. A third answer to how tall a button is would be visible the moment two of
+   these screens are open in sequence. */
+.pricing-plain {
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.pricing-plain:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.pricing-plain:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* OUTLINE AND NEVER A FILL for a pressed state, which is the register docs/DESIGN.md assigns
+   to a system that is unsure — and a chosen filter is exactly that until it is cleared. */
+.pricing-plain[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ------------------------------------------------------------------- the run picker */
+
+.pricing-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.pricing-run {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.pricing-run:hover {
+  background: var(--hover);
+}
+
+.pricing-run[aria-pressed='true'] {
+  background: var(--hover);
+  border-color: var(--ink);
+}
+
+.pricing-run-name {
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pricing-run-meta {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.pricing-empty,
+.pricing-note-text,
+.pricing-refusal {
+  margin: var(--s3) 0 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pricing-refusal {
+  color: var(--ink);
+}
+
+.pricing-note-block {
+  margin-top: var(--s3);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* The greppable token beneath the sentence — docs/DESIGN.md's human-label-large,
+   machine-string-small rule. It is the string as it sits in decisions.json, so grepping
+   `withheld` finds the screen, the file and the run report at once. */
+.pricing-machine {
+  margin: var(--s1) 0 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- the presets */
+
+.pricing-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.pricing-preset {
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.pricing-preset:hover {
+  background: var(--hover);
+}
+
+.pricing-preset-says {
+  flex: 1 1 20rem;
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------------- the sections
+
+   THREE, AND THEY ARE THE THREE FILES emit WRITES rather than three states an operator can
+   move a row between. Every one is decided by the Market cell alone, so nothing typed here
+   can move a row from one to another — which is what makes the list stop reflowing under a
+   commit (D28's other half). */
+
+.pricing-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
+.pricing-section-title {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.pricing-section-count,
+.pricing-section-note {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.pricing-section-note {
+  margin: var(--s1) 0 var(--s2);
+  font-family: var(--body);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+/* ------------------------------------------------------------------------- the grid
+
+   ONE TEMPLATE, DEFINED ONCE, READ BY THE CAPTION AND BY EVERY ROW. Two declarations that
+   have to agree is two declarations that will eventually not; a custom property makes the
+   drift structurally impossible rather than carefully avoided.
+
+   THE GAP IS UNIFORM AND THAT IS DELIBERATE. Tighter inside the reference block and wider
+   between zones cannot be expressed — `column-gap` is one value on a grid container, and a
+   wrapper around the four figures would stop them being items of the row's own grid, which
+   is what keeps the decimal column aligned down the list. */
+/* THE TEMPLATE HANGS ON THE SECTION AND NOT ON THE LIST, because the caption is the list's
+   SIBLING rather than its child — declared on `.pricing-list` it reached every row and no
+   caption at all, which is precisely the drift the shared property exists to prevent, arrived
+   at by the mechanism meant to stop it. `app/tests/pricing.spec.ts` compares the two computed
+   templates and caught it. */
+.pricing-section {
+  --pricing-cols:
+    minmax(0, 1fr) /* the card                       */
+    76px /* MARKET   max $4400.00          */
+    76px /* DIRECT   max $1974.74          */
+    84px /* LOW      max $49000.00         */
+    84px /* +SHIP    max $49000.00         */
+    64px /* TCGplayer Id                   */
+    76px /* quantity                       */
+    120px /* the price being set            */
+    32px; /* hold                           */
+  margin-top: var(--s5);
+}
+
+.pricing-caption,
+.pricing-row {
+  display: grid;
+  grid-template-columns: var(--pricing-cols);
+  column-gap: var(--s3);
+  align-items: center;
+}
+
+.pricing-caption {
+  padding: 0 0 var(--s1);
+  font-family: var(--util);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.pricing-caption > span:not(:first-child) {
+  text-align: right;
+}
+
+/* THE SNAP KEYS LIVE HERE, ONCE PER COLUMN, AND NOT ONCE PER ROW. docs/DESIGN.md's
+   every-choice-shows-its-key rule was written for a list whose choices differ per card; here
+   the same four choices are on every row, so the chip belongs where the eye already is when
+   choosing that column. A hundred rows would otherwise draw four hundred chips. */
+.pricing-caption kbd {
+  font-family: var(--util);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ROW HEIGHT IS INVARIANT ACROSS EVERY STATE, and the note is what makes it so: a second
+   grid row that every zone but the card leaves empty by construction, so a row that acquires
+   a sentence costs nothing and a list of a hundred cannot reflow when one does. */
+/* THE SECOND ROW IS RESERVED, NOT `auto`, AND THAT IS THE WHOLE OF THE NO-REFLOW GUARANTEE.
+   With `auto` it collapses to zero on a row carrying no note, so a row that acquires one grows
+   by 13px and everything below it moves — D28's finding, on the screen where the finger is
+   already travelling to the next field. 13px is the note's own line box: 10px x 1.3. */
+.pricing-row {
+  grid-template-rows: 32px 13px;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pricing-row[data-dim='true'] {
+  opacity: 0.4;
+}
+
+.pricing-id {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pricing-name {
+  overflow: hidden;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pricing-meta {
+  overflow: hidden;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Condition at ink, because it is the field that tells one row of a SKU pair from the other
+   — the same argument ReviewQueue.css makes for the candidate rows, and the only place in
+   the repo that makes it. It is also FIRST, so the ellipsis can never reach it. */
+.pricing-cond {
+  color: var(--ink);
+}
+
+/* The four references and the quantity: one size, one weight, tabular, right-aligned. RIGHT
+   ALIGNMENT IS DECIMAL ALIGNMENT here, which is what carries the magnitude — a $1452.35 row
+   and a $0.45 row differ by four cells of ink per figure with every element drawn identically,
+   and no guessed breakpoint anywhere. `letter-spacing: 0` because Martian Mono is
+   fixed-advance and tracking a figure destroys the property it was chosen for (D41). */
+.pricing-ref,
+.pricing-sku,
+.pricing-qty {
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pricing-sku,
+.pricing-qty {
+  font-size: 11px;
+}
+
+/* MARKET is senior because D9 makes it so: it is what the threshold always reads, whatever
+   the basis, and it is a statement about the card's value rather than about this run. */
+.pricing-ref-market {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pricing-input {
+  min-height: 32px;
+  padding: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg);
+  /* --field: the boundary of something you TYPE INTO, and nowhere else. An empty input IS
+     its rectangle, so the hairline that separates every other thing on this screen leaves it
+     findable only by its placeholder. */
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+}
+
+/* A SUGGESTION READS AS ONE. It is a real value rather than a placeholder — the owner asked
+   for a preset that "prefills a box as suggested" — so the only thing that can say it has not
+   been chosen is its weight and its colour. */
+.pricing-row[data-answer='suggested'] .pricing-input {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.pricing-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.pricing-held {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  text-align: right;
+}
+
+.pricing-held .pricing-machine {
+  margin: 0;
+}
+
+.pricing-hold {
+  min-height: 32px;
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.pricing-hold[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The free row. Spans everything but the card, which is space that already exists. */
+.pricing-row-note {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  margin: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------- the hold panel */
+
+.pricing-holdpanel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  padding: var(--s3);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.pricing-holdpanel-lede,
+.pricing-holdpanel-fine {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pricing-holdpanel-reasons,
+.pricing-holdpanel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.pricing-holdpanel kbd {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pricing-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.pricing-field input {
+  padding: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+}
+
+.pricing-field-wide input {
+  flex: 1 1 20rem;
+}
+
+/* ----------------------------------------------------------------- the photo panel
+
+   ON DEMAND AND TOGGLED BY THE SAME KEY, so `Escape` keeps its two existing jobs in the
+   price field and this panel never takes a binding away from price entry. Fixed rather than
+   inline: it must not add height to a row, because an invariant row height is what stops the
+   list moving under a finger. */
+.pricing-photo {
+  position: fixed;
+  /* BOTTOM LEFT, AND THE CORNER WAS CHOSEN BY LOOKING AT IT. Bottom-right put the panel over
+     the four reference columns, the quantity and the price field — every number the operator
+     is pricing FROM and the one they are typing INTO. The left edge holds the card name,
+     which is already ellipsised and is the least precise thing on the row, so covering part
+     of it costs the least; and the panel is a picture of that card, so it sits beside what it
+     is about. */
+  left: var(--s4);
+  bottom: var(--s4);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 2px 16px rgb(8 9 10 / 12%);
+}
+
+.pricing-photo img {
+  display: block;
+  width: 260px;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border-radius: var(--r);
+}
+
+/* WHICH COPY THIS IS, NAMED. There is no quality signal worth trusting — confidence is the
+   tempting one and exactly wrong, since T1's recorded misses are confident answers with the
+   digits wrong — so the pick is the first in box-walk order, said out loud, and steppable.
+   Five photographs also answer "are these actually the same card?", and if they are not, the
+   identification was wrong. */
+.pricing-photo-caption {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pricing-photo-controls {
+  display: flex;
+  gap: var(--s2);
+}

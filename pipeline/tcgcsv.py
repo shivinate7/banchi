@@ -55,6 +55,13 @@ QUANTITY_COLUMN = "Add to Quantity"
 PRICE_COLUMN = "TCG Marketplace Price"
 MARKET_PRICE_COLUMN = "TCG Market Price"
 LOW_PRICE_COLUMN = "TCG Low Price"  # `--basis=low`; never the threshold, which reads Market
+# The other two price columns. Declared in CANONICAL_HEADER since the header was written and
+# read by nothing until D49 — the pricing screen shows all four side by side, because the
+# owner hand-prices and asked for "all the data from the CSV" in front of them when they do.
+# Neither is a basis: `pipeline/pricing.py` offers `market` and `low` and nothing else, and
+# widening that is a change to D9 rather than a constant.
+DIRECT_LOW_COLUMN = "TCG Direct Low"
+LOW_WITH_SHIPPING_COLUMN = "TCG Low Price With Shipping"
 LIVE_QUANTITY_COLUMN = "Total Quantity"
 SET_COLUMN = "Set Name"
 NUMBER_COLUMN = "Number"

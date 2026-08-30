@@ -28,6 +28,11 @@ MANIFEST = "manifest.json"
 IDENTIFICATIONS = "identifications.json"
 DECISIONS = "decisions.json"
 REPORT = "report.txt"
+# The per-SKU pricing table `join` writes beside the report (D49). Data rather than prose,
+# because a screen reads it: `report.txt` is written for a person and cannot be parsed back
+# without inventing a format nothing owns. `_DOWNLOADABLE` already matches `.json`, so it
+# also appears in the run panel's file list with no route change.
+PRICING = "pricing.json"
 RECONCILE = "reconcile.txt"
 IMPORT_LISTED = "import-listed.csv"
 IMPORT_SUBTHRESHOLD = "import-subthreshold.csv"

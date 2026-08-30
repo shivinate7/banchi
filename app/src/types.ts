@@ -1176,6 +1176,105 @@ export type RunPhase =
   | 'reconcile'
   | 'done'
 
+/* ------------------------------------------------------------------- pricing (D49)
+ *
+ * The per-SKU table `cli/cmd_join.py` writes beside `report.txt`, served with this run's
+ * answers by `GET /pipeline/runs/<name>/pricing`. Field names are the server's own, in the
+ * server's own case, which is this file's standing rule — so a screen can be held against
+ * `pricing.json` on disk without a translation table in between.
+ */
+
+/** One SKU, priced. Every figure here was computed by `pipeline/pricing.py` at join time;
+ *  the client performs no arithmetic on money, anywhere. */
+export type PricingSku = {
+  sku: string
+  game: string
+  /** THE EXPORT ROW, VERBATIM — all sixteen cells, unmodified, keyed by the CSV's own column
+   *  names. The owner asked for "all the data from the CSV shown when I make the decision",
+   *  and a subset chosen server-side would be a decision about what matters taken by the
+   *  wrong file. */
+  row: Record<string, string>
+  /** Which import file this SKU is bound for, and therefore which section it draws in.
+   *  Decided by the Market cell alone (`pipeline/join.py:prices_for`), so nothing the
+   *  operator types can move a row between sections — which is what makes the list stop
+   *  reflowing under a commit (D28). */
+  bucket: 'listable' | 'sub_threshold' | 'no_market_data'
+  copies: number
+  add_to_quantity: number
+  backstock: number
+  live_before: number
+  committed: number
+  at_cap: boolean
+  condition: string
+  set_name: string
+  name: string
+  /** The four export price columns plus the export's own `TCG Marketplace Price`, each
+   *  rendered to two decimals or `null` where the cell is blank. `null` is a real answer:
+   *  measured, `TCG Direct Low` is blank on 2,060 of 2,476 listable rows in the wide export,
+   *  so a snap onto it usually has nothing behind it and must refuse rather than write "". */
+  snap: {
+    market: string | null
+    direct_low: string | null
+    low: string | null
+    low_with_shipping: string | null
+    now: string | null
+  }
+  /** What each named preset would list this SKU at, `null` where it cannot price it — 394 of
+   *  2,476 listable rows carry no `TCG Low Price`, so a Low-based preset genuinely has
+   *  nothing to work from. The screen prices what it can and says which it could not. */
+  presets: Record<string, string | null>
+  /** The run's own rule applied to this SKU, which is the suggestion a row opens carrying. */
+  rule_price: string | null
+  /** Every copy, in box-walk order. The FIRST is the representative photograph and the
+   *  screen names which one it is drawing — there is no quality signal worth trusting, and
+   *  confidence is the tempting one and exactly wrong (T1's misses are confident answers
+   *  with the digits wrong), so an arbitrary pick made steppable is the honest version. */
+  positions: { box: number; index: number; label: string }[]
+  listing: { pushed: number; staged: number; live: number } | null
+}
+
+export type PricingTable = {
+  run: string
+  threshold: string
+  floor: string
+  rule: string
+  basis: string
+  presets: string[]
+  games: { game: string; import_listed: string; import_subthreshold: string }[]
+  skus: PricingSku[]
+  bands: { game: string; label: string; skus: number; copies: number }[]
+}
+
+/** A SKU the operator is deliberately not listing. The bare `"unlisted"` string is the same
+ *  answer with no reason attached, which is what a terminal user types. */
+export type WithheldRecord = {
+  withheld: string
+  watch_above?: string
+  note?: string
+}
+
+/** `decisions.json` as it sits on disk. Deliberately loose: `PUT .../decisions` replaces the
+ *  document wholesale, so the screen round-trips every key it does not understand rather
+ *  than rebuilding the file from what it happens to know about. */
+export type DecisionsDocument = {
+  rule?: string
+  basis?: string
+  sub_threshold?: string | { flat: string } | null
+  overrides?: Record<string, string | number | WithheldRecord>
+  no_market_data?: Record<string, string | null>
+  [key: string]: unknown
+}
+
+export type PricingPayload = {
+  run: string
+  pricing: PricingTable
+  decisions: DecisionsDocument | null
+  /** The sub-threshold answer the newest OTHER run gave. A LABEL and never a default — D9
+   *  forbids defaulting this on the operator's behalf, so this removes the time spent
+   *  deciding and not the press. */
+  remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
+}
+
 /** What a run was scoped to. `whole_box` is the common case and costs no temporary
  *  anything; a selection builds a directory of symlinks that is swept after 48 hours. */
 export type RunScope = {
@@ -1230,7 +1329,27 @@ export type RunDetail = RunSummary & {
  *  returns before `runs.create`. The two numbers a screen must show before it may ask to
  *  spend; null where the preflight did not print the line, so a changed preflight shows as
  *  a missing figure rather than as a confident zero. */
-export type RunPreflight = {
+/** One box as a SEND names it: which cards, and how they are read.
+ *
+ *  THE READING IS PART OF THE SCOPE AND NOT A SETTING BESIDE IT. `RunPanel`'s cost estimate
+ *  has been voided by a change to the crop or the max edge since D32 was amended — the
+ *  estimate is computed from the bytes each card is sent as, and those two decide them — so
+ *  the reading was already inside the thing being quoted. Carrying it on the scope is that
+ *  fact written down, and it is what lets one send give each box its own. */
+export type RunLeg = {
+  box: number
+  /** The ticked cards, or absent for the whole box. Never an empty array: the server refuses
+   *  one rather than reading it as every card, and the client must not invent that shape. */
+  indices?: number[]
+  crop?: boolean
+  maxEdge?: number
+}
+
+/** What one box in a send would cost. The figures are lifted out of that box's own preflight
+ *  stdout rather than recomputed anywhere, so the screen and the run's log carry the same
+ *  string produced by the same code. `null` where a line did not appear — a changed preflight
+ *  shows as a missing figure rather than as a confident zero. */
+export type RunLegPreflight = {
   ok: boolean
   exit_code: number
   scope: RunScope
@@ -1240,17 +1359,57 @@ export type RunPreflight = {
   cache_hits: number | null
   to_send: number | null
   estimate_usd: number | null
-  /** A live run already reading these cards. The screen disables its own confirm on this
-   *  rather than letting the operator press a button that is going to refuse. */
+  /** A live run already reading this box. The screen withholds its confirm on this rather
+   *  than letting the operator press a button that is going to refuse. */
   busy_run: string | null
 }
 
-export type RunStarted = {
+/** The whole send, summed SERVER-SIDE. Never computed here: this is the number the confirm
+ *  is gated on, and a `reduce` in TypeScript would be a second cost model that can disagree
+ *  with the per-box figures printed directly above it. A `null` in any box poisons its sum
+ *  rather than being skipped, for the reason the per-box `null`s exist at all. */
+export type RunPreflightTotal = {
+  photographs: number | null
+  cache_hits: number | null
+  to_send: number | null
+  estimate_usd: number | null
+  boxes: number
+  /** Every live run standing between this cart and a send. Non-empty withholds the confirm. */
+  busy: { box: number; run: string }[]
+}
+
+/** ALWAYS A LIST, EVEN FOR ONE BOX. A response shape that changed with the request would make
+ *  every reader ask which one it got before it could ask anything else, so a single-box send
+ *  answers as a cart of one — the same read-side widening D3's amendment gives a finish
+ *  claim. */
+export type RunPreflight = {
+  ok: boolean
+  scopes: RunLegPreflight[]
+  total: RunPreflightTotal
+}
+
+export type RunStartedLeg = {
   run: string
   path: string
   pid: number
   scope: RunScope
   argv: string[]
+}
+
+/** A box whose child could not be spawned. `Popen` can fail on the fourth leg after three
+ *  have started and no validation sees that coming, so the response names both halves and the
+ *  screen draws the failures: a partial send reported honestly is recoverable by pressing
+ *  again for the boxes that did not go, and one reported as a success is an invoice nobody
+ *  can account for. */
+export type RunStartFailure = {
+  box: number
+  code: string
+  message: string
+}
+
+export type RunStarted = {
+  started: RunStartedLeg[]
+  failed: RunStartFailure[]
 }
 
 /** A free step's result. A non-zero `exit_code` arrives as a 200 with `ok: false` — `emit`

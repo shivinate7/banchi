@@ -947,6 +947,17 @@ class SkuMatch:
         return self.row.get(tcgcsv.SET_COLUMN, "")
 
     @property
+    def name(self) -> str:
+        """The card's own name, off the export row.
+
+        Added for the pricing surfaces (D49), which name a SKU to a human in three places —
+        a watch line, a warning and the per-SKU table — and had `self.row[NAME_COLUMN]`
+        written out at each. `set_name` and `condition` above are the same accessor for the
+        same reason: the column constant belongs in one place per fact.
+        """
+        return self.row.get(tcgcsv.NAME_COLUMN, "")
+
+    @property
     def market_price(self) -> Optional[Decimal]:
         """What the D9 threshold reads, always, whatever `--basis` is set to."""
         return tcgcsv.parse_price(self.row[tcgcsv.MARKET_PRICE_COLUMN])
@@ -1513,6 +1524,7 @@ def prices_for(
     sub_threshold: Optional[pricing.Disposition] = None,
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
     no_market_data: Optional[Dict[str, object]] = None,
+    withheld: Optional[Set[str]] = None,
 ) -> "OrderedDict[str, Decimal]":
     """Listed price per SKU, and what decided it.
 
@@ -1535,11 +1547,23 @@ def prices_for(
     """
     overrides = dict(sku_dispositions or {})
     unpriced = dict(no_market_data or {})
+    # THE OPERATOR IS DELIBERATELY NOT LISTING THESE (D49). Absent from the returned mapping,
+    # exactly as an UNLISTED answer is below — `import_rows` already reads absence as "write
+    # no row", which is the whole reason a withhold needed no new machinery downstream.
+    #
+    # THERE IS DELIBERATELY NO UNKNOWN-KEY CHECK ON THIS SET, unlike `sku_dispositions` at the
+    # bottom of this function, and the absence is the survival guarantee rather than an
+    # oversight. A withheld SKU is the one most likely to fall out of a later run — it was
+    # withheld BECAUSE it is not being listed — and refusing on it would mean holding a card
+    # back eventually breaks `emit` for the whole run.
+    held = set(withheld or ())
     prices: "OrderedDict[str, Decimal]" = OrderedDict()
     undecided: List[SkuMatch] = []
     unanswered: List[SkuMatch] = []
 
     for match in report.matches.values():
+        if match.sku in held:
+            continue
         disposition = overrides.get(match.sku)
         if disposition is not None:
             prices[match.sku] = disposition.resolve()
@@ -1592,13 +1616,14 @@ def import_rows(
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
     no_market_data: Optional[Dict[str, object]] = None,
     only: Optional[Set[str]] = None,
+    withheld: Optional[Set[str]] = None,
 ) -> List[tcgcsv.Row]:
     """The rows an import file would carry. One per SKU, in catalog order.
 
     `only` selects a subset of SKUs, which is how `emit` splits one join into the listed
     file and the sub-threshold file (v2 §7) without pricing the run twice.
     """
-    prices = prices_for(report, sub_threshold, sku_dispositions, no_market_data)
+    prices = prices_for(report, sub_threshold, sku_dispositions, no_market_data, withheld)
     rows: List[tcgcsv.Row] = []
     for match in report.matches.values():
         if match.sku not in prices:  # answered UNLISTED
@@ -1627,6 +1652,7 @@ def emit_import(
     sku_dispositions: Optional[Dict[str, pricing.Disposition]] = None,
     no_market_data: Optional[Dict[str, object]] = None,
     only: Optional[Set[str]] = None,
+    withheld: Optional[Set[str]] = None,
 ) -> bytes:
     """Write the import file — or refuse, loudly, with both directions reported.
 
@@ -1642,7 +1668,9 @@ def emit_import(
             + "\n"
             + report.report()
         )
-    rows = import_rows(report, sub_threshold, sku_dispositions, no_market_data, only)
+    rows = import_rows(
+        report, sub_threshold, sku_dispositions, no_market_data, only, withheld
+    )
     skus = [r[tcgcsv.SKU_COLUMN] for r in rows]
     if len(skus) != len(set(skus)):
         raise OutputSuppressed("duplicate TCGplayer Id rows in one import file")

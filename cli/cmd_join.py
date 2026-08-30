@@ -20,10 +20,11 @@ hard stop on a snapshot's age would block a legitimate run for a reason already 
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 
 from cli import resolve, runs
-from pipeline import decisions, join, routing
+from pipeline import decisions, join, pricing, routing, tcgcsv
 from store import master, queues
 from store.session import Store
 
@@ -52,6 +53,180 @@ def _reason_counts(resolved: resolve.Resolved) -> Counter:
 def _counts_block(say, counts: Counter, indent: str = "                   ") -> None:
     for reason, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
         say(f"{indent}{reason:<34} {count}")
+
+
+# The three presets the pricing screen offers, priced HERE so `pipeline/pricing.py` runs
+# once and in Python (D49). The owner picked these three and their numbers in an interview:
+# match market, undercut market by 5, undercut TCG Low by 1. A fourth is a change to this
+# tuple and to `app/src/Pricing.tsx`'s labels, and to nothing else.
+#
+# THE CLIENT PERFORMS NO ARITHMETIC ON MONEY, WHICH IS WHAT THIS TUPLE BUYS. Re-implementing
+# `Rule.apply` + `round_money` + `clamp_floor` in TypeScript would put `pricing.py`'s
+# rounding-before-clamping order in two languages with nothing auditing the second, and that
+# order is the whole reason `list_price` is a function rather than an expression.
+PRESETS = (
+    ("market_match", pricing.RULE_MATCH, pricing.BASIS_MARKET),
+    ("market_undercut_5", "undercut:5", pricing.BASIS_MARKET),
+    ("low_undercut_1", "undercut:1", pricing.BASIS_LOW),
+)
+
+
+def _cell(row, column):
+    """One export cell as a rendered price, or `None` where it is blank.
+
+    Rendered through `tcgcsv.format_price` rather than passed raw, because three of the four
+    price columns are FOUR-decimal in every populated cell and two are two — so a screen
+    drawing them side by side without this reads `$0.0100` beside `$0.07` and loses the
+    decimal column. The raw string travels too (`row`), so nothing is lost.
+    """
+    value = tcgcsv.parse_price(row.get(column, ""))
+    return None if value is None else tcgcsv.format_price(value)
+
+
+def _preset_prices(match):
+    """What each named preset would list this SKU at, or `None` where it cannot price it.
+
+    `None` IS A REAL ANSWER AND NOT AN ERROR. Measured on the wide Pokemon export, 394 of
+    2,476 listable rows carry a blank `TCG Low Price`, so a Low-based preset genuinely has
+    nothing to price them from — and `SkuMatch.list_price` returns `None` there, which
+    `tcgcsv.set_writable` would turn into an import row carrying a quantity and no price.
+    The screen prices what it can, leaves the rest, and says which (the owner's ruling).
+    """
+    out = {}
+    for name, rule, basis in PRESETS:
+        basis_price = tcgcsv.parse_price(
+            match.row.get(
+                tcgcsv.MARKET_PRICE_COLUMN
+                if basis == pricing.BASIS_MARKET
+                else tcgcsv.LOW_PRICE_COLUMN,
+                "",
+            )
+        )
+        out[name] = (
+            None
+            if basis_price is None or basis_price <= 0
+            else str(pricing.list_price(basis_price, rule=pricing.Rule.parse(rule)))
+        )
+    return out
+
+
+def _pricing_table(run_dir, resolved, choice, snapshot):
+    """`pricing.json` — every SKU this run matched, with everything needed to price it.
+
+    WRITTEN BY `join` AND BY NOTHING ELSE, from the values it has already computed. The
+    alternative was a server route that re-ran `resolve.load` per request, which re-parses
+    the export, re-reads the store and SHA-256s every photograph in the box (D36) — seconds
+    per call, for a screen that polls nothing but is opened repeatedly.
+
+    IT IS DATA BECAUSE A SCREEN READS IT. `report.txt` beside it is prose written for a
+    person and cannot be parsed back without inventing a format nothing owns; this file
+    carries each export row VERBATIM under `row`, so the screen shows what the CSV says
+    rather than what an intermediate layer decided the CSV meant.
+    """
+    skus = []
+    for game_join in resolved.joins.values():
+        report = game_join.report
+        below = set(report.below_threshold.skus)
+        unpriced = {m.sku for m in report.no_market_data}
+        listing_of = snapshot.inventory.listings
+        for match in report.matches.values():
+            record = listing_of.get(match.sku)
+            skus.append(
+                {
+                    "sku": match.sku,
+                    "game": game_join.game,
+                    # VERBATIM, every cell, unmodified. D49's whole premise is the owner's
+                    # "I want all the data from the CSV shown when I make the decision".
+                    "row": dict(match.row),
+                    "bucket": (
+                        "no_market_data"
+                        if match.sku in unpriced
+                        else "sub_threshold"
+                        if match.sku in below
+                        else "listable"
+                    ),
+                    "copies": match.copies,
+                    "add_to_quantity": match.add_to_quantity,
+                    "backstock": match.backstock,
+                    "live_before": match.live_before,
+                    "committed": len(match.committed_positions),
+                    "at_cap": match.add_to_quantity == 0,
+                    "condition": match.condition,
+                    "set_name": match.set_name,
+                    "name": match.name,
+                    "snap": {
+                        "market": _cell(match.row, tcgcsv.MARKET_PRICE_COLUMN),
+                        "direct_low": _cell(match.row, tcgcsv.DIRECT_LOW_COLUMN),
+                        "low": _cell(match.row, tcgcsv.LOW_PRICE_COLUMN),
+                        "low_with_shipping": _cell(
+                            match.row, tcgcsv.LOW_WITH_SHIPPING_COLUMN
+                        ),
+                        "now": _cell(match.row, tcgcsv.PRICE_COLUMN),
+                    },
+                    "presets": _preset_prices(match),
+                    "rule_price": (
+                        None if match.list_price is None else str(match.list_price)
+                    ),
+                    # The first copy in box-walk order and how many there are — the
+                    # representative photograph, named rather than picked silently, and
+                    # steppable on the screen. `positions` is already sorted.
+                    "positions": [
+                        {"box": pos.box, "index": pos.index, "label": pos.label}
+                        for pos in match.positions
+                    ],
+                    "listing": (
+                        None
+                        if record is None
+                        else {
+                            "pushed": record.pushed,
+                            "staged": record.staged,
+                            "live": record.live,
+                        }
+                    ),
+                }
+            )
+
+    # Market descending, and `None` last. The sort is the hierarchy on the screen — there are
+    # no price type-size bands, because `ReviewQueue.css`'s own comment calls its breakpoints
+    # a guess and docs/DESIGN.md records them as drawing a sort that queue only partly has.
+    skus.sort(
+        key=lambda s: (
+            s["snap"]["market"] is None,
+            -float(s["snap"]["market"] or 0),
+            s["sku"],
+        )
+    )
+
+    bands = []
+    for game_join in resolved.joins.values():
+        for band in game_join.report.below_threshold.bands():
+            bands.append(
+                {
+                    "game": game_join.game,
+                    "label": f"${band.lower}-${band.upper}",
+                    "skus": len(band.matches),
+                    "copies": band.copies,
+                }
+            )
+
+    return {
+        "run": run_dir.name,
+        "threshold": str(pricing.THRESHOLD),
+        "floor": str(pricing.FLOOR),
+        "rule": str(choice.rule),
+        "basis": choice.basis,
+        "presets": [name for name, _, _ in PRESETS],
+        "games": [
+            {
+                "game": g.game,
+                "import_listed": runs.import_listed_name(g.game),
+                "import_subthreshold": runs.import_subthreshold_name(g.game),
+            }
+            for g in resolved.joins.values()
+        ],
+        "skus": skus,
+        "bands": bands,
+    }
 
 
 def _preview(args, run_dir, plan, resolved, say) -> int:
@@ -347,15 +522,35 @@ def run(args, say) -> int:
     # ------------------------------------------------------------- decisions.json (merge)
     decisions_path = run_dir.path(runs.DECISIONS)
     if decisions_path.is_file():
-        choice = decisions.Decisions.read(decisions_path)
+        try:
+            choice = decisions.Decisions.read(decisions_path)
+        except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
+            # A REFUSAL RATHER THAN A TRACEBACK, for the reason `cmd_emit` gives at the same
+            # seam: these three are the only ways this document can be unreadable, only one of
+            # them is a `MalformedDecisions`, and `PUT /pipeline/runs/<name>/decisions` writes
+            # it with no validation — so a screen can produce every one of them.
+            say(f"{runs.DECISIONS} is unusable: {exc}")
+            say("Fix it, or delete it and let this join write a fresh one.")
+            return 1
         say(f"decisions        merging into existing {runs.DECISIONS} — your edits are kept")
     else:
+        # SEEDED FROM THE RUN ON THE FIRST JOIN ONLY. `--rule` and `--basis` are how a run's
+        # pricing starts; after that the FILE is the authority and this command may not touch it.
         choice = decisions.Decisions(rule=resolved.rule, basis=resolved.basis)
 
     added = choice.add_unpriced(sorted(resolved.no_market_data_skus))
     dropped = choice.prune(set(resolved.matches))
-    choice.rule = resolved.rule
-    choice.basis = resolved.basis
+    # `choice.rule` and `choice.basis` ARE NOT REASSIGNED HERE, AND THE TWO LINES THAT DID IT
+    # ARE THE POINT OF THIS COMMENT. They ran immediately after the sentence above promising
+    # "your edits are kept", and they overwrote exactly the two fields an operator is most
+    # likely to have edited — measured: `markup:100` on `low` went back to `match` on `market`
+    # on a plain re-join, silently, while `sub_threshold` was correctly preserved beside it.
+    #
+    # `join` is free and re-runnable and is re-run routinely — after a review is cleared, after
+    # an export is refreshed — so this was not an edge case, it was every second run. The
+    # manifest still records what THIS join used (`run_dir.set(rule=..., basis=...)` below), and
+    # `report.txt` prints it; a record of what happened is a different thing from the answer,
+    # and only one of them may be authoritative.
     choice.write(decisions_path)
 
     say(f"                 {decisions_path}")
@@ -367,8 +562,34 @@ def run(args, say) -> int:
     for warning in choice.warnings:
         say(f"                 note: {warning}")
 
+    # THE WATCH, AND THIS IS THE ONLY COMMAND THAT CAN FIRE IT (D49). A withhold can name a
+    # market price the operator wants to be told about; `join` is free, re-runnable and
+    # pointed at a REFRESHED export, so it is the only moment a price has moved and therefore
+    # the only moment a watch has anything to say. A method rather than a `warnings` entry
+    # because `warnings` is a zero-argument property and cannot see a price.
+    for crossed in choice.watches(resolved.matches):
+        say(f"                 WATCH: {crossed}")
+
     for reason in choice.blocking(resolved.sub_threshold_skus):
         say(f"                 EMIT WILL REFUSE: {reason}")
+
+    # ---------------------------------------------------------------- pricing.json (D49)
+    # WRITTEN AFTER `decisions.json`, so the rule it records is the one this join resolved
+    # with and the one the screen will draw as the source of every suggestion. Written on
+    # every join for the same reason the report is: it describes THIS join, and a stale copy
+    # beside a fresh report would be the two-files-from-two-moments problem the pricing route
+    # exists to avoid.
+    pricing_path = run_dir.path(runs.PRICING)
+    # A FRESH SNAPSHOT, not the one read at the top of this command. The write block above
+    # moved `live` and drew `staged` down, so the snapshot taken before it is stale by
+    # exactly the counts this table reports — and a screen drawing `pushed 2 staged 0` from
+    # the wrong side of a join is a screen that disagrees with `emit` about what TCGplayer
+    # holds. Lock-free, because every write in this store is an atomic replace.
+    pricing_path.write_text(
+        json.dumps(_pricing_table(run_dir, resolved, choice, store.read()), indent=2) + "\n",
+        encoding="utf-8",
+    )
+    say(f"pricing table    {len(resolved.matches)} SKU(s) -> {pricing_path}")
 
     # ------------------------------------------------------------------------ persist
     # `exports` is the recorded shape: {game: source}, the mapping VERIFIED off the

@@ -37,6 +37,7 @@
     GET    /pipeline/runs                  every run, newest first, with its phase
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
+    GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
@@ -378,6 +379,10 @@ _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 # a path that reaches the handler is already known not to hold a separator.
 _RUN_ITEM_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)$")
 _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
+# The pricing table and this run's answers, in one read (D49). Matched before the
+# run-item pattern for the same reason the download is: the more specific path reads
+# first, for whoever is following this list rather than the regex engine.
+_RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -6341,6 +6346,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
                 blob, kind = pipeline_routes.do_pipeline_file(match.group(1), wanted[0])
                 return self._send(HTTPStatus.OK, blob, kind)
+            match = _RUN_PRICING_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_pricing(match.group(1))
+                )
             match = _RUN_ITEM_RE.match(path)
             if match:
                 return self._json(

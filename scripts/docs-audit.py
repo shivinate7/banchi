@@ -2381,6 +2381,94 @@ def design_reason_lists() -> Tuple[Dict[str, str], Optional[str]]:
     return out, None
 
 
+def check_withhold_reasons(report: Report) -> None:
+    """The three withhold reasons, reconciled across the two languages that declare them.
+
+    D49 gives `overrides` a second kind of answer — a SKU the operator is deliberately not
+    listing, carrying a reason — and the reason vocabulary is authored in `pipeline/
+    decisions.py` and offered by `app/src/holds.ts`. That is two independent declarations of
+    one closed set, which is exactly the shape `check_reason_codes` above exists for and
+    exactly the drift D16 exists to catch.
+
+    IT MATTERS MORE HERE THAN FOR THE REVIEW REASONS, and the reason is worth stating: `PUT
+    /pipeline/runs/<name>/decisions` writes that document with NO VALIDATION AT ALL and says
+    so in its own comment. The screen's defence against writing an unparseable file is that it
+    builds the document from typed state and cannot construct a shape its own code does not
+    know — and that defence is worth exactly as much as the two declarations agreeing.
+    A reason the screen offers and the parser refuses is a run the operator cannot join.
+
+    BLOCKING, because a mismatch is provably wrong rather than a question of judgement.
+
+    THE HUMAN LABELS ARE NOT CHECKED and that is deliberate: `WITHHOLD_LABELS` is prose for a
+    person, `docs/DESIGN.md` does not enumerate it, and a rule about wording would be this
+    audit taking a view on English. What is checked is the machine string, which is the thing
+    that has to match a parser.
+    """
+    findings: List[Finding] = []
+    python_path = ROOT / "pipeline" / "decisions.py"
+    ts_path = ROOT / "app" / "src" / "holds.ts"
+
+    authored: Set[str] = set()
+    for node in ast.walk(ast.parse(read(python_path))):
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if "WITHHOLD_REASONS" not in names:
+            continue
+        try:
+            authored = set(ast.literal_eval(node.value))
+        except (ValueError, SyntaxError):
+            findings.append(
+                Finding(
+                    "pipeline/decisions.py",
+                    "WITHHOLD_REASONS is not a literal this audit can read. It is a "
+                    "hand-authored vocabulary in D22's sense and has to stay one.",
+                )
+            )
+
+    ts_text = read(ts_path)
+    match = re.search(r"WITHHOLD_REASONS\s*=\s*\[(.*?)\]", ts_text, re.S)
+    offered: Set[str] = set(re.findall(r"'([^']+)'", match.group(1))) if match else set()
+
+    if not authored:
+        findings.append(
+            Finding("pipeline/decisions.py", "WITHHOLD_REASONS is missing or empty.")
+        )
+    if match is None:
+        findings.append(
+            Finding(
+                "app/src/holds.ts",
+                "no WITHHOLD_REASONS array — the screen has to declare the vocabulary it "
+                "offers, in one place, or nothing can reconcile it with the parser.",
+            )
+        )
+
+    for reason in sorted(offered - authored):
+        findings.append(
+            Finding(
+                "app/src/holds.ts",
+                f"{reason!r} is offered by the screen and is not in "
+                f"pipeline/decisions.py:WITHHOLD_REASONS — `_withheld` refuses it, so "
+                f"choosing it writes a decisions.json the next join cannot read.",
+            )
+        )
+    for reason in sorted(authored - offered):
+        findings.append(
+            Finding(
+                "app/src/holds.ts",
+                f"{reason!r} is authored in pipeline/decisions.py and the screen does not "
+                f"offer it — legal in the file, unreachable from the product.",
+            )
+        )
+
+    report.add(
+        "withhold reasons",
+        MECHANICAL,
+        findings,
+        f"{len(authored)} authored, offered by the screen, none unreachable",
+    )
+
+
 def check_reason_codes(report: Report) -> None:
     """The twelve review reasons, reconciled across the three places they are published.
 
@@ -4625,6 +4713,7 @@ def audit(staged_only: bool) -> Report:
     check_matrix_superset(report)
     check_join_key_shape(report)
     check_reason_codes(report)
+    check_withhold_reasons(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)
