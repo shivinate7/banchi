@@ -114,10 +114,12 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
-        "path": "scripts/githooks/pre-commit",
+        "path": "scripts/githooks/*",
         "kind": "file",
         "requires": (),
-        "why": "the opsec hook core.hooksPath must point at — read by hooks() below",
+        "why": "the tracked hooks `make hooks` installs — read by hooks() below. A glob "
+               "since D42: the opsec pre-commit gained two siblings guarding main, and an "
+               "entry naming one of three would report an armed clone while two were gone",
     },
     {
         "path": "inventory",
@@ -554,39 +556,93 @@ def repo() -> List[str]:
 
 
 def hooks() -> List[str]:
-    """Whether THIS clone's opsec pre-commit is actually armed.
+    """Whether THIS clone's git hooks are actually armed, and whether they are current.
 
-    `core.hooksPath` is local git config and is never pushed, so the hook being present in
-    the tree proves nothing — a fresh clone has the file with nothing pointing at it, and
+    `core.hooksPath` is local git config and is never pushed, so the hooks being present in
+    the tree proves nothing — a fresh clone has the files with nothing pointing at them, and
     CLAUDE.md's bearer-instrument rule is unenforced on the first commit. Only the config
     proves it, and only this script is in a position to look.
 
-    Reported here because it is the one setup step that cannot be committed, and `make
-    status` is what README.md and CLAUDE.md tell a cold session to run first.
+    WHAT IT LOOKS FOR CHANGED ON 2026-08-29, AND THE OLD ANSWER IS NOW A FAILURE STATE.
+    D42 first aimed core.hooksPath at the main worktree's `scripts/githooks`, and that made
+    arming depend on which branch that one checkout happened to be on. It was falsified the
+    hour it landed: the main checkout sat on another session's WIP branch that predated the
+    guard, so git read a directory holding one hook of three and nothing said so. The hooks
+    are installed into the git common dir now, which no branch can empty, and a config still
+    pointing into a working tree is reported as NOT ARMED rather than accepted.
 
-    Three ways to be unarmed and they are kept distinct, because they have three different
-    fixes: no config at all, a config aimed somewhere else, and a hook git will skip for
-    being non-executable. The last is the one worth naming — git says nothing about it.
+    Four ways to be unarmed and they are kept distinct, because they have four different
+    fixes: no config at all, a config aimed somewhere else, a hook missing from the install,
+    and a hook git will skip for being non-executable. The last is the one worth naming —
+    git says nothing about it.
+
+    STALENESS IS REPORTED AND NEVER TREATED AS AN ERROR. The install is a copy, so editing
+    `scripts/githooks` does not change what git runs until `make hooks` is run again. It
+    cannot be checked mechanically without lying: the tracked file legitimately differs
+    between branches, so a difference is a fact to state rather than a fault to flag. This
+    is the one place in the repo whose job is saying what state you are actually in, so it
+    says it here and gates nothing.
     """
-    found = resolve("scripts/githooks/pre-commit")  # records MISSING if the hook itself is gone
+    tracked = resolve("scripts/githooks/*")  # records MISSING if the hooks themselves are gone
     configured = git("config", "--get", "core.hooksPath")
 
     if configured is None:
         return [
-            field("Opsec hook", "NOT ARMED — core.hooksPath is unset, commits are unchecked"),
+            field("Git hooks", "NOT ARMED — core.hooksPath is unset, commits are unchecked"),
             cont("Fix: make hooks"),
         ]
-    if (ROOT / configured).resolve() != (ROOT / "scripts" / "githooks").resolve():
+
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir") or git(
+        "rev-parse", "--git-common-dir"
+    )
+    expected = (Path(common) / "hooks-armed") if common else None
+    installed = Path(configured)
+
+    if expected is None or installed.resolve() != expected.resolve():
         return [
-            field("Opsec hook", f"NOT ARMED — core.hooksPath points at {configured}"),
+            field("Git hooks", f"NOT ARMED — core.hooksPath points at {configured}"),
+            cont("A working tree is not a home for this: what it holds follows whatever"),
+            cont("branch that checkout is on, which armed the guard at zero once already."),
             cont("Fix: make hooks"),
         ]
-    if found and not os.access(found[0], os.X_OK):
+
+    names = sorted(path.name for path in tracked)
+    absent = [name for name in names if not (installed / name).exists()]
+    if absent:
         return [
-            field("Opsec hook", "NOT ARMED — pre-commit is not executable; git skips it silently"),
+            field("Git hooks", f"NOT ARMED — {', '.join(absent)} missing from the install"),
             cont("Fix: make hooks"),
         ]
-    return [field("Opsec hook", f"armed via {configured}")]
+
+    unrunnable = [name for name in names if not os.access(installed / name, os.X_OK)]
+    if unrunnable:
+        return [
+            field(
+                "Git hooks",
+                f"NOT ARMED — {', '.join(unrunnable)} not executable; git skips it silently",
+            ),
+            cont("Fix: make hooks"),
+        ]
+
+    out = [
+        field("Git hooks", f"armed via {configured}"),
+        cont(f"{len(names)} installed: {', '.join(names)}"),
+    ]
+
+    stale = []
+    for name in names:
+        try:
+            if (installed / name).read_bytes() != (ROOT / "scripts" / "githooks" / name).read_bytes():
+                stale.append(name)
+        except OSError:  # unreadable is not a claim that it differs
+            continue
+    if stale:
+        out += [
+            cont(f"differs from this tree: {', '.join(stale)}"),
+            cont("Expected on a branch that changed them. Otherwise the copy git runs is"),
+            cont("behind scripts/githooks here — re-run `make hooks`."),
+        ]
+    return out
 
 
 def store() -> List[str]:

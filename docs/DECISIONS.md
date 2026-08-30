@@ -2911,13 +2911,53 @@ only non-zero exit in the file is the deliberate refusal, and an unknown phase, 
 line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for
 itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
 
-**`core.hooksPath` IS ABSOLUTE AND RESOLVED TO THE MAIN WORKTREE, WHICH IS A FIX AND NOT A
-FORMATTING CHOICE.** That setting lives in the common `.git` dir, so one value governs every
-worktree of this clone — and git resolves a **relative** one against each worktree's own root.
-Left relative, a worktree checked out from a commit before this entry finds no hook file and
-runs unguarded, which is precisely the population the guard exists for. `make hooks` resolves
-it through `git worktree list` rather than the current directory, so running it from inside a
-worktree cannot point the whole clone at a checkout that is about to be deleted.
+**THE HOOKS ARE INSTALLED INTO THE GIT COMMON DIR. THIS PARAGRAPH SAID SOMETHING ELSE FOR
+ABOUT AN HOUR AND BOTH OF ITS CLAIMS WERE FALSE — the amendment is dated the same day as the
+entry, which is the useful part of it.** What it said: point `core.hooksPath` at the MAIN
+worktree's `scripts/githooks`, absolutely, because "that setting lives in the common `.git`
+dir, so one value governs every worktree of this clone."
+
+**Claim one, falsified within the hour of merging.** A working tree's contents are a function
+of whatever branch that checkout is on. The moment this entry landed on main, the main
+checkout was sitting on another session's WIP branch that predated it, so the directory git
+actually read held **one hook out of three**. The guard was armed at zero and nothing said so
+— the silent-failure class this repo refuses everywhere else, reproduced by the fix for it.
+
+**Claim two, falsified by running the test rather than reading the config.** `extensions.
+worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a
+per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree` — beside a
+`core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the
+common one.** After an install that printed success, `git config --get core.hooksPath` inside
+a worktree still answered the old path, and all four worktrees were still unguarded. It was
+found by running the nineteen cases against the INSTALLED directory — `PKMNSCAN_HOOKS_DIR`
+exists on the self-test for exactly this — and it would not have been found by reading the
+config, because the config that lies is not the one you look at.
+
+**So: `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`, points the
+common config there, and UNSETS the per-worktree override in every worktree.** `.git` is
+per-clone, shared by every worktree, and no branch can empty it. Unsetting rather than
+re-pointing, because one value is the property this paragraph wanted in the first place and
+four copies is four things that can drift. Verified after the change: all seven worktrees
+resolve to the install, the installed copy passes all nineteen cases, and a live
+`git push --dry-run --force origin <branch>:main` in the real repository is refused by name.
+
+**IT INSTALLS WHAT GIT TRACKS, NOT WHAT THE DIRECTORY HOLDS.** The first version copied
+`scripts/githooks/*`, and this repo lives in iCloud Drive, which had made `pre-push 2` and
+`reference-transaction 2` beside the originals — so it installed five hooks from three files,
+two of them untracked and reviewed by nobody. Git dispatches on exact names so it would not
+have RUN those two, and the damage was cosmetic; the mechanism is not. A hook directory whose
+contents are decided by whatever is lying on disk has given up the reviewability that is the
+whole reason these files are tracked rather than written into `.git` by hand. `git ls-files`
+is the only enumeration that means "the thing someone reviewed", and untracked files present
+are reported rather than silently skipped.
+
+**WHAT IS GIVEN UP, NAMED RATHER THAN DESIGNED AWAY: the copy can go stale**, and a new
+worktree gets handed the per-worktree override again by whatever creates it. Neither can be
+closed by a check without lying — the tracked file legitimately differs between branches, so
+"installed does not match this tree" is a fact and never a fault, and it must never gate a
+commit. `make status` reports both instead: it reads NOT ARMED whenever the effective path is
+not the install, and prints which hooks differ from the current tree. That is the one surface
+in this repo whose whole job is saying what state you are actually in.
 
 **THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
 `PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
