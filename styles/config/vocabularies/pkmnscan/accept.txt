@@ -222,3 +222,8 @@ Vite
 [Tt]CGplayer
 [Ww]orktree
 [Ww]orktrees
+[Pp]laymat
+[Tt]oploader
+[Uu]njudged
+[Uu]nmerged
+another's

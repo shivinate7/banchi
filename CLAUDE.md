@@ -392,6 +392,7 @@ D57  The sale is one press, and the button becomes the way back
 D58  A card's number counts the cards in the box, not the slots
 D59  The live cap is a per-SKU quantity, and a count of one run's positions was answering for it
 D60  The @-loaded docs are dense American technical English, and an entry cites rather than restates
+D61  The shipping lane is three lanes, and the third answer is "I cannot tell"
 D63  The order ledger is two maps, and the sync writes only one of them
 ```
 

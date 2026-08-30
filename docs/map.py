@@ -381,6 +381,69 @@ COMPONENTS = [
                                   "IT IS A LIBRARY AND NOT A FEATURE — no route, no client function "
                                   "and no screen reaches it, which by CLAUDE.md's own rule means it "
                                   "is not landed and must not be reported as such."},
+            # THE ONE-WAY EDGE INSIDE THIS PACKAGE: shipping.py imports pirateship.py and
+            # never the reverse, so the Pirate Ship format knows nothing about TCGplayer and
+            # can be fed by the Bridge without being touched. Same direction store/ and
+            # pipeline/ have, for the same reason.
+            "shipping.py": {"does": "the TCGplayer Export Shipping reader, and the router that "
+                                    "puts one order in one of THREE lanes: a tcgtracking envelope "
+                                    "(<$50, all cards), a Pirate Ship parcel (contains a non-card, "
+                                    "OR >=$50 because TCGplayer mandates tracking above $49.99), or "
+                                    "UNJUDGED. Abstention is a third answer and never a default to "
+                                    "a lane — sweeping an unplaceable order into the parcel lane is "
+                                    "postage the operator did not choose. The value question is "
+                                    "asked BEFORE the weight proxy, which is not a style choice: 58 "
+                                    "of the fixture's 97 weightless orders are >=$50 and are answered "
+                                    "with certainty by a rule that needs no weight, so abstention "
+                                    "falls from 97 orders (29%) to 39 (11.8%) — including the $1750 "
+                                    "order docs/specs/shipping-export.md names as its own worst case.",
+                            # D24 for the pooled/located split the non-card signal proxies at
+                            # postage scale; D19 for the rule that a cut is derived from where
+                            # a real distribution is empty rather than picked.
+                            "governed_by": ["D9", "D19", "D24", "D49", "D61"],
+                            "tested_by": ["T7"],
+                            "note": "EXACT RATIONAL ARITHMETIC, NEVER FLOATS, and that is a defect "
+                                    "already paid for: docs/specs/shipping-export.md records a float "
+                                    "pass reporting a phantom sub-0.07 row on a distribution whose "
+                                    "true minimum is exactly 0.07 — and sub-0.07 is the one band "
+                                    "this router treats as impossible, so a float manufactures the "
+                                    "outcome. THE WEIGHT IS A PROXY AND NOT A PACKAGE: it is a summed "
+                                    "per-product CATALOG CONSTANT, so it says `heavier than cards "
+                                    "alone` and may never say `contains a playmat`. A PRE-LINE-DATA "
+                                    "STOPGAP — the export carries no line items at all, and the cut "
+                                    "is to be RETIRED rather than re-fitted the day a feed supplies "
+                                    "them, because pipeline/orders.py already answers this properly "
+                                    "from line kinds. IT IS A LIBRARY AND NOT A FEATURE: no route, no "
+                                    "client function and no screen reaches it, which by CLAUDE.md's "
+                                    "own rule means it is not landed and must not be reported as such."},
+            "pirateship.py": {"does": "the Pirate Ship import spreadsheet — the one supported entry "
+                                      "point, because Pirate Ship has NO API. A closed column set, "
+                                      "T2's byte format, `Name` PRE-JOINED from the two columns "
+                                      "TCGplayer holds it in rather than left to their auto-mapper, "
+                                      "the TCGplayer order number carried through as `Order ID` so "
+                                      "the tracking number it mints can be matched back, and up to "
+                                      "three Rubber Stamps that print on the label corners — so a "
+                                      "label reading `Box 3 · Card 31` IS the pick instruction.",
+                              # D49 is the rule all three refusals below are instances of; D58
+                              # is why no label is composed here.
+                              "governed_by": ["D49", "D58", "D61"],
+                              "tested_by": ["T7"],
+                              "note": "THREE THINGS IT MAY NEVER DO, and all three are D49's "
+                                      "`nothing here is ever defaulted on your behalf` in another "
+                                      "lane. IT NEVER SELECTS INSURANCE — an insurance-shaped column "
+                                      "RAISES rather than being dropped, because dropping it "
+                                      "silently is an operator who believes they asked for insurance "
+                                      "and did not. IT NEVER BUYS A LABEL — no API exists and it "
+                                      "would be spending. IT NEVER DERIVES A WEIGHT, which is the "
+                                      "one most likely to be `fixed` later and is wrong in the "
+                                      "EXPENSIVE direction: TCGplayer's Product Weight counts the "
+                                      "cardboard and not the mailer, so it is a LOWER BOUND and "
+                                      "writing it buys postage for less than the parcel weighs. It "
+                                      "renders no position label either — pipeline/join.py:Position "
+                                      "is the only label formula in this repo (D58) and a stamp is "
+                                      "an opaque string somebody else composed. Buyer PII passes "
+                                      "through and is NOT persisted: `render` returns bytes so a "
+                                      "caller need never put a name on a disk."},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
                                      "and as of D49 the AUTHORITY for rule and basis rather than "
                                      "a copy of them. `overrides` holds a price OR a `Withheld`: "
