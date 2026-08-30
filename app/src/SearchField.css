@@ -31,6 +31,32 @@
   background: var(--surface);
   border: 1px solid var(--field);
   border-radius: var(--r);
+
+  /* THE BOX IS THE CONTROL, SO THE BOX HAS TO READ AS ONE. The border lives out here (see
+     above), which means the padding either side of the input — 8px on the owner's, 16px on
+     his — is part of what LOOKS like a text field and was reading `default` while the
+     middle read `text`. One rectangle, two answers, and the seam was invisible until the
+     pointer crossed it.
+
+     `text` and not `pointer`, because what this is is a place to type. It is also the
+     honest half of a known limit: a click on the padding does not move the caret, since
+     nothing here focuses the input on the box's behalf. Saying `text` describes the region
+     correctly; saying `pointer` would promise a click target that is not there.
+
+     BOTH SKINS, DELIBERATELY. This is the one input in the product both personas touch, and
+     the Fulfiller's is the 56px one — the larger the box, the more of it is padding, so the
+     mismatch was worse on his screen than on the owner's. Nothing in
+     app/tests/fulfillment.spec.ts measures a cursor; his nine floors are text size, target
+     size, contrast, jargon and reachability, and none of them is touched. */
+  cursor: text;
+}
+
+/* The edge darkens under the pointer (D50). `border-color` only — never width, which
+   would reflow the box and move a target under a finger already travelling toward it.
+   Focus is an outline drawn
+   outside this border, so the two compose rather than compete. */
+.search-field-box:hover {
+  border-color: var(--field-hover);
 }
 
 /* --ink and not --accent. Accent has exactly two jobs, "the system is unsure" and "there is
