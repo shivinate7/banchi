@@ -144,6 +144,7 @@ Postgres
 [Pp]x
 Pyroars
 [Qq]uantile
+[Rr]eachability
 Rengar
 Repo
 [Rr]asterizes
