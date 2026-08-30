@@ -614,3 +614,26 @@ test('a set vocabulary that could not be fetched leaves the hint field working',
   await hint.fill('sv09')
   await expect(hint).toHaveValue('sv09')
 })
+
+test('an expired session says so where the suggestions would have been', async ({ page }) => {
+  await routeSets(page, {
+    game: 'pokemon',
+    sets: [],
+    aliases: {},
+    reason: 'tcg_session_expired',
+  })
+  await open(page)
+  await page.keyboard.press('h')
+
+  /* DEGRADING TO EMPTY IS CORRECT; DEGRADING INVISIBLY IS NOT. An expired session and a game
+     with no sets produce the identical empty list, and the operator has no way to tell them
+     apart from silence — so the reason is drawn where the suggestions would have been. It
+     names the file to fix, because that is the one case they can act on. */
+  await expect(page.locator('.capture-open')).toContainText('TCGplayer session expired')
+  await expect(page.locator('.capture-open')).toContainText('.env')
+
+  /* And it is still only a note: the field takes text exactly as before. */
+  const hint = page.getByLabel('Set hint')
+  await hint.fill('sv09')
+  await expect(hint).toHaveValue('sv09')
+})

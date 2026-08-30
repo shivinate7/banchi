@@ -1102,3 +1102,13 @@ Two deliberate token removals stand against the D60 baseline and are not defects
 supervisor's stdout line reporting the stack up, which reads as an unregistered subcommand when
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
+
+## `make design-check` has one test that flakes under parallel load
+
+**`app/tests/inventory.spec.ts:2799` — "the photograph is sized by its column, not by the rows beside it" — failed once in a full run and passed alone and on re-run.** Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately afterwards was 256 of 256.
+
+**It measures rendered geometry, which is the shape most sensitive to load.** D38 sizes the photograph off its column, so the assertion reads back a computed width, and a layout that has not settled reports a number that is right a frame later. Nothing about it is specific to the change that was in flight.
+
+**What this costs: a green design-check is slightly weaker than it reads.** A single red in a 256-test run may be this rather than a defect, and telling them apart means re-running — which is exactly the habit that hides a real intermittent failure. Recorded rather than fixed because the fix is a wait-for-stable-layout in that one test, and changing an assertion to make it pass is what D16 forbids without knowing which of the two it is.
+
+**A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
