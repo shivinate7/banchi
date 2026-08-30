@@ -69,6 +69,50 @@ $(printf '%s\n' "$icloud_dupes" | sed 's/^/    /')
   If a name like this is genuinely intended:  PKMNSCAN_DUPES=off git commit ..."
 fi
 
+# A SYMLINK THAT LEAVES THE REPOSITORY. Refused, and it is the rule this hook was missing
+# on 2026-08-29 when a tracked one cost the 133 MB image mirror (D47).
+#
+# THE SHAPE OF THE FAULT, because it is not obvious that a symlink is dangerous. A worktree
+# provisions `app/node_modules` and `harness/images` as links into the MAIN working tree
+# (scripts/worktree-guard.sh) — correct there, and an ABSOLUTE PATH. Committed, that path is
+# baked into the tree; checked out in the main tree it points at ITSELF, and git will happily
+# remove the ignored real directory to put it there. The data is gone with no message, and
+# the loop is invisible until something opens it.
+#
+# GIT MODE 120000 IS THE TEST, so this cannot be fooled by a name: it asks the index what the
+# staged object IS. An absolute target is refused outright; a relative one is refused when it
+# climbs out of the repository, which is the same fault written differently.
+#
+# A relative link that stays inside the tree is allowed and is the only kind that survives a
+# clone on another machine — which is the property this rule is really enforcing.
+#
+# Bypass:  PKMNSCAN_LINKS=off git commit ...
+if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
+  root="$(git rev-parse --show-toplevel)"
+  while IFS= read -r link; do
+    [ -z "$link" ] && continue
+    target="$(git cat-file blob ":$link" 2>/dev/null || true)"
+    case "$target" in
+      /*)
+        fail "symlink with an absolute target staged: $link -> $target
+  Committed, that path is baked into the tree — and in the working tree it names, it
+  points at itself. Checking it out replaces the real directory with a loop, silently.
+  This is how the image mirror was lost (D47). Ignore the path instead of tracking it.
+  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..."
+        ;;
+      *)
+        resolved="$(cd "$root/$(dirname "$link")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)"
+        case "$resolved" in
+          "$root"|"$root"/*|"") ;;
+          *) fail "symlink pointing outside the repository staged: $link -> $target
+  It resolves to $resolved, which no clone on another machine will have.
+  If it is genuinely intended:  PKMNSCAN_LINKS=off git commit ..." ;;
+        esac
+        ;;
+    esac
+  done <<< "$(git diff --cached --name-only --diff-filter=ACMR -z | tr '\0' '\n' | while IFS= read -r p; do [ -z "$p" ] && continue; mode="$(git ls-files --stage -- "$p" | awk '{print $1}')"; [ "$mode" = "120000" ] && printf '%s\n' "$p"; done)"
+fi
+
 while IFS= read -r path; do
   [ -z "$path" ] && continue
 

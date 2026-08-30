@@ -446,7 +446,9 @@ COMPONENTS = [
                 "does": "the commit gate: fixtures read-only, no image staged outside "
                         "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
                         "the repo still lives there, no printed code-card layout in the "
-                        "staged diff, then "
+                        "staged diff, no symlink whose target leaves the repository (D47 — "
+                        "a tracked absolute link points at itself in the tree it names, and "
+                        "checking it out removes the ignored real directory), then "
                         "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
                         "the coupling question, 64 warning loudly that the auditor was "
                         "invoked with a flag it does not accept. Tracked and reviewable "
@@ -458,7 +460,7 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; unprotected, "
                         "so a sibling hook's arrival would not be.",

@@ -529,21 +529,50 @@ def ignored_paths(candidates: Sequence[str]) -> Set[str]:
     patterns (`harness/images/`), and git cannot match one of those against a path that is
     absent from disk — which is precisely the fresh-clone case this exists to handle, so
     the bare form silently fails exactly when it matters.
+
+    ONE POISONED CANDIDATE USED TO TAKE THE WHOLE BATCH DOWN, SILENTLY, AND THE FINDING
+    LANDED ON SOMEBODY ELSE. `git check-ignore --stdin` exits 128 and STOPS on a pathspec it
+    refuses — `fatal: pathspec 'app/node_modules/' is beyond a symbolic link`, which is what a
+    worktree's provisioning links are — and the answers for every candidate after it are simply
+    never printed. Read as a plain result that is "not ignored for all of them", so the first
+    unrelated gitignored path further down the list is reported as a dangling reference.
+    Measured 2026-08-30: a decision entry naming `app/node_modules` in prose made the batch
+    abort, and the audit blocked the commit over `harness/.cache/` in a different file, which
+    was correct and had not changed.
+
+    So a batch that did not run cleanly is not evidence about anything. check-ignore's own
+    contract is 0 when something matched and 1 when nothing did; ANY other code means it gave
+    up, and the answer is to ask again one candidate at a time so a refusal is contained to the
+    candidate that caused it. That path is rare and short — it runs only over references that
+    are already missing from the index.
     """
     if not candidates:
         return set()
-    try:
-        done = subprocess.run(
-            ["git", "check-ignore", "--stdin"],
-            cwd=str(ROOT),
-            input="\n".join(candidates).encode("utf-8"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    except OSError:
-        return set()  # no git: fall back to checking everything
-    return {line for line in done.stdout.decode("utf-8", errors="replace").splitlines() if line}
+
+    def ask(batch: Sequence[str]) -> Tuple[int, Set[str]]:
+        try:
+            done = subprocess.run(
+                ["git", "check-ignore", "--stdin"],
+                cwd=str(ROOT),
+                input="\n".join(batch).encode("utf-8"),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            return 1, set()  # no git: fall back to checking everything
+        got = {line for line in done.stdout.decode("utf-8", errors="replace").splitlines() if line}
+        return done.returncode, got
+
+    code, found = ask(candidates)
+    if code in (0, 1):
+        return found
+
+    for candidate in candidates:
+        one_code, one = ask([candidate])
+        if one_code in (0, 1):
+            found |= one
+    return found
 
 
 def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:

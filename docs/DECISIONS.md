@@ -3564,6 +3564,105 @@ earlier and the copy never mentioned it — the one place that most needed to.
 found, the fix is upstream in the join, not more catalog searching. `_strip_set_code` is the
 first instance of exactly that: three of box 1's four dead ends turned out to be a set code
 glued to a correct identifier, and code now recovers them without a human at all.
+## D47 — A tracked symlink is a path baked into the tree, and a checkout will spend a directory to place one
+
+**BUILT 2026-08-30, after a `git merge --ff-only origin/main` in the main working tree replaced
+the 133 MB eval-image mirror with a link pointing at itself.** No file was written by hand and no
+script misbehaved: the checkout did exactly what it was told, and what it was told was wrong.
+
+**THE DATA CAME BACK, AND THE ENTRY IS WRITTEN AS THOUGH IT HAD NOT.** iCloud Drive restored the
+directory from its own copy about ten minutes later — 150 images and the manifest, intact, and it
+removed the empty conflict copy it had made in the meantime. That is luck wearing the clothes of
+a backup: the same sync layer D44 exists to defend against is what happened to be holding the
+only other copy. On a machine without it the loss is permanent, and the remedy would have been a
+151-file re-download rather than nothing at all only because D15 makes this data derived. **The
+first draft of this entry said the mirror was deleted, because that was true of every observation
+available for ten minutes.** Corrected rather than quietly softened, because the mechanism is
+unchanged by the recovery and is the reason the rules below exist.
+
+**THE MECHANISM, WHICH IS THE WHOLE VALUE OF THIS ENTRY.** `scripts/worktree-guard.sh`
+provisions a linked worktree by symlinking two gitignored things to the main tree —
+`app/node_modules` and `harness/images`. Correct there, and necessarily an **absolute path**.
+Then:
+
+1. `.gitignore` said `node_modules/` and `harness/images/`. **A pattern ending in `/` matches
+   directories only**, and git does not count a symlink as a directory — so neither link was
+   ignored in a worktree, and both were invisible to a reader who had just read the ignore file
+   and concluded they were covered.
+2. A session ran `git add -A` and committed both, as mode `120000` blobs whose contents are an
+   **absolute path on one Mac** — the main working tree's own location, followed by the same
+   two names.
+3. In the **main** working tree those paths name the links' own locations. Checking the commit
+   out there makes each one a symlink to itself, and **git removes an ignored file or directory
+   that stands in the way of a checkout without asking**. The real directories were ignored, so
+   they were removed.
+
+**WHAT IT COST, MEASURED.** `harness/images` — 133 MB, 150 eval images and the manifest that
+labels them — was replaced by a self-referential link at 20:13 on 2026-08-29, with an empty iCloud
+conflict copy (`harness/images 2`) beside it. Every worktree linking to that path went dangling
+with it. T1 failed with a `FileExistsError` from `IMAGES_DIR.mkdir(exist_ok=True)`, which is what
+`mkdir` does when the path exists and is not a directory: **the error names the symptom and says
+nothing about the cause**, which is why this took a full investigation rather than a glance.
+
+**`app/node_modules` WAS IN THE SAME TRAP AND SURVIVED BY ACCIDENT.** The pull that detonated
+the images also carried a commit that had removed the node_modules entry from the index — for an
+unrelated reason, while cleaning a merge — so the add and the delete cancelled and git left the
+real directory alone. An accident is not a guard, and this entry is what replaces it.
+
+**THE FIX IS THREE THINGS, AND ONLY THE THIRD IS NEW MACHINERY.**
+
+- **`harness/images` is untracked.** It was the only tracked symlink left in the tree.
+- **Both ignore patterns lose the trailing slash** — `node_modules` and `harness/images` — so
+  they match a link as well as a directory. That is the one-character fault at the root of it,
+  and it is now stated in the file with the reason attached.
+- **The pre-commit hook refuses a staged symlink that leaves the repository.** It reads mode
+  `120000` out of the index rather than guessing from a name; an absolute target is refused
+  outright, and a relative one is refused when it climbs out of the tree. **A relative link that
+  stays inside is allowed**, because that is the only kind that survives a clone on another
+  machine — which is the property actually being enforced. `PKMNSCAN_LINKS=off` bypasses, in
+  the shape the iCloud-duplicate rule beside it already uses.
+
+**AND THE MIRROR MOVES OUT OF iCLOUD, WHICH IS THE OWNER'S CALL AND NOT A CONSEQUENCE OF THE
+BUG.** `PKMNSCAN_IMAGE_MIRROR` has been documented since build-order step 9 was written and read
+by nothing; `harness/eval/fixtures.py` honours it now, and the allowlist entry that carried it as
+a documented-but-unbuilt name is retired the moment it came true, exactly as D16 requires. The
+default is unchanged, so a tree that sets nothing behaves as it always did and every banked score
+stays comparable. The reason for moving it is D44's: this repository sits in iCloud Drive, and
+133 MB of derived binaries syncing there is what produces the conflict copies that entry refuses.
+
+**AND MOVING IT GIVES UP THE THING THAT JUST SAVED THE MIRROR, WHICH IS THE HONEST WAY TO RECORD
+THIS TRADE.** iCloud's copy is what restored the directory above. Outside it there is no second
+copy and no version history — the recovery path becomes the re-download, which is exactly what
+D15 says this data is for: derived, reproducible, and never the artefact worth keeping. The
+trade is a safety net that costs conflict copies, against a clean tree whose worst case is one
+download. The owner took the second.
+
+**WHAT THIS DOES NOT DO.** It does not stop `worktree-guard.sh` making the links — they are
+right, and they are what keep T1 from re-downloading 151 files per worktree. It does not make
+symlinks a bad idea. It stops one of them being **committed**, which is the only step in the
+chain where a local convenience becomes every checkout's problem.
+
+**IT ALSO BROKE THE AUDIT ON ITS WAY IN, AND THAT DEFECT WAS OLDER THAN THIS ENTRY.** Writing
+the paragraphs above put the string `app/node_modules` into a doc, which made it a path
+candidate — and `scripts/docs-audit.py:ignored_paths` probes missing candidates through
+`git check-ignore --stdin`, which **exits 128 and stops** on a pathspec it refuses. A
+provisioning symlink is exactly such a pathspec (*"beyond a symbolic link"*), so the batch
+aborted and every candidate after it lost its answer. The audit then blocked the commit over
+`harness/.cache/` in `docs/GATES.md` — a reference that was correct, unchanged, and in a
+different file.
+
+**A BATCH THAT DID NOT RUN CLEANLY IS NOT EVIDENCE ABOUT ANYTHING.** check-ignore's contract is
+0 when something matched and 1 when nothing did; any other code means it gave up. It now falls
+back to asking one candidate at a time so a refusal is contained to the candidate that caused
+it. The failure mode this replaces is the worse kind: not a check that misses something, but a
+check that **reports a defect in a file nobody touched**, which is what sends a session
+investigating the wrong doc.
+
+**WHAT WOULD REOPEN THIS: a third provisioned path.** The guard is general — it refuses by mode
+and by target, not by name — so a new link is covered the day it is added. What is not covered is
+the reverse direction: a path that ought to be ignored and is not, which is what let the first
+one through. `git check-ignore` over the provisioned set, run somewhere off the commit path,
+would close that half.
 
 ---
 
