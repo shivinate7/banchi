@@ -1102,3 +1102,86 @@ Two deliberate token removals stand against the D60 baseline and are not defects
 supervisor's stdout line reporting the stack up, which reads as an unregistered subcommand when
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
+
+---
+
+## One card renders three ways on one screen (2026-08-30)
+
+Found by the owner looking at five copies of Moonfall in box 3 and seeing the `Number` row
+disagree between them. Two defects and one symptom, separated here because only two of the
+three are defects.
+
+### `printed_total` is guarded as `null` and arrives as an empty string
+
+`app/src/BoxBrowse.tsx:864` and `app/src/CardLocations.tsx:85` carry the same expression:
+
+    return printed_total === null ? number : `${number}/${printed_total}`
+
+**The line above it in both guards `number` for `null` or blank, and this one guards
+`printed_total` for `null` alone.** Two emptiness tests in one function, one field apart.
+`printed_total` is stored as `""` on **174 of 715 records that also carry a number**, so those
+take the else branch and render a trailing separator with nothing behind it — `198/219/`.
+
+Cosmetic, and it costs a quarter of the store. Not fixed here because the two call sites are
+one of the pairs `docs/DESIGN.md` would rather see merged than edited twice, and merging them
+is a change with an argument attached rather than a one-line repair.
+
+### The set code the model glued on is stripped for the key and never for the display
+
+D55 removes a glued-on set code **by shape, and only after the join key has missed** — that is
+a rule about matching, and nothing applies it to what a screen draws. **Nine numbers carry
+one, with three different separators**: `UNL • 198/219`, `UNL - 198/219`, `UNL / 120/219`.
+
+**The visible cost is larger than nine rows, because disagreement propagates.**
+`server/capture_server.py:_agreed` returns `None` when the copies of a group do not all say
+the same thing, deliberately and for a good reason — a number lifted off whichever copy the
+dict yielded first would be a confident answer about a group that has none. So five Moonfall
+copies storing three spellings of one number make the **group** report no number at all, while
+each card's own detail row still shows its own raw variant. One card, three strings, one
+screen, and the group between them silent.
+
+Not fixed here because the repair has a real choice in it — normalize at capture, normalize at
+read, or teach `_agreed` to compare folded — and picking one is a decision entry, not a patch.
+
+### The stripped panel was the stranded card, not a third defect
+
+The fifth Moonfall drew no card block, no `Mark sold`, no `Retire` and `sku: null`, and it
+read as the copies panel failing on a null SKU. It was not. `_agreed`'s own docstring records
+that the SKU-less group is a deliberate collection of *"cards with nothing in common but the
+operator's query"*, so a card with no SKU correctly forms its own group and correctly offers
+nothing that depends on one.
+
+**That card should never have been in it.** `3/37` was resolved by its run — the run's
+`pricing.json` names the position under SKU `9191486` — and then lost the stamp to the D7 cap
+that `cli/cmd_emit.py` used to apply to `uncommitted_positions`, sold at 14:41, and was out of
+reach of every later re-emit by D57's invariant. Repaired 2026-08-30 from the run's own
+paperwork; `GET /search?q=moonfall` now returns one group of five.
+
+**What is worth keeping from it**: a SKU-less group renders as a panel with its controls
+missing, and the owner read that as breakage rather than as a category. Whether that category
+should announce itself is a design question nobody has asked.
+
+### Two departed copies in one box render as two identical rows
+
+Reported the same day as *"I'm seeing two box 1's"*. There is one box 1. There are two sold
+copies of `Vi, Peacekeeper` in it, at stored indices **67** and **106**, and both draw the
+string `Box 1 · departed` with nothing whatever beside it to tell them apart. Two physical
+cards, one row repeated.
+
+**D58's label is right and is not what is wrong here.** A departed card is in no slot, and
+printing the slot number would print the number that now belongs to its successor — a lie
+about a shelf. So the label drops it, correctly.
+
+**What is wrong is that the disambiguating value is already in the payload and the row throws
+it away.** `GET /search` returns `place.index` of 67 and 106 on those two rows. D58 itself
+draws the distinction this needs: *"The STORED index never moves — it is the
+`/inventory/<box>/<index>` path"*, while `Place.slot` is the countable number that shifts. The
+index is not a slot and printing it is not the lie D58 refuses.
+
+**It scales with sales, which is why it will get worse rather than stay a curiosity.** Four
+departed Moonfalls already draw four identical rows in box 3, and the only thing separating
+them on screen is the neighbor text underneath — which is the *shelf's* fact, not the card's,
+and goes blank on the copies whose neighbors are themselves departed.
+
+Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
+ruling about exactly this label. It wants an entry, not a patch.
