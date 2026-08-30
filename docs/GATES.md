@@ -359,6 +359,15 @@ at a temporary directory, so nothing here touches the real inventory.
   `first_seen`, `cleared_by_human`. All 16 were `metadata_detection_disagreement`, all
   parked, and the owner answered every one through the answer route.
 
+  **A third reason code met a real card on 2026-08-29, and it is the one that produced D43.**
+  Box 1's riftbound run queued four zero-candidate `no_catalog_row` entries — cards the
+  answer route refuses outright, so they could not be answered at all, only skipped. Three
+  turned out to be a set code glued to a correct identifier (`UNL • 140/219`) and are now
+  recovered by code with no human involved; the fourth had its champion name dropped by the
+  model and is what the catalog lookup exists for. T7's `check_review_catalog` covers that
+  route and D43's answer path, against the committed riftbound export rather than an invented
+  fixture — the first block in this file whose catalog is a real 10,078-row file.
+
   So the remaining gap is narrower and worth stating exactly: the fixtures are still
   invented, and Gate B's run of one lot produced exactly one reason code. **Box 2 produced a
   second, and this bullet denied it until 2026-08-25**: `no_catalog_row` has stood in the live
