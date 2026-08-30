@@ -1103,12 +1103,85 @@ supervisor's stdout line reporting the stack up, which reads as an unregistered 
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
 
-## `make design-check` has one test that flakes under parallel load
+## `make design-check` has one test that flakes under parallel load — resolved 2026-08-30
 
-**`app/tests/inventory.spec.ts:2799` — "the photograph is sized by its column, not by the rows beside it" — failed once in a full run and passed alone and on re-run.** Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately afterwards was 256 of 256.
+**What it argued.** `app/tests/inventory.spec.ts` — "the photograph is sized by its column,
+not by the rows beside it" — failed once in a full run and passed alone and on re-run.
+Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately
+afterwards was 256 of 256. The mechanism was given as rendered geometry: D38 sizes the
+photograph off its column, so the assertion reads back a computed width, and a layout that
+has not settled reports a number that is right a frame later.
 
-**It measures rendered geometry, which is the shape most sensitive to load.** D38 sizes the photograph off its column, so the assertion reads back a computed width, and a layout that has not settled reports a number that is right a frame later. Nothing about it is specific to the change that was in flight.
+**THE MECHANISM WAS A HYPOTHESIS AND IT WAS MEASURED FALSE.** No error text was captured
+when the entry was written — the commit records the count and reasons about the cause — so
+the geometry was inferred from what the case asserts rather than from what it said when it
+broke. It was reproduced on 2026-08-30 by loading the rig: 40 workers against 12 spinning
+CPU hogs, 80 repeats of that one case. **9 of the 80 failed, and every one of them failed
+in `open()` on `expect(page.locator(VIEW)).toBeVisible()` at the 5000 ms default — the
+app had not rendered yet. Not one failed on an assertion.**
 
-**What this costs: a green design-check is slightly weaker than it reads.** A single red in a 256-test run may be this rather than a defect, and telling them apart means re-running — which is exactly the habit that hides a real intermittent failure. Recorded rather than fixed because the fix is a wait-for-stable-layout in that one test, and changing an assertion to make it pass is what D16 forbids without knowing which of the two it is.
+**The geometry does not move.** The same case was instrumented to print what it measures and
+run 60 more times under the same load: every value came back byte-identical. Shot 387.11px
+in a 387.11px track (the case allows 8px of slack), tallest fact row 31.5px against a 40px
+ceiling, ratio 1.397 against 88/63 ±0.05, the two columns' tops 0px apart against a 1px
+allowance. There is no frame at which these numbers are different, because
+`.browse-body`'s tracks are `fr` and `.browse-photo` takes its height from `aspect-ratio` —
+neither waits on content, an image's bytes, or a font. Blocking the webfonts outright does
+not fail the case either.
 
-**A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
+**What shipped: `expect: { timeout: 15_000 }` in `app/playwright.config.ts`.** The suite is
+`fullyParallel`, so every worker's first act is that same visibility wait against a Vite dev
+server compiling the module graph for N contexts at once. With the wait lengthened the same
+80 loaded repeats passed 80 of 80, the slowest whole case taking 5.276s — which is why the
+default was failing, and why 15s is the number. Five consecutive `make design-check` runs
+after it: 256 of 256 each, 25.6-26.5s, no slower than before, because a timeout costs
+nothing until something fails.
+
+**This weakens no assertion, which is the test D16 sets.** Nothing about what is asserted or
+the value asserted against changed; what changed is how long a true statement is given to
+become true, and a false one is still false at 15s. The cost is slower reporting of a
+genuine failure. `app/tests/fulfillment.spec.ts` already pays that knowingly with a 60s
+`toHaveCount` and a 90s `test.setTimeout` of its own.
+
+**What is NOT closed by this, stated because the reproduction found it.** At 40 workers
+against 12 CPU hogs the full suite still loses tests — `fulfillment.spec.ts` on
+`main.fulfillment`, `capture-claims.spec.ts` on the Finish row, and `capture-undo.spec.ts`
+on a capture that never landed (it expects `Card 10` and the stack's newest is `Card 9`,
+which is a DROPPED PRESS rather than a slow one and is the only one of the three that a
+longer wait cannot be the answer to). None of them is this case, and that load is far past
+anything `make design-check` produces on its own — it runs 7 workers on this 15-core rig, and
+seven consecutive full runs at that setting across this session were 256 of 256, one before
+the change and six after.
+
+One more sighting is on the record and is neither explained nor reproduced: at 15 workers,
+before the change, `app/tests/cursor.spec.ts` — "a typed-into field darkens its edge under the
+pointer, and nothing moves" — failed once in nine runs. Its message was not captured, so it is
+named here rather than diagnosed.
+
+**A claim was published against the failing run.** The commit that added D65's capture-screen
+reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1
+failed, and the true count is 256. The number was written before the output was read.
+Corrected here rather than by rewriting the message, because the message is history and this
+file is where what-we-actually-know lives.
+
+## A Playwright line number is not a line in the file — found 2026-08-30
+
+**The entry above cited `app/tests/inventory.spec.ts:2799`. Line 2799 of that file is `  }`.**
+The case it names is at line 2565. The number was copied from the reporter, which is the only
+place it is ever printed, and it is wrong there for **254 of the 256 tests** — checked by
+walking `--reporter=json`'s location for every test and comparing it against the line the
+title actually sits on.
+
+**The transform is what moves them, and the sign goes both ways.** Playwright strips the
+TypeScript and reports against the generated file, so a spec loses the lines its type-only
+constructs occupied and gains the lines its long ones are re-broken into. Measured with a
+probe spec in this repo's own `app/tests`: a test on source line 24 with no annotations above
+it reported 23, and the same test on line 27 with a 22-line `type` block above it reported 3.
+Clearing `$TMPDIR/playwright-transform-cache-501` changes nothing — it is not staleness.
+
+**What it costs: a citation nobody can follow.** Every failure this repo has ever pasted into
+a commit message or a doc carries one of these numbers, and a session that opens the file at
+it lands on unrelated code — silently, because the line is real and the file is right. Grep
+the TITLE instead; the reporter prints that too and it is exact. Recorded rather than fixed
+because there is nothing here to fix: it is the tool's behaviour at 1.55.1, and the repo's
+own remedy is to stop writing the number down.
