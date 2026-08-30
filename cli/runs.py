@@ -137,6 +137,62 @@ class Run:
         self.manifest.update(values)
         self.save()
 
+    # ------------------------------------------------------------------ the emit record
+
+    @property
+    def emitted(self) -> dict:
+        """What this run has written into import files, tolerantly.
+
+        One reader, because the shape has grown: `2026-08-22-box1-03` predates `pushed_skus`
+        and every run before an emit has no key at all. Callers that ask "has this emitted"
+        must go through `emitted_skus` rather than testing this dict for truthiness — a
+        record naming nothing is not an emit, and `reconcile` refuses on exactly that.
+        """
+        return dict(self.manifest.get("emitted") or {})
+
+    @property
+    def emitted_skus(self) -> List[str]:
+        """Every SKU this run has ever sent, across all its emits. Empty means never."""
+        record = self.emitted
+        return list(record.get("listed") or []) + list(record.get("sub_threshold") or [])
+
+    def record_emit(self, *, listed, sub_threshold, pushed: int) -> None:
+        """Merge one emit's output into the record. D50: a re-emit ADDS; it never subtracts.
+
+        `Run.set` stays replace-not-merge — `set(collected=…)`, `set(joined=…)` and
+        `set(batch_ids=…)` all depend on that, and a global merge would be a wide silent
+        change for one field's problem. So the merge is named, and here.
+
+        THE UNION IS NOT TIDINESS; `reconcile` IS WHY. It passes these SKUs to
+        `join.reconcile_import`, which reports BOTH directions — so after
+        emit → import → re-emit → import, a record holding only the last delta puts every
+        SKU from the first import into `rows_without_cards`, and reconcile prints "something
+        else wrote it" about rows it wrote itself. The union is what makes the round trip
+        mean anything across more than one emit.
+
+        A SKU WITHHELD AFTER BEING EMITTED STAYS IN THE UNION, deliberately: it was sent, its
+        copies are at `pushed`, and the staged export will carry it.
+
+        `pushed` accumulates because it is a quantity of copies and quantities sum.
+        `pushed_skus` is DERIVED from the lists rather than accumulated beside them, so it
+        cannot come to disagree with them — D49 Part One's rule applied to this record.
+        """
+        record = self.emitted
+        merged_listed = list(record.get("listed") or [])
+        merged_listed += [s for s in listed if s not in merged_listed]
+        merged_sub = list(record.get("sub_threshold") or [])
+        merged_sub += [s for s in sub_threshold if s not in merged_sub]
+        self.set(
+            emitted={
+                "listed": merged_listed,
+                "sub_threshold": merged_sub,
+                "pushed": int(record.get("pushed") or 0) + pushed,
+                "pushed_skus": len(set(merged_listed) | set(merged_sub)),
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "emits": int(record.get("emits") or 0) + 1,
+            }
+        )
+
     def add_batch_id(self, batch_id: str) -> None:
         ids = list(self.manifest.get("batch_ids") or [])
         if batch_id not in ids:

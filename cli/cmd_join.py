@@ -215,7 +215,20 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
         "floor": str(pricing.FLOOR),
         "rule": str(choice.rule),
         "basis": choice.basis,
-        "presets": [name for name, _, _ in PRESETS],
+        # THE PAIR TRAVELS, NOT JUST THE NAME (D50). This was `[name for name, _, _ in
+        # PRESETS]`, and the screen had no way to learn what a preset MEANT — so pressing one
+        # wrote `preset: <key>`, a document key `Decisions.parse` does not read and
+        # `to_payload` drops on the next join. The rule ran on as `match`/`market` while the
+        # screen showed the preset's figures.
+        #
+        # SERVED RATHER THAN DECLARED IN TYPESCRIPT, which makes drift structurally impossible
+        # instead of merely detectable: a rule and a basis are a rule the pipeline owns, and
+        # `app/src/server.ts` records that the app may not compute one. It is also what
+        # finally makes the claim above this tuple true — a fourth preset is a change to
+        # `PRESETS` and to the screen's labels, and to nothing else.
+        "presets": [
+            {"key": name, "rule": rule, "basis": basis} for name, rule, basis in PRESETS
+        ],
         "games": [
             {
                 "game": g.game,

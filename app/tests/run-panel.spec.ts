@@ -331,7 +331,12 @@ async function open(
       body: JSON.stringify({
         ...runRow(),
         console: 'identified      40/40',
-        files: [{ name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true }],
+        files: [
+          { name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true },
+          // A NON-IMPORT ARTEFACT, so the absence asserted above is not vacuous: the
+          // list still renders here, it just does not carry the CSVs any more.
+          { name: 'reconcile.txt', bytes: 900, modified: 0, is_import: false },
+        ],
         manifest: {},
         ...(options.detail ?? {}),
       }),
@@ -925,20 +930,26 @@ test('join offers a preview that writes nothing, and the trust switch in plain E
   expect(body.bypass).toBe(true)
 })
 
-test('an import file is offered as a download, which is the gap Gate B left open', async ({
-  page,
-}) => {
+test('this run\'s own receipts download here; the import CSVs do not', async ({ page }) => {
   await open(page)
   await openPanel(page)
   await page.locator('.run-row').first().click()
 
-  /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as filenames
-     in terminal output the owner never saw. This is the link that closes it. */
-  const file = page.locator('.run-file-import')
+  /* THE FILES WRITTEN BY THE COMMANDS PRESSED ON THIS SCREEN. `report.txt` and
+     `pricing.json` come from join, `reconcile.txt` from reconcile — each one screen-inch
+     from the button that produced it, which is docs/GATES.md's gap answered for the half of
+     the artefacts that stayed. */
+  const file = page.locator('.run-file').filter({ hasText: 'reconcile.txt' })
   await expect(file).toBeVisible()
-  await expect(file).toContainText('import-listed.csv')
-  await expect(file).toHaveAttribute('download', 'import-listed.csv')
+  await expect(file).toHaveAttribute('download', 'reconcile.txt')
   expect(await file.getAttribute('href')).toContain('/pipeline/runs/')
+
+  /* AND THE IMPORT CSVs ARE NOT HERE, ASSERTED AS AN ABSENCE (D50). They went to
+     `#/pricing` with the press that writes them; `app/tests/pricing.spec.ts` carries the
+     Gate B case verbatim at its new address. A deliberate removal that a later edit must
+     not quietly undo — which is what an absence is for, and why this is not a weakening of
+     the case it replaces. */
+  await expect(page.locator('.run-file-import')).toHaveCount(0)
 })
 
 test('a bypassed run says so on the run itself, not only in its log', async ({ page }) => {

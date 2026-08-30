@@ -95,9 +95,41 @@ function sku(over: Record<string, unknown> = {}) {
 
 async function open(
   page: Page,
-  options: { skus?: unknown[]; decisions?: Record<string, unknown> | null } = {},
+  options: {
+    skus?: unknown[]
+    decisions?: Record<string, unknown> | null
+    /** Overridable so a case can serve the PRE-D50 shape — bare strings — and assert the
+     *  screen refuses to guess a rule rather than writing one `emit` would reject. */
+    presets?: unknown[]
+    /** Whether the run already carries an emit record — the double-press guard's input. */
+    emitted?: boolean
+  } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
+
+  /* THE RUN'S OWN DETAIL, for the files and the phase. Note the ORDER of these route
+     registrations matters: this pattern must be registered BEFORE the bare
+     `/pipeline/runs/<name>` one below would swallow it, and Playwright matches most-recent
+     first, so the specific patterns go last. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/emit$/, async (route) => {
+    wire.push({
+      method: 'POST',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        step: 'emit',
+        run: RUN,
+        console: 'listed           1 row(s), 1 card(s)',
+        files: [{ name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true }],
+        summary: { run: RUN, phase: 'reconcile' },
+      }),
+    })
+  })
 
   await page.route(/\/pipeline\/runs\/[^/]+\/decisions$/, async (route) => {
     wire.push({
@@ -124,7 +156,14 @@ async function open(
           floor: '0.40',
           rule: 'match',
           basis: 'market',
-          presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
+          // THE PAIR, NOT THE NAME (D50). `cli/cmd_join.py` serves `{key, rule, basis}` so
+          // the screen can write what a preset MEANS; it wrote `preset: <key>` before, a
+          // document key nothing in `pipeline/` reads.
+          presets: options.presets ?? [
+            { key: 'market_match', rule: 'match', basis: 'market' },
+            { key: 'market_undercut_5', rule: 'undercut:5', basis: 'market' },
+            { key: 'low_undercut_1', rule: 'undercut:1', basis: 'low' },
+          ],
           games: [
             {
               game: 'pokemon',
@@ -140,6 +179,33 @@ async function open(
             ? { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} }
             : options.decisions,
         remembered_sub_threshold: null,
+      }),
+    })
+  })
+
+  /* THE RUN DETAIL — its files and its phase, which is where the double-press guard reads
+     whether this run has emitted. `[^/]+$` cannot swallow `/pricing`, `/decisions` or
+     `/emit`, because a path segment holds no slash. */
+  await page.route(/\/pipeline\/runs\/[^/]+$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: RUN,
+        path: `/tmp/runs/${RUN}`,
+        live: false,
+        phase: options.emitted === true ? 'reconcile' : 'emit',
+        joined: true,
+        collected: true,
+        counts: { skus: 1, cards_in: 3, queued_main: 0, queued_parked: 0 },
+        batch_ids: [],
+        usage: {},
+        console: '',
+        files:
+          options.emitted === true
+            ? [{ name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true }]
+            : [],
+        manifest: options.emitted === true ? { emitted: { listed: ['8608859'] } } : {},
       }),
     })
   })
@@ -225,6 +291,160 @@ test('a suggested row carries the rule price and writes no key at all', async ({
      layer 4, so a screen that wrote its suggestions would produce a run where changing the
      preset silently changed nothing. Nothing has been pressed; nothing may have been sent. */
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
+})
+
+// -------------------------------------------------- the preset writes the rule (D50)
+
+test('a preset writes rule and basis, and never a `preset` key', async ({ page }) => {
+  const wire = await open(page)
+
+  await page.getByRole('button', { name: 'Market −5%' }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
+
+  const body = wire.filter((r) => r.method === 'PUT')[0]?.body as {
+    decisions: Record<string, unknown>
+  }
+  expect(body.decisions.rule).toBe('undercut:5')
+  expect(body.decisions.basis).toBe('market')
+
+  /* THE LOAD-BEARING ABSENCE, AND THE DEFECT THIS CASE EXISTS FOR. The screen wrote
+     `preset: 'market_undercut_5'` and nothing else — a key `Decisions.parse` does not read
+     and `to_payload` drops on the next join — so the run went on pricing at `match`/`market`
+     while these buttons showed the preset's own figures. D49 leaves an untouched row
+     unwritten on purpose, which is correct ONLY if the preset moves the rule instead. */
+  expect(body.decisions).not.toHaveProperty('preset')
+})
+
+test('the pressed preset is lit from rule and basis, not from a stored key', async ({ page }) => {
+  await open(page, { decisions: { rule: 'undercut:5', basis: 'market', overrides: {} } })
+
+  /* Derived, so it cannot disagree with what `emit` will price at. A pair typed by hand into
+     the textarea on `#/runs` lights the matching preset here with nothing having stored it,
+     and a pair matching no preset correctly lights none. */
+  await expect(page.getByRole('button', { name: 'Market −5%' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.getByRole('button', { name: 'Match market' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+})
+
+test('a run joined before presets carried their rule cannot be priced from one', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
+  })
+
+  /* REFUSES RATHER THAN GUESSING. The pair is genuinely unknown for such a run, and a guessed
+     `rule` written here reaches `emit` as `UnknownRule` — a refusal the operator would read
+     on another screen, about a press they made on this one. `join` is free and re-runnable,
+     so the remedy is a re-join and the sentence says so. */
+  await expect(page.getByRole('button', { name: 'Market −5%' })).toBeDisabled()
+  await expect(page.locator('.pricing-preset-says')).toContainText('Re-join it on Runs')
+  expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
+})
+
+// -------------------------------------------------- shipping the run (D50)
+
+test('the sub-threshold answer is settable here, and emit says what it still owes', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    skus: [sku({ bucket: 'sub_threshold', market: '0.12' })],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
+  })
+
+  /* THE REFUSAL EMIT MAKES, ON THE SCREEN WHERE IT CAN BE ANSWERED. `blocking` never consults
+     `overrides`, so hand-pricing every row still left emit refusing and the only surface for
+     this answer was a JSON textarea on another route. Two of the three runs on disk are
+     parked on exactly this. */
+  await expect(page.locator('.pricing-ready')).toContainText('Emit will refuse')
+
+  await page.getByRole('button', { name: /At the \$0.40 floor/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
+  const body = wire.filter((r) => r.method === 'PUT')[0]?.body as {
+    decisions: Record<string, unknown>
+  }
+  /* THE BARE STRING `pipeline/decisions.py` COMPARES AGAINST, never a value derived from the
+     button's label — that comparison is a `==` with no trim and no case fold. */
+  expect(body.decisions.sub_threshold).toBe('floor')
+
+  await expect(page.locator('.pricing-ready')).toContainText('Pricing is answered')
+  /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
+     emit" would be a promise it cannot keep, and overstating a check is worse than not
+     running one. */
+  await expect(page.locator('.pricing-ready')).toContainText('can still refuse')
+})
+
+test('typing a price then pressing emit saves before it sends', async ({ page }) => {
+  const wire = await open(page)
+
+  await field(page).fill('19.99')
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+
+  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
+
+  /* THE WRITE RACE, ASSERTED AS AN ORDER. The click blurs the field, which commits and calls
+     `setDoc`; the handler then runs in the SAME event with the OLD document in its closure,
+     so a POST fired there would emit against the file as it was before the last answer. The
+     press raises `waiting` instead and the send waits for the save loop to go quiet. */
+  const order = wire.filter((r) => r.method === 'PUT' || r.method === 'POST').map((r) => r.method)
+  expect(order).toEqual(['PUT', 'POST'])
+})
+
+test('the press cannot be made twice into two emits', async ({ page }) => {
+  const wire = await open(page)
+
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
+
+  /* THE SECOND PRESS HAS NOWHERE TO LAND. Once the run has emitted, the control that writes
+     is ABSENT — replaced by a sentence and a quieter `Write them again` which arms rather
+     than fires. Asserted as the absence rather than as a disabled attribute, because a
+     disabled button is one attribute away from pressable and that attribute is what a later
+     refactor drops. Clicking a vanished locator is what this case used to do, and it waited
+     out the full timeout proving nothing. */
+  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Write them again' })).toBeVisible()
+  expect(wire.filter((r) => r.method === 'POST')).toHaveLength(1)
+})
+
+test('an already-emitted run takes two presses, and the first is not it', async ({ page }) => {
+  const wire = await open(page, { emitted: true })
+
+  /* ABSENT, NOT DISABLED. A second emit used to overwrite the good CSV with a header-only
+     file and blank the manifest, after which `reconcile` refused a run that had emitted
+     perfectly. D50 fixed the command; this stops the press being made by momentum. */
+  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Write them again' }).click()
+  expect(wire.filter((r) => r.method === 'POST')).toHaveLength(0)
+
+  await page.getByRole('button', { name: 'Write again' }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
+})
+
+test('an import file is offered as a download, which is the gap Gate B left open', async ({
+  page,
+}) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+
+  /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as
+     filenames in terminal output the owner never saw. This is the link that closes it —
+     RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 with the press that writes them
+     (D50), because the gap was never "the file must be at address X"; it was that the press
+     and the receipt were in different places. */
+  const file = page.locator('.run-file-import')
+  await expect(file).toBeVisible()
+  await expect(file).toContainText('import-listed.csv')
+  await expect(file).toHaveAttribute('download', 'import-listed.csv')
+  expect(await file.getAttribute('href')).toContain('/pipeline/runs/')
+
+  /* AND THE ERRAND THAT FOLLOWS, named where it starts. */
+  await expect(page.locator('.pricing-ship')).toContainText('Export From Staged')
 })
 
 test('tabbing across a suggested row writes nothing', async ({ page }) => {

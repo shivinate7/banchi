@@ -21,6 +21,7 @@ import type {
   RunStartFailure,
   RunSummary,
 } from './types'
+import { RunFiles } from './RunFiles'
 import './RunPanel.css'
 
 /* THE PIPELINE, ON THE SCREEN THE OPERATOR IS ALREADY STANDING ON.
@@ -957,18 +958,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       </p>
     ) : null
 
-  const files = (detail?.files ?? []).filter((file) => file.name !== 'manifest.json')
-  const fileRows = files.map((file) => (
-    <a
-      key={file.name}
-      className={`run-file${file.is_import ? ' run-file-import' : ''}`}
-      href={runFileUrl(detail?.run ?? '', file.name)}
-      download={file.name}
-    >
-      <span className="run-file-name">{file.name}</span>
-      <span className="run-file-size">{(file.bytes / 1000).toFixed(1)} kB</span>
-    </a>
-  ))
 
   /* THE LIVE COUNT, WHICH USED TO RIDE THE PANEL'S OWN HEAD BESIDE THE FOUR COMMAND NAMES.
    * That head is gone: on `#/runs` the page draws the title and the scope, and a panel titled
@@ -1646,6 +1635,32 @@ export function RunPanel({ cart }: RunPanelProps) {
               </div>
               <p className="run-step-note">{step.note}</p>
 
+              {/* THE WAY TO EMIT, AND IT DRAWS IN EVERY STATE — including with no runs on
+                  disk at all (D50). The button it replaces was conditional on a run being
+                  open, so a first-time operator could see that Emit EXISTS (this head, this
+                  note) and nothing on the screen said where it is. That is strictly stronger
+                  than what it replaces rather than a loss.
+
+                  A TEXT LINK RATHER THAN A CONTROL, which is `.run-figure-link`'s own
+                  argument: underline is the web's convention for "this goes somewhere", it
+                  needs no colour of its own, and the accent stays reserved. */}
+              {step.key !== 'emit' ? null : (
+                <p className="run-step-note">
+                  <a
+                    className="run-figure-link"
+                    href={
+                      openRun === null
+                        ? '#/pricing'
+                        : `#/pricing?run=${encodeURIComponent(openRun)}`
+                    }
+                  >
+                    {openRun === null
+                      ? 'Price and emit a run →'
+                      : 'Price and emit this run →'}
+                  </a>
+                </p>
+              )}
+
               {step.key === 'join' && detail !== null && (
                 <>
                   <label className="run-toggle">
@@ -1708,19 +1723,16 @@ export function RunPanel({ cart }: RunPanelProps) {
                       type="button"
                       className="run-button"
                       disabled={busy !== null}
-                      onClick={() => void doStep('emit')}
-                    >
-                      {busy === 'emit' ? 'Writing…' : 'Write the import files'}
-                    </button>
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
                       onClick={() => void openDecisions()}
                     >
-                      Pricing answers
+                      The rule and basis…
                     </button>
                   </div>
+                  <p className="run-step-note run-step-fine">
+                    The advanced door, not the pricing door: a rule outside the three presets
+                    — <code>undercut:7</code> — is typed here. Prices, holds and the
+                    sub-threshold answer are on Pricing.
+                  </p>
                   {decisions === null ? null : (
                     <div className="run-decisions">
                       <label className="run-field run-field-wide">
@@ -1798,14 +1810,14 @@ export function RunPanel({ cart }: RunPanelProps) {
         </div>
       ))}
 
-      {fileRows.length === 0 ? null : (
-        <div className="run-files">
-          {/* THE WHOLE REASON THE DOWNLOAD EXISTS. docs/GATES.md, on what Gate B did not
-              close: emit's import files existed only as filenames in terminal output the
-              owner never saw, because someone else was driving the commands. */}
-          <p className="run-files-head">Files</p>
-          {fileRows}
-        </div>
+      {/* EVERYTHING EXCEPT THE IMPORT CSVs (D50). `report.txt`, `pricing.json` and
+          `reconcile.txt` are written by the commands pressed on THIS screen, so their
+          receipts belong beside those buttons. The two import files went to `#/pricing` with
+          the press that writes them — docs/GATES.md's recorded gap was that the press and
+          the receipt were in different places, and splitting them again here would
+          reproduce it with a nicer font. */}
+      {detail === null ? null : (
+        <RunFiles run={detail.run} files={detail.files} only="run" />
       )}
     </div>
   )

@@ -83,34 +83,57 @@ def _scoped(dispositions, report):
     return {sku: d for sku, d in dispositions.items() if sku in report.matches}
 
 
-def _game_only(report, withheld=()):
+def _game_only(report, priced):
     """(listed, sub_threshold) SKU sets for one game's report — emit's two files.
 
-    WITHHELD SKUs ARE SUBTRACTED HERE AND NOT LEFT TO `import_rows`, AND THE DIFFERENCE IS A
-    FILE ON DISK. `prices_for` leaves a held SKU out of the price mapping and `import_rows`
-    then skips its row, which is correct — but `_write` below decides whether to write a file
-    AT ALL from whether `only` is empty, and `tcgcsv.render` emits the header before it
-    iterates rows. So a game whose every listable SKU was held produced a header-only
-    `import-listed.csv`, reported as `listed 0 row(s), 0 card(s)`.
+    INTERSECTED WITH WHAT WILL ACTUALLY BE WRITTEN, RATHER THAN GUESSED AT BY SUBTRACTING
+    THE EXCLUSIONS WE HAPPENED TO THINK OF. `_write` decides whether to open a file at all
+    from whether `only` is empty, and `tcgcsv.render` emits the header before it iterates
+    rows — so any SKU that survives here and is then dropped by `import_rows` is a
+    header-only file on disk, reported as `0 row(s)`.
 
-    That is the Gate B shape exactly — `docs/GATES.md` records its `import-listed.csv` as
-    header-only — and it is the file an operator would then import.
+    THREE THINGS DROP A SKU AFTER THIS POINT AND THIS FUNCTION USED TO KNOW ABOUT ONE:
+
+      - it is WITHHELD (D49) — `prices_for` leaves it out of the price mapping. Subtracted
+        here since 2026-08-29, which is the version of this docstring D50 replaces.
+      - it is `no_market_data` ANSWERED `"unlisted"` — `prices_for` drops it too, and
+        nothing subtracted it. LIVE ON A FIRST EMIT for a game whose only above-threshold
+        entries are unpriced-and-unlisted.
+      - its `add_to_quantity` is 0, every copy already committed — which is every SKU on a
+        re-emit, and is the one that destroyed the file.
+
+    `priced` is `prices_for`'s output, which is exactly the set `import_rows` prices, so
+    intersecting with it closes the first two by construction rather than by enumeration.
+    The `add_to_quantity` filter closes the third. What is left cannot be dropped downstream,
+    which is what makes `only` a promise rather than an estimate.
     """
-    held = set(withheld)
+    writable = {
+        sku for sku in priced if report.matches[sku].add_to_quantity > 0
+    }
     listed = {m.sku for m in report.matches.values() if m.listable} | {
         m.sku for m in report.no_market_data
     }
-    return listed - held, set(report.below_threshold.skus) - held
+    return listed & writable, set(report.below_threshold.skus) & writable
 
 
 def _write(game_join, path, only, choice, say, label):
+    """Write one import file, or leave it alone. Returns the SKUs that reached it.
+
+    ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D50:
+    `emit` never opens an import file until it has at least one row for it, because
+    `tcgcsv.render` emits the header before it iterates and an empty write therefore replaces
+    a good file with a valid CSV of nothing.
+
+    THE EMPTY GUARD STAYS EVEN THOUGH `only` IS NOW EXACT. `_game_only` intersects with what
+    `import_rows` will price, so the two should never disagree — and this line is what proves
+    it rather than assumes it. It is one branch against a file the operator has already been
+    told to import.
+    """
     if not only:
         say(f"{label:<16} nothing to write")
         return []
-    data = join.emit_import(
+    rows = join.import_rows(
         game_join.report,
-        game_join.catalog,
-        path,
         sub_threshold=choice.sub_threshold,
         sku_dispositions=_scoped(choice.dispositions(), game_join.report),
         no_market_data=choice.no_market_data,
@@ -121,6 +144,10 @@ def _write(game_join, path, only, choice, say, label):
         withheld=set(choice.withheld()),
         only=only,
     )
+    if not rows:
+        say(f"{label:<16} nothing new to write — {path.name} left as it is")
+        return []
+    data = join.write_import(game_join.catalog, path, rows)
     written = tcgcsv.parse(data)
     skus = [row[tcgcsv.SKU_COLUMN] for row in written.rows]
     quantity = sum(int(row[tcgcsv.QUANTITY_COLUMN] or 0) for row in written.rows)
@@ -234,6 +261,11 @@ def run(args, say) -> int:
             raise join.Undecided(
                 f"sku_dispositions names SKUs not in this batch: {sorted(unknown)}"
             )
+        # KEPT, WHERE THIS PASS USED TO THROW IT AWAY. `prices_for`'s output IS the set
+        # `import_rows` will price, so `_game_only` intersects with it rather than guessing
+        # which exclusions to subtract — see its docstring for the three that drop a SKU and
+        # the two that were not being subtracted.
+        priced = {}
         for game_join in resolved.joins.values():
             report = game_join.report
             if not report.ok:
@@ -243,7 +275,7 @@ def run(args, say) -> int:
                     + "\n"
                     + report.report()
                 )
-            join.prices_for(
+            priced[game_join.game] = join.prices_for(
                 report,
                 sub_threshold=choice.sub_threshold,
                 sku_dispositions=_scoped(choice.dispositions(), report),
@@ -257,7 +289,7 @@ def run(args, say) -> int:
             game = game_join.game
             if multi:
                 say(f"[{game}]")
-            listed, sub = _game_only(game_join.report, withheld)
+            listed, sub = _game_only(game_join.report, priced[game])
             listed_skus += _write(
                 game_join,
                 run_dir.path(runs.import_listed_name(game)),
@@ -365,14 +397,15 @@ def run(args, say) -> int:
         queue_line = writable.queue_summary
         stages = writable.inventory.listing_counts()
 
-    run_dir.set(
-        emitted={
-            "listed": listed_skus,
-            "sub_threshold": sub_skus,
-            "pushed": pushed,
-            "pushed_skus": pushed_skus,
-        }
-    )
+    # ONLY WHEN SOMETHING REACHED A FILE. D50: the record is created by the first emit that
+    # writes a row and is afterwards only ever added to. Writing it unconditionally is what
+    # blanked it on every second press — and `reconcile` reads it, so a blank record made a
+    # run that had emitted perfectly an hour ago refuse with "this run has emitted nothing".
+    wrote_any = bool(listed_skus or sub_skus)
+    if wrote_any:
+        run_dir.record_emit(
+            listed=listed_skus, sub_threshold=sub_skus, pushed=pushed
+        )
 
     say("")
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> "
@@ -387,6 +420,22 @@ def run(args, say) -> int:
     listed_names = ", ".join(
         runs.import_listed_name(game) for game in resolved.joins
     ) or runs.IMPORT_LISTED
+    if not wrote_any:
+        # NOTHING NEW WENT ANYWHERE, AND SAYING SO IS THE POINT OF THIS BRANCH. Every copy
+        # this run holds is already at `pushed`, so there is no row left to send and the
+        # files on disk are the ones the first emit wrote. An operator who has just changed
+        # `sub_threshold` or a price and pressed again is owed that sentence: the change
+        # cannot reach TCGplayer through this run, because these copies have already been
+        # sent under the old answer.
+        sent = runs.open_run(run_dir.directory).emitted
+        say("nothing new to send — every copy this run matched is already at "
+            f"{master.PUSHED}.")
+        if sent:
+            say(f"      {listed_names} is unchanged, from the emit at {sent.get('at', 'an earlier run')}.")
+            say("      A price changed after an emit cannot travel this road; the copies "
+                "are already sent.")
+            say(f"next: pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
+        return 0
     say(f"next: import {listed_names} to Staged in TCGplayer, "
         f"then Export From Staged and run")
     say(f"      pkmnscan reconcile {run_dir.directory} <staged-export.csv>")

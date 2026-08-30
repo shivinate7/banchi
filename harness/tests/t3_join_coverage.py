@@ -513,15 +513,31 @@ def _check_committed_from_counts(c, export) -> None:
 
         live_export = _export_file(run.path("live.csv"), export, live_quantity=4)
         _command(c, "join", str(run.directory), "--export", str(live_export))
+        # CAPTURED BEFORE THE SECOND EMIT — the claim below is that this file is not touched,
+        # which cannot be checked against a file the assertion's own command rewrote.
+        sent = run.path(runs.IMPORT_LISTED).read_bytes()
         _command(c, "emit", str(run.directory))
 
         after = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
         c.equal(
-            len(tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).rows),
-            0,
+            run.path(runs.IMPORT_LISTED).read_bytes(),
+            sent,
             "THE SECOND EMIT WRITES NO SECOND ROW. Four copies are already live on "
-            "TCGplayer and the cap is four, so there is nothing to add — importing this "
-            "file again is what doubled them",
+            "TCGplayer and the cap is four, so there is nothing to add — a second row here "
+            "is what doubled them at Gate B, where a re-emit re-counted 37 copies into the "
+            "files. This asserted `len(rows) == 0` until 2026-08-30, which measured "
+            "something else entirely: the emitter was BLANKING the file, and 'no rows' is "
+            "satisfied identically by 'no second row was written' and by 'the first row was "
+            "destroyed'. D50 makes a no-op re-emit leave the file alone, so the property is "
+            "byte equality — the file still holds exactly what was sent",
+        )
+        c.equal(
+            tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).by_sku()[SEVEN_COPY_SKU][
+                tcgcsv.QUANTITY_COLUMN
+            ],
+            "4",
+            "and it still says 4, not 8: the surviving row is the FIRST emit's, unchanged, "
+            "rather than a second one added on top of copies already live",
         )
         c.equal(
             (after.pushed, after.staged, after.live),

@@ -206,6 +206,31 @@
   background: var(--hover);
 }
 
+/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D50). Derived from `rule`/`basis` rather than
+   from a stored key, so it cannot disagree with what `emit` will actually price at — see
+   `Pricing.tsx`'s `aria-pressed`.
+
+   AN OUTLINE, NOT A FILL. `docs/DESIGN.md` reserves the solid accent for a screen with
+   exactly one thing to do, and a hundred-row worklist is the definition of more than one;
+   `app/tests/pricing.spec.ts` asserts zero accent-filled grounds anywhere under
+   `main.pricing` and this must not be what breaks it. The weight comes from the border and
+   the ink, which is the same register `.boxops-op-on` uses one screen over. */
+.pricing-preset[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Absent-shaped rather than merely dim: a run joined before presets carried their rule
+   genuinely cannot be priced from one, and the sentence beside these says so. */
+.pricing-preset:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.pricing-preset:disabled:hover {
+  background: var(--surface);
+}
+
 .pricing-preset-says {
   flex: 1 1 20rem;
   font-family: var(--body);
@@ -546,7 +571,12 @@
      of it costs the least; and the panel is a picture of that card, so it sits beside what it
      is about. */
   left: var(--s4);
-  bottom: var(--s4);
+  /* ABOVE THE SHIP BAR, NOT UNDER IT (D50). The corner above was chosen by looking at it and
+     that argument is untouched — what changed is that the bottom edge is now occupied. The
+     bar's height varies with its receipt, so this is a floor rather than an exact clearance:
+     `--pricing-ship-h` is the closed height, and a bar grown by a receipt overlaps the
+     panel's lower edge only while the operator is reading a console rather than a card. */
+  bottom: calc(var(--pricing-ship-h, 64px) + var(--s4));
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -582,4 +612,132 @@
 .pricing-photo-controls {
   display: flex;
   gap: var(--s2);
+}
+
+/* ---- the ship bar (D50) ---------------------------------------------------------------
+ *
+ * STICKY AND IN FLOW, NOT `fixed`. A sticky last child reserves its own height in the
+ * document, so the space under a ~6,500px list is exactly this bar's height BY CONSTRUCTION
+ * — including when the receipt appears and it grows. A `fixed` bar needs a hand-maintained
+ * `padding-bottom` on `.pricing` equal to a height that changes, which is the
+ * two-declarations-that-must-agree drift this file already refuses for its grid template.
+ *
+ * The negative margins bleed it to the page edges so nothing shows in the 16px gutter; the
+ * negative bottom margin cancels the page's own bottom padding, so at full scroll it rests
+ * flush rather than floating above a strip of ground.
+ *
+ * IT SPENDS NONE OF docs/DESIGN.md's 150px TOP BUDGET, which is the other half of why it is
+ * at the bottom: the answer to "what do I still owe" has to be reachable from anywhere in a
+ * hundred rows, and the top of the page is already spent on the title, the scope and the
+ * lede.
+ */
+.pricing-ship {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: var(--s5) calc(-1 * var(--s4)) calc(-1 * var(--s4));
+  padding: var(--s3) var(--s4);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.pricing-ship-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.pricing-ship-act {
+  justify-content: flex-end;
+}
+
+.pricing-ship-key {
+  font-family: var(--util);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.pricing-ready {
+  flex: 1 1 24rem;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.pricing-ready-warn {
+  color: var(--muted);
+}
+
+/* A control you TYPE INTO gets `field` rather than `line` — docs/DESIGN.md's second line
+   colour, for the one case where the low contrast genuinely bites: an empty input is a
+   rectangle and nothing else. */
+.pricing-ship-flat {
+  width: 7rem;
+  min-height: 32px;
+  padding: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+}
+
+/* THE PRESS, AND IT IS AN OUTLINE. docs/DESIGN.md reserves the solid accent fill for a screen
+   with exactly one thing to do; a hundred-row worklist is the definition of more than one,
+   and `app/tests/pricing.spec.ts` asserts zero accent-filled grounds anywhere under
+   `main.pricing`. The weight comes from the border and from where it sits — the right end of
+   a bar that is always on screen. */
+.pricing-emit {
+  min-height: 32px;
+  padding: var(--s1) var(--s4);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.pricing-emit:hover {
+  background: var(--hover);
+}
+
+.pricing-emit:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+
+.pricing-ship-receipt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+/* Tighter than `.run-console`'s 260px: this one shares a bar with the control that produced
+   it, and the readiness row and the button must never be pushed out of their own bar. */
+.pricing-ship-console {
+  max-height: 120px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--s2);
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  white-space: pre-wrap;
 }

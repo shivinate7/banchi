@@ -1131,7 +1131,14 @@ def _phase(manifest: dict, live: bool) -> str:
         return "identify" if manifest.get("batch_ids") else "ready"
     if not manifest.get("joined"):
         return "join"
-    if not manifest.get("emitted"):
+    # A RECORD NAMING NOTHING IS NOT AN EMIT. Truthiness of the dict was the test, and
+    # `{"listed": [], "sub_threshold": [], "pushed": 0}` is a truthy dict — so a run whose
+    # record had been blanked read `reconcile` on the panel while `reconcile` itself refused
+    # with "this run has emitted nothing". D50 stops that record ever being written, and this
+    # is the belt to that braces: a hand-edited manifest, or one written by an older
+    # checkout, must not send the operator to a step that will refuse them.
+    emitted = manifest.get("emitted") or {}
+    if not (list(emitted.get("listed") or []) + list(emitted.get("sub_threshold") or [])):
         return "emit"
     if not manifest.get("reconciled"):
         return "reconcile"

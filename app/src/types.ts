@@ -1268,7 +1268,17 @@ export type PricingTable = {
   floor: string
   rule: string
   basis: string
-  presets: string[]
+  /** The named presets, each carrying the RULE AND BASIS it stands for (D50).
+   *
+   *  It was `string[]` — names alone — so the screen could not learn what a preset MEANT and
+   *  pressing one wrote `preset: <key>`, a key `pipeline/decisions.py` does not read. The
+   *  pair is served rather than declared here because a rule and a basis are a rule the
+   *  pipeline owns, and `app/src/server.ts` records that this app may not compute one.
+   *
+   *  A run joined before 2026-08-30 carries bare strings. `Pricing.tsx` reads this
+   *  tolerantly and disables the presets rather than guessing a pair — a wrong `rule` written
+   *  into `decisions.json` reaches `emit` as `UnknownRule`. */
+  presets: ({ key: string; rule: string; basis: string } | string)[]
   games: { game: string; import_listed: string; import_subthreshold: string }[]
   skus: PricingSku[]
   bands: { game: string; label: string; skus: number; copies: number }[]
