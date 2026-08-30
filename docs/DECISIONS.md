@@ -6624,53 +6624,135 @@ stopped being a Someday item and needs a decision entry of its own"* — and eac
   number — the mirror image of the trade the set-hint item above warns about.
 
 - **Keep a price series out of the exports runs already hold** (recorded 2026-08-29, from the
-  owner asking whether the export carries last solds). **It does not, and neither does
-  anything else reachable from here.** The Filtered CSV is current-state only — sixteen
-  columns, four of them prices, not one carrying a timestamp, a sale record or a sample size.
-  `TCG Market Price` is the only column with sales behind it and it arrives as TCGplayer's own
-  aggregate over recent sales, so *"what did the last three copies sell for"* is not answerable
-  from it and is not recoverable from it by arithmetic. The `tcgplayer-csv` skill carries the
-  schema half.
+  owner asking whether the export carries last solds). The Filtered CSV is current-state
+  only — sixteen columns, four of them prices, not one carrying a timestamp, a sale record or
+  a sample size. `TCG Market Price` is the only column with sales behind it and it arrives as
+  TCGplayer's own aggregate over recent sales, so *"what did the last three copies sell for"*
+  is not answerable from it and is not recoverable from it by arithmetic. The `tcgplayer-csv`
+  skill carries the schema half. **All of that is about the EXPORT and all of it still
+  stands.**
 
-  **TCGplayer publishes no price history at all, and that is the fact that decides the rest.**
-  The latest-sales panel on a product page is UI-only, with no export and no API contract — so
-  D2's own rubric answers it before any code is written: a benchmark, never a component. And
-  it would mean scraping the marketplace this project's entire listing path depends on (D11),
-  from the account that depends on it. The exposure is the seller account rather than an IP
-  ban, which is a worse trade than the data is worth.
+  **WHAT THIS ENTRY GOT WRONG, MEASURED 2026-08-30 AND CORRECTED HERE.** It said, twice, that
+  the data does not exist anywhere: *"It does not, and neither does anything else reachable
+  from here"*, and **"TCGplayer publishes no price history at all, and that is the fact that
+  decides the rest."** The second sentence is false and the first is false in its second half.
+  `infinite-api.tcgplayer.com/price/history/<productId>/detailed?range=<r>` is **public** — no
+  key, no cookie, no session, HTTP 200 to a bare `curl` — and it answers per-SKU daily and
+  weekly sales history: quantity sold, transaction count, market price, and the low and high
+  of the sales in each bucket.
 
-  **Nothing has to be fetched to start, which is the part worth not forgetting.** D33 makes an
-  app-driven run keep the exact export bytes it joined against, for an unrelated reason — so
-  the archive is already accumulating. Three exports were on disk on 2026-08-29:
-  `runs/2026-08-24-box2-01/` and two inside `runs/2026-08-29-box1-01/`, that run having
-  re-joined against a refreshed export the same morning. Keying `TCG Market Price` by
-  `TCGplayer Id` across run directories is a price series that grows every run and calls
-  nothing.
+  **The reasoning that produced the wrong sentence was sound and is kept.** It reasoned from
+  the *latest-sales panel* on a product page, which really is UI-only and really would mean
+  scraping the marketplace this project's listing path depends on, from the account that
+  depends on it — a worse trade than the data is worth, and D2's rubric answers it before any
+  code is written. That is a correct judgement about a different endpoint. What the entry did
+  was generalise from the one surface it had looked at to the whole marketplace, and no
+  amount of care about the first would have found the second.
 
-  **What it cannot cover is the backfill**, holding only SKUs that have been run, on the dates
-  they were run. `tcgcsv.com` is the candidate: a nightly mirror of TCGplayer's own API across
-  89+ games including all three this project captures, sub-type aware — Normal, Holofoil and
-  Reverse Holofoil as separate series, matching how the Condition string carries the variant —
-  with market/low/mid/high per day and an archive back to 2024-02-08. A published mirror, not
-  a scrape.
+  **THE HONEST BOUNDARY IS NOT WHERE THIS ENTRY DREW IT, AND IT IS SHARPER.** The line is not
+  *history exists / does not exist*; it is **aggregate versus fills**. A bucket says how many
+  copies sold that day and the lowest and highest price among them. It does not say what any
+  one copy sold for. So the sentence at the top of this entry survives verbatim and is now
+  true of everything reachable rather than only of the CSV: *what did the last three copies
+  sell for* is still not answerable, by this endpoint or any other one that does not need
+  credentials. What IS answerable — and was not before — is what a card has been worth, how
+  fast it moves, and which way it is going.
+
+  **RECORDED, NOT BUILT — AND THE WORD IS THE POINT. `pipeline/pricehistory.py` exists as of
+  2026-08-30 with T7 coverage, and it is a LIBRARY: nothing calls it, no route serves it, no
+  screen draws it.** `CLAUDE.md` says a wrap-up claiming BUILT for something unreachable is
+  wrong rather than merely incomplete, so this entry does not claim it. What is genuinely
+  built is a reader; what is genuinely done is this decision. Surfacing it needs a route, a
+  client function in `app/src/server.ts` and a control on a screen, and that is the
+  unfinished part of the same task rather than a follow-up. Per SKU the reader
+  answers a volume-weighted VWAP on `marketPrice`, the interval that VWAP must lie inside,
+  momentum, liquidity, units per transaction and within-bucket dispersion.
+
+  **THE TWO RANGES OVERLAP AND THE READER REFUSES TO MERGE THEM.** `annual` is not the year
+  before `month` — it is 357 days INCLUDING the same recent days at a coarser width, so
+  concatenating them double-counts the recent window and skews any volume-weighted figure.
+  They are kept separate and presented side by side. The wider range is also the staler one:
+  weekly buckets are stamped at the start of their week, so `annual` ran six days behind
+  `month` on the same card at the same moment.
+
+  **THE BOUND IS A SANITY CHECK AND NEVER A RESULT, which is the one way this could be
+  misread into a wrong number.** With buckets rather than fills a true VWAP is not
+  computable, only bounded. Measured on Moonfall (Unleashed 198/219) over `quarter`: a point
+  estimate of **$16.33** inside a bound of **$12.54..$20.35** — 48% of the point estimate
+  wide, or 62% of its own low end, which is why the module names both denominators instead of
+  reporting one percentage. Anchor on the VWAP; a screen that ever draws the bound as a price
+  and an error bar of comparable authority has read this backwards.
+
+  **THE JOIN IS LOCAL AND THE ENDPOINT IS KEYED BY productId, NOT BY SKU** (there is no
+  SKU-keyed history route — probed, 404). `tcgcsv.com` mirrors TCGplayer's own catalog
+  nightly, so the walk is `Product Line` cell -> categoryId, `Set Name` -> groupId, then
+  (`Number`, `Product Name`) -> productId, all against a published mirror and none of it a
+  scrape. The response then carries `skuId` on every result, so the last hop is EXACT: we ask
+  about a product and take our own SKU out of the answer by its number. **Measured across all
+  four committed exports: 3,588 distinct products, 100% resolved, zero ambiguous, zero
+  missed**, with all 19 set names matching their group names exactly.
+
+  **THE SAME MIRROR SERVES CURRENT PRICES, AND THEY ARE PRODUCT-LEVEL RATHER THAN SKU-LEVEL —
+  WHICH IS WHAT KEEPS D8 SHUT.** `/tcgplayer/<cat>/<group>/prices` answers low/mid/high/market
+  and a direct low per product per PRINTING: 445 rows over 321 products for Unleashed,
+  `subTypeName` being `Normal` or `Foil` and never a condition. Vilemaw is five export rows by
+  condition against one row there, so it can only ever speak for the Near Mint row.
+
+  **THAT IT IS THE NEAR MINT ROW WAS MEASURED RATHER THAN ASSUMED**: across 387
+  multi-condition Unleashed products this figure is nearest the export's Near Mint row **338
+  times, 87%**, and the 49 that are not have a median gap of **$0.04** between their two
+  closest condition rows — 41 of the 49 under $0.25 — so those are the instrument failing to
+  discriminate rather than the inference failing. It remains an inference the payload does
+  not state, and it may not be used to price a played copy. It carries no `TCGplayer Id` and no `Total Quantity` — the SKU D11's
+  import matches on and the quantity D7's cap is measured against — so **it supplements an
+  export and can never replace one**, and the field sets are not a mirror either: `midPrice`
+  and `highPrice` have no export column, and `TCG Low Price With Shipping` has no field there.
+
+  **What it actually buys is RECENCY, not a new dimension**, and that is worth saying flatly
+  because "supplements the export" reads like the opposite: every figure is already a column
+  the operator has, offered as of now rather than as of the last download.
+
+  **AND `number_index_key` IS REUSED ON BOTH SIDES RATHER THAN REIMPLEMENTED**, which is the
+  same rule that stopped `pipeline/join.py`'s silent zero-join. The name is consulted only as
+  a tiebreak and then as a last resort, and the measurement says it is doing nothing riskier
+  than that: of the 3,588 products, 355 resolve by name and **all 355 carry a blank `Number`
+  cell** — sealed product, code cards and DON!! cards, which print no collector number at
+  all. Not one row with a number in it has ever fallen through to the name index. That is the
+  measurement to re-run first if anything here is widened.
+
+  **WHAT WAS ALREADY TRUE AND IS UNCHANGED.** D33 makes an app-driven run keep the exact
+  export bytes it joined against, so keying `TCG Market Price` by `TCGplayer Id` across run
+  directories is still a price series that grows every run and calls nothing. It is still the
+  cheapest thing here and it still cannot cover the backfill. `tcgcsv.com`'s daily
+  market/low/mid/high archive back to 2024-02-08 is still the candidate for that, and this
+  build uses that mirror for the CATALOG only — it reads no price out of it.
 
   **eBay sold listings are a real source and the wrong one.** Officially reachable through the
   Marketplace Insights API rather than by scraping, but eBay is on the Deferred list above, and
   an eBay sold price is shipping-inclusive on a different market — it would mislead a
   TCGplayer listing price rather than inform it.
 
-  **This is Someday rather than a plan because the second half reopens D8**, which names the
-  export as the pricing source and no external pricing API. The two halves are not equally
-  affected and the split is the reason this is written down rather than built: the local
-  series barely touches D8 if at all — same bytes, same column, kept instead of discarded —
-  while `tcgcsv.com` is plainly an external price source whatever it is used for. The owner's
-  call, and a decision entry naming D8 is the shape it takes.
+  **D8 IS NOT REOPENED AND THE READER MUST NOT REOPEN IT.** That entry names the TCGplayer
+  export as the pricing source and no external pricing API, and **nothing in
+  `pipeline/pricehistory.py` prices anything**: it computes no listing price, writes no
+  `TCG Marketplace Price`, and is reached by no command that emits a row. It is a reading
+  taken NEXT TO the export rather than instead of it. The day something wants a listing price
+  to depend on a trend, that is a change to D8, argued on its own terms — and it is a change
+  this module makes cheaper to argue rather than one it has quietly made.
 
-  **What it would be worth**: D49's `bullish` withhold and its `watch_above` threshold are the
-  only things in the product that want a trend, and they have none — a hold is set against the
-  operator's memory of what a card used to cost. **The honest limit is that none of this is
-  last solds**, and no amount of daily aggregate becomes one.
+  **What it is worth**: D49's `bullish` withhold and its `watch_above` threshold are the only
+  things in the product that want a trend, and they have had none — a hold is set against the
+  operator's memory of what a card used to cost. The verification case is Vilemaw (Unleashed
+  060/219, sku 9189317, three copies in box 3). **Read on 2026-08-30**, and dated because
+  every figure in it moves: export market $23.14 against a live $23.63 at daily resolution ($23.73 read over `quarter`, whose buckets are three days wide), **1,763 copies sold
+  in the quarter**, and a month and a year pointing opposite ways — up 71% over the month,
+  down 34% over the year. Neither number was available to this product the day before, and
+  no aggregate of them is a last sold.
 
+  **WHAT WOULD REOPEN THIS: the endpoint closing.** It is undocumented and unversioned, and a
+  public thing that nobody promised can stop being public without notice. The reader refuses
+  by name rather than guessing when it does, and the failure is a missing reading rather than
+  a wrong price — which is the property that made it safe to build against at all.
 ---
 
 Unsorted scanning is **not** deferred: it works today via the optional hints, with more
