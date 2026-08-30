@@ -22,6 +22,7 @@ import type {
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
 import { RunFiles } from './RunFiles'
+import { runBoxLabel } from './runScope'
 import './Pricing.css'
 
 /* HAND-PRICING, ON A ROUTE OF ITS OWN — D49, from an interview the owner asked for.
@@ -716,13 +717,35 @@ export function Pricing() {
     [photoFor, rows],
   )
 
+  /** `Box 3 · RB Epics` for the run being priced, or `null` where nothing can say (D56).
+   *
+   *  `detail` FIRST AND THE LIST SECOND, AND THEY CANNOT DISAGREE — both come out of
+   *  `server/pipeline_routes.py:_summary`, which joins the box against the registry on every
+   *  read. What separates them is freshness: `runs` is fetched once at mount and never again,
+   *  while `detail` is re-read by `load()` and therefore by the Reload button — so a box
+   *  renamed on `#/inventory` shows up here on a press rather than on a page reload. The list
+   *  covers the window before `getRun` has answered and the case where it refused. */
+  const scopeName = useMemo(() => {
+    if (run === null) return null
+    const row = detail !== null && detail.run === run ? detail : runs.find((r) => r.run === run)
+    return row === undefined ? null : runBoxLabel(row)
+  }, [run, detail, runs])
+
   const chrome = (
     <header className="pricing-head">
       <div className="pricing-head-top">
         <h1 className="pricing-title">Pricing</h1>
         <div className="pricing-controls">
+          {/* THE DRAWER, THEN THE RUN, THEN THE COUNT (D56). It read `<run> · N SKUs`, which
+              names the directory and the size of the job and never says what is in the box —
+              the owner's complaint, in the place they were looking when they made it. The run
+              name stays because it is what `emit` and `join` are pointed at and what
+              `decisions.json` is written under; what goes in front of it is the answer to
+              which drawer these hundred prices are for. */}
           <span className="pricing-scope">
-            {run === null ? 'Pick a run.' : `${run} · ${rows.length} SKUs`}
+            {run === null
+              ? 'Pick a run.'
+              : [scopeName, run, `${rows.length} SKUs`].filter((part) => part !== null).join(' · ')}
           </span>
           {held.length === 0 ? null : (
             <button
@@ -772,18 +795,44 @@ export function Pricing() {
           ) : (
             runs
               .filter((row) => row.joined)
-              .map((row) => (
-                <button
-                  key={row.run}
-                  type="button"
-                  className={`pricing-run${row.run === run ? ' pricing-run-on' : ''}`}
-                  aria-pressed={row.run === run}
-                  onClick={() => setRun(row.run)}
-                >
-                  <span className="pricing-run-name">{row.run}</span>
-                  <span className="pricing-run-meta">{row.counts?.skus ?? '?'} SKUs</span>
-                </button>
-              ))
+              .map((row) => {
+                /* THE DRAWER LARGE, THE DIRECTORY SMALL BENEATH IT (D56). This chip drew the
+                   run name over a SKU count — a date, a box digit and a number — and the owner
+                   named it exactly: *"not just the date and the raw box number."* It is
+                   `docs/DESIGN.md`'s human-label-large, machine-string-small rule, which the
+                   review queue already applies to its reason codes, pointed at a picker: the
+                   box is what a person is choosing between, and the run directory is the
+                   greppable identity of the thing they are choosing.
+
+                   THE RUN NAME IS NOT DEMOTED OUT OF USEFULNESS, and it must not be. Two runs
+                   over one box draw the SAME headline — box 1 does exactly this on the owner's
+                   store today — so the date on the second line is the only thing telling them
+                   apart. It stays in the utility face at the metadata size rather than
+                   dropping to the 10px a count can afford.
+
+                   A RUN WITH NO BOX FALLS BACK TO ITS OWN NAME AS THE HEADLINE, rather than
+                   drawing an empty line above one. No run on this machine is in that state; a
+                   manifest with neither a scope block nor a box-shaped capture directory would
+                   be. */
+                const label = runBoxLabel(row)
+                return (
+                  <button
+                    key={row.run}
+                    type="button"
+                    className={`pricing-run${row.run === run ? ' pricing-run-on' : ''}`}
+                    aria-pressed={row.run === run}
+                    onClick={() => setRun(row.run)}
+                  >
+                    <span className="pricing-run-name">{label ?? row.run}</span>
+                    <span className="pricing-run-meta">
+                      {label === null ? null : (
+                        <span className="pricing-run-id">{row.run}</span>
+                      )}
+                      <span>{row.counts?.skus ?? '?'} SKUs</span>
+                    </span>
+                  </button>
+                )
+              })
           )}
         </div>
       </main>

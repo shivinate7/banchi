@@ -5472,6 +5472,124 @@ different and much bolder rule than this one.
 
 ---
 
+
+## D56 — A run names the drawer it was over, and the name is joined at read time
+
+**BUILT 2026-08-30, from the owner looking at `#/pricing`'s run picker**: *"how can we make it
+so that the runs and pricing tab in general — I need the pricing tab to include the name of the
+box that i gave it, not just the date and the raw box number. What I attached could be more
+informative at no cost."*
+
+**THE STORE HAD BEEN HOLDING THE ANSWER SINCE D20 AND NO SCREEN THAT LISTS RUNS HAD READ IT.**
+That entry makes a box an object with a name, makes the name unique, and makes it *how a box is
+addressed* — the capture screen's Box field searches on it, `#/inventory` draws it beside every
+position, and `#/runs`' own box picker one panel up draws `Box 3 · RB Epics`. Meanwhile every
+surface that mentions a RUN drew a digit: the pricing picker chip said `2026-08-30-box3-01` over
+`15 SKUs`, `RunPanel`'s run rows said `box 3`, and the cart leg above the spend button said
+`Box 3`. Measured on the owner's own store, the three names those screens could not say are
+`UNL Rares`, `ME01 C/UC` and `RB Epics`.
+
+**THE JOIN IS THE SERVER'S, AND IT HAPPENS ON EVERY READ.** `server/pipeline_routes.py:_summary`
+sends two new fields on every run: `box`, from `_run_box`, and `box_name`, from `_box_names()`
+— the box registry, parsed fresh out of `inventory.json`.
+
+**NOTHING IS STORED ON THE RUN, AND THAT IS THE LOAD-BEARING DECISION.** The obvious cheaper
+design is to have `identify` write the name into the manifest at spawn time, and it is wrong for
+D20's own reason: a rename is a live edit that relabels every card in the box on every screen
+that draws one, and `cli/runs.py` makes a run an **immutable input** precisely so a batch can
+outlive the server that started it. A name copied into a run directory would therefore be a
+second answer that can never be corrected — the run would go on saying `RB Epics` after the
+drawer became `Riftbound epics`, with no way to fix it short of editing a manifest by hand.
+T7 asserts the rename reaching the run on the next read, which is the case a stored name fails.
+
+**IT PARSES THE INVENTORY AND NOT THE SNAPSHOT, AND IT IS ONE READ FOR A WHOLE LIST.**
+`GET /pipeline/runs` is the polled route — 4s while anything is live — so `_box_names()` is
+called once and passed into every `_summary`; the single-run routes have nothing to share it
+with and read their own. Measured on the owner's store: `Inventory.parse` over 715 cards is
+**4.5ms**, against **7.3ms** for `Store().read()`, which also parses a 268KB identification
+cache and both queue files that nothing here reads. Cheap either way; the cheaper one is the
+one a poll should take.
+
+**IT NEVER RAISES.** `do_status`' rule applied to a decoration: a store this cannot read costs
+the run list its box names and must not cost it the run list, which is where the phase, the
+elapsed time and the download links are.
+
+**AND IT DELETED A SECOND IMPLEMENTATION OF `_run_box` IN TYPESCRIPT.** `RunPanel.tsx:boxOf`
+derived the box itself, with `/box(\d+)/` over the whole capture path where the server anchors
+`^box(\d+)` on its **basename** — so a parent directory with a number after `box` in its name
+would have answered differently on the two sides, and the symptom would have been a run filed
+under the wrong box and nothing else. It agreed on all four runs on this machine and was one
+oddly-named folder from not agreeing. `app/src/runScope.ts` is now the one module, `boxOf`
+prefers the server's field, and the old derivation survives only as the fallback for a payload
+that predates it — this response is cast rather than validated, the shape `written_at` already
+takes for the same reason. **Two of the owner's four runs carry no `scope` block at all**, so
+that fallback is not hypothetical: `pkmnscan identify captures/cards/box3` writes none.
+
+**BOTH HALVES, NEVER ONE.** `CLAUDE.md` is explicit that the name travels *beside* the number
+rather than replacing it, and both are load-bearing here: the name is what the operator
+recognises, and the number is the shelf they walk to, the capture directory the photographs are
+in, and what every refusal in `server/pipeline_routes.py` says. **An unnamed box draws the
+number ALONE** — no separator and no placeholder — because D20 leaves a name optional, so
+unnamed is an ordinary box and `Box 9 · —` would draw a fault where there is none. Same for a
+box that has since been deleted (D10 ruling 3): the run remembers a number the registry no
+longer has, and the number by itself is the honest rendering of that.
+
+**THE PRICING CHIP LEADS WITH THE BOX AND KEEPS THE DIRECTORY BENEATH IT.** That is
+`docs/DESIGN.md`'s human-label-large, machine-string-small rule — which the review queue already
+applies to its reason codes — pointed at a picker: the box is what a person is choosing between
+and the run directory is the greppable identity of the thing they are choosing.
+
+**THE RUN NAME IS NOT DEMOTED OUT OF USEFULNESS, AND THAT WAS THE ONE REAL RISK IN THE
+RE-ORDER.** Box 1 carries **two** joined runs on the owner's store, so two chips draw the
+identical headline `Box 1 · UNL Rares` and the date beneath is the whole of the difference. It
+therefore stays in the utility face at the metadata size rather than dropping to the 10px a
+count can afford, and the gap beside the count is `--s3` rather than `--s2`: both facts are
+mono, and the worst adjacency is two runs of digits — `2026-08-30-box3-01` ends in `01` and
+`15 SKUs` opens on `15`. The chip grew by **1px** for it, which is the owner's *"at no cost"*
+satisfied literally.
+
+**NO INTERPUNCT BETWEEN THEM, and that is D41 rather than a preference.** That entry answered
+this exact question for `.boxops-meta` by giving the facts structure instead of dots. Line one
+of the chip already spends the one dot it can afford.
+
+**WHERE ELSE IT LANDS, and the cart is the one worth arguing for.** `#/runs`' run rows and its
+one-box scope line, and — from the cart rather than from a run — the leg head above the reading
+picker and the per-box row of the cost breakdown. D33's money gate is two presses over a number
+the operator cannot miss, and until now the row that decides what reading a box costs could only
+call that box by its digit, on the one screen in the product that spends. **The multi-box scope
+line deliberately does NOT name them**: it would run the header to two and three lines while the
+picker directly below draws every box named.
+
+**THE NAME IS DRAWN AND NEVER SENT.** `CartBox` gains a `name`, and `RunPanel`'s `legs`
+projects a cart row to what the route reads — which does not include it. That is not tidiness:
+`scopeKey` is built from `legs` and is what **voids the estimate**, and renaming a drawer
+changes not one byte of the send. An estimate retired by a rename would be the money gate crying
+wolf.
+
+**TWO SOURCES FOR THE NAME, WITH A STATED PRECEDENCE, AND THEY CANNOT DISAGREE.** The run rows
+read it off the run (the registry, server-side); the cart legs read it off the picker's own
+`GET /boxes` (the same registry, one route over). A cart row is a box the operator just chose
+and no run over it may yet exist, so the run list cannot answer for it. On `#/pricing` the same
+split appears one scale down: `scopeName` prefers `detail` over the list row, because `runs` is
+fetched once at mount while `detail` is re-read by `load()` and therefore by **Reload** — so a
+box renamed on `#/inventory` reaches the header on a press rather than on a page reload.
+
+**COVERED IN BOTH PLACES, AND MUTATION-TESTED IN BOTH.** T7's `check_pipeline_routes` holds the
+server half: a box the registry has never heard of reports no name, naming it names the run
+without the run being touched, a **rename** reaches it on the next read, a run with no scope
+block is still placed and named off its capture directory, and the list carries it too.
+`app/tests/run-panel.spec.ts` and `app/tests/pricing.spec.ts` hold the client half. Five
+mutations were observed failing before the cases were kept: `boxLabel` ignoring the name;
+`boxLabel` drawing `· —` for an unnamed box; `boxOf` dropping the legacy derivation; the pricing
+chip reverting to the run name alone; and the chip dropping the run directory, which the
+two-runs-on-one-box case exists to catch.
+
+**What would reopen this: a box name long enough to wrap a run row.** These are three short
+labels on one store and nothing truncates. If a name ever pushes `.run-row`'s third column onto
+a second line, the fix is an ellipsis on the scope cell — `.run-row-name` already has one — and
+not dropping the name, which is the fact the row was added for.
+
+---
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

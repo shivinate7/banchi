@@ -121,6 +121,13 @@ function runRow(overrides: Record<string, unknown> = {}) {
     path: '/tmp/runs/2026-08-24-box9-01',
     capture_dir: '/tmp/captures/cards/box9',
     scope: { box: 9, whole_box: true, cards: null },
+    /* THE SERVER'S OWN ANSWER TO WHICH BOX, AND WHAT IT IS CALLED (D56). `box` is what
+       `RunPanel` groups and labels on now; `runScope.ts:boxOf` keeps the scope/capture-dir
+       derivation only for a server that predates the field. Box 9 is UNNAMED in this file's
+       registry fixture and this row agrees with it — the two would be a disagreement about the
+       same box otherwise, which is exactly the drift the server-side join exists to prevent. */
+    box: 9,
+    box_name: null,
     live: false,
     pid: null,
     phase: 'join',
@@ -380,9 +387,11 @@ async function open(
             sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }],
           },
           {
-            /* A SECOND BOX, so a cart can be a cart of more than one. Named, because the
-               strip draws `Box 12 · codes` and the cart row draws `Box 12` alone — two
-               different renderings of one box that a one-box fixture cannot tell apart. */
+            /* A SECOND BOX, so a cart can be a cart of more than one. NAMED WHERE BOX 9
+               IS NOT, which is what makes this fixture cover both arms of `boxLabel` (D56):
+               a named box draws `Box 12 · codes` everywhere it appears and an unnamed one
+               draws `Box 9` with no separator and no placeholder — D20 leaves a name optional,
+               so unnamed is an ordinary box rather than a fault to mark. */
             box: 12,
             name: 'codes',
             sections: [],
@@ -963,6 +972,59 @@ test('a bypassed run says so on the run itself, not only in its log', async ({ p
   await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
 })
 
+// ------------------------------------------------------------- which drawer a run was over
+
+test('a run row names the drawer, and takes the name from the server', async ({ page }) => {
+  await open(page, {
+    runs: [
+      runRow({ run: '2026-08-24-box12-01', box: 12, box_name: 'codes', phase: 'emit' }),
+      runRow(),
+    ],
+  })
+  await openPanel(page)
+
+  /* D56. The list drew `box 9` — a digit, on a screen whose whole question is which box you
+     are about to spend money on. The name comes off `GET /pipeline/runs`, joined against the
+     registry at read time, so it is current rather than whatever the manifest happened to
+     record; the number stays beside it because the number is the shelf and the directory the
+     photographs are in.
+
+     BOTH ARMS, and the second one is the assertion that matters: an unnamed box draws the
+     number ALONE. D20 leaves a name optional, so `Box 9 · —` would draw a fault where there
+     is none. */
+  const rowScope = (run: string) =>
+    page.locator('.run-row').filter({ hasText: run }).locator('.run-row-scope')
+
+  /* SELECTED BY RUN NAME AND NOT BY INDEX, because this list is PARTITIONED: box 9 is the
+     picked box, so its run sorts above box 12's whatever order the server sent them in. An
+     index here would be asserting the grouping by accident and would move the day either
+     fixture's box changed. */
+  await expect(rowScope('2026-08-24-box12-01')).toHaveText('Box 12 · codes')
+  await expect(rowScope('2026-08-24-box9-01')).toHaveText('Box 9')
+})
+
+test('a run predating the box field still finds its box, and is grouped by it', async ({
+  page,
+}) => {
+  /* THE FALLBACK, WHICH IS NOT DEAD CODE: `_summary` sends `box` today, and this payload is
+     CAST rather than validated, so a client talking to a server that predates the field must
+     not silently lose which box every run was over. Two of the four runs on the owner's own
+     machine carry no `scope` block either — `identify captures/cards/box3` writes none — so
+     the capture-directory derivation is the only thing that can place them.
+
+     GROUPING IS WHAT THIS ACTUALLY GUARDS. `boxOf` decides which runs are filed under the box
+     in the cart, and a null there would push a run about the box you are standing in down into
+     `other boxes`. That is why the assertion is on the ABSENCE of the caption: with box 9
+     picked and box 9 the only run, there is nothing to be other than. */
+  await open(page, {
+    runs: [runRow({ box: undefined, box_name: undefined, scope: null })],
+  })
+  await openPanel(page)
+
+  await expect(page.locator('.run-row-scope').first()).toHaveText('Box 9')
+  await expect(page.locator('.run-group')).toHaveCount(0)
+})
+
 // -------------------------------------------------------------------------- the cart
 //
 // D48. A SEND IS A CART OF BOXES AND A RUN IS STILL ONE BOX. The owner asked to multi-select
@@ -979,8 +1041,13 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
      the cart decides how each is read — the reading is part of what the confirm is agreeing to
      buy, because the estimate is computed from the bytes each card is sent as. */
   await expect(page.locator('.run-leg')).toHaveCount(2)
+  /* THE DRAWER BY NAME ON THE ROW THAT DECIDES WHAT READING IT COSTS (D56). Until then this
+     row could only call a box by its digit, on the one screen in the product that spends —
+     and the name is what the operator recognises the drawer by. Both arms are asserted here
+     because the fixture carries one of each: an unnamed box draws the number ALONE, with no
+     separator and no placeholder, since D20 makes a name optional rather than expected. */
   await expect(page.locator('.run-leg-box').first()).toHaveText('Box 9')
-  await expect(page.locator('.run-leg-box').nth(1)).toHaveText('Box 12')
+  await expect(page.locator('.run-leg-box').nth(1)).toHaveText('Box 12 · codes')
   await expect(page.locator('.runs-scope')).toContainText('2 boxes')
 
   await page.getByRole('button', { name: /^Check cost/ }).click()
@@ -993,6 +1060,12 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
   /* THE CONFIRM QUOTES THE TOTAL, NOT A LEG. Two boxes at 36 each is 72 cards and $0.84 — a
      screen that read the first leg and called it the total would say 36 and $0.42 here, which
      is the one number the operator is agreeing to and the one that must not be understated. */
+  /* THE PER-BOX BREAKDOWN NAMES THE BOX TOO, and it is a different source from the row above
+     it: the preflight answers per leg with a scope block carrying a number and no name, so
+     this line is the cart's own name looked up by box. Worth asserting separately for exactly
+     that reason — the leg head could be right while this stayed a bare digit. */
+  await expect(page.locator('.run-legs dt').nth(1)).toHaveText('Box 12 · codes')
+
   const confirm = page.locator('.run-button-money')
   await expect(confirm).toContainText('72')
   await expect(confirm).toContainText('$0.84')

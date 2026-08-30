@@ -22,6 +22,7 @@ import type {
   RunSummary,
 } from './types'
 import { RunFiles } from './RunFiles'
+import { boxLabel, boxOf, runBoxLabel } from './runScope'
 import './RunPanel.css'
 
 /* THE PIPELINE, ON THE SCREEN THE OPERATOR IS ALREADY STANDING ON.
@@ -200,35 +201,24 @@ const CUSTOM_SAYS =
 
 /** What a run was over, in the fewest words that are true.
  *
- *  FALLS BACK TO THE CAPTURE DIRECTORY, because `scope` is written by the route that starts a
- *  run from this screen and every run made before it — including both of the ones this project
- *  has actually done — carries none. Reading the box out of the path is a derivation and not a
- *  claim, so it is drawn without the `whole box` / `N cards` distinction that only a real scope
- *  block can support: an old run genuinely does not record whether it covered the whole box.
- *  The alternative was an em dash, which says nothing about a run whose directory names its
- *  box in plain sight. */
-/** Which box a run was over, by the same derivation the row prints.
+ *  IT NAMES THE DRAWER NOW AND NOT JUST THE NUMBER (D56). `runBoxLabel` joins the run's box
+ *  against the registry server-side, so this reads `Box 3 · RB Epics` where the owner has
+ *  named the box and `Box 3` where they have not — which is most of what a person scanning
+ *  this list is actually trying to tell apart. The number stays beside the name because the
+ *  number is the shelf, the capture directory and what every refusal here says.
  *
- *  SHARED WITH `scopeOf` ON PURPOSE, so the string a row draws and the group it is sorted into
- *  can never disagree. It matters immediately rather than in principle: `scope` is written only
- *  by the route that starts a run from this screen, and NEITHER run this project has actually
- *  done carries one — so grouping on `row.scope.box` alone would file both of them under "other
- *  boxes", including the one the panel's own head is naming. */
-export function boxOf(row: RunSummary): number | null {
-  if (row.scope != null) return row.scope.box
-  const found = /box(\d+)/.exec(row.capture_dir ?? '')
-  return found === null ? null : Number(found[1])
-}
-
+ *  THE `whole box` / `N cards` HALF STILL NEEDS A REAL SCOPE BLOCK. A box read out of a
+ *  capture directory is a derivation, not a claim about what was submitted, and an old run
+ *  genuinely does not record whether it covered the whole box — so that clause is drawn only
+ *  where the manifest supports it. The alternative was an em dash, which says nothing about a
+ *  run whose directory names its box in plain sight. */
 function scopeOf(row: RunSummary): string {
-  const box = boxOf(row)
-  if (box === null) return '—'
-  /* The whole-box / N-cards distinction only a real scope block can support — a box parsed out
-     of a capture directory is a derivation, not a claim about what was submitted. */
-  if (row.scope != null) {
-    return row.scope.whole_box ? `box ${box}` : `box ${box} · ${row.scope.cards ?? '?'} cards`
+  const label = runBoxLabel(row)
+  if (label === null) return '—'
+  if (row.scope != null && !row.scope.whole_box) {
+    return `${label} · ${row.scope.cards ?? '?'} cards`
   }
-  return `box ${box}`
+  return label
 }
 
 function money(value: number | null | undefined): string {
@@ -273,10 +263,17 @@ function Console({ text, label }: { text: string; label: string }) {
   )
 }
 
-/** One box in the cart, as the picker hands it over: which box, and which cards inside it.
- *  The READING is not here — it is chosen per box on this panel, beside the estimate it
- *  moves, because it is part of what the confirm is agreeing to buy. */
-export type CartBox = { box: number; indices: readonly number[] }
+/** One box in the cart, as the picker hands it over: which box, what it is called, and which
+ *  cards inside it. The READING is not here — it is chosen per box on this panel, beside the
+ *  estimate it moves, because it is part of what the confirm is agreeing to buy.
+ *
+ *  `name` IS DRAWN AND NEVER SENT (D56). `legs` below projects a cart row to what the route
+ *  reads, and the name is not in it — so it cannot reach `scopeKey`, which is what voids the
+ *  estimate. That matters: renaming a drawer does not change a single byte of the send, and an
+ *  estimate retired by a rename would be the money gate crying wolf. It comes from the picker's
+ *  own `GET /boxes` rather than from the run list, because a cart row is a box the operator
+ *  just chose and no run over it may yet exist. */
+export type CartBox = { box: number; name?: string | null; indices: readonly number[] }
 
 /** How a box is read until somebody says otherwise: D32's measured-best pair.
  *
@@ -438,6 +435,16 @@ export function RunPanel({ cart }: RunPanelProps) {
   )
 
   const scoped = cart.length > 0
+
+  /* WHAT THE CART CALLS A BOX, for the rows the SERVER answers about. The preflight replies
+     per leg with a scope block — a box number and a card count — and no name, correctly: the
+     route is answering what a send would cost, and what the drawer is called is not part of
+     that. The name is already on screen for these boxes because the operator just picked them,
+     so it is looked up here rather than added to a response that has no use for it. */
+  const cartName = useCallback(
+    (box: number) => cart.find((row) => row.box === box)?.name ?? null,
+    [cart],
+  )
 
   useEffect(() => {
     /* THE QUOTE IS VOID THE MOMENT THE SCOPE MOVES. Not merely stale — void: it is the first
@@ -1054,7 +1061,11 @@ export function RunPanel({ cart }: RunPanelProps) {
             return (
               <div className="run-leg" key={row.box}>
                 <p className="run-leg-head">
-                  <span className="run-leg-box">Box {row.box}</span>
+                  {/* THE DRAWER BY NAME, ON THE ROW THAT DECIDES WHAT IT COSTS TO READ IT.
+                      D33's gate is two presses over a number the operator cannot miss, and
+                      what that number buys is a box — which until D56 this row could only
+                      call by its digit, on the one screen in the product that spends. */}
+                  <span className="run-leg-box">{boxLabel(row.box, row.name) ?? `Box ${row.box}`}</span>
                   <span className="run-leg-scope">
                     {row.indices.length > 0
                       ? `${row.indices.length} ticked card${row.indices.length === 1 ? '' : 's'}`
@@ -1227,7 +1238,7 @@ export function RunPanel({ cart }: RunPanelProps) {
               <dl className="run-legs">
                 {quote.scopes.map((leg) => (
                   <div key={leg.scope.box}>
-                    <dt>Box {leg.scope.box}</dt>
+                    <dt>{boxLabel(leg.scope.box, cartName(leg.scope.box))}</dt>
                     <dd>
                       {count(leg.to_send)} to send · {money(leg.estimate_usd)}
                       {leg.scope.whole_box ? '' : ` · ${count(leg.scope.cards)} ticked`}
@@ -1292,7 +1303,10 @@ export function RunPanel({ cart }: RunPanelProps) {
               <Console
                 key={leg.scope.box}
                 text={leg.console}
-                label={`What the preflight printed for box ${leg.scope.box}`}
+                label={
+                  `What the preflight printed for ` +
+                  `${boxLabel(leg.scope.box, cartName(leg.scope.box)) ?? `box ${leg.scope.box}`}`
+                }
               />
             ))}
           </div>

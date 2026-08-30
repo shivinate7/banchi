@@ -1352,6 +1352,20 @@ export type RunSummary = {
   updated_at?: string | null
   capture_dir?: string | null
   scope?: RunScope | null
+  /** Which box this run is over, by the server's own derivation — the manifest's scope block
+   *  where there is one, and the capture directory's name where there is not (two of the four
+   *  runs on this machine predate `scope` entirely). Sent so the client stops re-deriving it;
+   *  `runScope.ts:boxOf` keeps the old derivation only for a server that predates the field. */
+  box?: number | null
+  /** What the owner calls that box, joined against the registry AT READ TIME (D56).
+   *
+   *  NEVER STORED ON THE RUN, which is the whole reason it is a field on the wire rather than
+   *  something `identify` could have written into the manifest. D20 makes a rename a live edit
+   *  to the registry that relabels every card in the box on every screen that draws one, so a
+   *  name copied into a run directory would be a second answer that goes stale the moment the
+   *  drawer is relabelled. `null` where the box has no name (D20 leaves names optional) or
+   *  where the registry no longer holds it (D10 ruling 3). */
+  box_name?: string | null
   started_by?: string | null
   /** A child process is still driving this run. Checked with signal 0 rather than trusted
    *  from a pid file, because the file outlives the process it names. */

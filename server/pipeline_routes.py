@@ -78,7 +78,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from cli import runs as run_files  # noqa: E402
-from store import files  # noqa: E402
+from store import Store, files, master  # noqa: E402
 
 PKMNSCAN = REPO_ROOT / "pkmnscan"
 CONSOLE = "console.log"
@@ -466,6 +466,50 @@ def _run_box(manifest: dict) -> Optional[int]:
         return None
     found = _BOX_IN_PATH.match(Path(recorded).name)
     return int(found.group(1)) if found else None
+
+
+def _box_names() -> Dict[int, str]:
+    """`box -> the name the owner gave it`, for every box the registry names one for.
+
+    THE STORE IS THE SOURCE AND THE RUN IS NOT, WHICH IS THE WHOLE POINT OF READING IT HERE
+    (D56). A run directory records the box NUMBER it was over — in its scope block, or in the
+    capture directory its name is derived from — and it has never recorded a name, correctly:
+    D20 makes a rename a live edit to the registry that relabels every card in the box on
+    every screen that draws one, so a name copied into a manifest would be a second answer
+    that goes stale the first time the owner renames the drawer. This reads the current one.
+
+    NAMED BY THE REGISTRY OR NOT NAMED AT ALL. D20 makes a name unique and deliberately NOT
+    required, so a box with none is the ordinary case rather than a fault, and it is simply
+    absent from this map — the caller draws `box 3` and says nothing it cannot support. Same
+    for a box that has since been deleted (D10 ruling 3): the run remembers a box the store
+    no longer has, and a missing name is the honest rendering of that.
+
+    IT PARSES THE INVENTORY AND NOT THE SNAPSHOT. `Store().read()` also parses the
+    identification cache and both queue files, which this has no use for — measured on the
+    owner's own store at 7.3ms against 4.5ms for the inventory alone, over a 268KB cache
+    nothing here reads. `GET /pipeline/runs` is polled at 4s while a run is live, so the
+    cheaper read is the one to take.
+
+    IT NEVER RAISES, which is `do_status`'s rule applied to a decoration. A store this cannot
+    read costs the run list its box names and must not cost it the run list — the phase, the
+    elapsed time and the download links are what that poll is actually for.
+    """
+    try:
+        inventory = master.Inventory.parse(files.read_json(Store().inventory_path))
+    except Exception:  # noqa: BLE001 — a name is never worth an unanswered poll
+        return {}
+    names: Dict[int, str] = {}
+    for key, entry in inventory.boxes.items():
+        name = entry.name
+        if not isinstance(name, str) or not name.strip():
+            continue
+        try:
+            names[int(key)] = name
+        except (TypeError, ValueError):
+            # A registry key that will not coerce names no box, exactly as `_box_row`'s walk
+            # treats a card whose box will not: skipped, never fatal.
+            continue
+    return names
 
 
 def _busy_run(box: int) -> Optional[str]:
@@ -1145,9 +1189,26 @@ def _phase(manifest: dict, live: bool) -> str:
     return "done"
 
 
-def _summary(directory: Path) -> dict:
+def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
+    """One run, as every route that mentions one answers with it.
+
+    `box` AND `box_name` ARE THE SERVER'S ANSWER TO WHICH DRAWER THIS WAS, AND THE CLIENT NO
+    LONGER HAS TO DERIVE EITHER (D56). The box was always derivable from `scope` or from the
+    capture directory, and `RunPanel.tsx:boxOf` derived it — a second implementation of
+    `_run_box` in another language, with an unanchored regex where this one anchors on the
+    basename. It agreed on every run on this machine and was one oddly-named parent directory
+    from not agreeing. The name was derivable by nobody: it lives in the store, which no
+    screen drawing a run list had read.
+
+    `names` IS PASSED IN BY THE LIST AND READ HERE BY THE SINGLE-RUN ROUTES. The registry is
+    one read whatever the answer, so a list of twenty runs must not take twenty of them; a
+    route answering about one run has nothing to share it with and reads its own.
+    """
     manifest = _manifest(directory)
     pid = _live_pid(directory)
+    box = _run_box(manifest)
+    if names is None:
+        names = _box_names()
     return {
         "run": directory.name,
         "path": str(directory),
@@ -1155,6 +1216,11 @@ def _summary(directory: Path) -> dict:
         "updated_at": manifest.get("updated_at"),
         "capture_dir": manifest.get("capture_dir"),
         "scope": manifest.get("scope"),
+        # DERIVED ON EVERY READ, NEVER STORED. `box` restates what the manifest already
+        # holds; `box_name` is a join against the registry as it stands right now, so a
+        # rename shows up on the next poll rather than on the next run.
+        "box": box,
+        "box_name": None if box is None else names.get(box),
         "started_by": manifest.get("started_by"),
         "live": pid is not None,
         "pid": pid,
@@ -1174,8 +1240,11 @@ def do_pipeline_runs() -> dict:
     root = files.runs_dir()
     if not root.is_dir():
         return {"runs": []}
+    # ONE REGISTRY READ FOR THE WHOLE LIST. This is the polled route — 4s while anything is
+    # live — and the names are the same map for every row in it.
+    names = _box_names()
     rows = [
-        _summary(entry)
+        _summary(entry, names)
         for entry in sorted(root.iterdir(), reverse=True)
         if entry.is_dir() and (entry / run_files.MANIFEST).is_file()
     ]

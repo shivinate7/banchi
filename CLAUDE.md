@@ -151,6 +151,16 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   mark** — that rule governs the card index inside a box and nothing else. The name never
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
+
+  **A RUN CARRIES THE NAME THE SAME WAY, AND IT IS JOINED AT READ TIME** (D56). Every run on
+  the wire has `box` and `box_name`, put there by `server/pipeline_routes.py:_summary` — the
+  box from the manifest's scope or from its capture directory, the name from the registry as
+  it stands right now. **Never write a name into a run directory**: a rename relabels every
+  card in the box on every screen that draws one, and `cli/runs.py` makes a run an immutable
+  input, so a stored name would be an answer nobody could correct. `app/src/runScope.ts` is
+  the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
+  has no name, because a name is optional and a placeholder would draw a fault where there is
+  none.
 - **The app has seven screens and seven routes** — six the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
