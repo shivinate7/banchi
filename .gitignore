@@ -68,6 +68,16 @@ inventory/
 app/test-results/
 app/playwright-report/
 
+# AND THE SAME OUTPUT AT THE REPO ROOT, which is where it lands whenever the suite is invoked
+# from here rather than from `app/` — `npx --prefix app playwright test --config
+# app/playwright.config.ts` resolves `.last-run.json` against the working directory, not the
+# config. That is an ordinary way to run one spec, so the artefact is ordinary too; it reached
+# a commit on 2026-08-30 because nothing ignored it and `git add -A` does not ask.
+#
+# Bare, no trailing slash, per the rule at the top of this file. The neighbours above predate
+# that lesson and are left alone rather than swept into this change.
+test-results
+
 # `.claude/launch.json` names a dev port and D43 made the port per checkout, so a tracked
 # copy is wrong in every linked worktree — and wrong by pointing the Browser pane at the MAIN
 # tree, which is the fault D43 exists to prevent. `make launch-config` writes it from
