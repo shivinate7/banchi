@@ -190,7 +190,7 @@ from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
-from pipeline import games, join, orders, tcgcsv, variant  # noqa: E402
+from pipeline import games, join, orders, pricehistory, tcgcsv, variant  # noqa: E402
 from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
@@ -11503,6 +11503,589 @@ def check_order_resolver(checks: Checks) -> None:
             "and a run that was identified and never joined has no pricing table, which is "
             "an ordinary state and not a complaint (D49) — the card-first pass needs none",
         )
+# ------------------------------------------------------------------ price history (D8, D49)
+
+
+# Named as relative paths rather than assembled from segments, which is T2's shape and is
+# what `scripts/docs-audit.py`'s `tested_by reach` row can actually see: it parses this file
+# for a string under `fixtures/`, and a path built out of `/ "fixtures" /` is invisible to it.
+# The audit is right to insist — `fixtures/` holds no Python, so a literal is the only
+# evidence that a test reaches it at all.
+TCGCSV_PRODUCTS_FIXTURE = "fixtures/tcgcsv_riftbound_unleashed_products.json"
+TCGCSV_PRICES_FIXTURE = "fixtures/tcgcsv_riftbound_unleashed_prices.json"
+PRICE_HISTORY_FIXTURE = "fixtures/tcgplayer_price_history_vilemaw_month.json"
+
+TCGCSV_PRODUCTS = Path(__file__).resolve().parents[2] / TCGCSV_PRODUCTS_FIXTURE
+TCGCSV_PRICES = Path(__file__).resolve().parents[2] / TCGCSV_PRICES_FIXTURE
+PRICE_HISTORY = Path(__file__).resolve().parents[2] / PRICE_HISTORY_FIXTURE
+
+
+def _riftbound_row(sku: str) -> tcgcsv.Row:
+    """One row of the committed Riftbound export, by SKU. Raises if it is not there.
+
+    The rows under test are LIFTED rather than written, so both halves of the join below are
+    ground truth and neither was authored to agree with the other. It raises rather than
+    answering None because a typo here would otherwise read as a join failure in the module,
+    which is the wrong file to go and look in.
+    """
+    export = tcgcsv.read_export(RIFTBOUND_EXPORT)
+    for row in export.rows:
+        if row.get(tcgcsv.SKU_COLUMN) == sku:
+            return row
+    raise AssertionError(f"{RIFTBOUND_EXPORT.name} carries no SKU {sku}")
+
+
+def check_price_history(checks: Checks) -> None:
+    """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
+
+    OFFLINE, ALWAYS. Every assertion below runs against two committed fixtures and a
+    fetcher this section supplies, so the harness opens no socket — which is not a style
+    preference. This test runs behind the Stop hook at the end of every turn, and a case
+    that reached a third party's server would put a stranger's uptime on the path that
+    decides whether work is done, and would hammer a free public mirror once per turn.
+    `fetch_json` is the only impure function in that module for exactly this reason.
+
+    WHAT IS REAL HERE AND WHAT IS CONSTRUCTED, because the two prove different things and
+    the file should not have to be read to tell them apart.
+
+      REAL       `fixtures/tcgcsv_riftbound_unleashed_products.json`, a verbatim slice of
+                 tcgcsv's Unleashed products, and
+                 `fixtures/tcgplayer_price_history_vilemaw_month.json`, a verbatim capture
+                 of the endpoint's answer for productId 684125. These carry the SHAPE — the
+                 numbers arriving as strings, `"0"` written into a bucket that sold nothing,
+                 and the buckets arriving NEWEST FIRST — and no invented payload would have
+                 any of those wrong in the same way.
+      CONSTRUCTED The arithmetic. A real series' VWAP is a number nobody can check by hand,
+                 so every metric below is asserted against small literal buckets whose
+                 answer is computable in the assertion's own label. A fixture cannot tell a
+                 correct weighted mean from a plausible one.
+
+    THE CASE THAT WOULD FAIL SILENTLY IS THE BUCKET ORDER, and it is why the real capture is
+    committed rather than described. The endpoint sends newest-first; `momentum` subtracts
+    one end of the list from the other; so a parser that trusted the wire order would report
+    every rising card as falling, with no exception, no missing field and nothing on screen
+    to see. The fixture is asserted to be newest-first ON DISK and the parse is asserted to
+    be oldest-first, so the day the endpoint changes its mind the first assertion goes red
+    and says so, rather than the second one quietly starting to pass for a new reason.
+
+    WHAT THIS SECTION DOES NOT COVER, named so a green harness is not misread: whether the
+    endpoint is still public, whether tcgcsv still mirrors these groups, and whether the
+    figures are right. All three are facts about someone else's server on the day you ask,
+    and no committed fixture can hold them. What is asserted is that the walk, the parse and
+    the arithmetic are what this repo says they are.
+    """
+    checks.note("")
+    checks.note("PRICE HISTORY — pipeline/pricehistory.py, the catalog walk and the readings")
+
+    products_fixture = TCGCSV_PRODUCTS
+    history_fixture = PRICE_HISTORY
+    checks.ok(products_fixture.exists(), f"{products_fixture.name} is committed")
+    checks.ok(history_fixture.exists(), f"{history_fixture.name} is committed")
+    checks.ok(TCGCSV_PRICES.exists(), f"{TCGCSV_PRICES.name} is committed")
+    if not all(f.exists() for f in (products_fixture, history_fixture, TCGCSV_PRICES)):
+        return
+
+    products_payload = json.loads(products_fixture.read_text("utf-8"))
+    history_payload = json.loads(history_fixture.read_text("utf-8"))
+    prices_payload = json.loads(TCGCSV_PRICES.read_text("utf-8"))
+
+    # ------------------------------------------------------------------ the join, on real bytes
+    #
+    # The rows are lifted out of the committed Riftbound export by SKU rather than written
+    # here, so the two halves of the join are both ground truth and neither was authored to
+    # agree with the other. `_riftbound_row` refuses a SKU the export does not carry, which
+    # is what stops a typo here from reading as a join failure there.
+    index = pricehistory.ProductIndex.build(products_payload["results"])
+
+    vilemaw = _riftbound_row("9189317")
+    checks.equal(
+        index.find(vilemaw[tcgcsv.NUMBER_COLUMN], vilemaw[tcgcsv.NAME_COLUMN]),
+        684125,
+        "Vilemaw 060/219 resolves to productId 684125 — the verification case, export row "
+        "to mirror product, with nothing fetched",
+    )
+    moonfall = _riftbound_row("9191486")
+    checks.equal(
+        index.find(moonfall[tcgcsv.NUMBER_COLUMN], moonfall[tcgcsv.NAME_COLUMN]),
+        684527,
+        "Moonfall 198/219 resolves to productId 684527",
+    )
+
+    # `number_index_key` ON BOTH SIDES, which is the rule this join borrows and the one that
+    # was a silent zero-join in `pipeline/join.py` before D-era `number_index_key` existed.
+    # The mirror writes `060/219`; an export or a model that wrote `60/219` is the same card,
+    # and a match that required the padding would miss every one of them.
+    checks.equal(
+        index.find("60/219", "Vilemaw"),
+        684125,
+        "an unpadded `60/219` finds the same product as `060/219` — number_index_key folds "
+        "both sides, which is what stops a padding difference being a whole-set miss",
+    )
+
+    # THE NAME RUNG, on the case it actually serves. Measured across all four committed
+    # exports, every one of the 355 products it resolves carries a BLANK `Number` — sealed
+    # product, code cards and DON!! cards, which print no collector number at all. Not one
+    # row WITH a number has ever fallen through to it.
+    checks.equal(
+        index.find("", "Unleashed - Booster Pack"),
+        678149,
+        "a blank-Number row resolves by name — the rung's whole domain, and the reason it "
+        "is reached last rather than not at all",
+    )
+
+    # AND IT REFUSES RATHER THAN GUESSING. Constructed, because the real mirror carries no
+    # such collision in this group and this is precisely the case that must not be left to
+    # whether one ever turns up.
+    twins = pricehistory.ProductIndex.build([
+        {"productId": 1, "name": "Twin", "extendedData": [{"name": "Number", "value": "007/219"}]},
+        {"productId": 2, "name": "Twin", "extendedData": [{"name": "Number", "value": "007/219"}]},
+    ])
+    checks.equal(
+        twins.find("007/219", "Twin"),
+        None,
+        "two products sharing a number AND a name answer None — a refusal a caller can act "
+        "on, never the first of two, which is geometry.detect_card's rule for the same reason",
+    )
+    tiebreak = pricehistory.ProductIndex.build([
+        {"productId": 1, "name": "Alpha", "extendedData": [{"name": "Number", "value": "007/219"}]},
+        {"productId": 2, "name": "Beta", "extendedData": [{"name": "Number", "value": "007/219"}]},
+    ])
+    checks.equal(
+        tiebreak.find("007/219", "Beta"),
+        2,
+        "two products sharing a number are told apart by name — the tiebreak, which is why "
+        "the name is consulted before the refusal rather than only after it",
+    )
+
+    # ---------------------------------------------------------------- the parse, on real bytes
+    #
+    # THE ORDER ASSERTION IS THE POINT OF COMMITTING THIS FILE. Both halves, so a change
+    # upstream is a red fixture rather than a quietly-passing parser.
+    raw_buckets = history_payload["result"][0]["buckets"]
+    checks.ok(
+        raw_buckets[0]["bucketStartDate"] > raw_buckets[-1]["bucketStartDate"],
+        "the endpoint's own bytes are NEWEST FIRST — asserted on the fixture, so the day "
+        "that changes this goes red instead of the parser silently agreeing for a new reason",
+    )
+
+    series = pricehistory.parse_history(history_payload, 684125, "month")
+    checks.equal(
+        sorted(series),
+        ["9189317", "9189318"],
+        "one product's answer carries every condition of the card, keyed by skuId — which "
+        "is what makes the last hop exact rather than a variant-string match",
+    )
+
+    near_mint = series["9189317"]
+    starts = [b.start for b in near_mint.buckets]
+    checks.ok(
+        starts == sorted(starts),
+        "Series.buckets is ASCENDING after parse — momentum subtracts one end from the "
+        "other, so the wire order would invert every reading's sign with nothing to see",
+    )
+    checks.equal(
+        (near_mint.total_quantity_sold, near_mint.total_transaction_count),
+        (642, 528),
+        "the endpoint's own totals are carried, not recomputed from the buckets",
+    )
+    checks.equal(
+        near_mint.condition,
+        "Near Mint",
+        "the condition string comes off the result rather than being matched against",
+    )
+
+    # `"0"` IS NOT A PRICE, AND THE FIXTURE HOLDS BOTH SHAPES — which was found by writing
+    # this assertion against the wrong SKU. The Near Mint card sold on all 30 days of the
+    # capture, so it exercises nothing here; the Lightly Played one beside it sold on 16 and
+    # its 14 quiet days each write `"0"` into low and high beside a real standing
+    # `marketPrice` of $19.54. Reading those zeros as prices drags every weighted mean
+    # below toward zero, which is the defect, and only the quiet card can see it.
+    checks.equal(
+        len([b for b in near_mint.buckets if not b.sold]),
+        0,
+        "the Near Mint card sold on every day of the capture — recorded because it is why "
+        "the zero-price case below is asserted on its Lightly Played sibling instead",
+    )
+    lightly_played = series["9189318"]
+    quiet = [b for b in lightly_played.buckets if not b.sold]
+    checks.equal(len(quiet), 14, "...and the Lightly Played card has 14 days that sold nothing")
+    checks.ok(
+        all(b.low is None and b.high is None for b in quiet),
+        "a bucket that sold nothing has NO low and NO high — the endpoint writes \"0\" "
+        "there, and D9's rule is that a missing price is unknown rather than cheap",
+    )
+    checks.ok(
+        all(b.market is not None for b in quiet),
+        "...and it keeps its standing marketPrice, which is why `sold` filters the means "
+        "rather than the parse dropping the bucket",
+    )
+
+    # ------------------------------------------------------------- the arithmetic, constructed
+    #
+    # Hand-computable on purpose. Two buckets, 10 units at $10 and 30 units at $20: the
+    # weighted mean is (100 + 600) / 40 = $17.50 and the unweighted mean is $15.00, so a
+    # build that forgot to weight lands on a different number rather than a rounder one.
+    def bucket(day: int, market, quantity: int, low=None, high=None, transactions: int = 0):
+        return {
+            "bucketStartDate": f"2026-08-{day:02d}",
+            "marketPrice": market,
+            "quantitySold": str(quantity),
+            "transactionCount": str(transactions or quantity),
+            "lowSalePrice": low if low is not None else "0",
+            "highSalePrice": high if high is not None else "0",
+        }
+
+    def made(buckets, sold=None, txn=None):
+        return pricehistory.Series.parse(
+            {
+                "skuId": "1",
+                "variant": "Foil",
+                "condition": "Near Mint",
+                "language": "English",
+                "totalQuantitySold": str(sum(int(b["quantitySold"]) for b in buckets) if sold is None else sold),
+                "totalTransactionCount": str(txn if txn is not None else 1),
+                "buckets": buckets,
+            },
+            product_id=1,
+            range_="month",
+        )
+
+    weighted = made([
+        bucket(1, "10.00", 10, low="9.00", high="11.00"),
+        bucket(2, "20.00", 30, low="18.00", high="24.00"),
+    ])
+    checks.equal(
+        weighted.vwap,
+        Decimal("17.50"),
+        "vwap weights by quantity — (10x$10 + 30x$20) / 40 = $17.50, where the unweighted "
+        "mean is $15.00, so a build that forgot the weights lands somewhere else",
+    )
+    bound = weighted.bound
+    checks.equal(
+        (bound.low, bound.high),
+        (Decimal("15.75"), Decimal("20.75")),
+        "the bound weights low and high the same way — (10x$9 + 30x$18)/40 and "
+        "(10x$11 + 30x$24)/40",
+    )
+    checks.ok(
+        bound.low <= weighted.vwap <= bound.high,
+        "the point estimate lies inside its own bound — the sanity check the bound exists "
+        "to be, and the one thing about it that is a result",
+    )
+    checks.equal(
+        (bound.width_of_vwap, bound.width_of_low),
+        (Decimal("0.2857"), Decimal("0.3175")),
+        "both widths are named and both are reported — one card is honestly '29% wide' and "
+        "'32% wide', and a bare percentage invites the two to be read as a disagreement",
+    )
+    checks.equal(
+        weighted.dispersion,
+        Decimal("5.00"),
+        "dispersion is the volume-weighted within-bucket spread — (10x$2 + 30x$6)/40 — "
+        "which measures sellers disagreeing on one day, not the range moving",
+    )
+
+    # A BUCKET THAT SOLD NOTHING CONTRIBUTES NOTHING, asserted by adding one carrying a
+    # market price far off the mean. It is the same series otherwise, so any drift in these
+    # numbers is the filter failing rather than the arithmetic.
+    with_quiet = made([
+        bucket(1, "10.00", 10, low="9.00", high="11.00"),
+        bucket(2, "20.00", 30, low="18.00", high="24.00"),
+        bucket(3, "99.00", 0),
+    ])
+    checks.equal(
+        with_quiet.vwap,
+        Decimal("17.50"),
+        "a $99 bucket that sold nothing moves the vwap not at all — it carries TCGplayer's "
+        "opinion, and weighting an opinion equally with a transaction is the defect",
+    )
+    checks.equal(
+        with_quiet.latest_market,
+        Decimal("99.00"),
+        "...and `latest_market` still reports it, because that is the figure the export's "
+        "own standing `TCG Market Price` column is comparable to",
+    )
+
+    # NO SALES IS None AND NEVER ZERO. D9 is emphatic that a missing price is an unknown
+    # price rather than a low one, and $0.00 is the reading that hands a chase card away at
+    # the floor.
+    silent = made([bucket(1, "10.00", 0), bucket(2, "10.00", 0)])
+    checks.equal(silent.vwap, None, "a series with no sales has no vwap — None, never $0.00")
+    checks.equal(silent.bound, None, "...and no bound, for the same reason")
+    checks.equal(silent.dispersion, None, "...and no dispersion")
+
+    # MOMENTUM: POSITIVE IS RISING. Two windows of one, $10 then $20.
+    rising = made([bucket(1, "10.00", 5), bucket(2, "20.00", 5)])
+    move = rising.momentum(window=1)
+    checks.equal(
+        (move.early, move.late, move.change, move.fraction),
+        (Decimal("10.00"), Decimal("20.00"), Decimal("10.00"), Decimal("1.0000")),
+        "momentum reads early -> late and POSITIVE IS RISING — the one fact a signed number "
+        "has to carry, and the one the wire's bucket order would have inverted",
+    )
+    checks.equal(
+        rising.momentum(window=5).change,
+        None,
+        "a series with fewer sold buckets than one window answers None on both ends — it "
+        "may not compare a window against itself and report zero as a measurement",
+    )
+
+    # LIQUIDITY AND UNITS PER TRANSACTION are the endpoint's totals, not a recount.
+    dealt = made([bucket(1, "10.00", 100)], sold=1763, txn=1455)
+    checks.equal(dealt.liquidity, 1763, "liquidity is the range's own total, unrecomputed")
+    checks.equal(
+        dealt.units_per_transaction,
+        Decimal("1.212"),
+        "units per transaction is 1763/1455 — the number that says whether the D7 live cap "
+        "of four is binding on this card or nowhere near it",
+    )
+    checks.equal(
+        made([bucket(1, "10.00", 0)], sold=0, txn=0).units_per_transaction,
+        None,
+        "no transactions is None rather than a division by zero",
+    )
+
+    # ------------------------------------------------------- the wire, with a fetcher we own
+    #
+    # `result: null` IS WHAT AN UNKNOWN PRODUCT ANSWERS, at HTTP 200. Measured. A caller
+    # that checked the status and iterated the result raises a TypeError on a typo'd id and
+    # reads it as a bug in the reader; an empty mapping is the honest answer and is the same
+    # one a real product with no sales gives.
+    checks.equal(
+        pricehistory.parse_history({"count": 0, "result": None}, 1, "month"),
+        {},
+        "an unknown productId answers HTTP 200 with `result: null` — parsed as no series, "
+        "never as an exception",
+    )
+
+    checks.raises(
+        pricehistory.UnknownRange,
+        lambda: pricehistory.history_url(684125, "week"),
+        "`week` is refused by name — it is not a range, it is an HTTP 400, and a range that "
+        "silently returned nothing would read as a card with no sales",
+    )
+    checks.ok(
+        pricehistory.history_url(684125, "annual").endswith(
+            "/price/history/684125/detailed?range=annual"
+        ),
+        "the history URL is the endpoint this module documents",
+    )
+
+    # THE WHOLE WALK, with every fetch answered from the committed fixtures. This is the
+    # only place the three catalog hops and the SKU pick are exercised together, and it is
+    # the shape a caller actually uses.
+    served = {
+        "https://tcgcsv.com/tcgplayer/categories": {
+            "results": [
+                {"categoryId": 89, "name": "Riftbound League of Legends Trading Card Game"},
+                {"categoryId": 3, "name": "Pokemon"},
+            ]
+        },
+        "https://tcgcsv.com/tcgplayer/89/groups": {
+            "results": [{"groupId": 24560, "name": "Unleashed"}]
+        },
+        "https://tcgcsv.com/tcgplayer/89/24560/products": products_payload,
+        pricehistory.history_url(684125, "month"): history_payload,
+    }
+    asked = []
+
+    def serve(url: str) -> dict:
+        asked.append(url)
+        if url not in served:
+            raise pricehistory.Unreachable(f"the harness serves no {url}")
+        return served[url]
+
+    with isolated_home() as home:
+        cache_dir = home / "market"
+        market = pricehistory.Market(
+            cache_dir=cache_dir, fetcher=serve, courtesy_delay=0
+        )
+        reading = market.reading_for_row(vilemaw, ranges=("month",))
+        checks.equal(
+            (reading.sku, reading.product_id),
+            ("9189317", 684125),
+            "the walk carries the row's OWN TCGplayer Id through and picks it out of the "
+            "product's answer by its number — no variant or condition string is matched",
+        )
+        checks.equal(
+            reading.of("month").condition,
+            "Near Mint",
+            "...and the series it picked is this SKU's, not the Lightly Played one beside it",
+        )
+        checks.equal(
+            market.category_id("Riftbound League of Legends Trading Card Game"),
+            89,
+            "the category is resolved BY NAME off the `Product Line` cell games.py already "
+            "authors — a table of integers here would be a second per-game fact in a second "
+            "file, and it would fail separately from the export rather than with it",
+        )
+
+        first_pass = len(asked)
+        checks.ok(first_pass == 4, f"the walk cost four requests, not more ({first_pass})")
+
+        # ONE REQUEST ANSWERS A WHOLE GROUP, which is the only shape the host offers — there
+        # is no per-product price route — and is why a second card in the same set is free.
+        served["https://tcgcsv.com/tcgplayer/89/24560/prices"] = prices_payload
+        before_prices = len(asked)
+        group_prices = market.prices(89, 24560)
+        checks.equal(
+            len(asked) - before_prices,
+            1,
+            "one request prices the whole group, and asking again costs nothing",
+        )
+        market.prices(89, 24560)
+        checks.equal(len(asked) - before_prices, 1, "...asserted by asking twice")
+        checks.equal(
+            group_prices[(684125, "Foil")].market,
+            Decimal("23.8"),
+            "...and the reader answers through the same cache as the catalog hops",
+        )
+
+        # THE CACHE IS ON REAL DISK AND A SECOND MARKET READS IT. The in-memory dict would
+        # pass a same-object re-read while the file was never written, which is the version
+        # of this that looks green and saves nothing.
+        # The baseline is taken HERE rather than reused from `first_pass`, because anything
+        # added between the two would make this assertion fail for a reason that has nothing
+        # to do with the cache — which it did, the moment the prices case above landed.
+        before_repeat = len(asked)
+        again = pricehistory.Market(cache_dir=cache_dir, fetcher=serve, courtesy_delay=0)
+        repeat = again.reading_for_row(vilemaw, ranges=("month",))
+        checks.equal(
+            len(asked),
+            before_repeat,
+            "a second Market over the same cache directory fetches NOTHING — the cache is "
+            "on disk, not in one object's memory",
+        )
+        checks.equal(
+            repeat.of("month").vwap,
+            reading.of("month").vwap,
+            "...and answers the same reading",
+        )
+
+        # A CORRUPT ENTRY IS A CACHE MISS, NEVER A REFUSAL. This directory is derived and
+        # deletable by construction, so the only honest response to bytes we cannot read is
+        # to go and ask again.
+        # The `next(...)` and the try/except are not defensive padding: a build that never
+        # wrote the cache has no file to corrupt and a build that raises on one propagates
+        # out of the section, and in both cases the assertion that should have reported the
+        # defect is the one that never runs. Reporting beats aborting in a suite whose whole
+        # job is to say what state everything is in.
+        cached_files = sorted(cache_dir.rglob("*.json"))
+        if not checks.ok(bool(cached_files), "the cache wrote files to look at"):
+            return
+        cached_files[0].write_text("{not json", "utf-8")
+        third = pricehistory.Market(cache_dir=cache_dir, fetcher=serve, courtesy_delay=0)
+        before = len(asked)
+        try:
+            third.reading_for_row(vilemaw, ranges=("month",))
+            refetched = len(asked) > before
+        except Exception as exc:  # noqa: BLE001 - the raise IS the defect being asserted
+            refetched = False
+            checks.note(f"re-reading a corrupt cache raised {type(exc).__name__}: {exc}")
+        checks.ok(
+            refetched,
+            "a corrupt cache file is re-fetched rather than raising — the directory is "
+            "derived, so unreadable bytes are a miss and not a fault",
+        )
+
+        # BOTH DIRECTIONS, WHICH IS CLAUDE.md's HARD RULE. A row this cannot resolve is
+        # named with the reason, never dropped — the promise JoinReport already makes about
+        # a card that finds no catalog row, applied to a reader that will one day feed a
+        # screen.
+        stranger = dict(vilemaw)
+        stranger[tcgcsv.SKU_COLUMN] = "9999999"
+        stranger[tcgcsv.NUMBER_COLUMN] = "999/219"
+        stranger[tcgcsv.NAME_COLUMN] = "Nothing By This Name"
+        readings, refusals = pricehistory.Market(
+            cache_dir=cache_dir, fetcher=serve, courtesy_delay=0
+        ).readings_for_rows([vilemaw, stranger], ranges=("month",))
+        checks.equal(
+            sorted(readings),
+            ["9189317"],
+            "a batch answers the rows it could resolve",
+        )
+        checks.equal(
+            sorted(refusals),
+            ["9999999"],
+            "...and NAMES the one it could not, rather than dropping it — a silent drop is "
+            "what CLAUDE.md forbids in as many words",
+        )
+        checks.ok(
+            "Nothing By This Name" in refusals.get("9999999", ""),
+            "...and the refusal says which card and why",
+            refusals.get("9999999", ""),
+        )
+
+    # ------------------------------------------------ tcgcsv /prices: current, and NOT SKU-level
+    #
+    # A SEPARATE CAPABILITY WITH A HARD LIMIT, and the limit is what these cases are for. The
+    # host also serves current prices per group, which maps onto columns the export already
+    # has — so the only thing it buys is RECENCY, and the only way it can mislead is by being
+    # read as SKU-level. It is not: `subTypeName` is the PRINTING.
+    prices = pricehistory.parse_prices(prices_payload)
+
+    # THE KEY IS COMPOSITE AND THE FIXTURE PROVES IT NEEDS TO BE. Arena Kingpin (685942) is
+    # stocked in both printings at different prices, so a productId-only key would keep
+    # whichever row came last and silently price a Normal card as a Foil.
+    def printing_market(product_id: int, printing: str):
+        # `.get` rather than `[]`: a build that dropped the printing from the key is exactly
+        # what this case exists to catch, and it must REPORT that rather than raise a KeyError
+        # partway through the section and take the assertions after it down.
+        row = prices.get((product_id, printing))
+        return None if row is None else row.market
+
+    checks.equal(
+        (printing_market(685942, "Foil"), printing_market(685942, "Normal")),
+        (Decimal("0.11"), Decimal("0.08")),
+        "one product carries a Foil row AND a Normal row at different prices — which is why "
+        "the key is (productId, printing) and not productId",
+    )
+    checks.equal(
+        printing_market(684125, "Foil"),
+        Decimal("23.8"),
+        "Vilemaw's current market comes off the printing row",
+    )
+
+    # A NULL IS NOT A ZERO. `directLowPrice` arrives as JSON null on every row of this
+    # fixture, and D9's rule decides it: a missing price is an unknown price, not a low one.
+    # $0.00 here is what would undercut a card to the floor against a direct low that does
+    # not exist.
+    checks.ok(
+        all(row.direct_low is None for row in prices.values()),
+        "a null directLowPrice parses to None, never Decimal(0) — the same rule that keeps "
+        "an empty market cell out of the sub-threshold bucket",
+    )
+
+    # THE ABSENCE IS THE ASSERTION. This payload carries no `TCGplayer Id` and no
+    # `Total Quantity` — the SKU D11's import matches on and the live quantity D7's cap is
+    # measured against — so it can supplement an export and can never replace one. Asserted
+    # on the raw payload rather than on the parse, because the parse could not show it.
+    fields = {key for row in prices_payload["results"] for key in row}
+    checks.ok(
+        tcgcsv.SKU_COLUMN not in fields and tcgcsv.LIVE_QUANTITY_COLUMN not in fields,
+        "the prices payload carries neither the SKU nor the live quantity — the two columns "
+        "the listing path is built on, and the reason this never replaces an export",
+        str(sorted(fields)),
+    )
+    checks.equal(
+        sorted({row["subTypeName"] for row in prices_payload["results"]}),
+        ["Foil", "Normal"],
+        "`subTypeName` is the PRINTING and never the condition — Vilemaw is five export rows "
+        "by condition against one row here, so this can only ever speak for Near Mint",
+    )
+
+    # `misc` HAS NO CATALOG AND THEREFORE NO HISTORY, and the predicate says so before the
+    # walk rather than raising inside it. D22 gives that game `product_line: None` by
+    # construction, so there is no cell to look a category up by.
+    checks.ok(
+        pricehistory.catalogued_row(vilemaw),
+        "a Riftbound row is catalogued — its Product Line cell is one games.py authors",
+    )
+    checks.ok(
+        not pricehistory.catalogued_row({tcgcsv.PRODUCT_LINE_COLUMN: "Yu-Gi-Oh!"}),
+        "a product line no registered game names is not catalogued — D22's `misc` case, "
+        "answered where the caller can act on it rather than inside the walk",
+    )
 
 
 def run() -> Result:
@@ -11552,6 +12135,7 @@ def run() -> Result:
     check_listing_commands(checks)
     check_order_resolver(checks)
     check_crop_preview(checks)
+    check_price_history(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )
