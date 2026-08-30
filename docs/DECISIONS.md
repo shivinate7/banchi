@@ -267,6 +267,107 @@ positions" above stays true in the only sense that matters — every copy is at 
 position and the app maps SKU to all of them — but no copy is *designated* backstock, and
 nothing may reintroduce a per-position listing flag to make it so.
 
+**AND "THE APP MAPS SKU TO ALL OF THEM" WAS FALSE FOR EVERY COPY PAST THE FOURTH, FROM THE DAY
+THE CAP EXISTED** (found by the owner 2026-08-30). `cli/cmd_emit.py` wrote the card's identity —
+`sku`, `condition`, `run` — inside a loop over `SkuMatch.live_positions`, which is
+`uncommitted_positions[:add_to_quantity]` and therefore bounded by the `live_cap` of 4. So the
+cap reached the one thing this entry says it has nothing to do with: **how many copies of a card
+we know the name of.**
+
+**The owner's own words on finding it are the whole argument**: *"this was supposed to be just a
+gentle heads up to only list four as a default mainly for cheap cards, it wasn't supposed to
+take the shape it's taken now."* The cap is a rule about the LISTING — the envelope-buster order
+and the stale-price spike this entry names two paragraphs up — and it had quietly become a rule
+about the RECORD.
+
+**An unstamped copy is not backstock in the sense the paragraph above defines.** Backstock is a
+number, and `backstock_positions` is a real answer this pipeline already computes; a copy with
+`sku: null` is something else entirely — invisible to `GET /search`, absent from
+`positions_for_sku`, and uncounted by `copies_on_hand`. The map this entry promises simply did
+not contain it.
+
+**Measured on the owner's store the day it was found: Rengar, Trophy Hunter (9189797, $30.81)
+holds SEVEN copies — 3/1, 3/2, 3/4, 3/17, 3/20, 3/30, 3/36 — and four carried the SKU.** The
+screen reported four on hand for a card there are seven of, and the three it could not see were
+the most valuable cards in the box.
+
+**The stamp runs over `uncommitted_positions` and the count still runs over `live_positions`,
+and keeping those two apart is the fix rather than a detail of it.** `pushed` is a commitment
+that a CSV row was written; a backstock copy has no row. One increment serving both loops would
+push the count past `add_to_quantity` and double-stage on the next import, which is the failure
+`docs/GATES.md` records from the first real post-import re-emit.
+
+**IT IS `uncommitted_positions` AND DELIBERATELY NOT `positions`, WHICH IS THE ONE WAY THIS FIX
+COULD HAVE BEEN WORSE THAN THE DEFECT.** The obvious repair is to iterate every matched
+position, and it destroys data. `cli/resolve.py` marks a copy committed on either of two
+grounds — a count read back off the `Listing`, or **the copy being in a TERMINAL state** — so
+every sold and retired copy of a matched SKU sits in `match.positions`, and
+`store/master.py:set_state` has no terminal guard. Iterating them would move a sold card to
+`identified`, taking D10's permanent gap and D26's terminal state with it, silently. Measured
+on the same run: **eight of its 33 matched positions are sold today**, so one re-emit would have
+resurrected all eight. `uncommitted_positions` cannot contain a departed copy by construction.
+
+**Nothing is given up by excluding the committed ones.** A copy committed by COUNT was chosen by
+`_committed_keys` out of `copies_on_hand`, which selects on `sku` — so it is already stamped. A
+copy committed by having LEFT is not this command's to relabel.
+
+**Idempotence is untouched, and this is worth stating because it is the first thing to doubt.**
+It lives in `cli/resolve.py:_committed_keys`, which reads the `Listing` counts and never
+`card.sku`, so widening what gets stamped cannot move what gets pushed. D54's rule that a
+re-emit adds and never subtracts is unaffected.
+
+**What it recovers is small today and structural from here.** Three cards on the owner's store —
+Rengar's backstock — because only two runs have ever been emitted and only one SKU in them holds
+more copies than the cap. The 502 of 715 records carrying `sku: null` are overwhelmingly not
+this: **498 of them are box 2, whose run was joined and never emitted at all**, and that is a
+different gap with a different remedy.
+
+**A SECOND EFFECT, NAMED SMALLER THAN IT WAS FIRST CLAIMED because the measurement did not
+support the larger claim.** `_committed_keys` slices `copies_on_hand(sku)[:held]`, and an
+unstamped copy is missing from that list — so the slice could return fewer keys than `held` and
+under-count `committed_positions`, inflating `add_to_quantity`. Full stamping makes that list
+complete and the shortfall structurally impossible where the copies exist. It fixes **nothing on
+the store today**: four SKUs there are currently short, and all four are short because their
+stamped copies SOLD — and a sold copy is committed by the terminal branch instead, so the count
+comes out right anyway. Recorded as a hole closed rather than a bug fixed.
+
+**Covered by T7's `check_emit_identity_stamp`, in its own isolated home.** Seven copies of a
+holofoil-only number: every copy carries the SKU, `pushed` stops at the cap, the import file
+asks for exactly the cap on one row, and a sold copy survives a re-emit. Three mutations were
+observed failing before it was kept — the original `live_positions` loop, the naive
+`match.positions` loop, and a shared increment — each red on a different assertion.
+
+**THE CAP ITSELF IS THE OWNER'S NEXT QUESTION, AND IT IS RECORDED HERE RATHER THAN BUILT
+(2026-08-30).** On being shown the fix above and the note that a value-dependent cap was the
+other half of their instruction: *"I'd like to make this cap related, but for now what you've
+done is fine."* So the flat 4 stands, and this paragraph is the marker that it stands by
+default rather than by argument.
+
+**What is being questioned is the FLATNESS, not the cap.** The reasoning above it is
+untouched — a cap still blocks the envelope-buster order, and it still bounds how many copies
+a price spike can sell at a stale number. What the owner's own framing calls into doubt is one
+number serving every card: *"this was supposed to be just a gentle heads up to only list four
+as a default mainly for cheap cards."* The measurement that makes it concrete is on their
+store, and it is the same card this amendment is about — Rengar at **$30.81**, capped at four
+by a default that was reasoned about with commons in mind. D9 already draws exactly this line
+one register over, where the threshold and the floor are both derived from a labor bar rather
+than picked; a cap derived the same way would be a number with an argument behind it instead
+of a constant nobody has revisited.
+
+**It is a change to THIS ENTRY when it is made, and the shape is already sitting here.**
+`SkuMatch.live_cap` is a per-match field with `LIVE_QUANTITY_CAP` as its default, and
+`pipeline/join.py:build` takes `live_cap` as an argument — so a rule that reads the row's own
+market price has somewhere to live without a schema change and without a new field on the
+wire. What it would need is the argument: which bands, what the cap is in each, and whether it
+is a per-run choice like D9's sub-threshold disposition or a standing rule. None of that has
+been argued, and **a cap that varies is a cap an operator has to be able to predict**, so the
+screen half is part of the question rather than a follow-up to it.
+
+**Nothing is blocked on it and nothing should wait for it.** The defect above is that the cap
+reached the RECORD, and that is fixed whatever the cap turns out to be — the identity write no
+longer reads `live_cap` at all, so this decision can be taken later without touching that seam
+again.
+
 ## D8 — Pricing source is the TCGplayer Filtered CSV export itself
 
 It carries live, per-SKU, per-variant `TCG Market Price`. Threshold checks and pricing rules
