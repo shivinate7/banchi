@@ -227,3 +227,5 @@ Vite
 [Uu]njudged
 [Uu]nmerged
 another's
+[Ss]parkline
+[Ss]parklines
