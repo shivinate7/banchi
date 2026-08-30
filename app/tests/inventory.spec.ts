@@ -2502,11 +2502,16 @@ test('the card carries what its run said the market was, and how old that readin
   await open(page, BOXES, PRICED_STORE)
 
   const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
-  await expect(market).toHaveText('$5.47 · read 2 days ago')
+  await expect(market).toHaveText('$5.47 · read 2d')
 
   /* THE AGE IS NEVER OPTIONAL, which is the half that makes the row honest. `join` is free,
      re-runnable and routinely pointed at a refreshed export, so two cards on one shelf can carry
-     prices read a week apart — a bare `$5.47` claims a currency the file cannot support. */
+     prices read a week apart — a bare `$5.47` claims a currency the file cannot support.
+
+     AND `read` SURVIVES THE COMPACTION, which is the other half. `2d` alone could be read as two
+     days on the market; `read 2d` says the age is the JOIN's. The word is asserted separately
+     from the string above so that shortening the duration again cannot quietly take the verb
+     with it. */
   expect(await market.innerText()).toContain('read')
 
   /* THE SECOND COPY OF THE SAME SKU, reached through the walk and priced identically — D7's
@@ -2516,7 +2521,7 @@ test('the card carries what its run said the market was, and how old that readin
   await page.locator('.browse-row').nth(1).click()
   await expect(page.locator('.browse-fact', { hasText: 'Number' })).toBeVisible()
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
-    '$5.47 · read 2 days ago',
+    '$5.47 · read 2d',
   )
 
   /* A BLANK MARKET CELL IS AN UNKNOWN PRICE AND SAYS SO — D9, in its own words, "a missing price
@@ -2536,8 +2541,54 @@ test('the card carries what its run said the market was, and how old that readin
      different fact again from a blank cell and gets a different sentence. */
   await page.locator('.browse-row').nth(4).click()
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
-    'no row matched by this run',
+    'no row in this run',
   )
+})
+
+/** How many lines the Market row's value actually draws, measured rather than inferred from the
+ *  string. A wrapped value is the defect this guards, and it is invisible from the text. */
+async function marketLines(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const dd = [...document.querySelectorAll('.browse-fact')]
+      .find((row) => row.querySelector('dt')?.textContent === 'Market')
+      ?.querySelector('dd') as HTMLElement
+    const line = parseFloat(getComputedStyle(dd).lineHeight)
+    return Math.round(dd.getBoundingClientRect().height / line)
+  })
+}
+
+test('the market row draws on one line at the width the owner works at', async ({ page }) => {
+  /* THE OWNER'S REPORT, 2026-08-30, with a screenshot of a `Market` row wrapped onto two lines
+     between `Run` and `Note`.
+
+     IT IS A WIDTH GUARD AND NOT A COPY GUARD, which is the whole reason it measures instead of
+     pinning a string. The four cases above already pin what the row SAYS; a sentence written
+     past the track does not fail there, it silently costs the row a second line and pushes the
+     panel down. What is asserted here is the rule — the value fits — so a future wording is
+     free to change and is not free to overflow.
+
+     1440x900 EXPLICITLY, AND THE DEFAULT VIEWPORT CANNOT SEE THIS. `.browse-facts` is
+     `column-width: 260px`: at the owner's 1440 the list is 578px and takes TWO columns of 277px,
+     leaving a 181px value track, and at this suite's default 1280 it is 506px and takes ONE
+     column with a 410px track. Every string in this row fits at 1280. So the whole of the
+     defect lives at a width nothing in this file had ever rendered — which is why it shipped,
+     and why pinning this viewport is the case rather than an incidental setting.
+
+     EVERY REACHABLE STATE, because the wrap is a property of the longest one rather than of the
+     priced one. `no row matched by this run` was 236.6px against the 181px track — worse than
+     the price it sits beside — and it would have gone on wrapping had only the priced form been
+     fixed. */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, BOXES, PRICED_STORE)
+  await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toBeVisible()
+  expect(await marketLines(page)).toBe(1)
+
+  await expandAll(page)
+  for (const row of [3, 4]) {
+    await page.locator('.browse-row').nth(row).click()
+    await expect(page.locator('.browse-fact', { hasText: 'Number' })).toBeVisible()
+    expect(await marketLines(page)).toBe(1)
+  }
 })
 
 test('Reload re-reads the price, because a join is what a reload is pressed after', async ({
@@ -2557,11 +2608,11 @@ test('Reload re-reads the price, because a join is what a reload is pressed afte
   await open(page, BOXES, PRICED_STORE, () => ({ ...PRICING, written_at: at }))
 
   const market = page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')
-  await expect(market).toHaveText('$5.47 · read 2 days ago')
+  await expect(market).toHaveText('$5.47 · read 2d')
 
   at = Math.floor((Date.now() - 9 * 86400000) / 1000)
   await page.getByRole('button', { name: 'Reload' }).click()
-  await expect(market).toHaveText('$5.47 · read 9 days ago')
+  await expect(market).toHaveText('$5.47 · read 9d')
 })
 
 test('the market row is drawn even for a card no run has read', async ({
@@ -2592,10 +2643,17 @@ test('a run with no pricing table names the remedy rather than reading as an unp
   const stale: Cards = Object.fromEntries(
     Object.entries(CARDS).map(([key, held]) => [key, { ...held, run: '2026-08-22-box1-03' }]),
   )
+  await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, BOXES, { cards: stale, search: (query) => searchAnswer(query, stale) })
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
-    'no pricing table — join this run',
+    'join this run',
   )
+
+  /* THE REMEDY WITHOUT THE STATE, and the width is why: `no pricing table — join this run` is
+     291.2px in a 181px track and drew as two lines. Measured here beside the string rather than
+     only in the case above, because this is the state that lost half its sentence to the track
+     and it is reached from a fixture that case cannot mount. */
+  expect(await marketLines(page)).toBe(1)
 })
 
 test('a card with an open question in the queue says so, and says whether it can be answered', async ({

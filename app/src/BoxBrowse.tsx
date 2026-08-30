@@ -622,9 +622,16 @@ function marketTable(payload: PricingPayload): MarketRead {
  *
  * THE SPLIT IN THIS FUNCTION IS THEREFORE: plain English where THIS SCREEN has nothing (the
  * shape every other fallback in the list takes — `not identified yet`, `none recorded`), and the
- * pipeline's own word where the PIPELINE said something. `no row matched by this run` is the
- * first kind: a position absent from the table is not a classification the pipeline made, and
- * the queue block below these rows is what names the reason when there is one. */
+ * pipeline's own word where the PIPELINE said something. `no row in this run` is the first
+ * kind: a position absent from the table is not a classification the pipeline made, and the
+ * queue block below these rows is what names the reason when there is one.
+ *
+ * EVERY SENTENCE HERE IS CUT TO THE 181px THE VALUE TRACK GIVES IT, and that is a constraint on
+ * this function rather than a style. Three of them were over it: the priced form (see below),
+ * `no row matched by this run` at 236.6px, and `no pricing table — join this run` at 291.2px,
+ * which is drawn where the refusal is caught. The budget is 19 characters at 9.1px each, and a
+ * sentence written past it does not fail loudly — it silently costs the row a second line and
+ * pushes the panel down. */
 function marketText(card: InventoryCard, read: MarketRead | undefined): string {
   if (card.run === null) return 'not joined yet'
   if (read === undefined) return 'reading…'
@@ -634,11 +641,30 @@ function marketText(card: InventoryCard, read: MarketRead | undefined): string {
   /* A POSITION THE TABLE DOES NOT HOLD IS NOT A MISSING PRICE — it is a card the join matched
      no catalog row for, which is `no_catalog_row` and is the review queue's business. The block
      below these rows already says so when it is; this row says only that it has no figure. */
-  if (price === undefined) return 'no row matched by this run'
+  if (price === undefined) return 'no row in this run'
   if (price === null) return 'no_market_data'
 
-  const age = read.at === null ? 'age unknown' : sinceText(read.at * 1000)
-  return `$${price} · ${age === 'today' ? 'read today' : `read ${age} ago`}`
+  /* `read 12d` AND NOT `read 12 days ago`, WHICH IS A MEASUREMENT AND NOT A HOUSE STYLE. The
+     value track is 181px and this row is the only one on the panel carrying two facts, so the
+     full wording wrapped every priced card: `$0.34 · read 9 hours ago` is 218.4px against a
+     `Run` row at 163.8px that fits. See `sinceText` for the arithmetic and for why the queue
+     age keeps its words.
+
+     `read` SURVIVES AND `ago` DOES NOT, which is the trade rather than an abbreviation taken as
+     far as it would go. `read` is what says the age is the JOIN's — the export is a CSV
+     downloaded from TCGplayer at a moment nothing on this machine can see — and dropping it
+     leaves `$0.34 · 12d`, which could as easily be read as twelve days on the market. `ago` is
+     the redundant word: `read` is already past tense, and it is the wider of the two at 36.4px
+     against 45.5px, so keeping the verb costs less than keeping the preposition.
+
+     `no age` RATHER THAN `age unknown` FOR THE SAME 181px REASON. That branch is a server too
+     old to send `written_at`; at 127.4px of suffix it fitted `$0.34` and wrapped `$149.99`,
+     which is a wrap in the one state that cannot be reproduced by looking at a card. It joins
+     `none` and `not recorded` further up this list, which is the register the panel already
+     uses for a fact it does not have. */
+  const age = read.at === null ? null : sinceText(read.at * 1000, 'compact')
+  if (age === null) return `$${price} · no age`
+  return `$${price} · ${age === 'today' ? 'read today' : `read ${age}`}`
 }
 
 function detailsOf(card: InventoryCard, market: MarketRead | undefined): Detail[] {
@@ -794,18 +820,37 @@ function openQuestion(
   return inParked === undefined ? null : { entry: inParked, queue: 'parked' }
 }
 
-/** How long ago a moment was, coarsely — `3 days`, `4 hours`, `today`.
+/** How long ago a moment was, coarsely — `3 days`, `4 hours`, `today`, or the same fact
+ *  compacted to `3d` / `4h`.
  *
  *  ONE VOCABULARY FOR THE TWO AGES THIS PANEL DRAWS, which is the whole reason it is a
  *  function rather than two. A card can carry both at once — how long its question has been
  *  waiting, and how long ago the join read its price — and two spellings of "two days" sixteen
- *  pixels apart is the drift `reasons.ts` was extracted to stop one screen further on. */
-function sinceText(at: number): string {
+ *  pixels apart is the drift `reasons.ts` was extracted to stop one screen further on.
+ *
+ *  THE COMPACT FORM IS A SECOND RENDERING AND NOT A SECOND VOCABULARY, which is the whole
+ *  reason it is a parameter here rather than a helper beside `marketText`. The thresholds, the
+ *  rounding and the `today` floor stay in one place, so the two ages can never come to disagree
+ *  about which day a moment falls on — only about how many characters they spend saying it. A
+ *  private `compactAge()` next to its one caller would have been the same rule written twice.
+ *
+ *  IT EXISTS BECAUSE OF A MEASUREMENT AND ONLY THE MARKET ROW TAKES IT. The facts list draws at
+ *  `column-width: 260px`, which at the owner's 1440 gives two columns of 277px and a value
+ *  track of 181px at 9.1px per character — 19 characters. `$0.34 · read 9 hours ago` is 218.4px
+ *  and wrapped every priced card onto two lines. `$0.34 · read 9h` is 100.1px of suffix, which
+ *  leaves eight characters for the figure. The queue age keeps the words: it is drawn in
+ *  `.browse-queued` below the list, which is full-width and has never been short of room.
+ *
+ *  AND THE WORDS ARE UNBOUNDED WHERE THE COMPACT FORM IS NOT. `N days` grows with N — a
+ *  year-old join renders `read 400 days ago` — so the wrap was the ordinary case rather than a
+ *  bad one. `Nd` is four characters until 2036. */
+function sinceText(at: number, form: 'words' | 'compact' = 'words'): string {
   const elapsed = Date.now() - at
   const days = Math.floor(elapsed / 86400000)
-  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`
+  if (days >= 1) return form === 'compact' ? `${days}d` : `${days} day${days === 1 ? '' : 's'}`
   const hours = Math.floor(elapsed / 3600000)
-  return hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'today'
+  if (hours < 1) return 'today'
+  return form === 'compact' ? `${hours}h` : `${hours} hour${hours === 1 ? '' : 's'}`
 }
 
 /** How long an entry has been waiting, in the queue's own terms. */
@@ -1730,10 +1775,16 @@ export function BoxBrowse({
            apart: it means this run predates `pricing.json` or has not been joined at all, and
            the remedy is a join rather than a look at the server. Every other failure — a run
            directory that has gone, a server that is down — is one sentence, because the row has
-           one line and the console has the rest. */
+           one line and the console has the rest.
+
+           THE REMEDY IS WHAT SURVIVED THE CUT. `no pricing table — join this run` is 291.2px in
+           a 181px track, so it drew as two lines, and only one of its halves fits. The state is
+           the half to drop: `MARKET: join this run` already says a table is what is missing, and
+           the sentence this is being told apart FROM — `could not be read` — names no remedy at
+           all, so the pair still reads as two different failures. */
         const why =
           describeFailure(error).code === 'pricing_not_written'
-            ? 'no pricing table — join this run'
+            ? 'join this run'
             : 'could not be read'
         if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why } }))
       })
