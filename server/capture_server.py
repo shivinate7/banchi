@@ -233,9 +233,16 @@ from store import Store, files, master, queues  # noqa: E402
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
 from server import pipeline_routes  # noqa: E402
+from server import ports  # noqa: E402
 
 HOST = "0.0.0.0"
-PORT = 8000
+
+# DERIVED PER CHECKOUT, NOT A CONSTANT (D43). It was `8000` here while `store/files.py:home()`
+# already defaulted to the checkout the code runs from — so every worktree served a DIFFERENT
+# store on the SAME port, and whichever process won the bind answered everyone. The main tree
+# still answers 8000 and every doc that says so stays true; a linked worktree gets its own.
+# `server/ports.py` carries the argument and `PKMNSCAN_PORT` overrides.
+PORT = ports.capture_port()
 
 CAPTURES_DIRNAME = "captures"
 CARDS_DIRNAME = "cards"
@@ -6553,6 +6560,13 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")
     print(f"  store     {files.inventory_dir()}")
+    # WHICH CHECKOUT IS SERVING, printed because the two lines above are absolute paths that
+    # differ between trees by one path segment nobody reads at a glance. A worktree's server
+    # over a worktree's empty store looks exactly like the real one until a capture lands
+    # somewhere that gets deleted with the branch — which is the failure D43 exists for.
+    if ports.is_linked_worktree(ports.REPO_ROOT):
+        print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
+        print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
     print("  Ctrl-C to stop.")
     try:
         httpd.serve_forever()

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { realpathSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -46,12 +46,41 @@ import { fileURLToPath } from 'node:url'
 // `strictPort`, so the second one refuses to start rather than quietly serving elsewhere —
 // which is the same reason that flag is set at all. The remedy is to rename the worktree
 // directory; the port follows the path.
+//
+// THE CAPTURE SERVER'S PORT IS DERIVED HERE TOO, FROM THE SAME SLOT (D43). This file solved
+// the shared-port fault for Vite and Playwright and stopped there; `server/capture_server.py`
+// stayed on a bare 8000 and `app/src/server.ts` asked for `http://localhost:8000` whatever
+// tree it was served from. The store is ALREADY per-checkout — `store/files.py:home()`
+// defaults to the checkout the code runs from — so a shared port means tree A's UI is
+// answered by tree B's server over tree B's inventory. One direction drives the owner's real
+// 767 cards from a branch; the other writes real capture photographs into a directory that is
+// deleted with the worktree. `server/ports.py` carries the argument; it is the Python twin of
+// this file and `scripts/port-agreement.py` is what keeps the two honest.
+//
+// ONE SLOT, TWO PORTS, so a tree reads as a pair — 5276 beside 8176 — and there is one number
+// to recognise rather than two unrelated ones.
 const BASE_PORT = 5173
+const CAPTURE_BASE_PORT = 8000
 const WORKTREE_LOW = 5200
+const CAPTURE_LOW = 8100
 const WORKTREE_SLOTS = 300
 
 function repoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..')
+}
+
+// `realpathSync` rather than the bare `resolve()` this used before, so a path reached through
+// a symlink hashes identically to the path itself — `/tmp` is a symlink to `/private/tmp` on
+// this machine and one worktree genuinely lives under it. Python's `Path.resolve()` is the
+// same operation, which is what lets the two implementations agree at all. Measured before it
+// was changed: every worktree in this clone answers the same slot either way, so no existing
+// dev port moved.
+function canonical(root: string): string {
+  try {
+    return realpathSync(root)
+  } catch {
+    return root
+  }
 }
 
 function isLinkedWorktree(root: string): boolean {
@@ -65,12 +94,29 @@ function isLinkedWorktree(root: string): boolean {
   }
 }
 
-export function devPort(): number {
+// Exported so `scripts/port-agreement.py` can feed it the same synthetic paths it feeds
+// `server/ports.py:slot_for` and diff the answers. A pure function of a string is the only
+// part of this that can be compared across two languages without a filesystem in the way.
+export function slotFor(root: string): number {
+  const digest = createHash('sha256').update(canonical(root)).digest()
+  return digest.readUInt32BE(0) % WORKTREE_SLOTS
+}
+
+function portFor(base: number, low: number): number {
   const root = repoRoot()
-  if (!isLinkedWorktree(root)) return BASE_PORT
-  const digest = createHash('sha256').update(root).digest()
-  return WORKTREE_LOW + (digest.readUInt32BE(0) % WORKTREE_SLOTS)
+  if (!isLinkedWorktree(root)) return base
+  return low + slotFor(root)
+}
+
+export function devPort(): number {
+  return portFor(BASE_PORT, WORKTREE_LOW)
+}
+
+export function capturePort(): number {
+  return portFor(CAPTURE_BASE_PORT, CAPTURE_LOW)
 }
 
 export const DEV_PORT = devPort()
 export const DEV_URL = `http://localhost:${DEV_PORT}`
+export const CAPTURE_PORT = capturePort()
+export const CAPTURE_URL = `http://localhost:${CAPTURE_PORT}`

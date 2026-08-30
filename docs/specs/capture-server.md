@@ -542,6 +542,14 @@ The surface is the step 5 line in `docs/GATES.md` and nothing else:
 Port 8000, matching what `make server` already prints. JSON in, JSON out, except the photo
 bytes.
 
+**Overtaken in one detail on 2026-08-29 (D43): 8000 is the MAIN checkout's port, not every
+checkout's.** The store has always defaulted to the checkout the code runs from, so each git
+worktree has its own inventory — and a shared port meant whichever server won the bind
+answered every tree's UI, in one direction driving the owner's real inventory from a branch
+and in the other writing real capture photographs into a directory deleted with it. A linked
+worktree now derives its own port; the main tree is unchanged, so this line stays true where
+anyone reading this spec is standing. `server/ports.py` holds the derivation.
+
 **`POST /capture`** — `application/json` with base64 image bytes, not multipart: the stdlib
 has no multipart parser worth using on the path that allocates positions, and base64 costs
 33% on a LAN. Body carries `box` (required), `image` (required), optional `set_hint`,

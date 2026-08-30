@@ -60,10 +60,27 @@ import type {
  * 30s, not below it.
  */
 
-/* Vite substitutes this at build time. The default is the rig's own Mac; the variable
- * exists so the Fulfiller's device can be pointed at that Mac by address later, which is
- * the one thing the capture-app spec leaves open (section 11). */
-const DEFAULT_BASE = 'http://localhost:8000'
+/* Vite substitutes both of these at build time. VITE_CAPTURE_SERVER is the operator's
+ * explicit override — it exists so the Fulfiller's device can be pointed at this Mac by
+ * address later, which is the one thing the capture-app spec leaves open (section 11).
+ *
+ * VITE_CAPTURE_DEFAULT is THIS CHECKOUT'S server, derived in `app/devPort.ts` from the same
+ * slot as the Vite port and injected by `vite.config.ts` (D43). It replaced a hardcoded
+ * `http://localhost:8000`, which was wrong in every tree but one: `store/files.py:home()`
+ * gives each checkout its own inventory, so a shared port meant this UI could be answered by
+ * another tree's server over another tree's store — in one direction driving the owner's real
+ * inventory from a branch, in the other writing real capture photographs into a directory
+ * that is deleted with the worktree.
+ *
+ * The literal below is the last-resort fallback for a bundle built without that define — a
+ * bare `tsc`, a test harness, an editor's type server. It is the main tree's port, which is
+ * the right guess when nothing has told us which tree this is. */
+const FALLBACK_BASE = 'http://localhost:8000'
+const derived: unknown = import.meta.env.VITE_CAPTURE_DEFAULT
+const DEFAULT_BASE =
+  typeof derived === 'string' && derived.trim() !== ''
+    ? derived.trim().replace(/\/+$/, '')
+    : FALLBACK_BASE
 const configured: unknown = import.meta.env.VITE_CAPTURE_SERVER
 
 /* Trailing slashes stripped so `${base}/status` cannot become `//status`, which some

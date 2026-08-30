@@ -506,6 +506,19 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 "governed_by": ["D18", "D42"],
             },
+            "port-agreement.py": {
+                "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
+                        "numbers. One algorithm in two languages that cannot import each "
+                        "other — Python SERVES the capture port, TypeScript ADDRESSES it — so "
+                        "a disagreement is silent and total. Feeds both the same REAL "
+                        "directories (a missing path canonicalises differently in the two) "
+                        "and compares this checkout's composed ports on top.",
+                # D43 authors the derivation. D18 decides where this runs: it shells out to
+                # node, and the git hook runs bare python3 with nothing installed, so it lives
+                # in `make check` beside the other two self-tests rather than on the commit
+                # path.
+                "governed_by": ["D18", "D43"],
+            },
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -560,7 +573,7 @@ COMPONENTS = [
                 # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
                 # a hook that can break a session gets disabled, and a disabled hook guards
                 # nothing, so every failure exits 0.
-                "governed_by": ["D16", "D18"],
+                "governed_by": ["D16", "D18", "D43"],
             },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
@@ -628,7 +641,7 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42"],
+                "governed_by": ["D16", "D17", "D42", "D43"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -711,6 +724,19 @@ COMPONENTS = [
                 "captures/cards/ and not captures/, so screenshot renders under "
                 "captures/ui/ are never scanned as paid captures.",
         "modules": {
+            "ports.py": {
+                "does": "which ports THIS checkout serves on, derived from where the checkout "
+                        "is. The main tree keeps :8000 and :5173; a linked worktree gets its "
+                        "own pair from one slot off its path. `PKMNSCAN_PORT` overrides and an "
+                        "out-of-range value is ignored rather than obeyed.",
+                # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
+                # store already defaults per-checkout — so a shared port meant one tree's UI
+                # writing into another tree's store, which is that entry's promise broken by
+                # a socket rather than by a design.
+                "governed_by": ["D13", "D43"],
+                "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
+                        "it and the git hook never does.",
+            },
             "capture_server.py": {
                 # THE COUNT USED TO BE PUBLISHED HERE AND IS NOT ANY MORE, and this comment
                 # is the argument against itself. It read "Nine since 2026-08-13" and defended
@@ -759,7 +785,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -852,13 +878,13 @@ COMPONENTS = [
                                    "DESIGN.md's floors against code the branch never had — "
                                    "green, and meaningless. Detects a worktree the way "
                                    "scripts/worktree-guard.sh does: `.git` is a file",
-                           "governed_by": ["D5", "D13"]},
+                           "governed_by": ["D5", "D13", "D43"]},
             "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
                                        "Makefile and scripts/views.txt would all three be wrong. "
                                        "The port comes from devPort.ts: :5173 in the main tree, "
                                        "per-worktree elsewhere",
-                               "governed_by": ["D13"]},
+                               "governed_by": ["D13", "D43"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
                                              "ON and is safe only because devPort.ts makes the port "
@@ -901,7 +927,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D33", "D34", "D37"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",

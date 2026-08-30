@@ -112,4 +112,25 @@ fi
 
 [ "$did_something" = "1" ] && echo "worktree-guard: this worktree is provisioned. See \`make worktree-setup\`."
 
+# WHICH PORTS THIS TREE OWNS, SAID BEFORE ANY WORK STARTS (D43).
+#
+# Unconditional in a worktree, and deliberately not gated on `did_something`: a provisioned
+# tree is exactly the one a session will now start servers in, and the numbers are the thing
+# it cannot guess. The store defaults to the checkout the code runs from, so a worktree's
+# `make server` serves that worktree's own — usually EMPTY — inventory, and before D43 they
+# all fought over one port and whichever won answered everybody. That is how the main tree's
+# real captures could have landed in a directory deleted with a branch.
+#
+# It never fails the hook. `|| true` on the whole thing and a stdlib-only import, because a
+# SessionStart hook that can exit non-zero is a hook that stops a session from starting.
+if [ -f .git ] && [ -f server/ports.py ]; then
+  python3 - <<'PORTS' 2>/dev/null || true
+import sys
+sys.path.insert(0, ".")
+from server import ports
+print(f"worktree-guard: this tree serves capture :{ports.capture_port()} and dev :{ports.dev_port()}")
+print(f"                the main checkout has :{ports.CAPTURE_BASE_PORT} / :{ports.DEV_BASE_PORT}, over a DIFFERENT store")
+PORTS
+fi
+
 exit 0

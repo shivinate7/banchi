@@ -2987,6 +2987,97 @@ main. Not either/or: the two incidents that produced this entry were one of each
 
 ---
 
+## D43 — the port follows the store, because the store was already per-checkout
+
+**BUILT 2026-08-29.** `store/files.py:home()` has always defaulted to `REPO_ROOT` — the
+checkout the code is running from — so every git worktree has its own `inventory/`, its own
+`runs/` and its own `captures/`. The capture server's port was the bare constant `8000` in all
+of them, and `app/src/server.ts` asked for `http://localhost:8000` whatever tree served it.
+
+**A SHARED PORT OVER PER-CHECKOUT STORES IS NOT A BUSY-PORT PROBLEM. IT IS A DATA-LOSS
+PROBLEM, AND IT RUNS IN BOTH DIRECTIONS.** Whichever server won the bind answered every tree's
+UI:
+
+- a worktree's screens drive the owner's real 767-card inventory, on a branch, with whatever
+  half-finished route that branch happens to define; or
+- the MAIN checkout's capture screen — the one the owner actually shoots a box from — is
+  answered by a worktree's server, and real card photographs are written into
+  `<worktree>/captures/cards/` and deleted with the branch.
+
+The second is unrecoverable and silent. Nothing on either screen says which process replied.
+
+**HALF OF THIS WAS ALREADY FIXED AND THE HALF THAT WAS LEFT IS THE ONE THAT WRITES.**
+`app/devPort.ts` (2026-08-29, earlier the same day) gave every checkout its own **Vite** port,
+after `make design-check` in a worktree attached to the main tree's dev server and asserted
+`docs/DESIGN.md`'s floors against code the worktree had never seen — and passed. That entry's
+own reasoning is the argument here: *"the shared PORT is the whole fault"*. It stopped at
+Vite and Playwright. The capture server, which is the process that writes photographs and
+inventory to disk, kept the shared constant.
+
+**`app/tests/inventory.spec.ts` HAD ALREADY WRITTEN THE BUG REPORT.** Its stubs are justified
+in a comment saying an unstubbed read is *"a request to whatever is listening on port 8000,
+which in this repo is the owner's actual capture server over their actual 767-card
+inventory."* That is this defect, observed, worked around locally, and never filed.
+
+**ONE SLOT, TWO PORTS.** `sha256` of the checkout's canonical path, first four bytes, modulo
+300. Dev is `5200 + slot`, capture is `8100 + slot`, so a tree reads as a pair — 5276 beside
+8176 — and there is one number to recognise rather than two unrelated ones. **The main working
+tree keeps 5173 and 8000**, so every doc, the Makefile's help and `scripts/views.txt` stay
+true and the ordinary single-checkout workflow is untouched.
+
+**DERIVED, NOT ALLOCATED**, for the reason `app/devPort.ts` already gives: the same tree
+answers the same port on every run, which is what makes a printed URL worth keeping and what
+lets `strictPort` tell *"someone else is here"* from *"I moved"*. Collisions are possible —
+300 slots, a handful of trees — and are loud: Vite refuses to start, and the capture server
+raises `EADDRINUSE` rather than serving somewhere else. The remedy is to rename the worktree
+directory; the port follows the path.
+
+**TWO IMPLEMENTATIONS OF ONE ALGORITHM, ASSERTED RATHER THAN TRUSTED.** Python serves and
+TypeScript addresses, and neither can import the other. `make port-agreement` runs both over
+the same real directories and diffs them, and it is in `make check` rather than the git hook
+because it needs node and the hook runs bare. **It was mutation-tested in both directions
+before it was kept** — moving the Python band takes the composed-port case red, and changing
+the slot width takes every path red. A check that cannot fail is not coverage; this repo
+already paid for that lesson at the multi-game prompt seam, where a differently-named
+identifier field would have parsed cleanly and joined nothing.
+
+**CANONICALISATION IS PART OF THE ALGORITHM AND WAS THE ONE REAL TRAP.** Both sides realpath
+the root before hashing — Node's `realpathSync`, Python's `Path.resolve()` — because `/tmp` is
+a symlink to `/private/tmp` on this machine and one worktree genuinely lives under it. The
+agreement test therefore feeds **real directories** rather than invented strings: a path that
+does not exist canonicalises differently in the two languages, so synthetic inputs would have
+tested the test rather than the code. `app/devPort.ts` was moved from `resolve()` to
+`realpathSync` for this, and it was measured first — every worktree in this clone answers the
+same slot either way, so **no existing dev port moved.**
+
+**IT IS SAID IN THE THREE PLACES A SESSION ACTUALLY LOOKS, which is the half that makes it
+reliable rather than merely correct.** The owner's complaint was exact: the port reasoning
+existed only in a source comment, *"not on CLAUDE.md nor on any hook, so it's not reliable"*.
+So: `CLAUDE.md` carries the rule; `scripts/worktree-guard.sh` — the SessionStart hook — prints
+this tree's two ports before any work begins; `make status` prints them and says outright when
+you are in a worktree; and `make server`'s banner names the store it is about to serve and
+warns when that store is not the main checkout's.
+
+**`PKMNSCAN_PORT` OVERRIDES, the same knob and shape as `PKMNSCAN_HOME`.** An unparseable or
+out-of-range value is **ignored rather than obeyed**: a typo must not put the server on a port
+no client will look at, which is this entry's own failure arriving by another road.
+`VITE_CAPTURE_SERVER` still outranks the derived default on the client, because that is the
+operator's explicit override and the case `docs/specs/capture-app.md` §11 leaves open — the
+Fulfiller's device pointed at this Mac by address.
+
+**WHAT THIS DOES NOT DO: it does not give worktrees a shared store.** Each still has its own,
+still usually empty, and that is D13's "one truth on the Mac" holding — the truth is the main
+checkout's. A worktree that wants to work against real data points `PKMNSCAN_HOME` at it
+deliberately, which is a decision with a visible env var rather than an accident of which
+process bound a socket first.
+
+**What would reopen this: wanting one capture server for every tree.** The honest shape then
+is one server on 8000 with `PKMNSCAN_HOME` pinned to the main checkout and the worktrees'
+clients pointed at it by `VITE_CAPTURE_SERVER` — which is the knob that already exists. That
+is a different decision about where the truth lives, not a tweak to this one.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN
