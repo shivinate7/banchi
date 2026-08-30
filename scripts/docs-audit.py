@@ -723,9 +723,19 @@ def iter_code_lines(text: str):
             yield number, line
             continue
         # Outside a fence, keep only the spans between backticks.
+        #
+        # JOINED BY A NEWLINE, BECAUSE TWO ADJACENT SPANS ARE TWO REFERENCES AND NOT ONE.
+        # A space let every caller's regex match straight across a span boundary, so
+        # `make` beside `docs/GATES.md` read as a target called `docs` and
+        # `~/Developer/pkmnscan` beside `make icloud-sweep` read as a subcommand called
+        # `make`. Both are phantoms — nobody wrote either reference — and both blocked a
+        # commit. Latent until D60 unwrapped the prose: the docs used to wrap at 96
+        # columns, which kept most spans on separate lines and hid it. Every caller here
+        # matches a literal space after the command word, so a newline cannot be crossed,
+        # and one yield per source line keeps the reported line numbers right.
         spans = re.findall(r"`([^`]+)`", line)
         if spans:
-            yield number, " ".join(spans)
+            yield number, "\n".join(spans)
 
 
 def phony_gaps(text: str) -> Tuple[Set[str], Set[str]]:
@@ -1391,6 +1401,150 @@ def code_haystack() -> str:
         parts.append(read(path))
     _HAYSTACK = "\n".join(parts)
     return _HAYSTACK
+
+
+# D60's two rows. Both read docs/DECISIONS.md by hard-coded path, so they answer on every
+# run rather than only when that file is staged — the same asymmetry check_map and
+# check_pass_criteria already have, and for the same reason: a broken heading there breaks
+# every consumer, not only the commit that wrote it.
+#
+# ENTRY_BUDGET is twice the median entry (6,374 bytes on the day it was set) rather than a
+# picked round number. D60 itself is 4,967. An entry at twice the median is one that should
+# have cited a neighbour instead of re-arguing it, which is that entry's own rule.
+ENTRY_BUDGET = 12000
+
+
+def _prose_guard():
+    """scripts/prose-guard.py, or None.
+
+    Imported rather than reimplemented: it already replicates decision-context.py's three
+    selectors, and a second copy here is the drift this file exists to catch. The filename
+    has a hyphen, hence importlib. Returns None on any failure — a missing guard must cost
+    two rows, never the whole audit.
+    """
+    path = ROOT / "scripts" / "prose-guard.py"
+    if not path.exists():
+        return None
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("prose_guard", path)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module
+    except Exception:  # noqa: BLE001 - a broken guard must not take the audit down
+        return None
+
+
+def check_decision_structure(report: Report) -> None:
+    """What scripts/decision-context.py needs, which it cannot report for itself.
+
+    That hook is wrapped in `except Exception: sys.exit(0)`, so a heading that loses its
+    dash separator or a `**bold**` reflowed across a wrap degrades it in silence. Measured
+    before D60: 270 bold runs — 20% of all 1,318 — were invisible to it, and seven entries
+    surfaced nothing but their title, with every row of this audit green throughout.
+
+    MECHANICAL, because each finding is provably wrong rather than a judgement: the hook's
+    regex either matches or it does not.
+    """
+    guard = _prose_guard()
+    if guard is None:
+        report.add("decision structure", ADVISORY,
+                   [Finding("scripts/prose-guard.py", "not readable; structure unchecked.")])
+        return
+    target = ROOT / "docs" / "DECISIONS.md"
+    findings = [Finding(f.where, f.message) for f in guard.check_structure(target)]
+    entries = guard.entries(read(target))
+    report.add("decision structure", MECHANICAL, findings,
+               f"{len(entries)} entries, every heading and bold reaches the hook")
+
+
+def check_decision_index(report: Report) -> None:
+    """CLAUDE.md's index against docs/DECISIONS.md's headings.
+
+    D60 dropped the `@` prefix, so that file is no longer loaded in full and the index is
+    the only thing a session sees without opening it. An index that has drifted is worse
+    than none, because it is believed — the argument D17 makes for auditing docs/map.py
+    exactly as hard as it is trusted.
+
+    MECHANICAL. Both sides are ids and titles: there is nothing here a later session could
+    reasonably disagree with, which is D16's test for what may block.
+
+    NOT a generator, and this deliberately does not open D18's seam list. It computes what
+    the index should say and compares; it never writes. That is D18's own write-time versus
+    check-time split, with only the check half built.
+    """
+    claude = ROOT / "CLAUDE.md"
+    decisions = ROOT / "docs" / "DECISIONS.md"
+    if not exists(claude) or not exists(decisions):
+        report.add("decision index", MECHANICAL,
+                   [Finding("CLAUDE.md", "cannot read the index or the entries.")])
+        return
+
+    want = [
+        (m.group(1), m.group(2).strip())
+        for m in (re.match(r"^##\s+(D\d{1,2})\s*[—-]\s*(.+)$", line)
+                  for line in read(decisions).split("\n"))
+        if m
+    ]
+    # The index is the first fenced block whose lines all start `D<n> `. Located by shape
+    # rather than by a heading, so re-titling the Map section cannot silently unhook it.
+    got: List[Tuple[str, str]] = []
+    fenced, block = False, []
+    for line in read(claude).split("\n"):
+        if line.lstrip().startswith("```"):
+            if fenced and block and all(re.match(r"^D\d{1,2}\s", b) for b in block if b.strip()):
+                got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
+                       for b in block if b.strip()]
+                break
+            fenced, block = not fenced, []
+            continue
+        if fenced:
+            block.append(line)
+
+    findings: List[Finding] = []
+    if not got:
+        findings.append(Finding("CLAUDE.md", "no decision index found. D60 requires one."))
+    else:
+        want_ids = [i for i, _ in want]
+        got_ids = [i for i, _ in got]
+        for ident in [i for i in want_ids if i not in got_ids]:
+            findings.append(Finding("CLAUDE.md", f"`{ident}` has a heading but is not in the index."))
+        for ident in [i for i in got_ids if i not in want_ids]:
+            findings.append(Finding("CLAUDE.md", f"the index lists `{ident}`, which has no heading."))
+        titles = dict(want)
+        for ident, title in got:
+            if ident in titles and titles[ident] != title:
+                findings.append(Finding(
+                    "CLAUDE.md",
+                    f"`{ident}`'s index line reads {title!r} and its heading reads "
+                    f"{titles[ident]!r}. The heading is the source.",
+                ))
+        if got_ids != [i for i in want_ids if i in got_ids]:
+            findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
+    report.add("decision index", MECHANICAL, findings,
+               f"{len(got)} indexed, matching {len(want)} headings")
+
+
+def check_entry_budget(report: Report) -> None:
+    """Entry size, reported and never blocked.
+
+    ADVISORY on D16's own test: a long entry is a judgement call rather than something
+    provably wrong, and a blocking row here would teach `--no-verify`, which switches off
+    the three opsec rules in the same hook. It exists because a rewrite is spent in two
+    days without it — growth over the two days before D60 was +45,580 and +44,460 tokens,
+    80% of it new entries.
+    """
+    guard = _prose_guard()
+    if guard is None:
+        report.add("entry budget", ADVISORY,
+                   [Finding("scripts/prose-guard.py", "not readable; sizes unchecked.")])
+        return
+    target = ROOT / "docs" / "DECISIONS.md"
+    findings = [Finding(f.where, f.message) for f in guard.check_budget(target, ENTRY_BUDGET)]
+    total = sum(len(e.body) for e in guard.entries(read(target)))
+    report.add("entry budget", ADVISORY, findings,
+               f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
 
 
 def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
@@ -5145,6 +5299,9 @@ def audit(staged_only: bool) -> Report:
     check_criteria_evidence(report)
     check_evidence_freshness(report, staged_only)
     check_decision_ids(report, docs)
+    check_decision_structure(report)
+    check_decision_index(report)
+    check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_map(report, allowed)
     check_game_vocabulary(report)

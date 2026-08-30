@@ -1,0 +1,22 @@
+extends: substitution
+message: "'%s' is British; D60 sets American spelling. Use '%s'."
+level: error
+ignorecase: false
+swap:
+  colour: color
+  colours: colors
+  behaviour: behavior
+  neighbour: neighbor
+  neighbours: neighbors
+  licence: license
+  grey: gray
+  artefact: artifact
+  normalised: normalized
+  recognise: recognize
+  sanitised: sanitized
+  parenthesised: parenthesized
+  finalisation: finalization
+  summarise: summarize
+  prioritise: prioritize
+  analyse: analyze
+  defence: defense
