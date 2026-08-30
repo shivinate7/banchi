@@ -493,6 +493,14 @@ gap is permanent.
    already in a file that names its position. Photos and sidecars are renamed inside the
    same locked operation; a `renumbered` history event maps every old index to its new one,
    so the log stays true across the shift.
+
+   **THAT REASON WEAKENED WITH D58 AND THE REFUSAL STANDS ANYWAY.** The box already closes
+   up over a departed card on every screen, so there is no gap left for a shift to close —
+   but this route moves the STORED index, which a photograph and an import file are named
+   by, and the records it would move across are departures and commitments. Relaxing it is
+   its own decision and has not been argued. What was corrected is the sentence the screen
+   recites, because a refusal explaining itself with something nobody can check any more
+   teaches an operator to read past it.
 2. **Capture-undo narrows to `captured` alone.** "Undo at `identified` is ALLOWED — only the
    identification fee is lost" is reversed: once a card has been identified it has made it
    into inventory proper, and the capture screen's undo may not reach it. The remedies for
@@ -1062,6 +1070,21 @@ fraction already drawn from that box wrong by one.
 high-water mark, so a sealed box's capacity never falls as its contents sell. Re-opening a box
 sets `capacity` back to unknown rather than leaving a stale number standing.
 
+**AMENDED BY D58: `capacity` IS NO LONGER THE DENOMINATOR, AND THE DENOMINATOR DOES SHRINK.**
+Every word above stays true of `capacity` itself — frozen at the high-water mark, never
+falling, cleared on re-open — and what changed is that nothing divides by it. A card's number
+now counts the cards in the box, so a count over a frozen capacity draws a card at a
+percentage of a box it is not at: on a 543-card box that has sold 200, `#100 of 543` puts a
+thumb a third of the way from the card. The denominator is the cards on hand, for a sealed box
+and an open one alike, and `capacity` records how full the box got.
+
+**The moving-denominator hazard this entry exists to prevent is answered rather than ignored.**
+What made `#40 of 53` dishonest was a denominator that is DIFFERENT TOMORROW for a reason the
+operator cannot see; this one changes only when a card leaves the box, which is a thing they
+did. The `so far` / `sealed` split is untouched and still says which kind of box it is, and a
+sealed box's identity line carries both numbers (`542 of 543 sealed`) so neither can be
+mistaken for the other.
+
 **THE SAME ARGUMENT HAS A SECOND INSTANCE ONE SCALE DOWN, and it arrived on 2026-08-23 with
 the section-scale position bar.** A section has a denominator problem of exactly this shape:
 `section_end` is a DECLARED bound taken from the box's dividers, not a count of the cards
@@ -1357,7 +1380,8 @@ one rig". `code-card-fork/CLAUDE.md` already said it: *"Codes are fungible pool 
 located items. No box, no section, no position. Do not reuse the singles schema."*
 
 - `located: True` — D10 in full. Sequential position at capture, never renumbered, the label
-  rendered everywhere.
+  rendered everywhere — and since D58 that label counts the cards in the box rather than the
+  slots, which changes what is rendered and not this flag's meaning.
 - `located: False` — `allocate_capture` is unchanged, because the record still needs an index to
   key its files. But **`Position.label` is never rendered**: not in the review queue, not in a run
   report, not in the pull preview. **Non-located cards never enter the Fulfillment view or the
@@ -1590,6 +1614,27 @@ D4's "digital-only, one-tap choice beside the photo" is unchanged for every card
 meet both conditions — and a group write still shows the photographs it is about to answer for.
 
 ## D30 — The physical convention for a gap
+
+**CLOSED BY D58 ON 2026-08-30, AND NOT BY THE MARKER THIS ENTRY WAS WAITING FOR.** The
+problem below is real and is stated better here than anywhere else in this file — *"`Card 17`
+is the seventeenth slot, not the seventeenth card you can count"* — and the answer turned out
+to be upstream of both halves: a card's number now counts the cards in the box, so selling one
+makes the card behind it take its number and every label stays countable by hand. There is no
+gap to put a marker in.
+
+**The digital half stays built and is not deleted.** `neighbors` is still drawn and still
+worth having for confirming a slot; `section_gaps` is structurally zero for a consolidated box
+and `placeSentence` already omits the phrase at zero, so the sentence quietly stops carrying a
+clause D58 made empty rather than needing a change.
+
+**The physical half is void rather than answered**, which is why the owner never had to choose
+a marker: the retroactivity problem this entry names — *"a convention adopted after fifty gaps
+exist cannot be applied to them"* — is what made a marker unworkable, and it is exactly the
+problem a rendering does not have. Every existing gap closed the day D58 landed.
+
+**The box audit is easier and still not built.** What is physically in a section and what the
+record says are the same count again, which is what that check compares.
+
 
 D10 makes a sold position a permanent gap, and the Fulfiller creates one per order. Nothing has
 ever told him to leave anything behind in the slot, and nothing teaches anyone to read a position
@@ -5739,6 +5784,232 @@ key, each console label, and `_preflight_total`'s `busy` list. D33 makes that th
 whose numbers must be unmissable.
 
 ---
+---
+
+## D58 — A card's number counts the cards in the box, not the slots
+
+**BUILT 2026-08-30, on the owner's instruction**: *"if a box is not SEALED, then when cards
+are marked sold in that box assume the indexes can move ie it's not that the slot is now
+empty, but that those before it have moved up one"*. Sell card 17 and the card behind it
+becomes card 17, on every screen.
+
+**IT IS THE ANSWER TO D30, WHICH HAS BEEN WAITING ON THE OWNER SINCE 2026-08-23.** That entry
+states the problem in the sentence this one deletes:
+
+> `Card 17` is the **seventeenth slot**, not the seventeenth card you can count. Once a
+> section has holes those two stop being the same number and every label in that section
+> becomes uncountable by hand.
+
+D30 answered it with `neighbors` and `section_gaps` — built, and both kept — and with a
+physical marker for the emptied slot, which was the owner's open item and is now moot: there
+is no gap left to mark. Its box-audit paragraph gets easier for the same reason, because what
+is in the section and what the record says are the same count again.
+
+**TWO THINGS ARE WIDER THAN THE ASK AND BOTH ARE THE OWNER'S, TAKEN IN THE SAME SESSION.**
+
+**The stored index never moves; the LABEL does.** The instruction says "assume the indexes can
+move", and D10 as amended already carved the seam this uses instead — *"'positions are never
+renumbered' governs the INDEX. The label is a view"*, restated in `pipeline/join.py:Position`'s
+own docstring. Moving the stored index was costed and rejected on four measurements, and each
+is worth keeping because each is a reason not to reach for it later:
+
+- **`do_remove_card` deletes its target and a sale must not**, so a sold record's index has
+  nowhere to go once the survivor above slides into it. Every answer is a v3 schema, rewriting
+  `next_index`, `box_fill`, `copies_on_hand`, `positions_for_sku`, `_walk`, `_release_plan`,
+  the box-delete gate and the migration.
+- **The Fulfiller's twenty-second undo would aim at the wrong card.** `undoSale` posts to
+  `/inventory/<box>/<index>/sold` — a POSITION, with `SOLD_FIELDS = ("undo",)` and no aim
+  check — and after a shift that position holds his next card.
+- **D28's answer-undo and D37's stand-down reversal would stop working.** `_answer_before` and
+  `_clearing_event` treat a `renumbered` history line as a hard stop, and every sale would
+  write one.
+- **D52 would gain a fourth occupant-changing operation**, on six screens whose `photoUrl`
+  callers rest on the element re-keying when a card moves.
+
+**Sealed boxes consolidate too, so there is no open/sealed distinction at all.** The ask gated
+this on the lid; the owner dropped the gate when shown that the alternative makes every label
+jump the moment a box with sold cards is sealed. What it costs is named in D20 below: a sealed
+box's denominator moves now, which that entry froze `capacity` to prevent.
+
+### What it is, measured
+
+On the owner's store the day it landed:
+
+| box | state | records | sold | retired | holds |
+|---|---|---|---|---|---|
+| 1 · UNL Rares | open | 133 | 2 | 0 | **131** |
+| 2 · ME01 C/UC | sealed | 543 | 0 | 1 | **542** |
+| 3 · RB Epics | open | 39 | 9 | 0 | **30** |
+
+Every label above a departed card moved once, deliberately — the same event as D10's deletion
+of automatic sectioning on 2026-08-29, and pinned the same way, so the next such shift cannot
+be accidental either.
+
+**`Position` GAINS THE BOX'S OCCUPANCY AND STAYS THE ONLY LABEL FORMULA IN THE REPO.**
+`occupied` is every on-hand index in the box, ascending, and `departed` is every terminal one.
+`slot` is this card's place among the first; `section`, `section_start`, `section_end` and
+`card` all read it. **`None` and `()` are opposite facts and the sentinel is `None`**: an
+empty tuple is a box every card has left, whose cards must still render as departed rather
+than reverting to slot numbers, and `None` is a caller with no inventory to consult — which
+renders in index space, byte-identically to the day before this landed. `BoxView` is that pair
+with a name and `BoxView().at(box, index)` is the one constructor.
+
+### The sections adjust, and that is what makes both numbers countable
+
+**MAPPING THE CARDS AND NOT THE DIVIDERS WOULD HAVE BEEN A HALF-BUILD THAT LOOKS RIGHT.** A
+divider declared at index `s` stands in front of the first card still on hand at or above it,
+so its number is the count of cards below `s` plus one. Both `slot` and `section_start` then
+move by the same amount for a departure in an earlier section, and `card` — their difference —
+does not. Worked on box 2's real layout `[1, 86, 171, 253, 394]` after four cards depart at
+10, 20, 30 and 180:
+
+| | before | after |
+|---|---|---|
+| divider numbers | 1, 86, 171, 253, 394 | 1, **83**, **168**, **249**, **390** |
+| the card at index 200 | `Section 3 · Card 30` | `Section 3 · Card 30` |
+
+It becomes `Card 29` only when 180 sells, which is a card in its own section and in front of
+it. *Go to the third divider and count twenty-nine cards* — and a sale anywhere else in the
+box does not disturb the count. T7 asserts both halves, because a build that mapped nothing
+passes the second and a build that mapped only the cards passes the first.
+
+**AN EMPTY SECTION KEEPS ITS NUMBER.** Two dividers with no card left between them map to one
+number and are deliberately not deduped: the plastic is still in the box, and renumbering the
+sections behind it would send a person to the wrong divider. `sections_detail` reports it with
+`count: 0`.
+
+**A DIVIDER PAST THE FILL KEEPS ITS UNFILLED SLOTS, and a T7 case caught the version that did
+not.** `[1, 51]` typed into a five-card box means section 2 starts at the fifty-first CARD, and
+answering "the sixth" would quietly delete a plan. `Position._divider` adds one for each slot
+between the box's high-water mark and the divider, so the two definitions agree everywhere
+inside a box that has grown into its own dividers.
+
+**THE STORED LAYOUT IS STILL IN INDEX SPACE AND IS NEVER REWRITTEN.** Same argument as the
+index itself: a divider list rewritten on every sale is an answer that can drift and that
+nobody can correct. Only the rendering maps.
+
+**SO THE DIVIDERS EDITOR MOVED TO COUNT SPACE, and this is the piece the owner's own question
+exposed.** `BoxOps.tsx` seeded the field from the raw `record.sections` and posted the same
+list, so under this change an operator would have been typing index numbers that appear
+nowhere else in the product. It seeds from `sections_detail[].start` now, and `do_put_box` maps
+what comes back through `join.divider_index` before `check_sections` sees it.
+**`divider_index` answers the index of the card the section starts at** — which is what
+`open_section` already writes when the operator presses `S` at the box, so a divider typed in
+and a divider put in at the feeder are the same kind of number. **Ordinal 1 is always index 1**,
+even where card 1 itself has sold, because `check_sections`' rule is a fact about the front of a
+box rather than about its contents. Property-tested over 4,000 random boxes: the round trip is
+exact and the result is always sorted, unique and starting at 1.
+
+### A departed card is in no slot
+
+**IT DOES NOT KEEP THE NUMBER IT HELD**, because that number belongs to the card that closed up
+behind it, and answering it would send a person to the wrong slot. `join.departed_label` renders
+`Box 3 · departed`, beside `pooled_label` in the same file for the reason that helper's own
+comment gives: the string that REPLACES a label belongs next to the label formula.
+
+**IT NAMES NO DOOR.** `sold` and `retired` are different departures with different reversals and
+both are already on the record beside this string. A second spelling of the state inside the one
+label formula is what `pooled_label` refuses one paragraph up.
+
+**ITS SECTION STAYS.** The numbers go and the section does not: a departed record belongs to a
+real part of a real box, the walk groups by it, and nulling it would file every sold card under
+a third heading that is not a section.
+
+**A RECEIPT IS UNTOUCHED AND MUST STAY SO.** `Inventory.tsx` and `Fulfillment.tsx` both snapshot
+the label BEFORE the write, so *"Sold Box 3 · Section 1 · Card 7"* still names where the operator
+just was. The departed string is for the record afterwards, not for the moment.
+
+### The denominator follows, which amends D20
+
+**`_denominator` IS RETIRED AND THE ANSWER IS THE CARDS ON HAND, sealed or open.** Forced by the
+numerator rather than chosen: `slot` counts cards, so dividing it by a frozen capacity draws a
+card at a percentage of a box it is not at, drifting further wrong with every sale. On a
+543-card box that has sold 200, `#100 of 543` puts a thumb a third of the way from the card.
+
+**What the function bought is now held structurally, which is stronger.** It existed so two
+renderers could not disagree; `_Places.view` computes the count from the walk it already runs and
+`_box_row` reads it off the SAME instance. One scan, two renderers, nothing to keep in step.
+
+**`capacity` KEEPS ITS D20 JOB AND LOSES THIS ONE.** It records how full the box got. `GET /boxes`
+still reports it, `close_box` still freezes it at the high-water mark, and the seal control still
+names that number before it is pressed — what it no longer is, is what anything divides by. A
+sealed box's identity line carries both (`542 of 543 sealed`), because one of them beside a bar
+reading `#40 of 542` would be the second-renderer failure with two numbers instead of one.
+
+**`GET /boxes` gains `on_hand`**, and `fill`, `next_index`, `cards`, `sold` and `retired` are
+untouched — `BoxOps` promises its census greps to `inventory.json` and it still does.
+
+### A live defect this forced, and the rule that fixes it
+
+**`store/queues.py:QueueEntry.label` IS A STORED RENDERING AND NOTHING HAD EVER RECOMPUTED IT.**
+Written once by `cli/resolve.py` at join time, served verbatim by `GET /queues`, drawn by
+`ReviewQueue.tsx`. Measured on the owner's real store: **15 of 92 entries carry a label drawn
+against `CARDS_PER_SECTION = 25`**, the divider rule D10's amendment deleted on 2026-08-29. Box 1
+declares no dividers at all and its queue holds both `Box 1 · Section 1 · Card 108` and
+`Box 1 · Section 5 · Card 18` — a section that does not exist.
+
+**IT IS LATENT RATHER THAN LIVE TODAY, AND SAYING SO IS THE POINT OF MEASURING IT.** All 92 of
+those entries are `cleared_by_human`, so `open_entries` serves none of them and nothing has
+been drawing a wrong label on screen. What the measurement establishes is the SHAPE: the field
+is a rendering that was written down, nothing has ever recomputed it, and a rule that moved
+left it behind. D28's `Queue.reopen` is the path that would surface one, and the next join
+writes fresh entries that go stale the next time a layout changes.
+
+**Re-rendered through the fix, 74 of the 92 come out differently** — the 15 stale ones, the
+retired card at `2/95` which is now `Box 2 · departed`, and the rest renumbered by the cards
+that have left in front of them.
+
+**D56 states the fix for exactly this shape one register up**, about a run's box name: never write
+down an answer nobody can correct; join it when it is read. `do_queues` re-renders the label from
+the live inventory through the same `_Places` every other screen uses. The stored field keeps its
+value on disk so nothing already written moves, and no route serves it.
+
+**AND `cli/resolve.py` BUILT EVERY `Position` WITH NO LAYOUT AT ALL**, which is older than D58 and
+is fixed with it: a box-2 queue entry was written as `Section 1 · Card 300` where the app rendered
+`Section 4 · Card 48`. Two renderers, two answers, and nothing had ever compared them. `box_views`
+is that walk, and **T7 asserts the two spell one address on a real card** — the same shape
+`make port-agreement` uses for the other pair that has to agree.
+
+### What is deliberately not changed
+
+- **`next_index`, `box_fill`, `allocate_capture` and the store schema.** No migration. D10's
+  permanent gap survives intact in the one place it was ever load-bearing — the allocator — which
+  is why T7's two hardest cases, `check_allocator`'s and `check_mark_sold`'s, are untouched.
+- **`renumber_blocked`.** Its sold/retired clause's stated reason weakens — the box already closes
+  up over a departure, so there is no gap left to close — but relaxing a refusal is its own
+  decision, and this one would let the mid-box delete shift indices across records that are
+  history and commitments. The refusal stands; the copy on `BoxBrowse` that recited the old
+  reason is corrected, because a refusal explaining itself with something nobody can check any
+  more teaches an operator to read past it.
+- **D52, `photoUrl` and `?card=`.** No index moves, so there is no fourth occupant-changing
+  operation.
+- **D30's `neighbors`.** Kept, and still worth having for confirming a slot. `section_gaps` is
+  structurally zero for a consolidated box and `placeSentence` already omits the phrase at zero.
+
+### What it costs
+
+**A CORRUPT RECORD NOW BLANKS LABELS RATHER THAN ONLY THE DECORATION, STORE-WIDE.** T7 asserted
+the opposite until today — *"one bad record does not take the route down: every other row keeps
+its label"* — on the ground that a label needs only this record's own two integers and the box's
+layout. That ground is exactly what this removed. A record nobody can place might be in this box
+and might be on hand, so the count is unknown; answering the index-space label instead would put
+a second numbering system on the screen with nothing saying which it is, and a person sent to
+`Card 40` in a box that has sold three would open the wrong slot and see nothing wrong.
+
+**Narrowing the blast radius per box is the fix to reach for if that bites**, and it is not taken
+here because it would be an untested branch added to make a case go green: a record whose INDEX
+will not read could be attributed to its box and poison only that one, where a record whose BOX
+will not read could be in any of them.
+
+**WHAT WOULD REOPEN THIS: a box whose slots are fixed.** Everything above rests on the physical
+fact that a card pulled out of a stack lets the cards behind it slide forward — the same premise
+D10 ruling 1 already leans on for the mid-box delete. A binder, a sleeved page or any storage
+where a slot stays empty is a box this numbering describes wrongly, and the honest answer then is
+per-box rather than global: the flag would sit on `Box` beside `sections`, and the seal gate the
+owner dropped is the cheapest version of it.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

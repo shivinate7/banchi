@@ -909,15 +909,36 @@ def check_server_routes(checks: Checks) -> None:
             "names a position that does not exist, which is the one thing a label may never "
             "do (D10)",
         )
-        # `.get` rather than an index, so a MISSING label is reported as the failure it is
-        # instead of raising a KeyError that would hide every check behind it. The
-        # assertion itself is unchanged and is not softened: a neighbour's label is either
-        # the one `join.Position` renders or this line is red.
+        # THIS CASE SAID THE OPPOSITE UNTIL D58 AND THE REVERSAL IS THE POINT. It read
+        # "one bad record does not take the route down: every other row keeps its label",
+        # on the stated ground that "a label needs only this record's own two integers and
+        # the box's layout". That ground is exactly what D58 removed: a card's number is
+        # now its place among the cards ON HAND in its box, so rendering one means counting
+        # the whole box, and a record nobody can place might be in this box and might be on
+        # hand. Answering the old index-space label instead would put a SECOND NUMBERING
+        # SYSTEM on the screen with nothing saying which one it is — a person sent to
+        # `Card 40` in a box that has sold three would open the wrong slot and see nothing
+        # wrong. No label is the honest answer, and it is the same call `view` already
+        # makes for a layout that will not validate.
+        #
+        # WHAT IT COSTS IS REAL AND IS RECORDED RATHER THAN DESIGNED AWAY: the walk
+        # degrades store-wide, so one unreadable record now blanks every label in the
+        # inventory rather than only the decoration. Narrowing it per box is the fix to
+        # reach for if that ever bites — a record whose INDEX will not read could be
+        # attributed to its box and poison only that one, where a record whose BOX will
+        # not read could be in any of them. Not done here, because it would be an
+        # untested branch added to make a case go green.
+        checks.ok(
+            "label" not in broken_inventory["cards"]["3/2"],
+            "and its NEIGHBOURS lose their labels too, because the number is a count of "
+            "the cards in the box and one of them cannot be counted (D58) — a card that "
+            "cannot be placed might be in this box and might be on hand",
+        )
         checks.equal(
-            broken_inventory["cards"]["3/2"].get("label"),
-            join.Position(3, 2).label,
-            "and one bad record does not take the route down: every other row keeps its "
-            "label, on the route the app polls",
+            broken_inventory["cards"]["3/2"]["place"]["box_total"],
+            0,
+            "and the denominator goes with it rather than standing alone: the count and "
+            "the numbers drawn against it come off one walk",
         )
 
 
@@ -6060,11 +6081,18 @@ def check_place_neighbors(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(5))
         capture_server.do_mark_sold(5, 2, {})
         place = capture_server.do_inventory()["cards"]["5/3"]["place"]
+        # 50 UNTIL D58 AND 49 SINCE, WHICH IS ONE DEPARTED CARD AND NOT A LOST PLAN. The
+        # divider is declared at index 51 and the box has sold one card, so it now stands
+        # in front of the FIFTIETH card rather than the fifty-first slot; section 1 runs to
+        # the forty-ninth. `Position._divider` is what keeps the other 45 slots — the ones
+        # the box has not grown into — counting for one card each, so a layout typed in
+        # before the box was filled still says what was typed.
         checks.equal(
             place["section_end"],
-            50,
-            "a declared divider past the fill is still the section's stated end — the "
-            "block says 50 while the box holds five cards",
+            49,
+            "a declared divider past the fill still carries its unfilled slots — the "
+            "block says the section ends at 49, one short of the declared 50, because "
+            "one card has left the box in front of it (D58)",
         )
         checks.equal(
             place["section_gaps"],
@@ -6133,6 +6161,15 @@ def check_place_neighbors(checks: Checks) -> None:
             "box 7's record too, because a walk that cannot read one record cannot vouch "
             "for any neighbour it names anywhere",
         )
+        # THE LABEL NOW DEGRADES WITH THE DECORATION AND IT USED NOT TO, which is the one
+        # place D58 is visible in this file's degrade story and the reversal of what this
+        # case asserted. It required the label, section, card and section_start to survive
+        # a corrupt record in a DIFFERENT box, on the ground that "a label needs only this
+        # record's own two integers and the layout". Both halves of that ground are gone:
+        # the number is now a count of the cards on hand in this box, so it needs the walk,
+        # and the walk is what the corrupt record broke. `located` is the one field that
+        # survives, because whether this game has slots at all is a registry question and
+        # not a counting one.
         checks.equal(
             [
                 degraded["located"],
@@ -6141,16 +6178,14 @@ def check_place_neighbors(checks: Checks) -> None:
                 degraded["card"],
                 degraded["section_start"],
             ],
-            [
-                intact["located"],
-                intact["label"],
-                intact["section"],
-                intact["card"],
-                intact["section_start"],
-            ],
-            "while the label and the rest of the block survive untouched: a label needs "
-            "only this record's own two integers and the layout, and one bad row must "
-            "not take the route the app polls down to a row of nulls",
+            [True, None, None, None, None],
+            "the label and every number drawn from it degrade WITH the walk (D58): they "
+            "count the cards in the box, and one record in the store could not be counted",
+        )
+        checks.ok(
+            intact["label"] is not None and intact["card"] is not None,
+            "where the intact read a moment earlier answered all of them — so this is the "
+            "walk failing, not the box being unlabellable",
         )
         # `section_end` WAS IN THAT LIST AND CAME OUT ON 2026-08-29, which is the one place
         # deleting the 25-card default is visible in this file's degrade story. Box 4
@@ -6167,17 +6202,252 @@ def check_place_neighbors(checks: Checks) -> None:
             "one section ends where the box does — the same degrade `fraction` takes, and "
             "not the label's",
         )
+        # [6, 6] UNTIL D58 AND [3, 3] SINCE. Box 4 holds six records: two terminal (the two
+        # this section already counts as its gaps), one pooled code card that never had a
+        # slot at all (D24), and three cards. The fill was the denominator and the cards on
+        # hand are — which is D58's arithmetic seen from the box rather than from a card,
+        # and it counts BOTH exclusions because both are answers to "what would a person
+        # opening this box count".
         checks.equal(
             [intact["section_end"], intact["box_total"]],
-            [6, 6],
-            "where an intact read says that section ends at the fill: no divider is "
-            "invented past the cards that exist (D10, amended)",
+            [3, 3],
+            "where an intact read says that section ends at the CARDS ON HAND: no divider "
+            "is invented past the cards that exist (D10, amended), and no slot is counted "
+            "for a card that has left (D58)",
+        )
+        checks.ok(
+            "label" not in rows["4/3"],
+            "and the flat label on the row degrades with the block rather than falling "
+            "back to an index-space one — omitted exactly as a record whose box will not "
+            "coerce has always been, so `positionLabel` answers null and no screen is "
+            "handed a number from the numbering system this change replaced",
+        )
+
+
+# ---------------------------------------------------- D58: the numbers count the cards
+
+
+def check_consolidated_numbering(checks: Checks) -> None:
+    """A card's number is its place among the cards IN the box, not among the slots. D58.
+
+    THE PROPERTY, AND IT IS ONE SENTENCE: sell card 17 and the card behind it becomes card
+    17. `docs/specs/order-flow.md` §10.4 spells out what that replaces — *"`Card 17` is the
+    seventeenth slot, not the seventeenth card you can count"* — and D30 has been waiting
+    since 2026-08-23 for a physical marker to explain the difference to whoever is holding
+    the box. There is nothing left to explain.
+
+    THE STORED INDEX NEVER MOVES AND THAT IS ASSERTED HERE TOO. This is a rendering change:
+    no photograph is renamed, no queue entry re-keyed, no history line changes subject, and
+    `next_index` is the high-water mark it has always been. D10's permanent gap survives
+    intact in the one place it was ever load-bearing — the allocator — which is why the two
+    hardest cases in this file (`check_allocator`'s and `check_mark_sold`'s) are untouched
+    by all of this.
+
+    THE SECTION HALF IS THE HALF THAT IS EASY TO GET WRONG, so it is asserted from both
+    sides: a sale in an EARLIER section must leave a later section's card numbers alone,
+    and a sale in the SAME section in front of a card must move it by one. Mapping only the
+    cards and not the dividers would pass the second and fail the first, and a build that
+    mapped neither would pass the first and fail the second.
+    """
+    checks.note("")
+    checks.note("D58 — THE NUMBER COUNTS THE CARDS IN THE BOX")
+
+    with isolated_home():
+        # Two sections, six cards each: [1, 7] over twelve.
+        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        for _ in range(12):
+            capture_server.do_capture(capture_payload(3))
+
+        def label(index: int) -> object:
+            return capture_server.do_inventory()["cards"][f"3/{index}"].get("label")
+
+        def place(index: int) -> dict:
+            return capture_server.do_inventory()["cards"][f"3/{index}"]["place"]
+
+        checks.equal(
+            [label(1), label(7), label(12)],
+            [
+                "Box 3 · Section 1 · Card 1",
+                "Box 3 · Section 2 · Card 1",
+                "Box 3 · Section 2 · Card 6",
+            ],
+            "a box nothing has left renders exactly as it did before D58 — the two spaces "
+            "coincide until the first departure, which is what makes this additive",
+        )
+
+        # --- a departure in section 1 -----------------------------------------------------
+        capture_server.do_mark_sold(3, 3, {})
+        checks.equal(
+            label(4),
+            "Box 3 · Section 1 · Card 3",
+            "SELL CARD 3 AND THE CARD BEHIND IT BECOMES CARD 3 — the whole of D58 in one "
+            "assertion, and the sentence `docs/specs/order-flow.md` §10.4 says could not "
+            "be true while a label named a slot",
         )
         checks.equal(
-            rows["4/3"]["label"],
-            join.Position(4, 3).label,
-            "and the flat label on the row is still the one pipeline/join.py renders — "
-            "the decoration degrades ALONE",
+            label(7),
+            "Box 3 · Section 2 · Card 1",
+            "AND SECTION 2 IS UNDISTURBED: a sale in an earlier section moves the divider "
+            "and the cards behind it by the same one, so the number WITHIN a section is "
+            "the difference between two things that both moved. Mapping the cards and not "
+            "the dividers would read `Card 2` here",
+        )
+        checks.equal(
+            [place(4)["slot"], place(4)["index"], place(7)["slot"], place(7)["index"]],
+            [3, 4, 6, 7],
+            "and `slot` and `index` are both on the wire and both true: the number a "
+            "person counts to, and the store key every write still aims by",
+        )
+        checks.equal(
+            capture_server.do_inventory()["cards"]["3/3"].get("label"),
+            "Box 3 · departed",
+            "the DEPARTED card does not keep the number it held — that number belongs to "
+            "the card that closed up behind it, and answering it would send someone to the "
+            "wrong slot. It says where the record belongs and that there is no slot, which "
+            "is the same shape a pooled card's line takes for the same reason (D24)",
+        )
+        checks.equal(
+            place(3)["label"],
+            join.departed_label(3),
+            "and its block says so in the one composer that owns that string, beside "
+            "`pooled_label` — a card with no slot, said the same way both times it happens",
+        )
+        checks.equal(
+            [place(3)["slot"], place(3)["card"], place(3)["fraction"]],
+            [None, None, None],
+            "with every number that would have counted it null rather than stale",
+        )
+
+        # --- a departure in the SAME section, in front ------------------------------------
+        capture_server.do_mark_sold(3, 8, {})
+        checks.equal(
+            label(9),
+            "Box 3 · Section 2 · Card 2",
+            "a sale in this card's OWN section and in front of it moves it by one — the "
+            "other half of the pair, and the half a build that mapped nothing would pass",
+        )
+        checks.equal(
+            label(4),
+            "Box 3 · Section 1 · Card 3",
+            "while section 1 is untouched by a sale behind it: the map runs one way",
+        )
+
+        # --- the index never moved --------------------------------------------------------
+        inventory = Store().read().inventory
+        checks.equal(
+            inventory.next_index(3),
+            13,
+            "AND NOT ONE INDEX MOVED. `next_index` is the high-water mark it always was, "
+            "so D10's permanent gap is intact where it was ever load-bearing — this is a "
+            "rendering, and the allocator never heard about it",
+        )
+        checks.ok(
+            capture_server.photo_path(3, 4).is_file()
+            and inventory.get("3/4") is not None
+            and inventory.get("3/3") is not None,
+            "the photograph is at the slot it was written to, and both records survive: "
+            "no rename, no re-key, no migration",
+        )
+
+        # --- retired counts the same as sold ----------------------------------------------
+        capture_server.do_retire(3, 5, {"reason": "damaged"})
+        checks.equal(
+            label(6),
+            "Box 3 · Section 1 · Card 4",
+            "a RETIRED card is counted out exactly as a sold one is — `master.TERMINAL_"
+            "STATES` is the pair, and both mean the card is not in the box any more",
+        )
+
+        # --- the box's own numbers follow -------------------------------------------------
+        row = capture_server.do_boxes()["boxes"][0]
+        checks.equal(
+            [row["on_hand"], row["cards"], row["fill"], row["next_index"]],
+            [9, 12, 12, 13],
+            "`on_hand` is what the box HOLDS and the three beside it are unchanged: "
+            "`cards` counts records, `fill` is the high-water mark, and `BoxOps` still "
+            "greps those two to `inventory.json`",
+        )
+        checks.equal(
+            place(12)["box_total"],
+            row["on_hand"],
+            "and the denominator on a card's block is the same number as the box row's — "
+            "one walk, two renderers, which is what `_denominator` used to buy by being "
+            "one function",
+        )
+        checks.equal(
+            [(d["section"], d["start"], d["end"], d["count"]) for d in row["sections_detail"]],
+            [(1, 1, 4, 4), (2, 5, 9, 5)],
+            "and `sections_detail` is in the same space as the labels, so the dividers "
+            "editor seeds with the numbers the screen is showing",
+        )
+
+        # --- the editor round-trips through the inverse -----------------------------------
+        # What the field would show, sent straight back: the store must be unchanged, which
+        # is the only property that makes a count-space editor safe over an index-space
+        # store. Mutation-tested by sending the RAW `sections` instead, which moves it.
+        before = list(Store().read().inventory.sections_for(3))
+        capture_server.do_put_box(3, {"sections": [d["start"] for d in row["sections_detail"]]})
+        checks.equal(
+            list(Store().read().inventory.sections_for(3)),
+            before,
+            "the layout the editor was seeded with, sent back unchanged, leaves the STORE "
+            "unchanged — `join.divider_index` is `Position._divider` run backwards and the "
+            "round trip is exact",
+        )
+
+        # Moving a divider one card later lands one index later, not one card later.
+        capture_server.do_put_box(3, {"sections": [1, 6]})
+        checks.equal(
+            list(Store().read().inventory.sections_for(3)),
+            [1, 9],
+            "and a divider moved to the 6th CARD is stored at the INDEX THAT CARD SITS AT "
+            "— 9, not 6, because three cards in front of it have left. That is the index "
+            "`open_section` would have written had the operator pressed `S` there, so a "
+            "divider typed in and a divider put in at the feeder are the same number",
+        )
+        capture_server.do_put_box(3, {"sections": before})
+
+        # --- an emptied section keeps its number ------------------------------------------
+        for index in (7, 9, 10, 11, 12):
+            if Store().read().inventory.get(f"3/{index}").state == master.CAPTURED:
+                capture_server.do_mark_sold(3, index, {})
+        row = capture_server.do_boxes()["boxes"][0]
+        checks.equal(
+            [(d["section"], d["count"]) for d in row["sections_detail"]],
+            [(1, 4), (2, 0)],
+            "a section every card has left keeps its NUMBER and reports zero: the divider "
+            "is still in the plastic, and renumbering the sections behind it would send "
+            "someone to the wrong one",
+        )
+
+        # --- the report and the screen spell one address ----------------------------------
+        # THE LOAD-BEARING CASE. `cli/resolve.py:box_views` and `_Places._walk` are two
+        # implementations of one walk, in one language but in two modules that cannot import
+        # each other's caching, and a card's number is now a property of the whole box — so
+        # a reporter that renders without the walk answers in the numbering system D58
+        # replaced and prints it beside a screen that does not. Same shape `make
+        # port-agreement` uses for the other pair that must agree.
+        #
+        # It also fixes a defect OLDER than D58, which is why the box here declares a layout:
+        # every `Position` built in `cli/resolve.py` used to pass no layout at all, so a
+        # box-2 queue entry read `Section 1 · Card 300` where the app read `Section 4 · Card
+        # 48`. Nothing had ever compared the two.
+        views = resolve.box_views(Store().read().inventory)
+        checks.equal(
+            [views[3].at(3, i).label for i in (4, 6)],
+            [label(4), label(6)],
+            "THE RUN REPORT AND THE SCREEN RENDER ONE ADDRESS — two walks, in two modules, "
+            "asserted equal on real cards rather than trusted",
+        )
+        checks.equal(
+            views[3].at(3, 3).label,
+            place(3)["label"],
+            "including for a departed card, where the two could most easily disagree",
+        )
+        checks.equal(
+            views[3].on_hand,
+            row["on_hand"],
+            "and they count the same cards on hand — the denominator is the same walk",
         )
 
 
@@ -10615,6 +10885,7 @@ def run() -> Result:
     check_box_claims(checks)
     check_place_neighbors(checks)
     check_open_section(checks)
+    check_consolidated_numbering(checks)
     check_concurrency(checks)
     check_origin_gate(checks)
     check_photo_cache(checks)

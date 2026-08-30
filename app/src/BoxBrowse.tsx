@@ -3044,13 +3044,24 @@ function CardOps({
           <p className="browse-note-text">
             This deletes the record, the photograph and the sidecar for this card, and{' '}
             <strong>slides every card behind it in box {row.card.box} down one index</strong> —
-            so every label above it changes. There is no undo, and unlike an undone capture this
-            card is not necessarily still in your hand.
+            so every stored position above it changes, and so does the photograph each one is
+            named after. There is no undo, and unlike an undone capture this card is not
+            necessarily still in your hand.
           </p>
+          {/* THE SECOND HALF OF THIS SENTENCE USED TO SAY "shifting across a permanent gap
+              would close a gap that means something", which was the refusal's own reason
+              until D58. It is not any more: the box already closes up over a departed card
+              on every screen, so there is no gap left to close. The refusal stands and is
+              deliberately unchanged — relaxing it would let this route shift indices across
+              records that are history and commitments, which is its own decision and not a
+              consequence of this one — so what is corrected here is the explanation, not the
+              rule. A refusal that recites a reason nobody can check any more teaches an
+              operator to read past it. */}
           <p className="browse-note-text">
-            It is refused if any card behind it has been sold, retired or listed: shifting
-            across a permanent gap would close a gap that means something, and a listed
-            card&rsquo;s position is already written into a file somebody will read.
+            It is refused if any card behind it has been sold, retired or listed. Those
+            records are departures and commitments rather than clutter, and this route moves
+            the stored index a photograph and an import file are named by &mdash; not the
+            number on the screen, which already counts past a departed card.
           </p>
           <p className="browse-machine">
             aiming at capture id {row.card.capture_id ?? 'null (written before ids existed)'}

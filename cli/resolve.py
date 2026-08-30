@@ -67,6 +67,10 @@ class NotJoined:
     box: int
     index: int
     read: Dict[str, object] = field(default_factory=dict)
+    # D58's label coordinates for this card's box, or an empty view for a caller that has
+    # no store to read — which renders in index space, exactly as this file did before.
+    # Defaulted so a hand-built record (T7 builds several) reads as it always did.
+    view: join.BoxView = field(default_factory=join.BoxView)
 
     @property
     def label(self) -> str:
@@ -75,7 +79,7 @@ class NotJoined:
         # `misc` — today's only occupant of this type — is located, so its lines are
         # byte-identical; the branch exists for the day a non-located game is also
         # uncatalogued.
-        return join.place_text(self.game, join.Position(self.box, self.index))
+        return join.place_text(self.game, self.view.at(self.box, self.index))
 
     @property
     def describe(self) -> str:
@@ -100,12 +104,16 @@ class PreJoinFailure:
     # position label. Defaulted so a hand-built failure — T7 builds them — reads as the
     # backfill would read it.
     game: str = games.DEFAULT_GAME
+    # D58's label coordinates for this card's box, or an empty view for a caller that has
+    # no store to read — which renders in index space, exactly as this file did before.
+    # Defaulted so a hand-built record (T7 builds several) reads as it always did.
+    view: join.BoxView = field(default_factory=join.BoxView)
 
     @property
     def label(self) -> str:
         if self.box is None or self.index is None:
             return f"{Path(self.photo).name if self.photo else self.key} (no position)"
-        return join.place_text(self.game, join.Position(self.box, self.index))
+        return join.place_text(self.game, self.view.at(self.box, self.index))
 
     @property
     def describe(self) -> str:
@@ -360,6 +368,63 @@ def _rarity_claim(raw) -> Optional[Tuple[str, ...]]:
     return cleaned or None
 
 
+def box_views(inventory: master.Inventory) -> Dict[int, join.BoxView]:
+    """Every box's D58 label coordinates, read off the live store in one pass.
+
+    THE REPORT AND THE SCREEN HAVE TO SPELL ONE ADDRESS. A card's number counts the cards on
+    hand in its box, so a reporter that renders without this answers in the numbering system
+    D58 replaced — and prints it beside a screen that does not, with nothing saying which is
+    which. `server/capture_server.py:_Places._walk` is the other implementation of this walk
+    and the two are asserted equal on a real card in T7, which is the same shape
+    `make port-agreement` uses for the other pair of languages that must agree.
+
+    THIS FIXES A DEFECT OLDER THAN D58 ON ITS WAY PAST. Every `Position` built in this file
+    used to pass NO layout at all, so a box-2 queue entry was written as `Section 1 · Card
+    300` where the app rendered `Section 4 · Card 48`. Two renderers, two answers, and
+    nothing had ever compared them.
+
+    A POOLED CARD IS SKIPPED BY RULING (D24) and a TERMINAL one by state (D26/D10) — the
+    same two exclusions `_walk` makes, for the same two reasons: one never had a slot and
+    the other has left it. A record that will not coerce degrades its whole box to index
+    space rather than being skipped past, because a card nobody can place might be one of
+    the cards being counted.
+    """
+    grouped: Dict[int, List[Tuple[int, bool]]] = {}
+    broken: set = set()
+    for card in inventory.cards.values():
+        try:
+            at = (int(card.box), int(card.index))
+        except (TypeError, ValueError):
+            # Which box it belonged to is exactly what could not be read, so every box
+            # loses its count — `_walk`'s own store-wide degrade, for its reason.
+            return {}
+        game = str(getattr(card, "game", None) or games.DEFAULT_GAME)
+        try:
+            if not games.get(game)["located"]:
+                continue
+        except games.UnknownGame:
+            pass  # unregistered reads as located, exactly as `join.is_located` answers
+        grouped.setdefault(at[0], []).append(
+            (at[1], card.state not in master.TERMINAL_STATES)
+        )
+    views: Dict[int, join.BoxView] = {}
+    for number, rows in grouped.items():
+        if number in broken:
+            continue
+        try:
+            sections = inventory.sections_for(number)
+        except master.BadSections:
+            # A layout that will not validate means the section and card numbers are
+            # unknown, which is `_Places.view`'s call and not a new one.
+            sections = ()
+        views[number] = join.BoxView(
+            sections=sections,
+            occupied=tuple(i for i, on_hand in sorted(rows) if on_hand),
+            departed=tuple(i for i, on_hand in sorted(rows) if not on_hand),
+        )
+    return views
+
+
 def _committed_keys(inventory: master.Inventory) -> set:
     """Positions the join must treat as copies TCGplayer already holds or has pending.
 
@@ -434,7 +499,11 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     # Positions are not read here beyond the box number, and `load` realigns them a moment
     # later — so this reads the payload raw rather than paying for the photo digests twice.
     payload = run.read_identifications()
-    held_cards = Store().read().inventory.cards
+    inventory = Store().read().inventory
+    held_cards = inventory.cards
+    # The same coordinates `load` renders in, off the same store, so a refusal names cards
+    # by the numbers the operator will see on the screen they go looking on (D58).
+    views = box_views(inventory)
     needed: "OrderedDict[str, List[str]]" = OrderedDict()
     for key, record in sorted((payload.get("cards") or {}).items()):
         box, index = record.get("box"), record.get("index")
@@ -452,7 +521,9 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
         # them, and a pooled game's cards are named by the pooled fact and their key — the
         # label is the one string the pooled ruling says may never be printed for them.
         needed.setdefault(str(game), []).append(
-            join.place_text(str(game), join.Position(box=int(box), index=int(index)))
+            join.place_text(
+                str(game), views.get(int(box), join.BoxView()).at(box, index)
+            )
         )
     # Registry order, so refusals and reports list games the way every picker does.
     return OrderedDict(
@@ -851,6 +922,9 @@ def load(
     snapshot = Store().read()
     held_cards = snapshot.inventory.cards
     committed_keys = _committed_keys(snapshot.inventory)
+    # D58's label coordinates, off the same snapshot for the same reason — one read, and
+    # every position this run renders counted against the box as it stands right now.
+    views = box_views(snapshot.inventory)
 
     # Grouped by game as they are built: each game's cards walk their own catalog and
     # nobody else's, which is the partition D25 asks for. Within a game the payload's
@@ -911,6 +985,7 @@ def load(
                     index=index,
                     read={"status": record.get("status"), "error": record.get("error")},
                     game=str(game),
+                    view=views.get(int(box), join.BoxView()),
                 )
             )
             continue
@@ -961,7 +1036,7 @@ def load(
         )
         grouped.setdefault(str(game), []).append(
             join.IdentifiedCard(
-                position=join.Position(box=int(box), index=int(index)),
+                position=views.get(int(box), join.BoxView()).at(box, index),
                 name=identification.get("name") or "",
                 number=number,
                 printed_total=total if number else None,

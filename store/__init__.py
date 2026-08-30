@@ -40,7 +40,8 @@ So `write()` takes the exclusive lock AND re-reads from disk inside it. Re-readi
 half that actually matters; a lock around a stale snapshot loses the update just as quietly.
 
 `history.jsonl` is append-only and is the audit trail. D10 makes it worth keeping: positions
-are never renumbered and sold cards leave permanent gaps, so the history IS inventory truth
+are never renumbered and sold cards leave permanent gaps IN THE INDEX — D58 closes the gap
+in the LABEL and touches nothing here — so the history IS inventory truth
 over time, in a way the current-state file cannot be.
 """
 

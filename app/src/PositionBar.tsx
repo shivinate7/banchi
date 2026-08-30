@@ -83,7 +83,14 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
   const total = place.box_total
   if (!Number.isFinite(total) || total <= 0) return []
 
-  const holds = (start: number, end: number) => place.index >= start && place.index <= end
+  /* OFF `slot`, NOT `index` (D58). Every bound in this function is a card COUNT — the
+   * server's `box_total`, `section_start` and `sections_detail` all count the cards in the
+   * box — so testing the store key against them would mark the wrong span the moment
+   * anything in the box has been sold. Null means the card has no place among them, which
+   * is a departed card or a box the server could not count, and nothing is marked. */
+  const at = place.slot
+  const holds = (start: number, end: number) =>
+    at !== null && at >= start && at <= end
 
   if (sections !== undefined && sections.length > 0) {
     const spans: Span[] = []
@@ -130,13 +137,19 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
  * exactly like a correct answer. The track draws empty and the sentence says so instead.
  */
 export function sentenceOf(place: Place): string {
-  const { index, box_total, box_closed, fraction } = place
+  const { slot, box_total, box_closed, fraction } = place
 
+  /* `#N` IS THE CARD'S NUMBER AMONG THE CARDS IN THE BOX (D58), not its store key. The
+   * denominator counts cards, so the numerator has to; `#40 of 30` is what reading `index`
+   * here would draw on a box that has sold ten. A card with no number among them — departed,
+   * or a box that could not be counted — has no sentence of this shape, and saying so is the
+   * same refusal the null-fraction line beneath it already makes. */
+  if (slot === null) return 'where this sits in the box is not known yet'
   if (fraction === null || !Number.isFinite(box_total) || box_total <= 0) {
-    return `#${index} · where this sits in the box is not known yet`
+    return `#${slot} · where this sits in the box is not known yet`
   }
-  if (box_closed) return `#${index} of ${box_total} · ${Math.round(fraction * 100)}% in`
-  return `#${index} of ${box_total} so far`
+  if (box_closed) return `#${slot} of ${box_total} · ${Math.round(fraction * 100)}% in`
+  return `#${slot} of ${box_total} so far`
 }
 
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
