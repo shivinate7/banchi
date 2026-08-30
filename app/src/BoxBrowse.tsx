@@ -6,6 +6,7 @@ import { isEditableTarget } from './keys'
 import type {
   BoxRecord,
   InventoryCard,
+  PricingPayload,
   QueueEntryWire,
   QueueSnapshot,
   RemoveResult,
@@ -18,6 +19,7 @@ import {
   getBoxes,
   getQueues,
   getInventory,
+  getPricing,
   photoUrl,
   removeCardInPlace,
   reshootPhoto,
@@ -414,6 +416,87 @@ type BoxBrowseProps = {
  * it byte for byte, and both of those comments named server.ts as the destination; the third
  * copy is what made the move due. */
 
+/* BRING A ROW INTO VIEW WITHOUT MOVING THE PAGE, and the page is the whole point.
+ *
+ * `Element.scrollIntoView` scrolls EVERY scrollable ancestor, and the last of them is the
+ * document. That is exactly wrong on this screen, and it is wrong in a way `.browse-map`
+ * makes worse rather than better: the walk's column is `position: sticky`, so scrolling the
+ * document cannot move a row inside it — the browser computes a delta from the row's current
+ * geometry, scrolls the page by it, and the row stays exactly where it was. The page moves
+ * and nothing is revealed.
+ *
+ * MEASURED, and it is the owner's report of 2026-08-29 — "picking from a copy of a card moves
+ * the screen down a little to where it hides the top bars". At 1280x720 over the two-box
+ * fixture, with the page at rest: pressing a copy's walk-to took `window.scrollY` 0 -> 280,
+ * which is the document's whole scroll range, putting the nav at y=-280 and the screen's own
+ * header at y=-218. The landing row was already going to be visible; what the press bought was
+ * losing every control above the fold.
+ *
+ * SO THE SCROLL IS DONE BY HAND, UP TO A BOUNDARY. Each scrollable ancestor from the row to
+ * `boundary` inclusive gets its `scrollTop` adjusted; nothing above `boundary` is touched, so
+ * the document scroller is out of reach by construction rather than by a flag that could be
+ * dropped. `scroll-margin-top` on the row is honoured because `.browse-row` sets it (28px) to
+ * clear its own sticky section header, and a hand-rolled scroll that ignored it would park the
+ * landing underneath that header — the failure the stylesheet's declaration exists to prevent.
+ *
+ * THE INNERMOST SCROLLER TAKES `mode` AND EVERY OUTER ONE TAKES `nearest`. `start` is a
+ * statement about where the row sits in the LIST, which is what a jump wants; asking the same
+ * of the column outside it would drag the search field and the box strip off the top of a
+ * column that is only ever scrolled to reach the box's editors.
+ *
+ * Rects are re-read per scroller, innermost first, because scrolling one moves the row. */
+/** FOCUS MUST NOT MOVE THE PAGE EITHER, which is the second door into the same defect.
+ *  `HTMLElement.focus()` scrolls the focused element into view by default — the document
+ *  included — so the two presses that hand the keys to the walk (`selectShelf`, and the
+ *  landing of a walk-to) could undo `scrollWithin` a line after it ran. Measured, neither
+ *  fires today: `.browse-map` is sticky at the top of the viewport, so the list it holds is
+ *  already on screen whenever these run. It is a latent second cause rather than a live one,
+ *  and it costs one object to close: `scrollWithin` above owns where this component scrolls,
+ *  and nothing else in it may. */
+const FOCUS = { preventScroll: true } as const
+
+type Bring = 'start' | 'nearest'
+
+function scrollWithin(target: HTMLElement, boundary: HTMLElement | null, mode: Bring): void {
+  let node: HTMLElement | null = target.parentElement
+  let next: Bring = mode
+  while (node !== null) {
+    /* THE DOCUMENT IS THE THING THIS FUNCTION EXISTS TO NOT TOUCH, so it is checked FIRST and
+       independently of `boundary`. A null ref — this running before the column has mounted —
+       would otherwise walk straight past it to `<html>`, which is a scrolling element like any
+       other, and the defect would be back with no null check anywhere near the symptom. The
+       ceiling has to hold when the boundary is missing, or it is not a ceiling. */
+    if (node === document.body || node === document.documentElement) return
+    if (node.scrollHeight > node.clientHeight) {
+      bringInto(target, node, next)
+      next = 'nearest'
+    }
+    if (node === boundary) return
+    node = node.parentElement
+  }
+}
+
+/** One scroller, adjusted by the smallest amount that satisfies `mode`.
+ *
+ *  The scroller's CONTENT edge, not its border box: `.browse-list` carries a 1px border, and
+ *  `clientTop`/`clientLeft` are what that border measures. Overscrolling is left to the
+ *  browser, which clamps `scrollTop` to the scrollable range on assignment. */
+function bringInto(target: HTMLElement, scroller: HTMLElement, mode: Bring): void {
+  const style = window.getComputedStyle(target)
+  const rect = target.getBoundingClientRect()
+  const box = scroller.getBoundingClientRect()
+  const top = rect.top - (parseFloat(style.scrollMarginTop) || 0)
+  const bottom = rect.bottom + (parseFloat(style.scrollMarginBottom) || 0)
+  const edge = box.top + scroller.clientTop
+  const foot = edge + scroller.clientHeight
+
+  if (mode === 'start' || top < edge) {
+    scroller.scrollTop += top - edge
+    return
+  }
+  if (bottom > foot) scroller.scrollTop += bottom - foot
+}
+
 /* A POOLED CARD — the owner's ruling that a code card is a count, not a location
  * (`pipeline/games.py`'s `located` flag; "Code cards are pooled inventory, not located" in
  * docs/DECISIONS.md). The server sends its row with no flat label and a `place` block
@@ -472,7 +555,93 @@ function claimText(claim: string | string[] | null): string {
   return members.length === 0 ? 'none recorded' : members.join(' · ')
 }
 
-function detailsOf(card: InventoryCard): Detail[] {
+/* WHAT A RUN'S JOIN SAID A CARD IS WORTH, AND HOW LONG AGO IT SAID IT.
+ *
+ * THE STORE HAS NO PRICE IN IT, and that is D8 rather than a gap: every figure in this product
+ * comes out of the TCGplayer Filtered Export, and `store/master.py` holds not one field
+ * shaped like money. So the answer is not on the record the walk already has, and the question
+ * "what is this card worth" could be answered on `#/pricing` and nowhere the operator is
+ * actually standing when they ask it.
+ *
+ * THE EDGE IS D46'S, REUSED RATHER THAN REBUILT: card -> `run` -> that run's `pricing.json`.
+ * `cli/cmd_join.py` writes that file on every join with each matched SKU's export row verbatim
+ * AND every position holding a copy, so a position resolves to a SKU and a market price with no
+ * new route, no new field on the wire and no schema change anywhere. `GET /pipeline/runs/<name>
+ * /pricing` is free, read-only and creates nothing, which is what makes it safe to open from a
+ * screen that is not about running anything.
+ *
+ * KEYED BY POSITION AND NOT BY `card.sku`. That field is written by `emit`, for SKUs that
+ * reached an import file — so a sub-threshold card, a withheld one (D49) and every card in a run
+ * that was joined but never emitted all carry `null` and would silently drop out. The position
+ * is on both sides of this join and is written by neither.
+ *
+ * NOT ON THE WALK'S OWN READ. `GET /inventory` answers with the whole store and knows nothing
+ * about runs; folding a price into it would put a per-run figure onto a record whose whole
+ * contract is that the app READS state and never sets it. */
+type MarketRead =
+  /** The run's table, indexed. `at` is `written_at` — when `join` last read an export — or
+   *  null against a server too old to send it. */
+  | { kind: 'table'; at: number | null; rows: Record<string, string | null> }
+  /** No table to read, and WHY, because the two reasons have different remedies: a run that
+   *  predates `pricing.json` wants a re-join, and everything else wants a look at the server. */
+  | { kind: 'absent'; why: string }
+
+/** One payload, turned into the only two things this panel asks it: which positions the join
+ *  matched, and what the export's Market cell said for each. Every other column stays on
+ *  `#/pricing`, which is the screen for deciding a price rather than for reading one. */
+function marketTable(payload: PricingPayload): MarketRead {
+  const rows: Record<string, string | null> = {}
+  for (const priced of payload.pricing?.skus ?? []) {
+    for (const at of priced.positions ?? []) {
+      rows[`${at.box}/${at.index}`] = priced.snap?.market ?? null
+    }
+  }
+  return { kind: 'table', at: payload.written_at ?? null, rows }
+}
+
+/* THE MARKET ROW'S VALUE, INCLUDING EVERY WAY THERE IS NOT ONE.
+ *
+ * A PRICE IS NEVER DRAWN WITHOUT ITS AGE, which is the owner's ask and is also the only honest
+ * way to draw it. `join` is free and re-runnable and is routinely pointed at a refreshed export,
+ * so two cards on one shelf can carry prices read a week apart — and a bare `$5.47` claims a
+ * currency the file cannot support.
+ *
+ * `read`, NEVER `as of`. The age is the age of the JOIN, not of the price: the export is a CSV
+ * the operator downloaded from TCGplayer at some earlier moment nothing on this machine can see,
+ * so the freshest thing this can truthfully say is when the pipeline last looked at it. The
+ * `written_at` field on the server carries the same paragraph at the other end.
+ *
+ * `no_market_data` VERBATIM, UNDERSCORE AND ALL, and the underscore is the whole point. It is
+ * `pipeline/routing.py`'s own constant — `NO_MARKET_DATA` — and D9 is emphatic that a blank
+ * Market cell is an UNKNOWN price rather than a low one, which is the mistake that entry exists
+ * to prevent: rendering it as `$0.00` is what hands a chase card away at the floor. Spelled
+ * `no market data` it is neither the machine string nor a human label, which is the second
+ * vocabulary D22 refuses and D16 exists to catch — and it would grep to nothing on the day
+ * somebody holds this screen against `decisions.json`'s own `no_market_data` block, which is
+ * where such a card is priced by hand.
+ *
+ * THE SPLIT IN THIS FUNCTION IS THEREFORE: plain English where THIS SCREEN has nothing (the
+ * shape every other fallback in the list takes — `not identified yet`, `none recorded`), and the
+ * pipeline's own word where the PIPELINE said something. `no row matched by this run` is the
+ * first kind: a position absent from the table is not a classification the pipeline made, and
+ * the queue block below these rows is what names the reason when there is one. */
+function marketText(card: InventoryCard, read: MarketRead | undefined): string {
+  if (card.run === null) return 'not joined yet'
+  if (read === undefined) return 'reading…'
+  if (read.kind === 'absent') return read.why
+
+  const price = read.rows[`${card.box}/${card.index}`]
+  /* A POSITION THE TABLE DOES NOT HOLD IS NOT A MISSING PRICE — it is a card the join matched
+     no catalog row for, which is `no_catalog_row` and is the review queue's business. The block
+     below these rows already says so when it is; this row says only that it has no figure. */
+  if (price === undefined) return 'no row matched by this run'
+  if (price === null) return 'no_market_data'
+
+  const age = read.at === null ? 'age unknown' : sinceText(read.at * 1000)
+  return `$${price} · ${age === 'today' ? 'read today' : `read ${age} ago`}`
+}
+
+function detailsOf(card: InventoryCard, market: MarketRead | undefined): Detail[] {
   return [
     { label: 'Card', value: card.name ?? 'not identified yet', mono: card.name === null },
     { label: 'Number', value: collectorNumber(card), mono: true },
@@ -545,6 +714,24 @@ function detailsOf(card: InventoryCard): Detail[] {
      * D33 scopes a run to a SELECTION inside a box, so two cards in one box can legitimately
      * carry different runs. */
     { label: 'Run', value: card.run ?? 'not identified yet', mono: true },
+    /* WHAT THAT RUN'S JOIN SAID THIS CARD IS WORTH, DIRECTLY UNDER THE RUN THAT SAID IT — the
+     * owner's ask of 2026-08-29, "if a join has happened on that set, can I get the TCG Market
+     * Price as part of the data summary... with a note of how stale/fresh that data is".
+     *
+     * BENEATH `Run` FOR THE REASON `Confidence` SITS BENEATH THE READ IT HEDGES. The price is
+     * not a property of the card, it is what one join found in one export, and the age drawn
+     * beside it is that join's age — so provenance is a straight read-down rather than two
+     * glances. Both would be inexplicable apart: `Run` names a directory and cannot say what it
+     * found, and a price with no run named is a number from nowhere.
+     *
+     * ABOVE `Note`, WHICH KEEPS ITS PLACE AS THE LAST ROW for the reason stated there — it is
+     * the one unbounded free-text value in this list, so it grows the panel from the bottom
+     * rather than shifting aligned rows underneath it.
+     *
+     * NEVER CONDITIONAL, the same rule the two rows above it follow: a row that disappears
+     * leaves "this card has no price" and "this screen does not show prices" indistinguishable,
+     * and `marketText` has a sentence for every one of the five ways there is no figure. */
+    { label: 'Market', value: marketText(card, market), mono: true },
     { label: 'Note', value: card.note ?? 'none', mono: card.note === null },
   ]
 }
@@ -607,14 +794,24 @@ function openQuestion(
   return inParked === undefined ? null : { entry: inParked, queue: 'parked' }
 }
 
+/** How long ago a moment was, coarsely — `3 days`, `4 hours`, `today`.
+ *
+ *  ONE VOCABULARY FOR THE TWO AGES THIS PANEL DRAWS, which is the whole reason it is a
+ *  function rather than two. A card can carry both at once — how long its question has been
+ *  waiting, and how long ago the join read its price — and two spellings of "two days" sixteen
+ *  pixels apart is the drift `reasons.ts` was extracted to stop one screen further on. */
+function sinceText(at: number): string {
+  const elapsed = Date.now() - at
+  const days = Math.floor(elapsed / 86400000)
+  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`
+  const hours = Math.floor(elapsed / 3600000)
+  return hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'today'
+}
+
 /** How long an entry has been waiting, in the queue's own terms. */
 function waitingFor(firstSeen: string): string {
   const at = Date.parse(firstSeen)
-  if (Number.isNaN(at)) return 'unknown age'
-  const days = Math.floor((Date.now() - at) / 86400000)
-  if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`
-  const hours = Math.floor((Date.now() - at) / 3600000)
-  return hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : 'today'
+  return Number.isNaN(at) ? 'unknown age' : sinceText(at)
 }
 
 function collectorNumber(card: InventoryCard): string {
@@ -702,6 +899,30 @@ export function BoxBrowse({
    * simply does not draw — which is the same state as "no open question", and that is honest:
    * both mean this screen has nothing to add. */
   const [queued, setQueued] = useState<QueueSnapshot | null>(null)
+
+  /* THE MARKET PRICES, ONE RUN'S TABLE AT A TIME AND CACHED BY RUN NAME. `pricing.json` is
+   * per-run and every card in a box normally names the same run, so walking a whole box costs
+   * ONE read — the same argument `queued` above makes for reading both queues whole rather than
+   * per card, and it matters more here: a real table is ~80KB for 50 SKUs, which is cheap once
+   * and silly per arrow key.
+   *
+   * KEYED BY RUN AND NOT BY BOX, because a run is what wrote the file. D33 scopes a run to a
+   * SELECTION inside a box, so two cards on one shelf can legitimately carry different runs and
+   * therefore two tables read at two different moments — which is exactly the staleness the row
+   * exists to report.
+   *
+   * FAILS INTO A SENTENCE RATHER THAN SILENT, unlike `queued` beside it, and the difference is
+   * the point. A missing queue entry and a card with no open question are the same fact, so
+   * drawing nothing is honest there. A missing PRICE and a price of nothing are not: this row
+   * is always drawn, so a read that refused has to say it refused rather than leave `Market`
+   * looking like a card nobody has priced. */
+  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
+  /* Every run a fetch has already been started for. A ref rather than reading `priced`, because
+   * the state lands one render AFTER the request goes out — and the effect below re-runs
+   * whenever any OTHER run's table arrives, which is a second request for a run already in
+   * flight. Bookkeeping about requests, never a fact drawn: `askedAt` one screen up is the same
+   * shape for the same reason. */
+  const asked = useRef<Set<string>>(new Set())
   const [reloads, setReloads] = useState(0)
   /* Each re-shot card's NEW capture id, by row key — the cache nonce PhotoPanel appends
    * after a replacement, and nothing else. The id rather than a counter because it
@@ -718,6 +939,12 @@ export function BoxBrowse({
     null,
   )
   const listRef = useRef<HTMLUListElement | null>(null)
+  /* THE COLUMN, AS THE CEILING ON EVERY SCROLL THIS COMPONENT PERFORMS. `scrollWithin` walks
+   * scrollable ancestors up to this node and stops, so the document scroller cannot be reached
+   * — which is the whole fix, stated as a boundary rather than as a flag. It is a ref and not a
+   * `document.querySelector` for the reason `listRef` is: two of these screens on one page is
+   * not a thing today and a global query would be the first thing to break if it ever were. */
+  const mapRef = useRef<HTMLDivElement | null>(null)
   /* The key a box-chip jump wants scrolled to the TOP of the scroller, or null for every
    * ordinary selection change. One-shot; the scroll effect consumes it. `block: 'nearest'`
    * is right for a step and wrong for a jump — after two hundred rows it parks the landing
@@ -961,6 +1188,15 @@ export function BoxBrowse({
     }
   }, [reloads, reloadToken])
 
+  /* A RELOAD DROPS EVERY CACHED TABLE, and it is declared BEFORE the read below so that the
+   * clear and the re-read happen in one pass rather than leaving the panel a render showing
+   * yesterday's price. The button beside the walk is pressed after a join precisely because
+   * something downstream has changed, and a price is one of the things a join rewrites. */
+  useEffect(() => {
+    asked.current = new Set()
+    setPriced({})
+  }, [reloads, reloadToken])
+
   /* THE SHELF FOLLOWS THE FILTER, which is the selection rule one level up and it exists for
    * the same failure: a query matching only box 95 while box 1 is selected would draw an empty
    * list under a header naming a box that does have cards, and nothing on screen would say the
@@ -1079,12 +1315,15 @@ export function BoxBrowse({
    * row is three screens up inside its own scroller, and the only thing that visibly moved is
    * on the other side of the page.
    *
-   * `block: 'nearest'` so it scrolls only when it has to, which is what keeps it from
-   * fighting the mouse — a click on a row that was already visible moves nothing. A
-   * box-chip jump is the argued exception and lands `block: 'start'`, once, via jumpRef
-   * above: a jump is FOR seeing what follows the landing, and 'nearest' shows what
-   * precedes it. The rows' scroll-margin in the stylesheet is what keeps 'start' from
-   * parking the row under its own sticky section header.
+   * `'nearest'` so it scrolls only when it has to, which is what keeps it from fighting the
+   * mouse — a click on a row that was already visible moves nothing. A box-chip jump is the
+   * argued exception and lands `'start'`, once, via jumpRef above: a jump is FOR seeing what
+   * follows the landing, and 'nearest' shows what precedes it. The rows' scroll-margin in the
+   * stylesheet is what keeps 'start' from parking the row under its own sticky section header.
+   *
+   * `scrollWithin` RATHER THAN `scrollIntoView`, AND THE BOUNDARY IS THE POINT. That API
+   * scrolls the document too, which on a sticky column moves the page without moving the row —
+   * the owner's hidden-top-bars report. The helper's own header carries the measurement.
    *
    * READ OFF `aria-current` rather than off a ref per row. That attribute is already this
    * screen's answer to "which row is current", so the row that scrolls is by construction the
@@ -1096,7 +1335,7 @@ export function BoxBrowse({
   useEffect(() => {
     const current = listRef.current?.querySelector('[aria-current="true"]')
     if (current instanceof HTMLElement) {
-      current.scrollIntoView({ block: jumpRef.current === selected ? 'start' : 'nearest' })
+      scrollWithin(current, mapRef.current, jumpRef.current === selected ? 'start' : 'nearest')
     }
     jumpRef.current = null
   }, [selected, visible])
@@ -1171,7 +1410,7 @@ export function BoxBrowse({
       jumpRef.current = landing.key
       setSelected(landing.key)
     }
-    listRef.current?.focus()
+    listRef.current?.focus(FOCUS)
   }
 
   /* Off `visible`, not off `rows`: a selection the filter removed renders NO detail rather
@@ -1445,9 +1684,16 @@ export function BoxBrowse({
     jumpRef.current = jump
     setSelected(jump)
     /* The keys, armed. The gesture after "take me to that copy" is walking from it, exactly as
-       `selectShelf` argues, and the page scroll this brings with it is wanted here: the copies
-       list is below the card band, and the photograph is what was asked for. */
-    listRef.current?.focus()
+       `selectShelf` argues.
+
+       THIS COMMENT USED TO END "and the page scroll this brings with it is wanted here: the
+       copies list is below the card band, and the photograph is what was asked for". The
+       intention was right and what happened was the opposite: the scroll came from
+       `scrollIntoView` on the landed ROW, so it moved the page DOWN — away from the card band —
+       and on a sticky column it moved the page without moving the row at all. The owner
+       reported it as the top bars disappearing. `scrollWithin` is the fix and `FOCUS` is what
+       stops this line becoming the same defect by another door. */
+    listRef.current?.focus(FOCUS)
     setJump(null)
   }, [jump, rows, inQuery, searching, setQuery])
 
@@ -1458,6 +1704,43 @@ export function BoxBrowse({
   useEffect(() => {
     onSelect?.(selectedRow)
   }, [selectedRow, onSelect])
+
+  /* THE SELECTED CARD'S RUN, READ ONCE AND THEN NOT AGAIN. The dependency is the run NAME and
+   * not the row, so stepping through a box of one run fires this exactly once — and the guard is
+   * `asked` rather than `priced` for the reason given at that ref.
+   *
+   * THE RELOAD COUNTERS ARE IN THE DEPENDENCIES AND LEAVING THEM OUT WAS A LIVE BUG, caught by
+   * pressing Reload against the real store. The effect above empties the cache; this one was
+   * keyed on the run NAME alone, which does not change when a box is re-read — so the cleared
+   * entry was never re-fetched and the row sat on `reading…` permanently. A clear and its
+   * re-read are one gesture and must be triggered by the same thing. Declared AFTER that effect
+   * so the order within the commit is empty-then-ask rather than the reverse. */
+  const pricedRun = selectedRow?.card.run ?? null
+  useEffect(() => {
+    if (pricedRun === null) return
+    if (asked.current.has(pricedRun)) return
+    asked.current.add(pricedRun)
+    let live = true
+    getPricing(pricedRun)
+      .then((payload) => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
+      })
+      .catch((error: unknown) => {
+        /* THE REFUSAL IS KEPT AND SHOWN, and `pricing_not_written` is the one worth telling
+           apart: it means this run predates `pricing.json` or has not been joined at all, and
+           the remedy is a join rather than a look at the server. Every other failure — a run
+           directory that has gone, a server that is down — is one sentence, because the row has
+           one line and the console has the rest. */
+        const why =
+          describeFailure(error).code === 'pricing_not_written'
+            ? 'no pricing table — join this run'
+            : 'could not be read'
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why } }))
+      })
+    return () => {
+      live = false
+    }
+  }, [pricedRun, reloads, reloadToken])
 
   /* THE SCOPE, REPORTED UPWARDS, on the same terms and for the same reason. `pickedIndices` is
    * already memoised on exactly the three things that can move it, so this fires on a real
@@ -1587,7 +1870,7 @@ export function BoxBrowse({
               walk it. One column because they are one instrument — everything in it narrows
               or indexes the same walk, and the detail panel beside it is what the walk is
               pointing at. */}
-          <div className="browse-map">
+          <div className="browse-map" ref={mapRef}>
             {/* The shared field: owner persona, `/` from anywhere, Esc handing focus back
                 with the query intact — all SearchField's own rulings, not re-made here. The
                 search-shape argument and the deliberate absence of autoFocus are at the
@@ -2106,11 +2389,14 @@ export function BoxBrowse({
                       This is the same fact reached from the other direction, not the same
                       rendering drawn twice.
 
-                      OUTSIDE THE `<dl>` ON PURPOSE. `detailsOf` is a pure function of
-                      `InventoryCard` and a queue entry is per-POSITION; a `dt`/`dd` grid row
-                      cannot hold the two-line reason DESIGN.md's reason-code rule requires; and
-                      `app/tests/inventory.spec.ts` measures `.browse-facts` specifically, so
-                      keeping this out of that list leaves D38's assertion honest.
+                      OUTSIDE THE `<dl>` ON PURPOSE, and one of the three reasons has since
+                      been spent. It read "`detailsOf` is a pure function of `InventoryCard` and
+                      a queue entry is per-POSITION" — and the Market row added on 2026-08-29 is
+                      per-position too, passed in as a second argument, so that clause no longer
+                      separates the two. What still does: a `dt`/`dd` grid row cannot hold the
+                      two-line reason DESIGN.md's reason-code rule requires, and it must not,
+                      because a queue block is a SENTENCE about what to do next where every row
+                      in that list is a value being compared against something.
 
                       The candidate count is load-bearing rather than decoration: zero candidates
                       is the difference between "go and answer it" and "it cannot be answered as
@@ -2211,7 +2497,10 @@ export function BoxBrowse({
             {selectedRow === null ? null : (
               <div className="browse-about">
                 <dl className="browse-facts">
-                  {detailsOf(selectedRow.card).map((fact) => (
+                  {detailsOf(
+                    selectedRow.card,
+                    selectedRow.card.run === null ? undefined : priced[selectedRow.card.run],
+                  ).map((fact) => (
                     <div className="browse-fact" key={fact.label}>
                       <dt>{fact.label}</dt>
                       <dd className={fact.mono ? 'is-util' : undefined}>{fact.value}</dd>

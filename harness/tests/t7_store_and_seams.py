@@ -8279,6 +8279,36 @@ def check_pricing_route(checks: Checks) -> None:
                 "with no earlier run there is nothing to remember, and the answer is null "
                 "rather than a guess — D9 forbids a default and this is a LABEL, not one",
             )
+            # WHEN THE TABLE WAS WRITTEN, WHICH IS THE ONLY AGE A PRICE CAN HONESTLY CARRY.
+            # `#/inventory`'s card panel draws `$5.47 · read 2 days ago` off this, and the
+            # second half is not decoration: `join` is free, re-runnable and routinely pointed
+            # at a REFRESHED export, so two cards on one shelf can carry prices read a week
+            # apart and a bare figure claims a currency the file cannot support.
+            #
+            # BACKDATED FIRST, AND THAT IS THE WHOLE OF THE CASE. Asserting the field against
+            # the file's live mtime is VACUOUS here: `seam_run` joins immediately before the
+            # request, so a route that stamped `time.time()` instead would answer the same
+            # integer and pass. That version was written, mutated to a clock, and observed
+            # PASSING — which is the shape this repo has paid for before at the multi-game
+            # prompt seam. Backdating the file by a week separates the two answers, so what is
+            # checked is that the number describes THIS TABLE rather than THIS REQUEST.
+            #
+            # The failure it forbids is invisible from the screen: a price whose age resets to
+            # `read today` every time the panel is opened is a stale figure wearing a fresh
+            # stamp, which is worse than no stamp at all.
+            table_file = run_dir.path(runs.PRICING)
+            backdated = int(table_file.stat().st_mtime) - 7 * 86400
+            os.utime(table_file, (backdated, backdated))
+            status, body, _ = request(
+                port, "GET", f"/pipeline/runs/{run_dir.directory.name}/pricing"
+            )
+            checks.equal(
+                (status, json.loads(body).get("written_at")),
+                (200, backdated),
+                "and it says WHEN the table was written, off that file's own mtime — a week-old "
+                "table reads a week old, where a clock read at request time would call every "
+                "price fresh forever",
+            )
 
             # A second run whose answer is on disk, so the label has something to find.
             answered = run_dir.path(runs.DECISIONS)
