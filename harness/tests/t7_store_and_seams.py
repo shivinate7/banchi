@@ -11601,6 +11601,36 @@ def check_export_fetch(checks: Checks) -> None:
                     "went unchecked rather than reporting them as verified",
                 )
 
+                # ------------------------------------- a run that cannot answer for itself
+                #
+                # A 500 IS THE ONE ANSWER THIS ROUTE MAY NOT GIVE. `exports_for` reaches
+                # the run's identifications and the live store to learn which games it
+                # holds, and every way that can fail — no identifications yet, an
+                # unregistered game, an unreadable store — arrives here as a `RunError`
+                # rather than as a value. Caught and named, because a traceback on the
+                # screen is the one refusal an operator cannot act on.
+                empty = runs.create("t7-no-idents")
+                status, raw, _ = request(
+                    port, "POST", f"/pipeline/runs/{empty.directory.name}/export", payload={}
+                )
+                checks.equal(
+                    (status, error_code(raw)),
+                    (409, "export_refused"),
+                    "a run with no identifications refuses by name and carries the "
+                    "command's own sentence — `run pkmnscan identify first` — rather than "
+                    "letting a RunError out as a 500 with a traceback in it",
+                )
+                checks.equal(
+                    [
+                        entry.name
+                        for entry in empty.directory.iterdir()
+                        if entry.name.startswith(pipeline_routes.FETCHED_PREFIX)
+                    ],
+                    [],
+                    "and it keeps nothing either, which is the rule every refusal here "
+                    "follows: a refusal tears down what it built",
+                )
+
                 # ---------------------------------------------------------- the wrong file
                 before = len(fetched_files())
                 stub["body"] = (

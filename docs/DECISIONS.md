@@ -6709,6 +6709,14 @@ adds no second copy; anything else gets a name of its own and can never clobber 
 predecessor. **A refusal deletes only a file the request itself created**, for the same
 reason — "a refusal tears down what it built" is about what it BUILT.
 
+**WHAT WAS FETCHED IS DOWNLOADABLE, WHICH IS WHAT KEEPS THE REPORT HONEST.**
+`_artefacts` lists off the run DIRECTORY rather than off a table of names, so a fetched
+export appears beside the import CSVs and the report and comes down through the same
+`GET .../file`. The operator does not have to trust this route's summary of how many SKUs and
+which sets arrived — they can open the file it is describing. That falls out of an existing
+design rather than being built for this, and it is the reason the fetch may report in
+summary at all.
+
 **THE COOKIE IS A BEARER INSTRUMENT AND `.env` IS THE ONLY PLACE IT LIVES.** Never logged,
 never in a refusal message, never written into a run directory — T7 asserts the last one
 directly, over every file the run holds, because a run directory is the one thing here meant
