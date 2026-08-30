@@ -35,6 +35,26 @@ regression:
     `--dry-run` does everything except the API call: it counts the cards, prices the
     submission, and creates no run directory at all.
 
+AND ONE ROUTE NOW OPENS A SOCKET OF ITS OWN, WHICH IS THE SECOND HALF OF THAT PROMISE
+GOING AND HAS TO BE SAID AS PLAINLY AS THE FIRST. `GET /pipeline/runs/<name>/history`
+fetches from `tcgcsv.com` and `infinite-api.tcgplayer.com`. The letter of the old sentence
+survives — those are not Anthropic and no key is read — but the sentence meant *this process
+talks to nobody*, and it no longer does. Leaning on the letter is the drift D16 exists to
+catch, so:
+
+  - **It spends nothing, and that is a property rather than a hope.** Both hosts are public:
+    no key, no cookie, no session, no account. There is no way to run up a bill on either,
+    which is what makes this a different kind of route from the one above rather than a
+    second one of it.
+  - **It reads and never writes, except its own derived cache.** No run directory is
+    touched, no store lock is taken, and nothing about a card changes.
+  - **It cannot fire on its own.** No screen polls it and no effect fires it on a walk; it
+    answers one press about one SKU. That is the guard that keeps a courtesy delay honest
+    against a free public mirror.
+  - **A third party being down is a sentence, never a stack trace.** `Unreachable` and
+    `NotResolvable` are named refusals with their own codes, so a mirror having a bad day
+    costs the panel its reading and costs the screen nothing.
+
 THE MONEY STEP IS SPAWNED AND NEVER AWAITED; EVERY OTHER STEP RUNS IN THE REQUEST. That
 split is not a preference, it is the shape of the work. A Batch job takes minutes to hours
 (`identify/batch.py` polls until the batch ends), and no HTTP request may be held open for
@@ -78,6 +98,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from cli import runs as run_files  # noqa: E402
+# STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
+# reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
+# and nothing else — verified under bare `/usr/bin/python3`, which is what the Makefile
+# falls back to when there is no venv. It is a top-level import rather than one inside
+# the handler for exactly that reason: D32 puts the imports inside `crop-preview`
+# because Pillow may genuinely be absent, and there is no equivalent risk here.
+from pipeline import pricehistory  # noqa: E402
 from store import Store, files, master  # noqa: E402
 
 PKMNSCAN = REPO_ROOT / "pkmnscan"
@@ -1370,6 +1397,248 @@ def do_pipeline_pricing(name: str) -> dict:
         # from the bytes it describes. What it does not survive is the run directory being
         # copied, which resets it; nothing in this repo copies one.
         "written_at": int(table.stat().st_mtime),
+    }
+
+
+# ------------------------------------------------------------------- the price history
+
+
+def market_cache_dir() -> Path:
+    """Where `pipeline/pricehistory.py`'s fetches are cached. Derived, deletable, per checkout.
+
+    THIS IS THE DIRECTORY THAT MODULE'S HEADER WARNED THE FIRST CALLER ABOUT, and this is
+    the caller. It says: *"the moment a command passes `files.home() / <something>` the
+    derived cache lands in the checkout and needs a `.gitignore` line, with D47's rule
+    attached: no trailing slash on a path a worktree can provision."* `/.cache` is that
+    line, anchored to the repo root so it cannot silently swallow `harness/.cache`, and
+    bare so it matches whatever kind of thing is at the name.
+
+    UNDER `files.home()` AND THEREFORE PER CHECKOUT, which is D43 rather than a default. A
+    worktree gets its own, usually empty, and warms it the first time somebody presses the
+    key — the same posture its store, its runs and its captures already take. Sharing one
+    across checkouts would save a handful of requests and put a branch's writes inside the
+    main tree, which is the trade D43 spends a whole entry refusing.
+
+    NOTHING PRUNES IT AND NOTHING NEEDS TO. Entries are small JSON, the TTLs inside the
+    module decide what is stale, and a corrupt entry is read as a miss rather than as a
+    refusal — so the worst this directory can do is take up a few megabytes, and `rm -rf`
+    is a complete remedy at any moment.
+    """
+    return files.home() / ".cache" / "market"
+
+
+def _history_row(directory: Path, sku: str) -> dict:
+    """This run's `pricing.json` entry for one SKU, or a refusal naming which half is missing.
+
+    THE EXPORT ROW IS WHAT THE READER NEEDS, AND THIS RUN ALREADY HOLDS IT VERBATIM.
+    `cli/cmd_join.py:_pricing_table` writes every matched SKU's row unmodified under `row`,
+    for D49's reason — the screen shows what the CSV says — and that is exactly the five
+    cells the catalog walk reads: `Product Line`, `Set Name`, `Number`, `Product Name` and
+    `TCGplayer Id`. So there is no second source to keep in step and no re-parse of an
+    export: the run that priced this card is the run that says what it is.
+    """
+    table = directory / run_files.PRICING
+    if not table.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_not_written",
+            f"Run {directory.name} has no {run_files.PRICING} — `join` is what writes it, "
+            f"and a price history is read off the export row it stores. Join this run.",
+        )
+    try:
+        payload = json.loads(table.read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_unreadable",
+            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+        ) from None
+    for entry in payload.get("skus") or ():
+        if str(entry.get("sku") or "") == sku:
+            return entry
+    raise PipelineRefusal(
+        HTTPStatus.NOT_FOUND,
+        "sku_not_in_run",
+        f"Run {directory.name} matched no SKU {sku}. A history is read off the export row "
+        f"this run stored, so a SKU it never matched has no row here to read.",
+    )
+
+
+def _money(value) -> Optional[str]:
+    """A `Decimal` as a string, or None. The wire carries money as text, never as a float.
+
+    `cli/cmd_join.py` writes every figure in `pricing.json` this way and for the same
+    reason: a price that goes through a JSON float comes back as binary floating point,
+    and `pipeline/pricing.py` computes in `Decimal` precisely so that never happens.
+    """
+    return None if value is None else str(value)
+
+
+def _history_series(series) -> dict:
+    """One range of one SKU, as the screen reads it.
+
+    THE VWAP IS THE ANCHOR AND THE BOUND IS A SANITY CHECK. Both are on the wire and they
+    are NOT peers: `pipeline/pricehistory.py`'s header is explicit that a true VWAP is not
+    computable from buckets and that rendering the two as a price and an error bar of
+    comparable authority is that paragraph being ignored. The field names carry the
+    distinction as far as a payload can — `vwap` is a figure, `bound` is an object with its
+    own two widths — and `app/src/Pricing.tsx` is where the drawing honours it.
+
+    `points` IS THE BUCKETS, ASCENDING, and it is here because a sparkline answers *is this
+    rising* in one glance where four numbers do not. It is the parsed order and never the
+    wire order — the endpoint sends newest-first, `Series.parse` sorts, and a payload that
+    passed the raw list through would draw every rising card falling.
+    """
+    momentum = series.momentum()
+    bound = series.bound
+    starts = [b.start for b in series.buckets if b.start is not None]
+    return {
+        "range": series.range,
+        "buckets": len(series.buckets),
+        # The span the buckets actually cover, which is what lets the panel caption a range
+        # without restating the width table in TypeScript. `annual` is the STALER of the two
+        # — weekly buckets are stamped at the start of their week — so a screen drawing both
+        # has to be able to say when each one ends.
+        "from": starts[0].isoformat() if starts else None,
+        "to": starts[-1].isoformat() if starts else None,
+        "latest_market": _money(series.latest_market),
+        "vwap": _money(series.vwap),
+        "bound": (
+            None
+            if bound is None
+            else {
+                "low": _money(bound.low),
+                "high": _money(bound.high),
+                # BOTH DENOMINATORS, NAMED, which is `Bound`'s own rule: one card's interval
+                # is honestly "48% wide" and "62% wide" and a bare percentage invites the two
+                # to be read as a disagreement about the same card.
+                "width_of_vwap": _money(bound.width_of_vwap),
+                "width_of_low": _money(bound.width_of_low),
+            }
+        ),
+        "momentum": {
+            "early": _money(momentum.early),
+            "late": _money(momentum.late),
+            "change": _money(momentum.change),
+            "fraction": _money(momentum.fraction),
+            "window": momentum.window,
+        },
+        "liquidity": series.liquidity,
+        "transactions": series.total_transaction_count,
+        "units_per_transaction": _money(series.units_per_transaction),
+        "dispersion": _money(series.dispersion),
+        "points": [
+            {
+                "at": bucket.start.isoformat() if bucket.start else None,
+                "market": _money(bucket.market),
+                "quantity": bucket.quantity,
+                "low": _money(bucket.low),
+                "high": _money(bucket.high),
+            }
+            for bucket in series.buckets
+        ],
+    }
+
+
+def do_pipeline_history(name: str, sku: str) -> dict:
+    """`GET /pipeline/runs/<name>/history?sku=<sku>` — what this SKU has been selling for.
+
+    THE ONE ROUTE IN THIS FILE THAT TALKS TO A THIRD PARTY. The header above carries the
+    whole argument and the short form is: it spends nothing, both hosts are public, it
+    writes only its own derived cache, and it cannot fire without a press.
+
+    IT PRICES NOTHING AND D8 IS NOT REOPENED. `pipeline/pricehistory.py`'s own header is
+    emphatic on this and the route is the place it could quietly stop being true: nothing
+    here computes a listing price, writes `TCG Marketplace Price`, or reaches
+    `decisions.json`. It is a READING taken beside the export, on the screen where a hold is
+    set — D49 records that the `bullish` withhold and its `watch_above` threshold have been
+    set against the operator's memory of what a card used to cost, and this is the fact that
+    was missing. The day a listing price is allowed to depend on a trend, that is a change
+    to D8 argued on its own terms and not a widening of this handler.
+
+    IT IS SYNCHRONOUS, AND THAT IS THE SHAPE OF THE WORK RATHER THAN A SHORTCUT. The
+    header's rule is that the money step spawns because a Batch takes hours, and everything
+    else answers in the request because it finishes in seconds. This is the second kind:
+    five requests cold and two warm, each one a small JSON document off a mirror. The server
+    is threaded, so a slow host costs this request and no other.
+
+    A REFUSAL IS A SENTENCE WITH ITS OWN CODE, and there are four kinds. The run has no
+    table, or no such SKU (`_history_row`). The card is not one a catalogue covers
+    (`not_catalogued`). The walk found no single product (`history_unresolved`). A host did
+    not answer (`history_unreachable`). Each names what to do next, because a panel that
+    said only "failed" would send the operator to the wrong file — a `misc` card with no
+    product line and a mirror having a bad day are not the same problem.
+    """
+    directory = _open_run(name)
+    wanted = (sku or "").strip()
+    if not wanted:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "sku_required",
+            "A price history is per SKU. Pass ?sku=<TCGplayer Id>.",
+        )
+    entry = _history_row(directory, wanted)
+    row = entry.get("row") or {}
+
+    # NOT EVERY CARD HAS A CATALOGUE, AND THAT IS D22 RATHER THAN A GAP. `misc` carries
+    # `product_line: None` by construction, so there is no cell to look a category up by and
+    # no history to fetch — checked here, where the caller can act on it, rather than left to
+    # refuse three hops down the walk with a message about a category name.
+    if not pricehistory.catalogued_row(row):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "not_catalogued",
+            f"{entry.get('name') or wanted} is not in a catalogued product line, so there is "
+            f"no product to look a history up by. D22 makes that the permanent state for "
+            f"`misc` rather than a missing export.",
+        )
+
+    market = pricehistory.Market(cache_dir=market_cache_dir())
+    try:
+        reading = market.reading_for_row(row)
+    except pricehistory.Unreachable as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "history_unreachable",
+            f"{exc} Nothing is wrong with this run — a public mirror did not answer, and "
+            f"the reading is the only thing lost. Try again.",
+        ) from None
+    except pricehistory.NotResolvable as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "history_unresolved",
+            str(exc),
+        ) from None
+
+    return {
+        "run": directory.name,
+        "sku": reading.sku,
+        "product_id": reading.product_id,
+        # The card's own identity, off the run's table rather than re-derived, so the panel
+        # can caption itself without the caller passing three strings it already holds.
+        "name": entry.get("name"),
+        "set_name": entry.get("set_name"),
+        "condition": entry.get("condition"),
+        # THE EXPORT'S OWN FIGURE, BESIDE THE READING AND NEVER MIXED INTO IT. This is what
+        # the card is priced against today (D8), and the whole point of the panel is to put
+        # it next to what the card has actually been selling for. They are two sources read
+        # at two moments and nothing here averages them.
+        "market": (entry.get("snap") or {}).get("market"),
+        # ONE ENTRY PER RANGE, IN `DEFAULT_RANGES` ORDER — finest first. The ranges OVERLAP
+        # and this list is two readings to present side by side, never two halves to add up:
+        # `annual` is not the year before `month`, it is 357 days that INCLUDE the same
+        # recent days at a coarser width. Nothing here merges them and nothing may start.
+        "ranges": [
+            _history_series(reading.series[r])
+            for r in pricehistory.DEFAULT_RANGES
+            if r in reading.series
+        ],
+        # A CARD THE ENDPOINT HAS NEVER SEEN SELL IS AN EMPTY LIST AND NOT AN ERROR. HTTP 200
+        # with a null result is what it answers for a real, catalogued product that has
+        # simply never traded — measured on two of them — so a screen that read an empty
+        # `ranges` as a failure would report a join defect over a card that is merely
+        # illiquid. This flag is what lets the panel say the honest thing instead.
+        "never_sold": not reading.series,
     }
 
 

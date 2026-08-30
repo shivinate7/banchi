@@ -42,6 +42,7 @@
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
+    GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
@@ -451,6 +452,13 @@ _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
 # run-item pattern for the same reason the download is: the more specific path reads
 # first, for whoever is following this list rather than the regex engine.
 _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
+# The price history for ONE SKU, named on the query string (D62). Matched before the
+# run-item and step patterns for the same reason the two above are: the more specific
+# path reads first. `history` would otherwise be eaten by `_RUN_STEP_RE`, whose
+# `[a-z]+` matches it exactly — and a GET never reaches that pattern, so the collision
+# is latent rather than live. Ordered defensively all the same: the day somebody adds a
+# GET step, the specific path is already above it.
+_RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -7161,6 +7169,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_pricing(match.group(1))
+                )
+            match = _RUN_HISTORY_RE.match(path)
+            if match:
+                # THE ONE READ HERE THAT LEAVES THIS MACHINE. It is free, both hosts are
+                # public, and it answers one press about one SKU — `server/pipeline_routes.py`'s
+                # header carries the argument and names what it may not become. The SKU is a
+                # query parameter rather than a path segment because it is a FILTER on the run
+                # rather than a thing the run contains: `/history` with no `?sku=` is a
+                # question this route refuses by name rather than a path that does not exist.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or [""]
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_history(match.group(1), asked[0]),
                 )
             match = _RUN_ITEM_RE.match(path)
             if match:

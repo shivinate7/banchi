@@ -175,6 +175,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11535,6 +11536,236 @@ def _riftbound_row(sku: str) -> tcgcsv.Row:
     raise AssertionError(f"{RIFTBOUND_EXPORT.name} carries no SKU {sku}")
 
 
+def _seed_market_cache(directory, product_id: int, month: dict, annual: dict) -> None:
+    """Warm `Market`'s on-disk cache so the route below opens no socket.
+
+    THE SLUGS ARE `Market`'s OWN AND ARE WRITTEN HERE BY HAND, which is the one thing in this
+    block that could rot: a rename there makes this seed miss, the route fetches, and
+    `urlopen` — patched to raise — takes the case red rather than letting it quietly reach the
+    network. That is the failure mode wanted. A seed that silently stopped seeding would turn
+    an offline test into an online one, which is the thing `check_price_history` says the
+    harness must never do.
+    """
+    at = time.time()
+    for slug, payload in (
+        ("tcgcsv/categories", {"results": [{"categoryId": 89,
+                                            "name": "Riftbound League of Legends Trading Card Game"}]}),
+        ("tcgcsv/89/groups", {"results": [{"groupId": 24560, "name": "Unleashed"}]}),
+        ("tcgcsv/89/24560/products", json.loads(TCGCSV_PRODUCTS.read_text("utf-8"))),
+        (f"history/{product_id}-month", month),
+        (f"history/{product_id}-annual", annual),
+    ):
+        path = directory / f"{slug}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"fetched_at": at, "payload": payload}), "utf-8")
+
+
+def check_history_route(checks: Checks) -> None:
+    """`GET /pipeline/runs/<name>/history` — D62's route, and the reading it serves.
+
+    OFFLINE, AND NOT MERELY BY HABIT. `check_price_history` above states why the harness may
+    not reach a third party: it runs behind the Stop hook at the end of every turn, so a case
+    that opened a socket would put a stranger's uptime on the path that decides whether work
+    is done and would hammer a free public mirror once per turn. That section can simply pass
+    a fetcher; this one cannot, because the ROUTE constructs its own `Market`. So the cache is
+    seeded from committed fixtures and `urlopen` is patched to raise — belt and braces, and
+    the braces are what makes it a guarantee rather than an intention.
+
+    WHAT THIS COVERS THAT `check_price_history` CANNOT: that the route reads its export row
+    off the RUN rather than from anywhere else, that each refusal carries its own code, and
+    that the payload a screen casts is the shape `app/src/types.ts` declares. The module's own
+    section owns the arithmetic; this owns the seam.
+
+    THE ASCENDING ASSERTION IS THE ONE THAT WOULD FAIL SILENTLY. `infinite-api` sends buckets
+    newest-first and `Series.parse` sorts them; a route that passed the wire order through
+    would draw every rising card falling, with no exception and nothing on screen to see. It
+    is asserted here as well as in the module because this is the payload the screen actually
+    reads — the sort could be correct in `pipeline/` and undone by a serializer.
+    """
+    checks.note("")
+    checks.note("PRICE HISTORY ROUTE — D62's seam, offline against committed fixtures")
+
+    month = json.loads(PRICE_HISTORY.read_text("utf-8"))
+    # THE SAME CAPTURE SERVES BOTH RANGES, and it is the honest thing to do rather than
+    # inventing a weekly fixture: what this section asserts about `annual` is that a SECOND
+    # range is fetched, keyed separately and reported separately. The buckets' width is the
+    # endpoint's business and `check_price_history` owns the arithmetic over them.
+    annual = json.loads(PRICE_HISTORY.read_text("utf-8"))
+
+    with isolated_home() as home:
+        run_dir = runs.create("t7-history")
+        for _ in range(1):
+            capture_server.do_capture(capture_payload(7, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+            snapshot.inventory.cards["7/1"].game = "riftbound"
+        run_dir.write_identifications(
+            {
+                "prompt_fingerprint": "t7-history",
+                "cards": {
+                    "7/1": {
+                        "photo": str(capture_server.photo_path(7, 1)),
+                        "box": 7,
+                        "index": 1,
+                        "set_hint": None,
+                        # THE FINISH CLAIM IS REQUIRED HERE AND THAT IS THE LADDER WORKING.
+                        # Every Vilemaw row in the riftbound export is a Foil — Near Mint
+                        # through Damaged — so a card with no claim reaches five candidates
+                        # and D3 routes it `ambiguous_no_signal` rather than guessing a
+                        # condition. That is the correct outcome and it leaves no SKU to read
+                        # a history for, so this card carries the toggle an operator sets on
+                        # the stack.
+                        "metadata_finish": "foil",
+                        "status": "ok",
+                        "error": None,
+                        "identification": {
+                            "name": "Vilemaw",
+                            "number": "060/219",
+                            "printed_total": "219",
+                            "confidence": "high",
+                            "finish": "foil",
+                        },
+                    }
+                },
+            }
+        )
+        # A REAL JOIN, so `pricing.json` is written by `cli/cmd_join.py` rather than by this
+        # file. The row the route reads is therefore the row that command stores — which is
+        # the whole reason the route needs no export of its own, and the one coupling worth
+        # asserting against the real writer instead of a hand-made fixture.
+        command(checks, "join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT))
+        name = run_dir.directory.name
+
+        _seed_market_cache(pipeline_routes.market_cache_dir(), 684125, month, annual)
+
+        real_urlopen = urllib.request.urlopen
+
+        def no_sockets(*args, **kwargs):  # noqa: ANN001, ANN003
+            raise AssertionError("the history route opened a socket in the harness")
+
+        urllib.request.urlopen = no_sockets
+        try:
+            answer = pipeline_routes.do_pipeline_history(name, "9189317")
+            checks.ok(True, "a warm cache answers without opening a socket")
+
+            checks.equal(answer["sku"], "9189317", "the payload names the SKU asked for")
+            checks.equal(answer["product_id"], 684125, "and the productId the walk resolved")
+            checks.equal(answer["name"], "Vilemaw", "the card's name comes off the run's table")
+            # THE EXPORT'S OWN FIGURE, CARRIED SO THE PANEL CAN DRAW IT BESIDE THE READING.
+            # `snap.market` is what `cli/cmd_join.py` stored out of the export, so asserting
+            # it here is asserting the route reads the RUN rather than re-deriving a price.
+            checks.ok(
+                answer["market"] is not None,
+                "and the export's own market price, for the panel to draw beside it",
+            )
+            checks.equal(answer["never_sold"], False, "a card with sales is not `never_sold`")
+
+            ranges = [r["range"] for r in answer["ranges"]]
+            checks.equal(
+                ranges,
+                list(pricehistory.DEFAULT_RANGES),
+                "both ranges are served, finest first, in DEFAULT_RANGES order",
+            )
+
+            recent = answer["ranges"][0]
+            starts = [p["at"] for p in recent["points"] if p["at"]]
+            checks.equal(
+                starts,
+                sorted(starts),
+                "THE BUCKETS ARE ASCENDING — the wire order is newest-first, and passing it "
+                "through would draw every rising card falling",
+            )
+            # And the fixture really is the other way round on disk, so the assertion above is
+            # about the ROUTE sorting rather than about the endpoint having changed its mind.
+            raw = [b["bucketStartDate"] for b in month["result"][0]["buckets"]]
+            checks.ok(
+                raw != sorted(raw),
+                "and the committed fixture is newest-first on disk, so that was a real sort",
+            )
+
+            checks.ok(recent["vwap"] is not None, "the anchor is present")
+            checks.ok(
+                recent["bound"] is not None
+                and recent["bound"]["width_of_vwap"] is not None
+                and recent["bound"]["width_of_low"] is not None,
+                "and the bound names BOTH denominators, per `Bound`'s own rule",
+            )
+            checks.ok(
+                "window" in recent["momentum"],
+                "momentum carries the window it was measured over",
+            )
+            checks.ok(
+                isinstance(recent["liquidity"], int),
+                "liquidity is the endpoint's own total rather than a recomputation",
+            )
+
+            # MONEY IS A STRING ON THIS WIRE. `cli/cmd_join.py` writes every figure in
+            # `pricing.json` this way for the reason `pipeline/pricing.py` computes in
+            # `Decimal`: a price through a JSON float comes back as binary floating point.
+            checks.ok(
+                all(
+                    isinstance(v, str)
+                    for v in (recent["vwap"], recent["bound"]["low"], recent["bound"]["high"])
+                ),
+                "and every figure crosses the wire as a string, never a float",
+            )
+
+            # A SECOND PRESS IS FREE, which is what makes the panel's toggle affordable.
+            pipeline_routes.do_pipeline_history(name, "9189317")
+            checks.ok(True, "and a second read is served from the same warm cache")
+
+            for sku, code, why in (
+                ("", "sku_required", "no SKU at all"),
+                ("1", "sku_not_in_run", "a SKU this run never matched"),
+            ):
+                try:
+                    pipeline_routes.do_pipeline_history(name, sku)
+                    checks.ok(False, f"the route refuses {why}", "it answered instead")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(refusal.code, code, f"the route refuses {why} as `{code}`")
+
+            try:
+                pipeline_routes.do_pipeline_history("2026-01-01-nope-01", "9189317")
+                checks.ok(False, "the route refuses an unknown run", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(refusal.code, "no_such_run", "the route refuses an unknown run")
+
+            # A `misc` CARD HAS NO CATALOGUE AND THAT IS D22 RATHER THAN A GAP. Checked by
+            # rewriting the stored row's product line, because the refusal is about the CELL —
+            # a line no registered, catalogued game names has no category to look up, and
+            # `misc` carries `product_line: None` by construction.
+            table = run_dir.directory / runs.PRICING
+            stored = json.loads(table.read_text("utf-8"))
+            for entry in stored["skus"]:
+                entry["row"][tcgcsv.PRODUCT_LINE_COLUMN] = "Yu-Gi-Oh!"
+            table.write_text(json.dumps(stored), "utf-8")
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "an uncatalogued product line refuses", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "not_catalogued",
+                    "an uncatalogued product line refuses as `not_catalogued`, before any fetch",
+                )
+
+            # AND A RUN WITH NO PRICING TABLE REFUSES BY NAME. `join` is what writes it, so
+            # this is the run that predates the file or has never been joined — the same
+            # refusal `do_pipeline_pricing` makes, because it is the same missing file.
+            table.unlink()
+            try:
+                pipeline_routes.do_pipeline_history(name, "9189317")
+                checks.ok(False, "a run with no pricing table refuses", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "pricing_not_written",
+                    "a run with no pricing table refuses as `pricing_not_written`",
+                )
+        finally:
+            urllib.request.urlopen = real_urlopen
+
+
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
 
@@ -12136,6 +12367,7 @@ def run() -> Result:
     check_order_resolver(checks)
     check_crop_preview(checks)
     check_price_history(checks)
+    check_history_route(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )
