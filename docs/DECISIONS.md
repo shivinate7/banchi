@@ -267,6 +267,107 @@ positions" above stays true in the only sense that matters — every copy is at 
 position and the app maps SKU to all of them — but no copy is *designated* backstock, and
 nothing may reintroduce a per-position listing flag to make it so.
 
+**AND "THE APP MAPS SKU TO ALL OF THEM" WAS FALSE FOR EVERY COPY PAST THE FOURTH, FROM THE DAY
+THE CAP EXISTED** (found by the owner 2026-08-30). `cli/cmd_emit.py` wrote the card's identity —
+`sku`, `condition`, `run` — inside a loop over `SkuMatch.live_positions`, which is
+`uncommitted_positions[:add_to_quantity]` and therefore bounded by the `live_cap` of 4. So the
+cap reached the one thing this entry says it has nothing to do with: **how many copies of a card
+we know the name of.**
+
+**The owner's own words on finding it are the whole argument**: *"this was supposed to be just a
+gentle heads up to only list four as a default mainly for cheap cards, it wasn't supposed to
+take the shape it's taken now."* The cap is a rule about the LISTING — the envelope-buster order
+and the stale-price spike this entry names two paragraphs up — and it had quietly become a rule
+about the RECORD.
+
+**An unstamped copy is not backstock in the sense the paragraph above defines.** Backstock is a
+number, and `backstock_positions` is a real answer this pipeline already computes; a copy with
+`sku: null` is something else entirely — invisible to `GET /search`, absent from
+`positions_for_sku`, and uncounted by `copies_on_hand`. The map this entry promises simply did
+not contain it.
+
+**Measured on the owner's store the day it was found: Rengar, Trophy Hunter (9189797, $30.81)
+holds SEVEN copies — 3/1, 3/2, 3/4, 3/17, 3/20, 3/30, 3/36 — and four carried the SKU.** The
+screen reported four on hand for a card there are seven of, and the three it could not see were
+the most valuable cards in the box.
+
+**The stamp runs over `uncommitted_positions` and the count still runs over `live_positions`,
+and keeping those two apart is the fix rather than a detail of it.** `pushed` is a commitment
+that a CSV row was written; a backstock copy has no row. One increment serving both loops would
+push the count past `add_to_quantity` and double-stage on the next import, which is the failure
+`docs/GATES.md` records from the first real post-import re-emit.
+
+**IT IS `uncommitted_positions` AND DELIBERATELY NOT `positions`, WHICH IS THE ONE WAY THIS FIX
+COULD HAVE BEEN WORSE THAN THE DEFECT.** The obvious repair is to iterate every matched
+position, and it destroys data. `cli/resolve.py` marks a copy committed on either of two
+grounds — a count read back off the `Listing`, or **the copy being in a TERMINAL state** — so
+every sold and retired copy of a matched SKU sits in `match.positions`, and
+`store/master.py:set_state` has no terminal guard. Iterating them would move a sold card to
+`identified`, taking D10's permanent gap and D26's terminal state with it, silently. Measured
+on the same run: **eight of its 33 matched positions are sold today**, so one re-emit would have
+resurrected all eight. `uncommitted_positions` cannot contain a departed copy by construction.
+
+**Nothing is given up by excluding the committed ones.** A copy committed by COUNT was chosen by
+`_committed_keys` out of `copies_on_hand`, which selects on `sku` — so it is already stamped. A
+copy committed by having LEFT is not this command's to relabel.
+
+**Idempotence is untouched, and this is worth stating because it is the first thing to doubt.**
+It lives in `cli/resolve.py:_committed_keys`, which reads the `Listing` counts and never
+`card.sku`, so widening what gets stamped cannot move what gets pushed. D54's rule that a
+re-emit adds and never subtracts is unaffected.
+
+**What it recovers is small today and structural from here.** Three cards on the owner's store —
+Rengar's backstock — because only two runs have ever been emitted and only one SKU in them holds
+more copies than the cap. The 502 of 715 records carrying `sku: null` are overwhelmingly not
+this: **498 of them are box 2, whose run was joined and never emitted at all**, and that is a
+different gap with a different remedy.
+
+**A SECOND EFFECT, NAMED SMALLER THAN IT WAS FIRST CLAIMED because the measurement did not
+support the larger claim.** `_committed_keys` slices `copies_on_hand(sku)[:held]`, and an
+unstamped copy is missing from that list — so the slice could return fewer keys than `held` and
+under-count `committed_positions`, inflating `add_to_quantity`. Full stamping makes that list
+complete and the shortfall structurally impossible where the copies exist. It fixes **nothing on
+the store today**: four SKUs there are currently short, and all four are short because their
+stamped copies SOLD — and a sold copy is committed by the terminal branch instead, so the count
+comes out right anyway. Recorded as a hole closed rather than a bug fixed.
+
+**Covered by T7's `check_emit_identity_stamp`, in its own isolated home.** Seven copies of a
+holofoil-only number: every copy carries the SKU, `pushed` stops at the cap, the import file
+asks for exactly the cap on one row, and a sold copy survives a re-emit. Three mutations were
+observed failing before it was kept — the original `live_positions` loop, the naive
+`match.positions` loop, and a shared increment — each red on a different assertion.
+
+**THE CAP ITSELF IS THE OWNER'S NEXT QUESTION, AND IT IS RECORDED HERE RATHER THAN BUILT
+(2026-08-30).** On being shown the fix above and the note that a value-dependent cap was the
+other half of their instruction: *"I'd like to make this cap related, but for now what you've
+done is fine."* So the flat 4 stands, and this paragraph is the marker that it stands by
+default rather than by argument.
+
+**What is being questioned is the FLATNESS, not the cap.** The reasoning above it is
+untouched — a cap still blocks the envelope-buster order, and it still bounds how many copies
+a price spike can sell at a stale number. What the owner's own framing calls into doubt is one
+number serving every card: *"this was supposed to be just a gentle heads up to only list four
+as a default mainly for cheap cards."* The measurement that makes it concrete is on their
+store, and it is the same card this amendment is about — Rengar at **$30.81**, capped at four
+by a default that was reasoned about with commons in mind. D9 already draws exactly this line
+one register over, where the threshold and the floor are both derived from a labor bar rather
+than picked; a cap derived the same way would be a number with an argument behind it instead
+of a constant nobody has revisited.
+
+**It is a change to THIS ENTRY when it is made, and the shape is already sitting here.**
+`SkuMatch.live_cap` is a per-match field with `LIVE_QUANTITY_CAP` as its default, and
+`pipeline/join.py:build` takes `live_cap` as an argument — so a rule that reads the row's own
+market price has somewhere to live without a schema change and without a new field on the
+wire. What it would need is the argument: which bands, what the cap is in each, and whether it
+is a per-run choice like D9's sub-threshold disposition or a standing rule. None of that has
+been argued, and **a cap that varies is a cap an operator has to be able to predict**, so the
+screen half is part of the question rather than a follow-up to it.
+
+**Nothing is blocked on it and nothing should wait for it.** The defect above is that the cap
+reached the RECORD, and that is fixed whatever the cap turns out to be — the identity write no
+longer reads `live_cap` at all, so this decision can be taken later without touching that seam
+again.
+
 ## D8 — Pricing source is the TCGplayer Filtered CSV export itself
 
 It carries live, per-SKU, per-variant `TCG Market Price`. Threshold checks and pricing rules
@@ -1566,6 +1667,14 @@ refuses to re-queue a position a human has cleared — deliberately, so an answe
 question — so there is no undo, no confirm and no acknowledgement. Meanwhile mark-sold, which is
 reversible, gets a photo to confirm against, a two-step control, a twenty-second undo and a
 pre-checked `restores_to`.
+
+**THAT SENTENCE DESCRIBED THE OWNER'S SCREEN UNTIL 2026-08-30 AND NOW DESCRIBES THE FULFILLER'S
+(D57).** Kept as written because it is the MEASUREMENT this entry was built from and nothing
+about the repair depends on it still being current — but a later reader would otherwise go
+looking for a photo-confirm on `#/inventory` and find none. D57 finished the correction from the
+other end: this entry gave the irreversible action its undo, and that one took the redundant
+press off the reversible write, so the sale is one press with `Undo` in the row and on the
+receipt. `#/fulfillment` keeps all four.
 
 **Two fixes, because there are two halves.**
 
@@ -3859,6 +3968,69 @@ audit check resolves it — so this cost nothing but the file.
 until `make venv` runs, where before it had a wrong one immediately. That is the right
 direction for a file whose only failure mode is pointing somewhere plausible and wrong.
 
+**AND THAT TRADE WAS WRONG ABOUT WHAT AN ABSENT FILE COSTS, WHICH TOOK TWENTY-THREE DAYS AND
+A MEASUREMENT TO SEE (2026-08-30).** The paragraph above reasons that absent beats wrong. It
+does not, and the reason is that **nothing leaves it absent**: the Browser pane's own
+instructions tell an agent that finds no `launch.json` to create one from a template carrying
+a literal port, so "absent" is a state that lasts until the first `preview_start` and then
+becomes "wrong" — written by a session that had no way to know this repo derives the number.
+Absent is not the safe end of that trade; it is the *entrance* to the unsafe end.
+
+**Measured across the five worktrees of this clone**: four correct, one absent, and one — the
+tree the measurement was taken in — holding a hand-written **5173** nobody remembered writing.
+That is a linked worktree whose Browser pane would start its own dev server on 5470 and then
+open a tab on the MAIN TREE's, which is this entry's own "silent wrong answer" with the only
+signal being the one you were hoping for.
+
+**AND THE ABSENT ONE BECAME A 5173 WHILE THE FIX WAS BEING WRITTEN, WHICH IS THE MEASUREMENT
+THAT SETTLES IT.** `card-sku-stamping-fix-d11945` was the tree with no config at 10:16. At
+10:29 it had one, naming **5173** against a derived **5313** — written by a session in that
+worktree, from the template, in the twenty minutes between the two readings. Nobody was
+careless: the port is a fact about the checkout's path and there is no way to know it from
+inside a tool that offers a template. **The absent state is not a resting state, and it decays
+in exactly one direction.**
+
+**THE FAULT WAS THAT THE FIX WAS A `make` TARGET, AND A TARGET ONLY RUNS WHEN SOMEBODY RUNS
+IT.** `make launch-config` hangs off `make venv`, which `make worktree-setup` calls — so it
+reaches a worktree provisioned that way and no other. The five readers this entry moved onto
+one derivation are all *code*, which runs whether or not anyone remembers; this one was a
+file somebody had to ask for.
+
+**SO `scripts/worktree-guard.sh` WRITES IT, AND THAT IS THE WHOLE OF THE REPAIR.** The
+SessionStart hook already runs before any work starts in every checkout, already provisions
+the other gitignored things a tree cannot inherit, and already imports this same
+`server/ports.py` to print the pair. One more provisioned thing, from the one derivation,
+with nobody required to remember a target. **It runs ABOVE the worktree test**, because
+`dev_port()` answers 5173 in the main tree by construction — the same call is right in every
+checkout and there is no branch to get wrong.
+
+**ONE WRITER, THREE APPETITES, AND THE DIFFERENCE IS WHO ASKED.** `scripts/launch-config.py`
+holds the shape; the Makefile target FORCES because somebody typed it, the hook passes
+`--if-needed` because it runs unasked, and `make status` passes `--check` and writes nothing.
+Splitting the appetites rather than the writers is what stops the two from drifting, which is
+the failure this entry is otherwise entirely about.
+
+**IT REWRITES AN ABSENT OR A STALE FILE AND NEVER A HAND-EDITED ONE.** Stale is the narrow
+case — this repo's exact shape at the wrong port, which is precisely what the Browser pane's
+template produces. A second configuration, a different command, a `url`, JSON that does not
+parse: all reported, none touched. That asymmetry is **D44's**, taken deliberately rather than
+reinvented — `make icloud-sweep` deletes only what is provably a duplicate and only ever
+reports what differs, on the grounds that guessing is the one way a cleanup tool destroys
+work. Something that runs on every session start without being asked has more reason to keep
+that rule, not less.
+
+**`make status` REPORTS A DISAGREEMENT, BECAUSE THE HOOK FAILS OPEN BY DESIGN.** That is this
+repo's standing rule for hooks and it is right, and its cost is that a skipped hook is silent.
+The status line closes exactly that gap: it is the surface whose whole job is saying what
+state you are actually in, it already reports NOT ARMED for the git hooks on the same
+argument, and it is silent when the two agree so the ordinary case costs no line.
+
+**WHAT IS STILL NOT CLOSED, named rather than implied: a worktree gets the fixed hook only
+once this lands on the branch it was cut from.** The guard is a tracked file, so a tree cut
+from an older main runs the older guard and goes on needing `make launch-config` by hand.
+Nothing can reach backwards into a checkout that does not have the code; what it does mean is
+that the last hand-run of that target is the one this repair asks for, once.
+
 **AND A SECOND FILE WAS MISSED, WHICH IS THE ONE THAT DECIDES WHETHER A WORKTREE CAN WRITE AT
 ALL** (found and fixed 2026-08-30). `server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the
 literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming
@@ -5784,6 +5956,140 @@ key, each console label, and `_preflight_total`'s `busy` list. D33 makes that th
 whose numbers must be unmissable.
 
 ---
+## D57 — The sale is one press, and the button becomes the way back
+
+**BUILT 2026-08-30, on the owner's instruction**: *"change how mark sold works on inventory, it
+should be a single tap immediately marks it as sold, with the button changing to undo
+afterwards."* On `#/inventory` only.
+
+**IT IS `docs/DESIGN.md`'s HEADLINE RULE HONOURED ON THIS CONTROL FOR THE FIRST TIME, NOT AN
+EXCEPTION CARVED OUT OF IT.** That file has said since it was written: *"No confirm dialog on a
+reversible action … Undo covers the mistake; a dialog only makes the ninety-nine correct answers
+cost two taps each."* Its Fulfillment paragraph has said **"One-tap mark-sold"** in as many
+words for just as long. A sale is the most reversible write in this product — one route, two
+directions, no expiry, no listing hold — and it was the one carrying a modal.
+
+**D28 FIXED THAT ASYMMETRY FROM ONE END AND THIS FIXES IT FROM THE OTHER.** Its complaint,
+verbatim: *"mark-sold, which is reversible, had a photo to confirm against, a two-step control
+and a twenty-second window. The reversible action carried three guards and the irreversible one
+carried none."* It gave the review answer an undo. What it did not do — because it was not
+asked to — was take the redundant press off the reversible write, and this is that half. D28 is
+untouched: every guard it added stays.
+
+**THE PHOTOGRAPH WAS THE REAL ARGUMENT AND THE OWNER ANSWERED IT WITH THE SCREEN.**
+`Inventory.tsx`'s panel did not defend itself as an intent check — it said in its own comment
+that *"what is being confirmed is not 'did you mean to press that' — docs/DESIGN.md bans that
+dialog outright — but 'is the card in your hand the card at this position', which is a question
+only a photograph can answer."* That was right when it was written and D38 overtook it: the card
+band draws the selected copy's photograph at **449x627**, on the same screen, feet from the row.
+The owner: *"for my side i literally have the inventory image in front of me already, it was
+redundant."*
+
+**WHAT IS EXACT AND WHAT IS APPROXIMATE, stated because the two are not the same claim.** The
+band shows the photograph of the copy the walk is pointing at (`aria-current`), so for that row
+the redundancy is literal — same bytes, same position, one panel over. For a SECOND copy of the
+same SKU in another box the band shows the same card face at a different slot rather than that
+slot's own photograph. **D45 already makes that copy's own photograph one press away**: the
+position label is a control, and pressing it walks the box browse to that copy. So the check is
+not deleted, it is demoted from mandatory to available — and the operator who wants it presses
+the label that names where they are going.
+
+**THE UNDO IS DOUBLED RATHER THAN MOVED, AND THAT IS THE OWNER'S CHOICE OVER TWO CHEAPER ONES.**
+The row's slot becomes `Undo` for the window and the screen-level receipt keeps its own.
+
+- **The row's is the one under the hand.** It is where the press was, where the eye is, and it
+  is what the instruction asked for.
+- **The receipt is the only one that survives.** The copy rows are unmounted by stepping the
+  walk to another card, by a query matching nothing, and by a failed re-read — `useSearch`
+  clears its results on a failure, deliberately — and the twenty-second clock stops for none of
+  the three. `Inventory.tsx` and `BoxBrowse.css` have both argued for years that *"a
+  twenty-second promise has to outlive that"*, and `app/tests/inventory.spec.ts` asserts it by
+  selling a copy and then stepping the walk. Deleting the receipt would make the promise good
+  only for as long as the operator stands still.
+- **It is also the only one that can SPEAK.** `already_sold` and `sold_origin_unknown` both come
+  back `canUndo: false`, so the row correctly draws the plain word `sold`; the sentence saying
+  why there is no way back needs a line of prose and a 32px slot in a copy row has none.
+
+**TWO CONTROLS, TWO ACCESSIBLE NAMES, DELIBERATELY DIFFERENT.** The receipt's is `Undo <place>`
+and the row's is `Undo the sale at <place>`. Identical names would leave a screen reader unable
+to tell one sale's two ways back from two different sales — which is the failure the receipt's
+own label was written to avoid one register down. The visible word stays `Undo` on both, which
+is what the copy rules ask of a control.
+
+**`Undo` ALONE IN THE SLOT, WITH NO `Retire` BESIDE IT**, because that is what the slot already
+did for a sold copy: the server refuses the retirement of a sold card, so the second control
+could only fail.
+
+**IT IS DRAWN INSIDE THE `sold` BRANCH AND THAT IS FORCED RATHER THAN STYLISTIC.** `doSell` sets
+the optimistic `soldKeys` overlay in the same continuation as the receipt, so the very next
+render is already past the sold guard — a branch above it would be unreachable, and unreachable
+code that looks like the feature is worse than none. Found by pressure-testing the design before
+it was built rather than by the screen doing nothing.
+
+**THE RETIREMENT IS UNCHANGED AND THE ASYMMETRY IS THE RULING.** D26's write keeps its panel,
+its photograph and its undo-on-the-receipt-only. The reason is not symmetry and not caution: a
+retirement without a reason is refused (`retire_reason_invalid`), so the four reason buttons are
+not an acknowledgement to dismiss, they are **the only input the write has**. Take them away and
+there is nothing to send. This entry removed a press that asked a question already answered; that
+panel asks one with four answers.
+
+**THE OVERSHOOT GUARD IS `busyKey` AND NOTHING ELSE — the owner's choice, and the honest caveat
+is recorded rather than argued away.** `Fulfillment.css` records the opposite ruling for the same
+failure one screen over, and it was earned: *"Pull" and "Mark sold" were the same control in the
+same place, one state apart, so a double-tap on Pull sold the card — one tap of overshoot between
+looking at a photo and recording a sale.* `app/tests/fulfillment.spec.ts` measures the two
+rectangles. Displacing the control the same way here was offered and declined.
+
+What actually covers it, in descending order of how much it is worth: every control in the slot
+is disabled while a write is in flight, and `doSell` returns early besides; the slot SHRINKS to
+one right-packed control, vacating the coordinate `Mark sold` was under; and a receipt appearing
+above pushes the whole copies list down. **What does not cover it: the busy gate against a local
+server, which reopens in milliseconds and does not span a human double-tap.**
+
+**TWO RESIDUAL RISKS, NAMED SO THEY ARE NOT DISCOVERED AS SURPRISES.** `Mark sold` is an ordinary
+`<button>` in the tab order, so Tab-then-Enter now writes where it used to open a modal; and a
+HELD Enter can oscillate sell → `Undo` → sell as the slot changes meaning under it. Neither is
+reachable from a key binding — `BoxBrowse`'s window handler is arrow/PageUp/Home navigation that
+writes nothing, and `App.tsx`'s leader chord only sets a hash — so nothing about the keyboard
+walk is armed by this. **The focus drop is the accidental brake**: the slot's two-buttons-to-one
+change replaces the DOM node, so focus falls to `<body>` and a held Enter stops. The arrow keys
+still walk the box from there, because that listener is on `window`.
+
+**WHAT WOULD REOPEN THIS: a sale recorded against a copy the owner did not mean.** The fix to
+reach for then is `.fulfillment-step`'s displacement — put the `Undo` outside the footprint
+`Mark sold` occupied — and **not** the panel this replaced, which guarded a photograph the screen
+already draws.
+
+**WHAT IT OVERTURNS, NAMED RATHER THAN QUIETLY STEPPED OVER.**
+`docs/specs/order-flow.md` §13 says *"Do not add a second sale path without both guards. Section
+8.1 answers the objection by bringing the guards, not by dismissing them."* One of the two guards
+is being dismissed, on the owner's ruling, and §8.1's actual argument survives intact: the guards
+belong to the WRITE rather than to the Fulfillment view, and nothing in D5 says the owner may
+have the write without them. What moved is *which* guard this screen needs, on a screen that
+already draws the photograph. `#/fulfillment` is untouched — D31 is explicit that its downstream
+rule *"is about which arguments may decide architecture, not about which tests may go red"*.
+
+**IT IS A CLIENT CHANGE AND ONLY A CLIENT CHANGE.** `POST /inventory/<box>/<index>/sold` is not
+touched: it already takes `{}` and `{"undo": true}` on one path, already answers `restores_to` so
+a caller knows before drawing an Undo whether one will work, and its own docstring already said
+*"NO CONFIRM DIALOG IS IMPLIED BY ANY OF THIS. `docs/DESIGN.md` bans one on a reversible action,
+and this route is what makes the action reversible."* The store, the harness and every Python
+test are unaffected.
+
+**THE ACCENT FILL LEFT THE SCREEN WITH THE PANEL, AND THAT IS THE RULE SATISFIED.** The confirm
+was the one place `#/inventory` drew a solid fill; `Inventory.css`'s header has now said both
+things and records why. `docs/DESIGN.md` reserves the fill for a screen with exactly one thing to
+do — it says where one MAY go, never that a screen must have one, and `#/runs` draws none either.
+
+**AND THE CHANGE WAS MAKEABLE WITH EVERY CHECK GREEN, WHICH IS THE FINDING WORTH MORE THAN THE
+FEATURE.** `app/tests/inventory.spec.ts` asserted that `Mark sold` and `Retire` were *visible*
+and stopped there. It never pressed either, so the confirm panel, the receipt, the undo window,
+`canUndo` and the `already_sold` path on this screen were **entirely unasserted** — a control
+could change what it does to a real card and no check in the repo would notice. `open()` did not
+even stub the sale route. Six cases now cover it, and three mutations were observed failing
+before they were kept: dropping the `canUndo` filter (an Undo offered for a sale the server said
+cannot be reversed — caught twice), never drawing the row's Undo, and a press that writes
+nothing.
 ---
 
 ## D58 — A card's number counts the cards in the box, not the slots

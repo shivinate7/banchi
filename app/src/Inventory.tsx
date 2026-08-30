@@ -22,7 +22,6 @@ import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
-import { PullConfirm } from './PullConfirm'
 import { useSearch } from './useSearch'
 import './Inventory.css'
 
@@ -52,8 +51,9 @@ import './Inventory.css'
  * thing was made a view of the other.
  *
  * NOTHING FROM THE FIND HALF WAS DROPPED, and each piece is named so a later reader can check:
- * D7's SKU -> positions map is `CopiesPanel` below; the sale keeps its photo-confirm, its
- * receipt and its twenty-second undo; D26's retirement keeps all three; `already_sold` is still
+ * D7's SKU -> positions map is `CopiesPanel` below; the sale keeps its receipt and its
+ * twenty-second undo — and lost its photo-confirm on 2026-08-30, see the ruling below; D26's
+ * retirement keeps all three; `already_sold` is still
  * drawn as a receipt rather than as an error; a pooled copy (D24) still renders no position
  * label; and the per-SKU listing quantities the old group rows carried are now read off
  * `SearchGroup.listed`, which is the same three numbers from the route that also reports the
@@ -87,11 +87,28 @@ import './Inventory.css'
  *   properties of the Fulfillment view; they are properties of a screen that records a sale,
  *   and docs/DESIGN.md asserts them THERE because that is the view its constraints table
  *   governs. Nothing in D5 says the owner may have the write without them. So this screen
- *   carries both: `Confirm` below is the photo-confirm — the sale goes through a panel
- *   showing the copy's own stored photo (D6) at its position before anything is written —
- *   and every recorded sale leaves a receipt with an undo window, the shape Fulfillment.tsx
- *   already ships. `markSold` answers `restores_to` precisely so a caller knows whether an
- *   undo can be offered at all, and this screen reads it rather than offering one blind.
+ *   carried both: a photo-confirm panel showing the copy's own stored photo (D6) at its
+ *   position before anything was written, and a receipt with an undo window on every
+ *   recorded sale — the shape Fulfillment.tsx already ships. `markSold` answers
+ *   `restores_to` precisely so a caller knows whether an undo can be offered at all, and
+ *   this screen reads it rather than offering one blind.
+ *
+ *   AND THE PHOTOGRAPH HALF WAS RULED REDUNDANT ON THIS SCREEN ON 2026-08-30 (D57). The
+ *   owner: "for my side i literally have the inventory image in front of me already, it was
+ *   redundant." The panel argued it was checking "is the card in your hand the card at this
+ *   position", which only a photograph can answer — and since D38 the card band draws that
+ *   photograph at 449x627 two inches from the row, so the panel was answering a question
+ *   already answered. `Mark sold` writes on one press now and the undo half is DOUBLED
+ *   rather than dropped: the row's own slot becomes `Undo` for the window, and the receipt
+ *   below keeps its own. That is docs/DESIGN.md's headline rule — "No confirm dialog on a
+ *   reversible action ... Undo covers the mistake" — honoured on this control for the first
+ *   time, and its Fulfillment line has read "One-tap mark-sold" all along.
+ *
+ *   THE ANSWER ABOVE IS NOT WEAKENED BY THAT, and the distinction is the whole of D57. The
+ *   guards still belong to the write rather than to a view; what moved is which guard this
+ *   screen needs, on a screen that already draws the photograph. #/fulfillment is untouched:
+ *   his two-step exists because a double-tap once sold a card whose photo he never saw, and
+ *   app/tests/fulfillment.spec.ts measures the two rectangles.
  *
  *   OBJECTION 2, TWO PLACES FOR ONE ACTION — ANSWERED BY THE SERVER, WHICH ALREADY REFUSES
  *   THE RACE. The failure feared was two devices disagreeing about which copy went. They
@@ -355,17 +372,14 @@ export function Inventory() {
    * no copy of anything, so a write's only honest follow-up is to ask again. */
   const [reloads, setReloads] = useState(0)
 
-  /* The copy waiting on a photo-confirm, or null. THE PHOTO IS THE GUARD — see the header: this
-   * is half of what the objection asked for, and it is why pressing Mark sold on a row writes
-   * nothing on its own. */
-  const [pending, setPending] = useState<SearchCopy | null>(null)
-
-  /* The copy waiting on a retire panel, or null. The same guard for the sibling write (D26):
-   * pressing Retire writes nothing on its own — the panel shows the copy's stored photo at its
-   * position, and the write happens only when a REASON is chosen, since a retirement without
-   * one is refused (`retire_reason_invalid`) and the choice is the confirm. At most one of
-   * `pending` and this is non-null: opening either closes the other at the call sites, because
-   * two stacked scrims is two answers to "what am I about to do". */
+  /* The copy waiting on a retire panel, or null. THERE IS NO SALE EQUIVALENT SINCE D57 — this
+   * sat beside a `pending` that held the copy waiting on a photo-confirm, and the sale writes on
+   * one press now.
+   *
+   * THE SIBLING WRITE KEEPS ITS PANEL AND THE REASON IS NOT SYMMETRY (D26): a retirement without
+   * a reason is refused (`retire_reason_invalid`), so the four reason buttons ARE the confirm and
+   * there is no redundant press here to take away. D57 removed a press that asked "did you mean
+   * it" about a photograph already on screen; this one asks a question with four answers. */
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
 
   /* One write in flight at a time, by copy key. `Store.write()` takes the file lock per call, so
@@ -411,21 +425,21 @@ export function Inventory() {
     return () => window.clearTimeout(timer)
   }, [receipts])
 
-  /* Escape closes whichever panel is up — the photo-confirm, or the retire panel, which is the
-   * same decision point for the sibling write. A panel is a decision point and not a
-   * destination, so the key that means "I did not mean this" has to work — and docs/DESIGN.md's
-   * no-dialog rule is about REVERSIBLE actions, which is what makes a confirm legal here. */
+  /* Escape closes the retire panel. It closed the photo-confirm too until D57 took that panel
+   * away; one panel is left and the key still has to work, because a panel is a decision point
+   * and not a destination.
+   *
+   * WHAT DOES NOT FOLLOW FROM THIS: that the sale wanted the same key. Escape is the way OUT of
+   * an unanswered question, and the sale no longer asks one — its way back is `Undo`, in the row
+   * and on the receipt, which is docs/DESIGN.md's own remedy for a reversible action. */
   useEffect(() => {
-    if (pending === null && retiring === null) return
+    if (retiring === null) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPending(null)
-        setRetiring(null)
-      }
+      if (event.key === 'Escape') setRetiring(null)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [pending, retiring])
+  }, [retiring])
 
   /** Newest first, and a second write against one position replaces its receipt rather than
    *  stacking another on it. These are events rather than places, so box-walk order does not
@@ -442,7 +456,6 @@ export function Inventory() {
       if (busyKey !== null) return
       setBusyKey(copy.key)
       setTrouble(null)
-      setPending(null)
       setRetiring(null)
 
       /* The label, or the pooled fact — `Place.label` is null for a pooled copy (types.ts, on
@@ -505,7 +518,6 @@ export function Inventory() {
       if (busyKey !== null) return
       setBusyKey(copy.key)
       setTrouble(null)
-      setPending(null)
       setRetiring(null)
 
       const seat = {
@@ -590,15 +602,49 @@ export function Inventory() {
   const soldKeys = useMemo(() => new Set(sold), [sold])
   const retiredKeys = useMemo(() => new Set(retired), [retired])
 
-  const openSell = useCallback((copy: SearchCopy) => {
-    setTrouble(null)
-    setRetiring(null)
-    setPending(copy)
-  }, [])
+  /** The sales a row may still take back, by copy key. D57's half of the undo, and the reason
+   *  it is a MAP rather than a set beside `soldKeys`: the row's press calls `doUndo`, which
+   *  needs the box, the index and the kind, and a key alone cannot rebuild them.
+   *
+   *  `kind === 'sale'` IS LOAD-BEARING AND NOT A TIDY-UP. `remember` dedupes by key across both
+   *  writes, so one position holds one receipt — without the filter a RETIREMENT's receipt would
+   *  put an Undo in the row's `retired` branch, which nobody ruled on. D26's write keeps its
+   *  panel and keeps its undo on the receipt alone.
+   *
+   *  `canUndo` FALLS OUT HERE, which is what makes the two dead ends draw the plain word:
+   *  `already_sold` is another device's sale and `sold_origin_unknown` has no state to put back,
+   *  and in both cases the receipt below carries the sentence a row has no room for.
+   *
+   *  NOTHING CHECKS `until`. Dropping an expired receipt is the timer's job above, and a second
+   *  clock read here would be a second opinion about when the window closed. */
+  const undoableSales = useMemo(
+    () =>
+      new Map(
+        receipts
+          .filter((receipt) => receipt.kind === 'sale' && receipt.canUndo)
+          .map((receipt) => [receipt.key, receipt] as const),
+      ),
+    [receipts],
+  )
+
+  /* THE PRESS IS THE SALE AS OF 2026-08-30 (D57). This was `openSell`, which set `pending` and
+   * wrote nothing until a photo-confirm was answered. `doSell` already refuses a second write
+   * while one is in flight and already clears `trouble`, so what is left of the old body is the
+   * one thing the sale still has to do to its sibling: a retire panel standing over another copy
+   * is a question about a different card, and leaving it up over a sale that has just landed
+   * would leave two writes on screen at once. */
+  const sell = useCallback(
+    (copy: SearchCopy) => {
+      setRetiring(null)
+      void doSell(copy)
+    },
+    [doSell],
+  )
+
+  const undo = useCallback((receipt: Receipt) => void doUndo(receipt), [doUndo])
 
   const openRetire = useCallback((copy: SearchCopy) => {
     setTrouble(null)
-    setPending(null)
     setRetiring(copy)
   }, [])
 
@@ -613,9 +659,21 @@ export function Inventory() {
    * sentence and their note; `kind` is `doUndo`'s to branch on and nothing rendered here reads
    * it.
    *
-   * NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly one thing to
-   * do, and a receipt is the way back from something already done. The confirm panel is the one
-   * place on this screen that qualifies, and it keeps the only fill. */
+   * IT IS NOW THE SECOND UNDO ON A SALE AND STILL THE ONLY ONE THAT SURVIVES (D57). The row's
+   * own slot draws an `Undo` too, which is the one under the hand — but the rows are unmounted
+   * by stepping the walk, by a query matching nothing, and by a failed re-read (`useSearch`
+   * clears its results on a failure, deliberately), and the clock does not stop for any of the
+   * three. So this is not redundancy: it is the control the paragraph above was written for,
+   * and deleting it would make a twenty-second promise good for as long as you stand still.
+   *
+   * AND IT IS THE ONLY PLACE `already_sold` AND `sold_origin_unknown` CAN SPEAK. Both come back
+   * `canUndo: false`, so the row correctly draws the plain word `sold`; the sentence saying WHY
+   * there is no way back needs a line of prose, and a 32px slot in a copy row has none.
+   *
+   * NO FILL, AND AS OF D57 THERE IS NONE LEFT ANYWHERE ON THIS SCREEN. docs/DESIGN.md reserves
+   * the solid accent for a screen with exactly one thing to do; the photo-confirm panel used to
+   * be it and it is gone. That is the rule satisfied rather than broken — it says where a fill
+   * MAY go, never that a screen must have one, and `#/runs` draws none either. */
   const receiptPanels = receipts.map((receipt) => (
     <div className="inventory-receipt" key={receipt.key}>
       <p className="inventory-receipt-said">{receipt.said}</p>
@@ -625,7 +683,14 @@ export function Inventory() {
         /* The position is in the accessible name and not on the button. Two receipts standing at
            once make two controls that both read "Undo" to anything that cannot see the panel
            they sit in; the visible word stays one word, which is what the copy rules ask of a
-           control. */
+           control.
+
+           AND SINCE D57 A THIRD CONTROL CAN BE LIVE FOR THE SAME SALE — the copy row's own
+           `Undo`, which names itself `Undo the sale at <place>` for exactly the reason above.
+           The two strings are deliberately different rather than deliberately the same: they
+           reverse one write from two places, and a reader that cannot see the layout has no
+           other way to tell them apart. `Action` carries the other half of this pair; change
+           neither string without the other. */
         <button
           className="inventory-plain"
           type="button"
@@ -663,7 +728,9 @@ export function Inventory() {
           busyKey={busyKey}
           soldKeys={soldKeys}
           retiredKeys={retiredKeys}
-          onSell={openSell}
+          undoableSales={undoableSales}
+          onSell={sell}
+          onUndo={undo}
           onRetire={openRetire}
           onGoTo={walkTo}
         />
@@ -701,20 +768,6 @@ export function Inventory() {
            card. */
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
       />
-
-      {pending === null ? null : (
-        <Confirm
-          copy={pending}
-          /* THE PANEL GETS ONE BOX'S LAYOUT, because the panel holds exactly one copy and the
-             box it is in is already known here. Looking it up at the call site rather than
-             handing a whole map to a component with one place to draw is the same reason
-             `CardLocations` takes the map: each is given the shape its own job needs. */
-          sections={layouts.get(pending.place.box)}
-          busy={busyKey !== null}
-          onConfirm={() => void doSell(pending)}
-          onCancel={() => setPending(null)}
-        />
-      )}
 
       {retiring === null ? null : (
         <RetirePanel
@@ -763,7 +816,9 @@ function CopiesPanel({
   busyKey,
   soldKeys,
   retiredKeys,
+  undoableSales,
   onSell,
+  onUndo,
   onRetire,
   onGoTo,
 }: {
@@ -778,7 +833,14 @@ function CopiesPanel({
   busyKey: string | null
   soldKeys: ReadonlySet<string>
   retiredKeys: ReadonlySet<string>
+
+  /** The sales still inside their undo window, by copy key (D57). Passed through to `Action`
+   *  and read nowhere else here — this panel decides nothing about which sale is reversible,
+   *  it only hands the screen's answer to the slot that draws it. */
+  undoableSales: ReadonlyMap<string, Receipt>
+
   onSell: (copy: SearchCopy) => void
+  onUndo: (receipt: Receipt) => void
   onRetire: (copy: SearchCopy) => void
 
   /** Point the walk at one copy. Handed straight to `CardLocations`, which draws it on every
@@ -862,7 +924,9 @@ function CopiesPanel({
               busyKey={busyKey}
               soldKeys={soldKeys}
               retiredKeys={retiredKeys}
+              undoableSales={undoableSales}
               onSell={onSell}
+              onUndo={onUndo}
               onRetire={onRetire}
             />
           </div>
@@ -915,7 +979,9 @@ function CopiesPanel({
               busyKey={busyKey}
               soldKeys={soldKeys}
               retiredKeys={retiredKeys}
+              undoableSales={undoableSales}
               onSell={onSell}
+              onUndo={onUndo}
               onRetire={onRetire}
             />
           )}
@@ -950,28 +1016,78 @@ function Action({
   busyKey,
   soldKeys,
   retiredKeys,
+  undoableSales,
   onSell,
+  onUndo,
   onRetire,
 }: {
   copy: SearchCopy
   busyKey: string | null
   soldKeys: ReadonlySet<string>
   retiredKeys: ReadonlySet<string>
+  undoableSales: ReadonlyMap<string, Receipt>
   onSell: (copy: SearchCopy) => void
+  onUndo: (receipt: Receipt) => void
   onRetire: (copy: SearchCopy) => void
 }) {
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
-    return <span className="card-locations-gone">sold</span>
+    /* THE UNDO IS INSIDE THE SOLD BRANCH AND NOT AHEAD OF IT (D57), which is forced rather than
+       stylistic: `doSell` sets the optimistic `soldKeys` overlay in the same continuation as the
+       receipt, so the very next render is already down here. A branch above this one would be
+       unreachable, and unreachable code that looks like the feature is worse than none.
+       `undoableSales` has already filtered to sales that CAN be reversed, so `already_sold` and
+       `sold_origin_unknown` fall through to the plain word with the receipt carrying their
+       sentence.
+
+       `Undo` ALONE, WITH NO `Retire` BESIDE IT, which is what this slot already did for a sold
+       copy: the server refuses the retirement of a sold card (`already_sold` on that route), so
+       drawing the second control would be drawing one that can only fail.
+
+       ITS ACCESSIBLE NAME IS NOT THE RECEIPT'S. Two live controls reverse this one sale and a
+       screen reader announces both; identical names would leave them indistinguishable, which is
+       the failure the receipt's own label was written to avoid one register down. Composed from
+       `receipt.place` and never from `copy.place.label`, because that is null for a pooled copy
+       (D24) and the receipt's copy already carries the `pooled · key` fallback. */
+    const standing = undoableSales.get(copy.key)
+    return standing === undefined ? (
+      <span className="card-locations-gone">sold</span>
+    ) : (
+      <button
+        className="card-locations-sell"
+        type="button"
+        aria-label={`Undo the sale at ${standing.place}`}
+        disabled={busyKey !== null}
+        onClick={() => onUndo(standing)}
+      >
+        Undo
+      </button>
+    )
   }
   if (copy.state === 'retired' || retiredKeys.has(copy.key)) {
     return <span className="card-locations-gone">retired</span>
   }
   return (
     <span className="inventory-copy-actions">
-      {/* No accent fill on either. docs/DESIGN.md reserves the solid fill for a screen with
-          exactly one thing to do, and a copy row with two doors out of inventory is not that —
-          the confirm panel each of them opens is. The guard is not in the slot: each press opens
-          a panel over the copy's own photograph, and the receipt above carries the undo. */}
+      {/* No accent fill on either, and since D57 there is none on this screen at all.
+          docs/DESIGN.md reserves the solid fill for a screen with exactly one thing to do, and a
+          copy row with two doors out of inventory is not that.
+
+          THE GUARD IS NOW ASYMMETRIC AND THAT IS THE RULING, NOT AN OVERSIGHT. `Retire` still
+          opens a panel, because a retirement without a reason is refused and the four reasons ARE
+          the confirm. `Mark sold` writes on this press: the photograph it used to confirm against
+          is already on screen in the card band, and the way back is the `Undo` this slot draws
+          for twenty seconds plus the receipt above.
+
+          WHAT GUARDS THE OVERSHOOT IS `busyKey` AND NOTHING ELSE (the owner's choice, D57).
+          Fulfillment.css records the opposite ruling for the same failure — it displaces the
+          second control out of the first one's footprint, because a double-tap there once sold a
+          card whose photo he never saw — and a reader will find that first, so: it was offered
+          and declined for this screen. The honest caveat is that against a local server the gate
+          reopens in milliseconds, so it does not span a human double-tap; what does cover it here
+          is that the slot SHRINKS to one right-packed control, vacating the coordinate `Mark
+          sold` was under, and that a receipt appearing above pushes the whole list down. If a
+          real mis-sale ever happens, `.fulfillment-step`'s displacement is the fix to reach for
+          — not the panel this replaced. */}
       <button
         className="card-locations-sell"
         type="button"
@@ -992,129 +1108,31 @@ function Action({
   )
 }
 
-/* The photo-confirm, and the first half of the answer to this file's own objection.
+/* The retire panel — the one panel left on this screen, and the last reader of `.inventory-scrim`
+ * and `.inventory-confirm*`.
  *
- * D6 PUTS THE PHOTO SERVICE HERE FOR EXACTLY THIS: "the review queue requires it; the pull
- * modal reuses it, showing the card's own capture photo beside its location before pulling."
- * The pull modal is the Fulfiller's; this is the owner's, and the entry describes the operation
- * rather than the persona. What is being confirmed is not "did you mean to press that" —
- * docs/DESIGN.md bans that dialog outright — but "is the card in your hand the card at this
- * position", which is a question only a photograph can answer.
+ * IT HAD A SIBLING UNTIL 2026-08-30 (D57) and the rules below were written against the pair:
+ * `Confirm` was the sale's photo-confirm and this shared its scrim, its photo and its bar so
+ * what the owner confirmed against was the same picture on both writes. The sale writes on one
+ * press now and that component is gone.
  *
- * ONE THING TO DO, SO IT GETS THE FILL. The rule is docs/DESIGN.md's: solid accent where there
- * is exactly one action, outline where the system is unsure. A confirm panel is the one shape on
- * this screen that qualifies, which is why `PullConfirm` is reused here rather than copied — the
- * same component step 6 built and the same fill it was measured in. Cancel is not a second
- * action in that sense; it is the way out, and it is drawn as the quiet control every other
- * owner-side screen uses.
- *
- * A MISSING PHOTO DOES NOT BLOCK THE SALE. `has_photo` says the server had bytes when it
- * answered, and undo deletes a photo — so the load can still fail between the search and this
- * panel. A card with no photograph is still a real card at a real position, and refusing to let
- * the owner sell it would make a display failure into an inventory one. The panel says plainly
- * that there is nothing to confirm against and leaves the decision where it was.
- */
-function Confirm({
-  copy,
-  sections,
-  busy,
-  onConfirm,
-  onCancel,
-}: {
-  copy: SearchCopy
-
-  /** THIS copy's box layout, or undefined. One box's spans and not the map, because this panel
-   *  draws one copy — see the call site. Undefined is the ordinary case before `GET /boxes`
-   *  answers and the permanent case if it never does, and the bar is honest either way. */
-  sections?: readonly SectionDetail[]
-  busy: boolean
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  const [broken, setBroken] = useState(false)
-  const [panel, setPanel] = useState<HTMLDivElement | null>(null)
-
-  /* Focus lands on the confirm button. A callback ref rather than `useRef` + an effect on mount,
-   * because the node is what the effect is waiting for and a callback ref already fires when it
-   * arrives.
-   *
-   * NO KEY CHIP, and its absence is the honest half of "every choice shows its key". The focused
-   * button already takes Enter and Escape already cancels — both true without a listener of this
-   * file's own. A chip saying so would be a hint about the browser's behaviour rather than about
-   * a binding this screen owns, and a second Enter handler beside the focused button is how one
-   * press fires twice. */
-  useEffect(() => {
-    panel?.querySelector<HTMLButtonElement>('.pull-confirm')?.focus()
-  }, [panel])
-
-  const gone = !copy.has_photo || broken
-
-  return (
-    /* The scrim closes on a click that misses the panel, which is the same gesture Escape is.
-       `role="presentation"` because it is not a control — the panel's own buttons are, and the
-       keyboard route out is the key rather than this element. */
-    <div className="inventory-scrim" role="presentation" onClick={onCancel}>
-      <div
-        className="inventory-confirm"
-        ref={setPanel}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Mark sold: ${copy.place.label}`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <p className="inventory-confirm-head">Mark sold</p>
-
-        {gone ? (
-          <p className="inventory-note-text">
-            No photo is stored for this position, so there is nothing to check the card against.
-            The copy is still recorded at the position below.
-          </p>
-        ) : (
-          <img
-            className="inventory-confirm-photo"
-            src={photoUrl(copy.place.box, copy.place.index)}
-            alt={`The card stored at ${copy.place.label}`}
-            onError={() => setBroken(true)}
-          />
-        )}
-
-        <p className="inventory-confirm-place">{copy.place.label}</p>
-        {copy.place.box_name === null ? null : (
-          <p className="inventory-confirm-boxname">{copy.place.box_name}</p>
-        )}
-
-        {/* The same bar the row carries, so what the owner confirms against is what he chose the
-            copy by. Nothing here is computed: `spansOf` draws the server's own numbers, and
-            `sectionDepth` adds the second scale off two more of them — the SAME pair of bars
-            that is on the row this panel was opened from, because a confirm that draws less
-            than the thing it is confirming makes the operator check twice. */}
-        <PositionBar place={copy.place} persona="owner" sections={sections} sectionDepth />
-
-        <div className="inventory-confirm-actions">
-          <PullConfirm label="Mark sold" onConfirm={onConfirm} disabled={busy} />
-          <button className="inventory-plain" type="button" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* The retire panel — `Confirm`'s sibling for D26's write, sharing its scrim, its photo and its
- * bar so what the owner confirms against is the same picture on both writes.
+ * WHY THIS ONE SURVIVED, WHICH IS THE PART A LATER SESSION WILL ASK. D57 removed a press that
+ * asked "did you mean it" about a photograph the card band already draws — the confirm
+ * docs/DESIGN.md bans on a reversible action. This panel asks something else: a retirement
+ * without a reason is refused (`retire_reason_invalid`), so the four reason buttons are not an
+ * acknowledgement, they are the write's only input. Take them away and there is nothing to send.
  *
  * FOUR ANSWERS, SO NO FILL. docs/DESIGN.md gives the solid accent to a screen with exactly one
  * thing to do, and this panel is a choice — filling one reason would teach the queue's "a screen
  * with two answers gets no fill" rule a counterexample on the next screen over. The reason
  * buttons are the confirm: pressing one writes the retirement, pressing nothing writes nothing,
- * and Escape or the scrim leaves the way `Confirm` does. There is no separate "Retire" button to
- * press after the reason, because the reason IS the decision — a second press would be the
- * acknowledgement dialog the design bans.
+ * and Escape or the scrim leaves. There is no separate "Retire" button to press after the
+ * reason, because the reason IS the decision — a second press would be the acknowledgement
+ * dialog the design bans.
  *
- * FOCUS LANDS ON CANCEL, not on a reason. `Confirm` focuses its one action because it has one;
- * focusing any reason here would make Enter answer a question the owner has not read yet, and
- * the four are not ranked. Cancel is the one control whose accidental press costs nothing. */
+ * FOCUS LANDS ON CANCEL, not on a reason. Focusing any reason would make Enter answer a question
+ * the owner has not read yet, and the four are not ranked. Cancel is the one control whose
+ * accidental press costs nothing. */
 function RetirePanel({
   copy,
   sections,

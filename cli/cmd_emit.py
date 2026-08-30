@@ -376,8 +376,45 @@ def run(args, say) -> int:
             # reads `pushed + staged` back as `committed` — which is where this command's
             # idempotence actually lives. The bump below is gated on `emitted` and the stamp
             # above it is not.
+            #
+            # THE CAP BOUNDS THE LISTING, NOT THE IDENTITY, AND THIS LOOP READ IT AS BOTH.
+            #
+            # It iterated `live_positions` — `uncommitted_positions[:add_to_quantity]`, so
+            # bounded by D7's `live_cap` of 4 — and did the identity write inside it. D7 caps
+            # how many copies a SKU may have LIVE, on the envelope-buster and stale-price
+            # arguments it gives; it says nothing about how many copies we know the name of.
+            # Every copy past the fourth was left wearing `sku: null`, which is not backstock
+            # in D7's sense (`backstock_positions` is a real answer this command already has)
+            # but a copy that no SKU-keyed surface can see at all: `GET /search` misses it,
+            # `copies_on_hand` misses it, and `positions_for_sku` cannot map it back.
+            #
+            # Measured on the owner's store: Rengar, Trophy Hunter (9189797, $30.81) holds
+            # SEVEN copies at 3/1, 3/2, 3/4, 3/17, 3/20, 3/30 and 3/36. The first four carry
+            # the SKU and the last three carry null, so a card the owner has seven of reported
+            # four on hand — and the three invisible ones are the most valuable cards in the
+            # box. It is the same split the paragraph above already drew for a withhold, at a
+            # different seam: identity is known, and only the COUNT waits on a file.
+            #
+            # UNCOMMITTED AND NOT `positions`, WHICH IS THE ONE PLACE THIS COULD DESTROY DATA.
+            # `match.positions` includes `committed_positions`, and `cli/resolve.py` commits a
+            # copy on either of two grounds — a count read back off the `Listing`, or the copy
+            # being in a TERMINAL state. So every sold and retired copy of a matched SKU is in
+            # `positions`, and `set_state` has no terminal guard: it would move a sold card to
+            # `identified`, wiping D10's permanent gap and D26's terminal state. Measured on
+            # the owner's box-3 run, EIGHT of its 33 matched positions are sold today, so a
+            # re-emit would have resurrected all eight. `uncommitted_positions` is the honest
+            # set — every copy this run may still list, live and backstock together — and it
+            # cannot contain a departed card by construction.
+            #
+            # Nothing is lost by excluding the committed ones: a copy committed by COUNT was
+            # picked by `_committed_keys` out of `copies_on_hand`, which selects on `sku`, so
+            # it is already stamped. A copy committed by having LEFT is not this command's to
+            # relabel.
             copies = 0
-            for position in match.live_positions:
+            live_keys = {
+                master.position_key(p.box, p.index) for p in match.live_positions
+            }
+            for position in match.uncommitted_positions:
                 key = master.position_key(position.box, position.index)
                 # Upsert first. A position the store has never seen — a run joined from a
                 # recovered identifications file, say — would otherwise take a write that
@@ -398,20 +435,32 @@ def run(args, say) -> int:
                 # the audit trail. `identified` is where the card already is and where it
                 # stays: `pushed` is not a state a card can wear any more, and passing it
                 # here now raises `UnknownState` rather than silently flagging a position.
-                if writable.inventory.set_state(
+                #
+                # THE RETURN VALUE IS COUNTED ONLY FOR A COPY THAT REACHED THE FILE. The
+                # stamp now runs over a wider set than the count does, so the two can no
+                # longer share one increment: `pushed` is a commitment that a CSV row was
+                # written, and a backstock copy has no row. Bumping it here would push the
+                # count past `add_to_quantity` and double-stage on the next import, which is
+                # the failure `docs/GATES.md` records from the first real post-import
+                # re-emit. The membership test is what keeps the two apart, and it is on the
+                # key rather than on the index because `live_positions` is a slice of the
+                # same objects — identity would work and would break the day it is rebuilt.
+                stamped = writable.inventory.set_state(
                     key,
                     master.IDENTIFIED,
                     sku=match.sku,
                     condition=match.condition,
                     run=run_dir.name,
-                ):
+                )
+                if stamped and key in live_keys:
                     copies += 1
             if copies and match.sku in emitted:
                 # Incremented, not set: two runs can push copies of one SKU, and the second
                 # must not erase the first. Re-emitting the SAME run adds nothing because
                 # `cli/resolve.py` reads these counts back as `committed`, so those copies
-                # are no longer in `match.live_positions` at all — the idempotence lives
-                # there rather than in a special case here.
+                # are no longer in `match.uncommitted_positions` at all — the idempotence
+                # lives there rather than in a special case here, and it is untouched by the
+                # stamp above: `_committed_keys` reads the `Listing`, never `card.sku`.
                 writable.inventory.listing(
                     match.sku, condition=match.condition
                 ).bump(master.PUSHED, copies)

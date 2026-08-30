@@ -8617,6 +8617,119 @@ def check_emit_bypass(checks: Checks) -> None:
         )
 
 
+def check_emit_identity_stamp(checks: Checks) -> None:
+    """The live cap bounds the LISTING. Every copy the run matched gets its identity.
+
+    THE DEFECT, FOUND BY THE OWNER ON THEIR OWN STORE. `cli/cmd_emit.py` wrote the SKU inside
+    a loop over `match.live_positions` — `uncommitted_positions[:add_to_quantity]`, bounded by
+    D7's `live_cap` of 4 — so the fifth copy of anything was left wearing `sku: null`. D7 caps
+    how many copies may be LIVE, on the envelope-buster and stale-price arguments it gives; it
+    has never said anything about how many copies we know the name of, and the owner's note on
+    finding this says so in as many words: *"this was supposed to be just a gentle heads up to
+    only list four as a default mainly for cheap cards, it wasn't supposed to take the shape
+    it's taken now"*.
+
+    Measured on their store: Rengar, Trophy Hunter (9189797, $30.81) holds SEVEN copies at
+    3/1, 3/2, 3/4, 3/17, 3/20, 3/30 and 3/36. Four carry the SKU. The three that do not are
+    invisible to `GET /search`, to `copies_on_hand` and to `positions_for_sku` — so the screen
+    reported four on hand for a card the owner has seven of, and the invisible three are the
+    most valuable cards in the box.
+
+    THE SECOND HALF IS WHAT KEEPS THE FIX FROM BEING WORSE THAN THE BUG. The obvious repair is
+    to iterate `match.positions`, and it would destroy data: `cli/resolve.py` marks a copy
+    committed on either of two grounds, a count read off the `Listing` or the copy being in a
+    TERMINAL state, so every sold and retired copy of a matched SKU is in `positions`. Eight of
+    the box-3 run's 33 matched positions are sold today. `set_state` has no terminal guard, so
+    a re-emit would have moved all eight back to `identified` — D10's permanent gap and D26's
+    terminal state both gone, silently. `uncommitted_positions` is the honest set and cannot
+    contain a departed card by construction.
+
+    Its own isolated home, this file's own lesson again: it emits, which writes `pushed` counts
+    that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
+    """
+    checks.note("")
+    checks.note("EMIT IDENTITY — the cap bounds the listing, not the identity")
+
+    # Articuno 161/159 is holofoil-only, so the catalog settles it on its own (D3 rung 2) and
+    # no capture toggle is needed to make seven copies resolve to one SKU. SEVEN because the
+    # cap is four: it is the smallest count that puts copies on both sides of it and matches
+    # the shape the owner actually found.
+    copies = 7
+    cards = [(3, i, "Articuno", "161", None) for i in range(1, copies + 1)]
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+
+        inventory = Store().read().inventory
+        stamped = [
+            c.index
+            for c in inventory.positions_for_sku(ARTICUNO_SKU)
+        ]
+        checks.equal(
+            stamped,
+            list(range(1, copies + 1)),
+            "EVERY MATCHED COPY CARRIES THE SKU, not the first `live_cap` of them. This is "
+            "the assertion the defect fails: it stamped 1-4 and left 5, 6 and 7 null, which "
+            "is a copy no SKU-keyed surface can see rather than backstock in D7's sense",
+        )
+        checks.equal(
+            len(inventory.copies_on_hand(ARTICUNO_SKU)),
+            copies,
+            "so the SKU -> positions map D7 promises is COMPLETE. `copies_on_hand` selects on "
+            "`card.sku`, so an unstamped copy was missing from the count the screen draws and "
+            "from the set `cli/resolve.py:_committed_keys` slices to size the next join",
+        )
+
+        listing = Store().read().inventory.listings[ARTICUNO_SKU]
+        checks.equal(
+            listing.pushed,
+            join.LIVE_QUANTITY_CAP,
+            "AND THE CAP STILL HOLDS. `pushed` is a commitment that a CSV row was written, so "
+            "it counts `live_positions` and nothing else — the stamp runs over a wider set now "
+            "and a shared increment would push the count past `add_to_quantity` and "
+            "double-stage on the next import",
+        )
+        listed = run_dir.path(runs.import_listed_name("pokemon"))
+        rows = [
+            row
+            for row in tcgcsv.read_export(listed).rows
+            if row[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU
+        ]
+        checks.equal(
+            [row[tcgcsv.QUANTITY_COLUMN] for row in rows],
+            [str(join.LIVE_QUANTITY_CAP)],
+            "and the import file asks for exactly the cap, on ONE row. The file is what D7's "
+            "cap is actually about, and it must not move because more copies got a name",
+        )
+
+        # --------------------------------------------------------- and a departed copy stays gone
+        capture_server.do_mark_sold(3, 1, {})
+        checks.equal(
+            Store().read().inventory.get(master.position_key(3, 1)).state,
+            master.SOLD,
+            "a copy is sold — the setup for the assertion below, stated so a failure here "
+            "cannot be misread as the re-emit having done it",
+        )
+
+        command(checks, "emit", str(run_dir.directory))
+        after = Store().read().inventory
+        checks.equal(
+            after.get(master.position_key(3, 1)).state,
+            master.SOLD,
+            "A RE-EMIT DOES NOT RESURRECT A SOLD COPY. This is the case that fails against the "
+            "obvious fix: `match.positions` holds every terminal copy of a matched SKU, and "
+            "`set_state` has no terminal guard, so iterating it would move this card back to "
+            "`identified` and take D10's permanent gap with it",
+        )
+        checks.equal(
+            after.listings[ARTICUNO_SKU].pushed,
+            join.LIVE_QUANTITY_CAP,
+            "and the re-emit adds nothing (D54). The copies it already sent are `committed` "
+            "now, so they are not in `uncommitted_positions` at all — the idempotence lives "
+            "in `_committed_keys`, which reads the `Listing` and never `card.sku`",
+        )
+
 def check_pricing_authority(checks: Checks) -> None:
     """`decisions.json` decides the price, and `join` may not take that decision back.
 
@@ -10857,6 +10970,7 @@ def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
     check_emit_bypass(checks)
+    check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_withholding(checks)
     check_pricing_route(checks)

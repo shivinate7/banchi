@@ -552,10 +552,24 @@ neither guard, plus a second place to perform one action.
 **Answer 1: the guards were never properties of the view.** They are properties of a screen that
 records a sale, and `docs/DESIGN.md` asserts them there because that is the view its constraints
 table governs. Nothing in D5 says the owner may have the write without them. So this screen
-carries both: the sale goes through a panel showing the copy's own stored photo at its position
-(D6) before anything is written, and every recorded sale leaves a receipt with an undo window.
+carried both: the sale went through a panel showing the copy's own stored photo at its position
+(D6) before anything was written, and every recorded sale leaves a receipt with an undo window.
 The sale route answers `restores_to` precisely so a caller knows whether an undo can be offered
 at all, and this screen reads it rather than offering one blind.
+
+**THE PHOTOGRAPH HALF WAS RULED REDUNDANT ON 2026-08-30 (D57) AND THE ARGUMENT ABOVE SURVIVES
+IT.** The owner: *"for my side i literally have the inventory image in front of me already, it
+was redundant."* D38 gave this screen a card band drawing the selected copy's photograph at
+449x627, so the panel was answering a question the screen had already answered — and
+`docs/DESIGN.md` bans a confirm on a reversible action precisely to stop that. The sale writes
+on one press now, and the undo half is DOUBLED rather than dropped: the copy row's own slot
+becomes `Undo` for the window, and the receipt above keeps its own because the rows are
+unmounted by stepping the walk and the clock does not stop for that.
+
+**What is NOT weakened is the sentence this paragraph opens with.** The guards still belong to
+the write rather than to a view; what moved is which guard this screen needs, on a screen that
+already draws the photograph. Read §13's rule below with that distinction, which is the whole of
+D57.
 
 **Answer 2: the server already refuses the race.** The failure feared was two devices
 disagreeing about which copy went. They cannot: the second device's sale comes back
@@ -776,6 +790,11 @@ mark-sold, which is *reversible*, gets a photo to confirm against, a two-step co
 window and a pre-checked `restores_to`. **The irreversible action had fewer guards than the
 reversible one, which is backwards.**
 
+**That last sentence describes the OWNER's screen as it stood on the day, and D57 finished the
+correction from the other end on 2026-08-30**: the sale is one press there now, with `Undo` in
+the copy row and on the receipt. `#/fulfillment` keeps all four. Nothing D28 added was taken
+back — the two entries close the same gap from opposite sides.
+
 **The window is a hole punched in `Queue.upsert`'s refusal on purpose, not a softening of the
 rule.** `reopen` is the one door back out and it is deliberately narrow: it refuses anything that
 is not present and cleared, so the refusal still stands for everything outside the window. **Every
@@ -827,6 +846,12 @@ directly.
 - **Do not let the whole-box scan back inside the label path.** One corrupt record blanked every
   label in the inventory once. Section 5.1.
 - **Do not tile a position bar from one section's width.** Section 7.1.
-- **Do not add a second sale path without both guards.** Section 8.1 answers the objection by
-  bringing the guards, not by dismissing them.
+- **Do not add a second sale path without both guards** — **amended 2026-08-30 by the owner
+  (D57), and the amendment is narrower than it looks.** Section 8.1 answers the objection by
+  bringing the guards rather than dismissing them, and that reasoning stands: the guards belong
+  to the WRITE and not to the Fulfillment view. What the owner ruled is that on `#/inventory` the
+  photograph half is answered by the card band D38 put two inches from the row, so the sale is
+  one press and the undo is doubled — in the copy row and on the receipt. **The rule for a THIRD
+  sale path is unchanged**: bring the guards, and argue in a decision entry if one of them is
+  already satisfied by the screen it would sit on.
 - **D26's state is `retired`, never `removed` — §10.1 has the collision that decided it.**

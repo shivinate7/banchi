@@ -515,11 +515,39 @@ const STORE: Store = { cards: CARDS, search: (query) => searchAnswer(query) }
  *  mutable would leak between the tests Playwright runs in one worker. */
 type Priced = () => unknown
 
+/** What `POST /inventory/<box>/<index>/sold` answers, called per request so one test can send a
+ *  sale and its reversal down different branches. D57 made this route reachable in one press, so
+ *  it is the first thing on this screen a mis-stubbed test could get wrong quietly.
+ *
+ *  `restores_to` IS THE FIELD THE SCREEN BRANCHES ON, and a stub answering null draws no Undo
+ *  anywhere — which is a real server case (`sold_origin_unknown`) and also the shape of a broken
+ *  fixture. Both cases below say which one they are. */
+type SaleStub = (box: number, index: number, undo: boolean) => { status: number; body: unknown }
+
+/** The ordinary sale and the ordinary reversal. `identified` is what `_state_before_sale` reads
+ *  back off the history line for a card that was identified before it sold, which is every card
+ *  in this fixture; null on the reversal because there is then nothing left to reverse. */
+const SALE: SaleStub = (box, index, undo) => ({
+  status: 200,
+  body: {
+    position: `${box}/${index}`,
+    box,
+    index,
+    undone: undo,
+    state: undo ? 'identified' : 'sold',
+    previous_state: undo ? 'sold' : 'identified',
+    restores_to: undo ? null : 'identified',
+    listing: null,
+    card: null,
+  },
+})
+
 async function open(
   page: Page,
   boxes: unknown = BOXES,
   store: Store = STORE,
   priced: Priced = () => PRICING,
+  sale: SaleStub = SALE,
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -528,6 +556,26 @@ async function open(
 
   /* The writes first: the read regexes below are looser and a `/inventory` matcher would
      swallow `/inventory/2` if it were registered ahead of it. */
+
+  /* D57's one-press sale, and both directions on it — `server.ts:sale` sends `{}` to record one
+     and `{"undo": true}` to reverse it, on one path, so the body is the only thing telling them
+     apart and `undo` is what this fixture reads. Registered up here with the other write for the
+     ordering reason above: `/inventory\/\d+$/` would swallow nothing of this, but `/inventory$/`
+     and the pattern for one card are both looser than it looks and the file already pays for
+     that mistake once. */
+  await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON() as { undo?: boolean } | null
+    record(request.method(), request.url(), body)
+    const path = new URL(request.url()).pathname.split('/')
+    const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true)
+    await route.fulfill({
+      status: answer.status,
+      contentType: 'application/json',
+      body: JSON.stringify(answer.body),
+    })
+  })
+
   await page.route(/\/inventory\/\d+\/\d+\/remove$/, async (route) => {
     const request = route.request()
     record(request.method(), request.url(), request.postDataJSON())
@@ -826,6 +874,204 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   await expect(page.locator('.card-locations-owner')).toHaveCount(0)
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Retire' })).toBeVisible()
+})
+
+
+// -------------------------------------------- the sale is one press, and the row is the way back
+
+/* D57. `Mark sold` opened a photo-confirm panel and wrote nothing; the owner ruled the photograph
+ * redundant against the card band two inches away — "for my side i literally have the inventory
+ * image in front of me already, it was redundant" — so the press IS the sale and the slot becomes
+ * `Undo` for the window.
+ *
+ * NOTHING IN THIS FILE PRESSED `Mark sold` BEFORE TODAY. The two cases above assert the button is
+ * visible and stop there, so the panel, the receipt, the undo window, `canUndo` and the
+ * `already_sold` path on this screen were all unasserted — which is exactly the condition that
+ * lets a control change what it does to a real card with every check still green. That is the
+ * hole these close, and it is why `open()` had no `/sold` route to stub until now.
+ *
+ * WHAT IS DELIBERATELY NOT ASSERTED HERE: that the undo lasts twenty seconds. docs/DESIGN.md's
+ * ">= 10s" is a row of the FULFILMENT constraints table and binds that view, where
+ * `fulfillment.spec.ts` pays ten seconds of real wall time for it once. This screen is the
+ * owner's and the floor does not reach it, so the property worth spending time on is the one
+ * below: which control survives the rows being replaced. */
+
+/** A mutable copy of the five-card fixture. `searchAnswer` reads whatever it is handed, so
+ *  flipping a card to `sold` here is what makes the RE-READ after a write answer the way the
+ *  server would — without it the row would be resting on the optimistic overlay alone and a test
+ *  could pass against a stub that contradicts the wire. */
+function sellableStore(): { store: Store; sell: (key: string) => void } {
+  const cards: Cards = Object.fromEntries(
+    Object.entries(CARDS).map(([key, held]) => [key, { ...held }]),
+  )
+  return {
+    store: { cards, search: (query) => searchAnswer(query, cards) },
+    sell: (key) => {
+      const held = cards[key]
+      if (held !== undefined) held.state = 'sold'
+    },
+  }
+}
+
+/** The copy row for one position, scoped so the two `Undo` controls a standing sale draws — this
+ *  one and the receipt's — can each be reached on their own. */
+function copyRow(page: Page, place: string) {
+  return page.locator('.card-locations-owner .card-locations-row', { hasText: place })
+}
+
+test('one press marks a copy sold, with no panel in between', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  const wire = await open(page, BOXES, store)
+
+  const row = copyRow(page, 'CARD 1')
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+
+  /* THE PRESS IS THE WRITE. Red against the two-step, where this press only set `pending`. */
+  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  const sales = wire.filter((call) => call.path.endsWith('/sold'))
+  expect(sales.map((call) => [call.method, call.path, call.body])).toEqual([
+    ['POST', '/inventory/2/1/sold', {}],
+  ])
+
+  /* AND ASSERTED AS AN ABSENCE, which is the discipline the run panel's spend button already
+     keeps: a panel that is merely not visible is one CSS rule from being back, and a component
+     that is not rendered has to be deliberately re-added. */
+  await expect(page.locator('.inventory-scrim')).toHaveCount(0)
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+})
+
+test('the row that sold the copy becomes the way to take it back', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  const wire = await open(page, BOXES, store)
+
+  const row = copyRow(page, 'CARD 1')
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+
+  /* The slot draws `Undo` ALONE — no `Retire` beside it, because the server refuses the
+     retirement of a sold card and a control that can only fail is not a control. */
+  const rowUndo = row.getByRole('button', { name: 'Undo the sale at' })
+  await expect(rowUndo).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Retire' })).toHaveCount(0)
+  await expect(row.getByRole('button', { name: 'Mark sold' })).toHaveCount(0)
+
+  /* THE TWO CONTROLS ARE REACHABLE APART, which is the whole reason their accessible names
+     differ. Identical names would leave a screen reader unable to tell one sale's two ways back
+     from two different sales. */
+  const receiptUndo = page
+    .locator('.inventory-receipt')
+    .getByRole('button', { name: /^Undo Box/ })
+  await expect(receiptUndo).toBeVisible()
+
+  await rowUndo.click()
+  const sales = wire.filter((call) => call.path.endsWith('/sold'))
+  expect(sales.map((call) => call.body)).toEqual([{}, { undo: true }])
+
+  // And the copy is sellable again, which is what a reversal means on this screen.
+  await expect(row.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(page.locator('.inventory-receipt')).toHaveCount(0)
+})
+
+test('the receipt is the undo that survives the rows being replaced', async ({ page }) => {
+  const { store, sell } = sellableStore()
+  const wire = await open(page, BOXES, store)
+
+  await copyRow(page, 'CARD 1').getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+
+  /* STEP THE WALK. The copies panel is drawn for whichever card the walk points at, so this
+     unmounts the row and its `Undo` with it — and the clock does not stop for that. This is the
+     measurement that decides the owner's ruling to keep BOTH controls: without the receipt a
+     twenty-second promise would be good only for as long as you stand still. */
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'captured' }).first().click()
+  await expect(page.locator('.inventory-lone')).toBeVisible()
+  await expect(page.locator('.card-locations-owner')).toHaveCount(0)
+
+  const receiptUndo = page
+    .locator('.inventory-receipt')
+    .getByRole('button', { name: /^Undo Box/ })
+  await expect(receiptUndo).toBeVisible()
+  await receiptUndo.click()
+  expect(wire.filter((call) => call.path.endsWith('/sold')).map((call) => call.body)).toEqual([
+    {},
+    { undo: true },
+  ])
+})
+
+test('another device having sold the copy draws a receipt and no undo anywhere', async ({
+  page,
+}) => {
+  const { store, sell } = sellableStore()
+  /* `already_sold` IS NOT THIS DEVICE'S SALE (D13: two devices, one store). Answered as a
+     success it would offer an Undo, and that Undo would reverse the OTHER device's real sale —
+     putting a card back on TCGplayer that a buyer has paid for. */
+  const wire = await open(page, BOXES, store, () => PRICING, () => ({
+    status: 409,
+    body: {
+      error: {
+        code: 'already_sold',
+        message: 'Box 2, card 1 is already sold. Send {"undo": true} to reverse that sale.',
+      },
+    },
+  }))
+
+  const row = copyRow(page, 'CARD 1')
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+
+  await expect(page.locator('.inventory-receipt')).toContainText('Already sold.')
+  await expect(page.getByRole('button', { name: /Undo/ })).toHaveCount(0)
+  await expect(row).toContainText('sold')
+
+  // One request, and no reversal was ever attempted.
+  expect(wire.filter((call) => call.path.endsWith('/sold'))).toHaveLength(1)
+})
+
+test('a sale the store cannot put back offers no undo, in the row or on the receipt', async ({
+  page,
+}) => {
+  const { store, sell } = sellableStore()
+  /* `restores_to: null` is `sold_origin_unknown` seen one step early — the history cannot say
+     what state the card was in before the sale, so the route says so at the moment of the sale
+     rather than at a tap that would have failed. */
+  const wire = await open(page, BOXES, store, () => PRICING, (box, index, undo) => ({
+    status: 200,
+    body: {
+      position: `${box}/${index}`,
+      box,
+      index,
+      undone: undo,
+      state: 'sold',
+      previous_state: 'identified',
+      restores_to: null,
+      listing: null,
+      card: null,
+    },
+  }))
+
+  const row = copyRow(page, 'CARD 1')
+  await row.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/1')
+
+  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  await expect(page.locator('.inventory-receipt')).toContainText('sold_origin_unknown')
+  await expect(page.getByRole('button', { name: /Undo/ })).toHaveCount(0)
+  await expect(row).toContainText('sold')
+  expect(wire.filter((call) => call.path.endsWith('/sold'))).toHaveLength(1)
+})
+
+test('the retirement keeps its panel, because the reason is the write', async ({ page }) => {
+  await open(page)
+
+  /* D57 IS ABOUT ONE OF THE TWO DOORS AND THIS IS THE OTHER. The asymmetry is the ruling: a
+     retirement without a reason is refused, so the four reason buttons are not an
+     acknowledgement to dismiss, they are the only input the write has. */
+  await copyRow(page, 'CARD 1').getByRole('button', { name: 'Retire' }).click()
+  await expect(page.locator('.inventory-scrim')).toHaveCount(1)
+  await expect(page.locator('.inventory-retire-reasons')).toBeVisible()
 })
 
 // ------------------------------------------------ the copies are a way back into the walk

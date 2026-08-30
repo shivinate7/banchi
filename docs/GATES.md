@@ -273,6 +273,22 @@ at a temporary directory, so nothing here touches the real inventory.
 - **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
   sockets, matching D5's two devices. The twenty-way case that found the listen backlog
   proved something about a socket option and is not worth paying for at every turn end.
+- **The identity stamp is covered as of 2026-08-30, and the case exists because the obvious
+  fix was destructive.** `cli/cmd_emit.py` wrote the SKU inside a loop over `live_positions`,
+  bounded by D7's live cap of 4, so the fifth copy of anything kept `sku: null` — invisible to
+  `GET /search`, `copies_on_hand` and `positions_for_sku`. Measured on the owner's store:
+  Rengar, Trophy Hunter (9189797, $30.81) holds seven copies and four carried the SKU.
+  `check_emit_identity_stamp` asserts every matched copy carries it, that `pushed` still stops
+  at the cap, and that the import file still asks for exactly the cap on one row.
+
+  **Its fourth assertion is the one that matters most and is about the FIX rather than the
+  defect.** Iterating `match.positions` would have stamped every copy and moved every sold one
+  back to `identified` — `cli/resolve.py` commits a copy for being TERMINAL as well as for
+  being counted, and `set_state` has no terminal guard. Eight of the box-3 run's 33 matched
+  positions are sold today. So the case sells a copy and re-emits, and requires it still sold.
+  Three mutations were observed failing before it was kept — the original `live_positions`
+  loop, the naive `match.positions` loop, and a shared increment — each red on a different
+  assertion, which is what says the four are measuring four things rather than one.
 - **Undo is covered as of 2026-08-13**, the day its route landed with step 7a: that it
   answers with the position it removed, that the record, sidecar and photo all go, that a
   second call walks back one more card, and that it refuses anything but the newest and
