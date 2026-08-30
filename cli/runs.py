@@ -157,7 +157,7 @@ class Run:
         return list(record.get("listed") or []) + list(record.get("sub_threshold") or [])
 
     def record_emit(self, *, listed, sub_threshold, pushed: int) -> None:
-        """Merge one emit's output into the record. D52: a re-emit ADDS; it never subtracts.
+        """Merge one emit's output into the record. D54: a re-emit ADDS; it never subtracts.
 
         `Run.set` stays replace-not-merge — `set(collected=…)`, `set(joined=…)` and
         `set(batch_ids=…)` all depend on that, and a global merge would be a wide silent

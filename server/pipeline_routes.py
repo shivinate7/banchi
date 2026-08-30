@@ -1134,7 +1134,7 @@ def _phase(manifest: dict, live: bool) -> str:
     # A RECORD NAMING NOTHING IS NOT AN EMIT. Truthiness of the dict was the test, and
     # `{"listed": [], "sub_threshold": [], "pushed": 0}` is a truthy dict — so a run whose
     # record had been blanked read `reconcile` on the panel while `reconcile` itself refused
-    # with "this run has emitted nothing". D52 stops that record ever being written, and this
+    # with "this run has emitted nothing". D54 stops that record ever being written, and this
     # is the belt to that braces: a hand-edited manifest, or one written by an older
     # checkout, must not send the operator to a step that will refuse them.
     emitted = manifest.get("emitted") or {}

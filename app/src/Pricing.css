@@ -206,7 +206,7 @@
   background: var(--hover);
 }
 
-/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D52). Derived from `rule`/`basis` rather than
+/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D54). Derived from `rule`/`basis` rather than
    from a stored key, so it cannot disagree with what `emit` will actually price at — see
    `Pricing.tsx`'s `aria-pressed`.
 
@@ -602,7 +602,7 @@
      of it costs the least; and the panel is a picture of that card, so it sits beside what it
      is about. */
   left: var(--s4);
-  /* ABOVE THE SHIP BAR, NOT UNDER IT (D52). The corner above was chosen by looking at it and
+  /* ABOVE THE SHIP BAR, NOT UNDER IT (D54). The corner above was chosen by looking at it and
      that argument is untouched — what changed is that the bottom edge is now occupied. The
      bar's height varies with its receipt, so this is a floor rather than an exact clearance:
      `--pricing-ship-h` is the closed height, and a bar grown by a receipt overlaps the
@@ -645,7 +645,7 @@
   gap: var(--s2);
 }
 
-/* ---- the ship bar (D52) ---------------------------------------------------------------
+/* ---- the ship bar (D54) ---------------------------------------------------------------
  *
  * STICKY AND IN FLOW, NOT `fixed`. A sticky last child reserves its own height in the
  * document, so the space under a ~6,500px list is exactly this bar's height BY CONSTRUCTION

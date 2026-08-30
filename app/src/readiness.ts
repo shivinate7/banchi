@@ -1,7 +1,7 @@
 import type { DecisionsDocument, PricingSku } from './types'
 
 /* WHAT `emit` WOULD REFUSE THIS RUN FOR, computed here so the pricing screen can say it
- * without a round trip. D52.
+ * without a round trip. D54.
  *
  * THIS IS A SECOND IMPLEMENTATION OF `pipeline/decisions.py:blocking`, AND THAT IS THE
  * OWNER'S CHOICE RATHER THAN AN ACCIDENT. The screen autosaves `decisions.json` on every

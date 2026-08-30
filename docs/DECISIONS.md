@@ -5162,7 +5162,7 @@ is that the agent and an active feeder run should not share a tree, which is one
 
 ---
 
-## D52 — A re-emit adds; it never subtracts
+## D54 — A re-emit adds; it never subtracts
 
 **BUILT 2026-08-30, and it was a live data-loss bug that every check in this repo passed.**
 Pressing `emit` twice on one run destroyed its output: the good `import-listed.csv` was

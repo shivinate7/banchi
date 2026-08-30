@@ -1636,7 +1636,7 @@ export function RunPanel({ cart }: RunPanelProps) {
               <p className="run-step-note">{step.note}</p>
 
               {/* THE WAY TO EMIT, AND IT DRAWS IN EVERY STATE — including with no runs on
-                  disk at all (D52). The button it replaces was conditional on a run being
+                  disk at all (D54). The button it replaces was conditional on a run being
                   open, so a first-time operator could see that Emit EXISTS (this head, this
                   note) and nothing on the screen said where it is. That is strictly stronger
                   than what it replaces rather than a loss.
@@ -1810,7 +1810,7 @@ export function RunPanel({ cart }: RunPanelProps) {
         </div>
       ))}
 
-      {/* EVERYTHING EXCEPT THE IMPORT CSVs (D52). `report.txt`, `pricing.json` and
+      {/* EVERYTHING EXCEPT THE IMPORT CSVs (D54). `report.txt`, `pricing.json` and
           `reconcile.txt` are written by the commands pressed on THIS screen, so their
           receipts belong beside those buttons. The two import files went to `#/pricing` with
           the press that writes them — docs/GATES.md's recorded gap was that the press and

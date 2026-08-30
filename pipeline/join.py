@@ -1773,7 +1773,7 @@ def write_import(catalog: Catalog, path, rows: List[tcgcsv.Row]) -> bytes:
     """Write rows that have already been computed, with the duplicate-SKU gate.
 
     SPLIT OUT OF `emit_import` SO A CALLER CAN LOOK AT THE ROWS BEFORE A FILE HANDLE OPENS,
-    and that is not a convenience — it is the whole of D52's rule. `tcgcsv.write_csv` emits
+    and that is not a convenience — it is the whole of D54's rule. `tcgcsv.write_csv` emits
     the header before it iterates, so calling it with an empty list produces a valid CSV of
     nothing, which is indistinguishable on disk from a file whose rows were never written
     and is catastrophic when it lands on top of a file the operator has been told to import.

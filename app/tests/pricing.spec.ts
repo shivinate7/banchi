@@ -283,7 +283,7 @@ test('a suggested row carries the rule price and writes no key at all', async ({
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
 
-// -------------------------------------------------- shipping the run (D52)
+// -------------------------------------------------- shipping the run (D54)
 
 test('the sub-threshold answer is settable here, and emit says what it still owes', async ({
   page,
@@ -353,7 +353,7 @@ test('an already-emitted run takes two presses, and the first is not it', async 
 
   /* ABSENT, NOT DISABLED. A second emit used to overwrite the good CSV with a header-only
      file and blank the manifest, after which `reconcile` refused a run that had emitted
-     perfectly. D52 fixed the command; this stops the press being made by momentum. */
+     perfectly. D54 fixed the command; this stops the press being made by momentum. */
   await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Write them again' }).click()
   expect(wire.filter((r) => r.method === 'POST')).toHaveLength(0)
@@ -371,7 +371,7 @@ test('an import file is offered as a download, which is the gap Gate B left open
   /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as
      filenames in terminal output the owner never saw. This is the link that closes it —
      RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 with the press that writes them
-     (D52), because the gap was never "the file must be at address X"; it was that the press
+     (D54), because the gap was never "the file must be at address X"; it was that the press
      and the receipt were in different places. */
   const file = page.locator('.run-file-import')
   await expect(file).toBeVisible()
