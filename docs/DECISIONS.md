@@ -2011,6 +2011,16 @@ Added 2026-08-30, from the owner asking how they would know whether a change tou
 
 **`scripts/docs-audit.py`'s `supervisor self-watch` row is what keeps the list honest.** A hand-written list of a file's own imports goes stale the next time somebody adds one, and the failure it would reintroduce is the invisible one above. The row parses `serve.py` with `ast`, resolves its module-scope imports against the tree, and blocks on any project-local import missing from `SELF_FILES`. Mutation-tested: dropping `server/ports.py` from the list takes it red and names the file.
 
+### The screen
+
+**One press fetches and then joins, and the two are reported separately.** `#/runs`' join step carries the control. The fetch draws a receipt naming the file, the rows, the SKUs, the sets and the finishes, and says which games were checked against a previous export and which were not. A fetch that refuses does not join: it wrote nothing, so joining after one would silently re-use the previous export and look exactly like the fetch had worked.
+
+**The join is handed the file by name, not the bytes.** The server already holds them.
+
+**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable.
+
+**`app/tests/run-panel.spec.ts` asserts that absence at rest and after a clean fetch.** A control appearing once the panel had merely been used would be as wrong as one always there. Two mutations were observed failing: drawing the acknowledgement for every refusal, and joining after a refused fetch.
+
 ### What it costs
 
 - **`RunAtLoad` does not survive the Mac sleeping.** A phone hitting a sleeping Mac gets nothing. Inherent to D13, written down now rather than found as a bug in three weeks.
@@ -2433,7 +2443,7 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 ## D62 — The Filtered Export is fetched, and completeness is a delta rather than a claim
 
-**The last manual step in `runs -> join` is gone: the server downloads the export instead of the operator.** Built 2026-08-30.
+**The last manual step in `runs -> join` is gone: the server downloads the export instead of the operator, and one press on `#/runs` fetches and joins.** Built 2026-08-30.
 
 `identify` spawns detached (D33) and the three free steps are re-runnable, so the only thing left between a finished batch and a joined run was opening TCGplayer, pressing Export Filtered CSV, waiting, and uploading the file back. `POST /pipeline/runs/<name>/export` fetches it.
 
