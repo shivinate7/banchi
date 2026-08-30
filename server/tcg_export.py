@@ -49,12 +49,14 @@ the two were conflated once while this was being scoped, and reached the wrong c
 
 from __future__ import annotations
 
+import json
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlencode, urljoin, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -64,7 +66,11 @@ import envfile  # noqa: E402
 # The seller portal's own download. A constant rather than something a request can name: a
 # route that fetched any URL a client sent, carrying the operator's session cookie, would be
 # a credential-forwarding primitive guarded by an origin header.
-DEFAULT_URL = "https://store.tcgplayer.com/Admin/Pricing/DownloadMyExportCSV"
+DEFAULT_URL = "https://store.tcgplayer.com/admin/pricing/downloadexportcsv"
+
+# The filter vocabulary for one category: its sets, rarities, printings and conditions with
+# the ids the export scopes on. A GET, and the only other call this module makes.
+FILTERS_URL = "https://store.tcgplayer.com/admin/pricing/getjsonfilters"
 
 # The cookie is a BEARER INSTRUMENT and lives in `.env` and nowhere else — gitignored, and
 # denied to an agent by `.claude/settings.json`.
@@ -110,6 +116,74 @@ MAX_BYTES = 32 * 1024 * 1024
 _LOGON_MARKER = "account/logon"
 
 
+@dataclass(frozen=True)
+class Scope:
+    """What to ask TCGplayer for. Empty tuples mean "all of them", as the portal encodes it.
+
+    THE POINT OF ASKING RATHER THAN INSPECTING (D65). An export's completeness cannot be read
+    off its contents — three filters narrow it and one leaves no trace in the file — but a
+    file fetched to a scope this names is complete WITHIN that scope by construction. So the
+    check downstream becomes "did I get the sets I asked for", which is a fact, rather than an
+    inference about what might be missing.
+    """
+
+    category_id: int
+    set_ids: Tuple[int, ...] = ()
+    rarity_ids: Tuple[int, ...] = ()
+    condition_ids: Tuple[int, ...] = ()
+
+    def model(self) -> dict:
+        """The request body, field for field as `main-built.js` builds it.
+
+        READ OFF THE PORTAL'S OWN BUNDLE rather than guessed, and the two fields that matter
+        most are the ones nobody would have guessed. `MyInventory` false is what makes this
+        the CATALOG rather than the operator's current listings — with it true the same
+        request returns only what they already have listed, which is useless to a join that
+        exists to list new cards. `ExcludeListos` is the exclude-listings-with-photos flag,
+        the axis D64 measured as leaving no trace in the file; setting it explicitly is what
+        stops it being invisible.
+
+        `PrintingIds` is left empty on purpose. All Printings is the whole point: a number
+        stocked in several finishes must arrive with all of them, or D3 rung 2 decides it
+        from whichever one survived.
+        """
+        def ids(chosen):
+            # "ALL OF THEM" IS `["0"]` AND NOT THE EMPTY LIST, which is the single detail that
+            # cost the most. An empty array answers `System Error` — a 200 carrying an HTML
+            # error page — and reads exactly like a rejected session unless you look at the
+            # title. `0` is the "All Set Names" / "All Rarities" option's own id, so the
+            # portal is asking for a filter that matches everything rather than for no filter.
+            return [str(int(v)) for v in chosen] or ["0"]
+
+        # EVERY VALUE IS A STRING AND THE TYPES ARE NOT NEGOTIABLE. Captured off the portal's
+        # own submit in the owner's browser on 2026-08-30 rather than inferred from the
+        # bundle: `PricingType` is the literal `"Pricing"` and not an enum ordinal, the ids
+        # are strings, and the three price fields carry values even when comparison is off.
+        # Guessing produced a body that was structurally plausible and answered `System Error`
+        # five different ways.
+        return {
+            "PricingType": "Pricing",
+            "CategoryId": str(int(self.category_id)),
+            "SetNameIds": ids(self.set_ids),
+            "ConditionIds": ids(self.condition_ids),
+            "RarityIds": ids(self.rarity_ids),
+            "LanguageIds": ["1"],
+            # All Printings, always. A number stocked in several finishes must arrive with all
+            # of them or D3 rung 2 decides it from whichever one survived.
+            "PrintingIds": ["0"],
+            "CompareAgainstPrice": False,
+            "PriceToCompare": 3,
+            "ValueToCompare": 1,
+            "PriceValueToCompare": None,
+            # The catalog, not the operator's current listings. With this true the same
+            # request returns only what is already listed, which is useless to a join whose
+            # whole job is listing cards that are not.
+            "MyInventory": False,
+            "ExcludeListos": False,
+            "ExportLowestListingNotMe": True,
+        }
+
+
 class FetchRefusal(Exception):
     """A refusal with its own code. `server/pipeline_routes.py` converts it to a 4xx.
 
@@ -148,6 +222,16 @@ def endpoint() -> str:
         f"{URL_ENV} must be an https URL, or http on 127.0.0.1 for a local test. "
         f"The session cookie is not sent over plain http to anywhere else.",
     )
+
+
+def _filters_endpoint() -> str:
+    """Where the filter list is read from. Follows `endpoint()`'s override so a test that
+    redirects the download does not leave this one pointed at TCGplayer."""
+    override = (envfile.get_live(URL_ENV) or "").strip()
+    if not override:
+        return FILTERS_URL
+    endpoint()  # re-uses its https-or-loopback refusal rather than restating it
+    return override.rstrip("/").rsplit("/", 1)[0] + "/getjsonfilters"
 
 
 def _cookie() -> str:
@@ -195,9 +279,13 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def _open(url: str, *, cookie: Optional[str]) -> Tuple[int, dict, bytes]:
+def _open(
+    url: str, *, cookie: Optional[str], data: Optional[bytes] = None, content_type: str = ""
+) -> Tuple[int, dict, bytes]:
     """One request. Returns (status, headers, body) and raises only for a dead socket."""
-    request = urllib.request.Request(url, method="GET")
+    request = urllib.request.Request(url, data=data, method="POST" if data else "GET")
+    if content_type:
+        request.add_header("Content-Type", content_type)
     request.add_header("User-Agent", _agent())
     request.add_header("Accept", "text/csv, application/octet-stream, */*")
     if cookie:
@@ -288,6 +376,19 @@ def _check_body(body: bytes, headers: dict) -> bytes:
         )
     kind = str(headers.get("Content-Type") or "").lower()
     head = body.lstrip()[:400].lower()
+    if b"system error" in body[:4000].lower() or b"<title>system error" in body[:4000].lower():
+        # NOT AN EXPIRED SESSION, AND SAYING SO WAS A REAL DEFECT. The portal answers a
+        # malformed request with HTTP 200 carrying an HTML page titled `System Error`, and the
+        # branch below read any HTML as a login page — so a body this code got wrong was
+        # reported as the operator's credential being stale. That sends them to re-copy a
+        # cookie that was working. Measured while D65 was being built: five different bad
+        # request bodies, every one reported as `tcg_session_expired`.
+        raise FetchRefusal(
+            "tcg_request_rejected",
+            "TCGplayer rejected the request and returned its System Error page. The session "
+            "is fine — this is the export request itself being malformed, which is a defect "
+            "here rather than anything to fix in the portal. Nothing was written.",
+        )
     if "html" in kind or head.startswith(b"<"):
         # A LOGIN PAGE SERVED AS A 200 IS THE THIRD WAY A SESSION FAILS, and it is the one
         # that would otherwise be parsed as a CSV. The header is checked as well as the body
@@ -312,19 +413,114 @@ def _check_body(body: bytes, headers: dict) -> bytes:
     return body
 
 
-def fetch() -> bytes:
-    """The Filtered Export, as bytes, or a `FetchRefusal` that names what went wrong.
+def filters(category_id: int) -> Dict[str, Any]:
+    """One category's filter vocabulary: `Sets`, `Rarities`, `Conditions`, `Printings`.
 
-    ONE DELIBERATE HOP. The endpoint may reasonably answer a redirect to wherever the built
-    file actually lives, and refusing every 3xx would break the feature on an implementation
-    detail — but the cookie is NOT re-sent across a host change, because a redirect is a
-    destination somebody else chose and forwarding a bearer instrument to it is the whole
-    shape of a credential leak. A second redirect is refused rather than followed: a chain is
-    not something this needs to support, and a loop is not something it may.
+    Each entry is `{Text, Value, Selected, ...}` and `Value` is the id the export scopes on.
+    WITHOUT A CATEGORY THIS ANSWERS ALMOST NOTHING — measured 2026-08-30, the bare call returns
+    one "All Set Names" row and one "All Rarities" row, because the portal populates those
+    lists from whichever category is picked. Passing `categoryId=89` returns Riftbound's 13
+    sets, 8 rarities and 3 printings. That is why this takes the argument rather than being a
+    constant read once.
+    """
+    url = f"{_filters_endpoint()}?categoryId={int(category_id)}"
+    status, headers, body = _open(url, cookie=_cookie())
+    if _check_status(status, headers, url) is not None:
+        raise FetchRefusal(
+            "tcg_unexpected_response",
+            "TCGplayer redirected the filter list. Nothing was read.",
+        )
+    try:
+        parsed = json.loads(body.decode("utf-8", "replace"))
+    except ValueError:
+        raise FetchRefusal(
+            "tcg_filters_unreadable",
+            "TCGplayer's filter list did not parse as JSON. The portal may have changed "
+            "shape; nothing was fetched.",
+        ) from None
+    if not isinstance(parsed, dict) or "Sets" not in parsed:
+        raise FetchRefusal(
+            "tcg_filters_unreadable",
+            "TCGplayer's filter list is not the shape this reads — no `Sets`. Nothing was "
+            "fetched.",
+        )
+    return parsed
+
+
+def match_sets(hints, sets, aliases=None) -> Tuple[Tuple[int, ...], Tuple[str, ...]]:
+    """Capture-time set hints -> TCGplayer set ids. Returns (matched ids, hints that missed).
+
+    THE HINT IS THE OPERATOR'S SHORTHAND AND THE SET NAME IS TCGPLAYER'S, and nothing
+    guarantees they are the same string. Measured against the two the store actually holds:
+    `UNL` against `Unleashed`, and `ME01` against `ME01: Mega Evolution`. Three rules, tried
+    in order, each stricter than a substring search would be:
+
+      exact      case-folded equality.
+      prefix     the hint is a case-folded prefix of the name. `UNL` -> `Unleashed`.
+      code       the name's leading token before `:` equals the hint. `ME01` -> `ME01: ...`.
+
+    AN AMBIGUOUS HINT MATCHES NOTHING RATHER THAN GUESSING. Two sets sharing a prefix is a
+    real shape — `Origins` and `Origins: Proving Grounds` — and picking either would scope the
+    export to a set the box may not be in. The hint is returned as unresolved instead, and the
+    caller widens to the whole category, which is slower and always correct.
+
+    Substring is deliberately NOT one of the rules. `Origins` appears inside
+    `Origins: Proving Grounds`, so a substring test makes every hint that names a base set
+    ambiguous with its own sub-sets and resolves nothing.
+    """
+    by_id = [(str(entry.get("Text") or ""), str(entry.get("Value") or "")) for entry in sets]
+    # RULE ZERO: the game's own alias table, folded before the shape rules run. `MEG` and
+    # `ME01` name one set in two vocabularies and no string rule bridges them, so the registry
+    # carries the pairing (D65). An alias resolves to another HINT rather than to an id, so
+    # the three rules below still do the matching and the table never repeats a full set name.
+    folded = {str(k).strip().casefold(): str(v) for k, v in (aliases or {}).items()}
+    matched, missed = [], []
+    for hint in hints:
+        raw = str(hint or "").strip()
+        needle = folded.get(raw.casefold(), raw).strip().casefold()
+        if not needle:
+            continue
+        found = [v for t, v in by_id if t.casefold() == needle]
+        if not found:
+            found = [v for t, v in by_id if t.casefold().startswith(needle)]
+        if not found:
+            found = [v for t, v in by_id if t.split(":")[0].strip().casefold() == needle]
+        # `0` is the "All Set Names" row and is not a set; matching it would silently widen.
+        found = [v for v in found if v != "0"]
+        if len(found) == 1:
+            matched.append(int(found[0]))
+        else:
+            missed.append(str(hint))
+    return tuple(dict.fromkeys(matched)), tuple(dict.fromkeys(missed))
+
+
+def fetch(scope: Scope) -> bytes:
+    """The catalog export for `scope`, as bytes, or a `FetchRefusal` naming what went wrong.
+
+    A POST, AND THE METHOD IS THE WHOLE CORRECTION (D65). This module shipped against
+    `/Admin/Pricing/DownloadMyExportCSV` with the scope on the query string, and that endpoint
+    ignores every parameter: eight different spellings returned byte-identical output, because
+    it is a different, unscoped endpoint that serves whatever the portal's saved filter last
+    was. What the Export Filtered CSV button actually sends — captured off the wire in the
+    owner's own browser — is a POST to `/admin/pricing/downloadexportcsv`.
+
+    THE BODY IS KNOCKOUT'S `postJson` SHAPE, which is a form whose fields are JSON strings
+    rather than a JSON document. `ko.utils.postJson(url, {model: {...}})` builds a hidden form
+    with one field named `model` holding `JSON.stringify(model)` and submits it. A plain JSON
+    body is what a reader would write first and it answers 500.
+
+    One deliberate redirect hop, as before: the cookie is not re-sent across a host change,
+    because a redirect is a destination somebody else chose.
     """
     url = endpoint()
     cookie = _cookie()
-    status, headers, body = _open(url, cookie=cookie)
+    payload = urlencode({"model": json.dumps(scope.model())}).encode("utf-8")
+    status, headers, body = _open(
+        url,
+        cookie=cookie,
+        data=payload,
+        content_type="application/x-www-form-urlencoded",
+    )
     following = _check_status(status, headers, url)
     if following is not None:
         same_host = urlparse(following).netloc == urlparse(url).netloc

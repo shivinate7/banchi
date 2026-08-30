@@ -38,6 +38,7 @@
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
     POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
+    GET    /tcg/sets                       D65's real set names for a game, for the hint field
     GET    /pipeline/runs                  every run, newest first, with its phase
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
@@ -7236,6 +7237,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # The pipeline reads. All three are free and hold nothing: each one opens the
             # run directory, reads it, and answers — which is what lets a screen poll a run
             # this process did not start and would not otherwise know about.
+            # D65's set vocabulary for the capture screen. A READ, and free: it opens a
+            # socket to TCGplayer but spends nothing and writes nothing, and it answers 200
+            # with an empty list on every failure because the rig must not stop for it.
+            if path == "/tcg/sets":
+                wanted = parse_qs(urlparse(self.path).query).get("game") or [""]
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_tcg_sets(wanted[0])
+                )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             match = _RUN_FILE_RE.match(path)

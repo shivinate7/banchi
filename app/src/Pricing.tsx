@@ -77,6 +77,25 @@ const UNDO_DEPTH = 10
  *  It is not arithmetic and must never become arithmetic. `cli/cmd_join.py:PRESETS` prices
  *  every row in Python precisely so `Rule.apply` + `round_money` + `clamp_floor` are not
  *  re-implemented here; what travels is the NAME of a rule, which the pipeline then applies. */
+/** A run's date, short, for the picker's headline. Null when there is no usable stamp.
+ *
+ *  THE HEADLINE IS `Box 1 · UNL Rares` AND A BOX GETS MORE THAN ONE RUN, so without this two
+ *  buttons over one drawer are the same string and the only thing separating them is the run
+ *  id in the meta line — which `docs/DESIGN.md`'s human-label-large rule deliberately draws
+ *  small. Reported as "why does pricing show two box 1s".
+ *
+ *  DAY AND MONTH, NO CLOCK. Two runs over one box on one day is possible and this would not
+ *  separate them; the run id underneath still does, and a timestamp in a headline spends the
+ *  width that made the label readable in the first place. The year is omitted for
+ *  `BoxBrowse.tsx:capturedAt`'s reason — every run on this machine is from this one, so
+ *  printing it on all four says nothing. */
+function runDay(stamp: string | null | undefined): string | null {
+  if (typeof stamp !== 'string' || stamp.trim() === '') return null
+  const at = new Date(stamp)
+  if (Number.isNaN(at.getTime())) return null
+  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 const PRESETS: { key: string; label: string; rule: string; basis: string; says: string }[] = [
   {
     key: 'market_match',
@@ -898,6 +917,7 @@ export function Pricing() {
                    manifest with neither a scope block nor a box-shaped capture directory would
                    be. */
                 const label = runBoxLabel(row)
+                const day = runDay(row.created_at)
                 return (
                   <button
                     key={row.run}
@@ -906,7 +926,10 @@ export function Pricing() {
                     aria-pressed={row.run === run}
                     onClick={() => setRun(row.run)}
                   >
-                    <span className="pricing-run-name">{label ?? row.run}</span>
+                    <span className="pricing-run-name">
+                      {label ?? row.run}
+                      {label === null || day === null ? null : ` · ${day}`}
+                    </span>
                     <span className="pricing-run-meta">
                       {label === null ? null : (
                         <span className="pricing-run-id">{row.run}</span>

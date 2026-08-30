@@ -1728,6 +1728,16 @@ export type CsvUpload = { name: string; content: string }
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
  *  not a step. */
+/** The real set names for a game, for the capture screen's hint field (D65). Always answers,
+ *  even when it could not be fetched: `sets` is empty and `reason` says why, because the rig
+ *  must not stop for an autocomplete. */
+export type TcgSets = {
+  game: string
+  sets: { name: string; id: string }[]
+  aliases?: Record<string, string>
+  reason: string | null
+}
+
 export type ExportFetched = {
   ok: boolean
   run: string
@@ -1743,4 +1753,18 @@ export type ExportFetched = {
   unverified: string[]
   accepted_narrower: boolean
   source: string
+  /** What was ASKED FOR, beside what arrived (D65). The scope is derived from the box's own
+   *  capture claims — its game, and the set hints the operator set — so this is the half they
+   *  can correct. `widened` is true where no hint resolved and the whole category was taken,
+   *  which is slower and always correct; `unresolved_hints` names the hints that did not
+   *  match a TCGplayer set, which is the thing worth seeing. */
+  asked: {
+    game: string
+    category_id: number
+    hints: string[]
+    set_ids: number[]
+    unresolved_hints: string[]
+    sets: string[]
+    widened: boolean
+  }
 }

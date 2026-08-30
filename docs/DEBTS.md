@@ -1103,6 +1103,16 @@ supervisor's stdout line reporting the stack up, which reads as an unregistered 
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
 
+## `make design-check` has one test that flakes under parallel load
+
+**`app/tests/inventory.spec.ts:2799` — "the photograph is sized by its column, not by the rows beside it" — failed once in a full run and passed alone and on re-run.** Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately afterwards was 256 of 256.
+
+**It measures rendered geometry, which is the shape most sensitive to load.** D38 sizes the photograph off its column, so the assertion reads back a computed width, and a layout that has not settled reports a number that is right a frame later. Nothing about it is specific to the change that was in flight.
+
+**What this costs: a green design-check is slightly weaker than it reads.** A single red in a 256-test run may be this rather than a defect, and telling them apart means re-running — which is exactly the habit that hides a real intermittent failure. Recorded rather than fixed because the fix is a wait-for-stable-layout in that one test, and changing an assertion to make it pass is what D16 forbids without knowing which of the two it is.
+
+**A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
+
 ---
 
 ## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
@@ -1207,7 +1217,7 @@ rather than through a screen's own layout, and the departed row is the one that 
 drawn wrong by looking at it. Nothing checks that the gallery is complete, which is the general
 shape of this file's entries about `docs/map.py`.
 
-### The pricing screen shows two Box 1 buttons, and one of them is a box that is gone
+### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
 
 Reported as *"why does pricing show two box 1s"*. **Because there are two runs over box 1**,
 and `Pricing.tsx`'s run picker draws one button per run with the box as the headline:
@@ -1235,7 +1245,27 @@ right now**. D56 chose read-time joining on purpose, so that a rename relabels e
 rather than stranding an answer nobody can correct. The cost it did not name is this one: a
 run over a *previous* occupant of a box number silently borrows the *current* occupant's name.
 
-Not fixed here because the repair is a choice between three things — draw the run's date in
-the headline, mark a run whose cards are no longer in the store, or refuse to name a box whose
-`created_at` postdates the run — and the third is a real amendment to D56 rather than a
-rendering tweak.
+**Closed the same day, on the owner's ruling, by two of the three candidate repairs.**
+`Pricing.tsx` draws the run's date in the headline, so two runs over one drawer are never the
+same string; and `_summary` withholds the name where the box under that number is a different
+drawer. The third candidate — marking a run whose cards have left the store — was not taken
+as a display, but its signal is half of the rule below.
+
+**It is not the D56 amendment it looked like.** `_box_names`'s own docstring already said a
+vanished box gets no name — *"the run remembers a box the store no longer has, and a missing
+name is the honest rendering of that"* — and could not act on it, because a deleted box number
+is REALLOCATED by D20's lowest-free-integer rule, so the map is never missing the key. The
+guard completes a rule this code already stated rather than overturning one, which is why it
+took no new decision entry.
+
+**The first version of the guard was wrong and T7 caught it inside the session.** It compared
+the timestamps alone — box created after the run, withhold the name — and that forbids naming
+a box *afterwards*, which is an ordinary thing to do and which T7 already asserted three
+blocks earlier: name the box, and the name reaches the run on the next read. The shipped rule
+needs **both** conditions, and each rules out the other's false positive:
+
+    the box was created AFTER the run started
+    AND the box's cards disown the run — it holds some, and none of them is this run's
+
+An empty box disowns nobody, so name-it-later still works. A live run that has not identified
+yet owns no cards, so the timestamp keeps it named. Three assertions pin it.

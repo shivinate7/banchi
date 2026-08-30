@@ -35,6 +35,7 @@ import type {
   RunPreflight,
   RunStarted,
   RunStepResult,
+  TcgSets,
   RunSummary,
 } from './types'
 
@@ -1710,6 +1711,18 @@ export async function getRun(name: string): Promise<RunDetail> {
  * `tcg_blocked`, `export_wrong_game` — is a `ServerError` carrying a sentence to read and no
  * control to press.
  */
+/**
+ * The real set names for a game (D65), for the capture screen's hint field.
+ *
+ * NEVER THROWS FOR A MISSING LIST. The server answers 200 with an empty `sets` and a `reason`
+ * whenever it could not fetch — no cookie, no network, the portal down — because the capture
+ * screen is the rig and D19 measures its cadence in milliseconds. A hint field that refused to
+ * open because an autocomplete failed would be a worse product than one with no autocomplete.
+ */
+export async function getTcgSets(game: string): Promise<TcgSets> {
+  return (await request(`/tcg/sets?game=${encodeURIComponent(game)}`, NO_CACHE)) as TcgSets
+}
+
 export async function fetchExport(
   name: string,
   options: { acceptUnverified?: boolean; acceptNarrower?: boolean } = {},

@@ -315,7 +315,7 @@ COMPONENTS = [
                                  "falling back to Pokemon's — riftbound and one_piece ship "
                                  "unverified because no export for either has ever been seen.",
                          "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18",
-                                         "D21", "D22", "D23", "D24", "D25"],
+                                         "D21", "D22", "D23", "D24", "D25", "D65"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -1150,11 +1150,11 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D62", "D64", "D67"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D62", "D64", "D65", "D67"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
-                "does": "the ONE outbound call this server makes, and the only place allowed "
+                "does": "the TWO outbound calls this server makes, and the only place allowed "
                         "to make it: GET the operator's own Filtered Export off "
                         "store.tcgplayer.com with the session cookie in .env. Stdlib urllib, "
                         "one host, one method. Redirects are NOT followed blindly — a 302 to "
@@ -1176,7 +1176,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64"],
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D64", "D65"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1215,7 +1215,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64", "D65", "D19"],
                 "tested_by": ["T7"],
             },
         },
@@ -1389,11 +1389,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64", "D68"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D64", "D65", "D68"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64", "D67"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D62", "D64", "D65", "D67"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1482,7 +1482,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D65"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -1991,7 +1991,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -2081,7 +2081,7 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27"],
+                "governed_by": ["D3", "D22", "D23", "D27", "D65"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -2180,7 +2180,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
