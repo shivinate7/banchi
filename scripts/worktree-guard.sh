@@ -30,7 +30,10 @@
 #                    cold cache and a paid submission at the end of every turn.
 #   harness/images/  SYMLINKED TO WHEREVER THE MAIN TREE'S MIRROR ACTUALLY IS — asked for, not
 #                    assumed, since D47 moved it out of iCloud and this line went on pointing at
-#                    the old place in silence. The difference from the line above is the point:
+#                    the old place in silence. It is back at the in-repo default as of
+#                    2026-08-29, which is precisely what asking makes irrelevant: the answer
+#                    moved twice in two days and this line did not change either time.
+#                    The difference from the line above is the point:
 #                    133 MB
 #                    is too much to duplicate per worktree, and unlike the cache these are
 #                    immutable: `fixtures.load` only ever ADDS a missing file, keyed by card

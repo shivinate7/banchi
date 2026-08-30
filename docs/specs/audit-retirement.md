@@ -23,8 +23,10 @@ before and after every commit in this plan.
   they exist — docs-gen still is; audit-history stopped being one the moment it landed,
   and section 7 now writes its real path. If a future name must be written as a real
   reference before it is built, the sanctioned route is a line in
-  scripts/docs-audit-allow.txt with a reason — the mechanism already covering
-  PKMNSCAN_IMAGE_MIRROR today, and T7 until the day it was registered.
+  scripts/docs-audit-allow.txt with a reason — the mechanism that covered
+  PKMNSCAN_IMAGE_MIRROR until D47 made the name real, and T7 until the day it was
+  registered. The list is empty today, and that is the state it is supposed to reach:
+  an entry that comes true fails the audit, which is what forces it back out.
 - **Verbatim doc text below sits in blockquotes, never fenced blocks.** The audit reads
   every line of a fenced block as code, so a fenced quotation of prose mentioning a make
   target would be scanned as a command reference. Blockquotes scan as prose. Keep it that

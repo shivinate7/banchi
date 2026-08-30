@@ -182,7 +182,7 @@ worktree-setup:
 #
 # IT INSTALLS WHAT GIT TRACKS, NEVER WHAT THE DIRECTORY HOLDS, and that distinction was
 # earned rather than anticipated. The first version copied `scripts/githooks/*` and this repo
-# lives in iCloud Drive, which had quietly made `pre-push 2` and `reference-transaction 2`
+# lived in iCloud Drive at the time, which had quietly made `pre-push 2` and `reference-transaction 2`
 # beside the originals — so the first run installed five hooks from three files, two of them
 # untracked and reviewed by nobody. Git would not have RUN those two (it dispatches on exact
 # names), so the damage was cosmetic this time; the mechanism is not. A hook directory whose

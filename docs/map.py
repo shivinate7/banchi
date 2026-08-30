@@ -624,7 +624,10 @@ COMPONENTS = [
                         "ASKED FOR — the main checkout's own fixtures.IMAGES_DIR — rather than "
                         "assumed to be its harness/images, which D47 emptied when it moved the "
                         "mirror out of iCloud; the old assumption skipped in silence and cost a "
-                        "151-file download. Fails open on every path, including its own bugs.",
+                        "151-file download. The mirror came back to that default on 2026-08-29 "
+                        "with the repo leaving iCloud, which is what asking makes irrelevant: "
+                        "the answer moved twice and this code did not. Fails open on every "
+                        "path, including its own bugs.",
                 # D18 is the one that decides where this may run rather than what it does.
                 # It WRITES — a venv and a cache copy — so it belongs at session start and
                 # must never be moved onto the commit path or into `make check`. D16 is
@@ -699,7 +702,11 @@ COMPONENTS = [
                 # D42 joins because hooks() no longer merely reports a config: it encodes where
                 # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
                 # arrangement that entry started with and then had to retract.
-                "governed_by": ["D16", "D17", "D42", "D43"],
+                # D44 governs icloud(), which is a REPORT and never an action — and which is
+                # kept now that the repo has left iCloud for that entry's amended reason: the
+                # hazard belongs to a synced directory, and a tree can be put inside one
+                # without telling this script.
+                "governed_by": ["D16", "D17", "D42", "D43", "D44"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
