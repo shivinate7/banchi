@@ -3482,6 +3482,91 @@ floors his position at >=32px plain, and D31 keeps that spec unweakened.
 
 ---
 
+## D46 — A card the pipeline could not place is offered the catalog, and a human may point at a row
+
+**BUILT 2026-08-29, and the owner found it from the far end.** Shown three cards rescued by
+D35's name rung, they asked why the fourth was still a dead end and why the screen said nothing
+useful about it: *"it should've brought up what cards it could have matched too (along with
+letting me literally just enter in what it is)"*.
+
+**THE DEAD END WAS REAL AND IT WAS TOTAL.** A queue entry with no candidate rows cannot be
+answered — `POST /review/<box>/<index>/answer` refuses it as `no_candidates` — so the only two
+moves were Skip, which writes nothing and asks the same question next session forever, and
+D37's stand-down, which closes the question rather than answering it. Neither one lists the
+card. The row was in the export the whole time.
+
+**THE CASE THAT REOPENED IT IS THE ONE THE OLD REFUSAL SAID DID NOT EXIST.** That refusal
+argued from evidence and named it: *"Every one of them wanted a re-export or a re-shoot, never
+a typed SKU, so the refusal stands on the evidence it asked for."* True of the cards it was
+written about. Box 1 position 108 is not one of them. Its photograph is **good** — measured at
+2160x3840 with mean luma 72.2, statistically indistinguishable from two copies of the same card
+that read perfectly — and `Master Yi, Wuju Master` came back as `Wuju Master`, the champion
+dropped. A re-shoot repairs nothing, a re-identify is a coin toss, and a person looking at the
+card can see what it is.
+
+**IT IS NOT A FREE-TEXT PATH INTO THE FIELD THE HARD RULE PROTECTS, AND THAT IS THE WHOLE
+DESIGN.** The operator never types a SKU into a card. They pick a ROW, and the server re-reads
+that row **out of the export this card was joined against, inside the write lock**, before
+anything is written:
+
+- an unknown SKU refuses as `sku_not_in_catalog`;
+- the **condition is taken from the row, never from the request** — a client that sends the
+  wrong one gets the right one rather than an error, so the SKU is the only thing the request
+  decides;
+- and `from_catalog` reaches only an entry with **zero** candidates. An entry with rows of its
+  own still answers only from those rows, so the anti-laundering refusal is untouched.
+
+The property the old guard protected — that no string a client sends can become a listing on
+its own — is therefore unchanged. What changed is that a human may point at a row the pipeline
+failed to find, instead of only being able to walk away from it.
+
+**THE EDGE IS ON THE CARD, NOT ON THE QUEUE ENTRY, and that is what makes the lookup exact.**
+`store/queues.py:QueueEntry` records no run, no game and no export, and `Queue.parse` drops any
+key it does not declare — so nothing about a run can be written into `review.json` without a
+schema change. `master.Card` has carried `run` since identification wrote it and `game` since
+D21, and the answer path already loads the card. So: card -> run -> that run's manifest -> the
+export for that card's game. Guessing the run by scanning `runs/` for one whose scope covers
+the box was the alternative and it is **unsound**: two runs on this machine touch box 1,
+`first_seen` is date-only, and `Queue.upsert` preserves it across re-joins. An exact edge that
+is sometimes absent beats an inferred one that is always present and sometimes wrong. Every way
+it can be absent is a named refusal — `no_run_recorded`, `run_not_found`, `no_export_for_game`,
+and `export_missing`, which is the legacy case: a join driven from a terminal records the
+`--export` path it was handed, typically `~/Downloads/...` and often gone, while a join driven
+from the app uploads the bytes into the run.
+
+**THE MATCH IS LOOSE IN BOTH DIRECTIONS AND IS ALLOWED TO BE, because it decides nothing.**
+`CLAUDE.md` forbids the JOIN to match on Product Name, and that stands — this is not the join.
+It ranks rows for a person to choose between, so a loose match costs a row on a list rather
+than a wrong card in an import file. Measured on that export: **490 of 494 epithets identify
+exactly one product, against 38 of 98 champion names**, and the same run truncated in both
+directions (`Wuju Master` three times, `Master Yi` twice). So both directions are offered and
+neither is trusted without a human looking at the photograph.
+
+**THE ROWS GO WHERE THE CANDIDATE ROWS GO, and are answered on the same digits.** Not a panel
+below them: `ReviewQueue.css` holds that nothing may come between the sentence and the rows,
+and these ARE the rows — found by a lookup rather than by the join, drawn through the same
+markup. One vocabulary rather than two, because whether the pipeline or the catalog found a row
+is not something the finger needs to know. The search box is a form, so Enter submits it, and
+`isEditableTarget` is what stops a typed `1` from answering the card — asserted as a negative
+case, because nothing in the type system says so.
+
+**THE HISTORY LINE CARRIES `from_catalog`, and only when it is true.** `_history` drops a None
+extra, so every line already on disk keeps its exact shape. A row the PIPELINE offered and a row
+a HUMAN went and found are different claims about how much the machine knew, and after the write
+there is no other evidence which happened.
+
+**THE STALE COPY WENT WITH IT.** That arm drew one paragraph saying the only move was to skip
+and pointing at a command in a terminal. D37 had put a stand-down on this very screen months
+earlier and the copy never mentioned it — the one place that most needed to.
+
+**What would reopen this: the flag being used on cards that had a good answer available.** If
+`from_catalog` starts appearing on answers for cards whose export row a better join would have
+found, the fix is upstream in the join, not more catalog searching. `_strip_set_code` is the
+first instance of exactly that: three of box 1's four dead ends turned out to be a set code
+glued to a correct identifier, and code now recovers them without a human at all.
+
+---
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **THE HEADING READ "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN

@@ -644,6 +644,21 @@ this screen. The mid-box delete is deliberately not there: it renumbers every ca
 one being deleted, which would re-point the worklist the panel is drawn from, and it is the one
 operation here with no undo. D37 carries the whole argument.
 
+**THE ZERO-CANDIDATE CARD IS NO LONGER A DEAD END (D46, 2026-08-29), AND THE COPY THAT SAID IT
+WAS IS GONE.** That arm of the screen drew one paragraph: the only move was to skip, and the way
+out was a command in a terminal. Both halves had gone stale — D37 had put a stand-down on this
+very screen and the copy never mentioned it, and the row the pipeline missed was usually sitting
+in the export the whole time. The screen now looks the card up in the export it was joined
+against, suggests on arrival from the card's own read, and offers a search by name, collector
+number or SKU.
+
+**Those rows go where the candidate rows go, and are answered on the same digits.** Not a panel
+beneath them: nothing may come between the sentence and the rows, and these ARE the rows — found
+by a lookup rather than by the join. One vocabulary, because whether the pipeline or the catalog
+found a row is not something the finger needs to know. The search field is the one control on
+this screen that takes typing, so it carries `field` rather than `line` per the token block
+above, and `isEditableTarget` is what stops a typed digit from answering the card.
+
 **Skip survives, narrowed and no longer load-bearing.** It is still the only move that writes
 nothing, which is right for a card the owner intends to come back to this session; what it is
 no longer is the ONLY move for a card that can never be answered. The paragraphs below are left

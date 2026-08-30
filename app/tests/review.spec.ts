@@ -127,6 +127,33 @@ const REVIEW = [
   entry(5, 'low_confidence', '1.10', [candidate(0, '1.10')]),
 ]
 
+/* D46 — the export rows a lookup offers for a card the pipeline found nothing for. Modelled
+   on the real case: run 2026-08-29-box1-01 read `Master Yi, Wuju Master` as `Wuju Master`,
+   dropping the champion, so an exact name match finds nothing and only a substring does. */
+const CATALOG_ROWS: Candidate[] = [
+  {
+    sku: '9192027',
+    name: 'Master Yi, Wuju Master',
+    set: 'Unleashed',
+    number: '191/219',
+    condition: 'Near Mint Foil',
+    market: '0.12',
+  },
+  {
+    sku: '9197294',
+    name: 'Master Yi, Wuju Master (Overnumbered)',
+    set: 'Unleashed',
+    number: '231/219',
+    condition: 'Near Mint Foil',
+    market: '51.52',
+  },
+]
+
+/** A queue entry the pipeline offered NO rows for — `no_catalog_row` with zero candidates.
+ *  Before D46 this was a dead end: the answer route refuses it as `no_candidates`, so the
+ *  only moves were skip and stand-down. */
+const NO_ROWS: Entry[] = [entry(14, 'no_catalog_row', null, [])]
+
 type Sent = { method: string; url: string; body: unknown }
 
 /** Opens the screen with every route it calls intercepted. Returns the writes it attempted,
@@ -144,6 +171,34 @@ async function open(page: Page, review = REVIEW): Promise<Sent[]> {
 
   await page.route(/\/photo\/\d+\/\d+/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG })
+  })
+
+  /* D46's catalog lookup. Fulfilled from `catalogRows`, which the zero-candidate test
+     overrides; every other test in this file has candidates on every entry and so never
+     reaches it. Recorded into `sent` as a GET so a test can assert it was asked at all —
+     the suggest-on-arrival property is otherwise invisible. */
+  await page.route(/\/catalog\?/, async (route) => {
+    const request = route.request()
+    sent.push({ method: request.method(), url: request.url(), body: null })
+    const url = new URL(request.url())
+    const q = url.searchParams.get('q') ?? ''
+    const rows = q === '' || CATALOG_ROWS.some((r) => r.name.toLowerCase().includes(q.toLowerCase()))
+      ? CATALOG_ROWS
+      : []
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        index: 14,
+        game: 'riftbound',
+        query: q || 'Wuju Master',
+        searched: q !== '',
+        rows,
+        found: rows.length,
+        truncated: false,
+      }),
+    })
   })
 
   // Every write, recorded and never issued.
@@ -421,4 +476,75 @@ test('a pooled card never draws a photograph here', async ({ page }) => {
   await expect(page.locator('.review-absent')).toBeVisible()
   await expect(page.locator('.review-photo')).toHaveCount(0)
   await expect(page.locator('.review-inset')).toHaveCount(0)
+})
+
+/* ---------------------------------------------------------- D46: the card with no rows */
+
+/* Before this, the zero-candidate arm drew one paragraph of prose saying the only move was
+   to skip and pointing at a command in a terminal. Both halves were stale: D37 had put a
+   stand-down on this very screen, and the row the pipeline missed was usually sitting in the
+   export the whole time. These four cases are the properties that repair depends on. */
+
+test('a card the pipeline found nothing for is offered rows out of the export', async ({
+  page,
+}) => {
+  const sent = await open(page, NO_ROWS)
+
+  // Asked on ARRIVAL, with no query — the owner's ask was that the screen suggest rather
+  // than wait to be asked. This is the only assertion that can see that it was asked at all.
+  await expect.poll(() => sent.filter((s) => s.url.includes('/catalog?')).length).toBe(1)
+  expect(sent[0]!.url).toContain('q=')
+  expect(sent[0]!.method).toBe('GET')
+
+  const rows = page.locator('.review-catalog .review-candidate')
+  await expect(rows).toHaveCount(CATALOG_ROWS.length)
+  await expect(rows.first()).toContainText('Master Yi, Wuju Master')
+  // The digits mean these rows, exactly as they mean the pipeline's own.
+  await expect(rows.first().locator('.review-key')).toHaveText('1')
+})
+
+test('choosing a suggested row answers the card and says the row came from the catalog', async ({
+  page,
+}) => {
+  const sent = await open(page, NO_ROWS)
+  await page.locator('.review-catalog .review-candidate').first().click()
+
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBeGreaterThan(0)
+  const write = sent.find((s) => s.method === 'POST')!
+  const body = write.body as { sku: string; condition: string; from_catalog?: boolean }
+  expect(body.sku).toBe(CATALOG_ROWS[0]!.sku)
+  expect(body.condition).toBe(CATALOG_ROWS[0]!.condition)
+  /* THE FLAG IS THE WHOLE POINT OF THE ROUTE CHANGE. Without it the server refuses this
+     write as `no_candidates`, which is the guard D46 deliberately left standing for every
+     answer that does not come from the catalog. */
+  expect(body.from_catalog).toBe(true)
+})
+
+test('an ordinary answer carries no catalog flag at all', async ({ page }) => {
+  const sent = await open(page)
+  await page.locator('.review-candidate').first().click()
+
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBeGreaterThan(0)
+  const body = sent.find((s) => s.method === 'POST')!.body as { from_catalog?: boolean }
+  /* Absent, not false. Every answer this screen has ever written goes through one call, and
+     a flag about D46 riding on all of them would put a claim about how the row was found
+     onto thousands of answers that have nothing to do with it. */
+  expect(body.from_catalog).toBeUndefined()
+})
+
+test('the search box does not answer the card when a digit is typed into it', async ({
+  page,
+}) => {
+  const sent = await open(page, NO_ROWS)
+  const box = page.locator('.review-catalog-input')
+  await box.click()
+  await box.fill('1')
+
+  /* THE NEGATIVE CASE, and it is the one that matters. The digits on this screen answer the
+     card; an input that swallowed one would be fine, but an input that did NOT would write a
+     SKU onto a real card while the operator was typing a collector number. `isEditableTarget`
+     is what stops it, and nothing in the type system says so. */
+  await page.waitForTimeout(150)
+  expect(sent.filter((s) => s.method === 'POST')).toHaveLength(0)
+  await expect(box).toHaveValue('1')
 })

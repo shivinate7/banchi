@@ -171,6 +171,7 @@ import io
 import json
 import hashlib
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -7067,6 +7068,208 @@ ONE_PIECE_EXPORT = (
 )
 
 
+# --------------------------------------------------------------- the review catalog lookup
+
+
+def check_review_catalog(checks: Checks) -> None:
+    """GET /review/<box>/<index>/catalog and D46's answer path — the card with no rows.
+
+    ITS OWN ISOLATED HOME, this file's standing lesson: it answers a card, which clears queue
+    entries and writes history lines the blocks around it count over stores they build by hand.
+
+    THE DEAD END THIS CLOSES. A queue entry with no candidates could not be answered at all —
+    `do_review_answer` refuses it as `no_candidates` — so the only moves were skip, which
+    writes nothing and asks again next session, and D37's stand-down, which closes the question
+    rather than answering it. The row was usually in the export the whole time: box 1's
+    `Master Yi, Wuju Master` was read as `Wuju Master`, dropping the champion, so no exact
+    match could find it and the photograph was perfectly good.
+
+    THE GUARD IS NARROWED, NOT REMOVED, AND THAT IS WHAT MOST OF THIS BLOCK ASSERTS. A bare
+    SKU still refuses. The flag only reaches an entry with NO candidates. The SKU is re-read
+    out of THIS CARD'S OWN export inside the write lock, so an unknown one refuses and a
+    condition the client invented is discarded rather than believed.
+    """
+    checks.note("")
+    checks.note("REVIEW CATALOG — GET /review/<box>/<index>/catalog, and D46's answer")
+
+    with isolated_home() as home:
+        # A run holding the riftbound export, exactly as an app-driven join leaves it: the
+        # bytes INSIDE the run, and the manifest naming that copy.
+        run_dir = home / "runs" / "2026-08-29-box1-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-08-29T22:37:47+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(1, game="riftbound"))
+        with Store().write() as snapshot:
+            for key in ("1/1", "1/2", "1/3"):
+                snapshot.inventory.set_state(key, master.IDENTIFIED)
+                snapshot.inventory.cards[key].game = "riftbound"
+            # The live case: the champion dropped, no number read, no candidate rows.
+            snapshot.inventory.cards["1/1"].run = "2026-08-29-box1-01"
+            snapshot.review.upsert(
+                entry(
+                    1,
+                    1,
+                    candidates=[],
+                    reason="no_catalog_row",
+                    read={"name": "Wuju Master", "number": None},
+                )
+            )
+            # Records no run at all — a card identified before `run` was written.
+            snapshot.review.upsert(entry(1, 2, candidates=[], reason="no_catalog_row"))
+            # Has candidates of its own, so the catalog path must never reach it.
+            snapshot.inventory.cards["1/3"].run = "2026-08-29-box1-01"
+            snapshot.review.upsert(entry(1, 3, market="12.00"))
+
+        # --- the lookup ---
+
+        found = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, ""),
+            "an empty query suggests from the card's own read, which is the arriving case",
+        )
+        if found is not None:
+            names = [str(row["name"]) for row in found["rows"]]
+            checks.ok(
+                "Master Yi, Wuju Master" in names,
+                "D46: the row the pipeline could not find is offered — the read dropped the "
+                "champion, so only a substring match recovers it",
+            )
+            checks.equal(
+                found["game"],
+                "riftbound",
+                "D46: and it is looked up as the game the CARD records, not the default",
+            )
+
+        typed = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, "191/219"),
+            "a typed collector number searches the same export",
+        )
+        if typed is not None:
+            checks.ok(
+                any(str(row["number"]) == "191/219" for row in typed["rows"]),
+                "D46: a number finds its row",
+            )
+
+        empty = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, "zzz not a card"),
+            "a query matching nothing answers with no rows",
+        )
+        if empty is not None:
+            checks.equal(
+                (len(empty["rows"]), empty["found"]),
+                (0, 0),
+                "D46: and it does NOT guess — an empty result is an empty result",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_catalog(9, 99, ""),
+            "card_not_found",
+            "a lookup for a card that does not exist refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 2, ""),
+            "no_run_recorded",
+            "a card with no run has no export to look in, and says so rather than guessing "
+            "which run on disk might have been the one",
+        )
+
+        # --- the answer, and the guard that stays standing ---
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1, 1, {"sku": "9192027", "condition": "Near Mint Foil"}
+            ),
+            "no_candidates",
+            "WITHOUT the flag a zero-candidate entry still refuses — D46 narrows this guard "
+            "and does not remove it",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                1,
+                {"sku": "0000000", "condition": "Near Mint Foil", "from_catalog": True},
+            ),
+            "sku_not_in_catalog",
+            "a SKU the export does not carry refuses even WITH the flag — the row is re-read "
+            "server-side, so this is never a free-text write",
+        )
+
+        before = Store().read().inventory.cards["1/1"].sku
+        checks.ok(before is None, "and neither refusal wrote anything")
+
+        answered = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                1,
+                # A DELIBERATELY WRONG CONDITION. The server takes the row's own, so this is
+                # discarded rather than validated — a client that sends the wrong one gets the
+                # right one, which is what makes the SKU the only thing the request decides.
+                {"sku": "9192027", "condition": "TOTAL NONSENSE", "from_catalog": True},
+            ),
+            "a catalog-verified row answers the card",
+        )
+        if answered is not None:
+            checks.equal(
+                answered["condition"],
+                "Near Mint Foil",
+                "D46: and the CONDITION comes off the export row, never off the request",
+            )
+
+        stored = Store().read()
+        card = stored.inventory.cards["1/1"]
+        checks.equal(
+            (card.sku, card.condition),
+            ("9192027", "Near Mint Foil"),
+            "the pair lands on the card, which is what a later join reads back as D3 rung 0",
+        )
+        checks.ok(
+            stored.review.entries["1/1"].cleared_by_human,
+            "and the queue entry is cleared, so the question stops being asked",
+        )
+        line = [
+            event
+            for event in Store().history()
+            if event.get("event") == "answered" and event.get("position") == "1/1"
+        ]
+        checks.ok(
+            bool(line) and line[-1].get("from_catalog") is True,
+            "D46: the history line records that a HUMAN found this row rather than the "
+            "pipeline — after the write there is no other evidence which happened",
+        )
+
+        # --- the flag reaches nothing it should not ---
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                3,
+                {"sku": "9192027", "condition": "Near Mint Foil", "from_catalog": True},
+            ),
+            "sku_not_a_candidate",
+            "an entry WITH candidates is unaffected by the flag: it still answers only from "
+            "the rows it was offered, which is the laundering guard D46 must not reach",
+        )
+
+
 def check_review_stand_down(checks: Checks) -> None:
     """POST /review/<box>/<index>/stand-down — D37, closing a question without answering it.
 
@@ -9056,6 +9259,7 @@ def run() -> Result:
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_review_stand_down(checks)
+    check_review_catalog(checks)
     check_run_realignment(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
