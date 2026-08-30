@@ -931,13 +931,18 @@ COMPONENTS = [
                         "(the redirect AND a login page served as a 200), tcg_blocked (the "
                         "WAF, naming PKMNSCAN_TCG_USER_AGENT as the remedy), tcg_unavailable, "
                         "tcg_unreachable, tcg_not_csv, tcg_export_empty. The cookie is in no "
-                        "return value, no message and no run directory.",
+                        "return value, no message and no run directory, and it is read "
+                        "through envfile.get_live rather than envfile.get because a "
+                        "SESSION EXPIRES: get caches per process and cannot replace a "
+                        "name it lifted out of .env itself, so under D53's long-running "
+                        "supervisor the remedy tcg_session_expired prints would not have "
+                        "worked.",
                 # D60 is the entry. D16 is why capture_server.py's file-boundary sentence was
                 # rewritten rather than narrowed to "no socket TO ANTHROPIC". D11 is what the
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D11", "D16", "D24", "D33", "D60"],
+                "governed_by": ["D11", "D16", "D24", "D33", "D53", "D60"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "

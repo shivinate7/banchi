@@ -66,9 +66,15 @@ import envfile  # noqa: E402
 # a credential-forwarding primitive guarded by an origin header.
 DEFAULT_URL = "https://store.tcgplayer.com/Admin/Pricing/DownloadMyExportCSV"
 
-# The cookie is a BEARER INSTRUMENT and lives in `.env` and nowhere else — gitignored,
-# denied to an agent by `.claude/settings.json`, and read here at call time rather than at
-# import so that placing it does not need a server restart. A bare name rather than a
+# The cookie is a BEARER INSTRUMENT and lives in `.env` and nowhere else — gitignored, and
+# denied to an agent by `.claude/settings.json`.
+#
+# READ THROUGH `envfile.get_live` AND NOT `envfile.get`, WHICH IS NOT A DETAIL: this session
+# EXPIRES, and `tcg_session_expired` tells the operator to sign in again and replace the value
+# in `.env`. `get` caches per process and, worse, cannot replace a value it already lifted out
+# of the file — so under D53's supervisor, which runs for days and does not watch `.env`, that
+# printed remedy would not have worked and the refusal would have repeated forever over a
+# cookie the operator had already fixed. A bare name rather than a
 # `PKMNSCAN_` one, which is this repo's existing split: knobs are prefixed, secrets are not
 # (`ANTHROPIC_API_KEY`, `POKEMONTCG_API_KEY`).
 COOKIE_ENV = "TCGPLAYER_STORE_COOKIE"
@@ -130,7 +136,7 @@ def endpoint() -> str:
     exfiltration channel wearing a test seam. `http://127.0.0.1` is permitted because it
     cannot leave the machine, which is the same reason `store/files.py` trusts a local path.
     """
-    override = (envfile.get(URL_ENV) or "").strip()
+    override = (envfile.get_live(URL_ENV) or "").strip()
     if not override:
         return DEFAULT_URL
     parsed = urlparse(override)
@@ -153,7 +159,7 @@ def _cookie() -> str:
     operator looking in the wrong place. Copying the whole `Cookie:` header out of the
     browser's network tab is one action and cannot be wrong about which cookies matter.
     """
-    value = envfile.get(COOKIE_ENV)
+    value = envfile.get_live(COOKIE_ENV)
     if not value:
         raise FetchRefusal(
             "tcg_cookie_missing",
@@ -172,7 +178,7 @@ def _cookie() -> str:
 
 
 def _agent() -> str:
-    return (envfile.get(AGENT_ENV) or "").strip() or DEFAULT_AGENT
+    return (envfile.get_live(AGENT_ENV) or "").strip() or DEFAULT_AGENT
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

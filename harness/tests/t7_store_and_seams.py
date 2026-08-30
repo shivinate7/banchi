@@ -187,6 +187,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
 from cli import resolve, runs  # noqa: E402
@@ -11649,6 +11650,68 @@ def check_export_fetch(checks: Checks) -> None:
                     before,
                     "and that refusal keeps nothing either",
                 )
+                # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
+                #
+                # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the
+                # operator to sign in again and replace the value in `.env` — and
+                # `envfile.get` caches per process AND cannot replace a name it already
+                # lifted out of the file, so under D53's supervisor (days of uptime, and it
+                # does not watch `.env`) that remedy would not have worked. The refusal
+                # would have repeated forever over a cookie already fixed.
+                #
+                # DRIVEN THROUGH THE REAL FETCH rather than through the reader, because what
+                # has to be true is that the SOCKET sees the new value. The stub records
+                # every Cookie header it is sent, so this reads what actually went out.
+                dotenv = home / "rotating.env"
+                was_file, was_env = envfile.ENV_FILE, os.environ.pop(
+                    "TCGPLAYER_STORE_COOKIE", None
+                )
+                envfile.ENV_FILE = dotenv
+                try:
+                    stub["mode"] = "csv"
+                    stub["body"] = whole.read_bytes()
+
+                    dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=one\n")
+                    stub["seen"] = []
+                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    checks.equal(
+                        stub["seen"][-1] if stub["seen"] else None,
+                        "TCGAuthTicket_Production=one",
+                        "a cookie placed in `.env` while the server is already running "
+                        "reaches the socket — `envfile.get` returns early once loaded, so "
+                        "adding one to a long-running server was invisible to it. The "
+                        "value carries its own `=` — a Cookie header is `name=value` — "
+                        "so this pins that `.env` splits a line on its FIRST separator",
+                    )
+
+                    dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=two\n")
+                    stub["seen"] = []
+                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    checks.equal(
+                        stub["seen"][-1] if stub["seen"] else None,
+                        "TCGAuthTicket_Production=two",
+                        "and a REPLACED one reaches it too, which is the case that matters: "
+                        "the session expires, and `load` will not overwrite a name it set "
+                        "itself even with force — so the fix printed by tcg_session_expired "
+                        "has to actually work",
+                    )
+
+                    os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=from-env"
+                    stub["seen"] = []
+                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    checks.equal(
+                        stub["seen"][-1] if stub["seen"] else None,
+                        "TCGAuthTicket_Production=from-env",
+                        "and a real environment variable still outranks the file, which is "
+                        "the precedence `envfile` has always promised so CI can set one "
+                        "without editing anything",
+                    )
+                finally:
+                    envfile.ENV_FILE = was_file
+                    os.environ.pop("TCGPLAYER_STORE_COOKIE", None)
+                    if was_env is not None:
+                        os.environ["TCGPLAYER_STORE_COOKIE"] = was_env
+
             finally:
                 httpd.shutdown()
                 httpd.server_close()

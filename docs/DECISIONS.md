@@ -6725,6 +6725,34 @@ to be read later by somebody else. `TCGPLAYER_STORE_COOKIE` is a bare name rathe
 **This repo has no secret scanning** — the pre-commit hook's only content rule is the
 code-card regex — so discipline is the whole guard.
 
+**AND THE REFUSAL'S OWN REMEDY DID NOT WORK, WHICH IS THE WORST DEFECT THIS ENTRY FOUND IN
+ITSELF.** `tcg_session_expired` tells the operator to sign in again and replace the value in
+`.env`. `envfile.get` could not see them do it. **Two caches sit in the way and they fail
+differently**: `load` returns early once `_loaded` is set, so a cookie ADDED to `.env` while
+the server runs is never seen at all; and it only assigns a name absent from `os.environ`, so
+even `force=True` cannot REPLACE one it lifted out of the file earlier. Measured, all four
+steps: added-while-running `''`, and after a forced reload the ROTATED value still read as
+the old one.
+
+**Neither cache had ever mattered, which is why nobody had looked.** `ANTHROPIC_API_KEY` and
+`PKMNSCAN_IMAGE_MIRROR` are placed before anything starts and do not change under a running
+process. A SESSION COOKIE EXPIRES — that is the whole reason `tcg_session_expired` exists —
+and D53 made the server long-running (`make up`, days of uptime, and its watcher does not
+watch `.env`). So the operator would have replaced a dead cookie, pressed fetch, and been
+told the session had expired, forever. **A refusal whose printed remedy does not work is
+worse than one that says nothing**, because it spends the operator's trust on the advice.
+
+**`envfile.get_live` is the fix and the precedence is unchanged, which is what `_from_file`
+is for.** A real environment variable still wins — the property that lets CI set one without
+editing a file — and it is now distinguishable from a value this module lifted out of `.env`,
+which after `load` are the same thing to anyone reading `os.environ`. Nothing is written
+back: assigning the fresh value into the environment would make it look like a real variable
+to the next call and the rotation after that would be ignored, which is the same defect one
+turn later. `_parse` is split out so `load` and `get_live` cannot disagree about what a line
+means. T7 drives all three states through the REAL fetch and reads the Cookie header off the
+socket, because what has to be true is that the new value goes out on the wire; reverting to
+`get` takes exactly the two rotation cases red and leaves the precedence case green.
+
 **THE URL OVERRIDE REFUSES TO CARRY THE COOKIE ANYWHERE BUT https OR LOOPBACK.**
 `PKMNSCAN_TCG_EXPORT_URL` exists so T7 can aim the fetch at a socket it controls, and a knob
 that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect
