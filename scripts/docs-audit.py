@@ -587,6 +587,15 @@ def check_paths(report: Report, docs: List[Path], allowed: Dict[str, str]) -> No
                 target = resolve_candidate(candidate, doc, tops)
                 if target is None:
                     continue
+                # `.git/` IS GIT'S OWN STORAGE AND NOT REPO CONTENT — see this module's
+                # header note. Whether `.git/config` or `.git/worktrees/` is there is a fact
+                # about how this checkout is arranged: the first is a FILE rather than a
+                # directory in a linked worktree, and the second is created with the first
+                # worktree and deleted with the last. Both blocked a commit over a true
+                # sentence in this session alone. Same category as a gitignored path, which
+                # `ignored_paths` already exempts for the same reason and in the same words.
+                if rel(target).split("/")[0] == ".git":
+                    continue
                 checked += 1
                 seen.append((doc, number, candidate, target))
 
