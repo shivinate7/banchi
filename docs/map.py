@@ -391,10 +391,11 @@ COMPONENTS = [
         "status": "built",
         "does": "the gate machinery and the tools around it: the pre-commit hook, the docs "
                 "audit it runs, the opsec guard that is that hook's disabled PreToolUse "
-                "twin, the Stop hook, the PostToolUse typecheck hook, D17's "
+                "twin, D42's two-hook guard over main and the throwaway-repo self-test that "
+                "proves it, the Stop hook, the PostToolUse typecheck hook, D17's "
                 "decision-context hook, `make status`, the screenshot runner and its "
                 "manifest, and audit-history — diagnostic, never gating, per D18.",
-        "governed_by": ["D14", "D16", "D17", "D18"],
+        "governed_by": ["D14", "D16", "D17", "D18", "D42"],
         # What the orphan rule covers here, and the one hole no declaration can close.
         # Declaring the key is also what makes the scan recursive, which is the only way
         # scripts/githooks/ is reached at all.
@@ -416,6 +417,15 @@ COMPONENTS = [
         # docs/DEBTS.md rather than worked around: the limit is in scripts/docs-audit.py,
         # and inventing a second key in this file to route around it would put the
         # workaround inside the thing the rule audits.
+        #
+        # THE HYPOTHETICAL IN THAT PARAGRAPH CAME TRUE ON 2026-08-29 AND IT NAMED THE FILE
+        # CORRECTLY. D42 added `githooks/reference-transaction` and `githooks/pre-push`, and
+        # the orphan rule was silent for both exactly as predicted — they are listed below by
+        # hand, and nothing would have failed had the author forgotten. What DID catch a
+        # missing entry that day was `githooks-selftest.sh`, one directory up and carrying a
+        # declared suffix, which failed the commit until it was described. The two outcomes
+        # from one change are the clearest statement of this hole available, so they are
+        # recorded here rather than only in docs/DEBTS.md.
         "source_suffixes": [".py", ".sh", ".txt"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
@@ -434,7 +444,9 @@ COMPONENTS = [
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
             "githooks/pre-commit": {
                 "does": "the commit gate: fixtures read-only, no image staged outside "
-                        "captures/, no printed code-card layout in the staged diff, then "
+                        "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
+                        "the repo still lives there, no printed code-card layout in the "
+                        "staged diff, then "
                         "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
                         "the coupling question, 64 warning loudly that the auditor was "
                         "invoked with a flag it does not accept. Tracked and reviewable "
@@ -446,10 +458,77 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D44"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; unprotected, "
                         "so a sibling hook's arrival would not be.",
+            },
+            "githooks/reference-transaction": {
+                "does": "D42's local half: refuses any move of refs/heads/main from any "
+                        "worktree of this clone — commit, fast-forward, merge, rebase, "
+                        "reset, `branch -f`, `update-ref`, delete. Allows exactly one thing, "
+                        "a move to a commit origin/main already carries, which is what "
+                        "pulling a merged pull request looks like. PKMNSCAN_MAIN=off is the "
+                        "visible escape hatch, and every refusal prints it.",
+                # A ref hook rather than a commit hook because the incident that produced it
+                # created no commit: a fast-forward moves a ref and runs no commit hook. D42
+                # carries that argument and the measured reason the payload's `old` column is
+                # ignored — git reports zeros for it whenever the caller stated no expected
+                # value, so `old == new` is what a DELETION looks like. D18 governs the shape
+                # rather than the content: this file is on the path that decides whether a
+                # commit proceeds, so it reads and refuses and never writes.
+                "governed_by": ["D18", "D42"],
+                "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
+                        "case the comment above this modules block predicted by name.",
+            },
+            "githooks/pre-push": {
+                "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
+                        "the ref hook beside it cannot see because `git push origin HEAD:main` "
+                        "never touches refs/heads/main locally. This is what stands in for "
+                        "branch protection, which GitHub answers 403 on for a private repo on "
+                        "the free plan.",
+                # Same escape hatch and the same fail-open discipline. Weaker than the thing it
+                # substitutes for in one way D42 names outright: it guards this clone, not the
+                # repository.
+                "governed_by": ["D42"],
+                "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
+            },
+            "githooks-selftest.sh": {
+                "does": "builds an origin and a clone in a temp directory, points "
+                        "core.hooksPath at the real hook files, and runs the gestures against "
+                        "them: nineteen cases over what is refused, what stays open, the "
+                        "legitimate pull, the escape hatch and a fresh clone. A refusal must "
+                        "carry the hook's own marker to count, because git declines some of "
+                        "these by itself and two cases were green on that before the check "
+                        "existed.",
+                # D18 is why it is in `make check` and never in the git hook: it writes. It has
+                # a second reason the audit's self-test does not — it exercises the guard by
+                # violating it, so wired into the commit path it would refuse its own commits.
+                "governed_by": ["D18", "D42"],
+            },
+            "icloud-sweep.py": {
+                "does": "lists iCloud Drive conflict copies (`foo 2.py`) and, with --delete, "
+                        "removes ONLY those byte-identical to their original. A differing copy "
+                        "is reported and left alone — it is not provably a duplicate, and "
+                        "guessing there is how a cleanup tool destroys work. Never touches a "
+                        "tracked file: `git ls-files --others` is its only enumeration.",
+                # D44 is the decision. D18 keeps it off the gate: it is the one target in this
+                # repo that can delete a file, so it is neither in `make check` nor in the
+                # git hook.
+                "governed_by": ["D18", "D44"],
+            },
+            "port-agreement.py": {
+                "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
+                        "numbers. One algorithm in two languages that cannot import each "
+                        "other — Python SERVES the capture port, TypeScript ADDRESSES it — so "
+                        "a disagreement is silent and total. Feeds both the same REAL "
+                        "directories (a missing path canonicalises differently in the two) "
+                        "and compares this checkout's composed ports on top.",
+                # D43 authors the derivation. D18 decides where this runs: it shells out to
+                # node, and the git hook runs bare python3 with nothing installed, so it lives
+                # in `make check` beside the other two self-tests rather than on the commit
+                # path.
+                "governed_by": ["D18", "D43"],
             },
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -491,6 +570,22 @@ COMPONENTS = [
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
+            "worktree-guard.sh": {
+                "does": "the SessionStart hook: provisions a git worktree's UNTRACKED state "
+                        "before any work starts. A worktree gets the tracked files and "
+                        "nothing else, so .venv/, harness/.cache/ and app/node_modules/ do "
+                        "not travel — and the three failures that causes (numpy missing, a "
+                        "fixture AttributeError, an empty T1 cache) never mention a "
+                        "worktree. Copies the cache, builds the venv, and only REPORTS the "
+                        "80 MB npm install. Fails open on every path, including its own bugs.",
+                # D18 is the one that decides where this may run rather than what it does.
+                # It WRITES — a venv and a cache copy — so it belongs at session start and
+                # must never be moved onto the commit path or into `make check`. D16 is
+                # cited for the sibling rule it sets over guard-opsec.sh and inherits here:
+                # a hook that can break a session gets disabled, and a disabled hook guards
+                # nothing, so every failure exits 0.
+                "governed_by": ["D16", "D18", "D43"],
+            },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
                         "the turn end on a failure. Arms itself on the absence of the last "
@@ -554,7 +649,10 @@ COMPONENTS = [
                 # next" through — which is why an entry without one prints a dead end. D16
                 # is the audit it shells out to for its health line, and the reason SOURCES
                 # is pure literals: a check that verifies a reader must not execute it.
-                "governed_by": ["D16", "D17"],
+                # D42 joins because hooks() no longer merely reports a config: it encodes where
+                # the hooks must be INSTALLED, and reads NOT ARMED for the working-tree
+                # arrangement that entry started with and then had to retract.
+                "governed_by": ["D16", "D17", "D42", "D43"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -637,6 +735,19 @@ COMPONENTS = [
                 "captures/cards/ and not captures/, so screenshot renders under "
                 "captures/ui/ are never scanned as paid captures.",
         "modules": {
+            "ports.py": {
+                "does": "which ports THIS checkout serves on, derived from where the checkout "
+                        "is. The main tree keeps :8000 and :5173; a linked worktree gets its "
+                        "own pair from one slot off its path. `PKMNSCAN_PORT` overrides and an "
+                        "out-of-range value is ignored rather than obeyed.",
+                # D43 is the decision. D13 is why it matters: one truth on the Mac, and the
+                # store already defaults per-checkout — so a shared port meant one tree's UI
+                # writing into another tree's store, which is that entry's promise broken by
+                # a socket rather than by a design.
+                "governed_by": ["D13", "D43"],
+                "note": "Stdlib only, like the server it serves. `scripts/status.py` imports "
+                        "it and the git hook never does.",
+            },
             "capture_server.py": {
                 # THE COUNT USED TO BE PUBLISHED HERE AND IS NOT ANY MORE, and this comment
                 # is the argument against itself. It read "Nine since 2026-08-13" and defended
@@ -685,7 +796,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -704,7 +815,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D25", "D32"],
+                "governed_by": ["D1", "D2", "D9", "D13", "D16", "D21", "D25", "D32"],
                 "tested_by": ["T7"],
             },
         },
@@ -769,12 +880,26 @@ COMPONENTS = [
             "index.html": {"does": "the single page: the #root main.tsx mounts into, and the "
                                    "three font faces from their two hosts",
                            "governed_by": ["D5", "D13"]},
-            "vite.config.ts": {"does": "the dev server on :5173, strictPort — a busy port fails "
+            "devPort.ts": {"does": "the ONE dev port for this checkout, imported by both "
+                                   "vite.config.ts and playwright.config.ts so they cannot "
+                                   "disagree. The main tree keeps 5173; a linked worktree "
+                                   "derives its own from a hash of its path, because both "
+                                   "configs hardcoding 5173 is what let design-check attach "
+                                   "to the MAIN tree's server from a worktree and assert "
+                                   "DESIGN.md's floors against code the branch never had — "
+                                   "green, and meaningless. Detects a worktree the way "
+                                   "scripts/worktree-guard.sh does: `.git` is a file",
+                           "governed_by": ["D5", "D13", "D43"]},
+            "vite.config.ts": {"does": "the dev server, strictPort — a busy port fails "
                                        "loudly rather than serving on 5174, where CLAUDE.md, the "
-                                       "Makefile and scripts/views.txt would all three be wrong",
-                               "governed_by": ["D13"]},
+                                       "Makefile and scripts/views.txt would all three be wrong. "
+                                       "The port comes from devPort.ts: :5173 in the main tree, "
+                                       "per-worktree elsewhere",
+                               "governed_by": ["D13", "D43"]},
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
-                                             "Vite it starts for itself",
+                                             "Vite it starts for itself. reuseExistingServer stays "
+                                             "ON and is safe only because devPort.ts makes the port "
+                                             "per-checkout",
                                      "governed_by": ["D5"]},
 
             # ---- the ground: what everything else reads ----
@@ -813,11 +938,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D33", "D34", "D37"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D33", "D34", "D37"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D32", "D33", "D34", "D37"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -900,6 +1025,26 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5", "D27"]},
+            "src/PositionLabel.tsx": {
+                "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
+                        "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
+                        "muted coarse path and a promoted slot figure, deleting the interpuncts; "
+                        "the server string is never edited and travels verbatim on `aria-label`. "
+                        "Two geometries: `stack` for a standalone label, `run` for one inside a "
+                        "running sentence, where the stacked block measured 3.3x the line height "
+                        "and orphaned the trailing period. A NUMERIC GUARD refuses to promote a "
+                        "slot that is not digits, which is what keeps D24's pooled label "
+                        "(`... \u00b7 pooled`) from drawing a lowercase word as a 300px figure. "
+                        "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
+                        "the firewall is the component graph, not a selector.",
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41"]},
+            "src/PositionLabel.css": {
+                "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
+                        "chooses; the key is a single clamp and the gap is a token by rule "
+                        "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
+                        "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
+                        "classes exist only where the component rendered them.",
+                "governed_by": ["D31", "D41"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -967,7 +1112,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -1104,14 +1249,16 @@ COMPONENTS = [
                                               "prints one (D38, two renderings of one fact). The "
                                               "owner's position label is a CONTROL where the caller "
                                               "offers `onGoTo` (D45): pressing it walks the box "
-                                              "browse to that copy. The label and not the row, "
-                                              "because the row already holds an action.",
+                                              "browse to that copy. A transparent button around "
+                                              "PositionLabel, not a second treatment; the label "
+                                              "and not the row, because the row already holds an "
+                                              "action.",
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D45"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
-                                              "label takes the button chrome back off and shows its "
-                                              "affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D31", "D40", "D45"]},
+                                              "wrapper takes the button chrome back off and shows "
+                                              "its affordance on hover and focus only (D45).",
+                                      "governed_by": ["D5", "D7", "D31", "D40", "D41", "D45"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -1194,8 +1341,8 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D31", "D32", "D33",
-                                                 "D39"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32",
+                                                 "D33", "D39"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1208,8 +1355,11 @@ COMPONENTS = [
                                          "BoxOps gives the same job over in the walk's column. ALL FOUR "
                                          "STEPS draw in every state now, controls absent until a run is "
                                          "picked; the list polls at two cadences because a run started "
-                                         "in a terminal begins live.",
-                                 "governed_by": ["D31", "D33", "D38"]},
+                                         "in a terminal begins live. Carries the crop preview under the "
+                                         "reading chips: a 200px frame with the cut drawn over it, and the "
+                                         "collector-number strip at 1:1 because a band scaled to the column "
+                                         "makes 1200 and 900 look identical.",
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1362,7 +1512,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -1377,7 +1527,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colours "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24"],
+                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

@@ -214,6 +214,22 @@ decoration, and the map was restored byte-identically after.
   reaches that same file by handing `_walk` the whole filename as if it were a suffix. Not
   done here because it changes `scripts/docs-audit.py` and what `source_suffixes` means, and
   that is argued on its own terms rather than while writing a map entry.
+
+  **THE HYPOTHETICAL LANDED ON 2026-08-29 AND IT WAS THE FILE THIS BULLET NAMED.** D42 added
+  `githooks/reference-transaction` and `githooks/pre-push` — the "a `pre-push`, say" above,
+  written as a thought experiment and then committed as a real file — and the orphan rule was
+  silent for both. They are listed in `docs/map.py` by hand and nothing would have failed had
+  the author forgotten. The same change added `scripts/githooks-selftest.sh` one directory up,
+  which carries a declared suffix and duly **failed the commit** until it was described. One
+  commit, both outcomes, which is the sharpest available statement of what this debt costs:
+  the rule's coverage is decided by whether a filename happens to have a dot in it.
+
+  **It also raises what the gap protects, which is the part that changes the priority.** When
+  this was written the unscanned directory held one file, the commit gate. It now holds the
+  guard over `main` as well, so the files the orphan rule cannot see are the commit path, the
+  ref path and the push path — every enforcement seam in the repo, and none of them scanned.
+  Still not fixed here for the reason above; recorded so the next reader weighs it against
+  that list rather than against one hook.
 - **It proves a file has an entry, never that the entry is true.** The same limit `app/`
   carries, now spread across eleven more hand-written lines: a `does` describing the wrong
   file passes exactly as well. The `governed_by` half is enforced in one direction only —

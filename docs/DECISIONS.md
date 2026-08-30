@@ -596,6 +596,27 @@ reconstructions of both historical false positives, and fails open on its own bu
 `--no-verify` no longer switches off the only opsec layer, and the commit-time rules are
 again the backstop rather than the whole guard.
 
+**A GIT WORKTREE INSIDE THE TREE IS ANOTHER BRANCH, AND THE AUDIT DOES NOT WALK ONE** (added
+2026-08-29). Concurrent sessions check worktrees out under `.claude/worktrees/<name>/`, which is a
+full source tree of a DIFFERENT branch sitting inside this one. The walk found them, so the audit
+was checking one branch's prose against another branch's code and reporting the disagreement as a
+defect in yours. Observed: a worktree's `CLAUDE.md` documented a `worktree-setup` target, real on
+its own branch, and the make-targets check failed a commit on `main`, which has no such target.
+**Two branches are allowed to disagree; that is what a branch is.**
+
+**It is pruned twice, by name and by asking git, and the two cover different things.** `worktrees`
+in `SKIP_DIRS` catches the convention and keeps working when git does not answer. `nested_worktrees()`
+reads `git worktree list --porcelain` and prunes any checkout under the repo root whatever it is
+called — verified against a worktree named `zz-scratch-wt`, which no name rule could guess: zero
+files walked, audit clean. It fails open exactly as `ignored_paths` does, because a discovery
+helper that can abort the audit is worse than one that occasionally walks too much.
+
+**This is not the gitignore filter and neither subsumes the other.** That filter stops a finding
+being *reported* for local state; this stops a foreign tree being *enumerated*. The finding here
+was against the make-targets check, which never consults the filter. `--self-test` covers the staged path;
+the on-disk path needs a real repository with a real worktree in it and was verified by hand, which
+that case says in as many words rather than implying coverage it does not have.
+
 **Nothing on the audit path can write.** The script opens, compares, prints, and sets an
 exit code; it parses with `ast` rather than importing, so it does not even run project code.
 Its only writes are inside `--self-test`, into a temporary directory it creates and destroys.
@@ -1651,6 +1672,144 @@ being sent*. No hash is named — the panel has no business publishing `prompt_f
 nothing about the gap is closed. Drawn only above zero, because a warning about answers that do
 not exist is the kind an operator learns to skip.
 
+**THE READING IS DRAWN NOW, NOT ONLY DESCRIBED (built 2026-08-29, at the owner's instruction:
+*"there should be a crop preview on the runs tab given that I need to select a crop there"*).**
+`POST /pipeline/crop-preview` is free, writes nothing, shells out to nothing, and answers what
+the selected pair would send for one card; `RunPanel.tsx` draws it in a column beside the
+chips. Everything above stands — this is the sentence the READINGS block could not be.
+
+**THE MEASUREMENT THAT DECIDED THE DESIGN: the rectangle is IDENTICAL at 1200 and at 900.**
+The cut comes from `detect_card` plus the aspect correction plus `CROP_PAD`, and not one of
+those reads `max_edge` — the downscale happens after. So a preview that drew only the crop
+would leave two of the three chips looking exactly alike, which is most of the question the
+owner was asking. The pair has two axes and one picture cannot carry both:
+
+- **The crop decides FRAMING**, and the frame shows it as a composite: the discarded margin is
+  the stored photograph at 35% opacity, and the cut region is **the payload itself**, at full
+  strength, with the accent outline on the boundary. It answers *is the collector number inside
+  the bytes* — box 2's failure, 38 numbers cut clean off — and **a picture of the crop alone
+  could never answer it, because what was cut is not in the crop.**
+- **The max edge decides RESOLUTION**, and it is shown by a **1:1 window onto the same file**.
+  `background-size: auto` with a pixel `background-position` IS 1:1, with no scaling arithmetic
+  to get wrong and no second request. That is the review queue's loupe one screen over, aimed
+  at the PAYLOAD rather than at the stored photograph, and the same standards are behind it:
+  FADGI and Metamorfoze both require this class of judgement at 100%, and here a downscale is
+  precisely what is being judged.
+
+**THE FRAME DREW THE STORED PHOTOGRAPH UNTIL THE OWNER CAUGHT IT** — *"the crop preview should
+also show the depixelation reflected as you change the options"*. It did not, and could not: it
+was `GET /photo`, which is the same bytes at every reading, so the one thing being changed was
+the one thing the picture could not show. It draws the prepared bytes now, which costs 235-441KB
+on a localhost socket, debounced, for one card.
+
+**AND THE FRAME STILL CANNOT SHOW THE DIFFERENCE, WHICH IS PHYSICS RATHER THAN A DEFECT.** It
+draws the payload at roughly 28% of its pixels, and no two downscales are distinguishable under
+a reduction that large — an operator comparing 1200 against 900 up there will correctly see no
+difference and wrongly conclude there is none. So the caption says `shown reduced`, and the 1:1
+window below is where the comparison is actually made. Recorded because the obvious "fix" is to
+enlarge the frame, and no size short of 100% would work.
+
+**THE BAND STOPPED BEING A SECOND IMAGE, and that is what makes the pair trustworthy.** It was
+a separately encoded JPEG of the number strip; it is a RECTANGLE INTO the sent bytes now, and
+the window paints that region of the file the frame is already showing. One image over the
+wire, two views of it, and **the second cannot drift from the first because there is no second
+file to drift**. It also costs fewer bytes than the two-image version it replaces.
+
+**THE WINDOW FOLLOWS THE POINTER, AND THAT IS WHAT MAKES A BANDLESS GAME USABLE.** It rests on
+the collector number where the registry claims one and reads whatever the pointer is over
+otherwise — so on Riftbound, where nobody has measured where the identifier prints, the
+operator points at it themselves. A refusal that had taken the magnifier away with it would
+have left that game strictly worse off than before the preview existed.
+
+**ONE COMPUTATION, TWO CALLERS, AND THAT IS THE HONESTY OF IT.** `identify/images.py:crop_rect`
+is the rectangle `card_crop` cuts, extracted so the screen can draw it rather than derive one
+of its own. A preview with its own copy of that arithmetic is a preview that can reassure the
+operator about a crop it is not describing — which is EXACTLY the failure the aspect correction
+was written for. `card_rect` splits out beside it, unpadded, because the number band is a
+fraction of the cardboard rather than of the cut. T6 asserts the identity and was observed
+failing against a `card_crop` that had quietly stopped using it; the extraction was checked
+byte-for-byte against the committed version on 25 real box-2 frames before anything was built
+on it.
+
+**IT IS PRESSED BEFORE THE PREFLIGHT, WHICH IS THE ORDER OF THE DECISION.** The reading is
+chosen here, the estimate is what the choice costs, and the spend button does not exist until
+the estimate has answered — three steps down the panel in the order they happen. It is keyed on
+the same `scopeKey` that voids the estimate, so a chip press redraws the picture and clears the
+number together. The previous strip stays up, dimmed, while the next is fetched: blanking would
+move `Check cost` under a pointer already travelling toward it, which is D28's hazard on the
+one panel whose next button spends money.
+
+**`rect: null` MEANS TWO OPPOSITE THINGS AND `method` IS WHAT SEPARATES THEM.** The crop being
+off is a setting the operator chose; detection refusing is a card going at whole-frame cost
+when they asked for a crop. The route reports both and the strip says which, because the
+preflight counts refusals across the box and this is where one can actually be looked at.
+
+**ONE CARD, BESIDE THE CHIPS, WALKED BY THE ARROW KEYS — and it was three abreast underneath
+them for a few hours.** The first build sampled three cards evenly across the box on this
+entry's own measurement: card area runs 39-81% across box 2 because cards move on the tray, so
+the front of a box does not stand for it. That argument is right about SAMPLING and it lost to
+a plainer fact, which the owner put plainly: *"the preview right now is too small"*. Three
+pictures across a panel are three small pictures — each frame drew 112px wide — and a preview
+nobody can read is not a preview. One card in a column of its own is ~2.5x the linear size for
+the same block of screen, and the spread is reached by WALKING, which is also the only version
+of it that lets the operator look at a card they actually suspect.
+
+**The walk wraps, on both sides of the wire.** The route takes `offset % total` so a stale
+client cannot send a negative, and the screen wraps too so the caption stays inside the box
+being looked at. Arrow keys are the control and the buttons beside the card do the same thing:
+a key with no visible affordance is a key nobody finds. **The listener is guarded on the
+event's target** — this panel holds a number input and a `decisions.json` textarea, and an
+unguarded window listener steals the caret keys from both. The fetch is debounced at 140ms,
+because a held arrow key repeats faster than a photograph decodes.
+
+Measured at ~115ms a card — 63-84ms of detection, ~51ms to crop, downscale and encode — so
+firing it on every chip press and every arrow press is affordable.
+
+**Two things came with it that are not about pixels.** `make server` ran bare `python3`, whose
+interpreter has no Pillow, so this route would have refused on the one machine it is for; it
+runs `$(PYTHON)` now, which is the venv where one exists and `python3` where none does — the
+property that line protected was *"must not NEED `make venv`"*, and that is intact. And the
+imports are inside the handler, so a missing Pillow is a named `imaging_unavailable` refusal
+rather than a server that will not boot over a preview nobody asked for.
+
+**D24's tripwire fired, and it is answered by D24 rather than by new machinery.** `scripts/
+docs-audit.py`'s `views exposure` row now names `#/runs` as a screen that can draw stored
+capture photos — which is exactly what that row is for, and the render-conditions ruling in D24
+already answers it: renders are local-only, `captures/ui/` is gitignored, and the pre-commit
+hook blocks stray images. No per-screen filtering, for the reason that ruling gives.
+
+**What this does NOT do: it does not record what a PAST run sent.** The strip recomputes with
+today's detector, so it describes the run you are about to start and nothing else. That
+distinction matters for box 2 specifically — its crops were cut by the flat pad this entry
+records, fixed in `d431afb` about 35 minutes after that run was submitted, so a recomputation
+of those cards shows the corrected crop rather than the one that lost 38 collector numbers.
+Making a run replayable means recording the box on the run payload at identify time, which is a
+change to what `identify` writes and has not been argued. Until it is, this is a preview and
+never a receipt.
+
+**THE BAND IS THE REGISTRY'S TO GRANT, PER CARD, AND THIS SHIPPED WRONG FIRST.** The first
+build cut `geometry/crop.py`'s number band over every card whatever game it was, and
+`pipeline/games.py` refuses exactly that in writing: *"the bands are fractions measured on a
+Pokemon card. Nothing has measured where a Riftbound card puts its title or its number, and a
+band claimed without that measurement is cut over the wrong pixels."* Box 1 is Riftbound, the
+owner opened it, and the strip drew that card's RULES TEXT as though it were a collector
+number. Only `pokemon` claims a number band today; a game that does not gets **no band and the
+registry's own sentence saying why**, which is the same refusal `crop_regions` makes reached
+through the same field. **The CUT is unaffected** — a card is 63x88mm whatever is printed on
+it, so the crop is right for every game even where no band has been measured, and that
+asymmetry is the whole reason the two halves are separate answers.
+
+Worth naming as a class rather than an instance: the registry already held the answer and the
+first build did not ask it. A preview is a second reader of everything the pipeline knows, and
+every fact it draws has an owner somewhere in `pipeline/` — drawing one from a constant instead
+of from its owner is how a picture ends up more confident than the thing it depicts.
+
+**What would reopen this: a refusal the walk never reaches.** The preflight counts detection
+refusals across the whole box and the walk shows one card at a time, so a box with three
+refusals among 543 is a hunt. If that ever costs a real session, the fix is a control that
+jumps to the next refused card once the preflight has answered — not a return to sampling,
+which is what made the picture too small to read in the first place.
+
 ---
 
 ## D33 — The pipeline is reachable from a screen, and one route can spend
@@ -1944,7 +2103,7 @@ every one with **zero candidate rows** — so they could not be answered at all,
 `POST /review/<box>/<index>/answer` refuses an entry with no candidates as `no_candidates`.
 
 **The gap was one line, and its comment stated the false assumption outright.**
-`pipeline/join.py:_lookup_number_and_printed_total` fell back, when a card carried no number,
+`pipeline/join.py`'s Pokemon lookup fell back, when a card carried no number,
 to `catalog.rows_for_blank_number_name` — an index of **only those export rows whose own
 `Number` cell is blank**. Its comment: *"No collector number on the product (code cards, some
 promos). These are exactly the rows whose `Number` is blank."* That reads `card.number is
@@ -2025,6 +2184,62 @@ lookup onto `QueueEntry` is the fix, and it is a schema change nobody has argued
 across box 2, but a set with two prints of one name would produce it. The behaviour is already
 correct — two surviving rows means two candidates and an ordinary one-card review — but it has
 never been seen, and the group offer would correctly refuse it as `group_not_uniform`.
+
+**IT WAS A RULE ABOUT POKEMON'S LOOKUP UNTIL 2026-08-29, AND IT WAS WRITTEN AS A RULE ABOUT A
+READ.** This entry argues throughout that the NUMBER is the field that fails and the NAME is
+the field that survives — a claim about photographs and models, with nothing game-specific in
+it. It was nevertheless implemented in the Pokemon lookup alone, so every game
+keyed by a printed identifier (`riftbound`, `one_piece`) returned an empty row set and stopped
+where Pokemon fell through to the name.
+
+**The owner found it from the far end**, asking why cards whose rows are plainly in the export
+were sitting in the review queue as unanswerable. Run `2026-08-29-box1-01`, 133 real Riftbound
+cards: **4 unusable reads, all 4 zero-candidate `no_catalog_row`** — and a zero-candidate entry
+is refused by `POST /review/<box>/<index>/answer` as `no_candidates`, so those cards could not
+be answered at all, only skipped, every session, forever. Three carried a set-code prefix the
+Riftbound prompt forbids in as many words (`UNL • 140/219` for `140/219`, twice with a bullet
+and once with a middot — a model slip at 3 of 133, not a prompt gap), and **all three hold
+exactly one row by name**. One of them, `Hwei, Brooding Painter` at **$2.86**, is above D9's
+threshold: a listable card stuck unanswerable. The fourth read `Wuju Master` for the export's
+`Master Yi, Wuju Master` and correctly stays unmatched — the name it gave is not the name the
+export carries, so nothing can rescue it.
+
+**Nothing about the rung is widened by this.** It still fires only on an empty result, so it is
+reached only by a card already bound for `no_catalog_row`; it still produces a queue entry and
+never a listing; it still answers `name?:` rather than `name:`. What changed is which strategies
+run it. `name_only` deliberately does NOT gain it: there the name IS the key, so there is
+no unreadable number to fall back from.
+
+**THE REAL FINDING WAS THE SHAPE, AND IT IS FIXED — the owner's ruling, same day.** Each game
+had its own `_lookup_*` function, and each re-implemented the same four-step ladder — build a
+key, look it up, try the blank-`Number` name, fall back to the name — differing only in STEP
+ONE, the only genuinely per-game part. D35 landed in one copy and nothing compared them, because
+nothing could: they were three unrelated functions that happened to be parallel.
+
+`pipeline/join.py:_walk` is now the ladder, written once, and `KeyStrategy` is the per-game part
+as a VALUE — a key builder, the lookup label, and whether D35's rung applies. **A rung added to
+`_walk` cannot land in one game and not another**, which is the property the old shape could not
+offer at any level of care.
+
+**THE OWNER ASKED WHETHER THE EXPORTS DIFFER PER GAME, AND THEY DO NOT.** Measured across all
+four committed fixtures — SV09, the wide Pokemon export, Riftbound and One Piece — the 16-column
+header is **byte-identical** (one md5 between them), which is what makes a shared ladder correct
+rather than merely tidy. What is genuinely per-game is the `Product Line` cell, the rarity
+vocabulary, the shape of the `Number` cells, and one import file per game (D25) — none of which
+lives below step one.
+
+**`name_only` KEEPS ITS EXEMPTION, AND IT IS NOT COMPATIBILITY DEBT.** `pokemon_code` has no
+collector number at all and lives inside the Pokemon export as a blank-`Number` row, so
+`rows_for_name` would match it to the NUMBERED card of the same name — a code card listed as the
+card it came with. The rung is for "we could not READ the number"; a product that prints none has
+nothing to fall back from. That is now a declared `name_rung=False` rather than an absence
+somebody has to notice.
+
+**Behaviour-preserving, and checked as such rather than asserted.** `join --dry-run` over both
+real runs — box 1's 133 Riftbound cards and box 2's 544 Pokemon cards — produced **byte-identical
+output** before and after the restructure.
+
+Covered by T3 in both directions, observed failing against the old code first.
 
 ---
 
@@ -2613,6 +2828,23 @@ change behaves identically to the shipped one. Written at the default viewport, 
 against the very mutation it exists to catch. It is red at 1440 against that change and green
 against this one, observed both ways.
 
+**AND THE FOLD EXPOSED A CLIFF POINTING THE WRONG WAY, WHICH IS FIXED HERE (860 -> 880).**
+`CardLocations.css` switches the bar into the row at a container threshold, and 860 was chosen
+against a 144px narrow row. Once the narrow row was 114px the wide branch was producing **126px at
+the exact width it engaged**: measured across the sweep, 820 -> 114, **860 -> 126**, 880 -> 85,
+900+ -> 82. Crossing into the better branch made the row twelve pixels taller.
+
+**It was dormant rather than invisible, and that is the worse condition.** The copies container is
+612px at 1440 and 528px at 1280, so `min-width` needs roughly a **1980px viewport** to fire at all
+— nothing in the suite and nothing on the owner's display would ever have rendered it. 860 was
+picked because "columns 2+3 measure 862px at Playwright's 1280", a layout this very entry deleted,
+so the number was inherited from a dead premise. That is the same defect D41 found in the position
+label's own comment, in a rule that had no way to fail while it waited.
+
+**The assertion is the PROPERTY, not the new number**: a container that grows may never make a row
+taller. Pinning 880 would go green on any later change that moves the cliff somewhere else, which
+is exactly how this one survived.
+
 **WHAT IT COSTS, NAMED RATHER THAN BURIED.** `.boxops-meta` wraps from one line to two — 17px to
 33px — because it needs the full 360px track and now has 299. Measured across 299-360px: it is
 one line at 360 and two below it, with no intermediate. Accepted rather than fixed: it is a
@@ -2711,11 +2943,22 @@ describe what is in the box; `next index` is D10's high-water mark — what the 
 out next. Four peers joined by dots was a false claim about them, and the structure is now the
 distinction rather than a sentence explaining it.
 
-**AND `fill` FINALLY SAYS WHICH KIND OF NUMBER IT IS, WHICH DISCHARGES D20.** That entry is
-explicit that a denominator whose meaning switches silently between an open box and a sealed one
-is the failure it exists to prevent — `fill` is a fill-**so far** while the box is open and a
-frozen capacity once **sealed**, and the two were rendered identically for as long as this line
-existed. It carries D20's own two words now.
+**AND D20's TWO WORDS ARE ON SCREEN ONCE, ON THE IDENTITY LINE.** That entry is explicit that a
+denominator whose meaning switches silently between an open box and a sealed one is the failure it
+exists to prevent — `fill` is a fill-**so far** while the box is open and a frozen capacity once
+**sealed**.
+
+**THE QUALIFIER WAS PUT ON `.boxops-meta`'s FILL AND TAKEN OFF AGAIN ONE COMMIT LATER**, and the
+correction is worth recording because the first version made a duplication EXACT that had until
+then only been approximate. `BoxIdentity` sixteen pixels above already renders `133 so far`;
+adding the same two words to the meta line put the identical string on screen twice, nine words
+apart. Measured on the owner's store, both before and after.
+
+**The field stays and only the qualifier goes**, which is the half that matters: `BoxOps.tsx`
+promises these key names grep to `inventory.json`, so dropping `fill` outright — the other option
+considered — would have broken one promise to keep another. D20 is discharged either way, because
+its rule is that the number is unambiguous ON SCREEN, not that it is annotated at every site that
+draws it.
 
 **FIELD NAMES STAY VERBATIM IN THE DOM.** `BoxOps.tsx` promises that what is on screen greps to
 `inventory.json`; the keys are written lowercase and uppercased by `text-transform` at paint only,
@@ -2730,11 +2973,407 @@ cap and `.browse-list` is the scroller — there it comes out of the walk at 25.
 about 1.2 rows. The ledger variant that was also rendered cost 81px and ~1.9 rows, and was
 declined on that number.
 
-**WHAT WOULD REOPEN THIS: the other two sites.** `.review-position` and `.card-locations-label`
-still draw the dotted string, and the copies list draws it seven times two inches below the new
-address. If the owner wants the dot theme gone screen-wide, the answer is the key/figure colour
-split WITHOUT the shape — a 44px figure repeated seven times in a list would be a different and
-worse defect.
+**THAT REOPENING HAPPENED THE SAME DAY. The owner: "Full treatment for all -- amendment."** The
+paragraph this replaces named `.review-position` and `.card-locations-label` and said taking the
+treatment to them was "a decision about all three sites, not a copy of this one". This is that
+decision, and the count was wrong: the capture screen draws the address in **five** more places,
+three of them inside running sentences. Six owner sites, not three.
+
+**THE STRUCTURE IS UNIVERSAL AND THE SIZE IS PER SITE, WHICH IS WHAT THE OLD PARAGRAPH'S WARNING
+BUYS.** It predicted that "a 44px figure repeated seven times in a list would be a different and
+worse defect", and that is now measured rather than predicted: at 44px the copies row goes
+114.17 -> 126.48px, +86px on a seven-copy list, and copies visible on landing drop 4 -> 3 — on the
+screen whose recorded complaint (D38 twice, D40 again) is that the copies scroll away. So what is
+shared is the RANK — muted stacked path, no separator, the slot as the only thing drawn at size —
+and each site sets its own figure.
+
+**ONE COMPONENT, `app/src/PositionLabel.tsx`, AND ONE DECLARATION PER SITE.** `--pos-slot` is the
+figure and `.position-num` is `1em`, so a site's whole register is one line in its own stylesheet.
+The key is `clamp(var(--pos-path), 0.295em, 13px)` — 12.98px at a 44px figure and 11px at 32, 28
+and 20 — so `#/inventory` keeps its shipped key to within 0.02px and no other site declares one.
+
+**PROPORTIONAL SCALING WAS TRIED AND REFUSED, WITH THE ARITHMETIC.** D41's shipped ratio is path
+11px against 44px, 0.25em. At the review head's 32px that is 8px and at the copies row's 28px it is
+7px, below anything this product draws. Probed independently, **all four new sites landed on the
+same 11px path against four different figures** — the path tracks each screen's metadata register
+(`.review-machine` 11px, `.card-locations-boxname` 10px) while the figure tracks its payload. Two
+scales, not one; a single multiplier would have claimed these screens are scaled copies of each
+other.
+
+**THE FIGURE IS FREE UP TO 32.3px, AND THAT IS ONE MEASUREMENT NOT FIVE.** The two-line path is
+33.9px, so at `line-height: 1.05` every figure to 32.3px draws the same 33.9–34.0px block: 20, 24,
+28 and 32 cost nothing, 36 costs 4px and 44 costs 12. Three of the four new sites sit on that
+plateau by construction. **It is a property of a THREE-part label** — a two-part label has a
+one-line path and the plateau collapses, which D36 and D24 both contemplate.
+
+**THREE SITES NEEDED A RULE THE BAND DID NOT.**
+
+- **The copies list leads with the SLOT, not the path**, because it is a list. Down seven rows the
+  coarse parts are identical, so path-first stands seven `BOX 2 / SECTION n` blocks in front of the
+  only thing that differs — the dense-grey-table failure `docs/DESIGN.md` names by the front door.
+  It is height-free **only because the two-line path absorbs `.card-locations-boxname`**; a box
+  with no name pays +17px on every row, and D20 made names unique but deliberately NOT required.
+  Latent today, nothing warns.
+- **An in-sentence label gets the RANK without the geometry** — the `run` form. Stacking inside a
+  sentence measured 79px against 23px and orphaned the trailing period onto its own line; at
+  `inline-flex` it rendered `BOX 2` above the baseline as a superscript footnote marker.
+- **A NUMERIC GUARD, which D41's own splitter did not have.** `#/inventory` draws only real
+  positions. `#/review` draws D24's pooled label `Pokémon code cards · pooled`, which the shipped
+  splitter turned into a path reading `POKÉMON CODE cards` and a lowercase word promoted to a
+  300.9px figure. Nothing broke geometrically and no assertion saw it. A promoted slot is a slot
+  NUMBER or the label renders whole.
+
+**THE FULFILLER'S FIREWALL IS THE COMPONENT GRAPH, NOT A SELECTOR.** `Fulfillment.tsx` and
+`CardLocations.tsx:FulfillerCard` do not import the component, so no `.position-*` rule can reach
+his 32px and 36px labels — which is why stripping a class prefix cannot breach it. The breach that
+would actually happen is somebody lifting the call out of `OwnerCard` into a shared render path,
+and `app/tests/fulfillment.spec.ts` now states that as a CAUSE (`.position-parts` count zero)
+rather than leaving it to be diagnosed from a font size. Mutation-tested: the lift takes the
+firewall case red, and eleven other cases with it.
+
+**TWO ASSERTIONS WERE FOUND DEFECTIVE ON THE WAY, BOTH WRITTEN EARLIER THE SAME DAY.**
+`inventory.spec.ts`'s `labelLines` read `getClientRects().length` off a column-flex child, which is
+blockified and returns exactly ONE rect however many lines it holds — measured on the shipped tree,
+the label wraps to 2/3/4 real lines at 200/120/80px and the assertion read 1 every time. Its case
+only ever went red on a different assertion, which hid it. And `review.spec.ts`'s
+`.not.toHaveText(/Card 14$/)` would have gone vacuous the moment the DOM text stopped containing
+that string, passing forever while detecting nothing — the silently-weakened shape D16 forbids.
+Both now assert against `aria-label` or a geometric fact.
+
+**WHAT IS NOT TREATED, AND WHY.** `.review-row-position` (11px, 23 in the rail), `.review-group-pos`
+(10px) and the capture screen's bare-integer consumer keep the plain string: the mechanism is RANK,
+and a 10px caption has no rank to spend — stacking it would cost height in the two lists whose only
+job is to be scannable. The consequence is honest: **`#/review` now renders the address two ways.**
+So does `#/inventory`, where the band's 44px figure and the copies list's 28px sit ~500px apart in
+one idiom; the 1.57 ratio is what keeps the band dominant, and it is the first thing to look at if
+the screen starts feeling noisy.
+
+**ONE SITE IS UNTREATED FOR A STRUCTURAL REASON RATHER THAN A DESIGN ONE.**
+`CaptureScreen.tsx:1931` composes `Note saved on ${target.card.label}.` as a plain STRING inside a
+notice payload — there is no element to style and no JSX to return, so it cannot take even the run
+form without changing the notice type across the component. Named here rather than silently left,
+because it is the one place the owner's "all" is not satisfied.
+
+**WHAT WOULD REOPEN THIS: a two-part label, or a box with no name.** Both collapse a measurement
+this rests on — the first ends the 32.3px free plateau, the second costs the copies list 17px a row.
+Neither is hypothetical: D24 pools cards without positions and D20 leaves names optional.
+
+---
+
+## D42 — main moves by pull request, and the guard is local because the server-side one is not for sale
+
+**BUILT 2026-08-29, after main moved under live worktrees twice in one day.** `637e2e4` was
+authored on one session's branch and fast-forwarded into main while three others were working
+on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that
+wrote this entry, which is how the second half of the guard got specified. `origin/main`'s
+reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may
+not do that, and nothing checked.
+
+**BRANCH PROTECTION WAS THE OBVIOUS ANSWER AND IT IS NOT AVAILABLE ON THIS REPOSITORY.**
+Measured rather than assumed — both surfaces answer 403:
+
+    GET repos/shivinate7/pkmnscan/rulesets                   403
+    GET repos/shivinate7/pkmnscan/branches/main/protection   403
+    "Upgrade to GitHub Pro or make this repository public to enable this feature."
+
+Free plan, private repo. The second half of that sentence is not an option: `CLAUDE.md`'s
+repo-wide opsec rule makes a live unredeemed code card a bearer instrument, and this tree
+carries the enforcement for it. So the server-side gate costs a Pro subscription, and the
+owner chose the local guard instead.
+
+**AND IT WOULD NOT HAVE CLOSED THIS ON ITS OWN, WHICH IS THE PART WORTH KEEPING IF THE PLAN
+EVER CHANGES.** Branch protection bites at `git push`. Both incidents moved main **locally**
+first, under worktrees that share this clone — by which point every session cut from main is
+already sitting on a different history than the one it started from. A gate at the remote
+would have caught the second incident and been silent through the first.
+
+**TWO HOOKS, BECAUSE THERE ARE TWO WAYS OUT, AND NEITHER COVERS THE OTHER.**
+
+- `scripts/githooks/reference-transaction` — main does not move in this clone. It is a ref
+  hook and not a commit hook **because the first incident created no commit**: a fast-forward
+  merge moves a ref and runs no commit hook, and `git rebase`, `git reset --hard`,
+  `git branch -f` and `git update-ref` are the same shape. Underneath they are all one ref
+  update, so the ref update is the only place that catches all of them and the only one that
+  cannot be routed around by reaching for a different porcelain command.
+- `scripts/githooks/pre-push` — nothing pushes to main. `git push origin HEAD:main` never
+  touches `refs/heads/main` locally and lands the commit on GitHub anyway, so the first hook
+  is blind to it. This is the piece standing in for branch protection, and it is weaker in one
+  nameable way: it lives on this machine, so it protects this clone rather than the repository.
+
+**THE ONE LEGITIMATE MOVE IS TO A COMMIT ORIGIN ALREADY HAS.** That is the whole allow rule,
+and it is what makes the pair a workflow rather than a wall: a PR is merged on GitHub,
+`git pull` fast-forwards, and the commit was on the remote before it was ever on your main.
+It cannot be forged from inside a session, because a local commit is not on origin until
+something pushes it, and pushing to main is what the second hook refuses.
+
+**THE `old` COLUMN OF A reference-transaction PAYLOAD IS NOT EVIDENCE, AND BELIEVING IT SHIPPED
+TWO HOLES BEFORE THE SELF-TEST FOUND THEM.** The format is `<old> <new> <ref>`, so the obvious
+rules are *allow a no-op* (`old == new`) and *allow a creation* (`old` all zeros). Both are
+wrong. Measured on git 2.39.3:
+
+    git branch -D main              0000000... 0000000... refs/heads/main
+    git branch -f main feature      0000000... 3f5f2cd... refs/heads/main
+    git update-ref refs/heads/main  0000000... 8f06f47... refs/heads/main
+
+Git reports zeros for the old value **whenever the caller did not state an expected one**, even
+where main exists at a real commit. So a deletion is indistinguishable from a no-op, and
+`branch -f` is indistinguishable from a creation — the first draft waved both through, and main
+was genuinely deleted in the test rig. The hook now decides on `new` alone and asks git for the
+pre-update value itself when it wants one.
+
+**IT FAILS OPEN ON ITS OWN BUGS, AND THAT IS A TRADE RATHER THAN A WEAKNESS.** This hook runs on
+every ref update in every worktree of the clone. A version that exits non-zero when it did not
+mean to does not block one commit; it breaks git for every concurrent session at once. So the
+only non-zero exit in the file is the deliberate refusal, and an unknown phase, an unparseable
+line or a missing git allows. Same rule `scripts/docs-audit.py:nested_worktrees` states for
+itself, and the same one `scripts/guard-opsec.sh` took after it over-triggered (D16).
+
+**THE HOOKS ARE INSTALLED INTO THE GIT COMMON DIR. THIS PARAGRAPH SAID SOMETHING ELSE FOR
+ABOUT AN HOUR AND BOTH OF ITS CLAIMS WERE FALSE — the amendment is dated the same day as the
+entry, which is the useful part of it.** What it said: point `core.hooksPath` at the MAIN
+worktree's `scripts/githooks`, absolutely, because "that setting lives in the common `.git`
+dir, so one value governs every worktree of this clone."
+
+**Claim one, falsified within the hour of merging.** A working tree's contents are a function
+of whatever branch that checkout is on. The moment this entry landed on main, the main
+checkout was sitting on another session's WIP branch that predated it, so the directory git
+actually read held **one hook out of three**. The guard was armed at zero and nothing said so
+— the silent-failure class this repo refuses everywhere else, reproduced by the fix for it.
+
+**Claim two, falsified by running the test rather than reading the config.** `extensions.
+worktreeConfig` is **on** in this clone, and whatever creates `.claude/worktrees/` writes a
+per-worktree `core.hooksPath` into `.git/worktrees/<name>/config.worktree` — beside a
+`core.longpaths`, so it is that tooling and not this repo. **A per-worktree value beats the
+common one.** After an install that printed success, `git config --get core.hooksPath` inside
+a worktree still answered the old path, and all four worktrees were still unguarded. It was
+found by running the nineteen cases against the INSTALLED directory — `PKMNSCAN_HOOKS_DIR`
+exists on the self-test for exactly this — and it would not have been found by reading the
+config, because the config that lies is not the one you look at.
+
+**So: `make hooks` copies the tracked hooks into `<git-common-dir>/hooks-armed`, points the
+common config there, and UNSETS the per-worktree override in every worktree.** `.git` is
+per-clone, shared by every worktree, and no branch can empty it. Unsetting rather than
+re-pointing, because one value is the property this paragraph wanted in the first place and
+four copies is four things that can drift. Verified after the change: all seven worktrees
+resolve to the install, the installed copy passes all nineteen cases, and a live
+`git push --dry-run --force origin <branch>:main` in the real repository is refused by name.
+
+**IT INSTALLS WHAT GIT TRACKS, NOT WHAT THE DIRECTORY HOLDS.** The first version copied
+`scripts/githooks/*`, and this repo lives in iCloud Drive, which had made `pre-push 2` and
+`reference-transaction 2` beside the originals — so it installed five hooks from three files,
+two of them untracked and reviewed by nobody. Git dispatches on exact names so it would not
+have RUN those two, and the damage was cosmetic; the mechanism is not. A hook directory whose
+contents are decided by whatever is lying on disk has given up the reviewability that is the
+whole reason these files are tracked rather than written into `.git` by hand. `git ls-files`
+is the only enumeration that means "the thing someone reviewed", and untracked files present
+are reported rather than silently skipped.
+
+**WHAT IS GIVEN UP, NAMED RATHER THAN DESIGNED AWAY: the copy can go stale**, and a new
+worktree gets handed the per-worktree override again by whatever creates it. Neither can be
+closed by a check without lying — the tracked file legitimately differs between branches, so
+"installed does not match this tree" is a fact and never a fault, and it must never gate a
+commit. `make status` reports both instead: it reads NOT ARMED whenever the effective path is
+not the install, and prints which hooks differ from the current tree. That is the one surface
+in this repo whose whole job is saying what state you are actually in.
+
+**THE ESCAPE HATCH IS `PKMNSCAN_MAIN=off`,** spelled the way `PKMNSCAN_GATE=off` and
+`PKMNSCAN_DOCS=off` already are. It is one variable and it is printed in every refusal, because
+a guard with no visible way past it gets disarmed at the config instead — and a disarmed
+`core.hooksPath` takes the three opsec rules with it, which is the trade D16 already refused to
+make for the docs audit.
+
+**`make githooks-selftest` IS THE EVIDENCE, AND IT RUNS IN `make check` AND NEVER IN THE GIT
+HOOK.** D18's rule: it writes — a bare repo, a clone, commits, pushes — and nothing that writes
+may run on the path that decides whether a commit proceeds. It has a second reason of its own
+that the docs audit's self-test does not: it exercises the guard by **violating** it, so a
+version wired into the commit path would be refusing its own commits. Nineteen cases, and two
+of them were green for the wrong reason until the harness was made to check whose refusal it
+was: git declines to delete the branch you are standing on and declines to push what is already
+up to date, both without consulting a hook. A refusal now has to carry the hook's own marker to
+count.
+
+**WHAT IT DOES NOT COVER, stated so a green self-test is not misread.** It is one machine's
+clone. A push from anywhere else, a commit made in a different clone, and the GitHub web
+editor are all outside it. That is the exact gap branch protection would close, which is why
+the next paragraph is short.
+
+**What would reopen this: GitHub Pro, or the repository going public.** Either makes rulesets
+available, and the honest response is to add one requiring a pull request on main and keep both
+hooks — the server gate for what reaches the repository, these for what reaches this clone's
+main. Not either/or: the two incidents that produced this entry were one of each.
+
+---
+
+## D43 — the port follows the store, because the store was already per-checkout
+
+**BUILT 2026-08-29.** `store/files.py:home()` has always defaulted to `REPO_ROOT` — the
+checkout the code is running from — so every git worktree has its own `inventory/`, its own
+`runs/` and its own `captures/`. The capture server's port was the bare constant `8000` in all
+of them, and `app/src/server.ts` asked for `http://localhost:8000` whatever tree served it.
+
+**A SHARED PORT OVER PER-CHECKOUT STORES IS NOT A BUSY-PORT PROBLEM. IT IS A DATA-LOSS
+PROBLEM, AND IT RUNS IN BOTH DIRECTIONS.** Whichever server won the bind answered every tree's
+UI:
+
+- a worktree's screens drive the owner's real 767-card inventory, on a branch, with whatever
+  half-finished route that branch happens to define; or
+- the MAIN checkout's capture screen — the one the owner actually shoots a box from — is
+  answered by a worktree's server, and real card photographs are written into
+  `<worktree>/captures/cards/` and deleted with the branch.
+
+The second is unrecoverable and silent. Nothing on either screen says which process replied.
+
+**HALF OF THIS WAS ALREADY FIXED AND THE HALF THAT WAS LEFT IS THE ONE THAT WRITES.**
+`app/devPort.ts` (2026-08-29, earlier the same day) gave every checkout its own **Vite** port,
+after `make design-check` in a worktree attached to the main tree's dev server and asserted
+`docs/DESIGN.md`'s floors against code the worktree had never seen — and passed. That entry's
+own reasoning is the argument here: *"the shared PORT is the whole fault"*. It stopped at
+Vite and Playwright. The capture server, which is the process that writes photographs and
+inventory to disk, kept the shared constant.
+
+**`app/tests/inventory.spec.ts` HAD ALREADY WRITTEN THE BUG REPORT.** Its stubs are justified
+in a comment saying an unstubbed read is *"a request to whatever is listening on port 8000,
+which in this repo is the owner's actual capture server over their actual 767-card
+inventory."* That is this defect, observed, worked around locally, and never filed.
+
+**ONE SLOT, TWO PORTS.** `sha256` of the checkout's canonical path, first four bytes, modulo
+300. Dev is `5200 + slot`, capture is `8100 + slot`, so a tree reads as a pair — 5276 beside
+8176 — and there is one number to recognise rather than two unrelated ones. **The main working
+tree keeps 5173 and 8000**, so every doc, the Makefile's help and `scripts/views.txt` stay
+true and the ordinary single-checkout workflow is untouched.
+
+**DERIVED, NOT ALLOCATED**, for the reason `app/devPort.ts` already gives: the same tree
+answers the same port on every run, which is what makes a printed URL worth keeping and what
+lets `strictPort` tell *"someone else is here"* from *"I moved"*. Collisions are possible —
+300 slots, a handful of trees — and are loud: Vite refuses to start, and the capture server
+raises `EADDRINUSE` rather than serving somewhere else. The remedy is to rename the worktree
+directory; the port follows the path.
+
+**TWO IMPLEMENTATIONS OF ONE ALGORITHM, ASSERTED RATHER THAN TRUSTED.** Python serves and
+TypeScript addresses, and neither can import the other. `make port-agreement` runs both over
+the same real directories and diffs them, and it is in `make check` rather than the git hook
+because it needs node and the hook runs bare. **It was mutation-tested in both directions
+before it was kept** — moving the Python band takes the composed-port case red, and changing
+the slot width takes every path red. A check that cannot fail is not coverage; this repo
+already paid for that lesson at the multi-game prompt seam, where a differently-named
+identifier field would have parsed cleanly and joined nothing.
+
+**CANONICALISATION IS PART OF THE ALGORITHM AND WAS THE ONE REAL TRAP.** Both sides realpath
+the root before hashing — Node's `realpathSync`, Python's `Path.resolve()` — because `/tmp` is
+a symlink to `/private/tmp` on this machine and one worktree genuinely lives under it. The
+agreement test therefore feeds **real directories** rather than invented strings: a path that
+does not exist canonicalises differently in the two languages, so synthetic inputs would have
+tested the test rather than the code. `app/devPort.ts` was moved from `resolve()` to
+`realpathSync` for this, and it was measured first — every worktree in this clone answers the
+same slot either way, so **no existing dev port moved.**
+
+**IT IS SAID IN THE THREE PLACES A SESSION ACTUALLY LOOKS, which is the half that makes it
+reliable rather than merely correct.** The owner's complaint was exact: the port reasoning
+existed only in a source comment, *"not on CLAUDE.md nor on any hook, so it's not reliable"*.
+So: `CLAUDE.md` carries the rule; `scripts/worktree-guard.sh` — the SessionStart hook — prints
+this tree's two ports before any work begins; `make status` prints them and says outright when
+you are in a worktree; and `make server`'s banner names the store it is about to serve and
+warns when that store is not the main checkout's.
+
+**`PKMNSCAN_PORT` OVERRIDES, the same knob and shape as `PKMNSCAN_HOME`.** An unparseable or
+out-of-range value is **ignored rather than obeyed**: a typo must not put the server on a port
+no client will look at, which is this entry's own failure arriving by another road.
+`VITE_CAPTURE_SERVER` still outranks the derived default on the client, because that is the
+operator's explicit override and the case `docs/specs/capture-app.md` §11 leaves open — the
+Fulfiller's device pointed at this Mac by address.
+
+**WHAT THIS DOES NOT DO: it does not give worktrees a shared store.** Each still has its own,
+still usually empty, and that is D13's "one truth on the Mac" holding — the truth is the main
+checkout's. A worktree that wants to work against real data points `PKMNSCAN_HOME` at it
+deliberately, which is a decision with a visible env var rather than an accident of which
+process bound a socket first.
+
+**What would reopen this: wanting one capture server for every tree.** The honest shape then
+is one server on 8000 with `PKMNSCAN_HOME` pinned to the main checkout and the worktrees'
+clients pointed at it by `VITE_CAPTURE_SERVER` — which is the knob that already exists. That
+is a different decision about where the truth lives, not a tweak to this one.
+
+**ONE FILE WAS MISSED AND IT WAS THE ONE A HUMAN LOOKS THROUGH: `.claude/launch.json`** (found
+and fixed 2026-08-30, immediately after this entry landed). It was tracked, and it hardcoded
+`"port": 5173` — right in the main tree and wrong in every linked worktree. `vite.config.ts`,
+`playwright.config.ts`, `server/capture_server.py` and `app/src/server.ts` all moved onto the
+derivation; the Browser pane's own launch config did not, so `preview_start` would start THIS
+tree's dev server on its own port and then open a tab on 5173.
+
+**That is this entry's own defect wearing a different hat, and the worse half of it.** A dead
+tab is a nuisance. A tab on 5173 while the main tree's `make dev` is up is a worktree
+**previewing main and looking like it worked** — the same silent-wrong-answer shape
+`app/devPort.ts` records for `make design-check`, which that file calls "the worst shape a
+check can fail in, because the only signal it gives is the one you were hoping for."
+
+**A tracked file cannot hold a per-checkout value, so it stopped being tracked.**
+`.claude/launch.json` is gitignored and written by `make launch-config` from
+`server/ports.py` — the same derivation the other four read, so all five cannot disagree. It
+hangs off `make venv`, which is already the documented first step in a fresh clone and is what
+`make worktree-setup` calls; it is a standalone target as well, because **the port follows the
+PATH** and a renamed worktree needs it written again.
+
+**The precedent is `.claude/settings.local.json`, already gitignored beside it.** The split
+inside that directory is not new: what every checkout shares is tracked, what one machine or
+one checkout answers is not. Nothing in the repo reads `launch.json` — no doc names it, no
+audit check resolves it — so this cost nothing but the file.
+
+**What this gives up, stated because it is a real trade:** a fresh clone has no launch config
+until `make venv` runs, where before it had a wrong one immediately. That is the right
+direction for a file whose only failure mode is pointing somewhere plausible and wrong.
+
+---
+
+## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess
+
+**BUILT 2026-08-29, and it is a decision about an ENVIRONMENT rather than about the product.**
+This repo lives in iCloud Drive. iCloud resolves a same-file race by writing a second file
+beside the original with `" 2"` appended to the stem — `pre-push 2`, `githooks-selftest 2.sh`.
+Three appeared in one afternoon. The owner is moving the repo off iCloud; this entry is what
+holds until they do, and it costs nothing afterwards.
+
+**IT HAD ALREADY DONE DAMAGE TWICE BEFORE ANYTHING GUARDED IT.** `make hooks` copied
+`scripts/githooks/*` and installed **five hooks from three files**, two of them untracked and
+reviewed by nobody — git dispatches on exact names so it would not have run them, but the
+mechanism put unreviewed code into the hook directory. And `githooks-selftest 2.sh` failed a
+commit on the repo-map orphan rule, which is the *good* outcome and only happens inside a
+mapped directory with a declared suffix.
+
+**THE THIRD FAILURE IS THE ONE WORTH RECORDING, because it is not about file names at all.**
+An in-place overwrite of `server/ports.py` left iCloud serving **stale bytes to Python's
+import machinery**: in one interpreter, `open(path).read()` returned the new file and
+`import` ran the old one, with no `__pycache__` present and `-B` set. A test that had just
+been mutated read as passing against code that was no longer on disk. The mitigation is a
+same-directory stage plus `os.replace` — a rename swaps the inode and cannot be served
+stale — and it is why `scripts/status.py`'s helper preserves mode as well, having dropped
+`+x` from a SessionStart hook on its first outing.
+
+**THREE RESPONSES, GRADED BY HOW SURE WE CAN BE:**
+
+- **`make hooks` installs only what `git ls-files` returns.** Not a guess — a hook directory
+  whose contents are decided by what is lying on disk has given up the reviewability that is
+  the reason those files are tracked at all.
+- **The pre-commit hook REFUSES a staged conflict copy.** They are untracked, so they are
+  invisible until something says `git add -A`, which is exactly what an agent session says. A
+  committed `foo 2.py` is a second copy of a module no import reaches and no test runs, read
+  later as a file somebody meant to write. `PKMNSCAN_DUPES=off` is the bypass, for the
+  deliberate `Section 2.md` nothing in this repo has yet needed.
+- **`make icloud-sweep` deletes ONLY a copy that is byte-identical to its original**, and
+  reports every differing one without touching it. That asymmetry is the whole design.
+  Identical means iCloud copied a file that still exists unchanged, so there is nothing in it
+  to lose. Differing means it is not provably a duplicate — it may be the newer of two real
+  edits, and this script cannot know which. Guessing there would be the one way a cleanup tool
+  destroys work.
+
+**IT IS NOT IN `make check` AND NOT IN THE GIT HOOK.** D18 at its strongest: it is the only
+target in this repo that can delete a file. It is also not a defect to *have* conflict copies
+— the commit path already refuses them — so failing `check` would gate a tidy-up on something
+the filesystem creates on its own schedule. `make status` reports the count, which is where a
+fact you should know but need not act on belongs, and is silent when there are none.
+
+**What retires this: leaving iCloud Drive.** The sweep then finds nothing forever, the
+pre-commit rule costs one grep per commit, and the `git ls-files` enumeration in `make hooks`
+is correct on its own terms and stays regardless.
 
 ---
 

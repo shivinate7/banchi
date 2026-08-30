@@ -727,3 +727,237 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+/* ---- the crop preview (D32, amended) ----
+ *
+ * WHAT THE READING SENDS, DRAWN, BESIDE THE CONTROL THAT SETS IT. The chips carry three
+ * measured pairs and a sentence each because the owner could not read the crop off a checkbox
+ * and a number; this column is the same answer as a picture.
+ *
+ * ON THE SIDE, AND ONE CARD (the owner, 2026-08-29). It was three cards abreast in a row under
+ * the chips, sampled across the box because cards move on the tray — right about sampling, and
+ * wrong about the only thing that decides whether a picture works: at a third of the panel's
+ * width each frame drew 112px wide, and the operator could not see what they were being shown.
+ * One card in a column of its own is ~2.5x the linear size for the same block of screen, and
+ * the spread is reached by walking rather than by being sampled for. */
+.run-identify {
+  display: grid;
+  /* THE CONTROLS KEEP THE WIDTH THEY WERE TUNED IN and the preview takes a fixed column, so
+     the reading chips do not reflow as the picture appears. `minmax` rather than a bare 340:
+     the panel is full-width on `#/runs` but this file is not entitled to assume it, and a
+     column that cannot shrink would push the chips into a two-line wrap on a narrow window. */
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: var(--s5);
+  align-items: start;
+}
+
+/* Below the width where the pair fits side by side, the picture goes back under the controls
+   rather than squeezing them. Nothing is hidden and nothing folds — the column is a layout,
+   not a disclosure. */
+@media (max-width: 900px) {
+  .run-identify {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.run-identify-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.run-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.run-preview-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+.run-preview-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* The utility face, because it is a count and a position — docs/DESIGN.md's mono-carries-all
+   metadata rule, the same one `.run-reading-edge` follows one block up. */
+.run-preview-count {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.run-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+/* While a new card is in flight the previous one stays up, dimmed rather than blanked:
+   removing it would collapse the tallest block in this column and move everything under it,
+   in a panel whose other column holds the button that spends. */
+.run-preview-card[aria-busy='true'] {
+  opacity: 0.55;
+}
+
+/* SIZED BY WIDTH NOW, NOT BY A FIXED HEIGHT. With one card in a column of its own the rig's
+   9:16 frame at 340px draws ~604px tall, which is the size that makes the cut legible — the
+   three-abreast version had to pin the height to 200px to stop the row becoming the largest
+   thing on the screen, and that was the whole reason it was too small to read.
+
+   `aspect-ratio` rather than letting the image set it: the box has to hold its shape before
+   the photograph decodes, because the rectangle is positioned against the BOX. A frame that
+   resized on load would draw the cut in the wrong place for one paint — D28's moving-photograph
+   defect, on a picture whose entire content is a rectangle's position. */
+.run-preview-frame {
+  position: relative;
+  box-sizing: border-box;
+  display: block;
+  /* The pointer aims the 1:1 window below, so say so on the thing being aimed at. `zoom-in`
+     rather than `crosshair`, the same choice `ReviewQueue.css` makes for its loupe: the
+     gesture reveals magnification, it does not select a point. */
+  cursor: zoom-in;
+  /* CAPPED BY HEIGHT, AND THE CAP IS WHAT KEEPS THE OTHER COLUMN HONEST. At the column's full
+     360px a 9:16 frame draws 640px tall, and the controls beside it are ~330px — so the step
+     opened with ~600px of white under `Check cost`, which is the dead space D40 spends its
+     first paragraph on. `min()` rather than a bare vh so a tall display cannot push the frame
+     wider than its own column.
+
+     THE BOX MUST STAY EXACTLY 9:16 AND THAT IS NOT A PREFERENCE. The cut is positioned as a
+     percentage of THIS BOX, so a box whose aspect drifts from the frame's draws the rectangle
+     in the wrong place — silently, and most wrongly at the edges, which is exactly where the
+     collector number is. So the height is the specified dimension and the width follows it;
+     `width: 100%` with a `max-height` would have let the box go wide and letterbox the image
+     inside it, which is the same defect wearing a different property. */
+  height: min(48vh, 460px);
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+/* WHAT IS THROWN AWAY. The stored photograph, underneath everything, at an opacity that says
+   so: the margin outside the cut is context rather than content, and drawing it at full
+   strength made the frame read as one picture with a box on it instead of as two things — the
+   bytes, and what was left behind. */
+.run-preview-ghost {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* CONTAIN, NOT COVER, AND THIS IS THE ONE PLACE IN THE PRODUCT WHERE THAT IS RIGHT.
+     `BoxBrowse.css` and the Fulfiller's views both use `cover` deliberately: they are showing
+     a CARD and the desk is waste. This block is showing the FRAME, because the question it
+     answers is what falls outside the cut — and a cover crop would silently trim the very
+     margin the whole composition is drawn to describe. */
+  object-fit: contain;
+  opacity: 0.35;
+}
+
+/* THE PAYLOAD, at the cut's own position, at full strength. It is a different FILE from the
+   ghost behind it — the prepared bytes rather than what is on disk — which is what makes the
+   picture change when the reading does. Its box is set inline as percentages of the frame. */
+.run-preview-sent {
+  position: absolute;
+  display: block;
+  object-fit: fill;
+}
+
+/* THE CUT. An outline rather than a mask, because both sides have to stay visible: what is
+   inside is what gets sent, and what is outside is what the run will never see. Accent at
+   outline weight is docs/DESIGN.md's register for a system that is unsure, which is the honest
+   register here — the detector answers per photograph and can refuse. */
+.run-preview-cut {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  /* A WHITE RING ON BOTH SIDES OF THE LINE, because the thing it is drawn over is a card and
+     cards have borders of their own. Box 1's Riftbound cards are bordered in blue and purple,
+     and against those the accent line alone read as part of the artwork — the one element on
+     this screen that must not be mistaken for the photograph it sits on. */
+  box-shadow:
+    0 0 0 2px var(--on-accent),
+    inset 0 0 0 1px var(--on-accent);
+  pointer-events: none;
+}
+
+/* THE 1:1 WINDOW, AND IT IS THE ONLY PLACE THE READING IS ACTUALLY LEGIBLE.
+ *
+ * The frame draws the payload now, which makes it honest — but it draws it at ~28% of the
+ * sent pixels, and no two downscales are distinguishable at that size. This window paints the
+ * same file at its natural size: `background-size: auto` plus a `background-position` in
+ * pixels IS 1:1, with no scaling arithmetic to get wrong and no second request, because the
+ * frame above has already loaded the bytes.
+ *
+ * It is the review queue's loupe aimed at the PAYLOAD rather than at the stored photograph,
+ * and the argument is that screen's: FADGI and Metamorfoze both require this class of
+ * judgement at 100%, and here a downscale is precisely what is being judged.
+ *
+ * TALL ENOUGH TO HOLD THE NUMBER WHEREVER IT SITS, which took two corrections. `bottom` was
+ * the first resting aim and the band is not the card's foot — the number prints at roughly
+ * 90-95% of card height. Centred was the second, and measured on box 2 the number line lands
+ * at about 75% of the band. 140px is three quarters of a band and holds it on any card the
+ * rig produces without being tuned to one of them. */
+.run-preview-detail {
+  box-sizing: border-box;
+  width: 100%;
+  height: 140px;
+  background-repeat: no-repeat;
+  background-size: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background-color: var(--surface);
+}
+
+.run-preview-fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s1);
+  margin: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.run-preview-slot {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* THE WALK. The arrow keys are the control the owner asked for; these buttons exist because a
+   key with no visible affordance is a key nobody finds, and the hint between them is what says
+   the keys are there at all. */
+.run-preview-walk {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s1);
+}
+
+.run-preview-step {
+  min-height: 32px;
+  min-width: 44px;
+  padding: 0 var(--s2);
+  font-size: 14px;
+}
+
+.run-preview-hint {
+  flex: 1 1 auto;
+  text-align: center;
+  font-family: var(--util);
+  font-size: 10px;
+  color: var(--muted);
+}

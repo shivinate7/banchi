@@ -235,11 +235,22 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
   `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
   paragraph above exists to prevent.
-- **The three sites that draw this string are decided one at a time.** `.browse-position` is
-  changed; `.review-position` and `.card-locations-label` are not. They sit at 13-16px where the
-  joints are narrow and the complaint was never made, and a 44px figure repeated seven times down
-  a copies list would be a worse defect than the dots. Taking this to them is a decision about
-  all three, not a copy of this one.
+- **It reaches every OWNER site as of 2026-08-29 (D41, amended), and the size is per site.** Six
+  of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28 and
+  slot-first, the capture stage at 32, its undo sidebar at 20, and three in-sentence mentions in a
+  `run` form that keeps the rank and drops the geometry. **The structure is shared and the figure
+  never is** — the warning this paragraph used to carry is measured now: 44px down a seven-copy
+  list costs +86px and drops a copy below the fold.
+- **A sixth site needs two rules, and they are the whole of the scale.** The gap is `--s5` at a
+  figure of 40px or more and `--s3` below, so it always lands on the spacing scale above. And a
+  promoted slot is a slot NUMBER or the label renders whole — without that guard D24's pooled
+  label draws the lowercase word `pooled` as a 300px figure.
+- **The Fulfiller's two sites are not owner sites and never take it.** His labels stay plain text
+  under `app/tests/fulfillment.spec.ts`'s 32px tabular floor, and the guard is that his components
+  do not import the shared one — not a selector prefix, which is the thing a refactor drops.
+- **What is deliberately NOT treated**: `.review-row-position` (11px) and `.review-group-pos`
+  (10px). The mechanism is rank, and a 10px caption has no rank to spend. So `#/review` renders
+  the address two ways, which is a ruling rather than drift.
 
 **And the same deletion reached `.boxops-meta`**, where four label/value pairs and three
 interpuncts were wrapping a 299px column. Horizontal is scarce there and vertical is not, so it

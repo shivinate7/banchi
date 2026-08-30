@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { PositionLabel } from './PositionLabel'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import type {
@@ -614,75 +616,6 @@ function collectorNumber(card: InventoryCard): string {
   return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
 }
 
-/**
- * The position label, with its separators drawn quieter than its parts.
- *
- * THE STRING IS THE SERVER'S AND IS NOT TOUCHED — every character it sent is rendered, in the
- * order it sent them, and nothing here composes, pads or reformats a label.
- * `pipeline/join.py:Position` is still the only label formula in the repo, and this is the same
- * distinction `PositionBar` draws when it refuses to derive a section from an index: reading a
- * string to decide what COLOUR to paint it is not deriving it.
- *
- * WHY IT IS WORTH A COMPONENT. Martian Mono's advance is 0.70em, measured at this size and
- * weight, so ` · ` is three full cells — about 50px at 24px — and the label was reading as
- * three separate pools of white rather than as one address. The parts carry the meaning and the
- * joints carry none, so the joints are the half that gives way. Nothing moves: every glyph is
- * exactly where it was, which is what makes this cheaper than the two alternatives (tightening
- * the tracking on a fixed-advance face, or dropping the size that was set deliberately on
- * 2026-08-26).
- *
- * DEFENSIVE ABOUT THE SEPARATOR IT DOES NOT FIND. A label that does not split — a formula
- * change, a pooled fallback, an older server — renders whole and unstyled rather than as an
- * empty node. The failure mode of a mis-guessed separator is a label that looks like it always
- * did, never one that vanishes.
- *
- * SCOPED TO THIS SCREEN ON PURPOSE. `.review-position` and `.card-locations-label` draw the
- * same string and are untouched: this is the one drawn at 24px, where the joints are widest and
- * the complaint was made. If it reads better here it is worth taking to the other two, and that
- * is a decision about all three rather than a copy of this one.
- */
-function PositionParts({ label }: { label: string }) {
-  const parts = label.split(' · ')
-  if (parts.length < 2) return <>{label}</>
-
-  /* Each part is `<word...> <number>`, so the LAST space is the seam. `lastIndexOf` rather than
-     a split, because a two-word key (`next index` shape) must stay whole; `at < 1` keeps a part
-     with no space at all renderable rather than producing an empty key. */
-  const split = parts.map((part) => {
-    const at = part.lastIndexOf(' ')
-    return at < 1 ? { key: '', value: part } : { key: part.slice(0, at), value: part.slice(at + 1) }
-  })
-
-  /* THE SLOT IS THE LAST PART, NOT THE THIRD. Anchoring to the end rather than to a fixed index
-     is what keeps a two-part or four-part label honest: whatever the formula ends with is the
-     finest thing said, and that is what this panel uniquely supplies. */
-  const slot = split[split.length - 1]
-  /* `parts.length >= 2` above makes this unreachable, and it is written rather than asserted
-     because the guard costs nothing and a non-null assertion would be the one line here that
-     stops being true if the split ever changes. Same failure mode as the bail above: a label
-     that renders whole and unstyled, never one that vanishes. */
-  if (slot === undefined) return <>{label}</>
-  const path = split.slice(0, -1)
-
-  return (
-    <span className="browse-position-parts" role="group" aria-label={label}>
-      <span className="browse-position-path">
-        {path.map((part, at) => (
-          <span key={part.key + part.value + at}>
-            {part.key === '' ? null : `${part.key.toUpperCase()} `}
-            <b>{part.value}</b>
-          </span>
-        ))}
-      </span>
-      <span className="browse-position-slot">
-        {slot.key === '' ? null : (
-          <span className="browse-position-key">{slot.key.toUpperCase()}</span>
-        )}
-        <span className="browse-position-num">{slot.value}</span>
-      </span>
-    </span>
-  )
-}
 
 export function BoxBrowse({
   head,
@@ -2102,7 +2035,7 @@ export function BoxBrowse({
                        box across the desk. */
                     <>
                       <p className="browse-position">
-                        <PositionParts label={selectedLabel} />
+                        <PositionLabel label={selectedLabel} />
                       </p>
                       {/* D30's sentence, quiet, directly under the label it makes countable:
                           "between Mantine and Thievul · 2 slots in this section are empty".

@@ -1067,64 +1067,21 @@
    only FOUR are digits (67.2px, 14.8%); the words, dots and spaces are 386.4px — the entire 1280
    track, spent before a single number is drawn. Shrinking to fit needs 17px, and `CardLocations`
    prints the same string at 13px seven rows below, so the answer would have been 4px louder than
-   its own footnotes. */
+   its own footnotes.
+
+   THE SHAPE ITSELF LIVES IN `PositionLabel.tsx`/`.css` SINCE 2026-08-29 (D41, amended). This
+   entry scoped the treatment to this screen in writing — "taking this to them is a decision about
+   all three sites, not a copy of this one" — and that decision was taken: five owner sites draw it
+   now. What is left here is the SITE rule, and `--pos-slot` is the only number this screen
+   chooses. 44px because the address IS this panel's answer; every other site is smaller because
+   theirs is provenance. */
 .browse-position {
   font-family: var(--util);
   color: var(--ink);
   letter-spacing: 0;
-}
-
-.browse-position-parts {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s5);
-}
-
-/* THE PATH: coarse-to-fine, stacked, muted, and deliberately small. `align-self: flex-end` sits
-   it on the slot figure's baseline rather than its cap, which is what makes the two read as one
-   object instead of two panels. The VALUES stay `--ink` while their keys stay `--muted`, so the
-   numbers remain findable at a glance even demoted — this is a rank change, not a hiding. */
-.browse-position-path {
-  display: flex;
-  flex-direction: column;
-  align-self: flex-end;
-  padding-bottom: 2px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.browse-position-path b {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.browse-position-slot {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.browse-position-key {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-/* TRACKING LANDS ON THE WORDS AND NEVER ON THE FIGURES. The comment this replaces banned
-   negative tracking because Martian Mono is fixed-advance and carries every number in the
-   product; that rule is kept exactly — `letter-spacing: 0` here and on `.browse-position`, with
-   the 0.08em only ever on an uppercase key. docs/DESIGN.md's own metadata rule is "utility face,
-   uppercase, tracked", and that is what the keys are. */
-.browse-position-num {
-  font-size: 44px;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1.05;
-  letter-spacing: 0;
+  --pos-slot: 44px;
+  --pos-gap: var(--s5);
+  font-size: var(--pos-slot);
 }
 
 /* D30's sentence, directly under the position label it makes countable — "between Mantine

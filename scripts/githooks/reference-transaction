@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# main does not move locally. Every way it could is this one hook.
+#
+# WHY A reference-transaction HOOK AND NOT pre-commit. A pre-commit hook sees commits, and
+# the failure that produced this guard was not a commit: 637e2e4 was authored on a session's
+# own branch and FAST-FORWARDED into main, which creates no commit and runs no commit hook.
+# `git merge`, `git rebase`, `git reset --hard` and `git branch -f` are the same shape. All of
+# them are, underneath, one ref update — so the ref update is the only place that catches all
+# of them, and it is the only place that cannot be routed around by reaching for a different
+# porcelain command.
+#
+# Git calls this for EVERY ref transaction in every worktree of this clone (core.hooksPath is
+# shared through the common .git dir), with the phase as $1 and one `<old> <new> <ref>` line
+# per ref on stdin. Exiting non-zero at `prepared` aborts the whole transaction.
+#
+# WHAT IS ALLOWED, and each rule is narrow on purpose:
+#
+#   1. main not being touched at all. The overwhelming case — every branch commit, every
+#      fetch, every rebase of someone else's work. Costs one grep and exits.
+#   2. Creating main where it does not exist. A fresh clone. There is nothing to protect yet.
+#   3. Moving main to a commit ORIGIN ALREADY HAS. This is the whole legitimate path: a PR is
+#      merged on GitHub, `git pull` fast-forwards, and the commit was on the remote before it
+#      was ever on your main. It cannot be forged by a local session, because a local commit
+#      is not on origin until something pushes it — and pushing to main is what the pre-push
+#      hook beside this one refuses.
+#   4. PKMNSCAN_MAIN=off, the visible escape hatch, spelled the way PKMNSCAN_GATE=off and
+#      PKMNSCAN_DOCS=off already are in this repo.
+#
+# THE `old` COLUMN IS NOT EVIDENCE AND THIS HOOK IGNORES IT. That is the single most important
+# line in this file, it is not what the format suggests, and both bugs this hook shipped with
+# came from believing otherwise. Measured on git 2.39.3, the `prepared` payload reads:
+#
+#     git branch -D main              0000000... 0000000... refs/heads/main
+#     git branch -f main feature      0000000... 3f5f2cd... refs/heads/main
+#     git update-ref refs/heads/main  0000000... 8f06f47... refs/heads/main
+#
+# Git reports zeros for the old value whenever the caller did not state an expected one, even
+# where main exists at a real commit. So `old == new` does NOT mean no-op — it is what a
+# deletion looks like — and a zeroed `old` does NOT mean creation, it is what `branch -f` and
+# `update-ref` look like. Reading either as it appears leaves main forceable by one command.
+#
+# What replaces it: the DECISION IS MADE ON `new` ALONE, and where the pre-update value is
+# genuinely wanted this hook asks for it — `git rev-parse refs/heads/main`, during `prepared`,
+# before the lock is renamed into place, which answers with the value still on disk.
+#
+# IT FAILS OPEN ON ITS OWN BUGS, and that is a considered trade rather than a weak guard.
+# This hook runs on every ref update in every worktree; a version of it that exits non-zero
+# when it did not mean to does not block one commit, it breaks git for every concurrent
+# session at once. So the ONLY non-zero exit in this file is the deliberate refusal below,
+# and anything unexpected — a missing git, an unparseable line, a phase we do not know —
+# prints nothing and allows. Same reasoning `scripts/docs-audit.py:nested_worktrees` records
+# for itself, and the same one guard-opsec.sh took after it over-triggered.
+
+set -uo pipefail
+
+# `prepared` is the phase that can still refuse. `committed` and `aborted` are reports, and
+# reading stdin then exiting 0 is all they want. An unknown phase from a future git allows.
+[ "${1:-}" = "prepared" ] || exit 0
+
+[ "${PKMNSCAN_MAIN:-}" = "off" ] && exit 0
+
+lines="$(cat 2>/dev/null)" || exit 0
+case "$lines" in
+  *refs/heads/main*) ;;
+  *) exit 0 ;;
+esac
+
+zero_oid() {
+  # All-zero of any width: sha1 today, sha256 if this repo is ever converted.
+  case "$1" in
+    *[!0]*) return 1 ;;
+    "") return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# The value main actually holds right now. Read during `prepared`, so the transaction has a
+# lock file open but has not renamed it over the ref — what comes back is the pre-update value,
+# which is the thing the `old` column only pretends to be. Deliberately computed after the grep
+# above, so a transaction that never mentions main does not pay for it.
+current="$(git rev-parse --verify --quiet refs/heads/main 2>/dev/null)" || current=""
+
+while IFS=' ' read -r _old new ref rest; do
+  [ "${ref:-}" = "refs/heads/main" ] || continue
+  [ -n "${rest:-}" ] && continue        # unexpected shape: not ours to judge, allow
+
+  # Deletion. Tested first and on `new` alone, because a delete and a no-op are the same
+  # bytes on the wire — see the header.
+  if zero_oid "$new"; then
+    echo "" >&2
+    echo "REFUSED: this would DELETE refs/heads/main." >&2
+    echo "" >&2
+    echo "  Escape hatch, if you really mean it:  PKMNSCAN_MAIN=off git ..." >&2
+    echo "" >&2
+    exit 1
+  fi
+
+  # No main yet: a fresh clone, or `git init`. Nothing to protect.
+  [ -z "$current" ] && continue
+
+  # A genuine no-op, established against the ref rather than against the payload.
+  [ "$new" = "$current" ] && continue
+
+  # The one legitimate move: to a commit origin already has. If we cannot ask, we do not
+  # guess — a git that cannot answer is not evidence the move is safe, and the escape hatch
+  # is one environment variable away.
+  if git merge-base --is-ancestor "$new" refs/remotes/origin/main 2>/dev/null; then
+    continue
+  fi
+
+  short_new="$(git rev-parse --short "$new" 2>/dev/null || echo "$new")"
+  short_cur="$(git rev-parse --short "$current" 2>/dev/null || echo "$current")"
+  echo "" >&2
+  echo "REFUSED: main does not move locally." >&2
+  echo "" >&2
+  echo "  refs/heads/main  $short_cur -> $short_new" >&2
+  echo "" >&2
+  echo "  $short_new is not on origin/main, so this is a local commit, merge, fast-forward" >&2
+  echo "  or reset. main only ever moves by pulling a branch that was merged on GitHub." >&2
+  echo "" >&2
+  echo "  Nothing is lost. If you were committing, your changes are still staged." >&2
+  echo "  Put them on a branch and open a pull request:" >&2
+  echo "" >&2
+  echo "    git switch -c <branch-name>       # carries staged and unstaged work with it" >&2
+  echo "    git commit" >&2
+  echo "    git push -u origin <branch-name>" >&2
+  echo "    gh pr create --fill" >&2
+  echo "" >&2
+  echo "  To sync main after a PR is merged:   git switch main && git pull" >&2
+  echo "  Escape hatch, deliberate and loud:   PKMNSCAN_MAIN=off git ..." >&2
+  echo "" >&2
+  exit 1
+done <<EOF
+$lines
+EOF
+
+exit 0

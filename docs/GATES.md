@@ -53,6 +53,16 @@ per set and overall.
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
   holdout, 150 together.
+- **A CACHE MISS REFUSES; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
+  `make harness` makes no API call — and when there is nothing to replay it fails with
+  instructions rather than spending. That rule is cause-independent by design, and it was
+  not always: the moved-prompt case was guarded and every other cause of a cold cache fell
+  straight through to a fresh submission of ~150 images, **under the Stop hook, at the end
+  of every turn**. Found on 2026-08-29 in a git worktree, where `harness/.cache/` is
+  gitignored and therefore does not travel; nothing was billed only because that worktree
+  had no key either, which is luck rather than a design. Submitting is now an act —
+  `PKMNSCAN_RERUN_T1=1` — and `make worktree-setup` is how a worktree answers the refusal
+  without paying for an answer this machine already holds.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per configuration — a hinted run and an unhinted run are
   different measurements and must never share a filename. **No date in the name**: git
@@ -202,7 +212,7 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
 
 - **Pass**: detected rectangle within tolerance across the sweep; bands contain their
   target; no card -> not found; a ground the tone path cannot segment is still found by its
-  borders
+  borders; the cut and the rectangle the run panel draws are one computation
 - The sweep is offset, scale and rotation. "Bands" are the title band and the number
   corner, and each must contain its target region. "Not found" must be a refusal, never a
   guess.

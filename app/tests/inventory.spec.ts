@@ -715,7 +715,7 @@ test('a copy in another box is reached by pressing its position, and the walk go
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
      the press has to do. */
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
-  await expect(page.locator('.browse-position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
 
   /* THE LANDING'S SECTION IS OPEN AND THE MARK IS WHERE IT CAN BE SEEN, in a box that arrived
@@ -773,7 +773,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      this is the claim that matters and the wrong-card landing is what fails it: unguarded, the
      mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
      Card 1` under box 2's photograph. */
-  await expect(page.locator('.browse-position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
 
   // And the query goes, because it was a way of finding the card and the card has been found.
@@ -1906,13 +1906,13 @@ test('the address is drawn without a separator, and the server string survives o
   const position = page.locator('.browse-position')
   await expect(position).toBeVisible()
   expect(await position.innerText()).not.toContain('·')
-  await expect(page.locator('.browse-position-joint')).toHaveCount(0)
+  await expect(page.locator('.position-joint')).toHaveCount(0)
 
   /* AND THE SERVER'S OWN STRING IS STILL THE ACCESSIBLE NAME. This is what makes splitting the
      label client-side legitimate rather than a quiet edit of what the store said: the visual
      rendering is a view, and `pipeline/join.py:Position.label` is still what is announced.
      `PositionParts`' own comment scopes the split to this screen for exactly this reason. */
-  const parts = page.locator('.browse-position-parts')
+  const parts = page.locator('.position-parts')
   await expect(parts).toHaveAttribute('role', 'group')
   const label = await parts.getAttribute('aria-label')
   expect(label).toMatch(/^Box \d+ · Section \d+ · Card \d+$/)
@@ -1920,7 +1920,7 @@ test('the address is drawn without a separator, and the server string survives o
   /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
      address rather than to index 2, so a formula with a different number of parts still puts the
      finest thing said on the biggest step. */
-  const num = page.locator('.browse-position-num')
+  const num = page.locator('.position-num')
   await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
 })
 
@@ -1939,11 +1939,11 @@ test('the address holds one line at both widths, including the longest label the
      and the block is measured for a second line. */
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.locator('.browse-position-parts').first().waitFor()
+    await page.locator('.position-parts').first().waitFor()
 
     const oneLine = await page.locator('.browse-position').evaluate((el) => {
-      const shape = el.querySelector('.browse-position-parts') as HTMLElement
-      const slot = el.querySelector('.browse-position-slot') as HTMLElement
+      const shape = el.querySelector('.position-parts') as HTMLElement
+      const slot = el.querySelector('.position-slot') as HTMLElement
       return shape.getBoundingClientRect().height <= slot.getBoundingClientRect().height + 4
     })
     expect(oneLine).toBe(true)
@@ -1951,11 +1951,11 @@ test('the address holds one line at both widths, including the longest label the
     /* The shape fits its track with the worst label in it. Measured on the SHAPE rather than on
        `.browse-position`, which is a full-width block and would always "fit". */
     const fits = await page.evaluate(() => {
-      const path = document.querySelector('.browse-position-path') as HTMLElement
-      const slot = document.querySelector('.browse-position-slot') as HTMLElement
+      const path = document.querySelector('.position-path') as HTMLElement
+      const slot = document.querySelector('.position-slot') as HTMLElement
       const track = document.querySelector('.browse-detail') as HTMLElement
       path.innerHTML = '<span>BOX <b>100</b></span><span>SECTION <b>12</b></span>'
-      const numEl = slot.querySelector('.browse-position-num') as HTMLElement
+      const numEl = slot.querySelector('.position-num') as HTMLElement
       numEl.textContent = '543'
       const used = path.getBoundingClientRect().width + slot.getBoundingClientRect().width + 24
       return used <= track.getBoundingClientRect().width
@@ -2035,15 +2035,29 @@ test('a narrow copies column shortens the bar, never the position label', async 
   await page.waitForTimeout(150)
 
   const geom = await row.evaluate((el) => {
-    const place = el.querySelector('.card-locations-place') as HTMLElement
     const bar = el.querySelector('.position-bar') as HTMLElement
     const caps = [...el.querySelectorAll('.position-bar-text')] as HTMLElement[]
     const boxTrack = el.querySelector('.position-bar-track') as HTMLElement
     const sect = el.querySelector('.position-bar-sectiontrack') as HTMLElement
-    const label = place.querySelector('*') as HTMLElement
+    const parts = el.querySelector('.position-parts') as HTMLElement
+    const pathEl = el.querySelector('.position-path') as HTMLElement
+    const slotEl = el.querySelector('.position-slot') as HTMLElement
     return {
       barH: Math.round(bar.getBoundingClientRect().height),
-      labelLines: label === null ? 1 : label.getClientRects().length,
+      /* `getClientRects().length` WAS READ HERE AND IT IS BLIND. The node it was read off is a
+         column-flex child, so it is blockified and returns exactly ONE rect however many lines
+         of text it holds — measured on the shipped tree by forcing the place cell to 200/120/80px,
+         which wraps the label to 2/3/4 real lines while the assertion read 1 and passed every
+         time. The case only ever went red on its OTHER assertion, which hid this.
+
+         The honest question is geometric, and it is the same shape as `capBesideTrack` two lines
+         down: the parts block is the two-line path (33.9px) beside the figure, so anything past
+         ~36px means a half of it wrapped. Height, not rect count. */
+      partsH: parts === null ? 0 : Math.round(parts.getBoundingClientRect().height),
+      pathSlotAligned:
+        pathEl === null || slotEl === null
+          ? false
+          : Math.abs(pathEl.getBoundingClientRect().top - slotEl.getBoundingClientRect().top) < 40,
       capHeights: caps.map((c) => Math.round(c.getBoundingClientRect().height)),
       capBesideTrack: caps.length > 0 && boxTrack !== null
         ? Math.abs(caps[0]!.getBoundingClientRect().top - boxTrack.getBoundingClientRect().top) < 12
@@ -2053,8 +2067,11 @@ test('a narrow copies column shortens the bar, never the position label', async 
     }
   })
 
-  /* THE LABEL IS ON ONE LINE. This is the half the rejected fix broke. */
-  expect(geom.labelLines).toBe(1)
+  /* THE LABEL DID NOT WRAP. This is the half the rejected fix broke, and it is asserted as a
+     height rather than a rect count for the reason given inside the evaluate above. */
+  expect(geom.partsH).toBeGreaterThan(0)
+  expect(geom.partsH).toBeLessThanOrEqual(36)
+  expect(geom.pathSlotAligned).toBe(true)
 
   /* THE CAPTIONS SIT BESIDE THEIR TRACKS, not under them — which is where the 31px came from.
      Asserted as a geometric fact rather than by class, so a future rule that re-stacks them
@@ -2069,6 +2086,68 @@ test('a narrow copies column shortens the bar, never the position label', async 
      them into one would pass every height check above and lose the thing the bar is for. */
   expect(geom.boxTrackH).toBeGreaterThan(geom.sectTrackH!)
   expect(geom.sectTrackH).toBeGreaterThan(0)
+})
+
+test('a wider copies column never makes its rows taller', async ({ page }) => {
+  await open(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.locator('.card-locations-row').first().waitFor()
+
+  /* THE DEFECT THIS CLOSES, AND IT WAS DORMANT RATHER THAN INVISIBLE. `CardLocations.css` switches
+     the position bar into the row at a container threshold. That threshold was 860px, chosen when
+     the bar took four stacked full-width lines and the narrow row was 144px. Folding each caption
+     beside its track took the narrow row to 114px — and left the WIDE branch producing 126px at
+     the exact width it engaged. Measured: 820 -> 114, 860 -> 126, 880 -> 85, 900 -> 82. Crossing
+     into the "better" branch made the row twelve pixels taller.
+
+     IT COULD NOT BE SEEN. The copies container is 612px at 1440 and 528px at 1280, so `min-width`
+     needs roughly a 1980px viewport to fire at all — nothing in this suite or on the owner's
+     display would ever have rendered it. A threshold that is wrong and dormant is worse than one
+     that is wrong and visible, because nothing fails while it waits.
+
+     SO THE ASSERTION IS THE PROPERTY, NOT THE NUMBER. Whatever the threshold is, a container that
+     grows must never make a row taller — that is what "this branch is better" means, and it is
+     the claim a future re-tune has to keep. Pinning 880 instead would go green on any later change
+     that moves the cliff somewhere else. */
+  const heights = await page.evaluate(() => {
+    const host = document.querySelector('.browse-under') as HTMLElement
+    const previous = host.style.cssText
+    const out: { width: number; row: number }[] = []
+    for (const width of [560, 640, 760, 820, 860, 870, 880, 900, 940, 1024]) {
+      host.style.width = `${width}px`
+      host.getBoundingClientRect()
+      const row = document.querySelector('.card-locations-row') as HTMLElement
+      out.push({ width, row: Math.round(row.getBoundingClientRect().height) })
+    }
+    host.style.cssText = previous
+    return out
+  })
+
+  const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
+  expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
+
+  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
+     deleting the threshold and never switching at all. */
+  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+})
+
+test('the box fill is qualified once, on the identity line', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* D41 put D20's `so far` / `sealed` on `.boxops-meta`'s fill, and `BoxIdentity` sixteen pixels
+     above already carried it — so for one commit `133 so far` rendered twice on one screen. D20's
+     rule is that the number is unambiguous on screen, not that it is annotated at every site.
+
+     THE FIELD STAYS AND ONLY THE QUALIFIER GOES, which is the half worth asserting: `BoxOps.tsx`
+     promises these key names grep to `inventory.json`, so a fix that dropped `fill` outright would
+     have broken a different promise to keep this one. */
+  await expect(page.locator('.boxops-meta-qual')).toHaveCount(0)
+  const keys = await page.locator('.boxops-meta-key').allTextContents()
+  expect(keys).toContain('fill')
+
+  const identity = await page.locator('.boxops-identity').innerText()
+  expect(identity).toMatch(/so far|sealed/)
 })
 
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {

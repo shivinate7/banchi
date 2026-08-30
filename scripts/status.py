@@ -114,10 +114,28 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
-        "path": "scripts/githooks/pre-commit",
+        "path": "scripts/icloud-sweep.py",
         "kind": "file",
         "requires": (),
-        "why": "the opsec hook core.hooksPath must point at — read by hooks() below",
+        "why": "counts iCloud Drive conflict copies — run by icloud() below. Run rather than "
+               "reimplemented, so the pattern that decides what a conflict copy IS lives in "
+               "one file",
+    },
+    {
+        "path": "server/ports.py",
+        "kind": "file",
+        "requires": (),
+        "why": "which ports THIS checkout serves on — imported by ports_and_store() below. "
+               "Imported rather than ast-parsed because the answer is a function of where "
+               "the checkout is, not a literal; stdlib-only, so it cannot need `make venv`",
+    },
+    {
+        "path": "scripts/githooks/*",
+        "kind": "file",
+        "requires": (),
+        "why": "the tracked hooks `make hooks` installs — read by hooks() below. A glob "
+               "since D42: the opsec pre-commit gained two siblings guarding main, and an "
+               "entry naming one of three would report an armed clone while two were gone",
     },
     {
         "path": "inventory",
@@ -554,39 +572,165 @@ def repo() -> List[str]:
 
 
 def hooks() -> List[str]:
-    """Whether THIS clone's opsec pre-commit is actually armed.
+    """Whether THIS clone's git hooks are actually armed, and whether they are current.
 
-    `core.hooksPath` is local git config and is never pushed, so the hook being present in
-    the tree proves nothing — a fresh clone has the file with nothing pointing at it, and
+    `core.hooksPath` is local git config and is never pushed, so the hooks being present in
+    the tree proves nothing — a fresh clone has the files with nothing pointing at them, and
     CLAUDE.md's bearer-instrument rule is unenforced on the first commit. Only the config
     proves it, and only this script is in a position to look.
 
-    Reported here because it is the one setup step that cannot be committed, and `make
-    status` is what README.md and CLAUDE.md tell a cold session to run first.
+    WHAT IT LOOKS FOR CHANGED ON 2026-08-29, AND THE OLD ANSWER IS NOW A FAILURE STATE.
+    D42 first aimed core.hooksPath at the main worktree's `scripts/githooks`, and that made
+    arming depend on which branch that one checkout happened to be on. It was falsified the
+    hour it landed: the main checkout sat on another session's WIP branch that predated the
+    guard, so git read a directory holding one hook of three and nothing said so. The hooks
+    are installed into the git common dir now, which no branch can empty, and a config still
+    pointing into a working tree is reported as NOT ARMED rather than accepted.
 
-    Three ways to be unarmed and they are kept distinct, because they have three different
-    fixes: no config at all, a config aimed somewhere else, and a hook git will skip for
-    being non-executable. The last is the one worth naming — git says nothing about it.
+    Four ways to be unarmed and they are kept distinct, because they have four different
+    fixes: no config at all, a config aimed somewhere else, a hook missing from the install,
+    and a hook git will skip for being non-executable. The last is the one worth naming —
+    git says nothing about it.
+
+    STALENESS IS REPORTED AND NEVER TREATED AS AN ERROR. The install is a copy, so editing
+    `scripts/githooks` does not change what git runs until `make hooks` is run again. It
+    cannot be checked mechanically without lying: the tracked file legitimately differs
+    between branches, so a difference is a fact to state rather than a fault to flag. This
+    is the one place in the repo whose job is saying what state you are actually in, so it
+    says it here and gates nothing.
     """
-    found = resolve("scripts/githooks/pre-commit")  # records MISSING if the hook itself is gone
+    tracked = resolve("scripts/githooks/*")  # records MISSING if the hooks themselves are gone
     configured = git("config", "--get", "core.hooksPath")
 
     if configured is None:
         return [
-            field("Opsec hook", "NOT ARMED — core.hooksPath is unset, commits are unchecked"),
+            field("Git hooks", "NOT ARMED — core.hooksPath is unset, commits are unchecked"),
             cont("Fix: make hooks"),
         ]
-    if (ROOT / configured).resolve() != (ROOT / "scripts" / "githooks").resolve():
+
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir") or git(
+        "rev-parse", "--git-common-dir"
+    )
+    expected = (Path(common) / "hooks-armed") if common else None
+    installed = Path(configured)
+
+    if expected is None or installed.resolve() != expected.resolve():
         return [
-            field("Opsec hook", f"NOT ARMED — core.hooksPath points at {configured}"),
+            field("Git hooks", f"NOT ARMED — core.hooksPath points at {configured}"),
+            cont("A working tree is not a home for this: what it holds follows whatever"),
+            cont("branch that checkout is on, which armed the guard at zero once already."),
             cont("Fix: make hooks"),
         ]
-    if found and not os.access(found[0], os.X_OK):
+
+    names = sorted(path.name for path in tracked)
+    absent = [name for name in names if not (installed / name).exists()]
+    if absent:
         return [
-            field("Opsec hook", "NOT ARMED — pre-commit is not executable; git skips it silently"),
+            field("Git hooks", f"NOT ARMED — {', '.join(absent)} missing from the install"),
             cont("Fix: make hooks"),
         ]
-    return [field("Opsec hook", f"armed via {configured}")]
+
+    unrunnable = [name for name in names if not os.access(installed / name, os.X_OK)]
+    if unrunnable:
+        return [
+            field(
+                "Git hooks",
+                f"NOT ARMED — {', '.join(unrunnable)} not executable; git skips it silently",
+            ),
+            cont("Fix: make hooks"),
+        ]
+
+    out = [
+        field("Git hooks", f"armed via {configured}"),
+        cont(f"{len(names)} installed: {', '.join(names)}"),
+    ]
+
+    stale = []
+    for name in names:
+        try:
+            if (installed / name).read_bytes() != (ROOT / "scripts" / "githooks" / name).read_bytes():
+                stale.append(name)
+        except OSError:  # unreadable is not a claim that it differs
+            continue
+    if stale:
+        out += [
+            cont(f"differs from this tree: {', '.join(stale)}"),
+            cont("Expected on a branch that changed them. Otherwise the copy git runs is"),
+            cont("behind scripts/githooks here — re-run `make hooks`."),
+        ]
+    return out
+
+
+def ports_and_store() -> List[str]:
+    """Which ports this checkout serves on, and whose inventory it is serving.
+
+    THE THREE FACTS THAT DECIDE WHETHER YOU ARE ABOUT TO CORRUPT SOMETHING (D43). The store
+    defaults to the checkout the code runs from, so every worktree has its own inventory —
+    and until D43 the capture port was the constant 8000 in all of them, so whichever server
+    won the bind answered every tree's UI. One direction drives the owner's real inventory
+    from a branch; the other writes real capture photographs into a directory that is deleted
+    with the worktree.
+
+    Printed here rather than left derivable because none of it is visible at a glance: the
+    paths differ by one segment in the middle of a long absolute path, and the ports are
+    numbers nobody has memorised. `make status` is what CLAUDE.md tells a cold session to run
+    first, which makes it the right place to say which tree it has landed in.
+    """
+    found = resolve("server/ports.py")
+    if not found:
+        return [field("Ports", "MISSING: server/ports.py")]
+    spec = importlib.util.spec_from_file_location("_pkmnscan_ports", found[0])
+    if spec is None or spec.loader is None:
+        return [field("Ports", "server/ports.py could not be loaded")]
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # a broken derivation is not a reason to kill `make status`
+        return [field("Ports", f"server/ports.py raised: {exc}")]
+
+    linked = module.is_linked_worktree(module.REPO_ROOT)
+    out = [
+        field("Ports", f"capture {module.capture_port()} · dev {module.dev_port()}"),
+    ]
+    if linked:
+        out += [
+            cont(f"THIS IS A WORKTREE — {module.REPO_ROOT.name}"),
+            cont(f"the main checkout serves capture {module.CAPTURE_BASE_PORT} / "
+                 f"dev {module.DEV_BASE_PORT}, over a DIFFERENT store"),
+        ]
+    return out
+
+
+def icloud() -> List[str]:
+    """How many iCloud Drive conflict copies are lying in this tree.
+
+    Reported and never acted on. They are untracked, the pre-commit hook already refuses to
+    COMMIT one, and `make hooks` installs only what git tracks — so the two ways one could do
+    damage are closed and what is left is clutter that a person clears when they feel like it.
+    What was NOT closed until this line existed is noticing: they are invisible to every
+    normal command, and the way they surfaced was a commit failing on the repo-map orphan rule
+    and, once, one being installed as a git hook.
+
+    Silent when there are none, which is the ordinary case and will be the permanent one once
+    the repo moves off iCloud Drive.
+    """
+    found = resolve("scripts/icloud-sweep.py")
+    if not found:
+        return []
+    done = subprocess.run(
+        [sys.executable, str(found[0])],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    summary = ""
+    for line in done.stdout.splitlines():
+        if line.startswith("icloud-sweep:"):
+            summary = line.split(":", 1)[1].strip()
+    if not summary or summary == "no conflict copies":
+        return []
+    return [
+        field("iCloud copies", summary.split("  (")[0]),
+        cont("`make icloud-sweep` lists them; ARGS=--delete removes the identical ones"),
+    ]
 
 
 def store() -> List[str]:
@@ -617,7 +761,7 @@ def render() -> str:
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
-    lines += ["", "REPO"] + repo() + hooks()
+    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
     lines += ["", "STORE"] + store()
 
     if MISSING:

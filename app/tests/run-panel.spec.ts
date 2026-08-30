@@ -135,6 +135,49 @@ function runRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/** A 1x1 GIF, standing in for the sent bytes. The assertions here are about GEOMETRY and
+ *  about which reading was asked for, never about what a photograph looks like — so the
+ *  smallest decodable image is the honest fixture, and a real JPEG would be a large constant
+ *  nothing reads. It differs per reading so a case can assert the picture CHANGED. */
+const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+
+/** What `POST /pipeline/crop-preview` answers, in the shape the route really returns.
+ *
+ *  ONE CARD, WALKED BY `offset`. `rect` is in the ORIGINAL frame's pixels and the screen turns
+ *  it into percentages, so the numbers here are chosen to divide cleanly: 216/2160 is 10%, and
+ *  1728/2160 is 80%. An assertion that reads the rendered `left` back out is then checking the
+ *  mapping rather than restating a magic string.
+ *
+ *  `band_absent` is the registry's refusal, and it has a fixture because it is a real state
+ *  this route shipped without: `pipeline/games.py` holds which bands a game claims and only
+ *  `pokemon` claims a number band, so a Riftbound card gets a cut and no strip. */
+function cropPreviewPayload(crop: boolean, maxEdge: number, offset: number, game = 'pokemon') {
+  const claimsBand = game === 'pokemon'
+  return {
+    scope: { box: 9, whole_box: true, cards: null },
+    capture_dir: '/tmp/captures/cards/box9',
+    crop,
+    max_edge: maxEdge,
+    total: 543,
+    offset,
+    sample: {
+      box: 9,
+      index: offset + 1,
+      game,
+      frame: [2160, 3840],
+      sent: crop ? [859, maxEdge] : [882, maxEdge],
+      rect: crop ? [216, 384, 1944, 3456] : null,
+      method: 'edges',
+      sent_image: `${PIXEL}#${crop ? 'crop' : 'whole'}-${maxEdge}`,
+      band_rect: claimsBand ? [59, 931, 800, 1117] : null,
+      band_px: claimsBand ? (crop ? [741, 186] : [704, 177]) : null,
+      band_absent: claimsBand
+        ? null
+        : `\`${game}\` claims no number band. \`geometry/crop.py\`'s bands are fractions measured on a Pokemon card.`,
+    },
+  }
+}
+
 /** Stub the whole server and open the screen.
  *
  *  `to_send` and `estimate_usd` are parameters because the two most interesting states of this
@@ -157,6 +200,9 @@ async function open(
     detail?: Record<string, unknown>
     /** The run list reports a live run, which is the one state that opens the fold by itself. */
     live?: boolean
+    /** The game the previewed card claims. `riftbound` is the state where the registry
+     *  refuses a band — a cut with no strip, and a sentence saying why. */
+    previewGame?: string
     /** An EMPTY run list, which is the state the panel could not draw its own steps in until
      *  2026-08-25. Distinct from omitting the option: `[]` means "no runs on disk", where
      *  `undefined` means "the ordinary one-run fixture". */
@@ -182,6 +228,27 @@ async function open(
         scope: { box: 9, whole_box: true, cards: null },
         argv: [],
       }),
+    })
+  })
+
+  /* THE PREVIEW, WHICH IS FREE AND IS FIRED ON EVERY CHIP PRESS. Recorded like the rest so an
+     assertion can read WHICH reading the picture was drawn for — the failure worth forbidding
+     is a strip that keeps describing the previous pair, which is the estimate's stale-figure
+     defect one control higher up. */
+  await page.route(/\/pipeline\/crop-preview$/, async (route) => {
+    const body = route.request().postDataJSON()
+    record('POST', route.request().url(), body)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        cropPreviewPayload(
+          Boolean(body?.crop),
+          Number(body?.max_edge),
+          Number(body?.offset ?? 0),
+          options.previewGame ?? 'pokemon',
+        ),
+      ),
     })
   })
 
@@ -504,6 +571,122 @@ test('each reading sends the pair it names, never half of one', async ({ page })
 
   const whole = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   expect(whole?.body).toMatchObject({ crop: false, max_edge: 1568 })
+})
+
+test('the crop is drawn before it is paid for, and the cut is where the route put it', async ({
+  page,
+}) => {
+  await open(page)
+  await openPanel(page)
+
+  /* D32's amendment answered "walk me through how im supposed to understand crop with just
+     this dialog box" with three named pairs and a sentence each. The sentences are prose about
+     pixels; this is the same answer as a picture, and it has to be on screen while the pair is
+     being CHOSEN — which is why it is asserted beside the chips rather than beside a run. */
+  await expect(page.locator('.run-preview-card')).toHaveCount(1)
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+
+  /* THE OVERLAY IS THE ROUTE'S RECTANGLE, MAPPED — not decoration. 216 of 2160 is 10% and
+     1728 of 2160 is 80%, so reading the style back out asserts the arithmetic that makes the
+     picture true rather than that a blue box exists. */
+  const cut = page.locator('.run-preview-cut')
+  await expect(cut).toHaveAttribute('style', /left:\s*10%/)
+  await expect(cut).toHaveAttribute('style', /width:\s*80%/)
+
+  /* THE PICTURE IS THE PAYLOAD, WHICH IS THE HALF THAT MAKES ANY OF IT VISIBLE. The frame
+     drew the stored photograph until 2026-08-29 — the same bytes at every reading, so the one
+     thing being changed was the one thing it could not show. */
+  const sent = page.locator('.run-preview-sent')
+  await expect(sent).toHaveAttribute('src', /crop-1200$/)
+
+  /* AND THE 1:1 WINDOW READS THE SAME FILE, which is why the two can never disagree about
+     what is being sent: there is no second file to disagree with. */
+  const detail = page.locator('.run-preview-detail')
+  await expect(detail).toHaveAttribute('style', /crop-1200/)
+  await expect(page.locator('.run-preview')).toContainText('1:1')
+})
+
+test('the picture follows the reading, and a whole-frame run draws no cut at all', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+
+  /* ASSERTED AS AN ABSENCE, the same shape as the spend button's own case. A picture that kept
+     drawing a rectangle after `Whole frame` was chosen would be a picture of a send that is
+     not the one about to happen — D32's stale-estimate defect, in the medium the operator
+     actually believes. */
+  await page.getByRole('button', { name: 'Whole frame' }).click()
+  await expect(page.locator('.run-preview-cut')).toHaveCount(0)
+  await expect(page.locator('.run-preview-card')).toHaveCount(1)
+
+  const whole = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
+  expect(whole?.body).toMatchObject({ crop: false, max_edge: 1568 })
+
+  await page.getByRole('button', { name: 'Cheapest' }).click()
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+  const cheap = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
+  expect(cheap?.body).toMatchObject({ crop: true, max_edge: 900 })
+
+  /* THE PICTURE ITSELF CHANGED, not just the figures under it. This is the assertion the
+     owner's report earns: "the crop preview should also show the depixelation reflected as
+     you change the options". */
+  await expect(page.locator('.run-preview-sent')).toHaveAttribute('src', /crop-900$/)
+})
+
+test('arrow keys walk the box, and a text field keeps its own caret keys', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await expect(page.locator('.run-preview-count')).toContainText('card 1 of 543')
+
+  await page.keyboard.press('ArrowRight')
+  await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
+  expect(wire.filter((row) => row.path === '/pipeline/crop-preview').pop()?.body).toMatchObject({
+    offset: 1,
+  })
+
+  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input and a textarea, and
+     an unguarded window listener would steal the caret keys from both — the operator would be
+     unable to move through a value they were editing. Reveal `Custom`, put the caret in its
+     number field, and the walk must not move.
+
+     WAITED FOR RATHER THAN ASSERTED IMMEDIATELY, and the first draft of this case got that
+     wrong in a way worth recording: `toContainText` passes the instant the text matches, so
+     "still card 2" was true a millisecond after the keypress whatever the guard did — the
+     fetch is debounced at 140ms. The case passed against a build with the guard deleted. It
+     waits past the debounce now, and then asserts BOTH the caption and the wire, because the
+     wire is the half that cannot be true by accident. */
+  await page.getByRole('button', { name: 'Custom' }).click()
+  const edge = page.getByRole('spinbutton', { name: 'Max edge' })
+  await edge.click()
+  const before = wire.filter((row) => row.path === '/pipeline/crop-preview').length
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(500)
+  await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
+  expect(wire.filter((row) => row.path === '/pipeline/crop-preview').length).toBe(before)
+})
+
+test('a game that claims no number band gets the cut and a reason, never a wrong strip', async ({
+  page,
+}) => {
+  /* THE DEFECT THIS ROUTE SHIPPED WITH, found by the owner on box 1. It cut `geometry/crop.py`'s
+     number band over every game, and `pipeline/games.py` refuses that in writing — the bands are
+     fractions measured on a Pokemon card. The strip drew a Riftbound card's RULES TEXT as though
+     it were a collector number. */
+  await open(page, { previewGame: 'riftbound' })
+  await openPanel(page)
+
+  await expect(page.locator('.run-preview')).toContainText('claims no number band')
+
+  /* AND THE 1:1 VIEW STILL WORKS. The registry cannot say where a Riftbound card prints its
+     identifier and it does not have to — the operator points at it. A refusal that took the
+     magnifier away with it would have made this game strictly worse off than before. */
+  await expect(page.locator('.run-preview-detail')).toHaveCount(1)
+
+  /* AND THE CUT IS UNAFFECTED. A card is 63x88mm whatever is printed on it, so the crop is
+     right for every game even where no band has ever been measured. */
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
 })
 
 test('the raw controls are behind Custom, and that is where the mistake is named', async ({
