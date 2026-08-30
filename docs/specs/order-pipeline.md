@@ -32,8 +32,10 @@ is therefore proven and the file has never held an order.
 
 **Three modules have full T7 coverage and no reachability at all** — `pipeline/orders.py`,
 `pipeline/shipping.py`, `pipeline/pirateship.py`. No route, no function in `app/src/server.ts`,
-no subcommand beyond `identify | join | emit | reconcile`, no screen. Their only importer outside
-`harness/tests/t7_store_and_seams.py` is `pipeline/shipping.py` importing `pipeline/pirateship.py`.
+no subcommand beyond `identify | join | emit | reconcile`, no screen. `cli/resolve.py` does import
+`pipeline/orders.py`, and it buys the resolver no reach: it takes `PaperworkEntry` alone, and the
+`paperwork_for` that builds them has no caller outside `harness/tests/t7_store_and_seams.py`. The
+only other edge is `pipeline/shipping.py` importing `pipeline/pirateship.py`.
 `make harness` and `make check` are green over every one of them, which is `CLAUDE.md`'s
 route-is-not-a-feature rule and this repo's own recorded failure, at three modules at once.
 
@@ -41,14 +43,14 @@ route-is-not-a-feature rule and this repo's own recorded failure, at three modul
 
 ## 1. The store this has to run against
 
-Measured after the re-emit described below.
+Measured after the re-emit described below, and after the `3/37` stamp that followed it.
 
 | | |
 |---|---|
 | cards | **715** — 703 identified, 11 sold, 1 retired |
-| carry a SKU | **216**, across **102 distinct SKUs** |
-| stamped by box | 1 → 133/133 · 2 → 45/543 · 3 → **38/39** |
-| unstamped | **497**, every one of them in box 2 |
+| carry a SKU | **217**, across **102 distinct SKUs** |
+| stamped by box | 1 → 133/133 · 2 → 45/543 · 3 → **39/39** |
+| unstamped | **498**, every one of them in box 2 — 497 identified, 1 retired |
 | listing copies | 167 `pushed`, 0 `staged`, 0 `live`, across 117 rows |
 | ledger | `inventory/orders.json` present, both maps empty |
 
@@ -80,8 +82,12 @@ Diffed against a copy of the store taken immediately before:
     history lines added        4
 
 **Purely additive, which is D54, and no sold card was resurrected, which is D57's invariant
-measured rather than argued.** Box 3 now has no unstamped card. Before it, an eight-copy order
-for Rengar, Trophy Hunter resolved `short` on five picks; after it, `resolved` on eight.
+measured rather than argued.** Before it, an eight-copy order for Rengar, Trophy Hunter resolved
+`short` on five picks; after it, `resolved` on eight.
+
+It left box 3 one card short of stamped — `3/37`, sold, which no emit reaches — and a `sold` line
+at 20:43 UTC carried a SKU onto that one too. That is why the table above reads 39/39 and why
+section 7 has one fewer loose end than it was written with.
 
 ---
 
@@ -176,6 +182,14 @@ T1 already built.** Ingest writes no card state and no listing count, so a repla
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
 
+**The shape a second fetch should take is already in the tree**, landed by D65 after this file was
+written. `server/tcg_export.py` is this server's one outbound call: stdlib `urllib`, one host and
+one method reachable from it, the secret read at call time and present in no return value, refusal
+message or log line, ten named failure codes because "the fetch failed" is three different
+problems, and a control on `#/runs` that a person presses. It is **not** the order host — its
+cookie session is the admin portal's and does not transfer — so what carries over is the shape and
+not the auth.
+
 ### T4 — the envelope, and the money gate
 
 The tcgtracking call for the sub-$50 lane, under **D33's gate verbatim**: a free preflight, the
@@ -216,8 +230,9 @@ buyer's address should never become something the server has to remember to drop
 `capture_id`. D10 lets a mid-box delete slide every higher index down one, so a position written
 down today names a different card tomorrow — D63 measured exactly that.
 
-**The route count is updated in five places**: `CLAUDE.md`, `README.md`, `docs/map.py`,
-`app/src/App.tsx`, `scripts/views.txt`. `CLAUDE.md` already warns in its own words that this count
+**The route count is updated in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
+`app/src/App.tsx` — and `scripts/views.txt` gains a LINE rather than a number, which is the one a
+session looking for a count will not find. `CLAUDE.md` already warns in its own words that this count
 has been wrong more often than right and that nothing checks it.
 
 ---
@@ -268,9 +283,10 @@ somebody pastes one.
 
 ## 7. Loose ends found in the store
 
-- **`3/37` is sold and carries no SKU.** No order line can ever match it, and no re-emit will fix
-  it: emit walks `uncommitted_positions`, and a sold copy is not among them. It is the permanent
-  residue of the stamping defect, and it is one card.
+- ~~**`3/37` is sold and carries no SKU.**~~ **Closed 2026-08-30**, and not by a re-emit — emit
+  walks `uncommitted_positions` and a sold copy is not among them, so that reasoning held and the
+  stamp came from the sale itself. **No sold card in the store now lacks a SKU**, so the stamping
+  defect left no residue.
 - **`3/13` is sold with an empty `name`.** SKU and number are present, so it resolves; only what a
   screen would draw is wrong.
 - **Nothing is `live`.** 167 copies at `pushed`, none staged, none live. `store/master.py` already
