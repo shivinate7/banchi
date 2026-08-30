@@ -6619,9 +6619,12 @@ against the file this run was already joined against is arithmetic. Two readings
 game the fetch answers for:
 
 - **SKUs the baseline carried and this file does not.**
-- **Numbers that had several condition rows and now have one** — the rung-2 hazard, keyed on
-  `(Set Name, Number, Product Name)` because a collector number repeats across sets and a
-  blank one repeats across every code card in a file (D24).
+- **Numbers that had several condition rows and now have one** — the rung-2 hazard. Counted
+  over the FINISH conditions only (`condition_by_finish`'s own values, which is the
+  vocabulary the ladder resolves between), and keyed the way the row would be FOUND: by
+  `(Set Name, Number)` where there is a number, and by name where there is not — D24's code
+  cards, and the blank-`Number` rows D35's rung falls back to. Both of those were wrong in
+  the first build and the paragraph below is what measured them.
 
 **THE SECOND READING WAS WRONG TWICE IN ITS FIRST BUILD, AND BOTH WERE FOUND BY MEASURING
 AGAINST THE OWNER'S REAL EXPORTS RATHER THAN THE THREE-ROW FIXTURE.** Recorded rather than
