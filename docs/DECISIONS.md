@@ -3454,15 +3454,31 @@ Reload beside the list being the remedy is the honest cheap answer.
 nothing. The lone-copy fallback passes nothing either — that copy IS the card the walk is
 standing on.
 
-**D41 IS UNTOUCHED.** That entry rules that the three sites drawing `Position.label` are decided
-one at a time, and this changes none of them: `.card-locations-label` renders the same string
-through the same class at the same size, and only becomes pressable. `pipeline/join.py:Position`
-still composes the string and it still travels verbatim.
+**THIS PARAGRAPH WAS WRITTEN AGAINST A PREMISE THAT NO LONGER EXISTED BY THE TIME IT MERGED, AND
+THE CORRECTION IS THE USEFUL PART.** It read *"D41 IS UNTOUCHED — that entry rules that the three
+sites drawing `Position.label` are decided one at a time, and this changes none of them:
+`.card-locations-label` renders the same string through the same class at the same size"*. Both
+halves went stale in the hours this branch was out: D41's amendment took the treatment to **six**
+owner sites behind `app/src/PositionLabel.tsx`, and the copies list is one of them — so
+`.card-locations-label` carries the SITE rule (`--pos-slot`, the face, the colour) and renders
+none of the string itself. Left standing it would have been D41's own recorded failure repeating
+in the entry that cites it: a later change deleting the premise and leaving the conclusion.
+
+**WHAT IS TRUE INSTEAD, AND IT IS A STRONGER PROPERTY THAN THE ONE CLAIMED.** The walk-to is a
+TRANSPARENT WRAPPER around `PositionLabel` — same three props, no text of its own, the site's
+font and `--pos-slot` inherited through it — so a walkable row and a look-only one are the same
+pixels, and the copies list does not become a seventh site by acquiring a control. The one thing
+the wrapper adds is hover and focus, and it is scoped to `.position-slot`, the anchor that
+component already chooses, so it cannot reach the five sites that offer no walk-to.
+`pipeline/join.py:Position` still composes the string and it still travels verbatim on
+`aria-label`; the button's own name says what pressing it does.
 
 **WHAT WOULD REOPEN THIS: the same affordance asked for elsewhere.** If walking to a position
-becomes how the owner navigates generally, `#/review`'s position and the Fulfiller's copy cards
-are the next two — and per D41 that is a decision about all of them rather than a copy of this
-one.
+becomes how the owner navigates generally, `#/review`'s position is the next site — and it is now
+a decision about a shared component rather than about three copies of a treatment, which makes it
+cheaper to take and easier to take carelessly. **The Fulfiller is not on that list at all**:
+`PositionLabel`'s own header records that his screens never import it, `app/tests/fulfillment.spec.ts`
+floors his position at >=32px plain, and D31 keeps that spec unweakened.
 
 ---
 
