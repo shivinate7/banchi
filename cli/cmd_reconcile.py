@@ -37,8 +37,11 @@ def run(args, say) -> int:
         say(f"staged export not found: {staged_path}")
         return 1
 
-    emitted = run_dir.manifest.get("emitted") or {}
-    sent = list(emitted.get("listed") or []) + list(emitted.get("sub_threshold") or [])
+    # THROUGH `emitted_skus`, WHICH IS THE UNION ACROSS EVERY EMIT (D52). This report runs in
+    # BOTH directions, so a record holding only the last emit's delta would put every SKU
+    # from an earlier import into `rows_without_cards` — reconcile accusing something else of
+    # writing rows it wrote itself.
+    sent = run_dir.emitted_skus
     if not sent:
         say("this run has emitted nothing — run `pkmnscan emit` first")
         return 1

@@ -252,17 +252,21 @@ COMPONENTS = [
                                     "first join and never touches its rule again (D49) — the two "
                                     "lines that did ran under the sentence promising your edits "
                                     "were kept.",
-                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D52"], "tested_by": ["T4", "T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
-                                    "from decisions.json rather than from the run manifest (D49), "
-                                    "and subtracts withheld SKUs BEFORE deciding whether a file is "
-                                    "written at all — the writer emits a header before it iterates "
-                                    "rows, so a game whose listable SKUs were all held would "
-                                    "otherwise leave a header-only import file on disk.",
-                            "governed_by": ["D9", "D25", "D49"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11"], "tested_by": ["T7"]},
+                                    "from decisions.json rather than from the run manifest (D49). "
+                                    "A RE-EMIT ADDS AND NEVER SUBTRACTS (D52): it never opens an "
+                                    "import file until it has at least one row for it, because the "
+                                    "writer emits a header before it iterates and an empty write "
+                                    "replaces a good file with a valid CSV of nothing. What it "
+                                    "writes is the DELTA — the copies not already sent — and the "
+                                    "SKU set is INTERSECTED with what prices_for will actually "
+                                    "price rather than guessed at by subtracting the exclusions "
+                                    "somebody thought of.",
+                            "governed_by": ["D9", "D25", "D49", "D52"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D52"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit", "governed_by": ["D4", "D8", "D10", "D11", "D21", "D23", "D24", "D25", "D26", "D33", "D36"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D52"], "tested_by": ["T7"]},
         },
     },
     {
@@ -314,7 +318,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35", "D49"], "tested_by": ["T3"]},
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D35", "D49", "D52"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -901,7 +905,7 @@ COMPONENTS = [
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D21", "D25", "D29", "D32", "D48"],
+                "governed_by": ["D1", "D2", "D3", "D9", "D13", "D16", "D21", "D25", "D29", "D32", "D48", "D52"],
                 "tested_by": ["T7"],
             },
         },
@@ -1477,7 +1481,7 @@ COMPONENTS = [
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
                                 "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33",
-                                                "D37", "D39", "D41", "D49", "D35", "D48"]},
+                                                "D37", "D39", "D41", "D49", "D35", "D48", "D52"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -1487,7 +1491,7 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D52"]},
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -1496,6 +1500,32 @@ COMPONENTS = [
                                      "hoped against. Letters and not digits, because the digits on "
                                      "that screen are price entry.",
                              "governed_by": ["D16", "D22", "D26", "D37", "D49"]},
+            "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
+                                       "2026-08-30 (D52) so two screens can draw them. The `only` "
+                                       "prop is the split: the import CSVs go to #/pricing with the "
+                                       "press that writes them, and everything else (report.txt, "
+                                       "pricing.json, reconcile.txt) stays on #/runs with the "
+                                       "commands that wrote IT. The manifest.json filter travels "
+                                       "with the component rather than sitting at each call site.",
+                                "governed_by": ["D33", "D49", "D52"]},
+            "src/RunFiles.css": {"does": "the download rows — moved verbatim out of RunPanel.css "
+                                      "with the component, every class name intact so the two specs "
+                                      "that select .run-file-import and .run-file still select what "
+                                      "they always did. Carries the min-width:0 truncation fix a "
+                                      "real TCGplayer export filename earned.",
+                               "governed_by": ["D52"]},
+            "src/readiness.ts": {"does": "what `emit` would refuse this run for, on this side of the "
+                                        "wire — a second implementation of "
+                                        "pipeline/decisions.py:blocking, chosen so the pricing "
+                                        "screen's readiness line settles on the keystroke that "
+                                        "answers it rather than a round trip later. Shaped to be "
+                                        "audited: OWED_REASONS is a flat literal and every reason "
+                                        "is constructed by owed(). It answers 'is pricing answered' "
+                                        "and NEVER 'will emit succeed' — it sees two of emit's "
+                                        "refusals and the sentence on screen says so. It may never "
+                                        "read overrides, a hold or the floor, because blocking() "
+                                        "reads none of them.",
+                                 "governed_by": ["D9", "D16", "D49", "D52"]},
             "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
                                         "line saying whether anything is running over this box, "
                                         "and the control that hands the ticked selection to "
@@ -1550,7 +1580,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D49", "D48"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D49", "D48", "D52"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -1569,7 +1599,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D52"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -1725,7 +1755,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D9", "D28", "D33", "D49"]},
+                                      "governed_by": ["D9", "D28", "D33", "D49", "D52"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -1737,7 +1767,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32", "D33", "D39", "D48"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D31", "D32", "D33", "D39", "D48", "D52"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

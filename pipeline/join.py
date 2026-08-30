@@ -1766,6 +1766,22 @@ def emit_import(
     rows = import_rows(
         report, sub_threshold, sku_dispositions, no_market_data, only, withheld
     )
+    return write_import(catalog, path, rows)
+
+
+def write_import(catalog: Catalog, path, rows: List[tcgcsv.Row]) -> bytes:
+    """Write rows that have already been computed, with the duplicate-SKU gate.
+
+    SPLIT OUT OF `emit_import` SO A CALLER CAN LOOK AT THE ROWS BEFORE A FILE HANDLE OPENS,
+    and that is not a convenience — it is the whole of D52's rule. `tcgcsv.write_csv` emits
+    the header before it iterates, so calling it with an empty list produces a valid CSV of
+    nothing, which is indistinguishable on disk from a file whose rows were never written
+    and is catastrophic when it lands on top of a file the operator has been told to import.
+    `cli/cmd_emit.py` therefore computes rows, decides, and only then calls this.
+
+    `emit_import`'s signature and behaviour are unchanged — T3 calls it in six places and a
+    moved seam there would be a wide change for one caller's problem.
+    """
     skus = [r[tcgcsv.SKU_COLUMN] for r in rows]
     if len(skus) != len(set(skus)):
         raise OutputSuppressed("duplicate TCGplayer Id rows in one import file")

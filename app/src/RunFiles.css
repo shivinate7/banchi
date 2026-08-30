@@ -1,0 +1,68 @@
+/* A run's files, as downloads — the rules for `app/src/RunFiles.tsx`.
+ *
+ * MOVED HERE VERBATIM FROM `RunPanel.css` ON 2026-08-30 (D52), when the component was
+ * extracted so `#/pricing` could draw the import CSVs beside the button that writes them.
+ * Every class name survives the move, so the two specs that select `.run-file-import` and
+ * `.run-file` still select what they always did — one of them just looks on another screen.
+ */
+
+.run-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.run-files-head {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.run-file {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s2);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.run-file:hover {
+  background: var(--hover);
+}
+
+/* THE NAME TRUNCATES AND THE SIZE NEVER DOES. A TCGplayer export arrives called
+ * `TCGplayer__Pricing_Custom_Export_20260823_102138.csv`, which wrapped to two lines and
+ * pushed the size out through the right-hand border — seen in a render, which is the only
+ * way this class of defect is ever seen. `min-width: 0` is the part that is not obvious: a
+ * flex item will not shrink below its content's intrinsic width without it, so
+ * `text-overflow` alone does nothing here. */
+.run-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The import CSV is the file the owner came for — it is what goes into TCGplayer's Import to
+ * Staged, and before this route existed it was a filename in terminal output they never saw. */
+.run-file-import {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.run-file-size {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}

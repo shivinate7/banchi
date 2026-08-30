@@ -1,14 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { describeFailure, getPricing, getRuns, putDecisions, photoUrl, type Failure } from './server'
+import {
+  describeFailure,
+  getPricing,
+  getRun,
+  getRuns,
+  putDecisions,
+  photoUrl,
+  runStep,
+  type Failure,
+} from './server'
 import type {
   DecisionsDocument,
   PricingPayload,
   PricingSku,
+  RunDetail,
+  RunFile,
   RunSummary,
   WithheldRecord,
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
+import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
+import { RunFiles } from './RunFiles'
 import './Pricing.css'
 
 /* HAND-PRICING, ON A ROUTE OF ITS OWN — D49, from an interview the owner asked for.
@@ -155,6 +168,29 @@ export function Pricing() {
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
+  /* ------------------------------------------------------------------ shipping this run (D52)
+   *
+   * `emit`'s press and its import CSVs live HERE now, on the screen where every answer it
+   * refuses without is made. `#/runs` keeps the step's head, its note and a link over, so the
+   * pipeline still reads as four parts.
+   *
+   * `detail` IS REQUIRED, NOT DECORATIVE: once the import rows leave `#/runs`, an
+   * already-emitted run's CSVs are reachable from no screen at all without it. NO POLL —
+   * `RunPanel` polls because a run STARTS live, and this screen is entered on one that has
+   * finished; a poll here would re-render a hundred rows to bookkeep a file list. */
+  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [ship, setShip] = useState<'idle' | 'waiting' | 'sending'>('idle')
+  const [receipt, setReceipt] = useState<{
+    ok: boolean
+    console: string
+    files: readonly RunFile[]
+  } | null>(null)
+  /* ITS OWN TROUBLE STATE. `failure` already has two owners — the load and the save — and a
+     third would let a save success clear an emit error out from under the operator. */
+  const [shipTrouble, setShipTrouble] = useState<Failure | null>(null)
+  const [flatOpen, setFlatOpen] = useState(false)
+  const [armed, setArmed] = useState(false)
+
   const inputs = useRef(new Map<string, HTMLInputElement>())
   /* THE DOCUMENT THE SERVER LAST CONFIRMED, AND IT IS WHAT `dirty` IS MEASURED AGAINST.
    * `dirty` was a flag, and a flag cannot tell "the write I just sent" from "the write that
@@ -224,13 +260,31 @@ export function Pricing() {
   const load = useCallback(async (name: string) => {
     try {
       const answer = await getPricing(name)
-      const held = answer.decisions ?? {}
+      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D52). This was
+         `answer.decisions ?? {}`, so the first write `PUT` a document carrying no `rule` and
+         no `basis` — and `Decisions.parse` then defaults them to `match`/`market` while
+         `cli/cmd_join.py` treats the FILE as authoritative. A run joined at `markup:100` was
+         one keystroke from being silently reset to market price. Seeding writes nothing on
+         its own: `savedDoc` is set to the same object, so `dirty` is false. */
+      const held =
+        answer.decisions ?? { rule: answer.pricing.rule, basis: answer.pricing.basis }
       setPayload(answer)
       setDoc(held)
       savedDoc.current = held
       failedDoc.current = null
       setFailure(null)
       setUndo([])
+      setReceipt(null)
+      setArmed(false)
+      setShipTrouble(null)
+      /* THE RUN'S FILES AND ITS PHASE. Its own try, and its own trouble state: a failure here
+         must not blank the pricing table, which is the thing this screen is for. */
+      try {
+        setDetail(await getRun(name))
+      } catch (err) {
+        setDetail(null)
+        setShipTrouble(describeFailure(err))
+      }
     } catch (err) {
       setPayload(null)
       setFailure(describeFailure(err))
@@ -288,6 +342,95 @@ export function Pricing() {
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, saving])
+
+  /* ------------------------------------------------------------------- shipping this run (D52) */
+
+  /** What pricing still owes, recomputed live from the document on screen — never fetched.
+   *  See `app/src/readiness.ts` for why this is a second implementation and what audits it. */
+  const owes = useMemo(
+    () => owed(doc, subThresholdSkus(payload?.pricing.skus ?? [])),
+    [doc, payload],
+  )
+
+  /** What THIS RUN'S JOIN sent to review, from the run list already in hand. Zero new fetches.
+   *
+   *  IT IS A JOIN-TIME FIGURE AND THE COPY SAYS SO. `counts` is written by `join` and nothing
+   *  rewrites it until the next one, so it goes stale the instant the operator answers a card
+   *  — stale in the "there is more to do" direction, which is the one `_queue_depth` forbids
+   *  claiming as live. Worded as what the join sent rather than what remains, it is a fact
+   *  about the run and stays true. The live depth is `GET /status`, and it is not per-run. */
+  const queued =
+    runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
+
+  /** Whether this run has already written import rows. Derived, newest evidence first — the
+   *  receipt from a press this session, then the manifest, then the phase. All three are on
+   *  the wire already, and `_phase` reads the same manifest key, so the guard survives even a
+   *  record written by an older checkout. */
+  const emitted =
+    receipt?.ok === true ||
+    Boolean(detail?.manifest?.emitted) ||
+    detail?.phase === 'reconcile' ||
+    detail?.phase === 'done'
+
+  /** Set the run-wide sub-threshold answer. THE LITERALS COME FROM `readiness.ts`, never from
+   *  a label: `pipeline/decisions.py` compares with a bare `==` and does no trim or case
+   *  fold, so a value derived from a button's text is a `MalformedDecisions` at the next join.
+   *
+   *  The spread is what round-trips `_note`, `rule`, `basis`, `overrides` and every key a
+   *  later `decisions.py` adds — `PUT .../decisions` replaces the document wholesale and
+   *  validates nothing, so this is the only thing standing between a press and a lost block. */
+  const setSubThreshold = useCallback((answer: string | { flat: string } | null) => {
+    setDoc((current) => ({ ...(current ?? {}), sub_threshold: answer }))
+  }, [])
+
+  /* THE PRESS SEQUENCES RATHER THAN GATING ON `dirty`, AND THIS IS THE WRITE RACE CLOSED.
+   *
+   * The common gesture is type a price, then press emit. The click blurs the field, which
+   * commits and calls `setDoc`; the handler then runs in the SAME event with the old `doc` in
+   * its closure, so a POST fired there emits against the file as it was before the last
+   * answer. Gating on `dirty` is not the fix — it is true from the first keystroke until the
+   * PUT lands, so the button would flicker on every commit.
+   *
+   * Instead the press raises `waiting`. React batches that with the blur's `setDoc`, so the
+   * very next render carries BOTH the new document and the waiting state, and this effect —
+   * declared AFTER the save effect, so it runs after it — waits for the save loop to go
+   * quiet. The render that releases it is the one the save loop already documents as its only
+   * signal: the write's `finally` lowering `saving`. It rides an existing mechanism rather
+   * than adding one. */
+  useEffect(() => {
+    if (ship !== 'waiting' || run === null) return
+    if (doc !== null && failedDoc.current === doc) {
+      // THE SAVE LOOP DELIBERATELY STOPS RETRYING A REFUSED DOCUMENT, so without this the
+      // wait would never end. Emitting against answers the server does not have would be
+      // worse than saying so.
+      setShip('idle')
+      setShipTrouble({
+        code: 'answers_not_saved',
+        message:
+          'Your answers could not be saved, so nothing was emitted. Fix the error above and ' +
+          'the next keystroke will retry the save.',
+      })
+      return
+    }
+    if (dirty || saving || inFlight.current) return
+    setShip('sending')
+    void (async () => {
+      try {
+        const result = await runStep(run, 'emit')
+        setReceipt({ ok: result.ok, console: result.console, files: result.files })
+        // NO REFETCH: the step reply carries both the files and the new summary.
+        setDetail((current) =>
+          current === null ? current : { ...current, ...result.summary, files: result.files },
+        )
+        setShipTrouble(null)
+        setArmed(false)
+      } catch (err) {
+        setShipTrouble(describeFailure(err))
+      } finally {
+        setShip('idle')
+      }
+    })()
+  }, [ship, dirty, doc, run, saving])
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo
    *  stack. Recording absence is what lets an undo DELETE a key and return the row to its
@@ -397,6 +540,27 @@ export function Pricing() {
     [],
   )
 
+  /** The suggestion a row opens carrying.
+   *
+   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D52). Pressing a preset now
+   *  writes `rule`/`basis` into the document, and `pricing.json` is not rewritten until the
+   *  next join — so a screen that only ever read `rule_price` would say `decisions.json`
+   *  prices at `undercut:5` while every suggestion on it showed `match`. Where the document's
+   *  pair matches a served preset, that preset's own per-SKU figure is the honest suggestion.
+   *
+   *  STILL NO ARITHMETIC ON MONEY: both numbers came pre-rounded out of `pricing.json`, which
+   *  `cli/cmd_join.py:_preset_prices` computed through `pipeline/pricing.py`. `join` already
+   *  prices all three presets per SKU, which is why this costs a lookup rather than a rule.
+   */
+  const suggestionFor = useCallback(
+    (sku: PricingSku): string => {
+      const match = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis)
+      if (match !== undefined) return sku.presets[match.key] ?? ''
+      return sku.rule_price ?? ''
+    },
+    [doc],
+  )
+
   const applyPreset = useCallback(
     (key: string) => {
       if (table === null) return
@@ -494,7 +658,7 @@ export function Pricing() {
         event.preventDefault()
         const standing = answerFor(sku)
         event.currentTarget.value =
-          typeof standing === 'string' ? standing : (sku.rule_price ?? '')
+          typeof standing === 'string' ? standing : suggestionFor(sku)
         // Reverted, so the field is untouched again — an Escape that left it marked would
         // have the next blur write back the value Escape just undid.
         touched.current.delete(sku.sku)
@@ -658,8 +822,9 @@ export function Pricing() {
           </button>
         ))}
         <span className="pricing-preset-says">
-          A preset only fills rows you have not set. Anything else — a different rule or basis
-          — is typed into <code>decisions.json</code> on <a href="#/runs">Runs</a>.
+          A preset only fills rows you have not set, and sets the run’s rule. Anything else —
+          a different rule or basis — is typed into <code>decisions.json</code> on{' '}
+          <a href="#/runs">Runs</a>.
         </span>
       </div>
 
@@ -693,7 +858,7 @@ export function Pricing() {
               {inSection.map((sku) => {
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
-                const suggestion = sku.rule_price ?? ''
+                const suggestion = suggestionFor(sku)
                 return (
                   <div
                     className="pricing-row"
@@ -842,6 +1007,216 @@ export function Pricing() {
               Close
             </button>
           </div>
+        </aside>
+      )}
+
+      {/* ------------------------------------------------------- the ship bar (D52)
+          STICKY AND IN FLOW, NOT `fixed`, AND THAT IS THE ANSWER TO "HOW DOES THE LIST AVOID
+          BEING COVERED". A sticky last child reserves its own height in the document, so the
+          padding under a ~6,500px list is exactly the bar's height BY CONSTRUCTION —
+          including when the receipt appears and the bar grows. A fixed bar needs a
+          hand-maintained `padding-bottom` on `.pricing` equal to a height that changes, which
+          is the two-declarations-that-must-agree drift this stylesheet already argues against
+          for its grid template. */}
+      {run === null ? null : (
+        <aside className="pricing-ship" role="region" aria-label="Ship this run">
+          {subThresholdSkus(payload?.pricing.skus ?? []).length === 0 ? null : (
+            <div className="pricing-ship-row">
+              <span className="pricing-ship-key">
+                Below ${payload?.pricing.threshold ?? '0.40'} ·{' '}
+                {subThresholdSkus(payload?.pricing.skus ?? []).length} SKUs
+              </span>
+              {/* THE ANSWER `emit` REFUSES WITHOUT, ON THE SCREEN WHERE PRICING IS DONE. It
+                  was settable only by typing JSON on another route, and `blocking` never
+                  consults `overrides` — so hand-pricing every row still left emit refusing.
+                  Two of the three runs on disk are parked on exactly this. */}
+              <button
+                type="button"
+                className="pricing-plain"
+                aria-pressed={doc?.sub_threshold === FLOOR_CHOICE}
+                onClick={() =>
+                  setSubThreshold(
+                    doc?.sub_threshold === FLOOR_CHOICE ? null : FLOOR_CHOICE,
+                  )
+                }
+              >
+                At the ${payload?.pricing.floor ?? '0.40'} floor
+              </button>
+              <button
+                type="button"
+                className="pricing-plain"
+                aria-pressed={flatOpen || typeof doc?.sub_threshold === 'object'}
+                onClick={() => setFlatOpen((on) => !on)}
+              >
+                A flat price
+              </button>
+              {!flatOpen && typeof doc?.sub_threshold !== 'object' ? null : (
+                <input
+                  className="pricing-ship-flat"
+                  /* DELIBERATELY NOT MATCHING `/^Price for /`: `pricing.spec.ts` locates the
+                     row field by that name and asserts a held row has none of them. */
+                  aria-label="A flat price for every sub-threshold card"
+                  defaultValue={
+                    typeof doc?.sub_threshold === 'object' && doc.sub_threshold !== null
+                      ? doc.sub_threshold[FLAT_KEY]
+                      : ''
+                  }
+                  onBeforeInput={(event) => {
+                    const next =
+                      event.currentTarget.value + (event as { data?: string }).data
+                    if (!PRICE.test(next)) event.preventDefault()
+                  }}
+                  /* WRITES ONLY ON A COMMITTED, NON-EMPTY, WELL-FORMED VALUE. `{"flat": ""}`
+                     reaches `Decimal("")` and raises `MalformedDecisions` at the next join —
+                     an hour later, on another screen, about a keystroke nobody remembers. */
+                  onBlur={(event) => {
+                    const text = event.currentTarget.value.trim()
+                    if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    const text = event.currentTarget.value.trim()
+                    if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
+                  }}
+                />
+              )}
+              {payload?.remembered_sub_threshold == null ? null : (
+                /* A LABEL AND NEVER A DEFAULT — D9 forbids answering this on the operator's
+                   behalf, so this removes the time spent DECIDING and not the press. */
+                <button
+                  type="button"
+                  className="pricing-plain"
+                  onClick={() =>
+                    setSubThreshold(payload.remembered_sub_threshold?.answer ?? null)
+                  }
+                >
+                  {payload.remembered_sub_threshold.run} answered{' '}
+                  {typeof payload.remembered_sub_threshold.answer === 'string'
+                    ? payload.remembered_sub_threshold.answer
+                    : `$${payload.remembered_sub_threshold.answer.flat}`}{' '}
+                  · use it
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="pricing-ship-row">
+            {/* IT CLAIMS ONLY WHAT IT CHECKED. `readiness.ts` sees two of emit's roughly eight
+                refusals, so "ready to emit" would be a promise this screen cannot keep — and
+                a screen that overstates a check is worse than one that runs none. */}
+            <p className="pricing-ready">
+              {owes.length === 0
+                ? 'Pricing is answered. Emit can still refuse for a reason this line cannot see.'
+                : `Emit will refuse: still needs ${owes
+                    .map((o) => `${OWED_LABELS[o.reason]} (${o.count})`)
+                    .join(', ')}.`}
+            </p>
+            {queued === 0 ? null : (
+              /* WHAT *JOIN* QUEUED, worded as such: nothing rewrites `counts` until the next
+                 join, so this is a fact about the run rather than a live queue depth. A
+                 queued card is not in `report.matches`, so it is genuinely left out of the
+                 file — the cost is real and the remedy is a re-join. */
+              <p className="pricing-ready pricing-ready-warn">
+                This run’s join sent {queued} card{queued === 1 ? '' : 's'} to{' '}
+                <a href="#/review">review</a>. Emitting now leaves them out of the file.
+              </p>
+            )}
+          </div>
+
+          <div className="pricing-ship-row pricing-ship-act">
+            {ship === 'waiting' ? (
+              <>
+                <span className="pricing-ship-key">Saving your answers…</span>
+                <button
+                  type="button"
+                  className="pricing-plain"
+                  onClick={() => setShip('idle')}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : emitted && !armed ? (
+              <>
+                {/* ABSENT, NOT DISABLED. A second press used to overwrite the good CSV with a
+                    header-only file and blank the manifest, after which `reconcile` refused a
+                    run that had emitted perfectly — D52 fixed that in the command, and this
+                    is the half that stops the press being made by momentum. */}
+                <span className="pricing-ship-key">
+                  This run has already written its import files.
+                </span>
+                <button
+                  type="button"
+                  className="pricing-plain"
+                  onClick={() => setArmed(true)}
+                >
+                  Write them again
+                </button>
+              </>
+            ) : emitted && armed ? (
+              <>
+                <span className="pricing-ship-key">
+                  Writing again sends only what has not been sent yet.
+                </span>
+                <button
+                  type="button"
+                  className="pricing-emit"
+                  disabled={ship === 'sending'}
+                  onClick={() => setShip('waiting')}
+                >
+                  {ship === 'sending' ? 'Writing…' : 'Write again'}
+                </button>
+                <button type="button" className="pricing-plain" onClick={() => setArmed(false)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              /* AN OUTLINE, NEVER A SOLID FILL. `docs/DESIGN.md` reserves the fill for a
+                 screen with exactly one thing to do, and a hundred-row worklist is the
+                 definition of more than one; `pricing.spec.ts` asserts zero accent grounds
+                 here. Emphasis comes from position — the right end of a bar that is always on
+                 screen — rather than from colour. NO KEYBOARD SHORTCUT: every letter on this
+                 screen is typed with the hands in a price field, and a typo that ships a run
+                 is not a mistake worth trading a keystroke for. */
+              <button
+                type="button"
+                className="pricing-emit"
+                disabled={ship === 'sending'}
+                onClick={() => setShip('waiting')}
+              >
+                {ship === 'sending' ? 'Writing…' : 'Write the import files'}
+              </button>
+            )}
+          </div>
+
+          {shipTrouble === null ? null : (
+            <div className="pricing-note-block">
+              <p className="pricing-note-text">{shipTrouble.message}</p>
+              <p className="pricing-machine">{shipTrouble.code}</p>
+            </div>
+          )}
+
+          {receipt === null ? null : (
+            <div className="pricing-ship-receipt">
+              <p className={`pricing-ready${receipt.ok ? '' : ' pricing-ready-warn'}`}>
+                {receipt.ok ? 'emit finished' : 'emit refused'}
+              </p>
+              <pre className="pricing-ship-console" aria-label="What emit printed">
+                {receipt.console}
+              </pre>
+              {!receipt.ok ? null : (
+                <>
+                  <RunFiles run={run} files={receipt.files} only="import" />
+                  {/* THE NEXT STEP IS SOMEWHERE ELSE, AND IT IS AN ERRAND. Between these
+                      files and `reconcile` the operator leaves the app entirely. */}
+                  <p className="pricing-ready">
+                    Import these to Staged in TCGplayer, then come back with Export From
+                    Staged and run <a href="#/runs">reconcile on Runs</a>.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </aside>
       )}
     </main>

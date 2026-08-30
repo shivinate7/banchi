@@ -8716,6 +8716,52 @@ def check_withholding(checks: Checks) -> None:
             "it on the first free command the operator pressed",
         )
 
+        # --- a re-emit that HAS something new to say (D52) --------------------------------
+        #
+        # THE CASE THAT STOPS THE FIX BEING "EMIT ONCE, EVER". The block above proves a
+        # no-op re-emit leaves the file alone; on its own, that assertion is satisfied just
+        # as well by an emitter that refuses every second press. Lifting a hold is the
+        # ordinary reason to emit again, and what must then be written is the DELTA — the
+        # copies not already sent — because TCGplayer's Import to Staged ADDS quantity, so a
+        # file repeating already-imported rows double-stages them. That is Gate B's recorded
+        # 37-copy defect, and it is why a re-emit may not simply rewrite the whole file.
+        answers = json.loads(path.read_text())
+        del answers["overrides"][ARTICUNO_SKU]
+        path.write_text(json.dumps(answers))
+        command(
+            checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
+        )
+        freed = command(checks, "emit", str(run_dir.directory))
+
+        delta = tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon")))
+        checks.equal(
+            [row[tcgcsv.SKU_COLUMN] for row in delta.rows],
+            [ARTICUNO_SKU],
+            "A RE-EMIT WRITES WHAT HAS NOT BEEN SENT, AND ONLY THAT. Dunsparce went in the "
+            "first emit and its copies are at `pushed`; re-writing its row would import "
+            "three copies a second time",
+        )
+        checks.equal(
+            sorted(runs.open_run(run_dir.directory).emitted_skus),
+            sorted([DUNSPARCE_SKU, ARTICUNO_SKU]),
+            "AND THE RECORD IS THE UNION ACROSS BOTH EMITS, not the last delta. `reconcile` "
+            "reports in BOTH directions against this list, so a record holding only the "
+            "second emit would put Dunsparce in `rows_without_cards` — reconcile accusing "
+            "something else of writing a row it wrote itself",
+        )
+        checks.equal(
+            runs.open_run(run_dir.directory).emitted["emits"],
+            2,
+            "and the record counts the emits that wrote a row, so a later reader can tell a "
+            "run that was emitted once from one that was worked over several sittings",
+        )
+        checks.ok(
+            "next: import" in freed,
+            "and THIS re-emit does tell the operator to import, because this one wrote "
+            "something — the no-op branch is the one that stays quiet",
+            freed,
+        )
+
 
 def check_crop_preview(checks: Checks) -> None:
     """D32 — `POST /pipeline/crop-preview`: what a reading sends, before it is paid for.
@@ -9079,6 +9125,10 @@ def check_listing_commands(checks: Checks) -> None:
         # A second `join` then `emit` over the same run, which is the ordinary thing to do
         # after editing a review. `cli/resolve.py` reads the counts back as `committed`, so
         # every copy is already spoken for and the file gets nothing.
+        #
+        # CAPTURED BEFORE THE SECOND EMIT, because the assertion below is about the file NOT
+        # being touched, and that cannot be checked against a file this block wrote itself.
+        before_bytes = run_dir.path(runs.IMPORT_LISTED).read_bytes()
         command(checks, "join", str(run_dir.directory))
         again = command(checks, "emit", str(run_dir.directory))
         re_inventory = Store().read().inventory
@@ -9103,11 +9153,75 @@ def check_listing_commands(checks: Checks) -> None:
             "run that lost them",
             again,
         )
+        # A RE-EMIT WITH NOTHING NEW TO WRITE DOES NOT OPEN THE FILE.
+        #
+        # This replaced `len(rows) == 0`, which was blind: "the file holds no rows" is
+        # satisfied IDENTICALLY by the emitter correctly omitting a zero-quantity row and by
+        # the emitter overwriting two good rows with a bare header. A pass condition met
+        # equally by a behaviour and by that behaviour's catastrophic opposite is not testing
+        # the behaviour, and the destruction lived behind it.
+        #
+        # BYTE equality and not row equality, deliberately: `tcgcsv.render` writes the header
+        # before it iterates, so a file rewritten with no rows is a valid CSV of nothing and
+        # the row count cannot tell that from the rows never having existed.
         checks.equal(
-            len(tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED)).rows),
-            0,
-            "and the file holds no zero row: `Add to Quantity` of 0 is a row TCGplayer would "
-            "accept and act on, which is not what nothing-to-add means",
+            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            before_bytes,
+            "A RE-EMIT THAT HAS NOTHING NEW TO WRITE DOES NOT TOUCH THE FILE. Rewriting it "
+            "with a header and no rows destroys the output the operator was told to import, "
+            "and leaves a valid CSV of nothing in its place",
+        )
+        # LOOKED UP DEFENSIVELY, because the failure this case exists to catch empties the
+        # file — and a KeyError here would abort the block before the manifest and round-trip
+        # assertions below ever ran, reporting one crash instead of four findings.
+        surviving = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+        by_sku = surviving.by_sku()
+        checks.equal(
+            [
+                by_sku.get(DUNSPARCE_SKU, {}).get(tcgcsv.QUANTITY_COLUMN),
+                by_sku.get(ARTICUNO_SKU, {}).get(tcgcsv.QUANTITY_COLUMN),
+            ],
+            ["3", "1"],
+            "and the first emit's content is still there to be imported",
+        )
+        checks.ok(
+            "0" not in [row[tcgcsv.QUANTITY_COLUMN] for row in surviving.rows],
+            "and no row carries `Add to Quantity` of 0, which TCGplayer would accept and act "
+            "on — the claim the assertion this replaced was written to make, asserted where "
+            "it is actually observable",
+        )
+        checks.equal(
+            sorted(runs.open_run(run_dir.directory).manifest["emitted"]["listed"]),
+            sorted([DUNSPARCE_SKU, ARTICUNO_SKU]),
+            "AND THE MANIFEST STILL NAMES WHAT WAS SENT. Nothing asserted this record after a "
+            "second emit, which is why the destruction survived: every assertion in this "
+            "block was about the store, and the store side was already safe. `reconcile` "
+            "reads exactly this list, and an empty one makes it refuse a run that emitted",
+        )
+        checks.ok(
+            "next: import" not in again,
+            "and a re-emit that wrote nothing does not tell the operator to go and import it",
+            again,
+        )
+
+        # AND THE ROUND TRIP STILL CLOSES AFTER TWO EMITS.
+        #
+        # THE ASSERTION THAT WOULD HAVE CAUGHT THIS IN ONE LINE, and the only one in this
+        # block that spans two commands. `cli/cmd_reconcile.py` reads `emitted.listed +
+        # emitted.sub_threshold` and refuses "this run has emitted nothing" when it is empty
+        # — so a second emit that blanked the manifest made a run that had emitted perfectly
+        # an hour ago unreconcilable, with its CSV already imported to TCGplayer. `command`
+        # asserts exit 0, so the refusal fails here rather than needing its own check.
+        staged = write_staged(
+            run_dir.path("staged.csv"), {DUNSPARCE_SKU: 3, ARTICUNO_SKU: 1}
+        )
+        command(checks, "reconcile", str(run_dir.directory), str(staged))
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).staged,
+            3,
+            "and the copies reach `staged`, which is the whole point of the round trip: a "
+            "run whose emit record was destroyed cannot move a single copy off `pushed`, "
+            "and nothing else in the product ever takes them off it",
         )
 
     # --- emit against a position the store has never seen ---------------------------------
