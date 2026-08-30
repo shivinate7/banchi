@@ -53,11 +53,13 @@ Elgato
 [Ee]slint
 ETag
 [Ee]val
+Evelynn
 [Ff]ocusable
 Fontshare
 [Ff]ootgun
 Fraunces
 FSEvents
+Galio
 GIT
 [Gg]itignoring
 [Gg]reppable
@@ -76,8 +78,10 @@ Idempotence
 Inteleon
 [Ii]nterpunct
 [Ii]nterpuncts
+Kha'Zix
 [Kk]eyless
 [Kk]eypress
+[Kk]ha
 [Ll]aunchd
 [Ll]earnable
 [Ll]ede
@@ -144,6 +148,7 @@ Repo
 [Rr]eviewability
 [Rr]ulesets
 Schwarz
+[Ss]accade
 [Ss]crollable
 [Ss]crollbar
 [Ss]croller

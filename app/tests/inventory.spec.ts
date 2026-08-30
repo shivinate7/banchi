@@ -55,6 +55,8 @@ type Wire = { method: string; path: string; body: unknown }
  *  to each row from `pipeline/join.py:Position`. The screen renders them and computes none of
  *  them — types.ts forbids the arithmetic and D10 is why — so a fixture that omitted them would
  *  be testing the gap panel rather than the walk. */
+type Neighbor = { index: number; name: string | null }
+
 function card(input: {
   index: number
   state: string
@@ -88,6 +90,12 @@ function card(input: {
   finish?: string | string[] | null
   /** D58's box-wide count, where it differs from `index`. Omit for a box nothing has left. */
   at?: number
+  /** D30's neighbours, as the server sends them. NULL IS THE DEFAULT AND IS A REAL WIRE STATE
+   *  — an older server, or a record whose position will not read — which the app draws as no
+   *  block at all, so a fixture that only ever passed null could never render one. That was
+   *  every fixture in this file until 2026-08-30, which is how the ranked block's whole
+   *  vocabulary shipped unasserted. */
+  neighbors?: { prev: Neighbor | null; next: Neighbor | null } | null
 }) {
   const box = input.box ?? 2
   const boxTotal = input.boxTotal ?? 5
@@ -130,8 +138,8 @@ function card(input: {
         box_total: boxTotal,
         box_closed: false,
         fraction: null,
-        neighbors: null,
-        gaps_in_section: 0,
+        neighbors: input.neighbors ?? null,
+        section_gaps: 0,
       }
     : {
         located: true,
@@ -147,8 +155,8 @@ function card(input: {
         box_total: boxTotal,
         box_closed: false,
         fraction: (at - 1) / boxTotal,
-        neighbors: null,
-        gaps_in_section: 0,
+        neighbors: input.neighbors ?? null,
+        section_gaps: 0,
       }
 
   return {
@@ -2382,6 +2390,176 @@ test('the ticked selection is handed to the runs screen, and never lost silently
      that says 1 card and arriving at a screen that says the whole box — or worse, the reverse. */
   await first.uncheck()
   await expect(go).toContainText('Run box')
+})
+
+/* D30's NEIGHBOURS, WHICH NOTHING IN THIS FILE HAD EVER RENDERED.
+ *
+ * Every fixture here passed `neighbors: null` — a real wire state that draws no block at all —
+ * so the sentence, its vocabulary, its face and its two sites were unasserted from the day they
+ * shipped. The four fixtures that tried to pin the gap count spelled it `gaps_in_section`, a
+ * field that exists in no server, no type and no component, so they set nothing and the app's
+ * behaviour happened to match. That is the shape D57 records one screen over: the change was
+ * makeable with every check green.
+ *
+ * A STORE OF ITS OWN rather than neighbours on `CARDS`, because the block is ~31px and the band
+ * and copy-row measurements in this file are taken against a fixture that does not draw one. */
+const NEIGHBOURLY: Cards = {
+  '2/1': card({
+    index: 1,
+    state: 'identified',
+    name: 'Bashful Bloom',
+    sku: '8937370',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 3,
+    /* RIFTBOUND-SHAPED, WHICH IS THE WHOLE POINT OF THE CASE. `Champion, Epithet` is 494 of
+       1368 real names, so the comma inside a name fires before the boundary between them —
+       the reason the joined sentence could not be scanned and the reason the epithet has to
+       demote rather than disappear. */
+    neighbors: {
+      prev: { index: 18, name: 'Galio, Indefaticable' },
+      next: { index: 20, name: 'Evelynn, Entrancing' },
+    },
+  }),
+  '2/3': card({
+    index: 3,
+    state: 'identified',
+    name: 'Bashful Bloom',
+    sku: '8937370',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 3,
+    /* THE BOX'S FRONT: no card in front of it, so one row and not a pretend `between`. Its
+       neighbour is also the case with NO comma, which must render whole rather than being cut
+       at some other punctuation. */
+    neighbors: { prev: null, next: { index: 4, name: 'Conscription' } },
+  }),
+}
+
+test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
+  page,
+}) => {
+  await open(page, BOXES, {
+    cards: NEIGHBOURLY,
+    search: (query) => searchAnswer(query, NEIGHBOURLY),
+  })
+
+  const band = page.locator('.browse-position-said .nb')
+  await expect(band).toBeVisible()
+
+  /* THE KEYS ARE THE COMPOSER'S OWN TWO WORDS. `in front` / `behind` was built first and reads
+     better as a physical pair, and it takes the NEIGHBOUR as its subject where `placeParts`
+     takes THIS CARD — so the row and the `aria-label` would have disagreed about which side
+     the same name was on. */
+  await expect(band.locator('.nb-key')).toHaveText(['after', 'before'])
+
+  /* THE SPLIT, which is what makes two proper nouns findable in a column: the champion is the
+     recognition token at ink and the epithet is the disambiguator, demoted and never dropped —
+     61 of 99 champions carry more than one, so `Master Yi` alone names fourteen cards. */
+  await expect(band.locator('.nb-name b')).toHaveText(['Galio', 'Evelynn'])
+  await expect(band.locator('.nb-rest')).toHaveText([', Indefaticable', ', Entrancing'])
+
+  /* THE JOINED SENTENCE SURVIVES ON `aria-label`, so a screen reader hears one sentence where
+     the eye is given two rows — and it is `placeParts`' own composition, not a second author's,
+     which is what the one-composer rule in server.ts is for. */
+  await expect(band).toHaveAttribute(
+    'aria-label',
+    'between Galio, Indefaticable and Evelynn, Entrancing',
+  )
+})
+
+test('the neighbour names are read as words, not as metadata', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBOURLY,
+    search: (query) => searchAnswer(query, NEIGHBOURLY),
+  })
+
+  /* THE TWO DEFECTS THIS REPLACED, ASSERTED AS THE PROPERTIES THEY ARE.
+     `.card-locations-boxname` drew this at 10px UPPERCASE TRACKED MONO — the metadata register
+     — which made the only running English in the product a row of rectangles. docs/DESIGN.md
+     cuts on exactly this line: "Mono carries all metadata… the body face is reserved for
+     sentences a human reads." Uppercase is the half that costs most, because word-shape is the
+     fast route to a name last seen on a piece of cardboard.
+
+     Asserted on the COPIES ROW and not the band, because the row is where the borrow was. */
+  const name = page.locator('.card-locations-owner .nb-name').first()
+  await expect(name).toBeVisible()
+  const drawn = await name.evaluate((node) => {
+    const style = getComputedStyle(node)
+    return {
+      transform: style.textTransform,
+      tracking: style.letterSpacing,
+      family: style.fontFamily,
+      text: node.textContent ?? '',
+    }
+  })
+  expect(drawn.transform).toBe('none')
+  expect(drawn.tracking === 'normal' || drawn.tracking === '0px').toBe(true)
+  expect(drawn.family).toContain('Atkinson')
+  /* The name arrives with its own case intact rather than being uppercased by the stylesheet —
+     which is the same fact from the DOM's side, and the one a `text-transform` regression
+     would leave true while the screen went back to rectangles. */
+  expect(drawn.text).toContain('Galio')
+
+  /* THE KEY KEEPS THE TRACKING, and that is not an inconsistency. An isolated two-word token
+     has no word boundary to protect; an eighty-eight-character sentence does. */
+  const key = page.locator('.card-locations-owner .nb-key').first()
+  await expect(key).toHaveCSS('text-transform', 'uppercase')
+})
+
+test('a card at the front of the box gets one row, not a pretend between', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBOURLY,
+    search: (query) => searchAnswer(query, NEIGHBOURLY),
+  })
+
+  /* READ OFF THE COPIES LIST RATHER THAN THE BAND, because both copies of this SKU are drawn
+     there unconditionally — so the case needs no fold, no walk and no second selection, and it
+     asserts the block at the site that draws it once per copy. */
+  const front = page.locator('.card-locations-owner .nb').nth(1)
+  await expect(front).toBeVisible()
+  await expect(front.locator('.nb-row')).toHaveCount(1)
+  await expect(front.locator('.nb-key')).toHaveText(['before'])
+
+  /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
+     punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
+     Pokemon name takes this branch and is drawn exactly as the server sent it. */
+  await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
+  await expect(front.locator('.nb-rest')).toHaveCount(0)
+  await expect(front).toHaveAttribute('aria-label', 'before Conscription')
+})
+
+test('the gap clause is gone from every site that drew it', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBOURLY,
+    search: (query) => searchAnswer(query, NEIGHBOURLY),
+  })
+
+  /* "· 2 slots in this section are empty" (owner, 2026-08-30: deleted outright).
+     D58 already claimed it was structurally empty — "`section_gaps` is structurally zero for a
+     consolidated box" — and it is not: the server counts the terminal records between the
+     section's bounds, so box 1 with two sold drew the clause on every card in it. Under D58 the
+     box closes up, so `Card 19` is the nineteenth card a hand can count to and the clause's one
+     stated job in D30, saying why a hand-count came out short, is void.
+
+     ASSERTED OVER THE WHOLE DOCUMENT rather than on one node, because the string had three
+     render sites and a fix that reached two of them is the one this case exists to catch. */
+  const body = await page.locator('body').innerText()
+  expect(body.toLowerCase()).not.toContain('slots in this section')
+  expect(body.toLowerCase()).not.toContain('slot in this section')
+
+  /* AND OUT OF `said`, WHICH IS THE HALF THE VISIBLE TEXT CANNOT SEE. The first version of
+     this case asserted `innerText` alone and was mutation-tested by re-appending the clause
+     inside `placeParts` — it PASSED, because on this screen `said` only ever reaches an
+     `aria-label`. It is not decoration there: `#/fulfillment` renders the same string as
+     visible 20px body text, so a clause that came back in the composer would be invisible
+     here and on screen for the Fulfiller. Asserted where the composer puts it. */
+  const label = (await page.locator('.nb').first().getAttribute('aria-label')) ?? ''
+  expect(label.toLowerCase()).not.toContain('in this section')
+
+  /* AND THE CLASS THAT USED TO CARRY THE SENTENCE IS RETIRED, not merely emptied — an empty
+     rule left behind is what a later change re-populates without reading this one. */
+  await expect(page.locator('.browse-between')).toHaveCount(0)
 })
 
 test('the photograph is sized by its column, not by the rows beside it', async ({ page }) => {

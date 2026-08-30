@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 
 import type { SearchCopy, SearchGroup, SectionDetail } from './types'
 import { photoUrl, placeSentence } from './server'
+import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
 import './CardLocations.css'
@@ -299,7 +300,6 @@ function OwnerRows({
           const pooled = isPooled(copy)
           /* D30's sentence for this copy, or null — see the render note below. Read once
              per row so the presence test and the rendering cannot disagree. */
-          const between = placeSentence(copy.place)
           /* The walk-to handler for THIS copy, or null when there is nowhere to send anyone:
              no caller offering one, a pooled copy with no slot, or the copy the walk is already
              standing on. Computed once per row so the branch below cannot disagree with itself. */
@@ -391,18 +391,19 @@ function OwnerRows({
                         </button>
                       )}
                     </span>
-                    {/* D30's digital half, quiet under the label: "between Mantine and
-                        Thievul · 2 slots in this section are empty". This row's label names
-                        the SLOT, and once the section holds permanent gaps a hand-count
-                        stops reaching it; the neighbours restore the count, the gap tally
-                        says why it came out short. `server.ts:placeSentence` is the one
-                        composer and answers null — rendering nothing here — when there is
-                        nothing true to say. The boxname class rather than a new one: it is
-                        the same quiet sub-line register, and this file's stylesheet is not
-                        this change's to grow. */}
-                    {between === null ? null : (
-                      <span className="card-locations-boxname">{between}</span>
-                    )}
+                    {/* D30's neighbours, RANKED rather than joined (D41's move one line
+                        down). This row's label names the card's number and these are what let
+                        a hand count to it.
+
+                        IT NO LONGER BORROWS `.card-locations-boxname`, AND THE BORROW IS WHAT
+                        WAS WRONG. That class is 10px uppercase tracked mono — the metadata
+                        register — and this was the one piece of running English in the
+                        product drawn in it, against docs/DESIGN.md's own line that the body
+                        face is reserved for sentences a human reads. The comment here used to
+                        justify the borrow as "this file's stylesheet is not this change's to
+                        grow"; `PlaceNeighbors` is that stylesheet, grown on purpose. The
+                        pooled label above keeps the class, which is what it was for. */}
+                    <PlaceNeighbors place={copy.place} />
                   </>
                 )}
               </span>

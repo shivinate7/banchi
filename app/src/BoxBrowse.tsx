@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { PositionLabel } from './PositionLabel'
+import { PlaceNeighbors } from './PlaceNeighbors'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
 import type {
@@ -15,7 +16,6 @@ import type { Failure } from './server'
 import {
   describeFailure,
   positionLabel,
-  placeSentence,
   getBoxes,
   getQueues,
   getInventory,
@@ -1809,7 +1809,6 @@ export function BoxBrowse({
 
   /* Read once beside the label it sits under, for the label's own reason: one read, one
    * value, and no way for the sentence's presence test and its rendering to disagree. */
-  const selectedSentence = selectedRow === null ? null : placeSentence(selectedRow.card.place)
 
   return (
     <section className="browse">
@@ -2377,17 +2376,19 @@ export function BoxBrowse({
                       <p className="browse-position">
                         <PositionLabel label={selectedLabel} />
                       </p>
-                      {/* D30's sentence, quiet, directly under the label it makes countable:
-                          "between Mantine and Thievul · 2 slots in this section are empty".
-                          `Card 17` is the seventeenth SLOT, and once the section has permanent
-                          gaps that is no longer the seventeenth card a hand can count to —
-                          the neighbours restore the count and the gap tally says why it came
-                          out short. Composed by `server.ts:placeSentence`, the one composer,
-                          which answers null — and this renders nothing, never a guess — for a
-                          pooled card, an older server, or a decoration the server degraded. */}
-                      {selectedSentence === null ? null : (
-                        <p className="browse-between">{selectedSentence}</p>
-                      )}
+                      {/* D30's neighbours, RANKED rather than joined (D41's move one line
+                          down — the connectives are the separators and the names are the
+                          payload). `Card 19` is the nineteenth card in the box and these are
+                          what let a hand count to it. `PlaceNeighbors` answers nothing —
+                          never a guess — for a pooled card, an older server, a decoration the
+                          server degraded, or the one card whose box holds nothing else.
+
+                          THE GAP CLAUSE THAT USED TO TRAIL IT IS GONE (owner, 2026-08-30):
+                          D58 closes the box up over a departed card, so the count no longer
+                          comes out short and the clause had nothing left to explain. */}
+                      <div className="browse-position-said">
+                        <PlaceNeighbors place={selectedRow.card.place} />
+                      </div>
                     </>
                   )}
                 </div>
