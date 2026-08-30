@@ -271,6 +271,27 @@ export function positionLabel(card: { label?: string }): string | null {
   return typeof label === 'string' && label.trim() !== '' ? label : null
 }
 
+/** A record that has left its box — sold or retired — as its place block says it (D68).
+ *
+ *  TWO TESTS, BECAUSE `Place.slot` HAS TWO CAUSES AND ONLY ONE OF THEM IS THIS ONE. `types.ts`
+ *  states both on the field: it is null for a card that has left, and null for one the server
+ *  could not count. The second answers `label: null` with it — there is no honest label when the
+ *  cards could not be counted — so the label is exactly what tells a design fact from a fault,
+ *  and every screen has a different thing to draw for each. `located` keeps a pooled block out:
+ *  D24 gives one no slot at all, and it has never had one to lose.
+ *
+ *  ONE PREDICATE FOR THREE READERS, and the reason it is here rather than in any of them is
+ *  `isPooled` two screens over — that one IS written twice, once in `BoxBrowse.tsx` and once in
+ *  `CardLocations.tsx`, because neither could import the other's on the day it was written. This
+ *  module is what both already import for `positionLabel` above, so the third copy is not
+ *  written. */
+export function isDeparted(place?: { located?: boolean; slot?: number | null; label?: string | null }): boolean {
+  if (place === undefined) return false
+  return place.located !== false && place.slot === null && positionLabel({
+    label: place.label ?? undefined,
+  }) !== null
+}
+
 /** D30's neighbours, as records rather than as substrings of an English sentence.
  *
  * `Card 19` is the nineteenth card in the box, and the neighbours are what let a hand count

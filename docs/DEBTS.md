@@ -1121,80 +1121,101 @@ Found by the owner looking at five copies of Moonfall in box 3 and seeing the `N
 disagree between them. Two defects and one symptom, separated here because only two of the
 three are defects.
 
-### `printed_total` is guarded as `null` and arrives as an empty string
+### `printed_total` is guarded as `null` and arrives as an empty string — closed 2026-08-30
 
-`app/src/BoxBrowse.tsx:864` and `app/src/CardLocations.tsx:85` carry the same expression:
+Recorded and closed the same day, by **D67**. What it argued: `app/src/BoxBrowse.tsx` and
+`app/src/CardLocations.tsx` carried one expression — `printed_total === null ? number :
+${number}/${printed_total}` — **one line below a guard on `number` that tested null OR blank**.
+The store writes `""` there on **174 of 676 numbered records**, which is every Riftbound card,
+so a quarter of the store rendered `198/219/`. Why it sat: the two call sites are one of the
+pairs `docs/DESIGN.md` would rather see merged than edited twice.
 
-    return printed_total === null ? number : `${number}/${printed_total}`
+**What shipped**: `app/src/cardNumber.ts`, one composer for all three screens — the third copy,
+in `ReviewQueue.tsx`, was the correct one and is gone for the same reason the other two are, so
+a fourth cannot be written. One emptiness test, both halves. `app/tests/inventory.spec.ts`
+asserts it with and without the server's own composition, because the two repairs are
+independent.
 
-**The line above it in both guards `number` for `null` or blank, and this one guards
-`printed_total` for `null` alone.** Two emptiness tests in one function, one field apart.
-`printed_total` is stored as `""` on **174 of 715 records that also carry a number**, so those
-take the else branch and render a trailing separator with nothing behind it — `198/219/`.
+### The set code the model glued on is stripped for the key and never for the display — closed 2026-08-30
 
-Cosmetic, and it costs a quarter of the store. Not fixed here because the two call sites are
-one of the pairs `docs/DESIGN.md` would rather see merged than edited twice, and merging them
-is a change with an argument attached rather than a one-line repair.
+Closed by **D67**. What it argued: D55 removes a glued-on set code by shape and only after the
+join key has missed — a rule about matching, applied by nothing that draws. Ten numbers in the
+store carry one across **four** separators (the entry said nine and three; the middle dot at
+`1/124` is the fourth, and `_SET_CODE_PREFIX` already covered it). And it propagated:
+`_agreed` returns None when copies disagree, so five copies of Moonfall spelling one number three ways
+made the **group** report nothing while each card's own row showed its own variant.
 
-### The set code the model glued on is stripped for the key and never for the display
+**What shipped**: `join.strip_set_code` publishes D55's shape and `_repair_set_code` becomes a
+reader of it, so there is one regex rather than two. The server folds where it composes for a
+screen (`number_display` on every inventory row and on both group shapes), agrees on the folded
+value, and matches on it too — the last so that a number the screen printed can be typed back.
+The raw fields are untouched everywhere. Measured: 2,607 export cells matched zero, 10 store
+records changed, **7 of the 11 silent groups recovered** and the four real disagreements stayed
+silent.
 
-D55 removes a glued-on set code **by shape, and only after the join key has missed** — that is
-a rule about matching, and nothing applies it to what a screen draws. **Nine numbers carry
-one, with three different separators**: `UNL • 198/219`, `UNL - 198/219`, `UNL / 120/219`.
-
-**The visible cost is larger than nine rows, because disagreement propagates.**
-`server/capture_server.py:_agreed` returns `None` when the copies of a group do not all say
-the same thing, deliberately and for a good reason — a number lifted off whichever copy the
-dict yielded first would be a confident answer about a group that has none. So five Moonfall
-copies storing three spellings of one number make the **group** report no number at all, while
-each card's own detail row still shows its own raw variant. One card, three strings, one
-screen, and the group between them silent.
-
-Not fixed here because the repair has a real choice in it — normalize at capture, normalize at
-read, or teach `_agreed` to compare folded — and picking one is a decision entry, not a patch.
+**What it does not cover, by choice**: `#/review` still draws the raw read. D55 was found by the
+owner reading `UNL / 120/219` on that screen, and a queue that tidied its own evidence would
+have hidden it.
 
 ### The stripped panel was the stranded card, not a third defect
 
-The fifth Moonfall drew no card block, no `Mark sold`, no `Retire` and `sku: null`, and it
-read as the copies panel failing on a null SKU. It was not. `_agreed`'s own docstring records
-that the SKU-less group is a deliberate collection of *"cards with nothing in common but the
-operator's query"*, so a card with no SKU correctly forms its own group and correctly offers
-nothing that depends on one.
-
-**That card should never have been in it.** `3/37` was resolved by its run — the run's
-`pricing.json` names the position under SKU `9191486` — and then lost the stamp to the D7 cap
-that `cli/cmd_emit.py` used to apply to `uncommitted_positions`, sold at 14:41, and was out of
-reach of every later re-emit by D57's invariant. Repaired 2026-08-30 from the run's own
-paperwork; `GET /search?q=moonfall` now returns one group of five.
+Unchanged, and still not a defect. The fifth Moonfall drew no card block and `sku: null` because
+`_agreed`'s SKU-less group is a deliberate collection of *"cards with nothing in common but the
+operator's query"* — a card with no SKU correctly forms its own group and correctly offers
+nothing that depends on one. **That card should never have been in it**: `3/37` was resolved by
+its run, lost the stamp to the D7 cap `cli/cmd_emit.py` used to apply to `uncommitted_positions`,
+sold at 14:41, and was out of reach of every later re-emit by D57's invariant. Repaired
+2026-08-30 from the run's own paperwork; `GET /search?q=moonfall` returns one group of five, and
+that was confirmed live on 2026-08-30 against a copy of the owner's store.
 
 **What is worth keeping from it**: a SKU-less group renders as a panel with its controls
 missing, and the owner read that as breakage rather than as a category. Whether that category
 should announce itself is a design question nobody has asked.
 
-### Two departed copies in one box render as two identical rows
+### Two departed copies in one box render as two identical rows — closed 2026-08-30
 
-Reported the same day as *"I'm seeing two box 1's"*. There is one box 1. There are two sold
-copies of `Vi, Peacekeeper` in it, at stored indices **67** and **106**, and both draw the
-string `Box 1 · departed` with nothing whatever beside it to tell them apart. Two physical
-cards, one row repeated.
+Closed by **D68**. What it argued: two sold copies of `Vi, Peacekeeper` in box 1, at stored
+indices **67** and **106**, both drawing `Box 1 · departed` with nothing beside them. D58's
+label is right — a departed card is in no slot — and what was wrong is that `place.index` was in
+the payload and every renderer threw it away.
 
-**D58's label is right and is not what is wrong here.** A departed card is in no slot, and
-printing the slot number would print the number that now belongs to its successor — a lie
-about a shelf. So the label drops it, correctly.
+**What shipped**: `join.departed_label` ends on the store key, `PositionLabel` draws that key in
+the muted register rather than promoting it to the slot figure, and the walk's narrow left cell
+composes its own `departed · 3/31` from the row's key. **Two of the three surfaces were made
+worse by the label change alone and were found by running the app rather than by reasoning** —
+the walk clipped the key off the end at 177px into a 169px cell, and the copies row grew to
+154.2px against the live row's 133.6px. Both measured, both fixed, the row now 105.7px.
 
-**What is wrong is that the disambiguating value is already in the payload and the row throws
-it away.** `GET /search` returns `place.index` of 67 and 106 on those two rows. D58 itself
-draws the distinction this needs: *"The STORED index never moves — it is the
-`/inventory/<box>/<index>` path"*, while `Place.slot` is the countable number that shifts. The
-index is not a slot and printing it is not the lie D58 refuses.
+### The copies list says the state twice on every departed row — found 2026-08-30
 
-**It scales with sales, which is why it will get worse rather than stay a curiosity.** Four
-departed Moonfalls already draw four identical rows in box 3, and the only thing separating
-them on screen is the neighbor text underneath — which is the *shelf's* fact, not the card's,
-and goes blank on the copies whose neighbors are themselves departed.
+Found while fixing the entry above, by looking at four sold copies of Moonfall on one screen. Each
+departed row draws the word twice at 11px about 40px apart: `.card-locations-state`, which is
+`copy.state` verbatim, and `Inventory.tsx:Action`'s fallback, which prints the same word for the
+door the copy left by. **They can never disagree, because the second is derived from the first**
+— `sold`/`sold`, `retired`/`retired`, by construction — which is what makes this a duplication
+rather than two facts that happen to coincide.
 
-Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
-ruling about exactly this label. It wants an entry, not a patch.
+**Why it is not fixed with the rest.** The two have different owners and different arguments.
+The state span is the pipeline's own word and the screen where being able to grep what you saw
+is worth a machine string. The action slot is D57's — it becomes `Undo` for twenty seconds after
+a sale, and the word is what it falls back to. And `Action`'s **other** call site, the lone-copy
+branch of `Inventory.tsx`, has no state span beside it at all, so nulling the fallback would
+lose the fact on the 92% of the store that has no group. The honest fix is per-call-site and it
+is a D57 question.
+
+**The Fulfiller's skin already does the other thing** — `sold ? null :` — so the two skins
+disagree about this today, which is the argument for settling it rather than leaving it.
+
+### The component gallery has no departed case — found 2026-08-30
+
+`app/src/Gallery.tsx` draws four position bars and a pull-confirm in three states, and every one
+of its place fixtures is a live card. The departed rendering — the plain label, the demoted
+store key, the absent bar — is now a real state of two components and appears in no catalogue.
+
+**Cost**: low and specific. The gallery is where a treatment is looked at against the tokens
+rather than through a screen's own layout, and the departed row is the one that was found to be
+drawn wrong by looking at it. Nothing checks that the gallery is complete, which is the general
+shape of this file's entries about `docs/map.py`.
 
 ### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
 

@@ -398,6 +398,8 @@ D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
 D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
+D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
+D68  A departed card's label names the record, because two of them in one box were the same string
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
