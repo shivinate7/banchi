@@ -203,12 +203,29 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
 
-  **A SESSION MAY RUN `gh pr merge` ONLY WHEN THE OWNER SAYS THE WORD** (D42, amended
-  2026-08-30). Explicit and per-instruction: "merge to main" is the word, and "ship it",
-  "land it", "looks good" and an approving review are not. It costs nothing because
-  `gh pr merge` moves a ref on GitHub and not in this clone — `main` still arrives here by
-  `git pull`, which is what the hook already allows. **`PKMNSCAN_MAIN=off` is not what a
-  session reaches for to do this**; a session typing that variable is doing something else.
+  **A SESSION MERGES ON THE OWNER'S WORD, ON GITHUB AND IN THIS CLONE, AS ONE OPERATION**
+  (D42, amended twice 2026-08-30). Explicit and per-instruction. **The test is whether the
+  owner NAMED THE ACT** — "merge", "merge it", "merge to main" all are the word; "ship it",
+  "land it", "looks good" and an approving review are not, because they approve the work
+  without naming the operation.
+
+  **One word, both halves, and a session does not stop in between to ask again**: `gh pr merge`,
+  then the local fast-forward. If the second half fails, report it as an incomplete operation
+  rather than re-asking for permission.
+
+  **THE LOCAL HALF IS TWO COMMANDS AND THE ONE-COMMAND FORM IS REFUSED** — `main` is often
+  checked out in no worktree here, so `git switch main && git pull` has nowhere to run, and the
+  combined refspec moves `refs/heads/main` and `refs/remotes/origin/main` in ONE transaction,
+  which leaves the hook judging the move against the origin/main it is about to replace:
+
+  ```bash
+  git fetch origin && git fetch origin main:main
+  ```
+
+  **It arms nothing.** `reference-transaction`'s allow rule 3 has always permitted a move to a
+  commit origin already has, and a merged PR is exactly that commit — so this decides who runs
+  an already-permitted move, not which moves run. **`PKMNSCAN_MAIN=off` is not what a session
+  reaches for to do this**; a session typing that variable is doing something else.
 
   **This is enforced, not asked for** (D42): `scripts/githooks/reference-transaction` refuses
   any local move of `refs/heads/main` and `scripts/githooks/pre-push` refuses any push to it,

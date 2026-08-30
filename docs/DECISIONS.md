@@ -3305,13 +3305,67 @@ Everything the rest of this entry is about — the two hooks, what they refuse, 
 and the two incidents that produced them — is untouched, because none of it is about who
 presses the button.
 
-**WHAT THE PERMISSION IS FOR IS `gh pr merge`, WHICH MOVES A REF ON GITHUB AND NOT IN THIS
-CLONE.** That is the whole reason this amendment costs nothing: after it, `main` still arrives
-here by `git pull` and by no other route, so the local guard is not weakened, not bypassed, and
-not consulted. The allow rule above already covers what follows — *the one legitimate move is
-to a commit origin already has* — and a merged PR is precisely that commit. **`PKMNSCAN_MAIN=off`
-is not what a session reaches for here and must not become it.** A session that finds itself
-typing that variable has left this amendment behind and is doing something else.
+**THE PERMISSION COVERS BOTH HALVES OF THE MERGE, AND THE SECOND HALF IS THE OWNER'S SECOND
+AMENDMENT ON 2026-08-30**: *"Change D42 so that it merges on both local and github"*. This
+paragraph read that the permission was for `gh pr merge` alone, *"which moves a ref on GitHub
+and not in this clone"*, and offered that as the reason the amendment cost nothing. It was an
+accurate reading of a narrower grant, and what it left behind was a clone permanently one
+commit short: a session that merged a PR had to stop and *describe* the `git pull` rather than
+run it, which is a handoff in the middle of one operation and leaves every later session cutting
+branches from a stale main.
+
+**IT CANNOT WIDEN WHAT IS MECHANICALLY POSSIBLE, AND THAT IS THE WHOLE SAFETY ARGUMENT.** Allow
+rule 3 of `scripts/githooks/reference-transaction` is `git merge-base --is-ancestor "$new"
+refs/remotes/origin/main` — move main to a commit origin already has — and the commit a merged
+PR produces IS that commit. So this amendment reaches the prose and nothing else. It arms
+nothing, disarms nothing, edits no file under `scripts/githooks/`, and needs no escape hatch:
+the move it licenses is the one that hook has allowed since the day it was written, and
+everything it refuses is refused byte for byte afterwards. The change is **who may run an
+already-permitted move**, not which moves run. **`PKMNSCAN_MAIN=off` is not what a session
+reaches for here and must not become it.** A session that finds itself typing that variable has
+left this amendment behind and is doing something else.
+
+**THE MOVE IS TWO COMMANDS AND MUST BE, AND THE FIRST DRAFT OF THIS PARAGRAPH SHIPPED THE
+ONE-COMMAND FORM AND WAS REFUSED BY THE HOOK WITHIN THE MINUTE.** It said the move is
+`git fetch origin main:main`, which is the right shape for this clone — the hook's own refusal
+message suggests `git switch main && git pull`, and **main is often checked out in no worktree
+at all** here, the main working tree sitting on a feature branch as often as not, so there is
+frequently nowhere to switch. What that draft missed is that the combined refspec updates
+`refs/heads/main` and `refs/remotes/origin/main` **in one transaction**:
+
+    git fetch origin main:main
+      255e33b..8e8973f  main -> main
+      51492d6..8e8973f  main -> origin/main        <- same transaction
+
+At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/origin/main`, and
+that read answers with the PRE-update value — so whenever origin/main has moved since your last
+fetch, `new` is a DESCENDANT of what the hook can see rather than an ancestor, and it refuses. **The
+evidence the hook consults is being written by the transaction it is judging.**
+
+    git fetch origin              # refs/remotes/origin/main only; never touches refs/heads/main
+    git fetch origin main:main    # now origin/main demonstrably holds it, and the hook allows
+
+**THIS IS NOT A HOOK DEFECT AND MUST NOT BE "FIXED" IN THE HOOK.** The repair that suggests
+itself — read the transaction's own `origin/main` line and credit it — is the exact mistake the
+header of `scripts/githooks/reference-transaction` spends its longest section refusing for the
+`old` column: **a transaction may not be a witness for itself.** Trusting a line the caller
+supplied would let one `git update-ref` naming two refs assert its own permission, which is
+strictly worse than the failure it would fix. The hook asking git for state OUTSIDE the
+transaction is precisely what makes it sound, and the cost of that soundness is that the caller
+fetches first. `git switch main && git pull` is unaffected and always was: `pull` is a fetch and
+then a merge, two transactions, in that order.
+
+**Observed 2026-08-30**, in the session that wrote this amendment, against a main that had moved
+under it — PR #22 merged between the write and the run. That is not a rare alignment; it is the
+ordinary state of a clone running seven worktrees, which is the condition this whole entry
+exists for.
+
+**WHAT IT COSTS IS RECORDED RATHER THAN DESIGNED AWAY, because it is real and it is this
+entry's own subject.** Advancing main reshapes what every live worktree is cut from, and both
+incidents at the top of this entry are that happening unasked. What makes it a decision now
+rather than a repeat is the pair of conditions the rest of this entry establishes: it happens on
+an explicit instruction, and it happens only to a commit that was on origin before it was ever
+on your main.
 
 **THE WORD COMES FROM THE OWNER IN THE CONVERSATION, AND IT IS PER-INSTRUCTION.** Not a
 standing grant, not a mode, and never inferred: "ship it", "land it", "looks good" and an
@@ -3321,11 +3375,37 @@ route refuses without an explicit field because the next thing that happens cost
 this refuses without an explicit instruction because the next thing that happens is the branch
 every other session is cut from.
 
+**THE TEST IS WHETHER THE OWNER NAMED THE ACT, NOT WHETHER THEY MATCHED A PHRASE** (added
+2026-08-30, after this paragraph cost a session a round trip). It said *"merge to main" is the
+word*, and a session reading that literally hesitated over a bare **"Merge"** — which is the
+verb itself, given as a direct instruction, in reply to being told main had not moved. That is
+the word. So are "merge it", "merge the PR" and "merge to main". What is NOT the word is
+approval that never names the act: "ship it", "land it", "looks good", "nice", an approving
+review. **The line is naming the operation versus expressing satisfaction with the work**, and
+it was always meant to be — a phrase list is a worse instrument for it, because a session that
+matches on phrases both balks at a plain instruction and can be walked into a merge by anyone
+who happens to say five particular words.
+
+**AND THE MERGE IS ONE OPERATION, PERFORMED WHOLE. A SESSION DOES NOT STOP BETWEEN THE HALVES
+TO ASK AGAIN.** This is the correction the owner asked for in as many words — *"correct the
+prose so that this isn't an issue in the future"* — after a session merged on GitHub, reported
+that local main had not moved, and waited. That session was reading the entry correctly, which
+is what makes it a defect here rather than there. One word, both halves: `gh pr merge`, then the
+fast-forward. If the second half refuses or cannot run, that is reported as the incomplete
+operation it is — not re-asked as though permission were the thing missing.
+
 **WHAT IT DOES NOT LICENSE, stated because a permission to merge reads wider than it is**: a
-local fast-forward, a direct push, a force push, `git branch -f`, `git update-ref`, or a merge
-of a PR the owner did not name. The first incidents in this entry were a local fast-forward and
-a direct push — neither is a merge, both are still refused by a hook, and neither becomes
-available by the owner saying this word.
+direct push, a force push, `git branch -f`, `git update-ref`, or a merge of a PR the owner did
+not name. All four are still refused by a hook, and none becomes available by the owner saying
+this word.
+
+**AND THE LOCAL FAST-FORWARD IS NOW SPLIT RATHER THAN REFUSED WHOLE.** This list read "a local
+fast-forward" flatly, which was loose prose the day it was written and would be actively
+misleading now. The incident it meant is `637e2e4` — a fast-forward to a commit that was on
+NOBODY's origin — and that stays refused, by the hook rather than merely by this paragraph. What
+the word licenses is the fast-forward to the merged commit ON ORIGIN, a different move that
+happens to share a verb. The hook has always drawn exactly this line; the only thing that
+changed today is that the prose draws it too.
 
 **Why this is safe to grant and was not safe to assume.** The hooks were built because main
 moved twice in one day under three live worktrees, with nothing in the repo saying it may not.
