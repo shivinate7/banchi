@@ -98,6 +98,47 @@ fi
 
 # A linked worktree's `.git` is a FILE holding `gitdir: ...`; a normal clone's is a
 # directory. That one fact is the whole detection, and it needs no subprocess.
+# THE MAIN CHECKOUT PARKED ON A MERGED BRANCH, WHICH IS THE OTHER WAY A TREE GOES STALE.
+#
+# Everything above is about a worktree missing what it needs. This is the opposite tree and
+# the opposite failure: the MAIN checkout is the owner's live rig — their real store, the
+# ports every doc names, the server `make launch-agent` starts at login — and it drifts by
+# being left on a feature branch after that branch merges. Measured 2026-08-30: it sat on
+# `claude/d57-cap-is-a-quantity` for a day, 70 commits behind, serving a store through code
+# that predated four merged PRs. Nothing was lost, because the branch was fully merged; what
+# it cost was a rig running code nobody was reading any more.
+#
+# `make status` already reported it — `0 ahead of main, 70 behind it` — and nobody was
+# looking. That is the argument for putting it here instead: this runs unasked, before any
+# work, which is D43's own reason for printing the ports here rather than leaving them to a
+# target somebody has to remember.
+#
+# IT REPORTS AND NEVER SWITCHES. A hook that moved the branch under a running server would
+# be deciding for the operator, and `git switch` is theirs to type. What it can do is say
+# whether it is safe: AHEAD is the number that matters, because 0 ahead means the branch
+# holds nothing main does not and switching can lose nothing.
+#
+# `.git` is a DIRECTORY here, which is exactly the test the block above uses inverted: a
+# linked worktree gets a FILE. A worktree ON a feature branch is correct and is not reported.
+if [ -d .git ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
+  branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [ -n "$branch" ] && [ "$branch" != "main" ]; then
+    counts=$(git rev-list --left-right --count main...HEAD 2>/dev/null || echo "")
+    behind=$(echo "$counts" | awk '{print $1}')
+    ahead=$(echo "$counts" | awk '{print $2}')
+    dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    echo "worktree-guard: this is the MAIN checkout and it is on '$branch', not main."
+    echo "                ${ahead:-?} ahead / ${behind:-?} behind, ${dirty} uncommitted."
+    if [ "$ahead" = "0" ] && [ "$dirty" = "0" ]; then
+      echo "                Nothing here is unmerged and nothing is uncommitted, so"
+      echo "                \`git switch main\` loses nothing. This tree is the live rig."
+    else
+      echo "                It holds work main does not, or edits not committed. Do not"
+      echo "                switch blind — see \`make status\`."
+    fi
+  fi
+fi
+
 [ -f .git ] || exit 0
 
 main="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)" || exit 0
