@@ -620,8 +620,14 @@ command-line path in the project at once — measured, not assumed: mutating the
 require the header turns eleven T7 assertions red, eight of them in the concurrency section
 that sends no origin at all.
 
-**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults — `http://localhost:5173` and
-`http://127.0.0.1:5173` — and cannot replace them. Comma- or whitespace-separated; entries
+**`PKMNSCAN_ALLOWED_ORIGINS`** extends the two defaults and cannot replace them. **Those
+defaults are THIS CHECKOUT's dev origin in both spellings**, `http://localhost:<dev port>`
+and `http://127.0.0.1:<dev port>` — 5173 in the main working tree, and the port
+`server/ports.py:dev_port` derives in a linked worktree. It was the literal 5173 everywhere
+until 2026-08-30, which meant a worktree served an app whose every write its own server then
+refused as `origin_not_allowed`; D43's amendment carries the account. A checkout allows its
+own origin and not another tree's, so pointing one tree's app at another tree's server —
+already a deliberate act, through `VITE_CAPTURE_SERVER` — needs the origin named here. Comma- or whitespace-separated; entries
 are lowercased and lose a trailing slash, because that is what a human types. A port is
 never defaulted in, so `http://localhost` and `http://localhost:80` are different and the
 error is toward refusing. **`*` is not a wildcard here**: the list is compared by exact

@@ -852,7 +852,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D46", "D49", "D50"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -1027,7 +1027,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D50"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -1179,7 +1179,7 @@ COMPONENTS = [
                     "re-run against refreshed exports.",
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39",
-                            "D41", "D45", "D46", "D49"]},
+                            "D41", "D45", "D46", "D49", "D50"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "

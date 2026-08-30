@@ -3678,6 +3678,60 @@ audit check resolves it — so this cost nothing but the file.
 until `make venv` runs, where before it had a wrong one immediately. That is the right
 direction for a file whose only failure mode is pointing somewhere plausible and wrong.
 
+**AND A SECOND FILE WAS MISSED, WHICH IS THE ONE THAT DECIDES WHETHER A WORKTREE CAN WRITE AT
+ALL** (found and fixed 2026-08-30). `server/capture_server.py:DEFAULT_ALLOWED_ORIGINS` was the
+literal tuple `("http://localhost:5173", "http://127.0.0.1:5173")` — the CSRF allowlist naming
+the only origins permitted to POST, PUT or DELETE. This entry moved the dev port itself,
+`vite.config.ts`, `playwright.config.ts`, `app/src/server.ts` and eventually
+`.claude/launch.json` onto one derivation, and left the allowlist on the constant.
+
+**SO A LINKED WORKTREE SERVED AN APP WHOSE EVERY WRITE ITS OWN SERVER THEN REFUSED.** The app
+comes off that tree's derived dev port, the gate expects 5173, and the answer is 403
+`origin_not_allowed`. Observed on the worktree at `.claude/worktrees/inventory-delete-feedback-2b96fa`:
+capture, undo, mark-sold, retire, the mid-box delete and the claim editor all refused. **Reads
+are ungated**, so every screen rendered, the inventory drew, the walk worked — a branch's app
+could look at its store and never change it, and the only way to find out was to press
+something. `PKMNSCAN_ALLOWED_ORIGINS` was the workaround and nothing pointed at it until the
+refusal arrived.
+
+**IT IS THIS ENTRY'S OWN RULE WITH ONE MORE READER, AND THAT IS THE FINDING RATHER THAN THE
+FIX.** The paragraph above says it about `launch.json` in as many words — a tracked constant
+cannot be right in every checkout — and the same sentence was true of a second file nobody had
+enumerated. What both misses have in common is that they are readers of the port that are not
+*servers* on it: the bind moved because it was obviously about the port, and a launch config
+and an origin allowlist are about the port without looking like it.
+
+**`ports.dev_port()` IS ASKED, ONCE, AT IMPORT.** Unlike `allowed_origins()` one line below,
+which is read fresh per request because its input is an environment variable a running server
+should pick up without a restart, this has no input that can change while the process lives.
+
+**NOTHING MOVES IN THE MAIN TREE**, which is the property that makes this safe and also the
+reason it hid: `dev_port()` answers 5173 there by construction, so the tuple is byte-identical
+to the constant it replaces wherever the owner actually works, and every doc naming that number
+stays true. Only a linked worktree changes, and only from "refuses everything" to "allows its
+own app".
+
+**A CHECKOUT ALLOWS ITS OWN ORIGIN AND NOT THE MAIN TREE'S.** Adding 5173 back for worktrees
+was the obvious way to be generous and is the wrong one: it would let a page served by the MAIN
+checkout write into a branch's store, which is the cross-tree write this entry exists to
+prevent, arriving through the one control in this repo whose job is to stop a page writing
+where it should not. Pointing one tree's app at another tree's server is a real thing to want
+and is already deliberate — `VITE_CAPTURE_SERVER` — so it takes the deliberate answer:
+`PKMNSCAN_ALLOWED_ORIGINS`.
+
+**COVERED IN `check_origin_gate`, WHICH HAD THE CONSTANT WRITTEN INTO IT TOO.** That block
+asserted `["http://127.0.0.1:5173", "http://localhost:5173"]` literally, so it would have gone
+red in a worktree for the right reason and green in the main tree for the wrong one. It now
+asserts the PROPERTY — both spellings, at the port this checkout's app is actually served on —
+plus that a non-worktree root still derives 5173, and, in a worktree only, that the main tree's
+origin is NOT in the list. Mutation-tested: restoring the constant takes two of them red.
+
+**THE HONEST LIMIT, NAMED BECAUSE IT IS HOW THE DEFECT SURVIVED: none of those cases can fail
+in the main checkout.** 5173 is correct there whichever way the list is built, so the whole
+guard is only ever exercised by somebody running the harness from a worktree — which is what
+`make worktree-setup` and the Stop hook make ordinary, and is why the case is worth having at
+all. The block says so in a note rather than leaving a green run to be misread.
+
 ---
 
 ## D44 — an iCloud conflict copy is refused at the commit and never deleted on a guess
@@ -4796,6 +4850,102 @@ Cmd-], are the same shortcut by another name. `,` plus an arrow is the one that 
 since the leader already consumes whatever follows it.
 
 ---
+
+---
+
+## D50 — The photo URL names a photograph, because a slot's occupant changes under it
+
+**BUILT 2026-08-29, from the owner's report about the mid-box delete**: *"deleting a card
+often feels risky because the delete doesn't kick in super quickly and it makes you think you
+need to delete more but in reality it eventually (maybe half a minute or less) shows that it
+really was deleted."*
+
+**NOTHING WAS SLOW, AND THAT IS THE FINDING.** Measured against a hardlinked copy of the
+owner's real store, box 2, 543 cards: `POST /inventory/2/180/remove` answered in **288 ms**
+having shifted 363 cards, the three reads behind it returned in **116 ms**, and the walk,
+the count, the facts and the receipt were all correct **500 ms** after the press. The
+`inventory.json` write is 0.29 s at its worst — deleting card 1 of 543 — and `GET /inventory`
+over the whole 715-card store is 37 ms.
+
+**WHAT THE OPERATOR IS ACTUALLY LOOKING AT IS A PHOTOGRAPH OF THE CARD THEY JUST DELETED.**
+`app/src/server.ts:photoUrl` answers `/photo/<box>/<index>`, which is an address for a SLOT
+rather than for a card, and D10 ruling 1 slides a different card into that slot. The card
+band kept drawing the deleted card's picture over its replacement's facts, at the same
+position label — so the one large, unambiguous thing on the screen said nothing had happened
+while four small ones said it had. **The reading that makes this dangerous rather than untidy
+is the owner's own**: the next press deletes the card that slid in, which is a real capture
+with a real photograph, and it is not refused, because the aim check is satisfied by the
+record the screen just re-read.
+
+**THREE OPERATIONS CHANGE A SLOT'S OCCUPANT AND ONLY ONE OF THEM WAS EVER GUARDED.** The
+mid-box delete (D10 ruling 1), the undo that releases an index for the next capture (D10),
+and D26's re-shoot. Only the third had an answer, and it was a nonce appended by the one
+screen that knew it had just replaced the bytes.
+
+**THREE REPAIRS, IN THE ORDER THEY WERE BUILT, AND THE FIRST TWO ARE KEPT DESPITE NOT BEING
+SUFFICIENT.** Recorded as a sequence because each one looks like the whole answer until it is
+measured, and a later session will reach for them in the same order.
+
+1. **A validator on the server, which is the repair this repo had already specified in
+   writing and never built.** `photoUrl`'s comment said "the server sends no validators ...
+   the fix is a cache header on the server", and it was right about the diagnosis for four
+   months. `GET /photo` now sends a strong `ETag` — sha256 of the bytes, truncated to 128
+   bits — and `Cache-Control: no-cache`, and `_photo` answers `If-None-Match` with a 304.
+   **Necessary and not sufficient**: a header is a rule about reusing a cached RESPONSE, and
+   an `<img>` React keeps in the document never asks for one.
+2. **The occupant in the element's React key, so it remounts.** It does remount — measured,
+   `sameDomNode: false` across a delete — and **the picture still did not change**. Chrome
+   satisfies a second load of an IDENTICAL URL within one document from its in-memory
+   resource cache, which consults neither the ETag nor `no-cache`: one resource-timing entry,
+   `transferSize: 0`, before and after. Kept, because a remount is what makes step 3 issue a
+   load at all.
+3. **The capture id in the URL.** `?card=<capture_id>` on the card band's photograph. The
+   two loads are now different requests, so there is nothing for the memory cache to reuse,
+   and the correct photograph is on screen ~1 s after the press. Verified end to end in a
+   browser against the copied store, with the walk, the facts, the count and the picture all
+   naming the same card.
+
+**THE STAMP IS NOT THE CACHE-BUSTER `photoUrl` REFUSED, AND THE DISTINCTION IS THE WHOLE
+LICENCE FOR IT.** That comment rejected "a cache-busting query parameter minted here", and it
+was right: a NONCE is a value that never repeats, so it defeats caching by construction and
+papers over the missing header. `capture_id` is stable for the life of a photograph. It makes
+this URL name the photograph rather than the slot, so a card keeps one URL forever and the
+route caches **better** than it did — and a URL changes only when the thing behind it does.
+The re-shoot exception that comment already carries is now the same rule arriving one re-read
+early rather than a second mechanism: `nonce` IS the new capture id.
+
+**IT IS ONE SCREEN, AND THE REASON IS SPECIFIC RATHER THAN A JUDGEMENT ABOUT EFFORT.** Every
+other site that draws a stored photo keys its element on a POSITION that moves with the card —
+the review queue's entries are re-keyed by the renumber itself, the Fulfiller's card and the
+two confirm panels are opened for one copy at a time. `BoxBrowse`'s card band is the only
+place in the product that holds a slot SELECTED while its occupant changes underneath, which
+is exactly what a delete does to it.
+
+**WHAT IS NOT FIXED, NAMED SO A GREEN SUITE IS NOT MISREAD.** The in-document memory cache is
+still reachable anywhere two different cards are drawn from one slot URL in one document —
+the review screen's photograph after a renumber is the realistic one. The ETag makes every
+genuinely new load correct, so the residual is narrow, and the remedy if it ever bites is this
+entry's step 3 at that site rather than a new mechanism. And a record written before capture
+ids existed carries `null` and falls back to the bare slot URL: `do_remove_card` aims by the
+same field and is blind in the same place, so a Reload is the answer in both.
+
+**`SearchCopy` IS DELIBERATELY NOT WIDENED TO CARRY ONE.** `app/src/types.ts` argues that a
+search result which also carried `confidence` and `capture_id` "would invite a second
+inventory view to grow inside a search result", and none of the sites fed by it needed the
+stamp. Left alone rather than widened for symmetry.
+
+**Covered by `harness/tests/t7_store_and_seams.py:check_photo_cache` over real sockets** — the
+headers, the 304, the weak comparison, `If-None-Match: *`, and the case that is the defect: the
+same URL with the same tag answers 200 after a shift, under a new tag, with the neighbour's
+bytes. And by `app/tests/inventory.spec.ts`, which asserts the URL carries the occupant before
+and after a delete. **Both were mutation-tested**: a slot-derived ETag takes the T7 case red, a
+dropped `Cache-Control` takes another, and reverting the stamp takes the browser case red.
+
+**What would reopen this: a photograph that is slow rather than wrong.** Every measurement
+above says the data path is fast, so nothing here buys latency. If the walk ever feels slow
+after this, the thing to look at is the 304 round trip per card — and the honest fix then is a
+long `max-age` on a URL that already names its photograph, which this entry makes safe and
+deliberately did not take.
 
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 

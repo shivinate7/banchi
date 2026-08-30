@@ -2654,8 +2654,42 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
    * the one moment it knows, appending the id of the photograph it expects: that is
    * cache-busting as a statement of fact, not as a workaround, and photoUrl's comment now
    * names it as the standing exception. */
+  /* THE URL NAMES THE PHOTOGRAPH, NOT THE SLOT (D50), AND THAT IS THE WHOLE OF THE FIX HERE.
+   * `photoUrl` answers `/photo/<box>/<index>`, which is an address that CHANGES ITS
+   * MEANING: D10 ruling 1's mid-box delete slides a different card into the slot this
+   * screen is still pointing at, and D10's undo releases an index the next capture reuses.
+   *
+   * TWO CHEAPER REPAIRS WERE BUILT AND MEASURED FIRST, AND NEITHER IS SUFFICIENT — which
+   * is why this one is here and why the two below stay:
+   *
+   *   1. A validator on the server. `GET /photo` now sends a strong `ETag` and
+   *      `Cache-Control: no-cache`, which is the repair `server.ts:photoUrl` has named in
+   *      writing since it was written. It is necessary and it does not reach this case: a
+   *      header is a rule about reusing a cached RESPONSE, and an `<img>` that React keeps
+   *      in the document never asks for one.
+   *   2. The occupant in this element's `key`, so React remounts it. It does remount —
+   *      observed, `sameDomNode: false` across a delete — and the picture still did not
+   *      change, because Chrome satisfies a second load of an IDENTICAL URL in one
+   *      document from its in-memory resource cache, which consults neither the ETag nor
+   *      `no-cache`. Measured: one resource-timing entry, `transferSize: 0`, before and
+   *      after.
+   *
+   * SO THE STAMP IS NOT A CACHE-BUSTER AND `photoUrl`'s COMMENT DOES NOT FORBID IT. What
+   * that comment refuses is a nonce minted per LOAD because the bytes might have changed —
+   * a value that defeats caching by never repeating. `capture_id` is the opposite: it is
+   * stable for the life of a photograph, so this card keeps one URL forever and caches
+   * better than it did, and a URL only changes when the thing behind it does. The re-shoot
+   * exception that comment already carries is now a special case of this rule rather than
+   * a separate mechanism — `nonce` IS the new capture id, so it is the same stamp arriving
+   * one re-read early, and it wins while it is set.
+   *
+   * A RECORD WRITTEN BEFORE CAPTURE IDS EXISTED CARRIES null and falls back to the bare
+   * slot URL, exactly as before. That is the honest limit rather than a reason to invent a
+   * value: `do_remove_card` aims by the same field and is blind in the same place, and the
+   * server's ETag is what still makes a Reload right. */
   const base = photoUrl(row.card.box, row.card.index)
-  const src = nonce === null ? base : `${base}?reshot=${nonce}`
+  const stamp = nonce ?? row.card.capture_id
+  const src = stamp === null ? base : `${base}?card=${encodeURIComponent(stamp)}`
 
   if (absent) {
     return (
@@ -2674,8 +2708,28 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
     <img
       /* Remounted per card AND per replacement: `src` in the key means a re-shoot swaps
          the element rather than mutating it, so a failed load cannot leave the previous
-         photograph's broken state attached to the new one. */
-      key={`${row.key}:${src}`}
+         photograph's broken state attached to the new one.
+
+         AND PER OCCUPANT, WHICH IS THE HALF A RENUMBER NEEDS. `row.key` is a POSITION and
+         `src` is derived from one, so after D10 ruling 1's mid-box delete both are
+         unchanged for the slot that is still selected — while the card in it is a
+         different card. React then reuses this element, no load is initiated, and no
+         response header can help: `Cache-Control` is a rule about reusing a cached
+         response, not about an element that never asks for one. Measured on a copy of the
+         owner's store: deleting box 2 card 180 left the deleted card's photograph on
+         screen over its replacement's facts, at the same position label, which reads as
+         the delete not having happened — and the next press deletes the card that slid in.
+
+         `capture_id` IS THE OCCUPANT'S IDENTITY AND IS ALREADY ON THE ROW. It changes
+         exactly when the physical card at this slot changes and never otherwise, so this
+         costs no request on an ordinary re-render: a remount re-validates against the
+         server's ETag and takes a 304 whenever the bytes really are the same.
+
+         A RECORD WRITTEN BEFORE CAPTURE IDS EXISTED CARRIES null, and two of those in one
+         box are indistinguishable here. That is the honest limit rather than a reason to
+         mint something: `do_remove_card` aims by the same field and has the same blind
+         spot, and a Reload is correct in both. */
+      key={`${row.key}:${row.card.capture_id ?? 'no-id'}:${src}`}
       className="browse-photo"
       src={src}
       alt={`The card photographed at ${where}`}
