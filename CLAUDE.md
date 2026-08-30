@@ -143,7 +143,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   formula; what it gained is the box's occupancy. **The dividers editor speaks the same space**
   and `do_put_box` maps it back through `join.divider_index` before the store sees an index.
 
-- **THERE IS NO AUTOMATIC SECTIONING, AND `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
+- **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
   nothing else: an undeclared box renders as ONE section, `card` is the index, and
   `pipeline/join.py:Position.layout` falls back to `(1,)` — the divider at the front of every
@@ -201,7 +201,7 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
 ## Hard rules
 
-- **A ROUTE IS NOT A FEATURE. Nothing is built until it is reachable from a screen.**
+- **A route is not a feature. Nothing is built until it is reachable from a screen.**
   A capability that exists only in `server/` is not done, is not "landed", and must never be
   reported as either. Done means the whole chain: the route, a client function in
   `app/src/server.ts`, a control on the screen a human would look for it on, and — where it
@@ -412,7 +412,7 @@ D60  The @-loaded docs are dense American technical English, and an entry cites 
   view against a real order, and the review screen's price-banded hierarchy against a
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested 2026-08-22,
-  and **TUNED AT THE RIG on 2026-08-23** off the first 86-cycle feeder trace (`tLo` 3.0 → 4.5,
+  and **Tuned at the rig on 2026-08-23** off the first 86-cycle feeder trace (`tLo` 3.0 → 4.5,
   `tHi` 6.0 → 8.0, which recovered 14 silently-missed cards), then confirmed live at 85/85 on
   box 95. Its §4 is the rig-tuning protocol; D19 is the decision. Read its STATUS before
   treating a green `make design-check` as evidence about the feeder — the TRIGGER half of

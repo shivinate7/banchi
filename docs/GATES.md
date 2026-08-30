@@ -53,7 +53,7 @@ per set and overall.
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
   holdout, 150 together.
-- **A CACHE MISS REFUSES; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
+- **A cache miss refuses; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
   `make harness` makes no API call — and when there is nothing to replay it fails with
   instructions rather than spending. That rule is cause-independent by design, and it was
   not always: the moved-prompt case was guarded and every other cause of a cold cache fell
@@ -607,7 +607,7 @@ what the cards actually are.
 1,315,698 input and 20,698 output tokens — **$0.71**, against a $0.62 estimate; `SYSTEM_TOKENS`
 was 500 where the real turn is ~1,000, and is now the measured figure.
 
-**FINISH DETECTION IS WRONG ON 42% OF A BOX WHOSE TRUTH IS KNOWN.** The owner, after the run:
+**Finish detection is wrong on 42% of a box whose truth is known.** The owner, after the run:
 *"all of the cards provided in box 2 were normal by the way no reverse holo / foils etc"*.
 Every capture carried the claim `normal`, and every card was in fact normal. Detection said:
 
@@ -710,7 +710,7 @@ by accident and the next run should not have to.
   jitter: Gate B's manual loop averaged 661.9 ms over its last eight gaps at σ 34 ms;
   this runs at 623 ms and σ 43 ms. The operator was the slower component.
 
-**WHAT THIS RUN DID NOT DO, and it is half of what this section used to ask for.** Box 95
+**What this run did not do, and it is half of what this section used to ask for.** Box 95
 holds 85 records and **every one of them is still `captured`**: zero identified, zero
 carrying a SKU, and `runs/` holds no run directory for that box. The cards were photographed
 at feeder pace and the pipeline was never pointed at them.
@@ -901,7 +901,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     object and its retroactive capacity (D20), per-box section layouts (D10 amended), the
     search-and-sell screens on both sides, and the operations D26-D30 ratify.
 
-    **EVERY ITEM THIS STEP WAS SCOPED AROUND IS BUILT AND REACHABLE as of 2026-08-23**:
+    **Every item this step was scoped around is built and reachable as of 2026-08-23**:
     schema v2 with its migration, the server routes, the shared search components, the
     Fulfiller's search, D26 (`retired` and re-shoot in place, both with controls on the
     owner's screen), D27 (session state in `sessionStorage`), D28 in both halves (the
@@ -925,7 +925,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     registry with four real TCGplayer exports behind it, four audit rows, per-game dispatch,
     and `game` through all ten capture hops with the picker on the capture bar.
 
-    **EVERY STEP IS NOW BUILT** (2026-08-23): step 5's rarity claim end to end, step 6's
+    **Every step is now built** (2026-08-23): step 5's rarity claim end to end, step 6's
     repeatable `--export` with per-game catalogs and one import file per game (D25), step 7's
     pooled non-located inventory and both opsec discharges, step 8's rarity clause — built
     behind its A/B flag, MEASURED, and switched off because it lost (holdout 0.9706 → 0.9559,
