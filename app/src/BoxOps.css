@@ -457,11 +457,89 @@
    inventory.json. Metadata, so mono and muted. */
 /* `margin-top` gone: it is the last child of `.boxops-identity` now, which is a flex column with
    its own `gap`, and a margin on top of that gap is a spacing value nobody chose. */
+/* THE LINE WRAPPED AND THE FIX IS A SHAPE, NOT A SIZE (owner, 2026-08-29). `cards 543 · sold 0 ·
+   fill 543 · next index 544` is 46 cells at Martian Mono's measured 0.70em advance = 354.2px, in
+   a track that is 299px at 1440 and 285px at 1280 since the three-column rebuild (D40). It is
+   not a digit-count problem: box 1's `cards 22 · sold 0 · fill 22 · next index 23` is four
+   characters shorter and wraps identically. It is four label words and three interpuncts —
+   measured, the chrome is 277.2px of the 354.2 (78.3%) and the ten digits are 77.0px.
+
+   SO IT FLOWS DOWN THE PAGE INSTEAD OF ACROSS IT, because the scarce axis here is the opposite
+   of the one in the card's column. Horizontal is 285px and fixed; vertical is ~290px of unused
+   height under this column in D31's resting state, measured. That is what makes a grouped
+   key/figure block affordable here and a single line the wrong shape.
+
+   `overflow-wrap: anywhere` IS GONE WITH IT. It was the mitigation for a line that had to break
+   somewhere, and it breaks WORDS — so `next index 544` could split mid-word. Nothing here needs
+   to wrap at all now, and leaving the declaration would let a future overflow fail ugly instead
+   of failing visibly.
+
+   BE HONEST ABOUT WHAT THE HEIGHT COSTS. Free in the resting state; NOT free once a section is
+   open, where `.browse-map` is at its viewport cap and `.browse-list` is the scroller — there
+   every pixel here comes out of the walk at 25.5px per card row. This block is 33px -> ~65px, so
+   about 1.2 rows. Chosen deliberately over the ledger variant, which was 81px and ~1.9 rows. */
 .boxops-meta {
   font-family: var(--util);
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.boxops-meta-row {
+  display: flex;
+  gap: var(--s5);
+}
+
+.boxops-meta-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* Uppercased at PAINT so the DOM keeps the store's field names verbatim — see the .tsx. */
+.boxops-meta-key {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
-  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.boxops-meta-num {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.2;
+  letter-spacing: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
+
+/* D20's two words, beside the number they qualify rather than under it. Not italic by accident:
+   `font-style: normal` because this is an <i> chosen for its brevity in the markup, and the
+   register wanted here is the metadata one, not emphasis. */
+.boxops-meta-qual {
+  font-size: 10px;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* THE FORECAST, DRAWN AS THE THING IT IS. Inline rather than stacked, and muted rather than ink,
+   so it cannot be read as a fourth census figure — which is the whole reason it left the row. */
+.boxops-meta-next {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.boxops-meta-next .boxops-meta-num {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* ---- the layout and the four controls ---- */

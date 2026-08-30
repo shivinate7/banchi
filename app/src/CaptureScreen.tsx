@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PositionLabel } from './PositionLabel'
 import type { ReactNode } from 'react'
 
 import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
@@ -2320,7 +2321,9 @@ export function CaptureScreen() {
             ) : (
               <>
                 The last card recorded is{' '}
-                <span className="capture-inline-label">{last.card.label}</span>.
+                <span className="capture-inline-label">
+                  <PositionLabel label={last.card.label} flow="run" />
+                </span>.
               </>
             )}
           </p>
@@ -2337,7 +2340,7 @@ export function CaptureScreen() {
           {triggerMode === 'motion' && swallowed.halted > 0 ? (
             <p className="capture-halt-message">
               The motion trigger fired{' '}
-              <span className="capture-inline-label">{swallowed.halted}</span>{' '}
+              <span className="capture-inline-count">{swallowed.halted}</span>{' '}
               {swallowed.halted === 1 ? 'time' : 'times'} while captures were paused. If the
               feeder kept moving, that many cards may have passed the lens unrecorded — set
               them aside and re-feed them after you resume.
@@ -3248,7 +3251,9 @@ export function CaptureScreen() {
               {replayed === null ? null : (
                 <p className="capture-quiet">
                   Already recorded at{' '}
-                  <span className="capture-inline-label">{replayed}</span>. The paused capture
+                  <span className="capture-inline-label">
+                  <PositionLabel label={replayed} flow="run" />
+                </span>. The paused capture
                   did reach the server, so nothing new was recorded and no position was used.
                   Move on to the next card.
                 </p>
@@ -3363,7 +3368,17 @@ export function CaptureScreen() {
                             src={photoSrc(target.box, target.index, revision)}
                             alt=""
                           />
-                          <span className="capture-undo-pos">{positionText(target)}</span>
+                          <span className="capture-undo-pos">
+                            {/* THROUGH THE SHARED COMPONENT, because D41 lists this
+                                sidebar as one of the six owner sites that draw an
+                                address as a rank rather than a dotted list. This branch
+                                predates that entry by 32 commits and drew a bare string;
+                                the stack is the feature and the treatment is a rule about
+                                how any address is drawn, so the row keeps one and gains
+                                the other. The 20px figure is set in the stylesheet, once,
+                                where the site's register belongs. */}
+                            <PositionLabel label={positionText(target)} />
+                          </span>
                           {/* The top row carries its KEY and every other row carries its
                               DEPTH. They are different kinds of fact in the same slot, which
                               is legible only because the top row's is the one letter this
@@ -3404,7 +3419,9 @@ export function CaptureScreen() {
                   {undoNote.position === null ? null : (
                     <>
                       {' '}
-                      <span className="capture-inline-label">{undoNote.position}</span>
+                      <span className="capture-inline-label">
+                        <PositionLabel label={undoNote.position} flow="run" />
+                      </span>
                     </>
                   )}
                   {undoNote.code === null ? null : (
@@ -3469,7 +3486,9 @@ export function CaptureScreen() {
                 <div className="capture-said">
                   {/* Rendered by pipeline/join.py and returned by the server. The app never
                       composes a second one. */}
-                  <p className="capture-label">{last.card.label}</p>
+                  <p className="capture-label">
+                    <PositionLabel label={last.card.label} />
+                  </p>
                   <p className="capture-said-meta">
                     {/* The key rather than the display name, and first, because it is the
                         claim that decides whether this card is ever identified — and because

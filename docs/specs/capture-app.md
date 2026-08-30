@@ -334,7 +334,10 @@ One module under `app/src/` owning every call to the capture server. Not spread 
 components: the failure behaviour in section 5 has to be one decision applied once.
 
 Base URL is the server on port 8000, configurable through a Vite env variable so the
-Fulfiller's device can point at the Mac by address later. CORS is already handled server
+Fulfiller's device can point at the Mac by address later. **Since D43 the default is derived
+rather than literal** — `vite.config.ts` injects this checkout's own capture port, which is
+8000 in the main tree and its own in a worktree; `VITE_CAPTURE_SERVER` still outranks it, and
+this sentence's reason for that variable existing is unchanged. CORS is already handled server
 side — any origin, no credentials, preflight answered — and the decision that there is no
 auth and no TLS on a LAN tool is recorded in `docs/specs/capture-server.md`. Do not add a
 login screen.

@@ -1,4 +1,23 @@
-node_modules/
+# NO TRAILING SLASH ON ANY PATH A WORKTREE PROVISIONS — this one, `harness/images`,
+# `harness/.cache` and `.venv` below. A pattern ending in `/` matches DIRECTORIES ONLY, and a
+# worktree's provisioning can put a SYMLINK there, which git does not count as a directory. So
+# `node_modules/` did not match `app/node_modules` when it was a link, one `git add -A` in a
+# worktree committed it as an absolute path into this Mac, and checking that commit out in the
+# MAIN tree replaced the real directory with a link pointing at itself. See D47: it cost the
+# 133 MB image mirror before anybody noticed the mechanism.
+#
+# D47 FIXED TWO OF THE FOUR AND THE OTHER TWO CAME BACK THE SAME WAY (2026-08-30).
+# `scripts/worktree-guard.sh` COPIES `harness/.cache` and BUILDS `.venv`, so a directory-only
+# pattern is correct for what that script does — and it is correct only for as long as nobody
+# provisions them any other way. A session that linked both by hand got exactly D47's state
+# back: untracked rather than ignored, one `git add -A` from committing an absolute path into
+# one Mac, and `scripts/docs-audit.py` reporting every doc reference to `harness/.cache/` as a
+# dangling path because its ignore filter had nothing to match.
+#
+# So the rule is about the PATH and not about today's provisioning: if a worktree can put
+# something at this name, the pattern may not care what kind of thing it is. The precision a
+# trailing slash buys is worth nothing here — nothing else in this tree is called `.venv`.
+node_modules
 dist/
 .claude/settings.local.json
 __pycache__/
@@ -14,12 +33,12 @@ output/
 
 # opsec: never track raw captures or UI renders
 captures/
-harness/images/
+harness/images
 
 # Derived, reproducible from a public API. The artefact worth committing is the score in
 # harness/results/, not the images that produced it or the raw model responses.
-harness/.cache/
-.venv/
+harness/.cache
+.venv
 
 # Batch script v2 state. `runs/` is derived — deleting one costs nothing, which is the
 # property that makes it safe to re-run anything. `inventory/` is the master store and is
@@ -37,8 +56,14 @@ inventory/
 .scopes/
 
 # Playwright's own output from `make design-check`. Derived and per-run. The artefact worth
-# keeping is the spec, not the record of one execution of it — same rule as harness/.cache/
+# keeping is the spec, not the record of one execution of it — same rule as harness/.cache
 # above. app/package-lock.json is deliberately NOT here: a pinned Playwright version that
 # nothing locks is not pinned.
 app/test-results/
 app/playwright-report/
+
+# `.claude/launch.json` names a dev port and D43 made the port per checkout, so a tracked
+# copy is wrong in every linked worktree — and wrong by pointing the Browser pane at the MAIN
+# tree, which is the fault D43 exists to prevent. `make launch-config` writes it from
+# `server/ports.py`, the same derivation Vite and Playwright read.
+.claude/launch.json

@@ -30,8 +30,15 @@ looking like variant detection working.
 
 Cost and time: the run is cached by prompt fingerprint + fixture fingerprint (see
 `harness/eval/runcache.py`), so a normal `make harness` re-scores stored responses
-offline and makes no API call. Editing the prompt changes the fingerprint and re-submits
-automatically; `PKMNSCAN_RERUN_T1=1` forces it.
+offline and makes no API call.
+
+NOTHING HERE EVER SUBMITS ON ITS OWN, and this paragraph used to say the opposite —
+"editing the prompt changes the fingerprint and re-submits automatically", which was
+already false when it was written, because the fingerprint check in `run()` refuses
+instead. A cache miss of ANY cause now refuses the same way: a moved prompt, a fresh git
+worktree that `harness/.cache/` did not travel to, a cleared cache. `PKMNSCAN_RERUN_T1=1`
+is the one way a submission happens, because this test runs under the Stop hook at the end
+of every turn and a turn end must not be able to spend money.
 
 Two A/B knobs, both off by default so the gate scores the floor: `PKMNSCAN_T1_SET_HINT=1`
 (D2 — what is the set hint worth) and `PKMNSCAN_T1_RARITY=1` (D23 job (c) — what is the
@@ -349,6 +356,34 @@ def run() -> Result:
     if cached is not None:
         run_result: batch.BatchRun = cached["run"]  # type: ignore[assignment]
         source = "cached run {0}".format(cached["submitted_at"])
+    elif not runcache.forced():
+        # A COLD CACHE DOES NOT SUBMIT. The guard above this function's fixture load makes
+        # exactly this argument — "a guaranteed cache miss and a guaranteed re-submission —
+        # at the end of every turn, under the Stop hook" — and then guards ONE cause of a
+        # cold cache, a moved prompt fingerprint. There are others, and they are not
+        # hypothetical: `harness/.cache/` is gitignored, so it does not travel to a git
+        # worktree, and a fresh worktree with a key in the environment would submit 150
+        # images at the end of every turn until one run happened to warm it. Found on
+        # 2026-08-29 in exactly that state; nothing was spent only because that worktree
+        # also lacked the key, which is luck rather than a design.
+        #
+        # So the rule is the cause-independent one the comment above was already reaching
+        # for: replaying is automatic, SUBMITTING IS AN ACT. `PKMNSCAN_RERUN_T1=1` is that
+        # act and already existed — this branch does not invent a flag, it stops the flag
+        # from being bypassable by an empty directory. Every legitimate path is unchanged:
+        # forced still submits, a warm cache still replays, and the only behaviour that
+        # goes away is the one nobody ever chose.
+        return Result(
+            False,
+            "no cached run for this configuration, and a cold cache does not submit.\n"
+            "      Replaying is free and automatic; submitting ~150 images is not, so it\n"
+            "      is never something a Stop hook does on its own.\n"
+            "      If this is a git worktree, it is missing harness/.cache/ — copy it from\n"
+            "      the main working tree (`make worktree-setup`) rather than paying twice\n"
+            "      for an answer this machine already has.\n"
+            "      To genuinely re-measure, PKMNSCAN_RERUN_T1=1 make harness — deliberately,\n"
+            "      and per docs/GATES.md commit the new harness/results/t1.json with it.",
+        )
     else:
         try:
             run_result = batch.run_batch(

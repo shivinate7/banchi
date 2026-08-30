@@ -538,10 +538,51 @@ export function BoxIdentity({
           co-visible with `544 sealed` at any scroll position. The rule above says the field
           names are verbatim so a person can compare them against `inventory.json`; that
           comparison needs both halves on screen at once. */}
-      <p className="boxops-meta">
-        cards {record.cards} · sold {record.sold} · fill {fill ?? 'unknown'} · next index{' '}
-        {known(record.next_index) ?? 'unknown'}
-      </p>
+      {/* THREE CENSUS FIGURES AND ONE FORECAST, and the split is the point (owner's pick,
+          2026-08-29). The run-on line drew four peers joined by interpuncts and that was a false
+          claim about them: `cards` counts records naming this box, `sold` counts permanent gaps
+          (D10), `fill` is the box's high-water mark (D20) — all three describe what is THERE —
+          while `next index` describes what the allocator will hand out NEXT. It is not a fourth
+          statistic, so it does not get a fourth column; it gets its own line, at the muted
+          register, under the three it is not one of.
+
+          THE QUALIFIER DISCHARGES D20's DENOMINATOR RULE, which this line never did. That entry
+          is explicit that a number whose meaning switches silently between an open and a sealed
+          box is the failure it exists to prevent — `fill` is a frozen capacity once the box is
+          closed and a fill-so-far while it is open, and the two were rendered identically. It
+          says which it is now, in D20's own two words.
+
+          FIELD NAMES STAY VERBATIM IN THE DOM. The rule above is that what is on screen greps to
+          what is in `inventory.json`, so the keys are written lowercase here and uppercased by
+          `text-transform` at paint only — a copy out of the DOM still matches the store. */}
+      <div className="boxops-meta">
+        <p className="boxops-meta-row">
+          <span className="boxops-meta-cell">
+            <span className="boxops-meta-key">cards</span>
+            <span className="boxops-meta-num">{record.cards}</span>
+          </span>
+          <span className="boxops-meta-cell">
+            <span className="boxops-meta-key">sold</span>
+            <span className="boxops-meta-num">{record.sold}</span>
+          </span>
+          <span className="boxops-meta-cell">
+            <span className="boxops-meta-key">fill</span>
+            {/* NO QUALIFIER HERE, AND IT WAS HERE FOR ONE COMMIT (2026-08-29). D41 put D20's
+                `so far` / `sealed` on this number, correctly — and `BoxIdentity` sixteen pixels
+                above already carries it, so the effect was to make an approximate duplication
+                EXACT: `133 so far` rendered twice on one screen, nine words apart. D20's rule is
+                that the number is unambiguous on screen, not that it is annotated at every site,
+                and the identity line is the better host because that is where the box's state is
+                already being read. The field stays, so `BoxOps.tsx`'s promise that these names
+                grep to `inventory.json` is untouched. */}
+            <span className="boxops-meta-num">{fill ?? 'unknown'}</span>
+          </span>
+        </p>
+        <p className="boxops-meta-next">
+          <span className="boxops-meta-key">next index</span>
+          <span className="boxops-meta-num">{known(record.next_index) ?? 'unknown'}</span>
+        </p>
+      </div>
     </div>
   )
 }

@@ -219,9 +219,36 @@ production value is that it is *recorded*, making a targeted re-read possible.
 
 ### 5.1 Catalog and multi-set keying
 
-Catalog is built from the TCGplayer Filtered CSV export. Nothing else. Join key stays
-`zfill(3)(number) + "/" + printedTotal` (CLAUDE.md, and `161/159` is a secret rare, not an
-error).
+Catalog is built from the TCGplayer Filtered CSV export. Nothing else.
+
+**THE JOIN KEY IS PER GAME, AND THIS SECTION DESCRIBED ONLY POKEMON'S UNTIL 2026-08-29.**
+It read *"Join key stays `zfill(3)(number) + "/" + printedTotal`"* full stop, which was true
+the day it was written and was overtaken by D25 in August when the join learned to partition
+by `Product Line`. Corrected rather than deleted, because the Pokemon key is unchanged and
+`161/159` is still a secret rare rather than an error.
+
+`pipeline/games.py` names each game's strategy and `pipeline/join.py:JOIN_KEY_STRATEGIES`
+implements it:
+
+| strategy | games | key |
+|---|---|---|
+| `number_and_printed_total` | `pokemon` | `zfill(3)(number) + "/" + printedTotal` |
+| `printed_code` | `riftbound`, `one_piece` | the printed identifier, verbatim |
+| `name_only` | `pokemon_code` | no key — the blank-`Number` rows, by name |
+| `not_joined` | `misc` | never joined at all |
+
+**ONLY THAT KEY IS PER GAME.** `pipeline/join.py:_walk` is one ladder for every game — build
+the key, look it up, try the blank-`Number` name, then D35's name rung — and `KeyStrategy`
+is the per-game part as a value. It is written that way because the alternative was measured
+and failed: three parallel `_lookup_*` functions each re-implemented the ladder, D35's rung
+landed in the Pokemon copy alone, and `riftbound` returned zero candidates for a year's worth
+of cards whose rows were in the export the whole time. A rung added to `_walk` cannot now land
+in one game and not another.
+
+**Both sides of a comparison go through one fold**, never two spellings of one rule:
+`number_index_key` for the number, `name_index_key` for the name. `_strip_set_code` runs ahead
+of the printed-code key and removes a set code the model glued on with a bullet or middle dot —
+licensed by a measurement, that no export cell anywhere contains either character.
 
 That key is unique only *within* a set. Multi-set runs are required, so:
 

@@ -158,16 +158,97 @@
    node how wide it actually is keeps that promise; asking the viewport would break it the first
    time the column moved, which it has now done three times in two days.
 
+   880px SINCE 2026-08-29, AND 860 HAD BECOME A CLIFF POINTING THE WRONG WAY. The paragraph below
+   is the reasoning as it stood when the bar took four stacked full-width lines; the rule beneath
+   this one now folds each caption beside its track, so the NARROW branch is 114px and the
+   crossing has to beat that rather than the 144px it was written against. Measured across the
+   container sweep after that change: 820 -> 114px, **860 -> 126px**, 880 -> 85px, 900+ -> 82px.
+   At 860 the wide branch was making the row TWELVE PIXELS TALLER at the exact width it engaged.
+
+   BE HONEST THAT THIS IS UNREACHABLE TODAY. The copies container is 612px at 1440 and 528px at
+   1280, so `min-width` needs roughly a 1980px viewport to fire at all. 860 was chosen because
+   "columns 2+3 measure 862px at Playwright's 1280" — a layout D40 deleted — so the number was
+   inherited from a dead premise, which is the same defect the position label's own comment was
+   found to have. Fixed rather than left, because a threshold that is wrong and dormant is worse
+   than one that is wrong and visible: nothing will fail while it waits.
+
+   The original argument, kept because its SHAPE is still right — pick the width where the branch
+   starts being better, not the width where it becomes ideal:
+
    860px, NOT the ~940 where all four parts fit on one line. 940 is where the row becomes ideal;
    860 is where it stops being what it is today and starts being better — and columns 2+3 measure
    862px at Playwright's 1280, so the branch the owner sees at 1440 is at least rendered by the
    test viewport. That is the same argument this repo makes for putting the page breakpoint at
    1240 rather than at the owner's 1440. Between 860 and 940 the row is place+bar, then
    state+action: two lines, still better than three. */
-@container copies (min-width: 860px) {
+@container copies (min-width: 880px) {
   .card-locations-owner .card-locations-row > .position-bar {
     flex: 1 1 20rem;
     order: 0;
+  }
+}
+
+/* BELOW 860 THE CAPTIONS SIT BESIDE THEIR TRACKS INSTEAD OF UNDER THEM (2026-08-29, D40 amended).
+   The rule above is about whether the bar joins the row. This one is about the bar's own shape
+   once it has taken a line of its own, and it is what makes the narrow column affordable.
+
+   THE MEASUREMENT. In the three-column layout the copies column gives this list 586px, and the
+   row came to exactly `8 + place 51 + gap 12 + bar 65 + 8 = 144px`. The bar is four stacked
+   full-width children — box track 16, its caption 14, then the section block's 8px track and its
+   own 14px caption — on lines 570px wide carrying captions that measure ~120px and ~200px. Two
+   thirds of that block was empty. Beside their tracks the same four parts are two rows instead of
+   four: bar 65 -> 34px, row 144 -> 114px, copies visible on landing 3.61 -> 4.56, page 1274 ->
+   1092, and the landing void 26.30% -> 22.32%.
+
+   WHY NOT THE OBVIOUS FIX, AND THIS IS THE HALF WORTH KEEPING. Lowering the 860 threshold so the
+   bar rejoins the row was tried first and REFUSED: it does shorten the row to 129px, and it gets
+   there by squeezing `.card-locations-place` to 231px, which WRAPS THE POSITION LABEL. This file
+   says a few rules up that the label "is the string somebody carries to a shelf and it must not
+   break". A row 15px shorter that lies about where a card is, is not the trade. So the height
+   comes out of the bar's own dead space instead, and the label's line is untouched at 586px.
+
+   BOTH SCALES SURVIVE INTACT, which is the constraint `docs/DESIGN.md` puts on this component:
+   the box track stays 16px and the section track 8px, the section block keeps its indent, and the
+   captions keep their `#` and `Section` prefixes. All three cues that tell the two scales apart
+   are still drawn — what changed is where the words sit, not what they say.
+
+   `white-space: nowrap` ON THE CAPTIONS because they are now in an `auto` track beside a
+   flexible one: without it the grid would shrink the caption to its longest word rather than
+   shrinking the track, and the two-line caption is the thing this rule exists to delete. */
+@container copies (max-width: 879px) {
+  .card-locations-owner .card-locations-row > .position-bar-owner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--s2);
+    row-gap: var(--s1);
+  }
+
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-track {
+    grid-column: 1;
+  }
+
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-text {
+    grid-column: 2;
+    white-space: nowrap;
+  }
+
+  /* The section scale keeps its own row and repeats the pattern one level in, so the indent that
+     distinguishes it from the box scale is preserved rather than flattened into the same line. */
+  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-zoom {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--s2);
+  }
+
+  .card-locations-owner
+    .card-locations-row
+    > .position-bar-owner
+    > .position-bar-zoom
+    > .position-bar-text {
+    white-space: nowrap;
   }
 }
 
@@ -205,13 +286,23 @@
    Mono, and because it must not shift width between rows — which is the whole reason a list of
    positions is readable as a column at all. Allowed to wrap at the separators rather than
    truncate: a hidden digit is the digit that decides which slot gets opened. */
+/* THE SITE RULE ONLY, SINCE 2026-08-29 (D41, amended). The shape is `PositionLabel`'s; what this
+   file chooses is `--pos-slot`, and 28px is derived twice over. It is under the free ceiling —
+   the two-line path is 33.9px, so any figure up to 33.9/1.05 = 32.3px costs the row nothing, and
+   the sweep confirms it: 16/20/24/28/32 all measure 114.17px against a 114.19px baseline, 36
+   costs +3.9/row and 44 costs +12.3/row and drops a copy off the fold. And it is subordinate to
+   the card band 500px to the left, which draws the SAME fact at 44px — 44:28 is 1.57 and keeps
+   the band the dominant instance of this idiom, where 44:32 at 1.375 does not.
+
+   OWNER SKIN ONLY. The prefix is this file's existing two-skin guard and it is the SECOND line of
+   defence; the first is that `FulfillerCard` never calls the component. */
 .card-locations-owner .card-locations-label {
   font-family: var(--util);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.3;
   color: var(--ink);
+  letter-spacing: 0;
+  --pos-slot: 28px;
+  font-size: var(--pos-slot);
+  line-height: 1.3;
   overflow-wrap: break-word;
 }
 
@@ -390,7 +481,58 @@
   box-shadow: inset 2px 0 0 0 var(--ink);
 }
 
-.card-locations-owner .card-locations-row[aria-current='true'] .card-locations-label {
+/* The walk's cursor recoloured the label; the label is a container now, so it aims at the ink. */
+.card-locations-owner .card-locations-row[aria-current='true'] .position-num {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* THE WALK-TO, WHERE THE CALLER OFFERS ONE (`onGoTo`, D45). A TRANSPARENT WRAPPER AROUND
+   `PositionLabel` AND NOT A SECOND TREATMENT OF THE ADDRESS — that component owns every pixel of
+   the string at all six owner sites, and a rule here that touched its size, its colour or its
+   two ranks would make the copies list a seventh. So this takes the button chrome back off and
+   states nothing about the label: `font: inherit` because a button does not inherit one, and
+   `--pos-slot` and the site rule on `.card-locations-label` above reach the component through
+   it unchanged.
+
+   `display: block` and a full width because `.position-parts` is a flex box and the cell it
+   lays out in is `.card-locations-place`'s column. An inline-block would shrink-wrap the row
+   and put the slot figure and the path on a measure neither was tuned at.
+
+   THE AFFORDANCE IS HOVER AND FOCUS, WHICH IS THE ONE THING DEFENSIBLE HERE. A persistent
+   underline down a column of positions would be the newspaper-link register docs/DESIGN.md
+   rejects, and an accent fill is reserved for a screen with exactly one thing to do. The row
+   already lights on hover — this adds the underline that says the address itself is the target,
+   and `:focus-visible` gives the keyboard the same fact rather than leaving it to the ring
+   alone.
+
+   ON THE SLOT AND NOT ON THE WHOLE BLOCK, which was looked at and is the louder of the two. The
+   stacked address is three lines — the figure, and the two muted path lines under `slot` lead —
+   so underlining the parts drew three rules through a block whose own design demotes two of
+   them. `PositionLabel` already says which part is the anchor; the affordance follows it.
+   Under `.card-locations-goto` so it cannot reach the same component at the five sites that
+   offer no walk-to, and on the parts' own child so it tracks the text rather than the
+   full-width box — an underline running the width of the cell reads as a rule, not a link. */
+
+/* `text-align: left` because a button centres its text and every other line in this cell is
+   ragged-right against the same edge. */
+.card-locations-owner .card-locations-goto {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.card-locations-owner .card-locations-goto:hover .position-slot,
+.card-locations-owner .card-locations-goto:focus-visible .position-slot {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

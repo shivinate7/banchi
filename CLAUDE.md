@@ -20,16 +20,23 @@ tree.** What was retired is the gate as a *control*: the blocking, the sequencin
 ## Commands
 
 ```
-make hooks          # arm the opsec pre-commit. Once per clone — core.hooksPath never travels.
+make hooks          # arm the three git hooks. Once per clone — core.hooksPath never travels.
+make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; neither
+                    #   is tracked, so neither travels. Skipping it fails T1/T6/T7 with
+                    #   three errors that never mention the worktree.
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
-make dev            # Vite app on :5173. Blocks — background it.
-make server         # Python capture server on :8000. Blocks — background it.
+make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
+make server         # Python capture server. :8000 in the main tree, its own port in a
+                    #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
-make check          # harness + docs-audit + its self-test + lint + typecheck
+make check          # harness + docs-audit + both self-tests + lint + typecheck
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
+make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
+                    #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
+make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
@@ -70,6 +77,23 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
   `claude-haiku-4-5-20251001`.
+- **EVERY CHECKOUT HAS ITS OWN STORE AND ITS OWN PORTS, AND THE FIRST HALF HAS ALWAYS BEEN
+  TRUE** (D43). `store/files.py:home()` defaults to the checkout the code runs from, so a
+  worktree's `inventory/`, `runs/` and `captures/` are its own — usually empty. The ports
+  follow it now: the main tree keeps `:5173` and `:8000`, and a linked worktree derives both
+  from one slot off its path (`app/devPort.ts` and `server/ports.py`, kept in step by
+  `make port-agreement`).
+
+  **What this prevents is data loss, not a busy port.** While the port was the constant 8000
+  in every tree, whichever server won the bind answered every tree's UI — so a branch could
+  drive the owner's real 767-card inventory, or, worse, the MAIN tree's capture screen could
+  be answered by a worktree's server and write real card photographs into a directory that is
+  deleted with the branch.
+
+  `make status` prints this tree's ports and says when it is a worktree; the SessionStart
+  guard prints them before any work starts; `make server` prints them and names the store it
+  is about to serve. **If you are looking at an empty inventory in a worktree, that is
+  correct** — the real one is the main checkout's.
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact**: no `window.storage`, no `facingMode: "environment"`, and
   nothing about a card or the inventory in `localStorage`. Inventory state is server-side
@@ -115,11 +139,19 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
   mark** — that rule governs the card index inside a box and nothing else. The name never
   enters `Position.label`: `app/tests/fulfillment.spec.ts` floors that label and D31 keeps the
   spec unweakened, so the name travels as `box_name` beside it instead.
-- **The app has six screens and six routes** — five the owner's, one the Fulfiller's. It
+- **The app has seven screens and seven routes** — six the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
-  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — and D39 added
+  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
-  the review queue. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  the review queue, and D49 added `#/pricing` on 2026-08-30, which is where a listing price is
+  set by hand.
+
+  **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
+  CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
+  published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
+  not load-bearing prose. That argument holds for a number in a report and does not hold here,
+  where the sentence is what a session reads to learn the shape of the product. It was false
+  from D39 until D49 in FIVE places at once, none of which failed a check. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
@@ -167,6 +199,21 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
+- **MAIN MOVES BY PULL REQUEST. A SESSION NEVER COMMITS TO IT, MERGES INTO IT, OR PUSHES IT.**
+  Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and the owner
+  merges it on GitHub. `main` then advances in this clone by `git pull` and no other way.
+
+  **This is enforced, not asked for** (D42): `scripts/githooks/reference-transaction` refuses
+  any local move of `refs/heads/main` and `scripts/githooks/pre-push` refuses any push to it,
+  both armed by `make hooks`. The escape hatch is `PKMNSCAN_MAIN=off` and it is printed in
+  every refusal — reach for it rather than for `core.hooksPath`, which would take the three
+  opsec rules down with it.
+
+  **Why it is a hook and not a line in this file**: it already was a line nobody had written,
+  and main moved under three live worktrees twice on 2026-08-29 — once by a local
+  fast-forward, once by a direct push. GitHub's own branch protection is unavailable here (403,
+  private repo on the free plan), so this is the substitute and not a belt-and-braces addition
+  to it. A refusal is not a bug report: it means put the work on a branch.
 
 ## Working agreement
 

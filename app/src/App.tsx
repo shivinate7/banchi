@@ -6,6 +6,7 @@ import { CaptureScreen } from './CaptureScreen'
 import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
+import { Pricing } from './Pricing'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
@@ -21,9 +22,16 @@ import './App.css'
  * `Inventory.tsx`.
  *
  * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
- * fixes: the gallery was the seventh and nothing was counting. Five now — capture, review,
- * inventory, fulfillment, gallery — and the not-rendered-rather-than-hidden rule for the
- * Fulfiller's nav is untouched, because it was never about how many owner routes there are.
+ * fixes: the gallery was the seventh and nothing was counting. SEVEN again now — capture,
+ * runs, review, pricing, inventory, fulfillment, gallery — and the
+ * not-rendered-rather-than-hidden rule for the Fulfiller's nav is untouched, because it was
+ * never about how many owner routes there are.
+ *
+ * THIS COMMENT SAID `Five now` FROM D39 UNTIL D49, WHICH IS THE SAME DRIFT IN THE FILE THAT
+ * OWNS THE TABLE. `#/runs` landed and this line was not touched, so the one place a reader
+ * would check the count against the code was itself a count nobody had checked. Nothing on
+ * the commit path reconciles it; the only defence is the person editing the table below
+ * reading up this far.
  *
  * Hash routing, hand-written. A router library was the alternative and it loses on every
  * axis that matters here: a flat list of routes, no path parameters, no nested layouts, no
@@ -128,6 +136,22 @@ const ROUTES: readonly Route[] = [
     hotkey: 'q',
   },
   {
+    /* D49. AFTER the review queue and not before it, which is the owner's ruling and reverses
+     * what the first design pass proposed. The argument that decided it: answering the queue
+     * changes what the next join resolves, so pricing before the queue is worked prices a set
+     * that is about to move. Pricing is the last thing done before `emit`, and this strip now
+     * reads in the order the work happens — shoot, run, answer, price.
+     *
+     * `p`, WHICH WAS `#/pull`'s RETIRED CHORD — see the block below, amended in the same
+     * commit that took the key. */
+    path: '/pricing',
+    label: 'Pricing',
+    view: Pricing,
+    persona: 'owner',
+    group: 'run',
+    hotkey: 'p',
+  },
+  {
     path: '/inventory',
     label: 'Inventory',
     view: Inventory,
@@ -147,7 +171,17 @@ const ROUTES: readonly Route[] = [
    * inside it. The chord is a ROUTE table (`ROUTES.find` on `hotkey`), and a second key space
    * layered over it — some chords go to routes, some to modes within one route — is a rule
    * with an exception, which is the thing the leader's one-rule-no-exceptions comment above is
-   * written to protect. */
+   * written to protect.
+   *
+   * `p` NAMES `#/pricing` AS OF 2026-08-30 (D49), AND THIS PARAGRAPH IS AMENDED RATHER THAN
+   * LEFT TO GO FALSE. What the sentence above rules out is a chord reaching a MODE inside a
+   * route, which is a second key space over a route table; `#/pricing` is a route, so taking
+   * `p` for it obeys that rule rather than bending it, and `p` is the letter the owner would
+   * say out loud naming the screen — which is what the LEADER comment actually asks for.
+   *
+   * What it costs, named: a stale `,p` aimed at the old pull preview now lands on Pricing
+   * instead of on `NoSuchView`. That press reads nothing, writes nothing and spends nothing.
+   * `b` is still unassigned. */
   /* D5's second persona, and the one route here that is somebody else's whole product. It is
    * listed all the same: his device opens this hash and stays on it, but the owner needs a way
    * in to see what he sees, and a screen reachable only by typing a URL is a screen that gets
@@ -294,7 +328,14 @@ const CHORD_MS = 1000
 
 /** `location.hash` as a route path: '' and '#' and '#/' all mean the root. */
 function currentPath(): string {
-  const raw = window.location.hash.replace(/^#/, '')
+  // THE QUERY IS NOT PART OF THE PATH, and this router did not know that until D49 gave a
+  // route a parameter. `#/pricing?run=<name>` is how `#/runs` links a SPECIFIC run — a link
+  // rather than a handoff, because a run name has one source of truth and needs no second
+  // `sessionStorage` key with its own clearing rules. Without this strip the whole string is
+  // compared against `path` and matches nothing, so the link lands on `NoSuchView`: the
+  // screen renders, the route table is right, and the one thing that is wrong is invisible
+  // from either. The screen reads its own parameter off `location.hash`.
+  const raw = window.location.hash.replace(/^#/, '').split('?')[0] ?? ''
   if (raw === '') return '/'
   // Strip one trailing slash so '#/pull/' is not a fourth route that renders nothing.
   // Guarded on length so the root itself survives.

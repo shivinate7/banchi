@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { describeFailure, getBoxes, type Failure } from './server'
 import type { BoxRecord } from './types'
-import { RunPanel } from './RunPanel'
+import { RunPanel, type CartBox } from './RunPanel'
 import { carriedScope, clearCarriedScope } from './runHandoff'
 import './Runs.css'
 
@@ -35,6 +35,16 @@ import './Runs.css'
  * scope and reads the run directory for the rest. The split is the same one `BoxBrowse` and
  * `Inventory.tsx` already keep — the picker owns what is selected, the panel owns what is done
  * with it — so there is one answer to "which box" on this screen and one place it comes from.
+ *
+ * THE PICKER TAKES SEVERAL BOXES AS OF 2026-08-29, AND EACH IS STILL ITS OWN RUN. The owner
+ * asked for boxes to be "individualized" and sent together, and the split that answers it is
+ * this: one press, one request, one `confirm`, one total — and N run directories, because a
+ * run over several boxes would force one reading, one `--bypass` and one `decisions.json`
+ * across drawers that deserve their own. What is a cart is the REQUEST; a run is unchanged.
+ *
+ * WHICH BOXES IS THIS FILE'S; HOW EACH IS READ IS THE PANEL'S. The reading moves the estimate,
+ * so it belongs beside the estimate and under the same confirm — see `RunPanel.tsx`'s cart
+ * block. This file hands over the boxes and the cards ticked in one of them, and nothing else.
  */
 
 /** One frozen empty array, so `scope` is referentially stable across renders where nothing was
@@ -53,10 +63,15 @@ export function Runs() {
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
 
-  /** Which box the run is over, or null before one is picked. The panel's spend is gated on
-   *  this being non-null, which is why nothing here defaults it: a box chosen for the operator
-   *  is a box they did not read, and the next press after it spends money. */
-  const [box, setBox] = useState<number | null>(null)
+  /** Which boxes the send is over. Empty before anything is picked, and nothing here defaults
+   *  it: a box chosen for the operator is a box they did not read, and the next press after it
+   *  spends money. The panel's preflight is disabled while this is empty and its spend button
+   *  does not exist until the preflight has answered.
+   *
+   *  A SET, ORDERED ASCENDING WHEN IT IS DRAWN. Selection order would make the cart, the quote
+   *  and the strip disagree about which box comes first for no reason anybody chose; ascending
+   *  is the order the strip already offers and the order a shelf is in. */
+  const [picked, setPicked] = useState<ReadonlySet<number>>(() => new Set())
 
   /** The cards handed over from `#/inventory`'s mass-select, and the box they were ticked in.
    *  Held as the whole carried record rather than as a bare array so that a selection can never
@@ -86,7 +101,7 @@ export function Runs() {
           return
         }
         setCarried(handoff)
-        setBox(handoff.box)
+        setPicked(new Set([handoff.box]))
       } catch (err) {
         if (!live) return
         setFailure(describeFailure(err))
@@ -97,29 +112,74 @@ export function Runs() {
     }
   }, [reloads])
 
-  /* PICKING A BOX DROPS THE HANDOFF, ALWAYS — including when it names the box already picked.
-     The selection belongs to one box and to one moment in the walk; a tick list that survived
-     the operator deliberately choosing a box is a filter they did not re-consent to, sitting
-     over the control that spends. Dropping it widens the scope to the whole box, which is the
-     safe direction: the run costs more and identifies nothing that is not there. */
-  const chooseBox = useCallback((next: number) => {
-    setBox(next)
+  /* TOGGLING THE HANDOFF'S OWN BOX DROPS THE HANDOFF; TOGGLING ANY OTHER LEAVES IT ALONE.
+     D39's rule was that picking a box always dropped the tick list, on the grounds that "a
+     tick list that survived the operator deliberately choosing a box is a filter they did not
+     re-consent to, sitting over the control that spends". That reason is preserved rather than
+     weakened by scoping it to the carried box: under a single-select, choosing a box REPLACED
+     the scope, so every press was a re-consent question. Adding box 7 to a cart does not touch
+     what box 3 means, and dropping box 3's selection because box 7 was ticked would be the
+     surprise the rule exists to prevent, wearing the rule's own clothes.
+
+     Un-ticking the carried box drops it, because the selection has left the send. Re-ticking
+     that box brings back the WHOLE box, which is the safe direction: it costs more and
+     identifies nothing that is not there. */
+  const toggleBox = useCallback(
+    (next: number) => {
+      setPicked((held) => {
+        const now = new Set(held)
+        if (now.has(next)) now.delete(next)
+        else now.add(next)
+        return now
+      })
+      setCarried((held) => {
+        if (held === null || held.box !== next) return held
+        clearCarriedScope()
+        return null
+      })
+    },
+    [],
+  )
+
+  const dropCarried = useCallback(() => {
     setCarried(null)
     clearCarriedScope()
   }, [])
 
-  const indices = carried !== null && carried.box === box ? carried.indices : NONE
-
-  const scopeLine =
-    box === null
-      ? 'Pick a box.'
-      : indices.length > 0
-        ? `Box ${box} · ${indices.length} ticked card${indices.length === 1 ? '' : 's'}`
-        : `Box ${box} · the whole box`
-
   const rows = useMemo(() => (boxes === null ? [] : inOrder(boxes)), [boxes])
 
-  const scope = useMemo(() => ({ box, indices }), [box, indices])
+  /** The cart, ascending, each box carrying the cards ticked in it — which is at most one box,
+   *  because `#/inventory`'s mass-select is box-scoped and there is deliberately only one of
+   *  them in the product. */
+  const cart = useMemo<CartBox[]>(
+    () =>
+      [...picked]
+        .sort((a, b) => a - b)
+        .map((box) => ({
+          box,
+          indices: carried !== null && carried.box === box ? carried.indices : NONE,
+        })),
+    [picked, carried],
+  )
+
+  /** The one box, where there is exactly one. Bound rather than indexed twice, because
+   *  `cart[0]` is `CartBox | undefined` under this project's index checking and a `!` here
+   *  would be a claim about a length the compiler can already see. */
+  const only = cart.length === 1 ? cart[0] : undefined
+
+  const scopeLine =
+    only !== undefined
+      ? only.indices.length > 0
+        ? `Box ${only.box} · ${only.indices.length} ticked card${only.indices.length === 1 ? '' : 's'}`
+        : `Box ${only.box} · the whole box`
+      : cart.length === 0
+        ? 'Pick a box. You can pick several.'
+        : `${cart.length} boxes · ` +
+          cart
+            .map((row) =>
+              row.indices.length > 0 ? `${row.box} (${row.indices.length} ticked)` : `${row.box}`,
+            )
+            .join(', ')
 
   return (
     <main className="runs">
@@ -132,20 +192,14 @@ export function Runs() {
           <h1 className="runs-title">Runs</h1>
           <div className="runs-controls">
             <span className="runs-scope">{scopeLine}</span>
-            {indices.length === 0 ? null : (
+            {carried === null ? null : (
               /* THE WAY BACK OUT OF A HANDOFF, and it names what it does rather than saying
                  Clear. The operator arrived here from a tick list; the question they will ask
                  of this control is "how do I run the rest of the box", and that is the sentence
-                 on it. */
-              <button
-                className="runs-plain"
-                type="button"
-                onClick={() => {
-                  setCarried(null)
-                  clearCarriedScope()
-                }}
-              >
-                Run the whole box instead
+                 on it. It names the box now, because with a cart there can be others beside it
+                 and "the whole box" would not say which. */
+              <button className="runs-plain" type="button" onClick={dropCarried}>
+                Run all of box {carried.box} instead
               </button>
             )}
             <button
@@ -174,7 +228,7 @@ export function Runs() {
       )}
 
       {/* ------------------------------------------------------------------- the box picker */}
-      <div className="runs-boxes" role="group" aria-label="Which box to run">
+      <div className="runs-boxes" role="group" aria-label="Which boxes to run">
         {boxes === null && failure === null ? (
           <p className="runs-empty">Reading the boxes…</p>
         ) : rows.length === 0 ? (
@@ -184,9 +238,9 @@ export function Runs() {
             <button
               key={record.box}
               type="button"
-              className={`runs-box${record.box === box ? ' runs-box-on' : ''}`}
-              aria-pressed={record.box === box}
-              onClick={() => chooseBox(record.box)}
+              className={`runs-box${picked.has(record.box) ? ' runs-box-on' : ''}`}
+              aria-pressed={picked.has(record.box)}
+              onClick={() => toggleBox(record.box)}
             >
               <span className="runs-box-name">
                 Box {record.box}
@@ -206,7 +260,7 @@ export function Runs() {
         )}
       </div>
 
-      <RunPanel scope={scope} />
+      <RunPanel cart={cart} />
     </main>
   )
 }

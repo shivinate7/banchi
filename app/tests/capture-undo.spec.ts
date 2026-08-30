@@ -217,7 +217,7 @@ async function open(page: Page, options: { refuseDeleteFrom?: number } = {}): Pr
 async function shoot(page: Page, count: number): Promise<void> {
   for (let at = 1; at <= count; at += 1) {
     await page.keyboard.press('c')
-    await expect(rows(page).first()).toContainText(`Card ${at}`)
+    await expect(rows(page).first()).toHaveAttribute('aria-label', new RegExp(`Card ${at}$`))
   }
 }
 
@@ -235,8 +235,14 @@ test('the stack is the session, newest first, capped at ten', async ({ page }) =
   await expect(rows(page)).toHaveCount(10)
 
   // Newest first: card 12 on top, card 3 at the bottom of the ten.
-  await expect(rows(page).first()).toContainText('Card 12')
-  await expect(rows(page).last()).toContainText('Card 3')
+  /* THE ADDRESS IS READ OFF `aria-label` AND NOT OFF THE TEXT — D41's repair, right twice
+     over. `PositionLabel` draws the path as a muted stack and the slot as a figure, so no
+     contiguous `Card N` survives in the text content; the label rides `aria-label`
+     verbatim, which is what keeps the split a view of the server's string. That entry also
+     records the trap in the other direction: a text assertion of this shape goes VACUOUS
+     the day the DOM stops containing the string, and passes forever after. */
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 12$/)
+  await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 3$/)
 
   /* THE TOP ROW CARRIES ITS KEY AND THE REST CARRY THEIR DEPTH. The number on row N is how
      many cards that press deletes, which is also its ordinal — the same number twice, which
@@ -257,7 +263,7 @@ test('U undoes the most recent one, and only that one', async ({ page }) => {
   await expect(rows(page)).toHaveCount(3)
 
   expect(wire.deletes).toEqual(['/inventory/3/4'])
-  await expect(rows(page).first()).toContainText('Card 3')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 3$/)
   await expect(page.locator('.capture-undo .capture-quiet').last()).toContainText('Undone')
 })
 
@@ -275,10 +281,14 @@ test('a row undoes that card and everything after it, newest first', async ({ pa
      once and deleted one. */
   expect(wire.deletes).toEqual(['/inventory/3/5', '/inventory/3/4', '/inventory/3/3'])
 
-  await expect(rows(page).first()).toContainText('Card 2')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 2$/)
   const note = page.locator('.capture-undo .capture-quiet').last()
   await expect(note).toContainText('3 captures, back to')
-  await expect(note).toContainText('Card 3')
+  /* `.position-run`, not `.position-parts`: the inline form keeps D41's RANK and drops the
+     geometry, so it sits inside a sentence rather than stacking a path above a figure —
+     and it is its own element with its own class. Both carry the server's string on
+     `aria-label`, which is the half that matters here. */
+  await expect(note.locator('.position-run')).toHaveAttribute('aria-label', /Card 3$/)
 })
 
 test('a walk that is refused partway says how far it got, in the server’s own words', async ({
@@ -298,7 +308,7 @@ test('a walk that is refused partway says how far it got, in the server’s own 
 
   // The two that went are gone from the list; the one that refused is still on it, on top.
   await expect(rows(page)).toHaveCount(3)
-  await expect(rows(page).first()).toContainText('Card 3')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 3$/)
 
   // The server's sentence, verbatim, and its machine string beside it (docs/DESIGN.md).
   await expect(page.locator('.capture-refused')).toContainText('is the newest card in box 3')

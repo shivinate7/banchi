@@ -997,6 +997,39 @@ const WALK = [
   'Box 4 · Section 1 · Card 2',
 ]
 
+test("the owner's position treatment never reaches the Fulfiller", async ({ page }) => {
+  /* ONE HELPER CALL, and that is a property of the helpers rather than a shortcut. `openSearch`
+     calls `openList` itself, and `openList` calls `stubServer` — routing a page twice leaves the
+     second stub unable to answer, so the heading never renders and the failure reads as a missing
+     view. `openSearch` covers both surfaces in one navigation: the list is rendered on the way in
+     and `.card-locations-place-large` is what the search results draw. */
+  await openSearch(page, 'Eiscue', 2)
+
+  /* THE FIREWALL, ASSERTED AS A CAUSE. `PositionLabel` redraws the position string for the
+     OWNER's five sites — muted stacked path, promoted slot figure, interpuncts deleted. His
+     labels must go on rendering the server string as plain text, floored by this file at >=32px
+     with tabular figures, which D31 keeps unweakened.
+
+     THE GUARD IS THE COMPONENT GRAPH, NOT A SELECTOR. `Fulfillment.tsx` and
+     `CardLocations.tsx:FulfillerCard` do not import the component, so no `.position-*` rule can
+     reach a node here — which is why stripping a class prefix cannot breach it and why lifting
+     the call out of `OwnerCard` into a shared render path is the breach that would actually
+     happen.
+
+     THE REST OF THIS FILE ALREADY FIRES ON THAT BREACH, BY CONSEQUENCE: `BODY_FLOOR` would report
+     sixteen nodes under 20px, because `.position-path` sets its own 11px and that wins over the
+     container's 32px; and the `toHaveText` cases would fail on text that had become
+     `BOX 2SECTION 19`, uppercased and de-dotted. Those are symptoms. This is the cause, so a
+     breach names itself instead of being diagnosed from a font size. */
+  await expect(view(page).locator('.position-parts')).toHaveCount(0)
+  await expect(view(page).locator('.position-run')).toHaveCount(0)
+
+  /* And his label is really on screen, so the count-zero above is a firewall rather than an empty
+     view agreeing with everything. */
+  await expect(view(page).locator('.card-locations-place-large')).not.toHaveCount(0)
+})
+
+
 test('the cards for sale are listed in box-walk order, and nothing else is listed', async ({
   page,
 }) => {

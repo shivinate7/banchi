@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 
 import {
+  cropPreview,
   describeFailure,
   getRun,
   getRuns,
+  photoUrl,
   preflightRun,
   putDecisions,
   runFileUrl,
@@ -11,7 +13,14 @@ import {
   startRun,
   type Failure,
 } from './server'
-import type { CsvUpload, RunDetail, RunPreflight, RunSummary } from './types'
+import type {
+  CropPreview,
+  CsvUpload,
+  RunDetail,
+  RunPreflight,
+  RunStartFailure,
+  RunSummary,
+} from './types'
 import './RunPanel.css'
 
 /* THE PIPELINE, ON THE SCREEN THE OPERATOR IS ALREADY STANDING ON.
@@ -263,14 +272,30 @@ function Console({ text, label }: { text: string; label: string }) {
   )
 }
 
+/** One box in the cart, as the picker hands it over: which box, and which cards inside it.
+ *  The READING is not here — it is chosen per box on this panel, beside the estimate it
+ *  moves, because it is part of what the confirm is agreeing to buy. */
+export type CartBox = { box: number; indices: readonly number[] }
+
+/** How a box is read until somebody says otherwise: D32's measured-best pair.
+ *
+ *  STATED HERE RATHER THAN READ OUT OF `READINGS[0]`, because a lazy initialiser indexing
+ *  that table would be a second place the default lives and the two would drift the first
+ *  time a row was reordered. The CLI's own defaults are the OTHER corner — crop off, 1568 —
+ *  which is what `Whole frame` selects: this screen states a default rather than changing
+ *  what an unflagged terminal run means. */
+const DEFAULT_READING = { crop: true, maxEdge: 1200, custom: false }
+
+type Reading = typeof DEFAULT_READING
+
 type RunPanelProps = {
-  /** The box the walk is standing in, and the cards ticked inside it — `BoxBrowse`'s own
-   *  `onScope`. A run is scoped to what is already on screen, which is the whole reason this
-   *  panel lives on this route. */
-  scope: { box: number | null; indices: readonly number[] }
+  /** THE CART: every box this send is over, in the order the picker offers them, each with
+   *  the cards ticked inside it. `Runs.tsx` owns which boxes are in it and where a ticked
+   *  selection came from; this panel owns how each is read and everything after the press. */
+  cart: readonly CartBox[]
 }
 
-export function RunPanel({ scope }: RunPanelProps) {
+export function RunPanel({ cart }: RunPanelProps) {
   /* WHICH RUN IS OPEN, and nothing else about it. Every figure below is read from the server
    * on the next poll, so this component cannot hold a stale count — the failure that would
    * otherwise be invisible, because a wrong number on a run panel looks exactly like a right
@@ -285,22 +310,59 @@ export function RunPanel({ scope }: RunPanelProps) {
   const [quote, setQuote] = useState<RunPreflight | null>(null)
   const [ticketScope, setTicketScope] = useState<string>('')
 
-  /* The default is `READINGS[0]` — the measured pair — restated here rather than read off the
-   * table, because `useState` wants a value and a lazy initialiser reading an index would be a
-   * second place the default lives. The CLI's own defaults are the OTHER corner (crop off,
-   * 1568), which is deliberate and is what `Whole frame` selects: this screen states a default
-   * rather than changing what an unflagged terminal run means. */
-  const [crop, setCrop] = useState(true)
-  const [maxEdge, setMaxEdge] = useState(1200)
-  /* Whether the raw controls are revealed. An ACT rather than a derivation: with the pair set
-   * by the presets, the only way to reach an arbitrary number is to ask for one, and a `custom`
-   * that switched itself on whenever the pair stopped matching a row would leave the operator
-   * unable to see which of the two states they were in. */
-  const [custom, setCustom] = useState(false)
+  /* THE READING, PER BOX, AND THAT IS THE WHOLE REASON THIS IS A CART RATHER THAN ONE RUN
+   * OVER SEVERAL BOXES. D32's frontier is a cost-against-sharpness trade measured on real
+   * frames, and which end of it is right depends on what is IN the drawer: a box of bulk
+   * commons wants `Cheapest · 900`, a box worth reading a collector number off wants
+   * `Measured best · 1200`. One reading stretched across a send would make the cart a
+   * convenience bought with accuracy.
+   *
+   * SPARSE, AND `DEFAULT_READING` FILLS THE GAPS. A box the operator has not touched has no
+   * entry, so adding one to the cart cannot be a write — and a box that LEAVES the cart keeps
+   * its entry, which is deliberate: re-ticking a box you just unticked should not silently
+   * reset a reading you chose on purpose. Nothing is sent for a box that is not in the cart,
+   * so a stale entry costs a few bytes of state and no correctness at all.
+   *
+   * `custom` IS AN ACT RATHER THAN A DERIVATION, unchanged from when there was one of these.
+   * With the pair set by the presets, the only way to reach an arbitrary number is to ask for
+   * one, and a `custom` that switched itself on whenever the pair stopped matching a row would
+   * leave the operator unable to see which of the two states they were in. */
+  const [readings, setReadings] = useState<Record<number, Reading>>({})
+  const readingFor = useCallback(
+    (box: number): Reading => readings[box] ?? DEFAULT_READING,
+    [readings],
+  )
+  const setReading = useCallback((box: number, patch: Partial<Reading>) => {
+    setReadings((held) => ({ ...held, [box]: { ...(held[box] ?? DEFAULT_READING), ...patch } }))
+    /* AND THE PICTURE FOLLOWS THE READING THAT WAS JUST TOUCHED. Setting a chip on box 7's row
+     * is the act that says "I am deciding about box 7", so the preview is of box 7 from that
+     * press onward — one line, in the one function every reading change goes through, rather
+     * than four call sites each remembering to do it. */
+    setPreviewBox(box)
+  }, [])
+
   const [bypass, setBypass] = useState(false)
+
+  /* THE CROP PREVIEW'S STATE. `previewFor` is the reading-and-offset the strip on screen was
+   * drawn for, compared against the one the controls currently name — the same shape
+   * `ticketScope` uses against the estimate, and for the same reason: a picture of a reading
+   * that is no longer selected is worse than no picture, because it is believed. */
+  const [preview, setPreview] = useState<CropPreview | null>(null)
+  const [previewFor, setPreviewFor] = useState('')
+  const [previewOffset, setPreviewOffset] = useState(0)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [previewTrouble, setPreviewTrouble] = useState<string | null>(null)
+  /* WHERE THE 1:1 VIEW IS LOOKING, in the SENT image's own pixels, or null for its resting
+   * aim — the collector number where the registry claims one, the middle of the card where it
+   * does not. Null rather than a computed default so that leaving the frame returns the view
+   * to the thing worth reading rather than to wherever the pointer happened to exit. */
+  const [aim, setAim] = useState<{ x: number; y: number } | null>(null)
+  const detailRef = useRef<HTMLDivElement | null>(null)
 
   const [busy, setBusy] = useState<string | null>(null)
   const [trouble, setTrouble] = useState<Failure | null>(null)
+  /** Boxes whose child could not be spawned, from the last send. See `doStart`. */
+  const [partial, setPartial] = useState<RunStartFailure[] | null>(null)
   const [stepOut, setStepOut] = useState<{ step: string; ok: boolean; console: string } | null>(
     null,
   )
@@ -312,27 +374,76 @@ export function RunPanel({ scope }: RunPanelProps) {
    * compared by identity across renders — the array is rebuilt every time `BoxBrowse` reports
    * — and a deep compare written by hand here would be a second answer to a question a key
    * already answers. */
-  const scopeKey = useMemo(
+  /* WHAT WOULD ACTUALLY BE SENT, box by box, in the shape `server.ts` puts on the wire. One
+   * derivation feeding the preflight, the confirm and the key below, so the three can never
+   * describe different sends — which is the failure the whole two-step gate exists to
+   * prevent. */
+  const legs = useMemo(
     () =>
-      `${scope.box ?? 'none'}:${[...scope.indices].sort((a, b) => a - b).join(',')}` +
-      `:${crop ? 'crop' : 'whole'}:${maxEdge}`,
-    [scope, crop, maxEdge],
+      cart.map((row) => {
+        const reading = readings[row.box] ?? DEFAULT_READING
+        return {
+          box: row.box,
+          indices: row.indices.length > 0 ? [...row.indices] : undefined,
+          crop: reading.crop,
+          maxEdge: reading.maxEdge,
+        }
+      }),
+    [cart, readings],
   )
 
-  const scoped = scope.box !== null
-  const selection = scope.indices.length
+  /* WHETHER EVERY BOX IS READ THE SAME WAY, which decides where the sentence goes.
+   *
+   * THE SENTENCE IS PER READING, NOT PER BOX, AND A CART MADE THAT VISIBLE. D32's amendment
+   * puts three or four lines under the chips saying what the pair costs and what it buys —
+   * right for one box, and a wall for five, because the common case is a cart whose boxes are
+   * all read the same way and the paragraph is then rendered identically once per box.
+   * Observed at two boxes; at five it is fifteen lines of duplicate prose above the control
+   * that spends.
+   *
+   * Derived, never stored: a second piece of state would let the sentence disagree with the
+   * chips, which is the failure `reading` above is written to avoid one register down. Null
+   * when the readings differ, and then each box says its own — which is the case where the
+   * repetition is not repetition at all. */
+  const sharedReading = useMemo(() => {
+    if (cart.length === 0) return null
+    const first = readings[cart[0]?.box ?? -1] ?? DEFAULT_READING
+    const same = cart.every((row) => {
+      const held = readings[row.box] ?? DEFAULT_READING
+      return held.crop === first.crop && held.maxEdge === first.maxEdge && held.custom === first.custom
+    })
+    return same ? first : null
+  }, [cart, readings])
 
-  /* WHICH ROW THE PAIR IS, and the sentence that goes under it. Derived rather than stored, so
-   * the chip that reads as chosen and the values actually sent cannot come apart — the failure
-   * a second piece of state here would eventually produce. `custom` wins the tie: with the raw
-   * controls revealed, the operator is holding the knob whatever the numbers happen to say. */
-  const reading = READINGS.find((row) => row.crop === crop && row.maxEdge === maxEdge) ?? null
-  const readingSays = custom || reading === null ? CUSTOM_SAYS : reading.says
+  /* THE WHOLE SEND AS ONE STRING, so an effect can compare it. Boxes, their ticked cards and
+   * their readings cannot be compared by identity across renders — the arrays are rebuilt
+   * every time the picker reports — and a deep compare written by hand here would be a second
+   * answer to a question a key already answers.
+   *
+   * ORDER-SENSITIVE ON PURPOSE, ON THE CARDS AND NOT ON THE BOXES: the indices are sorted
+   * because ticking 4 then 2 is the same send as ticking 2 then 4, and the boxes are left in
+   * cart order because that is the order the legs are sent and the order the answer comes back
+   * in. A key that sorted the boxes would call two different-looking answers the same quote. */
+  const scopeKey = useMemo(
+    () =>
+      legs
+        .map(
+          (leg) =>
+            `${leg.box}:${(leg.indices ?? []).slice().sort((a, b) => a - b).join(',')}` +
+            `:${leg.crop ? 'crop' : 'whole'}:${leg.maxEdge}`,
+        )
+        .join('|'),
+    [legs],
+  )
+
+  const scoped = cart.length > 0
 
   useEffect(() => {
     /* THE QUOTE IS VOID THE MOMENT THE SCOPE MOVES. Not merely stale — void: it is the first
      * step of a two-step confirm, and a confirm whose first step described a different set of
-     * cards is not a confirm at all. Ticking one more card retires the estimate.
+     * cards is not a confirm at all. Ticking one more card retires the estimate, and so does
+     * adding a box to the cart or changing any box's reading — which is the same rule, now
+     * that a send can be several boxes and each carries its own.
      *
      * AND THE READING IS PART OF THE SCOPE, which this key did not say until 2026-08-25. The
      * estimate is computed from the BYTES each card is sent as, and the crop and the max edge
@@ -451,31 +562,248 @@ export function RunPanel({ scope }: RunPanelProps) {
     [],
   )
 
-  const scopeArgs = useMemo(
-    () => ({
-      box: scope.box ?? 0,
-      indices: selection > 0 ? [...scope.indices] : undefined,
-      crop,
-      maxEdge,
-    }),
-    [scope, selection, crop, maxEdge],
+  /* WHICH BOX THE PICTURE IS OF, once a send can be several (D48). The preview's whole job is
+   * showing what THIS reading sends, and a reading belongs to a box now — so the box whose
+   * chip was last pressed is the one being decided about, and the picture follows it. Null
+   * means "the first in the cart", which makes a cart of one behave exactly as it did before
+   * the cart existed.
+   *
+   * NOT one preview per row: that is N photographs decoded to answer one question, and the
+   * owner already rejected three-abreast on the plainer ground that three pictures in a row
+   * are three pictures too small to read. */
+  const [previewBox, setPreviewBox] = useState<number | null>(null)
+
+  const previewLeg = useMemo(
+    () => legs.find((leg) => leg.box === previewBox) ?? legs[0] ?? null,
+    [legs, previewBox],
+  )
+
+  const previewArgs = useMemo(
+    () =>
+      previewLeg === null
+        ? null
+        : {
+            box: previewLeg.box,
+            indices: previewLeg.indices,
+            crop: previewLeg.crop,
+            maxEdge: previewLeg.maxEdge,
+          },
+    [previewLeg],
+  )
+
+  /* THE PREVIEW'S OWN KEY, AND IT IS NOT THE CART'S. `scopeKey` covers every box and every
+   * reading, because the ESTIMATE is about the whole send; the picture is about one leg. Keyed
+   * on the cart, adding an unrelated box to it would refetch and redraw a photograph that had
+   * not changed. */
+  const previewKey =
+    previewArgs === null
+      ? ''
+      : `${previewArgs.box}:${(previewArgs.indices ?? []).join(',')}` +
+        `:${previewArgs.crop ? 'crop' : 'whole'}:${previewArgs.maxEdge}`
+
+  /* THE PREVIEW FOLLOWS THE READING, and it is keyed on `scopeKey` — the same string that
+   * voids the estimate below. The crop and the max edge are in that key already (D32's
+   * amendment put them there when unticking the crop left a stale figure over a live spend
+   * button), so a reading change redraws the picture and clears the number together. It runs
+   * BEFORE `Check cost` rather than after: this is what the pair is chosen from, and the
+   * estimate is what the choice then costs.
+   *
+   * DEBOUNCED, BECAUSE THE WALK IS HELD DOWN AS OFTEN AS IT IS TAPPED. An arrow key repeating
+   * at ~30/s against a route that decodes a photograph would queue a request per frame for a
+   * card nobody is looking at. 140ms is under the interval a key repeat produces and over the
+   * one a human tapping produces, so a tap is immediate and a hold costs one request when it
+   * stops.
+   *
+   * THE PREVIOUS CARD STAYS UP WHILE THE NEXT IS FETCHED. Blanking would make every press
+   * flash the tallest block in this column out of and back into the document, and the column
+   * beside it holds the button that spends. */
+  useEffect(() => {
+    if (!scoped || previewArgs === null) {
+      setPreview(null)
+      setPreviewFor('')
+      return
+    }
+    const want = `${previewKey}:${previewOffset}`
+    if (previewFor === want) return
+    let live = true
+    const timer = setTimeout(() => {
+      setPreviewBusy(true)
+      void (async () => {
+        try {
+          const answer = await cropPreview({ ...previewArgs, offset: previewOffset })
+          if (!live) return
+          setPreview(answer)
+          setPreviewTrouble(null)
+        } catch (err) {
+          if (!live) return
+          /* NAMED, NOT SWALLOWED. The one refusal an operator will actually meet is
+           * `imaging_unavailable` — Pillow missing from the SERVER's interpreter — and its
+           * remedy is a `make venv` and a restart they cannot guess at from an empty panel. */
+          setPreview(null)
+          setPreviewTrouble(describeFailure(err).message)
+        } finally {
+          if (live) {
+            setPreviewFor(want)
+            setPreviewBusy(false)
+          }
+        }
+      })()
+    }, 140)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [scoped, previewKey, previewOffset, previewFor, previewArgs])
+
+  /* THE AIM IS RELEASED WHEN THE PICTURE CHANGES. It is a position in the SENT image's
+   * pixels, and those move when the reading or the card does — so an aim carried across a
+   * change would be pointing at a coordinate that no longer means what it meant. */
+  useEffect(() => {
+    setAim(null)
+  }, [previewFor])
+
+  /* A NEW BOX STARTS AT THE FRONT OF ITS OWN WALK. Without this, stepping through box 2 and
+   * then picking box 6 would open box 6 at somebody else's offset.
+   *
+   * KEYED ON THE RESOLVED BOX AND NOT ON `previewBox`, WHICH IS THE DIFFERENCE BETWEEN A NEW
+   * BOX AND A NEW READING. `previewBox` starts null and `previewLeg` falls back to the first
+   * leg, so the first chip press changes the STATE from null to a box without changing which
+   * box is being previewed — and keyed on the state, that press reset the walk. Caught by
+   * `run-panel.spec.ts`'s arrow-key case: step to card 2, press Custom, and the caption fell
+   * back to card 1. Setting the reading of the box you are already looking at must not throw
+   * away where you are in it. */
+  useEffect(() => {
+    setPreviewOffset(0)
+  }, [previewLeg?.box])
+
+  /* THE WALK WRAPS RATHER THAN STOPPING, and it wraps HERE as well as on the route: the
+   * server takes `offset % total` so a stale client can never send a negative, and this keeps
+   * the number the caption prints inside the box the operator is looking at. */
+  const stepPreview = useCallback(
+    (by: number) =>
+      setPreviewOffset((was) => {
+        const total = preview?.total ?? 0
+        return total > 0 ? (was + by + total) % total : Math.max(0, was + by)
+      }),
+    [preview],
+  )
+
+  /* ARROW KEYS WALK THE BOX — the owner asked for them by name, and the buttons beside the
+   * card do the same thing because a key with no visible control is a key nobody finds.
+   *
+   * GUARDED ON THE EVENT'S TARGET, which is the whole subtlety. This panel holds a number
+   * input (Custom's max edge) and a textarea (`decisions.json`), and an unguarded window
+   * listener would steal the caret keys from both — the operator would be unable to move
+   * through a number they were editing. Modifier chords are left alone too: they belong to
+   * the browser and to `App.tsx`'s route chords. */
+  useEffect(() => {
+    if (!scoped) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return
+      }
+      event.preventDefault()
+      stepPreview(event.key === 'ArrowRight' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [scoped, stepPreview])
+
+  /* THE 1:1 VIEW'S POSITION, in the sent image's own pixels.
+   *
+   * `background-size: auto` paints the file at its natural size and `background-position`
+   * picks which natural pixel sits in the corner — that pair IS 1:1, with no scaling
+   * arithmetic to get wrong. It is the review queue's loupe, aimed at the PAYLOAD instead of
+   * at the stored photograph, and for the reason that screen gives: FADGI and Metamorfoze
+   * both require this class of judgement at 100%, and a downscale is exactly what is being
+   * judged here.
+   *
+   * CLAMPED INTO THE IMAGE, so the window never shows more empty ground than picture at the
+   * edges of a card. */
+  const detailPosition = useMemo(() => {
+    const sample = preview?.sample
+    if (sample?.sent == null) return undefined
+    const [sentW, sentH] = sample.sent
+    const node = detailRef.current
+    const viewW = node?.offsetWidth ?? 320
+    const viewH = node?.offsetHeight ?? 140
+    let x: number
+    let y: number
+    if (aim !== null) {
+      x = aim.x
+      y = aim.y
+    } else if (sample.band_rect != null) {
+      /* THE RESTING AIM IS THE COLLECTOR NUMBER, left-aligned and vertically centred on the
+         band — the registry knows where it is on a Pokemon card, so the operator should not
+         have to go looking for the one region that decides the run. */
+      x = sample.band_rect[0]
+      y = sample.band_rect[1] + (sample.band_rect[3] - sample.band_rect[1] - viewH) / 2
+    } else {
+      x = (sentW - viewW) / 2
+      y = (sentH - viewH) / 2
+    }
+    x = Math.max(0, Math.min(x, Math.max(0, sentW - viewW)))
+    y = Math.max(0, Math.min(y, Math.max(0, sentH - viewH)))
+    return `${-Math.round(x)}px ${-Math.round(y)}px`
+  }, [preview, aim])
+
+  /* POINTING AT THE FRAME AIMS THE 1:1 VIEW. The frame is drawn at a fraction of the sent
+   * image's size, so a pointer position has to travel two coordinate systems: the box is the
+   * ORIGINAL frame, and the view reads the SENT one. `rect` is the map between them, and its
+   * absence is the whole-frame case where the two differ only by scale.
+   *
+   * IT IS WHAT MAKES A GAME WITH NO BAND USABLE AT ALL. The registry cannot say where a
+   * Riftbound card prints its identifier, and it does not have to: the operator can. */
+  const aimAt = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const sample = preview?.sample
+      if (sample?.frame == null || sample.sent == null) return
+      const node = detailRef.current
+      const box = event.currentTarget.getBoundingClientRect()
+      if (box.width === 0 || box.height === 0) return
+      const [frameW, frameH] = sample.frame
+      const cut = sample.rect ?? [0, 0, frameW, frameH]
+      const originalX = ((event.clientX - box.left) / box.width) * frameW
+      const originalY = ((event.clientY - box.top) / box.height) * frameH
+      const sentX = ((originalX - cut[0]) / (cut[2] - cut[0])) * sample.sent[0]
+      const sentY = ((originalY - cut[1]) / (cut[3] - cut[1])) * sample.sent[1]
+      setAim({
+        x: sentX - (node?.offsetWidth ?? 320) / 2,
+        y: sentY - (node?.offsetHeight ?? 140) / 2,
+      })
+    },
+    [preview],
   )
 
   const doQuote = () =>
     guard('quote', async () => {
-      const answer = await preflightRun(scopeArgs)
+      const answer = await preflightRun(legs)
       setQuote(answer)
       setTicketScope(scopeKey)
     })
 
   const doStart = () =>
     guard('start', async () => {
-      const started = await startRun(scopeArgs)
-      /* The quote is spent. Clearing it forces a fresh preflight before a second run can be
+      const answer = await startRun(legs)
+      /* The quote is spent. Clearing it forces a fresh preflight before a second send can be
        * started, which is what stops a confirm being pressed twice on one estimate. */
       setQuote(null)
       setTicketScope('')
-      setOpenRun(started.run)
+      /* WHAT DID NOT START, KEPT ON SCREEN UNTIL THE NEXT PRESS. `Popen` can fail on the
+       * fourth leg after three have started and no validation sees that coming, so the route
+       * answers with both halves and this is where the failed half is drawn. Swallowing it
+       * would report a partial send as a whole one, which is an invoice nobody can account
+       * for. */
+      setPartial(answer.failed.length > 0 ? answer.failed : null)
+      /* The FIRST run started, which for a cart of one is the only one. Opening it is what
+       * the operator wants next either way — the rest are one click down the list, and a
+       * panel that opened the last of five would be answering a question nobody asked. */
+      const first = answer.started[0]
+      if (first !== undefined) setOpenRun(first.run)
       await loadRuns()
     })
 
@@ -594,18 +922,26 @@ export function RunPanel({ scope }: RunPanelProps) {
      over date-prefixed run names — so walking once and pushing into three buckets keeps each
      group newest-first for free. Comparing `created_at` would be worse than useless: it is
      `string | null | undefined`, and a run missing it would sort to an arbitrary end. */
+  const inCart = new Set(cart.map((row) => row.box))
   const running: RunSummary[] = []
   const mine: RunSummary[] = []
   const other: RunSummary[] = []
   for (const row of runs) {
     if (row.live) running.push(row)
-    else if (scope.box !== null && boxOf(row) === scope.box) mine.push(row)
+    else if (inCart.has(boxOf(row) ?? -1)) mine.push(row)
     else other.push(row)
   }
 
-  /* No box in the walk means no box to group against, so the list is drawn exactly as the
-     server sent it — a distinction with nothing to distinguish is chrome. */
-  const grouped = scope.box === null
+  /* No box in the cart means no box to group against, so the list is drawn exactly as the
+     server sent it — a distinction with nothing to distinguish is chrome.
+
+     THIS TEST WAS INVERTED AND THE GROUPING IT COMPUTED WAS THROWN AWAY. It read
+     `scope.box === null`, so the partition above ran, produced `mine`, and then rendered
+     `runs` in server order whenever a box actually WAS selected — while an unscoped screen,
+     where `mine` is empty by construction, got the three-group order and could draw an
+     `other boxes` caption with no box to be other than. Both halves were backwards at once,
+     which is why neither looked wrong on its own. */
+  const grouped = cart.length > 0
   const runRows = grouped
     ? [...running, ...mine, ...other].map(runRow)
     : runs.map(runRow)
@@ -696,73 +1032,143 @@ export function RunPanel({ scope }: RunPanelProps) {
         </div>
         <p className="run-step-note">{STEPS[0].note}</p>
 
-        {/* THE READING, AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above for the
-            measurement that decides it, and for why a checkbox beside a free number was an
-            invitation to spend more by asking for less. */}
-        <div
-          className="run-controls run-readings"
-          role="group"
-          aria-label="How the cards are read"
-        >
-          {READINGS.map((row) => (
-            <button
-              key={row.key}
-              type="button"
-              className="run-button run-reading"
-              aria-pressed={!custom && reading?.key === row.key}
-              onClick={() => {
-                setCustom(false)
-                setCrop(row.crop)
-                setMaxEdge(row.maxEdge)
-              }}
-            >
-              {row.label}
-              <span className="run-reading-edge">{row.maxEdge}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className="run-button run-reading"
-            aria-pressed={custom}
-            onClick={() => setCustom(true)}
-          >
-            Custom
-          </button>
-        </div>
+        <div className="run-identify">
+          <div className="run-identify-controls">
 
-        {custom && (
-          /* THE RAW CONTROLS, UNCHANGED AND DEMOTED RATHER THAN DELETED. `Sharpest · 1400` and
-             everything else on D32's frontier is reachable here, and so is every pairing the
-             three rows above refuse to offer — including the wrong one, which is why the
-             sentence beneath this block is the one that names it. */
-          <div className="run-controls">
-            <label className="run-toggle">
-              <input
-                type="checkbox"
-                checked={crop}
-                onChange={(event) => setCrop(event.target.checked)}
-              />
-              Crop to the card
-            </label>
-            <label className="run-field">
-              Max edge
-              <input
-                type="number"
-                min={256}
-                max={4096}
-                step={100}
-                value={maxEdge}
-                onChange={(event) => setMaxEdge(Number(event.target.value))}
-              />
-              px
-            </label>
-          </div>
+        {/* ------------------------------------------------------------------- the cart
+
+            ONE ROW PER BOX, EACH WITH ITS OWN READING. The strip on this page decides WHICH
+            boxes; this decides how each is read, because the reading is part of what the
+            confirm below is agreeing to buy — the estimate is computed from the bytes each
+            card is sent as, and the crop and the max edge are what decide those.
+
+            EVERY BOX IN THE CART IS ITS OWN RUN. One press starts several children, and
+            nothing downstream learns a new shape: each box gets a run directory, a manifest,
+            a queue, its own `--bypass` decision at join and its own `decisions.json`. What is
+            new is a fact about the REQUEST, not about a run.
+
+            THE READING IS DRAWN AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above
+            for the measurement that decides it, and for why a checkbox beside a free number
+            was an invitation to spend more by asking for less. */}
+        {cart.length === 0 ? (
+          <p className="run-needs">Pick a box above. You can pick several.</p>
+        ) : (
+          cart.map((row) => {
+            const held = readingFor(row.box)
+            /* WHICH ROW THE PAIR IS, and the sentence that goes under it. Derived rather than
+               stored, so the chip that reads as chosen and the values actually sent cannot
+               come apart — the failure a second piece of state here would eventually produce.
+               `custom` wins the tie: with the raw controls revealed, the operator is holding
+               the knob whatever the numbers happen to say. */
+            const match =
+              READINGS.find((r) => r.crop === held.crop && r.maxEdge === held.maxEdge) ?? null
+            return (
+              <div className="run-leg" key={row.box}>
+                <p className="run-leg-head">
+                  <span className="run-leg-box">Box {row.box}</span>
+                  <span className="run-leg-scope">
+                    {row.indices.length > 0
+                      ? `${row.indices.length} ticked card${row.indices.length === 1 ? '' : 's'}`
+                      : 'the whole box'}
+                  </span>
+                </p>
+
+                <div
+                  className="run-controls run-readings"
+                  role="group"
+                  aria-label={`How box ${row.box} is read`}
+                >
+                  {READINGS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className="run-button run-reading"
+                      aria-pressed={!held.custom && match?.key === option.key}
+                      onClick={() =>
+                        setReading(row.box, {
+                          custom: false,
+                          crop: option.crop,
+                          maxEdge: option.maxEdge,
+                        })
+                      }
+                    >
+                      {option.label}
+                      <span className="run-reading-edge">{option.maxEdge}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="run-button run-reading"
+                    aria-pressed={held.custom}
+                    onClick={() => setReading(row.box, { custom: true })}
+                  >
+                    Custom
+                  </button>
+                </div>
+
+                {held.custom && (
+                  /* THE RAW CONTROLS, UNCHANGED AND DEMOTED RATHER THAN DELETED.
+                     `Sharpest · 1400` and everything else on D32's frontier is reachable
+                     here, and so is every pairing the three chips refuse to offer —
+                     including the wrong one, which is why the sentence beneath this block is
+                     the one that names it. */
+                  <div className="run-controls">
+                    <label className="run-toggle">
+                      <input
+                        type="checkbox"
+                        checked={held.crop}
+                        onChange={(event) =>
+                          setReading(row.box, { crop: event.target.checked })
+                        }
+                      />
+                      Crop to the card
+                    </label>
+                    <label className="run-field">
+                      Max edge
+                      <input
+                        type="number"
+                        min={256}
+                        max={4096}
+                        step={100}
+                        value={held.maxEdge}
+                        onChange={(event) =>
+                          setReading(row.box, { maxEdge: Number(event.target.value) })
+                        }
+                      />
+                      px
+                    </label>
+                  </div>
+                )}
+
+                {/* WHAT THE READING MEANS, BEFORE Check cost IS PRESSED. The command prints
+                    its own crop line into the preflight stdout below, and that line is the
+                    receipt — but a receipt arrives after the decision, and this is the
+                    decision.
+
+                    DRAWN HERE ONLY WHERE THE BOXES DISAGREE. Where they all read the same way
+                    it is hoisted to one line beneath the cart, because the sentence is about
+                    the READING and not about the box — see `sharedReading`. */}
+                {sharedReading !== null ? null : (
+                  <p className="run-step-note run-step-fine">
+                    {held.custom || match === null ? CUSTOM_SAYS : match.says}
+                  </p>
+                )}
+              </div>
+            )
+          })
         )}
 
-        {/* WHAT THE READING MEANS, BEFORE Check cost IS PRESSED. The command prints its own
-            crop line into the preflight stdout below, and that line is the receipt — but a
-            receipt arrives after the decision, and this is the decision. */}
-        <p className="run-step-note run-step-fine">{readingSays}</p>
+        {sharedReading === null ? null : (
+          /* ONE SENTENCE FOR A CART READ ONE WAY. Same text, same register, same place in the
+             reading order — what changes is that it is said once. */
+          <p className="run-step-note run-step-fine">
+            {sharedReading.custom
+              ? CUSTOM_SAYS
+              : (READINGS.find(
+                  (row) => row.crop === sharedReading.crop && row.maxEdge === sharedReading.maxEdge,
+                )?.says ?? CUSTOM_SAYS)}
+          </p>
+        )}
 
         <div className="run-actions">
           <button
@@ -771,57 +1177,101 @@ export function RunPanel({ scope }: RunPanelProps) {
             disabled={!scoped || busy !== null}
             onClick={() => void doQuote()}
           >
-            {busy === 'quote' ? 'Checking…' : 'Check cost'}
+            {busy === 'quote'
+              ? 'Checking…'
+              : cart.length > 1
+                ? `Check cost for ${cart.length} boxes`
+                : 'Check cost'}
           </button>
         </div>
+
+        {partial === null ? null : (
+          /* WHAT DID NOT GO, FROM THE LAST PRESS. Drawn as loudly as a refusal because it is
+             one, arriving after the rest of the send already succeeded — the boxes named here
+             have no run and no invoice, and pressing again is what starts them. */
+          <div className="run-note">
+            <p className="run-note-text">
+              {partial.length} box{partial.length === 1 ? '' : 'es'} did not start. The rest of
+              the send did. Press again for {partial.length === 1 ? 'it' : 'them'}.
+            </p>
+            {partial.map((row) => (
+              <p className="run-machine" key={row.box}>
+                box {row.box} · {row.code} · {row.message}
+              </p>
+            ))}
+          </div>
+        )}
 
         {quote === null ? null : (
           <div className="run-quote">
             {/* STEP ONE OF THE TWO-STEP CONFIRM, and the confirm below cannot be reached
-                without it. The numbers are the command's own — lifted out of its preflight
-                stdout rather than recomputed anywhere — so what is on this screen and what is
-                in the run's log are the same string. */}
+                without it. The numbers are the commands' own — lifted out of each box's
+                preflight stdout rather than recomputed anywhere — and the TOTAL is summed on
+                the server, because the figure the confirm is gated on must not be a `reduce`
+                in TypeScript sitting beside the per-box figures it claims to add up. */}
             <dl className="run-figures">
               <div>
                 <dt>Photographs</dt>
-                <dd>{count(quote.photographs)}</dd>
+                <dd>{count(quote.total.photographs)}</dd>
               </div>
               <div>
                 <dt>Already answered</dt>
-                <dd>{count(quote.cache_hits)}</dd>
+                <dd>{count(quote.total.cache_hits)}</dd>
               </div>
               <div>
                 <dt>To send</dt>
-                <dd>{count(quote.to_send)}</dd>
+                <dd>{count(quote.total.to_send)}</dd>
               </div>
               <div className="run-figure-money">
                 <dt>Estimated cost</dt>
-                <dd>{money(quote.estimate_usd)}</dd>
+                <dd>{money(quote.total.estimate_usd)}</dd>
               </div>
             </dl>
 
-            {(quote.cache_hits ?? 0) > 0 && (
-              /* WHAT `Already answered` COSTS YOU, said where that figure is drawn. D32 records
-                 it as a known gap kept deliberately: neither the crop nor the max edge is part
-                 of the cache identity, so a box re-read at a different reading serves the
-                 answers it was first read with and reports them as hits. That is safe and it is
-                 not obvious, and the two controls it silently ignores are directly above.
-                 Stated as what it means to the person about to press the button rather than as
-                 a fact about a hash — the panel has no business naming `prompt_fingerprint`. */
+            {quote.scopes.length < 2 ? null : (
+              /* PER BOX, ONLY WHERE THERE IS MORE THAN ONE. For a single box the total IS the
+                 box, and a second row restating it is chrome that says nothing — the same
+                 judgement `otherCaption` makes about a group with nothing to be grouped
+                 against. One line each rather than four figures, because what a person checks
+                 here is that the boxes are the ones they meant and that no single one is
+                 wildly dearer than they expected. */
+              <dl className="run-legs">
+                {quote.scopes.map((leg) => (
+                  <div key={leg.scope.box}>
+                    <dt>Box {leg.scope.box}</dt>
+                    <dd>
+                      {count(leg.to_send)} to send · {money(leg.estimate_usd)}
+                      {leg.scope.whole_box ? '' : ` · ${count(leg.scope.cards)} ticked`}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {(quote.total.cache_hits ?? 0) > 0 && (
+              /* WHAT `Already answered` COSTS YOU, said where that figure is drawn. D32
+                 records it as a known gap kept deliberately: neither the crop nor the max
+                 edge is part of the cache identity, so a box re-read at a different reading
+                 serves the answers it was first read with and reports them as hits. That is
+                 safe and it is not obvious, and the controls it silently ignores are directly
+                 above. Stated as what it means to the person about to press the button rather
+                 than as a fact about a hash — the panel has no business naming
+                 `prompt_fingerprint`. */
               <p className="run-step-note run-step-fine">
-                Cards already answered keep the answer they were first read with. The reading
-                above only reaches the cards being sent.
+                Cards already answered keep the answer they were first read with. The readings
+                above only reach the cards being sent.
               </p>
             )}
 
-            <Console text={quote.console} label="What the preflight printed" />
-
-            {quote.busy_run !== null ? (
+            {quote.total.busy.length > 0 ? (
               <p className="run-blocked">
-                {quote.busy_run} is already identifying these cards. Two runs over one box is
-                two invoices for one answer — open it below and watch it instead.
+                {quote.total.busy
+                  .map((row) => `${row.run} is already identifying box ${row.box}`)
+                  .join('. ')}
+                . Two runs over one box is two invoices for one answer — open it below and
+                watch it instead. Nothing in this send would start while that is true.
               </p>
-            ) : quote.to_send === 0 ? (
+            ) : quote.total.to_send === 0 ? (
               <p className="run-blocked">
                 Every one of these cards is already answered and cached. There is nothing to
                 send and nothing to spend.
@@ -835,11 +1285,200 @@ export function RunPanel({ scope }: RunPanelProps) {
               >
                 {busy === 'start'
                   ? 'Starting…'
-                  : `Spend ${money(quote.estimate_usd)} and identify ${count(quote.to_send)} cards`}
+                  : `Spend ${money(quote.total.estimate_usd)} and identify ` +
+                    `${count(quote.total.to_send)} cards` +
+                    (quote.scopes.length > 1 ? ` in ${quote.scopes.length} boxes` : '')}
               </button>
             )}
+
+            {/* EVERY COMMAND'S STDOUT, VERBATIM, BENEATH THE CONTROL RATHER THAN ABOVE IT.
+                D33's copy rule is that the pipeline's own words appear on the owner's screens
+                unsummarised, and they do — one console per box, each labelled with its box.
+                What moved is the ORDER, and only once a cart can hold several: a console is
+                capped at 260px, so five of them above the button would put the confirm most
+                of a screen below the figures it is confirming, which is the one thing the
+                money gate may not allow. The figures are the decision and the consoles are
+                the evidence; the decision goes first. */}
+            {quote.scopes.map((leg) => (
+              <Console
+                key={leg.scope.box}
+                text={leg.console}
+                label={`What the preflight printed for box ${leg.scope.box}`}
+              />
+            ))}
           </div>
         )}
+          </div>
+
+          {/* WHAT THE READING SENDS, AS A PICTURE, BESIDE THE CONTROL THAT SETS IT.
+              D32's amendment answered "walk me through how im supposed to understand crop with
+              just this dialog box" with three named pairs and a sentence each. The sentences are
+              true and they are prose about pixels; this is the same answer in the medium the
+              decision is actually about.
+
+              ONE CARD, AT THE SIZE OF ITS OWN COLUMN (the owner, 2026-08-29). It was three
+              abreast under the chips for a few hours, sampled evenly across the box because
+              cards move on the tray — sound about sampling, and it lost to a plainer fact: three
+              pictures in a row are three small pictures, and the operator could not see what
+              they were being shown. The spread is reached by WALKING now, which is also the only
+              version of it that lets you look at a card you actually suspect. */}
+          {scoped && (previewTrouble !== null || preview !== null) && (
+            <div className="run-preview">
+              <div className="run-preview-head">
+                <h4 className="run-preview-title">What this sends</h4>
+                {preview !== null && (
+                  <span className="run-preview-count">
+                    card {preview.offset + 1} of {count(preview.total)}
+                  </span>
+                )}
+              </div>
+
+              {previewTrouble !== null ? (
+                <p className="run-step-note run-step-fine">{previewTrouble}</p>
+              ) : preview === null ? null : preview.sample.unreadable !== undefined ||
+                preview.sample.frame === undefined ? (
+                <p className="run-preview-fact">
+                  #{preview.sample.index} — this photograph cannot be decoded, so nothing is
+                  sent for it.
+                </p>
+              ) : (
+                <div className="run-preview-card" aria-busy={previewBusy}>
+                  <div
+                    className="run-preview-frame"
+                    onPointerMove={aimAt}
+                    onPointerLeave={() => setAim(null)}
+                  >
+                    {/* WHAT IS THROWN AWAY, AND IT IS DRAWN AS SUCH. The stored photograph
+                        sits underneath at a low opacity, so the margin outside the cut is
+                        visible as something the run will never see rather than as an equal
+                        part of the picture. */}
+                    <img
+                      className="run-preview-ghost"
+                      src={photoUrl(preview.sample.box, preview.sample.index)}
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                    />
+                    {/* THE PAYLOAD ITSELF, at the cut's own position. This is the half the
+                        owner asked for: the frame used to draw the stored file, which is the
+                        same bytes at every reading — so the one thing being changed was the
+                        one thing the picture could not show. Positioned in PERCENTAGES of the
+                        frame, so it is right at whatever size the column happens to give it. */}
+                    {preview.sample.sent_image != null && (
+                      <img
+                        className="run-preview-sent"
+                        src={preview.sample.sent_image}
+                        alt={`Box ${preview.sample.box}, card ${preview.sample.index}, as this reading sends it`}
+                        draggable={false}
+                        style={
+                          preview.sample.rect != null && preview.sample.frame != null
+                            ? {
+                                left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
+                                top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
+                                width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
+                                height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
+                              }
+                            : { left: 0, top: 0, width: '100%', height: '100%' }
+                        }
+                      />
+                    )}
+                    {preview.sample.rect != null && preview.sample.frame != null && (
+                      <div
+                        className="run-preview-cut"
+                        style={{
+                          left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
+                          top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
+                          width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
+                          height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* THE 1:1 WINDOW, onto the SAME file the frame is drawing. `background-size:
+                      auto` paints it at its natural size, so this is where the reading is
+                      actually legible: the frame is ~28% of the sent pixels and no downscale is
+                      distinguishable at that size, while here 1200 and 900 cannot look alike.
+
+                      IT RESTS ON THE COLLECTOR NUMBER and follows the pointer over the frame.
+                      The registry knows where the number is on a Pokemon card; on a game where
+                      it does not, the operator points at it themselves — which is what makes
+                      this usable for Riftbound at all. */}
+                  <div
+                    ref={detailRef}
+                    className="run-preview-detail"
+                    style={{
+                      backgroundImage:
+                        preview.sample.sent_image != null
+                          ? `url(${preview.sample.sent_image})`
+                          : undefined,
+                      backgroundPosition: detailPosition,
+                    }}
+                    role="img"
+                    aria-label={`Card ${preview.sample.index} at full size, as this reading sends it`}
+                  />
+                  <p className="run-preview-fact">
+                    <span>{aim === null ? 'resting on the collector number' : 'where you are pointing'}</span>
+                    <span>at 1:1</span>
+                    {preview.sample.band_px != null && (
+                      <span>
+                        number {preview.sample.band_px[0]}×{preview.sample.band_px[1]}
+                      </span>
+                    )}
+                  </p>
+                  {preview.sample.band_absent != null && (
+                    /* THE REGISTRY REFUSED A RESTING AIM AND SAYS SO. `pipeline/games.py` holds
+                       which bands a game claims, and only `pokemon` claims a number band — the
+                       fractions in `geometry/crop.py` were measured on a Pokemon card. This
+                       block drew them over a Riftbound card for one afternoon and rendered its
+                       rules text as though it were a collector number. */
+                    <p className="run-step-note run-step-fine">{preview.sample.band_absent}</p>
+                  )}
+
+                  <p className="run-preview-fact">
+                    <span className="run-preview-slot">#{preview.sample.index}</span>
+                    {/* THE CARD ABOVE IS THE PAYLOAD, DRAWN SMALL, AND THAT HAS TO BE SAID.
+                        It is ~28% of the sent pixels, and no two downscales are
+                        distinguishable at that size — so an operator comparing 1200 against
+                        900 up there will correctly see no difference and wrongly conclude
+                        there is none. This sentence points at the window that can show it. */}
+                    {preview.sample.sent != null && (
+                      <span>
+                        sends {preview.sample.sent[0]}×{preview.sample.sent[1]}, shown reduced
+                      </span>
+                    )}
+                    {/* A REFUSAL IS NOT THE SAME FACT AS THE CROP BEING OFF, and `rect` alone
+                        cannot tell them apart. */}
+                    {preview.sample.method == null && <span>no card found — sent whole</span>}
+                  </p>
+
+                  {/* THE WALK. Arrow keys do the same thing, which is what the owner asked
+                      for; these exist because a key with no visible control is a key nobody
+                      finds, and because a pointer is sometimes already in the hand. */}
+                  <div className="run-preview-walk">
+                    <button
+                      type="button"
+                      className="run-button run-preview-step"
+                      aria-label="The card before this one"
+                      onClick={() => setPreviewOffset((was) => was - 1)}
+                    >
+                      ←
+                    </button>
+                    <span className="run-preview-hint">arrow keys walk the box</span>
+                    <button
+                      type="button"
+                      className="run-button run-preview-step"
+                      aria-label="The card after this one"
+                      onClick={() => setPreviewOffset((was) => was + 1)}
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ the run list */}
@@ -946,6 +1585,25 @@ export function RunPanel({ scope }: RunPanelProps) {
                     aria-label={`See ${count(detail.counts.queued_parked)} parked in the review queue`}
                   >
                     {count(detail.counts.queued_parked)}
+                  </a>
+                </dd>
+              </div>
+              <div>
+                {/* THE WAY INTO PRICING, AND IT IS A LINK RATHER THAN A HANDOFF (D49). A run
+                    name has ONE source of truth — `GET /pipeline/runs` reads the runs
+                    directory — so `#/pricing` draws its own picker and cannot disagree with
+                    anything, which is the property D39's ticked selection did not have and
+                    the reason that one needed `sessionStorage`. Carrying the name in the URL
+                    removes the double-pick at no cost: no second storage key, no clearing
+                    rules, and `,P` on its own still lands on a picker that works. */}
+                <dt>Price</dt>
+                <dd>
+                  <a
+                    className="run-figure-link"
+                    href={`#/pricing?run=${encodeURIComponent(detail.run)}`}
+                    aria-label={`Price the ${count(detail.counts.skus)} SKUs in ${detail.run}`}
+                  >
+                    {count(detail.counts.skus)}
                   </a>
                 </dd>
               </div>

@@ -63,6 +63,14 @@ function card(input: {
   section: number
   sectionStart: number
   sectionEnd: number
+  /** Which box the card is in. Defaults to the one box every case below walks; the jump tests
+   *  are the only ones that need a second, because a walk-to is only interesting when it
+   *  changes what the strip is pointing at. */
+  box?: number
+  boxName?: string
+  /** The box's fill, for the place block's own fraction. A parameter so a one-card box does
+   *  not claim a five-card denominator — the failure D20 spends its entry on, in a fixture. */
+  boxTotal?: number
   captureId?: string | null
   /** D23's rarity claim, as a set. A list here is the shape `pipeline/games.py` authors. */
   rarity?: string[] | null
@@ -76,7 +84,8 @@ function card(input: {
    *  the store is mostly still full of. A row that passes a list is the new shape. */
   finish?: string | string[] | null
 }) {
-  const box = 2
+  const box = input.box ?? 2
+  const boxTotal = input.boxTotal ?? 5
 
   /* `card` IS THE SLOT INSIDE THE SECTION AND `index` IS THE BOX-WIDE ALLOCATOR NUMBER, which
      is what the server sends and what this fixture used to conflate — it set `card: index`, so
@@ -100,12 +109,12 @@ function card(input: {
       index: input.index,
       section: input.section,
       card: slot,
-      box_name: 'ME01 commons',
+      box_name: input.boxName ?? 'ME01 commons',
       section_start: input.sectionStart,
       section_end: input.sectionEnd,
-      box_total: 5,
+      box_total: boxTotal,
       box_closed: false,
-      fraction: input.index / 5,
+      fraction: input.index / boxTotal,
       neighbors: null,
       gaps_in_section: 0,
     },
@@ -141,7 +150,12 @@ function card(input: {
  *   4      sold, 5 retired — the terminal states, which draw a word instead of the controls
  *          and which the mid-box delete must not offer itself on
  */
-const CARDS = {
+/** Whatever `GET /inventory` is answering with for one test — the default five, or a map a
+ *  jump test hands in. Loose in its keys so a second box can be added without the default map's
+ *  key union closing the door on it. */
+type Cards = Record<string, ReturnType<typeof card>>
+
+const CARDS: Cards = {
   '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3 }),
   /* THE MISC-SHAPED CARD: no name, no SKU, and the two claims that are the only thing telling it
      apart. D22 makes exactly this the case the note exists for — "it carries a free-text operator
@@ -232,14 +246,23 @@ const GAMES = {
   ],
 }
 
-/** The per-SKU facts `GET /search` reports beside the copies. Only the two-copy SKU carries
- *  interesting numbers; the other two exist so that selecting a card in the SECOND section
- *  reaches a real group and therefore draws a real position bar. */
-const LISTED: Record<string, { listed: { pushed: number; staged: number; live: number }; on_hand: number }> = {
-  '8937370': { listed: { pushed: 0, staged: 2, live: 1 }, on_hand: 2 },
-  '8937371': { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 },
-  '8937372': { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 },
+/** The per-SKU LISTING STAGES `GET /search` reports beside the copies. Only the two-copy SKU
+ *  carries interesting numbers; the other two exist so that selecting a card in the SECOND
+ *  section reaches a real group and therefore draws a real position bar.
+ *
+ *  `on_hand` IS NOT HERE, and used to be. It is D7's count of copies that have not left, which
+ *  is a fact about the copies in the answer — so the answer counts them (see `searchAnswer`)
+ *  rather than restating a number a differently-sized card map would contradict. The three
+ *  literals it replaced all agreed with the count, which is why nothing below moved. */
+const LISTED: Record<string, { pushed: number; staged: number; live: number }> = {
+  '8937370': { pushed: 0, staged: 2, live: 1 },
+  '8937371': { pushed: 0, staged: 0, live: 0 },
+  '8937372': { pushed: 0, staged: 0, live: 0 },
 }
+
+/** The two doors out of inventory — `master.TERMINAL_STATES`. A copy behind either is not on
+ *  hand, which is the one rule `on_hand` applies. */
+const GONE = ['sold', 'retired']
 
 /** Which store keys a query reaches, in the shape `do_search` matches with: the SKU, the name,
  *  or the set hint — three of the six fields the real matcher reads.
@@ -248,10 +271,10 @@ const LISTED: Record<string, { listed: { pushed: number; staged: number; live: n
  *  carries `ME01`, so that one query reaches copies in BOTH sections — which is the only shape
  *  that can test the owner's ask that a search make every match immediately findable. A query
  *  matching one section proves nothing about a match folded away in the other. */
-function keysFor(query: string): string[] {
+function keysFor(query: string, cards: Cards = CARDS): string[] {
   const asked = query.trim().toLowerCase()
   if (asked === '') return []
-  return Object.entries(CARDS)
+  return Object.entries(cards)
     .filter(([, held]) =>
       [held.sku, held.name, held.set_hint].some(
         (field) => typeof field === 'string' && field.toLowerCase() === asked,
@@ -265,18 +288,18 @@ function keysFor(query: string): string[] {
  *  group by `positions_for_sku` and a screen built against a partial group would be built
  *  against a lie. A card with no SKU is in no group at all, which is the 22% of the store the
  *  lone-copy fallback exists for. */
-function searchAnswer(query: string) {
-  const reached = new Set(keysFor(query))
+function searchAnswer(query: string, cards: Cards = CARDS) {
+  const reached = new Set(keysFor(query, cards))
   const skus = [
     ...new Set(
       [...reached]
-        .map((key) => CARDS[key as keyof typeof CARDS].sku)
+        .map((key) => cards[key]?.sku ?? null)
         .filter((sku): sku is string => sku !== null),
     ),
   ]
 
   const copiesOf = (sku: string) =>
-    Object.entries(CARDS)
+    Object.entries(cards)
       .filter(([, held]) => held.sku === sku)
       .map(([key, held]) => ({
         key,
@@ -290,29 +313,31 @@ function searchAnswer(query: string) {
     query,
     groups: skus.map((sku) => {
       const copies = copiesOf(sku)
-      /* The stand-in for the SKU's listing counts, pulled out of the spread below so `listable`
-         can be derived from the SAME `on_hand` the group reports rather than from a second
-         literal that could disagree with it. */
-      const held = LISTED[sku] ?? { listed: { pushed: 0, staged: 0, live: 0 }, on_hand: 0 }
+      const listed = LISTED[sku] ?? { pushed: 0, staged: 0, live: 0 }
+      /* D7's count of copies that have not left, taken off the copies this answer is about to
+         send — so `listable` below is derived from the same number the group reports and the
+         fixture cannot claim a denominator its own rows contradict. */
+      const on_hand = copies.filter((copy) => !GONE.includes(copy.state)).length
       return {
         sku,
         names: [
           ...new Set(
-            Object.values(CARDS)
-              .filter((held) => held.sku === sku && held.name !== null)
-              .map((held) => held.name as string),
+            Object.values(cards)
+              .filter((row) => row.sku === sku && row.name !== null)
+              .map((row) => row.name as string),
           ),
         ],
         number: '090',
         printed_total: '132',
         set_hint: 'ME01',
         condition: 'Near Mint',
-        ...held,
+        listed,
+        on_hand,
         cap: 4,
         /* D7's `min(cap, on hand)`, mirroring what `capture_server.py` computes — the shelf
            binds below a playset, which is most of the store. Derived here rather than written
            as a number so the fixture cannot claim a denominator its own `on_hand` contradicts. */
-        listable: Math.min(4, held.on_hand),
+        listable: Math.min(4, on_hand),
         copies,
       }
     }),
@@ -322,7 +347,15 @@ function searchAnswer(query: string) {
 /** Stub the whole server and open the screen. Every route the view calls is intercepted; a
  *  request that reaches none of them would fail at the fetch, which is itself the assertion
  *  that this screen talks to the routes it claims to. */
-async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
+/** What the server is holding for one test: the cards `GET /inventory` answers with, and what
+ *  `GET /search` says about them. A pair rather than two parameters because they are one fixture
+ *  — a search answer that described cards the walk does not hold would be a store contradicting
+ *  itself, which is the shape of the bug the jump tests are about rather than a fixture to
+ *  build. Defaulted, so every case written before this stays a one-argument `open(page)`. */
+type Store = { cards: Cards; search: (query: string) => unknown }
+const STORE: Store = { cards: CARDS, search: (query) => searchAnswer(query) }
+
+async function open(page: Page, boxes: unknown = BOXES, store: Store = STORE): Promise<Wire[]> {
   const wire: Wire[] = []
 
   const record = (method: string, url: string, body: unknown) =>
@@ -428,7 +461,7 @@ async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(searchAnswer(asked)),
+      body: JSON.stringify(store.search(asked)),
     })
   })
 
@@ -450,7 +483,7 @@ async function open(page: Page, boxes: unknown = BOXES): Promise<Wire[]> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ version: 2, cards: CARDS, boxes: {}, listings: {} }),
+      body: JSON.stringify({ version: 2, cards: store.cards, boxes: {}, listings: {} }),
     })
   })
 
@@ -598,6 +631,159 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
   await expect(page.locator('.card-locations-owner')).toHaveCount(0)
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(page.locator('.inventory-lone').getByRole('button', { name: 'Retire' })).toBeVisible()
+})
+
+// ------------------------------------------------ the copies are a way back into the walk
+
+/** A SECOND BOX, FORTY CARDS DEEP, holding a third copy of the two-copy SKU at its far end.
+ *
+ *  D7 keeps every copy at its own position and says nothing about them sharing a box — the
+ *  owner's store spreads them — and a walk-to is only worth testing when it changes what the
+ *  strip is pointing at.
+ *
+ *  THE DEPTH IS THE POINT AND NOT DECORATION. The copy is the LAST of forty so that it sits
+ *  below the fold of the walk's own scroller, which is the only condition under which "the jump
+ *  scrolls to what it landed on" can fail. Against a one-card box that assertion passes whatever
+ *  the code does — and this fixture was one card until the mutation run proved exactly that.
+ *
+ *  The thirty-nine in front of it carry no SKU, so `GET /search` puts them in no group and the
+ *  copies list stays three rows: they are the length of the box and nothing else. */
+const SPARES: Cards = Object.fromEntries(
+  Array.from({ length: 40 }, (_, at) => {
+    const index = at + 1
+    const isCopy = index === 40
+    return [
+      `7/${index}`,
+      card({
+        index,
+        state: 'identified',
+        name: isCopy ? 'Thievul' : `Filler ${index}`,
+        sku: isCopy ? '8937370' : null,
+        section: 1,
+        sectionStart: 1,
+        sectionEnd: 40,
+        box: 7,
+        boxName: 'ME01 spares',
+        boxTotal: 40,
+      }),
+    ]
+  }),
+)
+
+const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
+
+/** Where the third copy sits — named once, because three assertions and a button label read it. */
+const FAR = 'Box 7 · Section 1 · Card 40'
+
+const TWO_BOXES = {
+  boxes: [
+    ...BOXES.boxes,
+    {
+      box: 7,
+      name: 'ME01 spares',
+      sections: [1],
+      state: 'open',
+      capacity: null,
+      fill: 40,
+      next_index: 41,
+      cards: 40,
+      sold: 0,
+      retired: 0,
+      listed: 0,
+      sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }],
+    },
+  ],
+}
+
+const ACROSS: Store = { cards: ELSEWHERE, search: (query) => searchAnswer(query, ELSEWHERE) }
+
+test('a copy in another box is reached by pressing its position, and the walk goes there', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS)
+
+  /* Three copies of one SKU in two boxes, and the walk is standing on the first. The row it is
+     standing on offers no walk-to — it is already here — which is what makes the button that
+     does appear unambiguous about where it goes. */
+  const rows = page.locator('.card-locations-owner .card-locations-row')
+  await expect(rows).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+
+  /* THE BOX, THE CARD AND THE PHOTOGRAPH ALL FOLLOW, which is the whole of the feature: every
+     one of them is drawn for whatever the walk points at, so moving the mark is the only thing
+     the press has to do. */
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
+
+  /* THE LANDING'S SECTION IS OPEN AND THE MARK IS WHERE IT CAN BE SEEN, in a box that arrived
+     collapsed like every other and is forty rows deep. Both halves are the jump's own work: it
+     opens the landing's section in the same pass it moves the mark, which is what leaves a
+     rendered row for the scroll effect to find — that effect runs a commit earlier than the
+     mark-is-never-hidden rule and does not depend on the folds, so a jump that left the opening
+     to it would land forty rows down a scroller showing the top of the box. */
+  const landed = page.locator('.browse-row[aria-current="true"]')
+  await expect(landed).toBeVisible()
+  await expect(landed).toBeInViewport()
+
+  /* And the offer is now the other way round: the copy just left has one, the copy landed on
+     does not. */
+  await expect(page.getByRole('button', { name: 'Walk to Box 2 · Section 1 · Card 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Walk to ${FAR}` })).toHaveCount(0)
+})
+
+test('a filtered walk gives up the filter rather than swallowing the jump', async ({ page }) => {
+  /* THE ONE WAY THE COPIES AND THE WALK CAN DISAGREE ABOUT WHAT EXISTS. `do_search` renders a
+     SKU's group WHOLE — every copy, including ones that did not match — so a copy of a matched
+     SKU is always in the walk's own filter. The `sku: null` group is the exception and is built
+     from the cards that matched THEMSELVES, and a named, never-emitted card is most of this
+     store today. This stub is that shape: the query answers with the group minus the copy in
+     box 7.
+
+     WITHOUT THE GUARD THIS LANDS ON THE WRONG CARD, SILENTLY. The two follows-the-filter effects
+     move the mark to the first visible row whenever the selection is not among them, so the
+     press would draw some other card's photograph under some other card's position with nothing
+     saying the one asked for was not reached. */
+  await open(page, TWO_BOXES, {
+    cards: ELSEWHERE,
+    search: (query) => {
+      const answer = searchAnswer(query, ELSEWHERE)
+      if (query.trim().toLowerCase() !== 'me01') return answer
+      return {
+        query,
+        groups: answer.groups.map((group) => ({
+          ...group,
+          copies: group.copies.filter((copy) => copy.key !== '7/40'),
+        })),
+      }
+    },
+  })
+
+  await page.locator('.search-field-input').fill('ME01')
+
+  // The filter reaches box 2 alone, so box 7 has no cell and no row: it is out of the walk.
+  await expect(page.locator('.browse-boxcell')).toHaveCount(1)
+  await expect(page.locator('.browse-boxcell')).toHaveText('2')
+
+  await page.getByRole('button', { name: `Walk to ${FAR}` }).click()
+
+  /* THE CARD ASKED FOR IS THE CARD REACHED — asserted before anything about the query, because
+     this is the claim that matters and the wrong-card landing is what fails it: unguarded, the
+     mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
+     Card 1` under box 2's photograph. */
+  await expect(page.locator('.browse-position .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveText('7')
+
+  // And the query goes, because it was a way of finding the card and the card has been found.
+  await expect(page.locator('.search-field-input')).toHaveValue('')
+
+  /* AND THE SECTION IS OPEN UNDERNEATH IT, which is the ordering claim `BoxBrowse.tsx` makes at
+     the landing effect: clearing a query fires the collapse-everything effect in the same pass
+     the jump lands in, and the jump is declared after it so the open is the final word. Swap the
+     two and this row is drawn inside a shut section. */
+  await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
 })
 
 // ------------------------------------------------------------------- collapsible sections
@@ -1703,6 +1889,265 @@ test('the box and the runs survive a query that selects no card', async ({ page 
     .locator('.browse-body > .browse-boxrun')
     .evaluate((el) => getComputedStyle(el).display)
   expect(hidden).toBe('none')
+})
+
+test('the address is drawn without a separator, and the server string survives on it', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* THE OWNER'S COMPLAINT, ASSERTED AS AN ABSENCE (2026-08-29): "i didn't ever like the dot theme
+     to separate". `PositionParts` used to paint the interpuncts muted so the parts would bind;
+     the answer that shipped deletes them instead — the path is a stacked muted pair and the slot
+     is a 44px figure beside it, so there is no seam left for a character to mark.
+
+     An absence is the right shape for this case. A positive assertion about the new markup goes
+     green on a treatment that also reintroduces the dots somewhere else in the block. */
+  const position = page.locator('.browse-position')
+  await expect(position).toBeVisible()
+  expect(await position.innerText()).not.toContain('·')
+  await expect(page.locator('.position-joint')).toHaveCount(0)
+
+  /* AND THE SERVER'S OWN STRING IS STILL THE ACCESSIBLE NAME. This is what makes splitting the
+     label client-side legitimate rather than a quiet edit of what the store said: the visual
+     rendering is a view, and `pipeline/join.py:Position.label` is still what is announced.
+     `PositionParts`' own comment scopes the split to this screen for exactly this reason. */
+  const parts = page.locator('.position-parts')
+  await expect(parts).toHaveAttribute('role', 'group')
+  const label = await parts.getAttribute('aria-label')
+  expect(label).toMatch(/^Box \d+ · Section \d+ · Card \d+$/)
+
+  /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
+     address rather than to index 2, so a formula with a different number of parts still puts the
+     finest thing said on the biggest step. */
+  const num = page.locator('.position-num')
+  await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
+})
+
+test('the address holds one line at both widths, including the longest label the store can emit', async ({
+  page,
+}) => {
+  await open(page)
+
+  /* THE DEFECT: 27 cells at Martian Mono's 0.70em advance is 453.6px in a 448.8px track, so the
+     shipped label wrapped — and the comment that justified its size measured it against a 630px
+     track a later layout change had already deleted. The worst label the formula can produce,
+     `Box 100 · Section 12 · Card 543`, is 520.8px: 16% over at 1440 and 35% over at 1280.
+
+     FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
+     checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
+     and the block is measured for a second line. */
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.locator('.position-parts').first().waitFor()
+
+    const oneLine = await page.locator('.browse-position').evaluate((el) => {
+      const shape = el.querySelector('.position-parts') as HTMLElement
+      const slot = el.querySelector('.position-slot') as HTMLElement
+      return shape.getBoundingClientRect().height <= slot.getBoundingClientRect().height + 4
+    })
+    expect(oneLine).toBe(true)
+
+    /* The shape fits its track with the worst label in it. Measured on the SHAPE rather than on
+       `.browse-position`, which is a full-width block and would always "fit". */
+    const fits = await page.evaluate(() => {
+      const path = document.querySelector('.position-path') as HTMLElement
+      const slot = document.querySelector('.position-slot') as HTMLElement
+      const track = document.querySelector('.browse-detail') as HTMLElement
+      path.innerHTML = '<span>BOX <b>100</b></span><span>SECTION <b>12</b></span>'
+      const numEl = slot.querySelector('.position-num') as HTMLElement
+      numEl.textContent = '543'
+      const used = path.getBoundingClientRect().width + slot.getBoundingClientRect().width + 24
+      return used <= track.getBoundingClientRect().width
+    })
+    expect(fits).toBe(true)
+  }
+})
+
+test("the box's census and its forecast are told apart, and the fill says which kind it is", async ({
+  page,
+}) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* SAME COMPLAINT ONE COLUMN OVER, and the same absence. `cards 543 · sold 0 · fill 543 · next
+     index 544` is 46 cells = 354.2px in a 299px track, so it wrapped — and it is not a digit
+     count: box 1's shorter line wraps identically. It is four words and three interpuncts. */
+  const meta = page.locator('.boxops-meta')
+  await expect(meta).toBeVisible()
+  expect(await meta.innerText()).not.toContain('·')
+
+  /* THE FIELD NAMES ARE STILL THE STORE'S, VERBATIM. `BoxOps.tsx` promises that what is on
+     screen greps to `inventory.json`, and the keys are uppercased by `text-transform` at paint
+     only — so the DOM text must still be lowercase. A `toUpperCase()` in the .tsx would look
+     identical on screen and break this. */
+  const keys = await page.locator('.boxops-meta-key').allTextContents()
+  expect(keys).toEqual(['cards', 'sold', 'fill', 'next index'])
+
+  /* NEXT INDEX IS NOT A FOURTH CENSUS FIGURE. `cards`, `sold` and `fill` describe what is in the
+     box; `next index` is D10's high-water mark — what the allocator hands out next. It is out of
+     the row, which is the structural form of that distinction. */
+  await expect(page.locator('.boxops-meta-row .boxops-meta-cell')).toHaveCount(3)
+  await expect(page.locator('.boxops-meta-next')).toHaveCount(1)
+  await expect(page.locator('.boxops-meta-row .boxops-meta-next')).toHaveCount(0)
+
+  /* D20's DENOMINATOR RULE, WHICH THIS LINE NEVER DISCHARGED. That entry is explicit that a
+     number whose meaning switches silently between an open box and a sealed one is the failure
+     it exists to prevent: `fill` is a fill-SO-FAR while the box is open and a frozen capacity
+     once it is closed, and both were rendered identically. */
+  const qual = page.locator('.boxops-meta-qual')
+  if (await qual.count()) {
+    const sealed = await page.locator('.boxops-state, .boxops-identity').first().innerText()
+    await expect(qual).toHaveText(/^(so far|sealed)$/)
+    if (/sealed/i.test(sealed)) await expect(qual).toHaveText('sealed')
+  }
+
+  /* And nothing wraps at either width. */
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    const row = await page.locator('.boxops-meta-row').boundingBox()
+    const cell = await page.locator('.boxops-meta-cell').first().boundingBox()
+    if (row === null || cell === null) throw new Error('the meta block did not render')
+    expect(row.height).toBeLessThan(cell.height * 1.6)
+  }
+})
+
+test('a narrow copies column shortens the bar, never the position label', async ({ page }) => {
+  await open(page)
+
+  /* THE TRADE THIS PROTECTS, AND IT IS THE ONE D40 REFUSED FIRST. In the three-column layout the
+     copies column gives this list ~586px, where the row was 144px: `8 + place 51 + gap 12 + bar
+     65 + 8`. The obvious fix — lowering the 860px container threshold so the bar rejoins the row
+     — does produce a 129px row, and it gets there by squeezing `.card-locations-place` to 231px,
+     which WRAPS THE POSITION LABEL. `CardLocations.css` forbids that by name: the label is the
+     string somebody carries to a shelf and it must not break.
+
+     So the height comes out of the BAR's own dead space instead. This case asserts both halves,
+     because either one alone can be satisfied by the wrong fix. */
+  /* AT 1440, DELIBERATELY, AND THIS SUITE RUNS AT 1280 BY DEFAULT. The container is 528px at
+     1280 and 612px at 1440, and the rejected fix's damage only exists in the second: with the
+     threshold at 560 the narrow branch still applies at 528, so a case left at the default
+     viewport passes against the very mutation it is written to catch. Observed — this case was
+     kept only after it was seen to go red at 1440 and green at 1280 against that change. */
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const row = page.locator('.card-locations-row').first()
+  await expect(row).toBeVisible()
+  await page.waitForTimeout(150)
+
+  const geom = await row.evaluate((el) => {
+    const bar = el.querySelector('.position-bar') as HTMLElement
+    const caps = [...el.querySelectorAll('.position-bar-text')] as HTMLElement[]
+    const boxTrack = el.querySelector('.position-bar-track') as HTMLElement
+    const sect = el.querySelector('.position-bar-sectiontrack') as HTMLElement
+    const parts = el.querySelector('.position-parts') as HTMLElement
+    const pathEl = el.querySelector('.position-path') as HTMLElement
+    const slotEl = el.querySelector('.position-slot') as HTMLElement
+    return {
+      barH: Math.round(bar.getBoundingClientRect().height),
+      /* `getClientRects().length` WAS READ HERE AND IT IS BLIND. The node it was read off is a
+         column-flex child, so it is blockified and returns exactly ONE rect however many lines
+         of text it holds — measured on the shipped tree by forcing the place cell to 200/120/80px,
+         which wraps the label to 2/3/4 real lines while the assertion read 1 and passed every
+         time. The case only ever went red on its OTHER assertion, which hid this.
+
+         The honest question is geometric, and it is the same shape as `capBesideTrack` two lines
+         down: the parts block is the two-line path (33.9px) beside the figure, so anything past
+         ~36px means a half of it wrapped. Height, not rect count. */
+      partsH: parts === null ? 0 : Math.round(parts.getBoundingClientRect().height),
+      pathSlotAligned:
+        pathEl === null || slotEl === null
+          ? false
+          : Math.abs(pathEl.getBoundingClientRect().top - slotEl.getBoundingClientRect().top) < 40,
+      capHeights: caps.map((c) => Math.round(c.getBoundingClientRect().height)),
+      capBesideTrack: caps.length > 0 && boxTrack !== null
+        ? Math.abs(caps[0]!.getBoundingClientRect().top - boxTrack.getBoundingClientRect().top) < 12
+        : false,
+      boxTrackH: Math.round(boxTrack.getBoundingClientRect().height),
+      sectTrackH: sect === null ? null : Math.round(sect.getBoundingClientRect().height),
+    }
+  })
+
+  /* THE LABEL DID NOT WRAP. This is the half the rejected fix broke, and it is asserted as a
+     height rather than a rect count for the reason given inside the evaluate above. */
+  expect(geom.partsH).toBeGreaterThan(0)
+  expect(geom.partsH).toBeLessThanOrEqual(36)
+  expect(geom.pathSlotAligned).toBe(true)
+
+  /* THE CAPTIONS SIT BESIDE THEIR TRACKS, not under them — which is where the 31px came from.
+     Asserted as a geometric fact rather than by class, so a future rule that re-stacks them
+     while keeping the selector fails. */
+  expect(geom.capBesideTrack).toBe(true)
+  for (const h of geom.capHeights) expect(h).toBeLessThan(20)
+  expect(geom.barH).toBeLessThan(48)
+
+  /* AND BOTH SCALES SURVIVE, which is docs/DESIGN.md's constraint on this component: the box
+     track is 16px and the section track 8px, and their differing heights are one of the three
+     cues that keep the two scales distinguishable at a glance. A "denser" row that flattened
+     them into one would pass every height check above and lose the thing the bar is for. */
+  expect(geom.boxTrackH).toBeGreaterThan(geom.sectTrackH!)
+  expect(geom.sectTrackH).toBeGreaterThan(0)
+})
+
+test('a wider copies column never makes its rows taller', async ({ page }) => {
+  await open(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.locator('.card-locations-row').first().waitFor()
+
+  /* THE DEFECT THIS CLOSES, AND IT WAS DORMANT RATHER THAN INVISIBLE. `CardLocations.css` switches
+     the position bar into the row at a container threshold. That threshold was 860px, chosen when
+     the bar took four stacked full-width lines and the narrow row was 144px. Folding each caption
+     beside its track took the narrow row to 114px — and left the WIDE branch producing 126px at
+     the exact width it engaged. Measured: 820 -> 114, 860 -> 126, 880 -> 85, 900 -> 82. Crossing
+     into the "better" branch made the row twelve pixels taller.
+
+     IT COULD NOT BE SEEN. The copies container is 612px at 1440 and 528px at 1280, so `min-width`
+     needs roughly a 1980px viewport to fire at all — nothing in this suite or on the owner's
+     display would ever have rendered it. A threshold that is wrong and dormant is worse than one
+     that is wrong and visible, because nothing fails while it waits.
+
+     SO THE ASSERTION IS THE PROPERTY, NOT THE NUMBER. Whatever the threshold is, a container that
+     grows must never make a row taller — that is what "this branch is better" means, and it is
+     the claim a future re-tune has to keep. Pinning 880 instead would go green on any later change
+     that moves the cliff somewhere else. */
+  const heights = await page.evaluate(() => {
+    const host = document.querySelector('.browse-under') as HTMLElement
+    const previous = host.style.cssText
+    const out: { width: number; row: number }[] = []
+    for (const width of [560, 640, 760, 820, 860, 870, 880, 900, 940, 1024]) {
+      host.style.width = `${width}px`
+      host.getBoundingClientRect()
+      const row = document.querySelector('.card-locations-row') as HTMLElement
+      out.push({ width, row: Math.round(row.getBoundingClientRect().height) })
+    }
+    host.style.cssText = previous
+    return out
+  })
+
+  const taller = heights.filter((point, at) => at > 0 && point.row > heights[at - 1]!.row)
+  expect(taller, `row grew as the container widened: ${JSON.stringify(taller)}`).toEqual([])
+
+  /* And the wide branch really is better by the end of the sweep, so this cannot be satisfied by
+     deleting the threshold and never switching at all. */
+  expect(heights[heights.length - 1]!.row).toBeLessThan(heights[0]!.row)
+})
+
+test('the box fill is qualified once, on the identity line', async ({ page }) => {
+  await open(page)
+  await openBoxOps(page)
+
+  /* D41 put D20's `so far` / `sealed` on `.boxops-meta`'s fill, and `BoxIdentity` sixteen pixels
+     above already carried it — so for one commit `133 so far` rendered twice on one screen. D20's
+     rule is that the number is unambiguous on screen, not that it is annotated at every site.
+
+     THE FIELD STAYS AND ONLY THE QUALIFIER GOES, which is the half worth asserting: `BoxOps.tsx`
+     promises these key names grep to `inventory.json`, so a fix that dropped `fill` outright would
+     have broken a different promise to keep this one. */
+  await expect(page.locator('.boxops-meta-qual')).toHaveCount(0)
+  const keys = await page.locator('.boxops-meta-key').allTextContents()
+  expect(keys).toContain('fill')
+
+  const identity = await page.locator('.boxops-identity').innerText()
+  expect(identity).toMatch(/so far|sealed/)
 })
 
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {

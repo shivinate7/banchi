@@ -5,6 +5,7 @@ import { photoUrl, placeSentence } from './server'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
 import './CardLocations.css'
+import { PositionLabel } from './PositionLabel'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -147,6 +148,25 @@ export type CardLocationsProps = {
    *  a second. */
   currentKey?: string
 
+  /** Walk to this copy: the box strip, the list and the photograph all move to it.
+   *
+   *  OWNER SKIN ONLY, and optional — `Fulfillment.tsx` and `Gallery.tsx` pass nothing and get
+   *  exactly what they got before. His view has no walk to move, and D31's ruling is that the
+   *  Fulfiller's surface is downstream of what the owner's build produces rather than a
+   *  counterpoint to it.
+   *
+   *  WHY THE LABEL AND NOT THE ROW. The row already holds a control — `Mark sold`, the retire
+   *  door, or whatever `renderAction` draws — and a button inside a button is invalid markup,
+   *  which is the same reason `aria-current` sits on the `<li>` rather than on anything
+   *  pressable. So the thing that is clickable is the position label, which is also the thing
+   *  that says where the press is about to send you: `Box 95 · Section 2 · Card 4` is both the
+   *  affordance and its own confirmation.
+   *
+   *  NOT DRAWN ON THE CURRENT COPY, which is where the walk already is, and NEVER ON A POOLED
+   *  ONE — D24 makes it a count rather than a location, so there is no slot to walk to and the
+   *  label slot is carrying the pooled fact instead of a position. */
+  onGoTo?: (copy: SearchCopy) => void
+
   /** Replaces the action slot for EVERY copy, sold ones included.
    *
    *  THE SOLD ONES ARE THE POINT OF THE PROP, not an edge case it happens to cover.
@@ -213,6 +233,7 @@ function OwnerRows({
   soldKeys,
   sections,
   currentKey,
+  onGoTo,
   renderAction,
 }: Omit<CardLocationsProps, 'persona'>) {
   /* The machine line, in the shape `Inventory.tsx` established so that this screen and a
@@ -279,6 +300,13 @@ function OwnerRows({
           /* D30's sentence for this copy, or null — see the render note below. Read once
              per row so the presence test and the rendering cannot disagree. */
           const between = placeSentence(copy.place)
+          /* The walk-to handler for THIS copy, or null when there is nowhere to send anyone:
+             no caller offering one, a pooled copy with no slot, or the copy the walk is already
+             standing on. Computed once per row so the branch below cannot disagree with itself. */
+          const goesTo =
+            onGoTo === undefined || pooled || copy.key === currentKey
+              ? null
+              : () => onGoTo(copy)
           return (
             <li
               className="card-locations-row"
@@ -306,10 +334,63 @@ function OwnerRows({
                         the rule on `Place.label` and D10 is why it has teeth: Section and Card
                         are a view of the index against the box's current divider layout, and
                         the only formula for it in this repo is `pipeline/join.py:Position`. */}
-                    <span className="card-locations-label">{copy.place.label}</span>
-                    {copy.place.box_name === null ? null : (
-                      <span className="card-locations-boxname">{copy.place.box_name}</span>
-                    )}
+                    {/* SLOT-FIRST HERE, PATH-FIRST EVERYWHERE ELSE, and it is a property of
+                        being a LIST rather than a taste call. Down seven copies the coarse parts
+                        are identical on every row, so path-first would stand seven identical
+                        `BOX 2 / SECTION n` blocks in front of the only thing that differs and
+                        push the figures to a ragged x — the dense-grey-table failure
+                        `docs/DESIGN.md` names by the front door. Slot-first puts them in a hard
+                        column at the cell's left edge. `aria-label` carries the server string
+                        either way, so nothing that is not an eye reads a different order.
+
+                        THE BOX NAME RIDES THE BOX LINE, WHICH IS WHAT MAKES THIS FREE. The
+                        two-line path costs +17px a row over the one-line string, and it repays
+                        exactly that by absorbing `.card-locations-boxname`'s first use — already
+                        a muted sub-line stating a fact about the box. Measured: row 114.19 ->
+                        114.17px, list 813.31 -> 813.20. Without the absorption it is +17px/row,
+                        +119px on a seven-copy list, and copies-visible-on-landing 4 -> 3.
+
+                        SO A BOX WITH NO NAME PAYS THE FULL +17px/ROW. `Place.box_name` is
+                        nullable and D20 made names unique but deliberately NOT required. Every
+                        box in the store is named today, so this is latent rather than live, and
+                        nothing warns. */}
+                    {/* `Place.label` IS NULLABLE AND THE OLD MARKUP HID IT. `{copy.place.label}`
+                        rendered nothing for a null and nobody had to think about it; the
+                        component takes a string, so the case has to be answered out loud. It
+                        answers the same way it always behaved — draw nothing — rather than
+                        inventing a placeholder for a card whose position the server did not
+                        send. */}
+                    {/* AND WHERE THE CALLER OFFERS A WALK-TO, THE SAME RENDERING SITS INSIDE A
+                        BUTTON (D45). A TRANSPARENT WRAPPER AND NOT A SECOND TREATMENT: the
+                        control draws no text of its own, inherits the site's font and its
+                        `--pos-slot`, and hands `PositionLabel` the identical three props — so a
+                        walkable row and a look-only one are the same pixels, which is what keeps
+                        this from becoming a seventh site. The button's own `aria-label` says
+                        what pressing it DOES; the server string still travels verbatim on the
+                        `role="group"` inside, whose semantics a button's presentational children
+                        rule makes inert. */}
+                    <span className="card-locations-label">
+                      {copy.place.label === null ? null : goesTo === null ? (
+                        <PositionLabel
+                          label={copy.place.label}
+                          lead="slot"
+                          boxNote={copy.place.box_name}
+                        />
+                      ) : (
+                        <button
+                          className="card-locations-goto"
+                          type="button"
+                          aria-label={`Walk to ${copy.place.label}`}
+                          onClick={goesTo}
+                        >
+                          <PositionLabel
+                            label={copy.place.label}
+                            lead="slot"
+                            boxNote={copy.place.box_name}
+                          />
+                        </button>
+                      )}
+                    </span>
                     {/* D30's digital half, quiet under the label: "between Mantine and
                         Thievul · 2 slots in this section are empty". This row's label names
                         the SLOT, and once the section holds permanent gaps a hand-count

@@ -1047,31 +1047,41 @@
    NOT 1.2, which was the first answer. Martian Mono's content box at 24px is ~29px, so 1.2
    puts the line box at 28.8 — under the ink it has to hold, on the one string this screen
    exists to print. 1.3 clears it by 2px and matches the precedent at the same time. */
+/* TERMINAL DOMINANT (owner's pick, 2026-08-29, from a design pass they asked for). The three
+   parts are not equal and the old rendering said they were. `Box 2` is the drawer you walk to,
+   `Section 1` narrows it, `Card 14` is the slot — and on THIS screen the first two are already
+   answered everywhere you look: the box strip names the box, so does the identity block, so does
+   every section header and every copies row. The measurement that decided it: the literal string
+   `Box 2` renders NINE times in this document. `Card 14` is the only part of the address this
+   panel uniquely supplies, so it is the only part drawn at size.
+
+   THE SEPARATOR IS GONE RATHER THAN REPLACED, which was the owner's actual complaint — "i didn't
+   ever like the dot theme to separate". Nothing takes the interpunct's place: the path is a
+   two-line muted stack and the slot is a 44px figure beside it, so there is no seam left for a
+   character to mark. `.browse-position-joint` is deleted with it.
+
+   WHY THIS WAS NOT A FONT-SIZE FIX, in the numbers that refuse one. `Box 2 · Section 1 · Card 14`
+   is 27 cells at Martian Mono's measured 0.70em advance = 453.6px, in a track that is 448.8px at
+   1440 and 387.1px at 1280 — so it wrapped, and the comment that used to sit here justified the
+   size against a 630px track that a later layout change had already deleted. Of those 27 cells
+   only FOUR are digits (67.2px, 14.8%); the words, dots and spaces are 386.4px — the entire 1280
+   track, spent before a single number is drawn. Shrinking to fit needs 17px, and `CardLocations`
+   prints the same string at 13px seven rows below, so the answer would have been 4px louder than
+   its own footnotes.
+
+   THE SHAPE ITSELF LIVES IN `PositionLabel.tsx`/`.css` SINCE 2026-08-29 (D41, amended). This
+   entry scoped the treatment to this screen in writing — "taking this to them is a decision about
+   all three sites, not a copy of this one" — and that decision was taken: five owner sites draw it
+   now. What is left here is the SITE rule, and `--pos-slot` is the only number this screen
+   chooses. 44px because the address IS this panel's answer; every other site is smaller because
+   theirs is provenance. */
 .browse-position {
   font-family: var(--util);
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.3;
   color: var(--ink);
   letter-spacing: 0;
-}
-
-/* THE JOINTS GIVE WAY SO THE PARTS BIND (owner, 2026-08-26). At 0.70em per cell — Martian
-   Mono's real advance, measured — ` · ` is three full cells and about 50px wide at this size, so
-   `Box 2`, `Section 1` and `Card 1` sat in three separate pools of white and the label read as
-   three fragments rather than as one address. The words carry the meaning and the dots carry
-   none, so the dots are what steps back.
-
-   --muted AND NOT A NEW VALUE, and it clears its floor on every ground this can land on: 7.76:1
-   on --bg, 7.96:1 on --surface, 7.30:1 on --hover. docs/DESIGN.md's rule is that a token
-   carrying text clears 7:1 wherever it sits, and a separator is text.
-
-   NOTHING MOVES. The alternative fixes both had to shift glyphs — negative tracking on the one
-   fixed-advance face in the product, or dropping the 24px that was set deliberately the same
-   week — and this changes one colour on two characters. `PositionParts` in the .tsx carries the
-   argument for splitting a server string to paint it. */
-.browse-position-joint {
-  color: var(--muted);
+  --pos-slot: 44px;
+  --pos-gap: var(--s5);
+  font-size: var(--pos-slot);
 }
 
 /* D30's sentence, directly under the position label it makes countable — "between Mantine

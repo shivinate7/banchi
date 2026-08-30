@@ -1620,7 +1620,7 @@ def run() -> Result:
     REAL_NAME, REAL_NUMBER, REAL_TOTAL = "Accelgor", "013", "159"
 
     #
-    # THE RUNG BELOW THE BLANK-NUMBER FALLBACK. `_lookup_number_and_printed_total` used to
+    # THE RUNG BELOW THE BLANK-NUMBER FALLBACK. The Pokemon lookup used to
     # treat "this card has no number" as "this PRODUCT prints no number" and look only at the
     # export's blank-`Number` rows — true for a code card, false for a photograph whose bottom
     # edge was cropped off. Box 2 sent 544 cards through a bad crop: 37 came back with no
@@ -1741,6 +1741,104 @@ def run() -> Result:
     c.ok(
         answered_row[tcgcsv.SKU_COLUMN] in answered.matches,
         "D35/D3 rung 0: it is listed on the answer, because an answer outlives the question",
+    )
+
+    # 8. D35 REACHES THE `printed_code` GAMES TOO, AND FOR ONE COMMIT IT DID NOT.
+    #
+    #    Every case above exercises the Pokemon key — `number_and_printed_total`. D35 is
+    #    written as a rule about a READ, not about a game ("a number that finds nothing is a
+    #    number we should stop believing"), but it was only ever wired into that one strategy.
+    #    the printed-code lookup returned `rows_for_key` even when EMPTY, so Riftbound and One
+    #    Piece stopped at zero candidates where Pokemon fell through to the name.
+    #
+    #    THE COST IS NOT AN EXTRA TAP, IT IS AN UNANSWERABLE CARD.
+    #    `POST /review/<box>/<index>/answer` refuses an entry with no candidates as
+    #    `no_candidates`, so those cards could only be skipped — forever, every session.
+    #
+    #    Measured on run 2026-08-29-box1-01, 133 real Riftbound cards: 4 unusable reads, all 4
+    #    zero-candidate `no_catalog_row`. Three carried a set-code prefix the prompt forbids in
+    #    as many words — `UNL • 140/219` for `140/219` — and all three hold exactly one row by
+    #    name. One of them, Hwei at $2.86, is above D9's threshold: a listable card stuck
+    #    unanswerable. The fourth read `Wuju Master` for `Master Yi, Wuju Master` and is
+    #    correctly still unmatched, because the name it gave is not the name the export has.
+    #
+    #    Observed failing before the fall-through was added: `rift_prefixed` returned 0 rows
+    #    with `name_inferred` False.
+    rift_catalog = join.Catalog.from_export(
+        tcgcsv.read_export(REPO_ROOT / RIFTBOUND_FIXTURE), "riftbound"
+    )
+    RIFT_NAME, RIFT_NUMBER = "Adaptatron", "056/298"
+
+    def _rift(index, name, number):
+        return join.IdentifiedCard(
+            position=join.Position(box=BOX, index=index),
+            name=name,
+            number=number,
+            printed_total=None,  # this game prints no denominator — D25
+            photo=f"captures/box{BOX}/{index:04d}.jpg",
+            confidence="high",
+            game="riftbound",
+        )
+
+    by_name = rift_catalog.rows_for_name(RIFT_NAME)
+    c.ok(len(by_name) > 0, "D35/printed_code: the name index holds this game's rows too")
+
+    # THE LIVE SHAPE, AND IT IS RECOVERED BY THE NUMBER RATHER THAN THE NAME. A set code glued
+    # to the identifier is noise the model added on top of digits it read correctly, so the
+    # honest repair is to strip the noise — an exact join on the field that tells one card from
+    # another — not to fall back to the name, which is a weaker signal that only ever queues.
+    # `_strip_set_code` is licensed by a measurement: no export cell anywhere carries a bullet
+    # or a middle dot.
+    rift_prefixed = rift_catalog.candidates(_rift(810, RIFT_NAME, "UNL \u2022 " + RIFT_NUMBER))
+    c.ok(
+        not rift_prefixed.name_inferred,
+        "set code: a prefixed identifier is recovered by NUMBER, not rescued by name",
+    )
+    c.ok(
+        rift_prefixed.lookup.startswith("code:"),
+        "set code: and the lookup says `code:`, because that is what it matched on",
+    )
+    c.equal(
+        {r[tcgcsv.NUMBER_COLUMN] for r in rift_prefixed.rows},
+        {RIFT_NUMBER},
+        "set code: and it lands on the exact row the bare identifier would have",
+    )
+
+    # THE NAME RUNG IS STILL REACHED, by a code that is well-formed and simply wrong — which is
+    # the case D35 exists for and which no strip can repair. Kept alongside the case above so a
+    # future change cannot quietly delete the rung by making every bad code recoverable.
+    rift_unread = rift_catalog.candidates(_rift(813, RIFT_NAME, "999/219"))
+    c.ok(
+        rift_unread.name_inferred,
+        "D35/printed_code: a code that matches NO row still falls through to the name rung",
+    )
+    c.ok(
+        rift_unread.lookup.startswith("name?:"),
+        "D35/printed_code: and says `name?:`, so the report can tell it from a blank-number row",
+    )
+    c.equal(
+        {r[tcgcsv.SKU_COLUMN] for r in rift_unread.rows},
+        {r[tcgcsv.SKU_COLUMN] for r in by_name},
+        "D35/printed_code: and finds the rows the export held the whole time",
+    )
+
+    # A code that DOES match is never second-guessed — the rung is a last resort, not a peer.
+    rift_good = rift_catalog.candidates(_rift(811, RIFT_NAME, RIFT_NUMBER))
+    c.ok(
+        not rift_good.name_inferred,
+        "D35/printed_code: a code that matches is used, and the name rung is not reached",
+    )
+    c.ok(
+        rift_good.lookup.startswith("code:"),
+        "D35/printed_code: and the lookup still says `code:`",
+    )
+
+    # An unknown name adds no guessing here either.
+    rift_missing = rift_catalog.candidates(_rift(812, "Not A Real Riftbound Card", "ZZZ/999"))
+    c.equal(
+        len(rift_missing.rows),
+        0,
+        "D35/printed_code: an unknown name finds nothing and stays unmatched",
     )
 
     return c.result()

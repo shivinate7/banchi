@@ -171,6 +171,7 @@ import io
 import json
 import hashlib
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -190,7 +191,7 @@ from harness.tests import Checks, Result  # noqa: E402
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import games, join, tcgcsv, variant  # noqa: E402
-from server import capture_server  # noqa: E402
+from server import capture_server, pipeline_routes  # noqa: E402
 from store import files, master, queues  # noqa: E402
 from store.session import Store  # noqa: E402
 
@@ -7086,6 +7087,208 @@ ONE_PIECE_EXPORT = (
 )
 
 
+# --------------------------------------------------------------- the review catalog lookup
+
+
+def check_review_catalog(checks: Checks) -> None:
+    """GET /review/<box>/<index>/catalog and D46's answer path — the card with no rows.
+
+    ITS OWN ISOLATED HOME, this file's standing lesson: it answers a card, which clears queue
+    entries and writes history lines the blocks around it count over stores they build by hand.
+
+    THE DEAD END THIS CLOSES. A queue entry with no candidates could not be answered at all —
+    `do_review_answer` refuses it as `no_candidates` — so the only moves were skip, which
+    writes nothing and asks again next session, and D37's stand-down, which closes the question
+    rather than answering it. The row was usually in the export the whole time: box 1's
+    `Master Yi, Wuju Master` was read as `Wuju Master`, dropping the champion, so no exact
+    match could find it and the photograph was perfectly good.
+
+    THE GUARD IS NARROWED, NOT REMOVED, AND THAT IS WHAT MOST OF THIS BLOCK ASSERTS. A bare
+    SKU still refuses. The flag only reaches an entry with NO candidates. The SKU is re-read
+    out of THIS CARD'S OWN export inside the write lock, so an unknown one refuses and a
+    condition the client invented is discarded rather than believed.
+    """
+    checks.note("")
+    checks.note("REVIEW CATALOG — GET /review/<box>/<index>/catalog, and D46's answer")
+
+    with isolated_home() as home:
+        # A run holding the riftbound export, exactly as an app-driven join leaves it: the
+        # bytes INSIDE the run, and the manifest naming that copy.
+        run_dir = home / "runs" / "2026-08-29-box1-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-08-29T22:37:47+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(1, game="riftbound"))
+        with Store().write() as snapshot:
+            for key in ("1/1", "1/2", "1/3"):
+                snapshot.inventory.set_state(key, master.IDENTIFIED)
+                snapshot.inventory.cards[key].game = "riftbound"
+            # The live case: the champion dropped, no number read, no candidate rows.
+            snapshot.inventory.cards["1/1"].run = "2026-08-29-box1-01"
+            snapshot.review.upsert(
+                entry(
+                    1,
+                    1,
+                    candidates=[],
+                    reason="no_catalog_row",
+                    read={"name": "Wuju Master", "number": None},
+                )
+            )
+            # Records no run at all — a card identified before `run` was written.
+            snapshot.review.upsert(entry(1, 2, candidates=[], reason="no_catalog_row"))
+            # Has candidates of its own, so the catalog path must never reach it.
+            snapshot.inventory.cards["1/3"].run = "2026-08-29-box1-01"
+            snapshot.review.upsert(entry(1, 3, market="12.00"))
+
+        # --- the lookup ---
+
+        found = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, ""),
+            "an empty query suggests from the card's own read, which is the arriving case",
+        )
+        if found is not None:
+            names = [str(row["name"]) for row in found["rows"]]
+            checks.ok(
+                "Master Yi, Wuju Master" in names,
+                "D46: the row the pipeline could not find is offered — the read dropped the "
+                "champion, so only a substring match recovers it",
+            )
+            checks.equal(
+                found["game"],
+                "riftbound",
+                "D46: and it is looked up as the game the CARD records, not the default",
+            )
+
+        typed = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, "191/219"),
+            "a typed collector number searches the same export",
+        )
+        if typed is not None:
+            checks.ok(
+                any(str(row["number"]) == "191/219" for row in typed["rows"]),
+                "D46: a number finds its row",
+            )
+
+        empty = answers(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 1, "zzz not a card"),
+            "a query matching nothing answers with no rows",
+        )
+        if empty is not None:
+            checks.equal(
+                (len(empty["rows"]), empty["found"]),
+                (0, 0),
+                "D46: and it does NOT guess — an empty result is an empty result",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_catalog(9, 99, ""),
+            "card_not_found",
+            "a lookup for a card that does not exist refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_catalog(1, 2, ""),
+            "no_run_recorded",
+            "a card with no run has no export to look in, and says so rather than guessing "
+            "which run on disk might have been the one",
+        )
+
+        # --- the answer, and the guard that stays standing ---
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1, 1, {"sku": "9192027", "condition": "Near Mint Foil"}
+            ),
+            "no_candidates",
+            "WITHOUT the flag a zero-candidate entry still refuses — D46 narrows this guard "
+            "and does not remove it",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                1,
+                {"sku": "0000000", "condition": "Near Mint Foil", "from_catalog": True},
+            ),
+            "sku_not_in_catalog",
+            "a SKU the export does not carry refuses even WITH the flag — the row is re-read "
+            "server-side, so this is never a free-text write",
+        )
+
+        before = Store().read().inventory.cards["1/1"].sku
+        checks.ok(before is None, "and neither refusal wrote anything")
+
+        answered = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                1,
+                # A DELIBERATELY WRONG CONDITION. The server takes the row's own, so this is
+                # discarded rather than validated — a client that sends the wrong one gets the
+                # right one, which is what makes the SKU the only thing the request decides.
+                {"sku": "9192027", "condition": "TOTAL NONSENSE", "from_catalog": True},
+            ),
+            "a catalog-verified row answers the card",
+        )
+        if answered is not None:
+            checks.equal(
+                answered["condition"],
+                "Near Mint Foil",
+                "D46: and the CONDITION comes off the export row, never off the request",
+            )
+
+        stored = Store().read()
+        card = stored.inventory.cards["1/1"]
+        checks.equal(
+            (card.sku, card.condition),
+            ("9192027", "Near Mint Foil"),
+            "the pair lands on the card, which is what a later join reads back as D3 rung 0",
+        )
+        checks.ok(
+            stored.review.entries["1/1"].cleared_by_human,
+            "and the queue entry is cleared, so the question stops being asked",
+        )
+        line = [
+            event
+            for event in Store().history()
+            if event.get("event") == "answered" and event.get("position") == "1/1"
+        ]
+        checks.ok(
+            bool(line) and line[-1].get("from_catalog") is True,
+            "D46: the history line records that a HUMAN found this row rather than the "
+            "pipeline — after the write there is no other evidence which happened",
+        )
+
+        # --- the flag reaches nothing it should not ---
+
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1,
+                3,
+                {"sku": "9192027", "condition": "Near Mint Foil", "from_catalog": True},
+            ),
+            "sku_not_a_candidate",
+            "an entry WITH candidates is unaffected by the flag: it still answers only from "
+            "the rows it was offered, which is the laundering guard D46 must not reach",
+        )
+
+
 def check_review_stand_down(checks: Checks) -> None:
     """POST /review/<box>/<index>/stand-down — D37, closing a question without answering it.
 
@@ -7511,7 +7714,7 @@ def check_printed_code_profiles(checks: Checks) -> None:
         checks.ok(
             "printed_total" not in chosen.schema["properties"],
             "and `printed_total` is absent rather than blank: a game keyed by "
-            "printed_code has no denominator half, and _lookup_printed_code never reads "
+            "printed_code has no denominator half, and _key_printed_code never reads "
             "one in either direction",
             f"properties were {sorted(chosen.schema['properties'])!r}",
         )
@@ -7874,6 +8077,624 @@ def _stages(inventory) -> str:
     print THIS number — not that they print some number that happens to match today.
     """
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
+
+
+def check_pricing_authority(checks: Checks) -> None:
+    """`decisions.json` decides the price, and `join` may not take that decision back.
+
+    TWO BUGS IN ONE SEAM, BOTH FOUND BY READING THE COMMANDS RATHER THAN THE TESTS, AND BOTH
+    INVISIBLE TO EVERY CHECK IN THIS REPO ON THE DAY THEY WERE FOUND.
+
+    The first: `cli/cmd_emit.py` resolved with `run_dir.manifest.get("rule")` and then printed
+    `choice.describe` off `decisions.json`, so an operator who set `"rule": "undercut:5"` in the
+    file got a run that PRINTED `rule=undercut:5` and priced every row at market. `pipeline/
+    decisions.py`'s own docstring calls that file *"the pricing decision, as a file rather than
+    as a flag"*, and it was the one thing in it that decided nothing.
+
+    The second is worse because it destroys work: `cli/cmd_join.py` assigned `choice.rule` and
+    `choice.basis` back from the run immediately after printing *"merging into existing
+    decisions.json — your edits are kept"*. `join` is free and re-runnable and is re-run
+    routinely, so an edited rule survived until the next join and then silently was not there.
+
+    T5 asserts `decisions.json` CARRIES a rule (`:305-306`) and passed throughout — carrying it
+    was never the question. These cases assert that it REACHES A PRICE, which is a fact about
+    the command seam and belongs here.
+
+    Its own isolated home, which is this file's own lesson three times over: these cases emit,
+    which writes `pushed` counts that `check_listing_commands` and `check_cli_seams` both
+    assert over their own fixtures.
+    """
+    checks.note("")
+    checks.note("PRICING AUTHORITY — decisions.json decides, join records")
+
+    cards = [(3, 1, "Articuno", "161", None)]
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        path = run_dir.path(runs.DECISIONS)
+        seeded = json.loads(path.read_text())
+        checks.equal(
+            (seeded["rule"], seeded["basis"]),
+            ("match", "market"),
+            "a first join SEEDS the file from the run's own flags — `--rule` is how a run's "
+            "pricing starts, and a file with no rule in it would be a document that cannot "
+            "answer the question it exists to ask",
+        )
+
+        # The market price this SKU is about to be priced from, read off the run's own export
+        # rather than written here: a literal would go on passing if the fixture moved.
+        export = tcgcsv.read_export(run_dir.path("export.csv"))
+        market = export.by_sku()[ARTICUNO_SKU][tcgcsv.MARKET_PRICE_COLUMN]
+
+        seeded["rule"] = "markup:100"
+        seeded["sub_threshold"] = "floor"
+        path.write_text(json.dumps(seeded))
+
+        said = command(checks, "emit", str(run_dir.directory))
+        written = {
+            row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
+            for row in tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon"))).rows
+        }
+        checks.equal(
+            written.get(ARTICUNO_SKU),
+            tcgcsv.format_price(Decimal(market) * 2),
+            "A RULE SET IN `decisions.json` REACHES THE EMITTED PRICE. `markup:100` doubles "
+            "the market price into the import file — the whole content of the first bug, "
+            "which priced at market while printing the rule it had been given",
+        )
+        checks.ok(
+            "rule=markup:100" in said,
+            "and the `pricing` line names the rule that was actually applied, which it did "
+            "before this too — printing the file and pricing from the manifest is exactly how "
+            "a wrong number stays invisible",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        path = run_dir.path(runs.DECISIONS)
+        edited = json.loads(path.read_text())
+        edited["rule"] = "undercut:5"
+        edited["basis"] = "low"
+        edited["sub_threshold"] = "floor"
+        path.write_text(json.dumps(edited))
+
+        said = command(
+            checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
+        )
+        after = json.loads(path.read_text())
+        checks.equal(
+            (after["rule"], after["basis"], after["sub_threshold"]),
+            ("undercut:5", "low", "floor"),
+            "A RE-JOIN KEEPS THE EDITED RULE, which is what the sentence it prints has always "
+            "promised. Two assignments used to run immediately after that sentence and reset "
+            "exactly the two fields most likely to have been edited — measured, `markup:100` "
+            "on `low` went back to `match` on `market` while `sub_threshold` beside it "
+            "survived, so the file looked merged and was not",
+        )
+        checks.ok(
+            "your edits are kept" in said,
+            "and it still says so — the sentence was not the bug, the two lines under it were",
+        )
+        checks.equal(
+            run_dir.manifest.get("rule"),
+            "match",
+            "THE MANIFEST STILL RECORDS WHAT THE JOIN RAN WITH, and it is deliberately NOT the "
+            "edited value: a record of what happened is a different thing from the answer, "
+            "`report.txt` prints this one, and only one of the two may be authoritative",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        path = run_dir.path(runs.DECISIONS)
+        path.write_text(json.dumps({"rule": "undercut:not-a-number", "sub_threshold": "floor"}))
+        from cli import __main__ as entry
+
+        for argv, label in (
+            (
+                ["emit", str(run_dir.directory)],
+                "emit refuses a rule outside the enum with a SENTENCE rather than a traceback",
+            ),
+            (
+                [
+                    "join",
+                    str(run_dir.directory),
+                    "--export",
+                    str(run_dir.path("export.csv")),
+                ],
+                "and so does join — `UnknownRule` is a ValueError and NOT a "
+                "`MalformedDecisions`, nothing above `cli/__main__.py` caught it, and `PUT "
+                "/pipeline/runs/<name>/decisions` writes this document with no validation at "
+                "all, so a screen can reach every one of these states",
+            ),
+        ):
+            with quiet() as said:
+                code = entry.main(argv)
+            checks.equal(
+                (code, "is unusable" in said.getvalue()),
+                (1, True),
+                label,
+            )
+
+
+def check_pricing_route(checks: Checks) -> None:
+    """`GET /pipeline/runs/<name>/pricing` — free, read-only, two files from one moment.
+
+    THE ONE THING WORTH ASSERTING HARDEST IS A SHAPE THAT LOOKS LIKE AN ACCIDENT AND IS NOT:
+    `_RUN_STEP_RE` matches `^/pipeline/runs/<name>/([a-z]+)$`, so a **POST** to this same
+    path reaches `do_pipeline_step` with `step="pricing"` and is refused against `FREE_STEPS`.
+    That refusal is correct — pricing is a read and has no step — and it is asserted rather
+    than left to be discovered by whoever next wonders why a POST here 404s.
+    """
+    checks.note("")
+    checks.note("PRICING ROUTE — the table and the answers, in one read")
+
+    cards = [(3, 1, "Articuno", "161", None)]
+
+    with isolated_home():
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            bare = runs.create("unjoined")
+            bare.set(capture_dir="/tmp/nowhere")
+            status, body, _ = request(
+                port, "GET", f"/pipeline/runs/{bare.directory.name}/pricing"
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (409, "pricing_not_written"),
+                "a run that has not been joined refuses IN ITS OWN CODE and names the "
+                "command that writes the file — every run made before D49 is in this state, "
+                "so the screen has to be able to say `re-join this run` rather than break",
+            )
+
+            run_dir, _ = seam_run(checks, cards)
+            status, body, _ = request(
+                port, "GET", f"/pipeline/runs/{run_dir.directory.name}/pricing"
+            )
+            payload = json.loads(body)
+            checks.equal(
+                (
+                    status,
+                    payload["run"],
+                    [s["sku"] for s in payload["pricing"]["skus"]],
+                    payload["decisions"]["rule"],
+                ),
+                (200, run_dir.directory.name, [ARTICUNO_SKU], "match"),
+                "and a joined run answers with the table AND this run's answers together — "
+                "two fetches could straddle a re-join, and a table describing one join "
+                "beside answers written against another is a screen pricing the wrong cards",
+            )
+            checks.equal(
+                len(payload["pricing"]["skus"][0]["row"]),
+                len(tcgcsv.CANONICAL_HEADER),
+                "every export cell travels VERBATIM — the owner asked for all the data from "
+                "the CSV in front of them while they price, and a subset chosen here is a "
+                "decision about what matters taken by the wrong file",
+            )
+            checks.equal(
+                payload["remembered_sub_threshold"],
+                None,
+                "with no earlier run there is nothing to remember, and the answer is null "
+                "rather than a guess — D9 forbids a default and this is a LABEL, not one",
+            )
+
+            # A second run whose answer is on disk, so the label has something to find.
+            answered = run_dir.path(runs.DECISIONS)
+            payload_doc = json.loads(answered.read_text())
+            payload_doc["sub_threshold"] = "floor"
+            answered.write_text(json.dumps(payload_doc))
+            later, _ = seam_run(checks, cards)
+            status, body, _ = request(
+                port, "GET", f"/pipeline/runs/{later.directory.name}/pricing"
+            )
+            remembered = json.loads(body)["remembered_sub_threshold"]
+            checks.equal(
+                (remembered or {}).get("answer"),
+                "floor",
+                "and a LATER run reads the last answer off the newest OTHER run — "
+                "'remember that I said so' with no new storage, no migration and no file "
+                "that can disagree with the runs it claims to summarise",
+            )
+
+            status, body, _ = request(
+                port,
+                "POST",
+                f"/pipeline/runs/{run_dir.directory.name}/pricing",
+                payload={},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (404, "no_such_step"),
+                "a POST to the same path is refused as a STEP rather than reaching this "
+                "handler — the step pattern admits any lowercase word, so `pricing` matches "
+                "it and is turned away by the free-steps list, which is correct and is the "
+                "kind of overlap that is only obvious once somebody has asserted it",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+
+
+def check_withholding(checks: Checks) -> None:
+    """A withheld SKU writes no row, moves no count, and is still FINDABLE (D49).
+
+    THE OWNER ASKED THE QUESTION THIS SECTION ANSWERS. Shown that a held card would keep
+    `state: captured` and carry no `sku`, they said: "Wait i want to be able to find it, why
+    can't it be emitted?" It can. `cli/cmd_emit.py` had one `continue` doing two jobs —
+    skipping the identity write and the `pushed` bump together — which was correct only while
+    "reached a file" and "we know what this is" meant the same thing. A withhold is the first
+    thing that splits them.
+
+    So the three facts below are asserted together, because the value of each depends on the
+    other two: no import row, no `pushed`, and the card knows what it is.
+    """
+    checks.note("")
+    checks.note("WITHHOLDING — no row, no count, still findable")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Articuno", "161", None),
+    ]
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        path = run_dir.path(runs.DECISIONS)
+        answers = json.loads(path.read_text())
+        answers["sub_threshold"] = "floor"
+        answers["overrides"] = {
+            ARTICUNO_SKU: {
+                "withheld": "bullish",
+                "watch_above": "30.00",
+                "note": "holding for rotation",
+            }
+        }
+        path.write_text(json.dumps(answers))
+
+        said = command(checks, "emit", str(run_dir.directory))
+        listed = tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon")))
+        checks.equal(
+            [row[tcgcsv.SKU_COLUMN] for row in listed.rows],
+            [DUNSPARCE_SKU],
+            "A WITHHELD SKU WRITES NO IMPORT ROW, and the SKU beside it still does — a hold "
+            "that emptied the file would be a hold nobody could tell from a broken emit",
+        )
+
+        inventory = Store().read().inventory
+        held_card = inventory.get(f"3/2")
+        checks.equal(
+            (held_card.state, held_card.sku, held_card.condition),
+            (master.IDENTIFIED, ARTICUNO_SKU, "Near Mint Holofoil"),
+            "AND ITS CARD STILL KNOWS WHAT IT IS. The identity is a fact about the physical "
+            "object that the join established; nothing about withholding it makes that fact "
+            "less true, and a card carrying no `sku` is invisible to GET /search and every "
+            "SKU-keyed surface in the product",
+        )
+        checks.equal(
+            inventory.listings.get(ARTICUNO_SKU),
+            None,
+            "AND NO COUNT MOVED — not even an empty record. `pushed` means a CSV was written "
+            "and none was; `cli/resolve.py:_committed_keys` reads `pushed + staged` back as "
+            "`committed`, so a count moved here would make the next run treat a card it never "
+            "listed as already spoken for",
+        )
+        checks.ok(
+            "withheld" in said and ARTICUNO_SKU in said,
+            "and `emit` NAMES the hold as it commits the file — the moment a person can "
+            "still change their mind is the moment it is worth saying, which is why this is "
+            "a warning rather than a refusal",
+        )
+
+        # --- the watch, on the next join -------------------------------------------------
+        said = command(
+            checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
+        )
+        checks.ok(
+            "WATCH" not in said,
+            "a watch set ABOVE the market says nothing — an alert that fires on every join "
+            "is an alert nobody reads",
+        )
+
+        answers = json.loads(path.read_text())
+        answers["overrides"][ARTICUNO_SKU]["watch_above"] = "1.00"
+        path.write_text(json.dumps(answers))
+        said = command(
+            checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
+        )
+        checks.ok(
+            "WATCH" in said and "Articuno" in said and "$1.00" in said,
+            "and one the market has passed is reported BY NAME on the run — `join` is free, "
+            "re-runnable and pointed at a refreshed export, which is the only moment a price "
+            "has moved and the only moment a watch has anything to say",
+        )
+
+        after = json.loads(path.read_text())
+        checks.equal(
+            after["overrides"][ARTICUNO_SKU],
+            {"withheld": "bullish", "watch_above": "1.00", "note": "holding for rotation"},
+            "and the hold ROUND-TRIPS through the re-join unchanged — reason, watch and note. "
+            "`join` rewrites this file on every run, so a hold that lost its note would lose "
+            "it on the first free command the operator pressed",
+        )
+
+
+def check_crop_preview(checks: Checks) -> None:
+    """D32 — `POST /pipeline/crop-preview`: what a reading sends, before it is paid for.
+
+    ITS OWN ISOLATED HOME, this file's own lesson yet again: the block writes photographs
+    into a box, and the blocks above count records over boxes they build card by card.
+
+    WHAT IT IS FOR. D32's amendment gave the crop three named pairs and a sentence each,
+    because the owner could not read the control: *"walk me through how im supposed to
+    understand crop with just this dialog box"*. The sentences are prose about pixels. This
+    route answers the same question as a picture — the cut, and the collector-number strip at
+    the resolution the reading delivers — and it has to be free, because it is pressed while
+    the reading is being CHOSEN, before the preflight and long before the confirm.
+
+    THE PROPERTY WORTH ASSERTING MOST IS A NEGATIVE ONE: it writes nothing. It sits in the one
+    module of this server that can spend money, one route above the one that does, so
+    "creates no run directory, no scope directory, no store write" is not a detail — it is
+    what makes it safe to fire on every chip press.
+    """
+    try:
+        from PIL import Image, ImageDraw  # noqa: F401
+    except ImportError:
+        checks.note("crop preview: Pillow absent, the route's own refusal path is all that runs")
+
+    from server import pipeline_routes
+
+    def photograph(path, *, card=True):
+        """A bright card on a dark ground — the one premise `geometry.detect_card` needs."""
+        from PIL import Image, ImageDraw
+
+        # BIG ENOUGH THAT THE MAX EDGE BINDS, which the first draft was not: a 900x1600 frame
+        # holding a 420x586 card crops to ~470x655, and `downscale` never upscales — so 1200
+        # and 900 both sent it untouched and the band came back the same size at both. The
+        # test was right and the fixture was wrong. A cropped long edge of ~1500 means both
+        # readings actually resize, which is the condition the rig's 2160x3840 frames meet.
+        frame = Image.new("RGB", (1500, 2600), (26, 28, 32))
+        if card:
+            draw = ImageDraw.Draw(frame)
+            # 1000x1396 is CARD_ASPECT — 63:88, 0.716. An earlier draft drew 420x786 and the
+            # detector correctly refused every frame: the shape gates are what stop it
+            # cropping a guess, so a fixture that is not card-shaped tests the refusal path.
+            draw.rectangle((300, 500, 1300, 1896), fill=(238, 232, 214))
+            # A dark strip where a collector number prints, so the band is not blank paper.
+            draw.rectangle((350, 1780, 700, 1840), fill=(40, 40, 40))
+        frame.save(path, format="JPEG", quality=92)
+
+    with isolated_home() as home:
+        box = home / "captures" / "cards" / "box3"
+        box.mkdir(parents=True)
+        for index in (1, 2, 3, 4, 5, 6):
+            photograph(box / f"{index:04d}.jpg")
+            (box / f"{index:04d}.json").write_text(
+                json.dumps({"box": 3, "index": index, "game": "pokemon"}), "utf-8"
+            )
+
+        runs_before = sorted(p.name for p in files.runs_dir().iterdir()) if files.runs_dir().is_dir() else []
+
+        # --- the refusals, each in its own code ------------------------------------------
+        for payload, code, why in (
+            ({}, "box_required", "no box at all"),
+            ({"box": 0}, "box_required", "a box that is not a positive integer"),
+            ({"box": 99}, "box_has_no_captures", "a box nothing has been photographed into"),
+            ({"box": 3, "indices": []}, "indices_invalid", "an empty selection"),
+            ({"box": 3, "max_edge": 40}, "max_edge_invalid", "a max edge below the floor"),
+            ({"box": 3, "max_edge": "1200"}, "max_edge_invalid", "a max edge that is a string"),
+            ({"box": 3, "offset": -1}, "offset_invalid", "a negative offset"),
+        ):
+            try:
+                pipeline_routes.do_pipeline_crop_preview(payload)
+                checks.ok(False, f"crop preview refuses {why}", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(refusal.code, code, f"crop preview refuses {why} as `{code}`")
+
+        # `max_edge` is validated by the SAME function the preflight uses, so a reading the
+        # preview accepts is a reading `identify` will accept. A second range check beside the
+        # second caller is a refusal that can disagree with the one the run actually gets.
+        try:
+            pipeline_routes._identify_flags({"max_edge": 40})
+            checks.ok(False, "and the preflight refuses the same value", "it accepted it")
+        except pipeline_routes.PipelineRefusal as refusal:
+            checks.equal(
+                refusal.code,
+                "max_edge_invalid",
+                "and the preflight refuses the same value through the same validator",
+            )
+
+        try:
+            from PIL import Image  # noqa: F401
+        except ImportError:
+            return
+
+        # --- the cut, and the seam it shares with the run --------------------------------
+        #
+        # `geometry` IS DELIBERATELY NOT IMPORTED HERE, and the reason is a check in
+        # `scripts/docs-audit.py`'s own self-test rather than taste: it proves the `tested_by
+        # reach` row does not follow imports transitively by asserting that T7 reaches `store`
+        # directly and does NOT reach `geometry` through `cli`. A direct import here would make
+        # that fixture unable to tell a transitive follow from a real one, and it went red the
+        # first time this block was written.
+        #
+        # Nothing is lost. The identity — that the rectangle the screen draws is the one
+        # `card_crop` cuts — is T6's, asserted there against the detector and observed failing
+        # against a `card_crop` that had stopped using `crop_rect`. What belongs HERE is the
+        # route's own contract: that it reports a rectangle at all, that the rectangle is a
+        # card, and that it lands inside the photograph the screen will draw it over.
+        cropped = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 1200}
+        )
+        checks.equal(cropped["total"], 6, "the preview counts the photographs in scope")
+        checks.equal(
+            cropped["sample"]["index"], 1, "and shows ONE card, the one the offset names"
+        )
+        first = cropped["sample"]
+        checks.ok(first["rect"] is not None, "a cropping reading reports where the cut falls")
+        if first["rect"] is not None:
+            left, top, right, bottom = first["rect"]
+            width, height = first["frame"]
+            checks.ok(
+                0 <= left < right <= width and 0 <= top < bottom <= height,
+                "and it lands inside the photograph the screen draws it over — the overlay is "
+                "positioned as a percentage of the frame, so a cut that ran off the picture "
+                "would be drawn outside it",
+                f"{first['rect']} against {first['frame']}",
+            )
+            aspect = (right - left) / (bottom - top)
+            checks.ok(
+                abs(aspect - 0.716) < 0.05,
+                "and it is CARD-SHAPED, which is the aspect correction reaching the screen: a "
+                "flat pad over a box short for its width is what cut 38 collector numbers off "
+                "box 2, and the preview would have drawn that crop as though it were fine",
+                f"aspect {aspect:.3f}",
+            )
+
+        # --- the walk: one card, `offset`, and it WRAPS ----------------------------------
+        #
+        # Three evenly spaced cards for a few hours, on the argument that cards move on the
+        # tray so the front of a box does not stand for it. The owner overruled it on the only
+        # ground that decides whether a picture works: three abreast are three small pictures.
+        # The spread is reached by walking now, which is also the only version of it that lets
+        # you look at a card you actually suspect.
+        walked = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 1200, "offset": 2}
+        )
+        checks.equal(walked["sample"]["index"], 3, "the offset walks the box one card at a time")
+        wrapped = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 1200, "offset": 6}
+        )
+        checks.equal(
+            wrapped["sample"]["index"],
+            1,
+            "and it WRAPS rather than clamping — a stepper that stops at the end of a 543-card "
+            "box leaves the operator pressing a key that does nothing",
+        )
+        checks.equal(wrapped["offset"], 0, "and the answer reports the offset it actually used")
+
+        # --- the whole-frame reading, and the two ways `rect` can be null ----------------
+        whole = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": False, "max_edge": 1568}
+        )
+        checks.ok(
+            whole["sample"]["rect"] is None,
+            "the whole-frame reading reports no cut, because there is none",
+        )
+        checks.ok(
+            whole["sample"]["method"] is not None,
+            "but it still reports the detector's answer — `rect: null` because the crop is "
+            "OFF and `rect: null` because detection REFUSED are opposite facts to an "
+            "operator, and `method` is the only thing that tells them apart",
+        )
+        checks.ok(
+            whole["sample"]["sent"] != cropped["sample"]["sent"],
+            "and the two readings send different bytes, which is the whole subject",
+        )
+
+        # --- the band: the half that moves when the max edge moves -----------------------
+        cheap = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 900}
+        )
+        checks.equal(
+            cheap["sample"]["rect"],
+            cropped["sample"]["rect"],
+            "THE RECTANGLE IS IDENTICAL AT 1200 AND AT 900 — the crop decides framing and the "
+            "max edge decides resolution, which is why the band exists at all",
+        )
+        checks.ok(
+            cheap["sample"]["band_px"][0] < cropped["sample"]["band_px"][0],
+            "and the collector number occupies FEWER PIXELS at 900 — the only half of the "
+            "preview that can tell the two cropping readings apart",
+            f"{cheap['sample']['band_px']} against {cropped['sample']['band_px']}",
+        )
+
+        # --- THE PICTURE IS THE PAYLOAD, WHICH IS WHAT MAKES ANY OF IT VISIBLE -----------
+        #
+        # The owner: "the crop preview should also show the depixelation reflected as you
+        # change the options". The frame drew `GET /photo` — the same bytes at every reading —
+        # so the one thing being changed was the one thing the picture could not show.
+        checks.ok(
+            str(cropped["sample"]["sent_image"]).startswith("data:image/jpeg;base64,"),
+            "the sample carries the BYTES THAT WILL BE SENT, not the file on disk",
+        )
+        checks.ok(
+            cropped["sample"]["sent_image"] != cheap["sample"]["sent_image"],
+            "and they are different bytes at 1200 and at 900 — which is the whole of what the "
+            "operator was asking to see",
+        )
+        checks.ok(
+            cropped["sample"]["band_rect"] is not None
+            and cropped["sample"]["band_rect"][2] <= cropped["sample"]["sent"][0]
+            and cropped["sample"]["band_rect"][3] <= cropped["sample"]["sent"][1],
+            "the band is a RECTANGLE INTO those bytes rather than a second image, so the 1:1 "
+            "view and the frame cannot disagree about what is being sent — there is no second "
+            "file to disagree with",
+            f"{cropped['sample']['band_rect']} in {cropped['sample']['sent']}",
+        )
+
+        # --- THE BAND IS THE REGISTRY'S TO GRANT, PER CARD -------------------------------
+        #
+        # THE DEFECT THIS ROUTE SHIPPED WITH, found by the owner on box 1. It cut
+        # `geometry/crop.py`'s number band over every game, and `pipeline/games.py` refuses
+        # that in writing: "the bands are fractions measured on a Pokemon card. Nothing has
+        # measured where a Riftbound card puts its title or its number, and a band claimed
+        # without that measurement is cut over the wrong pixels." Box 1 is Riftbound, and the
+        # strip drew its RULES TEXT as though it were a collector number.
+        (box / "0001.json").write_text(
+            json.dumps({"box": 3, "index": 1, "game": "riftbound"}), "utf-8"
+        )
+        rift = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 1200}
+        )
+        checks.equal(rift["sample"]["game"], "riftbound", "the sample carries the card's game")
+        checks.equal(
+            rift["sample"]["band_rect"],
+            None,
+            "a game whose `crop_bands` claims no number band gets NO RESTING AIM — the same "
+            "refusal `crop_regions` makes, reached through the same registry field",
+        )
+        checks.ok(
+            rift["sample"]["band_absent"] is not None
+            and "riftbound" in rift["sample"]["band_absent"],
+            "and the screen is told WHY, in the registry's own terms — and the 1:1 view still "
+            "works, because the operator can point at the identifier themselves",
+        )
+        checks.ok(
+            rift["sample"]["rect"] is not None,
+            "while the CUT is unaffected — a card is 63x88mm whatever is printed on it, so "
+            "the crop is right for every game even where no band has been measured",
+        )
+        (box / "0001.json").write_text(
+            json.dumps({"box": 3, "index": 1, "game": "pokemon"}), "utf-8"
+        )
+
+        # --- a photograph with no card in it ---------------------------------------------
+        photograph(box / "0001.jpg", card=False)
+        refused = pipeline_routes.do_pipeline_crop_preview(
+            {"box": 3, "crop": True, "max_edge": 1200}
+        )
+        checks.equal(
+            refused["sample"]["method"],
+            None,
+            "a frame the detector cannot find a card in reports no method, so the screen can "
+            "say the card is going at whole-frame cost rather than leaving it inferred from a "
+            "missing rectangle",
+        )
+
+        # --- and it wrote nothing ---------------------------------------------------------
+        runs_after = sorted(p.name for p in files.runs_dir().iterdir()) if files.runs_dir().is_dir() else []
+        checks.equal(
+            runs_after,
+            runs_before,
+            "EIGHT PREVIEWS CREATED NO RUN DIRECTORY. It lives in the module that can spend, "
+            "one route above the one that does, and it is fired on every chip press and every "
+            "press of an arrow key",
+        )
+        checks.ok(
+            not (home / ".scopes").exists(),
+            "and no scope directory either — a whole-box preview symlinks nothing",
+        )
 
 
 def check_listing_commands(checks: Checks) -> None:
@@ -8516,6 +9337,16 @@ def check_pipeline_routes(checks: Checks) -> None:
             (box_dir / f"{index:04d}.json").write_text(
                 json.dumps({"box": 3, "index": index, "game": "pokemon", "variant": "normal"})
             )
+        # A SECOND BOX, because half of what a cart has to be checked for is that two legs
+        # stay two: their own readings, their own runs, and a refusal on one taking the
+        # whole send down rather than leaving the other half spawned.
+        other_dir = home / "captures" / "cards" / "box7"
+        other_dir.mkdir(parents=True)
+        for index in (1, 2):
+            (other_dir / f"{index:04d}.jpg").write_bytes(JPEG)
+            (other_dir / f"{index:04d}.json").write_text(
+                json.dumps({"box": 7, "index": index, "game": "pokemon", "variant": "normal"})
+            )
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
@@ -8612,6 +9443,190 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "in the first place — a directory of symlinks there would be walked by the "
                 "next run pointed at the box above it and every card submitted twice",
             )
+
+            # ------------------------------------------------- a send of several boxes
+            #
+            # THE CART, AND THE HALF THAT IS WORTH TESTING IS THE REFUSALS. A send that
+            # spends is not reachable from here for the reason this section opens with, so
+            # what these cases hold is the shape of the answer and every gate that stands
+            # between a cart and an invoice.
+            status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 3})
+            single = json.loads(body)
+            checks.equal(
+                (status, len(single["scopes"]), single["scopes"][0]["scope"]["box"],
+                 single["total"]["boxes"]),
+                (200, 1, 3, 1),
+                "a bare `box` answers as a CART OF ONE — the same read-side widening D3's "
+                "amendment gives the finish claim, so every request written before the cart "
+                "existed resolves down the identical path and no reader has to ask which "
+                "response shape it got before it can ask anything else",
+            )
+            checks.equal(
+                (single["total"]["photographs"], single["scopes"][0]["photographs"]),
+                (2, 2),
+                "and the total of one leg is that leg, computed on the SERVER — the figure "
+                "the confirm is gated on is the one the operator agrees to spend, and a sum "
+                "written in TypeScript would be a second cost model beside the printed one",
+            )
+
+            status, body, _ = request(
+                port,
+                "POST",
+                "/pipeline/preflight",
+                payload={
+                    "scopes": [
+                        {"box": 3, "crop": True, "max_edge": 1200},
+                        {"box": 7, "crop": False, "max_edge": 1568},
+                    ]
+                },
+            )
+            cart = json.loads(body)
+            checks.equal(
+                (status, [leg["scope"]["box"] for leg in cart["scopes"]],
+                 cart["total"]["boxes"], cart["total"]["photographs"]),
+                (200, [3, 7], 2, 4),
+                "two boxes answer as two legs IN THE ORDER SENT, each with its own console "
+                "and figures, and the total sums them — the reading is per leg because "
+                "which end of D32's frontier is right depends on what is in the drawer",
+            )
+            checks.ok(
+                "\ncrop " in cart["scopes"][0]["console"]
+                and "\ncrop " not in cart["scopes"][1]["console"],
+                "and the per-leg reading REACHES THE CHILD: box 3's preflight printed its "
+                "own crop line and box 7's did not, in one request — a cart that quietly "
+                "applied one reading to every box would be a convenience bought with "
+                "accuracy, and the line is the command's own rather than this route's",
+            )
+
+            for payload, expected, label in (
+                (
+                    {"scopes": []},
+                    "scopes_invalid",
+                    "an empty cart is refused rather than read as every box — the same "
+                    "refusal an empty `indices` earns, for the same reason one register up",
+                ),
+                (
+                    {"scopes": [{"box": 3}, "box seven"]},
+                    "scopes_invalid",
+                    "one member that is not an object refuses the whole cart rather than "
+                    "being dropped from it, which is the rule the finish claim already "
+                    "follows for a bad member",
+                ),
+                (
+                    {"scopes": [{"box": 3}, {"box": 3}]},
+                    "box_repeated",
+                    "and a box named twice in one send is refused BEFORE anything spawns — "
+                    "two legs over one box is two invoices for one answer, which is the "
+                    "refusal a live run earns after the fact and this one earns before it",
+                ),
+                (
+                    {"scopes": [{"box": 3} for _ in range(pipeline_routes.MAX_LEGS + 1)]},
+                    "too_many_scopes",
+                    "and a cart longer than the bound refuses rather than spawning a "
+                    "process per element: the guard is against a malformed client, not "
+                    "against an operator with a lot of boxes",
+                ),
+            ):
+                status, body, _ = request(
+                    port, "POST", "/pipeline/preflight", payload=payload
+                )
+                checks.equal((status, error_code(body)), (400, expected), label)
+
+            status, body, _ = request(
+                port,
+                "POST",
+                "/pipeline/preflight",
+                payload={"scopes": [{"box": 3, "indices": [1]}, {"box": 7, "max_edge": 9}]},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (400, "max_edge_invalid"),
+                "a bad flag in the SECOND leg refuses the whole send — every leg is "
+                "resolved before any is acted on, because a loop that validated as it went "
+                "would leave two boxes identifying and a third refused",
+            )
+            checks.equal(
+                sorted(entry.name for entry in (home / ".scopes").iterdir())
+                if (home / ".scopes").is_dir()
+                else [],
+                [],
+                "and the scope directory the FIRST leg had already built is torn down with "
+                "it — a refusal that left symlink directories behind would accumulate one "
+                "per mis-typed cart, in the one directory identify walks recursively",
+            )
+
+            # ------------------------------------------- the double-click guard, by BOX
+            #
+            # IT USED TO COMPARE CAPTURE-DIRECTORY PATHS, which works for a whole box and
+            # cannot work for a ticked selection: `_scope_dir` builds a fresh
+            # `.scopes/box3-<n>-<timestamp>` on every press, so two presses over one
+            # selection were two paths and neither saw the other. The subset path had no
+            # double-click guard at all.
+            live = runs.create("box3")
+            live.set(
+                capture_dir=str(home / ".scopes" / "box3-1-1700000000"),
+                scope={"box": 3, "whole_box": False, "cards": 1},
+            )
+            # This process, which is alive by construction — `_live_pid` checks with signal
+            # 0 rather than trusting the file, so a pid belonging to nobody cannot make the
+            # guard into a permanent lock.
+            (live.directory / "running.pid").write_text(f"{os.getpid()}\n")
+            status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 3})
+            checks.equal(
+                (json.loads(body)["scopes"][0]["busy_run"],
+                 json.loads(body)["total"]["busy"]),
+                (live.directory.name, [{"box": 3, "run": live.directory.name}]),
+                "a live run over a SELECTION inside box 3 is found by a whole-box preflight "
+                "for box 3 — the guard compares boxes now, and under the old path compare "
+                "these two directories share no name at all",
+            )
+            status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 7})
+            checks.equal(
+                (json.loads(body)["scopes"][0]["busy_run"], json.loads(body)["total"]["busy"]),
+                (None, []),
+                "and box 7 is untouched by it — two runs over DIFFERENT boxes are fine and "
+                "are not blocked, which is the whole reason a cart is one send rather than "
+                "a queue",
+            )
+            status, body, _ = request(
+                port,
+                "POST",
+                "/pipeline/identify",
+                payload={"confirm": True, "scopes": [{"box": 7}, {"box": 3}]},
+            )
+            checks.equal(
+                (status, error_code(body)),
+                (409, "run_already_live"),
+                "and a cart whose SECOND box is busy refuses whole — the live-run guard "
+                "runs over every leg before the first child starts, so a busy box in the "
+                "middle cannot leave the boxes before it spawned and paid for",
+            )
+            checks.equal(
+                sorted(entry.name for entry in (home / "runs").iterdir()),
+                [live.directory.name],
+                "and NOTHING was spawned by it: the only run directory on disk is the one "
+                "this case created by hand, so the refusal cost no invoice and left no row",
+            )
+
+            # A run started in a TERMINAL carries a capture directory and NO scope — `scope`
+            # is written by the route and by nothing else — so the guard has to read the box
+            # out of the path as well, or the screen could start a second batch over a box
+            # an agent is already identifying.
+            (live.directory / "running.pid").unlink()
+            terminal = runs.create("box7")
+            terminal.set(capture_dir=str(other_dir))
+            (terminal.directory / "running.pid").write_text(f"{os.getpid()}\n")
+            status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 7})
+            checks.equal(
+                json.loads(body)["scopes"][0]["busy_run"],
+                terminal.directory.name,
+                "a run started from a terminal — capture directory, no scope — still blocks "
+                "the screen, because the box is read from the manifest's scope FIRST and "
+                "from the directory name second, and only the second can see that run",
+            )
+            (terminal.directory / "running.pid").unlink()
+            for stale in (live.directory, terminal.directory):
+                shutil.rmtree(stale)
 
             # -------------------------------------------------- reading runs, and refusals
             status, body, _ = request(port, "GET", "/pipeline/runs")
@@ -8982,6 +9997,9 @@ def check_open_section(checks: Checks) -> None:
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
+    check_pricing_authority(checks)
+    check_withholding(checks)
+    check_pricing_route(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
@@ -9011,10 +10029,12 @@ def run() -> Result:
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_review_stand_down(checks)
+    check_review_catalog(checks)
     check_run_realignment(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
+    check_crop_preview(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

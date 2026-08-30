@@ -28,6 +28,9 @@ regression:
   - **It refuses to start a second run over a capture directory a run is already reading.**
     A double-click is the realistic accident here, not an attacker, and two live batches
     over one box is the shape that turns one into two invoices.
+  - **The crop preview is free and shells out to nothing.** `POST /pipeline/crop-preview`
+    answers what a reading does to the bytes — the cut, and the collector-number strip at
+    the resolution it delivers — so the pair is legible before the estimate is asked for.
   - **The preflight is free, is a separate route, and is what the screen must show first.**
     `--dry-run` does everything except the API call: it counts the cards, prices the
     submission, and creates no run directory at all.
@@ -56,6 +59,8 @@ rule the Makefile uses — one rule about which Python runs, stated in places th
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import re
@@ -63,6 +68,8 @@ import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -91,10 +98,30 @@ STEP_TIMEOUT_S = 600
 # thing in this file: measured at roughly a minute for a 544-card box with `--crop`.
 PREFLIGHT_TIMEOUT_S = 900
 
+# HOW MANY BOXES ONE SEND MAY CARRY. A cart of boxes spawns one detached child per box, so an
+# unbounded list is an unbounded number of processes started by one request — the bound is
+# what stops a malformed or looping client doing that, and it is not a judgement about how
+# many boxes an operator may reasonably send. Sixteen is comfortably more than the thirteen
+# this store has ever held.
+MAX_LEGS = 16
+
+# How many preflights run at once. They are separate read-only processes doing CPU-bound
+# image decodes, so they parallelise cleanly and oversubscribing does not: four legs on four
+# threads finish in about the time one takes, and sixteen on sixteen finish in about the time
+# four take while making the machine unusable. Bounded rather than unbounded for the same
+# reason `MAX_LEGS` exists one constant up.
+PREFLIGHT_WORKERS = 4
+
 # Downloadable run artefacts are matched by SHAPE, never by a name from the request. The
 # request names a file, this decides whether that name is one this route is willing to
 # serve, and nothing built from user input is ever joined onto a path.
 _DOWNLOADABLE = re.compile(r"^[A-Za-z0-9._-]+\.(csv|txt|json|log)$")
+
+# The box a capture directory names, anchored at the start so `box3` and `box3-12-1724936400`
+# both read as 3 and nothing further down a name can be mistaken for one. Used only by
+# `_run_box`, and only for runs whose manifest carries no scope — which is every run started
+# from a terminal.
+_BOX_IN_PATH = re.compile(r"^box(\d+)", re.IGNORECASE)
 
 # The two numbers a screen must show before it may ask to spend. Parsed out of the
 # preflight's own stdout rather than recomputed here, so the figure on the screen and the
@@ -245,6 +272,112 @@ def _resolve_scope(payload: dict) -> Tuple[Path, dict]:
     }
 
 
+@dataclass(frozen=True)
+class Leg:
+    """One box in a send: where its photographs are, what it describes, and how it is read.
+
+    THE READING IS PER LEG, AND THAT IS THE WHOLE REASON A CART EXISTS RATHER THAN A
+    MULTI-BOX RUN. D32's frontier is a cost-against-sharpness trade measured on real frames,
+    and which end of it is right depends on what is IN the drawer: a box of bulk commons
+    wants `Cheapest / 900`, and a box worth reading a collector number off wants
+    `Measured best / 1200`. One reading stretched across a whole send would make the cart a
+    convenience bought with accuracy, which is the trade this repo does not make.
+
+    EVERY LEG IS STILL ONE RUN OVER ONE BOX. Nothing downstream learns a new shape: a run
+    directory, its manifest scope, `join`, `emit`, `reconcile`, the queue it writes and the
+    `--bypass` decision taken over it are all exactly what they were. What is new is that one
+    press can start several, which is a fact about the REQUEST and not about a run.
+    """
+
+    directory: Path
+    scope: dict
+    flags: List[str]
+    label: str
+
+
+def _one_leg(entry: dict) -> Leg:
+    """One entry of a cart, or a whole payload read as a cart of one."""
+    directory, scope = _resolve_scope(entry)
+    label = entry.get("label")
+    if not isinstance(label, str) or not label.strip():
+        label = f"box{scope['box']}"
+    return Leg(directory, scope, _identify_flags(entry), label.strip())
+
+
+def _resolve_legs(payload: dict) -> List[Leg]:
+    """`{box, ...}` or `{scopes: [{box, ...}, ...]}` -> the boxes this request is about.
+
+    A BARE `box` READS AS A ONE-ELEMENT CART, AND NOTHING EVER WRITES ONE. The same read-side
+    widening D3's amendment gives the finish claim and D21 gives `game`, chosen here for the
+    same reason: every request written before the cart existed — the harness's, a terminal's,
+    and this screen's own single-box send — resolves down the identical path, with no
+    migration and no second spelling on the wire for one idea.
+
+    EVERY LEG IS RESOLVED BEFORE ANY IS ACTED ON. `do_pipeline_identify` spawns a detached
+    child per leg, and a loop that validated as it went would leave two boxes identifying and
+    a third refused — a partial send nobody asked for, with an invoice attached. This is
+    D29's validate-everything-then-write-everything, one register up from a queue answer.
+
+    A REFUSAL TEARS DOWN THE SCOPE DIRECTORIES IT BUILT ON THE WAY. `_resolve_scope` creates
+    one per ticked selection, so a cart refused on its fourth leg would otherwise leave three
+    behind — and T7 asserts, in as many words, that no scope directory survives a refusal.
+    """
+    made: List[Path] = []
+    scopes_root = _scopes_root()
+
+    def _built(leg: Leg) -> Leg:
+        if scopes_root in leg.directory.parents:
+            made.append(leg.directory)
+        return leg
+
+    try:
+        raw = payload.get("scopes")
+        if raw is None:
+            return [_built(_one_leg(payload))]
+        if not isinstance(raw, list) or not raw:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "scopes_invalid",
+                "`scopes` must be a non-empty array of {box, indices?, crop?, max_edge?}, "
+                "or absent to send the one box named at the top level. An empty array is "
+                "refused rather than read as every box.",
+            )
+        if len(raw) > MAX_LEGS:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "too_many_scopes",
+                f"{len(raw)} boxes in one send, and the limit is {MAX_LEGS}. Each box "
+                f"spawns its own detached child, so an unbounded list is an unbounded "
+                f"number of processes started by one request.",
+            )
+        legs: List[Leg] = []
+        seen: Dict[int, int] = {}
+        for position, entry in enumerate(raw, start=1):
+            if not isinstance(entry, dict):
+                raise PipelineRefusal(
+                    HTTPStatus.BAD_REQUEST,
+                    "scopes_invalid",
+                    f"Scope {position} is not an object.",
+                )
+            leg = _built(_one_leg(entry))
+            first = seen.get(leg.scope["box"])
+            if first is not None:
+                raise PipelineRefusal(
+                    HTTPStatus.BAD_REQUEST,
+                    "box_repeated",
+                    f"Box {leg.scope['box']} is in this send twice, as scopes {first} and "
+                    f"{position}. Two legs over one box is two invoices for one answer — "
+                    f"the same refusal a live run earns, made before anything is spawned.",
+                )
+            seen[leg.scope["box"]] = position
+            legs.append(leg)
+        return legs
+    except PipelineRefusal:
+        for path in made:
+            shutil.rmtree(path, ignore_errors=True)
+        raise
+
+
 # ------------------------------------------------------------------------- running things
 
 
@@ -310,13 +443,50 @@ def _live_pid(run_dir: Path) -> Optional[int]:
     return pid
 
 
-def _busy_run(capture_dir: Path) -> Optional[str]:
-    """The name of a run already reading this capture directory, if one is live.
+def _run_box(manifest: dict) -> Optional[int]:
+    """Which box a run is reading, from its own manifest.
 
-    THE GUARD IS AGAINST A DOUBLE-CLICK, not against an attacker, and it is scoped to the
-    capture directory rather than to the server: two live batches over one box is the shape
-    that turns one invoice into two. Two runs over DIFFERENT boxes are fine and are not
-    blocked — the Batch API takes them in parallel and the cache keys them apart.
+    THE SCOPE FIRST AND THE PATH SECOND, AND THE SECOND HALF IS NOT A FALLBACK FOR OLD
+    FILES — it is the only thing that can see a run started in a TERMINAL. `scope` is
+    written by this module and by nothing else, so `pkmnscan identify captures/cards/box3`
+    leaves a manifest carrying a capture directory and no scope at all. A guard reading only
+    the scope would let this screen start a second batch over a box an agent was already
+    identifying, which is precisely the invoice the guard exists to prevent.
+
+    The path form covers both directory shapes because both name their box in the same
+    place: `captures/cards/box3` and `.scopes/box3-12-1724936400` are `box3...` either way.
+    """
+    scope = manifest.get("scope")
+    if isinstance(scope, dict):
+        box = scope.get("box")
+        if isinstance(box, int) and not isinstance(box, bool):
+            return box
+    recorded = manifest.get("capture_dir")
+    if not isinstance(recorded, str) or not recorded:
+        return None
+    found = _BOX_IN_PATH.match(Path(recorded).name)
+    return int(found.group(1)) if found else None
+
+
+def _busy_run(box: int) -> Optional[str]:
+    """The name of a live run already reading this BOX, if there is one.
+
+    THE GUARD IS AGAINST A DOUBLE-CLICK, not against an attacker: two live batches over one
+    box is the shape that turns one invoice into two. Two runs over DIFFERENT boxes are fine
+    and are not blocked — the Batch API takes them in parallel and the cache keys them apart,
+    which is what makes a cart of boxes one send rather than a queue.
+
+    IT COMPARES BOXES AND NOT PATHS, AND THAT CLOSED A REAL HOLE. It used to resolve the
+    incoming capture directory against each live run's recorded one, which works for a whole
+    box — `captures/cards/box3` both times — and cannot work for a ticked selection, because
+    `_scope_dir` builds a FRESH `.scopes/box3-<n>-<timestamp>` on every press. Two presses
+    over one selection were two different paths, neither saw the other, and the subset path
+    therefore had no double-click guard at all.
+
+    It narrows what is allowed, deliberately: two live runs over DISJOINT selections in one
+    box are now refused as well. That is the case an operator cannot tell apart from the
+    double-click at the moment of the press, and the refusal names the run so the answer is
+    one click away rather than one invoice away.
     """
     root = files.runs_dir()
     if not root.is_dir():
@@ -330,13 +500,35 @@ def _busy_run(capture_dir: Path) -> Optional[str]:
             manifest = json.loads((entry / run_files.MANIFEST).read_text())
         except (OSError, ValueError):
             continue
-        recorded = manifest.get("capture_dir")
-        if recorded and Path(recorded).resolve() == capture_dir.resolve():
+        if _run_box(manifest) == box:
             return entry.name
     return None
 
 
 # ------------------------------------------------------------------------- the preflight
+
+
+def _max_edge(payload: dict) -> Optional[int]:
+    """The request's `max_edge`, validated, or `None` where it names none.
+
+    ONE VALIDATOR FOR TWO ROUTES. The preflight turns it into a flag and the crop preview
+    uses the number itself, and a second range check written beside the second caller is a
+    refusal that can disagree with the one the run will actually get — the preview would
+    then draw a reading the identify route refuses.
+    """
+    max_edge = payload.get("max_edge")
+    if max_edge is None:
+        return None
+    if not isinstance(max_edge, int) or isinstance(max_edge, bool) or not (
+        256 <= max_edge <= 4096
+    ):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "max_edge_invalid",
+            "`max_edge` must be an integer between 256 and 4096. D32's measured "
+            "frontier for this rig runs 900 to 1400.",
+        )
+    return max_edge
 
 
 def _identify_flags(payload: dict) -> List[str]:
@@ -351,17 +543,8 @@ def _identify_flags(payload: dict) -> List[str]:
     flags: List[str] = []
     if payload.get("crop"):
         flags.append("--crop")
-    max_edge = payload.get("max_edge")
+    max_edge = _max_edge(payload)
     if max_edge is not None:
-        if not isinstance(max_edge, int) or isinstance(max_edge, bool) or not (
-            256 <= max_edge <= 4096
-        ):
-            raise PipelineRefusal(
-                HTTPStatus.BAD_REQUEST,
-                "max_edge_invalid",
-                "`max_edge` must be an integer between 256 and 4096. D32's measured "
-                "frontier for this rig runs 900 to 1400.",
-            )
         flags += ["--max-edge", str(max_edge)]
     retry = payload.get("retry_budget")
     if retry is not None:
@@ -397,76 +580,369 @@ def _parse_preflight(text: str) -> dict:
     }
 
 
-def do_pipeline_preflight(payload: dict) -> dict:
-    """`POST /pipeline/preflight` — what a run would cost. FREE, and creates no run.
-
-    `identify --dry-run` returns before `runs.create`, so this leaves nothing on disk at all.
-    The raw stdout is returned alongside the parsed figures and the screen shows it verbatim:
-    `docs/DESIGN.md`'s copy rule makes the owner's screens the place the pipeline's own words
-    are shown rather than paraphrased, and the preflight is the densest thing it says.
-    """
-    scope_dir, scope = _resolve_scope(payload)
-    argv = [str(PKMNSCAN), "identify", str(scope_dir), "--dry-run"] + _identify_flags(payload)
+def _preflight_leg(leg: Leg) -> dict:
+    """One box's dry run. Free by construction — `--dry-run` returns before `runs.create`."""
+    argv = [str(PKMNSCAN), "identify", str(leg.directory), "--dry-run"] + leg.flags
     code, text = _run_sync(argv, PREFLIGHT_TIMEOUT_S)
-    figures = _parse_preflight(text)
     return {
         "ok": code == 0,
         "exit_code": code,
-        "scope": scope,
-        "capture_dir": str(scope_dir),
+        "scope": leg.scope,
+        "capture_dir": str(leg.directory),
         "console": text,
-        **figures,
-        # The busy check is reported by the preflight so the screen can disable its own
+        **_parse_preflight(text),
+        # The busy check is reported by the preflight so the screen can withhold its own
         # confirm before the operator reaches for it, rather than letting them press a
         # button that is going to refuse.
-        "busy_run": _busy_run(scope_dir),
+        "busy_run": _busy_run(leg.scope["box"]),
+    }
+
+
+def _total(answers: Sequence[dict]) -> dict:
+    """What the whole send costs, summed HERE and never on the screen.
+
+    THE NUMBER THE CONFIRM IS GATED ON IS THE SERVER'S. `app/src/server.ts` records that the
+    app is forbidden from computing rules the pipeline owns, and this is the sharpest case of
+    it: the total on screen is the total the operator is agreeing to spend, and a `reduce` in
+    TypeScript would be a second implementation of the cost model that can disagree with the
+    per-box figures printed directly above it.
+
+    A MISSING FIGURE POISONS ITS SUM RATHER THAN COUNTING AS ZERO. `_parse_preflight` answers
+    `None` where a line did not appear, precisely so a changed preflight shows up as a
+    missing figure rather than as a confident zero — and a sum that quietly skipped one would
+    undo that at the exact moment it mattered, by understating what a press is about to buy.
+    """
+
+    def _sum(key: str):
+        values = [answer[key] for answer in answers]
+        return None if any(value is None for value in values) else sum(values)
+
+    money = _sum("estimate_usd")
+    return {
+        "photographs": _sum("photographs"),
+        "cache_hits": _sum("cache_hits"),
+        "to_send": _sum("to_send"),
+        # Rounded to cents at the sum rather than per leg: the legs are what the commands
+        # printed and are left exactly as printed.
+        "estimate_usd": None if money is None else round(money, 2),
+        "boxes": len(answers),
+        # Every live run standing between this cart and a send, named. The screen withholds
+        # its confirm on a non-empty list, which is cheaper than letting the operator press a
+        # button that is going to refuse on the third of five boxes.
+        "busy": [
+            {"box": answer["scope"]["box"], "run": answer["busy_run"]}
+            for answer in answers
+            if answer["busy_run"] is not None
+        ],
+    }
+
+
+def do_pipeline_preflight(payload: dict) -> dict:
+    """`POST /pipeline/preflight` — what a send would cost. FREE, and creates no run.
+
+    `identify --dry-run` returns before `runs.create`, so this leaves nothing on disk at all.
+    Each box's raw stdout is returned alongside its parsed figures and the screen shows it
+    verbatim: `docs/DESIGN.md`'s copy rule makes the owner's screens the place the pipeline's
+    own words are shown rather than paraphrased, and the preflight is the densest thing it
+    says.
+
+    THE ANSWER IS ALWAYS A LIST, EVEN FOR ONE BOX. A response shape that changed with the
+    request would make every reader ask which one it got before it could ask anything else —
+    so a single-box send answers as a cart of one, exactly as `_resolve_legs` reads it.
+
+    THE LEGS RUN AT ONCE, WHICH IS A LATENCY FIX AND NOT AN OPTIMISATION. A preflight decodes
+    and crops every photograph in its box, measured at about a minute for 544 cards, so five
+    boxes in series is a request held open for five minutes with nothing on screen. They are
+    separate read-only processes over a lock-free snapshot, so there is nothing for them to
+    contend over — `--dry-run` writes nothing at all, which is the property that makes this
+    safe rather than merely fast.
+    """
+    legs = _resolve_legs(payload)
+    if len(legs) == 1:
+        answers = [_preflight_leg(legs[0])]
+    else:
+        with ThreadPoolExecutor(max_workers=min(PREFLIGHT_WORKERS, len(legs))) as pool:
+            answers = list(pool.map(_preflight_leg, legs))
+    return {
+        "ok": all(answer["ok"] for answer in answers),
+        "scopes": answers,
+        "total": _total(answers),
+    }
+
+
+# ------------------------------------------------------------------- the crop preview
+
+# The band is JPEG at this quality. High, because the whole point of the strip is whether
+# the digits survive the reading — compression artefacts of our own invention would be a
+# preview lying in the one direction that matters.
+BAND_QUALITY = 92
+
+# WHICH BAND THE PREVIEW DRAWS, when the card's game claims one. `geometry/crop.py` owns
+# where a band IS and `pipeline/games.py` owns which bands a game CLAIMS; this names the one
+# the preview is about, and asks the registry per card whether that card's game claims it.
+PREVIEW_BAND = "number"
+
+
+def _band_rect(sent_size, prepared, det, rect, band_fractions):
+    """Where the collector number is IN THE BYTES THAT WILL BE SENT, as a rectangle.
+
+    A rectangle rather than a cut-out image, because the screen already has those bytes: it
+    draws the sent image in the frame and paints this region of the same file at 1:1
+    underneath. One image over the wire, two views of it, and the second cannot drift from
+    the first because there is no second file to drift.
+
+    Located off `card_rect` — the corrected, UNPADDED card — because the band is a fraction
+    of the cardboard, not of the cut. Measuring it off the padded rectangle would put the
+    strip a few percent low on every card, which is exactly the error the pad correction
+    exists to undo.
+    """
+    from identify import images as identify_images
+
+    sent_w, sent_h = sent_size
+    card = identify_images.card_rect(prepared.original_size, det)
+    if rect is not None:
+        origin_x, origin_y = float(rect[0]), float(rect[1])
+        source_w, source_h = float(rect[2] - rect[0]), float(rect[3] - rect[1])
+    else:
+        origin_x = origin_y = 0.0
+        source_w, source_h = (float(v) for v in prepared.original_size)
+    if source_w <= 0 or source_h <= 0:
+        return None
+
+    scale_x, scale_y = sent_w / source_w, sent_h / source_h
+    left = (card[0] - origin_x) * scale_x
+    top = (card[1] - origin_y) * scale_y
+    right = (card[2] - origin_x) * scale_x
+    bottom = (card[3] - origin_y) * scale_y
+
+    frac_l, frac_t, frac_r, frac_b = band_fractions
+    width, height = right - left, bottom - top
+    cut = (
+        max(0, int(round(left + width * frac_l))),
+        max(0, int(round(top + height * frac_t))),
+        min(sent_w, int(round(left + width * frac_r))),
+        min(sent_h, int(round(top + height * frac_b))),
+    )
+    if cut[2] - cut[0] < 2 or cut[3] - cut[1] < 2:
+        # The card is off the edge of its own frame, which is a real thing a bad capture
+        # does. No band rather than a sliver — a two-pixel strip drawn as evidence would
+        # read as a detector fault when it is a photograph fault.
+        return None
+    return cut
+
+
+def do_pipeline_crop_preview(payload: dict) -> dict:
+    """`POST /pipeline/crop-preview` — what this reading actually sends. FREE, writes nothing.
+
+    D32's amendment gave the crop three named pairs and a sentence each, because the owner
+    could not tell from the controls what the crop did: *"walk me through how im supposed to
+    understand crop with just this dialog box"*. The sentences are true and they are still
+    prose about pixels. This is the same answer in the medium the decision is actually about.
+
+    TWO ANSWERS, BECAUSE THE PAIR HAS TWO AXES AND ONE PICTURE CANNOT SHOW BOTH:
+
+      - `rect` is where the crop cuts, in the ORIGINAL frame's pixels, so the screen can draw
+        it over the photograph it already has. It answers *is the identifier inside the
+        bytes* — box 2's failure, 38 numbers cut clean off — and a picture of the crop alone
+        could never answer it, because what was cut is not in the crop.
+      - `band` is the collector-number strip AS SENT, at the resolution this reading
+        delivers. It answers *will the digits survive*, and it is the only half that moves
+        when `max_edge` moves: the rectangle is identical at 1200 and at 900, so a preview
+        that drew only the rectangle would leave two of the three readings looking the same.
+
+    ONE CARD PER CALL, WALKED BY `offset` (the owner, 2026-08-29). It answered three evenly
+    spaced cards for a few hours, on the argument that cards move on the tray so the front of
+    a box does not stand for it — D32 measured card area at 39-81% across box 2. That
+    argument is sound about SAMPLING and it lost to a plainer fact: three cards abreast in a
+    panel are three small pictures, and the operator could not see the thing they were being
+    shown. One card at the size of the column, and the spread is reached by walking rather
+    than by being sampled for.
+
+    THE BAND IS THE REGISTRY'S TO GRANT, PER CARD, AND THIS IS A DEFECT THIS ROUTE SHIPPED
+    WITH. It cut `geometry/crop.py`'s number band over every game, and `pipeline/games.py`
+    refuses that in writing for exactly this case: *"the bands are fractions measured on a
+    Pokemon card. Nothing has measured where a Riftbound card puts its title or its number,
+    and a band claimed without that measurement is cut over the wrong pixels."* Box 1 is
+    Riftbound, and the strip drew its rules text as though it were a collector number. A game
+    whose `crop_bands` does not claim the band gets NO band and a sentence saying why —
+    the same refusal `crop_regions` makes, reached through the same registry field.
+
+    IT CREATES NOTHING AND SPENDS NOTHING. No run directory, no scope directory, no store
+    write, no model call. It is a read, and it sits in this module rather than beside
+    `GET /photo` because everything it knows — the crop, the max edge, the scope — is this
+    module's vocabulary.
+    """
+    scope_dir, scope = _resolve_scope(payload)
+    crop = bool(payload.get("crop"))
+    offset = payload.get("offset", 0)
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "offset_invalid",
+            "`offset` must be a non-negative integer — it walks the preview, nothing else.",
+        )
+
+    try:
+        import geometry
+        from geometry.crop import BAND_PROFILES
+        from identify import images as identify_images, sidecar
+        from pipeline import games
+        from PIL import Image
+    except ImportError as exc:
+        # NAMED RATHER THAN FATAL, and the import is in here rather than at module scope for
+        # exactly this reason: `server/capture_server.py` has never needed Pillow, and a
+        # top-level import would turn a missing dependency into a server that will not boot
+        # over a preview nobody had asked for yet.
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "imaging_unavailable",
+            f"The crop preview needs Pillow, numpy and geometry in the SERVER's "
+            f"interpreter — run `make venv` and restart `make server`. ({exc})",
+        )
+
+    captures = [c for c in sidecar.scan(scope_dir) if c.has_position]
+    total = len(captures)
+    if total == 0:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "scope_is_empty",
+            "Nothing in this scope carries a position, so there is no card to preview.",
+        )
+
+    # WRAPS RATHER THAN CLAMPS. The stepper is held down as often as it is tapped, and a
+    # clamp at the end of a 543-card box leaves the operator pressing a key that does
+    # nothing; wrapping means the walk always moves.
+    at = offset % total
+    capture = captures[at]
+
+    try:
+        detected = geometry.detect_card(capture.photo)
+    except Exception:
+        # The same swallow `cli/cmd_identify.py` performs around this call, and for the same
+        # reason: detection is an optimisation, and a photograph it cannot read is sent whole
+        # rather than failing the card. A preview that raised where the run would shrug would
+        # be describing a different run.
+        detected = None
+
+    max_edge = _max_edge(payload) or identify_images.MAX_EDGE
+    try:
+        prepared = identify_images.prepare(
+            capture.photo,
+            max_edge=max_edge,
+            crop_box=detected if crop else None,
+        )
+    except identify_images.ImageError as exc:
+        return {
+            "scope": scope,
+            "capture_dir": str(scope_dir),
+            "crop": crop,
+            "max_edge": max_edge,
+            "total": total,
+            "offset": at,
+            "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
+        }
+
+    rect = (
+        identify_images.crop_rect(prepared.original_size, detected)
+        if crop and detected is not None
+        else None
+    )
+
+    # THE REGISTRY DECIDES WHETHER THERE IS A BAND AT ALL, per card, off the card's own game.
+    # `game_or_default` rather than the raw claim: D21 puts the backfill at the read, and a
+    # sidecar written before that field existed is a Pokemon card.
+    game = capture.game_or_default
+    try:
+        claims = games.get(game)["crop_bands"]
+    except Exception:
+        # An unregistered game is refused by the run itself, by name. Here it simply means no
+        # band — guessing one would be the defect this block exists to fix.
+        claims = ()
+    # THE PICTURE IS THE PAYLOAD, NOT THE FILE ON DISK (the owner, 2026-08-29: *"the crop
+    # preview should also show the depixelation reflected as you change the options"*). The
+    # frame used to draw `GET /photo`, which is the same bytes at every reading — so the one
+    # thing the operator was changing was the one thing the picture could not show. Sending
+    # the prepared bytes costs 235-441KB on a localhost socket, debounced, for one card.
+    sent_image = "data:image/jpeg;base64," + base64.b64encode(prepared.data).decode("ascii")
+
+    # THE REGISTRY DECIDES WHETHER THERE IS A BAND AT ALL, per card, off the card's own game.
+    # `game_or_default` rather than the raw claim: D21 puts the backfill at the read, and a
+    # sidecar written before that field existed is a Pokemon card.
+    game = capture.game_or_default
+    try:
+        claims = games.get(game)["crop_bands"]
+    except Exception:
+        # An unregistered game is refused by the run itself, by name. Here it simply means no
+        # band — guessing one would be the defect this block exists to fix.
+        claims = ()
+    band_rect = band_absent = None
+    if PREVIEW_BAND not in claims:
+        band_absent = (
+            f"`{game}` claims no {PREVIEW_BAND} band, so nothing points itself at the "
+            f"identifier on this game's cards — `geometry/crop.py`'s bands are fractions "
+            f"measured on a Pokemon card. Point at the card above to read any part of it."
+        )
+    elif detected is not None:
+        band_rect = _band_rect(
+            prepared.sent_size, prepared, detected, rect, BAND_PROFILES[PREVIEW_BAND]
+        )
+
+    return {
+        "scope": scope,
+        "capture_dir": str(scope_dir),
+        "crop": crop,
+        "max_edge": max_edge,
+        "total": total,
+        "offset": at,
+        "sample": {
+            "box": capture.box,
+            "index": capture.index,
+            "game": game,
+            "frame": list(prepared.original_size),
+            "sent": list(prepared.sent_size),
+            "rect": list(rect) if rect is not None else None,
+            # `rect: null` because the crop is OFF and `rect: null` because detection REFUSED
+            # are opposite facts to an operator — one is the setting they chose, the other is
+            # a card going at whole-frame cost when they asked for a crop. This is the only
+            # field that tells them apart.
+            "method": detected.method if detected is not None else None,
+            # THE SENT BYTES THEMSELVES. The frame draws these rather than the stored
+            # photograph, so the picture changes when the reading does — and the 1:1 view
+            # below is a region of this same file, which is why the two can never disagree.
+            "sent_image": sent_image,
+            # Where the collector number is INSIDE `sent_image`, for the default 1:1 aim.
+            # Null where the registry claims no band; the pointer still reaches every pixel.
+            "band_rect": list(band_rect) if band_rect is not None else None,
+            "band_px": (
+                [band_rect[2] - band_rect[0], band_rect[3] - band_rect[1]]
+                if band_rect is not None
+                else None
+            ),
+            "band_absent": band_absent,
+        },
     }
 
 
 # --------------------------------------------------------------------- the one that spends
 
 
-def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
-    """`POST /pipeline/identify` — THE ROUTE THAT SPENDS MONEY. Spawns, does not wait.
-
-    Answers as soon as the child is running, with the run's name. Everything after that is
-    read from the run directory by `do_pipeline_run` — this process keeps nothing, which is
-    what lets a run outlive the server that started it.
-    """
-    if payload.get("confirm") is not True:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "confirm_required",
-            "This is the step that spends money. Send `confirm: true` — and show the "
-            "operator /pipeline/preflight's card count and estimate before you do.",
-        )
-    scope_dir, scope = _resolve_scope(payload)
-    busy = _busy_run(scope_dir)
-    if busy is not None:
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "run_already_live",
-            f"Run {busy} is already identifying these cards. Two live batches over one box "
-            f"is two invoices for one answer — watch that run, or wait for it to finish.",
-        )
-
-    label = payload.get("label")
-    if not isinstance(label, str) or not label.strip():
-        label = f"box{scope['box']}"
-    run = run_files.create(label)
-    # Written HERE and not left to the child, because `_busy_run` reads it: a run whose
-    # manifest names no capture directory until the child's first flush is a run the
-    # double-click guard cannot see during exactly the window a double-click happens in.
+def _spawn(leg: Leg) -> dict:
+    """Create this leg's run directory and start its detached child. Costs money."""
+    run = run_files.create(leg.label)
+    # Written HERE and not left to the child, because `_run_box` reads it: a run whose
+    # manifest names neither a scope nor a capture directory until the child's first flush
+    # is a run the double-click guard cannot see during exactly the window a double-click
+    # happens in.
     run.set(
-        capture_dir=str(scope_dir),
-        scope=scope,
+        capture_dir=str(leg.directory),
+        scope=leg.scope,
         started_by="app",
-        flags_from_app=_identify_flags(payload),
+        flags_from_app=leg.flags,
     )
 
     argv = (
-        [str(PKMNSCAN), "identify", str(scope_dir), "--run-dir", str(run.directory)]
-        + _identify_flags(payload)
+        [str(PKMNSCAN), "identify", str(leg.directory), "--run-dir", str(run.directory)]
+        + leg.flags
     )
     console = run.directory / CONSOLE
     try:
@@ -488,16 +964,84 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "spawn_failed",
-            f"Could not start `pkmnscan identify`: {exc}",
+            f"Could not start `pkmnscan identify` for box {leg.scope['box']}: {exc}",
         ) from None
     (run.directory / PID_FILE).write_text(f"{child.pid}\n")
-    return HTTPStatus.ACCEPTED, {
+    return {
         "run": run.directory.name,
         "path": str(run.directory),
         "pid": child.pid,
-        "scope": scope,
+        "scope": leg.scope,
         "argv": argv,
     }
+
+
+def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
+    """`POST /pipeline/identify` — THE ROUTE THAT SPENDS MONEY. Spawns, does not wait.
+
+    Answers as soon as the children are running, with one run name per box. Everything after
+    that is read from the run directories by `do_pipeline_run` — this process keeps nothing,
+    which is what lets a run outlive the server that started it.
+
+    IT IS STILL EXACTLY ONE ROUTE THAT SPENDS, AND THAT IS WHY THE CART LANDED HERE RATHER
+    THAN BESIDE IT. A send of several boxes could have been a second route, or N calls from
+    the screen; both were declined for the same reason. This file's whole claim is that the
+    money is behind one door with one `confirm` and one refusal path, and a screen pressing a
+    money route five times on one operator decision is five confirms none of which the
+    operator gave separately. One press, one request, one `confirm`, one total on the screen
+    above it.
+
+    NOTHING IS SPAWNED UNTIL EVERY LEG HAS PASSED. `_resolve_legs` validates the whole cart,
+    and the live-run guard runs over all of it before the first child starts — so a cart with
+    a busy box in the middle refuses whole, rather than leaving two boxes identifying and an
+    error message about the third. D29's shape, with an invoice instead of a queue answer.
+
+    THE ONE THING THAT CANNOT BE PRE-CHECKED IS REPORTED RATHER THAN HIDDEN. `Popen` can fail
+    on the fourth leg after three have started, and no amount of validation sees that coming.
+    The response carries what STARTED and what did not, both named; the screen draws the
+    failures. A partial send reported honestly is recoverable — press again for the boxes
+    that did not go — and a partial send reported as a success is an invoice nobody can
+    account for.
+    """
+    if payload.get("confirm") is not True:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "This is the step that spends money. Send `confirm: true` — and show the "
+            "operator /pipeline/preflight's card count and estimate before you do.",
+        )
+    legs = _resolve_legs(payload)
+    for leg in legs:
+        busy = _busy_run(leg.scope["box"])
+        if busy is not None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "run_already_live",
+                f"Run {busy} is already identifying box {leg.scope['box']}. Two live "
+                f"batches over one box is two invoices for one answer — watch that run, or "
+                f"wait for it to finish. Nothing in this send was started.",
+            )
+
+    started: List[dict] = []
+    failed: List[dict] = []
+    for leg in legs:
+        try:
+            started.append(_spawn(leg))
+        except PipelineRefusal as refusal:
+            failed.append(
+                {
+                    "box": leg.scope["box"],
+                    "code": refusal.code,
+                    "message": str(refusal),
+                }
+            )
+    if not started:
+        raise PipelineRefusal(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            failed[0]["code"],
+            failed[0]["message"],
+        )
+    return HTTPStatus.ACCEPTED, {"started": started, "failed": failed}
 
 
 # --------------------------------------------------------------------------- reading runs
@@ -643,6 +1187,97 @@ def do_pipeline_run(name: str) -> dict:
     body["files"] = _artefacts(directory)
     body["manifest"] = _manifest(directory)
     return body
+
+
+def _remembered_sub_threshold(directory: Path) -> Optional[dict]:
+    """The sub-threshold answer the newest OTHER run gave, or `None`.
+
+    "REMEMBER THAT I SAID SO", WITH NO NEW STORAGE — the owner's words when asked what the
+    standing answer should be. Every run already writes its own answer into its own
+    `decisions.json`, so the last one is on disk and needs no second home, no migration and
+    no file that can disagree with the runs it claims to summarise.
+
+    A LABEL AND NEVER A DEFAULT. D9 is explicit that the sub-threshold disposition is a
+    per-run choice and that output is suppressed until it is made — so this removes the time
+    spent DECIDING and not the press. A pre-selected answer is one nobody read.
+
+    Bounded to five directories, newest first, stopping at the first run that answered. No
+    earlier answer means no label, which is correct: there is nothing to remember.
+    """
+    root = files.runs_dir()
+    if not root.is_dir():
+        return None
+    seen = 0
+    for entry in sorted(root.iterdir(), reverse=True):
+        if not entry.is_dir() or entry == directory:
+            continue
+        seen += 1
+        if seen > 5:
+            return None
+        path = entry / run_files.DECISIONS
+        if not path.is_file():
+            continue
+        try:
+            answer = json.loads(path.read_text("utf-8")).get("sub_threshold")
+        except (OSError, ValueError):
+            continue
+        if answer is not None:
+            return {"answer": answer, "run": entry.name}
+    return None
+
+
+def do_pipeline_pricing(name: str) -> dict:
+    """`GET /pipeline/runs/<name>/pricing` — the per-SKU table and this run's answers.
+
+    FREE, READ-ONLY, AND IT CREATES NOTHING. It opens files the run directory already holds
+    and computes no price: `cli/cmd_join.py` wrote every figure in `pricing.json` through
+    `pipeline/pricing.py`, which is the only place in this repo allowed to. This route is a
+    reader, and `app/src/server.ts` already records that the app may not compute rules the
+    pipeline owns — that rule reaches the server that feeds it.
+
+    TWO FILES IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER THAN TWO
+    DOWNLOADS. `_DOWNLOADABLE` already matches `.json`, so a screen could fetch
+    `pricing.json` and `decisions.json` through `GET .../file` and needs neither route nor
+    handler — but two fetches can straddle a re-join, and a table describing one join beside
+    answers written against another is a screen quietly pricing the wrong set of cards.
+
+    IT IMPORTS NOTHING NEW. `make server` runs bare `python3`, so this module is stdlib-only;
+    this handler opens, parses and returns.
+    """
+    directory = _open_run(name)
+    table = directory / run_files.PRICING
+    if not table.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_not_written",
+            f"Run {name} has no {run_files.PRICING} — `join` is what writes it, and every "
+            f"run made before it predates the file. Join this run and it will appear.",
+        )
+    decisions_path = directory / run_files.DECISIONS
+    try:
+        pricing = json.loads(table.read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_unreadable",
+            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+        ) from None
+    answers = None
+    if decisions_path.is_file():
+        try:
+            answers = json.loads(decisions_path.read_text("utf-8"))
+        except (OSError, ValueError):
+            # DELIBERATELY NOT A REFUSAL. `emit` and `join` both answer an unreadable
+            # decisions document with a sentence naming what is wrong with it, and that is
+            # where an operator should read it; a screen that would not draw AT ALL because
+            # its answers file is malformed is a screen that cannot show you the file.
+            answers = None
+    return {
+        "run": directory.name,
+        "pricing": pricing,
+        "decisions": answers,
+        "remembered_sub_threshold": _remembered_sub_threshold(directory),
+    }
 
 
 def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:

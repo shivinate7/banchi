@@ -135,6 +135,49 @@ function runRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/** A 1x1 GIF, standing in for the sent bytes. The assertions here are about GEOMETRY and
+ *  about which reading was asked for, never about what a photograph looks like — so the
+ *  smallest decodable image is the honest fixture, and a real JPEG would be a large constant
+ *  nothing reads. It differs per reading so a case can assert the picture CHANGED. */
+const PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+
+/** What `POST /pipeline/crop-preview` answers, in the shape the route really returns.
+ *
+ *  ONE CARD, WALKED BY `offset`. `rect` is in the ORIGINAL frame's pixels and the screen turns
+ *  it into percentages, so the numbers here are chosen to divide cleanly: 216/2160 is 10%, and
+ *  1728/2160 is 80%. An assertion that reads the rendered `left` back out is then checking the
+ *  mapping rather than restating a magic string.
+ *
+ *  `band_absent` is the registry's refusal, and it has a fixture because it is a real state
+ *  this route shipped without: `pipeline/games.py` holds which bands a game claims and only
+ *  `pokemon` claims a number band, so a Riftbound card gets a cut and no strip. */
+function cropPreviewPayload(crop: boolean, maxEdge: number, offset: number, game = 'pokemon') {
+  const claimsBand = game === 'pokemon'
+  return {
+    scope: { box: 9, whole_box: true, cards: null },
+    capture_dir: '/tmp/captures/cards/box9',
+    crop,
+    max_edge: maxEdge,
+    total: 543,
+    offset,
+    sample: {
+      box: 9,
+      index: offset + 1,
+      game,
+      frame: [2160, 3840],
+      sent: crop ? [859, maxEdge] : [882, maxEdge],
+      rect: crop ? [216, 384, 1944, 3456] : null,
+      method: 'edges',
+      sent_image: `${PIXEL}#${crop ? 'crop' : 'whole'}-${maxEdge}`,
+      band_rect: claimsBand ? [59, 931, 800, 1117] : null,
+      band_px: claimsBand ? (crop ? [741, 186] : [704, 177]) : null,
+      band_absent: claimsBand
+        ? null
+        : `\`${game}\` claims no number band. \`geometry/crop.py\`'s bands are fractions measured on a Pokemon card.`,
+    },
+  }
+}
+
 /** Stub the whole server and open the screen.
  *
  *  `to_send` and `estimate_usd` are parameters because the two most interesting states of this
@@ -157,10 +200,17 @@ async function open(
     detail?: Record<string, unknown>
     /** The run list reports a live run, which is the one state that opens the fold by itself. */
     live?: boolean
+    /** The game the previewed card claims. `riftbound` is the state where the registry
+     *  refuses a band — a cut with no strip, and a sentence saying why. */
+    previewGame?: string
     /** An EMPTY run list, which is the state the panel could not draw its own steps in until
      *  2026-08-25. Distinct from omitting the option: `[]` means "no runs on disk", where
      *  `undefined` means "the ordinary one-run fixture". */
     runs?: unknown[]
+    /** Boxes whose child could not be spawned, in the shape `POST /pipeline/identify` answers
+     *  with. A partial send is the one failure no validation can pre-empt (D48), so it is the
+     *  one the screen has to draw rather than swallow. */
+    failed?: { box: number; code: string; message: string }[]
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -171,36 +221,87 @@ async function open(
      read what the screen would have sent — the strongest thing a browser test can say about a
      route it must not actually reach. */
   await page.route(/\/pipeline\/identify$/, async (route) => {
-    record('POST', route.request().url(), route.request().postDataJSON())
+    const body = route.request().postDataJSON() as { scopes?: { box: number }[] }
+    record('POST', route.request().url(), body)
+    /* ONE STARTED RUN PER SCOPE SENT, because a send is a cart and the answer names both
+       halves (D48). Echoing the request rather than returning a fixed run is what lets the
+       cart cases assert that N boxes produce N children — a constant here would pass whether
+       the screen sent one box or five. */
     await route.fulfill({
       status: 202,
       contentType: 'application/json',
       body: JSON.stringify({
-        run: '2026-08-24-box9-02',
-        path: '/tmp/runs/2026-08-24-box9-02',
-        pid: 4242,
-        scope: { box: 9, whole_box: true, cards: null },
-        argv: [],
+        started: (body.scopes ?? [{ box: 9 }]).map((leg, n) => ({
+          run: `2026-08-24-box${leg.box}-0${n + 2}`,
+          path: `/tmp/runs/2026-08-24-box${leg.box}-0${n + 2}`,
+          pid: 4242 + n,
+          scope: { box: leg.box, whole_box: true, cards: null },
+          argv: [],
+        })),
+        failed: options.failed ?? [],
       }),
     })
   })
 
+  /* THE PREVIEW, WHICH IS FREE AND IS FIRED ON EVERY CHIP PRESS. Recorded like the rest so an
+     assertion can read WHICH reading the picture was drawn for — the failure worth forbidding
+     is a strip that keeps describing the previous pair, which is the estimate's stale-figure
+     defect one control higher up. */
+  await page.route(/\/pipeline\/crop-preview$/, async (route) => {
+    const body = route.request().postDataJSON()
+    record('POST', route.request().url(), body)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        cropPreviewPayload(
+          Boolean(body?.crop),
+          Number(body?.max_edge),
+          Number(body?.offset ?? 0),
+          options.previewGame ?? 'pokemon',
+        ),
+      ),
+    })
+  })
+
+  /* ONE LEG PER SCOPE, AND THE TOTAL SUMMED THE WAY THE SERVER SUMS IT (D48). The response
+     is always a list — a single box answers as a cart of one — and the total is what the
+     confirm is gated on, so a fixture that returned a fixed one-box body could not tell a
+     screen that reads the total from one that reads the first leg and calls it the total. */
   await page.route(/\/pipeline\/preflight$/, async (route) => {
-    record('POST', route.request().url(), route.request().postDataJSON())
+    const body = route.request().postDataJSON() as { scopes?: { box: number }[] }
+    record('POST', route.request().url(), body)
+    const asked = body.scopes ?? [{ box: 9 }]
+    const perBox = options.toSend ?? 36
+    const perBoxMoney = options.estimate ?? 0.42
+    const legs = asked.map((leg) => ({
+      ok: true,
+      exit_code: 0,
+      scope: { box: leg.box, whole_box: true, cards: null },
+      capture_dir: `/tmp/captures/cards/box${leg.box}`,
+      console: PREFLIGHT_CONSOLE,
+      photographs: 40,
+      cache_hits: options.cacheHits ?? 4,
+      to_send: perBox,
+      estimate_usd: perBoxMoney,
+      busy_run: options.busyRun ?? null,
+    }))
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        exit_code: 0,
-        scope: { box: 9, whole_box: true, cards: null },
-        capture_dir: '/tmp/captures/cards/box9',
-        console: PREFLIGHT_CONSOLE,
-        photographs: 40,
-        cache_hits: options.cacheHits ?? 4,
-        to_send: options.toSend ?? 36,
-        estimate_usd: options.estimate ?? 0.42,
-        busy_run: options.busyRun ?? null,
+        scopes: legs,
+        total: {
+          photographs: 40 * legs.length,
+          cache_hits: (options.cacheHits ?? 4) * legs.length,
+          to_send: perBox * legs.length,
+          estimate_usd: Number((perBoxMoney * legs.length).toFixed(2)),
+          boxes: legs.length,
+          busy: legs
+            .filter((leg) => leg.busy_run !== null)
+            .map((leg) => ({ box: leg.scope.box, run: leg.busy_run })),
+        },
       }),
     })
   })
@@ -273,6 +374,23 @@ async function open(
             listed: 0,
             sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }],
           },
+          {
+            /* A SECOND BOX, so a cart can be a cart of more than one. Named, because the
+               strip draws `Box 12 · codes` and the cart row draws `Box 12` alone — two
+               different renderings of one box that a one-box fixture cannot tell apart. */
+            box: 12,
+            name: 'codes',
+            sections: [],
+            state: 'open',
+            capacity: null,
+            fill: 4,
+            next_index: 5,
+            cards: 4,
+            sold: 0,
+            retired: 0,
+            listed: 0,
+            sections_detail: [{ section: 1, start: 1, end: 4, count: 4 }],
+          },
         ],
       }),
     })
@@ -323,8 +441,8 @@ async function open(
  *  mode caught it as an ambiguity rather than clicking the wrong one. Worth a helper rather than
  *  a longer locator repeated twice: this is the one press that turns an unscoped screen into a
  *  scoped one, and every test in this file depends on it having happened. */
-async function pickBox(page: Page) {
-  await page.locator('.runs-boxes').getByRole('button', { name: /^Box 9/ }).click()
+async function pickBox(page: Page, box = 9) {
+  await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^Box ${box}`) }).click()
 }
 
 /** Open the fold, where every pipeline control lives.
@@ -496,14 +614,130 @@ test('each reading sends the pair it names, never half of one', async ({ page })
   await expect(page.locator('.run-quote')).toBeVisible()
 
   const cheap = wire.filter((row) => row.path === '/pipeline/preflight').pop()
-  expect(cheap?.body).toMatchObject({ crop: true, max_edge: 900 })
+  expect(cheap?.body).toMatchObject({ scopes: [{ crop: true, max_edge: 900 }] })
 
   await page.getByRole('button', { name: 'Whole frame' }).click()
   await page.getByRole('button', { name: 'Check cost' }).click()
   await expect(page.locator('.run-quote')).toBeVisible()
 
   const whole = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  expect(whole?.body).toMatchObject({ scopes: [{ crop: false, max_edge: 1568 }] })
+})
+
+test('the crop is drawn before it is paid for, and the cut is where the route put it', async ({
+  page,
+}) => {
+  await open(page)
+  await openPanel(page)
+
+  /* D32's amendment answered "walk me through how im supposed to understand crop with just
+     this dialog box" with three named pairs and a sentence each. The sentences are prose about
+     pixels; this is the same answer as a picture, and it has to be on screen while the pair is
+     being CHOSEN — which is why it is asserted beside the chips rather than beside a run. */
+  await expect(page.locator('.run-preview-card')).toHaveCount(1)
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+
+  /* THE OVERLAY IS THE ROUTE'S RECTANGLE, MAPPED — not decoration. 216 of 2160 is 10% and
+     1728 of 2160 is 80%, so reading the style back out asserts the arithmetic that makes the
+     picture true rather than that a blue box exists. */
+  const cut = page.locator('.run-preview-cut')
+  await expect(cut).toHaveAttribute('style', /left:\s*10%/)
+  await expect(cut).toHaveAttribute('style', /width:\s*80%/)
+
+  /* THE PICTURE IS THE PAYLOAD, WHICH IS THE HALF THAT MAKES ANY OF IT VISIBLE. The frame
+     drew the stored photograph until 2026-08-29 — the same bytes at every reading, so the one
+     thing being changed was the one thing it could not show. */
+  const sent = page.locator('.run-preview-sent')
+  await expect(sent).toHaveAttribute('src', /crop-1200$/)
+
+  /* AND THE 1:1 WINDOW READS THE SAME FILE, which is why the two can never disagree about
+     what is being sent: there is no second file to disagree with. */
+  const detail = page.locator('.run-preview-detail')
+  await expect(detail).toHaveAttribute('style', /crop-1200/)
+  await expect(page.locator('.run-preview')).toContainText('1:1')
+})
+
+test('the picture follows the reading, and a whole-frame run draws no cut at all', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+
+  /* ASSERTED AS AN ABSENCE, the same shape as the spend button's own case. A picture that kept
+     drawing a rectangle after `Whole frame` was chosen would be a picture of a send that is
+     not the one about to happen — D32's stale-estimate defect, in the medium the operator
+     actually believes. */
+  await page.getByRole('button', { name: 'Whole frame' }).click()
+  await expect(page.locator('.run-preview-cut')).toHaveCount(0)
+  await expect(page.locator('.run-preview-card')).toHaveCount(1)
+
+  const whole = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
   expect(whole?.body).toMatchObject({ crop: false, max_edge: 1568 })
+
+  await page.getByRole('button', { name: 'Cheapest' }).click()
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
+  const cheap = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
+  expect(cheap?.body).toMatchObject({ crop: true, max_edge: 900 })
+
+  /* THE PICTURE ITSELF CHANGED, not just the figures under it. This is the assertion the
+     owner's report earns: "the crop preview should also show the depixelation reflected as
+     you change the options". */
+  await expect(page.locator('.run-preview-sent')).toHaveAttribute('src', /crop-900$/)
+})
+
+test('arrow keys walk the box, and a text field keeps its own caret keys', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await expect(page.locator('.run-preview-count')).toContainText('card 1 of 543')
+
+  await page.keyboard.press('ArrowRight')
+  await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
+  expect(wire.filter((row) => row.path === '/pipeline/crop-preview').pop()?.body).toMatchObject({
+    offset: 1,
+  })
+
+  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input and a textarea, and
+     an unguarded window listener would steal the caret keys from both — the operator would be
+     unable to move through a value they were editing. Reveal `Custom`, put the caret in its
+     number field, and the walk must not move.
+
+     WAITED FOR RATHER THAN ASSERTED IMMEDIATELY, and the first draft of this case got that
+     wrong in a way worth recording: `toContainText` passes the instant the text matches, so
+     "still card 2" was true a millisecond after the keypress whatever the guard did — the
+     fetch is debounced at 140ms. The case passed against a build with the guard deleted. It
+     waits past the debounce now, and then asserts BOTH the caption and the wire, because the
+     wire is the half that cannot be true by accident. */
+  await page.getByRole('button', { name: 'Custom' }).click()
+  const edge = page.getByRole('spinbutton', { name: 'Max edge' })
+  await edge.click()
+  const before = wire.filter((row) => row.path === '/pipeline/crop-preview').length
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(500)
+  await expect(page.locator('.run-preview-count')).toContainText('card 2 of 543')
+  expect(wire.filter((row) => row.path === '/pipeline/crop-preview').length).toBe(before)
+})
+
+test('a game that claims no number band gets the cut and a reason, never a wrong strip', async ({
+  page,
+}) => {
+  /* THE DEFECT THIS ROUTE SHIPPED WITH, found by the owner on box 1. It cut `geometry/crop.py`'s
+     number band over every game, and `pipeline/games.py` refuses that in writing — the bands are
+     fractions measured on a Pokemon card. The strip drew a Riftbound card's RULES TEXT as though
+     it were a collector number. */
+  await open(page, { previewGame: 'riftbound' })
+  await openPanel(page)
+
+  await expect(page.locator('.run-preview')).toContainText('claims no number band')
+
+  /* AND THE 1:1 VIEW STILL WORKS. The registry cannot say where a Riftbound card prints its
+     identifier and it does not have to — the operator points at it. A refusal that took the
+     magnifier away with it would have made this game strictly worse off than before. */
+  await expect(page.locator('.run-preview-detail')).toHaveCount(1)
+
+  /* AND THE CUT IS UNAFFECTED. A card is 63x88mm whatever is printed on it, so the crop is
+     right for every game even where no band has ever been measured. */
+  await expect(page.locator('.run-preview-cut')).toHaveCount(1)
 })
 
 test('the raw controls are behind Custom, and that is where the mistake is named', async ({
@@ -605,7 +839,7 @@ test('the estimate and the card count are on screen before the confirm is', asyn
   await expect(confirm).toContainText('36')
 })
 
-test('the confirm sends confirm:true and the scope the walk is showing', async ({ page }) => {
+test('the confirm sends confirm:true and the cart the picker is showing', async ({ page }) => {
   const wire = await open(page)
   await openPanel(page)
   await page.getByRole('button', { name: 'Check cost' }).click()
@@ -614,13 +848,17 @@ test('the confirm sends confirm:true and the scope the walk is showing', async (
 
   const spend = wire.find((row) => row.path === '/pipeline/identify')
   expect(spend).toBeTruthy()
-  const body = spend?.body as Record<string, unknown>
+  const body = spend?.body as { confirm?: unknown; scopes?: Record<string, unknown>[] }
   expect(body.confirm).toBe(true)
-  expect(body.box).toBe(9)
+  /* ONE ROUTE, ONE CONFIRM, ONE CART — D48. A single box is a cart of ONE rather than a
+     different request shape, which is what keeps the money behind one door with one refusal
+     path instead of two. */
+  expect(body.scopes).toHaveLength(1)
+  expect(body.scopes?.[0]).toMatchObject({ box: 9 })
   /* No ticked cards, so the run is the whole box and `indices` is absent — which the route
      reads as the whole box. An empty ARRAY would be refused there, deliberately, and the
      screen must never send one. */
-  expect(body.indices).toBeUndefined()
+  expect(body.scopes?.[0]?.indices).toBeUndefined()
 })
 
 test('the estimate is spent by the confirm, so a second run needs a second preflight', async ({
@@ -658,7 +896,11 @@ test('a live run over the same cards blocks the confirm rather than racing it', 
      `run_already_live`; the screen refuses to draw the button, so the operator never presses
      something that is going to fail. */
   await expect(page.locator('.run-button-money')).toHaveCount(0)
-  await expect(page.locator('.run-blocked')).toContainText('already identifying these cards')
+  /* IT NAMES THE BOX NOW, because a cart can carry several and "these cards" would not say
+     which of them is blocked. The run name is on the line for the same reason it always was:
+     the answer is to open that run, and a refusal that does not name it is a dead end. */
+  await expect(page.locator('.run-blocked')).toContainText('already identifying box 9')
+  await expect(page.locator('.run-blocked')).toContainText('2026-08-24-box9-01')
 })
 
 // ------------------------------------------------------------------------- the free steps
@@ -708,6 +950,118 @@ test('a bypassed run says so on the run itself, not only in its log', async ({ p
   /* The owner's choice, in their words: "resolved by the claim, and the run report says so."
      A count that appeared only in a file nobody opened would not be that. */
   await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
+})
+
+// -------------------------------------------------------------------------- the cart
+//
+// D48. A SEND IS A CART OF BOXES AND A RUN IS STILL ONE BOX. The owner asked to multi-select
+// and send together, and asked for the boxes to be "individualized" — so the request carries
+// several scopes, each with its own reading, and the route spawns one child per box. What
+// these cases hold is that the screen sends what it drew, that the confirm is gated on the
+// TOTAL rather than on a leg, and that a partial send is visible.
+
+test('several boxes are one cart, one estimate and one confirm', async ({ page }) => {
+  const wire = await open(page)
+  await pickBox(page, 12)
+
+  /* TWO ROWS, ONE PER BOX, EACH WITH ITS OWN READING PICKER. The strip decides WHICH boxes and
+     the cart decides how each is read — the reading is part of what the confirm is agreeing to
+     buy, because the estimate is computed from the bytes each card is sent as. */
+  await expect(page.locator('.run-leg')).toHaveCount(2)
+  await expect(page.locator('.run-leg-box').first()).toHaveText('Box 9')
+  await expect(page.locator('.run-leg-box').nth(1)).toHaveText('Box 12')
+  await expect(page.locator('.runs-scope')).toContainText('2 boxes')
+
+  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  const body = asked?.body as { scopes?: { box: number }[] }
+  expect(body.scopes?.map((leg) => leg.box)).toEqual([9, 12])
+
+  /* THE CONFIRM QUOTES THE TOTAL, NOT A LEG. Two boxes at 36 each is 72 cards and $0.84 — a
+     screen that read the first leg and called it the total would say 36 and $0.42 here, which
+     is the one number the operator is agreeing to and the one that must not be understated. */
+  const confirm = page.locator('.run-button-money')
+  await expect(confirm).toContainText('72')
+  await expect(confirm).toContainText('$0.84')
+  await expect(confirm).toContainText('2 boxes')
+
+  await confirm.click()
+  const spend = wire.find((row) => row.path === '/pipeline/identify')
+  const sent = spend?.body as { confirm?: unknown; scopes?: { box: number }[] }
+  expect(sent.confirm).toBe(true)
+  expect(sent.scopes?.map((leg) => leg.box)).toEqual([9, 12])
+})
+
+test('each box carries its own reading, and one press sends both', async ({ page }) => {
+  const wire = await open(page)
+  await pickBox(page, 12)
+
+  /* THE WHOLE REASON THIS IS A CART RATHER THAN ONE RUN ACROSS SEVERAL BOXES (D48). Which end
+     of D32's measured frontier is right depends on what is IN the drawer, so a box of bulk
+     commons and a box worth reading a collector number off must be able to disagree. Scoped
+     per row, because `Cheapest` appears once per box and an unscoped locator would be
+     ambiguous — which is the ambiguity that proves the control is per box. */
+  await page.locator('.run-leg').nth(1).getByRole('button', { name: 'Cheapest' }).click()
+  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+
+  const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  const body = asked?.body as { scopes?: { box: number; crop: boolean; max_edge: number }[] }
+  expect(body.scopes?.[0]).toMatchObject({ box: 9, crop: true, max_edge: 1200 })
+  expect(body.scopes?.[1]).toMatchObject({ box: 12, crop: true, max_edge: 900 })
+})
+
+test('adding a box to the cart voids the estimate, exactly as changing a reading does', async ({
+  page,
+}) => {
+  await open(page)
+  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await expect(page.locator('.run-button-money')).toHaveCount(1)
+
+  /* THE MONEY GATE'S RULE, APPLIED TO THE CART. "A confirm whose first step described a
+     different set of cards is not a confirm at all" — and a second box is a different set of
+     cards by the widest possible margin. Asserted as an ABSENCE, the same shape as the
+     reading case above it, because that is the form no refactor can quietly satisfy. */
+  await pickBox(page, 12)
+  await expect(page.locator('.run-button-money')).toHaveCount(0)
+  await expect(page.locator('.run-quote')).toHaveCount(0)
+})
+
+test('a box is untickable, and the last one out leaves nothing to price', async ({ page }) => {
+  await open(page)
+  await pickBox(page, 12)
+  await expect(page.locator('.run-leg')).toHaveCount(2)
+
+  await pickBox(page, 12)
+  await expect(page.locator('.run-leg')).toHaveCount(1)
+  await expect(page.locator('.run-leg-box')).toHaveText('Box 9')
+
+  /* Back to the state the screen opens in, and the free preflight is disabled again rather
+     than absent — the one control on this screen that gets to be disabled, because it is free
+     and it is the next thing to press. */
+  await pickBox(page, 9)
+  await expect(page.locator('.run-leg')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Check cost/ })).toBeDisabled()
+})
+
+test('a box the send could not start is named, not swallowed', async ({ page }) => {
+  await open(page, {
+    failed: [{ box: 12, code: 'spawn_failed', message: 'Could not start `pkmnscan identify`' }],
+  })
+  await pickBox(page, 12)
+  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await page.locator('.run-button-money').click()
+
+  /* THE ONE FAILURE NO VALIDATION CAN PRE-EMPT (D48). `Popen` can fail on the fourth leg after
+     three have started, so the route answers with both halves. A partial send reported as a
+     whole one is an invoice nobody can account for; reported honestly it is recoverable by
+     pressing again for the box that did not go, which is what the sentence says. */
+  const note = page.locator('.run-note')
+  await expect(note).toContainText('did not start')
+  await expect(note).toContainText('spawn_failed')
+  await expect(note).toContainText('box 12')
 })
 
 // ------------------------------------------------------ the state the old address never had

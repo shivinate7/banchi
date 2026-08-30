@@ -297,6 +297,89 @@ def run() -> Result:
         "an unlisted SKU never reaches the import file",
     )
 
+    # --- withholding: an answer that is not a price (D49) ------------------------------------
+    #
+    # THE MIRROR OF THE `no_market_data` CASE ABOVE, ONE CHANNEL OVER. That field has accepted
+    # `unlisted` since D9; `overrides` demanded a price, so a card WITH a market price had no
+    # way to be held back. The owner: "say i'm bullish on the price going up, and don't want to
+    # list any right now."
+    held = decisions.Decisions.parse(
+        {
+            "sub_threshold": "floor",
+            "overrides": {
+                ARTICUNO: {"withheld": "bullish", "watch_above": "30.00", "note": "rotation"},
+                ACCELGOR: "unlisted",
+            },
+        }
+    )
+    c.equal(
+        sorted(held.withheld()),
+        sorted([ARTICUNO, ACCELGOR]),
+        "both spellings of a withhold parse to one answer — the OBJECT the screen writes and "
+        "the bare string a terminal user types, which is the spelling `no_market_data` has "
+        "accepted since D9 and a second word for one idea is the drift D16 exists to catch",
+    )
+    c.equal(
+        held.dispositions(),
+        {},
+        "AND NEITHER REACHES `dispositions()`, WHICH IS LOAD-BEARING RATHER THAN TIDY: `emit` "
+        "refuses the whole run when that mapping names a SKU the batch does not hold, and a "
+        "withheld SKU is precisely the one most likely to fall out of a later run — it was "
+        "withheld BECAUSE it is not being listed",
+    )
+    c.equal(
+        held.to_payload()["overrides"][ACCELGOR],
+        pricing.UNLISTED,
+        "the bare form ROUND-TRIPS BYTE-IDENTICALLY — a hold typed by hand as a string must "
+        "not silently become an object on the next join, which rewrites this file every time",
+    )
+    c.equal(
+        held.to_payload()["overrides"][ARTICUNO],
+        {"withheld": "bullish", "watch_above": "30.00", "note": "rotation"},
+        "and the object round-trips whole, reason, watch and note",
+    )
+    c.equal(
+        decisions.Decisions.parse(
+            {"overrides": {ARTICUNO: {"withheld": "bullish"}}}
+        ).to_payload()["overrides"][ARTICUNO],
+        {"withheld": "bullish"},
+        "an EMPTY note is omitted rather than written — `join` rewrites this file on every "
+        "run, so a written empty would accrete on every held SKU forever",
+    )
+    c.ok(
+        any("withheld" in w for w in held.warnings),
+        "holds are NAMED in the warnings, at the moment `emit` commits a file and a person "
+        "can still change their mind — a warning and not a blocker, because `blocking` "
+        "refuses on the ABSENCE of an answer and a withhold is an answer",
+    )
+    c.equal(
+        held.blocking([]),
+        [],
+        "and a withhold blocks nothing on its own",
+    )
+    for bad, why in (
+        ({ARTICUNO: {"withheld": "greedy"}}, "a reason outside the authored vocabulary"),
+        ({ARTICUNO: {"withheld": "bullish", "note": 5}}, "a note that is not a string"),
+        ({ARTICUNO: {"withheld": "bullish", "watch_above": "soon"}}, "a watch that is not a price"),
+    ):
+        c.raises(
+            decisions.MalformedDecisions,
+            lambda payload=bad: decisions.Decisions.parse({"overrides": payload}),
+            f"{why} is refused by name rather than written",
+        )
+
+    # `warnings` compares every override against the floor, and did it over EVERY value — so
+    # the first re-join after a hold was set raised TypeError out of a property, from inside
+    # the free command an operator presses without thinking. This is that crash, asserted.
+    c.equal(
+        decisions.Decisions.parse(
+            {"overrides": {ARTICUNO: "0.10", ACCELGOR: "unlisted"}}
+        ).warnings[0].startswith("1 per-SKU override"),
+        True,
+        "a sub-floor price beside a hold still reports the price and does not crash on the "
+        "hold — the floor comparison is guarded on the value being a Decimal",
+    )
+
     # --- decisions.json is the contract, and it refuses rather than defaulting --------------
     choice = decisions.Decisions.parse(
         {"rule": "undercut:5", "basis": "low", "sub_threshold": None,

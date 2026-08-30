@@ -15,6 +15,7 @@ import type {
   QueueSnapshot,
   RetireReason,
   RetireResult,
+  CatalogLookup,
   ReviewAnswer,
   SaleResult,
   SearchResult,
@@ -24,8 +25,11 @@ import type {
   BoxDeleteResult,
   BoxListingPlan,
   ListingReleaseResult,
+  CropPreview,
   CsvUpload,
   RunDetail,
+  PricingPayload,
+  RunLeg,
   RunPreflight,
   RunStarted,
   RunStepResult,
@@ -60,10 +64,27 @@ import type {
  * 30s, not below it.
  */
 
-/* Vite substitutes this at build time. The default is the rig's own Mac; the variable
- * exists so the Fulfiller's device can be pointed at that Mac by address later, which is
- * the one thing the capture-app spec leaves open (section 11). */
-const DEFAULT_BASE = 'http://localhost:8000'
+/* Vite substitutes both of these at build time. VITE_CAPTURE_SERVER is the operator's
+ * explicit override — it exists so the Fulfiller's device can be pointed at this Mac by
+ * address later, which is the one thing the capture-app spec leaves open (section 11).
+ *
+ * VITE_CAPTURE_DEFAULT is THIS CHECKOUT'S server, derived in `app/devPort.ts` from the same
+ * slot as the Vite port and injected by `vite.config.ts` (D46). It replaced a hardcoded
+ * `http://localhost:8000`, which was wrong in every tree but one: `store/files.py:home()`
+ * gives each checkout its own inventory, so a shared port meant this UI could be answered by
+ * another tree's server over another tree's store — in one direction driving the owner's real
+ * inventory from a branch, in the other writing real capture photographs into a directory
+ * that is deleted with the worktree.
+ *
+ * The literal below is the last-resort fallback for a bundle built without that define — a
+ * bare `tsc`, a test harness, an editor's type server. It is the main tree's port, which is
+ * the right guess when nothing has told us which tree this is. */
+const FALLBACK_BASE = 'http://localhost:8000'
+const derived: unknown = import.meta.env.VITE_CAPTURE_DEFAULT
+const DEFAULT_BASE =
+  typeof derived === 'string' && derived.trim() !== ''
+    ? derived.trim().replace(/\/+$/, '')
+    : FALLBACK_BASE
 const configured: unknown = import.meta.env.VITE_CAPTURE_SERVER
 
 /* Trailing slashes stripped so `${base}/status` cannot become `//status`, which some
@@ -615,8 +636,39 @@ export async function getQueues(): Promise<QueueSnapshot> {
  * so it is read as present-or-null and never for its contents.
  */
 export async function answerReview(answer: ReviewAnswer): Promise<AnswerResult> {
-  const { box, index, sku, condition } = answer
-  return answerCall(box, index, { sku, condition })
+  const { box, index, sku, condition, fromCatalog } = answer
+  // `from_catalog` is sent only when it is true. The route allowlists the field either way,
+  // but an ordinary answer that carried `from_catalog: false` would put a flag about D46 on
+  // every one of the thousands of answers that have nothing to do with it.
+  return answerCall(
+    box,
+    index,
+    fromCatalog ? { sku, condition, from_catalog: true } : { sku, condition },
+  )
+}
+
+/**
+ * What this card COULD be, out of the export it was actually joined against (D46).
+ *
+ * FREE, READ-ONLY, AND IT ANSWERS THE DEAD END. A queue entry with no candidate rows could
+ * not be answered at all — the route refuses it as `no_candidates` — so the only moves were
+ * skip, which writes nothing and asks again next session, and stand-down, which closes the
+ * question rather than answering it. The row was in the export the whole time.
+ *
+ * AN EMPTY QUERY IS LEGAL AND IS THE ARRIVING-AT-THE-CARD CASE: the server suggests from the
+ * card's own read, so the screen shows what it could have been before anyone types. A query
+ * searches by name, collector number or SKU.
+ *
+ * IT OFFERS AND NEVER WRITES. Choosing one of these rows still goes through `answerReview`,
+ * and the server still re-reads the row before it writes anything.
+ */
+export async function reviewCatalog(
+  box: number,
+  index: number,
+  query: string,
+): Promise<CatalogLookup> {
+  const at = `/review/${box}/${index}/catalog?q=${encodeURIComponent(query)}`
+  return (await request(at, NO_CACHE)) as CatalogLookup
 }
 
 /* One route in both directions — `POST /review/<box>/<index>/answer`, with `{"undo": true}` to
@@ -1335,13 +1387,49 @@ export async function releaseBoxListings(box: number): Promise<ListingReleaseRes
  * command's own preflight stdout rather than recomputed anywhere, so the figure on the
  * screen and the figure in the run's log are the same string produced by the same code.
  */
-export async function preflightRun(input: {
+export async function preflightRun(cart: readonly RunLeg[]): Promise<RunPreflight> {
+  return (await request('/pipeline/preflight', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scopes: cart.map(onTheWire) }),
+  })) as RunPreflight
+}
+
+/** One cart row in the shape the route reads. Named rather than inlined because BOTH
+ *  functions below send it and the money one must not be able to send a different shape from
+ *  the one that was quoted — a preflight and a confirm describing different sends is the
+ *  exact failure the two-step gate exists to prevent. */
+function onTheWire(leg: RunLeg): Record<string, unknown> {
+  return {
+    box: leg.box,
+    // Absent rather than empty, because those mean different things to the route: absent is
+    // the whole box and `[]` is refused outright rather than read as one.
+    indices: leg.indices !== undefined && leg.indices.length > 0 ? leg.indices : undefined,
+    crop: leg.crop,
+    max_edge: leg.maxEdge,
+  }
+}
+
+/**
+ * What this reading actually sends: where the crop cuts, and the collector-number strip at
+ * the resolution it delivers. FREE, writes nothing, shells out to nothing.
+ *
+ * IT IS PRESSED BEFORE `preflightRun`, NOT AFTER IT, and that ordering is the point. D32
+ * gave the crop three named pairs and a sentence each because the controls alone could not
+ * be read; this is the same answer as a picture, and it has to be on screen while the pair
+ * is being CHOSEN. The estimate comes after, over a reading the operator has now seen.
+ *
+ * `offset` steps the sample. Three cards, evenly spaced and deterministic, so that changing
+ * the reading redraws the same three — see the route for why one card cannot stand for a box.
+ */
+export async function cropPreview(input: {
   box: number
   indices?: number[]
   crop?: boolean
   maxEdge?: number
-}): Promise<RunPreflight> {
-  return (await request('/pipeline/preflight', {
+  offset?: number
+}): Promise<CropPreview> {
+  return (await request('/pipeline/crop-preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1349,8 +1437,9 @@ export async function preflightRun(input: {
       indices: input.indices,
       crop: input.crop,
       max_edge: input.maxEdge,
+      offset: input.offset,
     }),
-  })) as RunPreflight
+  })) as CropPreview
 }
 
 /**
@@ -1369,25 +1458,32 @@ export async function preflightRun(input: {
  * cards — two batches over one box is two invoices), and every scope refusal the preflight
  * would have shown first.
  */
-export async function startRun(input: {
-  box: number
-  indices?: number[]
-  crop?: boolean
-  maxEdge?: number
-  label?: string
-}): Promise<RunStarted> {
+export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
   return (await request('/pipeline/identify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      confirm: true,
-      box: input.box,
-      indices: input.indices,
-      crop: input.crop,
-      max_edge: input.maxEdge,
-      label: input.label,
-    }),
+    body: JSON.stringify({ confirm: true, scopes: cart.map(onTheWire) }),
   })) as RunStarted
+}
+
+/**
+ * The per-SKU pricing table for one run, with this run's answers and the last run's
+ * sub-threshold choice. FREE and read-only: it creates nothing and prices nothing.
+ *
+ * TWO FILES IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE. `pricing.json` and
+ * `decisions.json` are both downloadable through `GET .../file` already, so a screen could
+ * fetch them separately and need no server change at all — but two fetches can straddle a
+ * re-join, and a table describing one join beside answers written against another is a
+ * screen quietly pricing the wrong set of cards.
+ *
+ * Refusals worth branching on: `pricing_not_written` (the run predates the file, or has not
+ * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
+ */
+export async function getPricing(name: string): Promise<PricingPayload> {
+  return (await request(
+    `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
+    NO_CACHE,
+  )) as PricingPayload
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from
