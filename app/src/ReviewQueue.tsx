@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { PositionLabel } from './PositionLabel'
 import { isEditableTarget } from './keys'
 import type {
   AnswerResult,
@@ -2452,7 +2453,9 @@ function Card({
           exists to make. Nothing about the pair changes: the label is still the human one
           with the machine string beneath it, at the sizes docs/DESIGN.md sets. */}
       <div className="review-card-head">
-        <p className="review-position">{entry.label}</p>
+        <p className="review-position">
+          <PositionLabel label={entry.label} />
+        </p>
 
         <div className="review-reason">
           {/* Accent at outline and text weight: the system is unsure. The chip carries the

@@ -1025,6 +1025,26 @@ COMPONENTS = [
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
                                       "governed_by": ["D3", "D5", "D27"]},
+            "src/PositionLabel.tsx": {
+                "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
+                        "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
+                        "muted coarse path and a promoted slot figure, deleting the interpuncts; "
+                        "the server string is never edited and travels verbatim on `aria-label`. "
+                        "Two geometries: `stack` for a standalone label, `run` for one inside a "
+                        "running sentence, where the stacked block measured 3.3x the line height "
+                        "and orphaned the trailing period. A NUMERIC GUARD refuses to promote a "
+                        "slot that is not digits, which is what keeps D24's pooled label "
+                        "(`... \u00b7 pooled`) from drawing a lowercase word as a 300px figure. "
+                        "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
+                        "the firewall is the component graph, not a selector.",
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41"]},
+            "src/PositionLabel.css": {
+                "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
+                        "chooses; the key is a single clamp and the gap is a token by rule "
+                        "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
+                        "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
+                        "classes exist only where the component rendered them.",
+                "governed_by": ["D31", "D41"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -1088,7 +1108,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -1224,7 +1244,7 @@ COMPONENTS = [
                                       "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row.",
-                                      "governed_by": ["D5", "D7", "D31", "D40"]},
+                                      "governed_by": ["D5", "D7", "D31", "D40", "D41"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -1478,7 +1498,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -1493,7 +1513,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colours "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24"],
+                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "
