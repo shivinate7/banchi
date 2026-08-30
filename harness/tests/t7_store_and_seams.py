@@ -166,6 +166,7 @@ says the same thing about 7b that a green T6 says about geometry: it is self-con
 
 from __future__ import annotations
 
+import ast
 import base64
 import io
 import json
@@ -193,6 +194,10 @@ from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import games, join, orders, pricehistory, tcgcsv, variant  # noqa: E402
 from server import capture_server, pipeline_routes, ports  # noqa: E402
 from store import files, master, queues  # noqa: E402
+# `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
+# — the resolver computes and stores nothing, this one persists — so it takes an alias
+# rather than shadowing the name half this file's order cases are written against.
+from store import orders as order_store  # noqa: E402
 from store.session import Store  # noqa: E402
 
 NAME = "T7"
@@ -11535,6 +11540,496 @@ def _riftbound_row(sku: str) -> tcgcsv.Row:
     raise AssertionError(f"{RIFTBOUND_EXPORT.name} carries no SKU {sku}")
 
 
+def check_order_ledger(checks: Checks) -> None:
+    """`store/orders.py` — `inventory/orders.json`, the durable half of the order flow.
+
+    ITS OWN `isolated_home`, and this file has now paid for that lesson twice: a block that
+    writes into a store another block counts records and history lines over fails on the
+    fixture rather than on the code. The queue-starvation cases and the listing-release
+    cases both took sibling assertions red before they were moved out, and this one writes
+    cards, a listing, a sale and a mid-box renumber.
+
+    IDEMPOTENCE IS ASSERTED AS BYTE EQUALITY, NEVER AS A COUNT, which is D54's lesson said
+    out loud: that entry's guard read `len(rows) == 0` under the message "the file holds no
+    zero row", and "the file holds 0 rows" is satisfied IDENTICALLY by the emitter correctly
+    omitting a row and by the emitter overwriting two good rows with a bare header. The
+    destruction lived behind it for as long as it existed. A second sync here must therefore
+    leave `orders.json` AND `inventory.json` AND `history.jsonl` byte-for-byte as they were
+    — a row count would go green on a ledger that had thrown its fulfilment away and
+    re-ingested the same order over the top.
+
+    THE CASE THAT MATTERS MOST IS THE RENUMBER. A pull is recorded, a junk capture is then
+    deleted from the middle of the box through the real route, and every higher card slides
+    down one — so the position key the pulled copy used to have now belongs to a DIFFERENT
+    physical card. A ledger keyed by position reports that the wrong card is in the post; a
+    ledger keyed by `capture_id` still names the right one. It is asserted as both halves,
+    because the first alone is satisfied by a ledger that stores nothing at all.
+
+    OBSERVED FAILING FIRST, AND EACH ONE THROUGH THE ASSERTION THAT OWNS IT. Six mutations
+    were run against this block before it was kept:
+
+      fulfilment moved inside the replaced record   7 red, headed by the survival case
+      `changed_at` restamped unconditionally        2 red, headed by the byte comparison
+      the pull's dedup dropped                      1 red, the idempotence case
+      `holder_of` not consulted                     1 red, the two-buyers refusal
+      the nested `__annotations__` filter removed   1 red, the LINE case
+      capture ids stored as POSITION KEYS (D36)     7 red, headed by the renumber
+
+    THREE OF THEM FIRST FAILED BY ABORTING THE BLOCK RATHER THAN BY NAMING ANYTHING, and
+    two assertions were changed for it — the repeat pull is caught as a value and the line
+    case tests the list before it indexes it. A mutation that raises out of the middle of a
+    block leaves the assertion that covers it unrun and everything after it unreported: it
+    is loud, so it is not the silent pass this repo fears most, but it is coverage of the
+    traceback rather than of the defect. A test that cannot fail is not coverage, and a
+    test that fails somewhere other than the case is barely better.
+    """
+    checks.note("")
+    checks.note("ORDER LEDGER — store/orders.py")
+
+    def line(sku, quantity, **extra) -> order_store.OrderLine:
+        return order_store.OrderLine(sku=sku, quantity=quantity, **extra)
+
+    def record(number, *lines, **extra) -> order_store.OrderRecord:
+        fields = {
+            "source": "TCGplayer",
+            "number": number,
+            "placed_at": "2026-08-28T10:00:00.000+00:00",
+            "lines": list(lines),
+        }
+        fields.update(extra)
+        return order_store.OrderRecord(**fields)
+
+    # ------------------------------------------------------ 1. the key, and its refusals
+    checks.equal(
+        order_store.order_key("TCGplayer", "A-1"),
+        order_store.order_key("tcgplayer", " a-1 "),
+        "the key folds case and strips to COMPARE — D20's box-name rule one register over, "
+        "because TCGplayer and tcgplayer are one marketplace to a person",
+    )
+    checks.raises(
+        order_store.BadOrderKey,
+        lambda: order_store.order_key("tcg:player", "A-1"),
+        "a source carrying the separator refuses — the key splits on the FIRST colon, so "
+        "such a source makes two different orders share one record",
+    )
+    checks.equal(
+        order_store.order_key("TCGplayer", "A:1"),
+        "tcgplayer:a:1",
+        "and an order NUMBER may carry one, which is the asymmetry that refusal buys",
+    )
+    for bad in (("", "A-1"), ("TCGplayer", "  ")):
+        checks.raises(
+            order_store.BadOrderKey,
+            lambda pair=bad: order_store.order_key(*pair),
+            f"an empty half refuses ({bad!r}) — every empty-half key is the same key",
+        )
+
+    with isolated_home():
+        # A real store to ingest beside: one identified card carrying the proven SKU, and a
+        # listing record with counts on it, so "ingest writes no card state and no listing
+        # count" is a comparison this block can lose rather than an absence it assumes.
+        for i in range(1, 6):
+            capture_server.do_capture(
+                {"box": 3, "capture_id": f"o{i}", "image": base64.b64encode(
+                    b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")}
+            )
+        with Store().write() as snapshot:
+            for i in range(1, 6):
+                snapshot.inventory.record_identification(
+                    f"3/{i}", name="Moonfall", number="198/219", printed_total="219",
+                    confidence="high",
+                )
+                snapshot.inventory.cards[f"3/{i}"].sku = "9191486"
+            snapshot.inventory.listing("9191486").set(master.PUSHED, 4)
+
+        store = Store()
+        moonfall = record(
+            "A-1",
+            line("9191486", 3, name="Moonfall", number="UNL #198/219",
+                 printing="Foil", condition="Near Mint", rarity="Epic",
+                 unit_price="11.88"),
+        )
+
+        # ------------------------------------------- 2. the first sync, and what it wrote
+        with store.write() as snapshot:
+            report = snapshot.ledger.ingest([moonfall])
+        checks.equal(
+            (report.added, report.changed, report.unchanged, report.wrote_nothing),
+            (1, 0, 0, False),
+            "the first sync reports the order as new",
+        )
+
+        key = order_store.order_key("TCGplayer", "A-1")
+        after = store.read()
+        checks.ok(
+            after.ledger.get(key) is not None
+            and after.ledger.get(key).source == "TCGplayer",
+            "the record round-trips through the session, storing the source VERBATIM "
+            "while the key that found it was folded",
+        )
+        checks.equal(
+            [c.state for c in sorted(after.inventory.cards.values(), key=lambda c: c.index)],
+            [master.IDENTIFIED] * 5,
+            "INGEST WROTE NO CARD STATE — not one of the five moved, which is what makes a "
+            "second press a no-op by construction rather than by a guard",
+        )
+        checks.equal(
+            (after.inventory.listing_for("9191486").pushed,
+             after.inventory.listing_for("9191486").staged,
+             after.inventory.listing_for("9191486").live),
+            (4, 0, 0),
+            "and no listing count — a ledger that bumped one would re-list every order in "
+            "the file on every sync",
+        )
+
+        # --------------------------------------- 3. IDEMPOTENCE, AS BYTES AND NOT A COUNT
+        ledger_bytes = store.ledger_path.read_bytes()
+        inventory_bytes = store.inventory_path.read_bytes()
+        history_bytes = store.history_path.read_bytes()
+
+        with store.write() as snapshot:
+            second = snapshot.ledger.ingest([record(
+                "A-1",
+                line("9191486", 3, name="Moonfall", number="UNL #198/219",
+                     printing="Foil", condition="Near Mint", rarity="Epic",
+                     unit_price="11.88"),
+            )])
+        checks.equal(
+            (second.added, second.changed, second.unchanged, second.wrote_nothing),
+            (0, 0, 1, True),
+            "the SECOND sync of the same order reports it unchanged",
+        )
+        checks.equal(
+            store.ledger_path.read_bytes(),
+            ledger_bytes,
+            "and orders.json is BYTE-IDENTICAL — a row count would go green on a ledger "
+            "that threw its fulfilment away and re-ingested over the top (D54)",
+        )
+        checks.equal(
+            store.inventory_path.read_bytes(),
+            inventory_bytes,
+            "and so is inventory.json, which is the half a count could never see",
+        )
+        checks.equal(
+            store.history_path.read_bytes(),
+            history_bytes,
+            "and history.jsonl — a sync appending a line per order is not the no-op the "
+            "module promises, however small the line is",
+        )
+
+        # ---------------------------------------------- 4. the pull, and its idempotence
+        with store.write() as snapshot:
+            newly = snapshot.ledger.record_pull(key, "9191486", ["o2", "o3"])
+        checks.equal(newly, 2, "a pull records the copies it was handed")
+        # THE REPEAT IS CAUGHT AS A VALUE RATHER THAN AS A TRACEBACK, deliberately. A pull
+        # that has stopped deduping does not return the wrong number, it RAISES — the same
+        # two copies counted twice overshoot the line and trip `OverFulfilled` — and an
+        # exception here would abort this block, leaving the assertion that owns the defect
+        # unrun and everything after it unreported. Turning it into a value is what makes
+        # the named case the one that goes red.
+        try:
+            with store.write() as snapshot:
+                again = snapshot.ledger.record_pull(key, "9191486", ["o2", "o3"])
+        except Exception as exc:  # noqa: BLE001 - reported as the failure it is
+            again = f"raised {type(exc).__name__}"
+        checks.equal(
+            again,
+            0,
+            "and recording the SAME pull again records nothing — idempotent because a "
+            "capture id already on the line is skipped, not because a caller checked",
+        )
+        after = store.read()
+        checks.equal(
+            (after.ledger.fulfilled(key, "9191486"),
+             after.ledger.outstanding(key, "9191486")),
+            (2, 1),
+            "two of the three copies are recorded and one is still owed",
+        )
+
+        # -------------------------------------- 5. A COUNT, AND NOT A LIST OF POSITIONS
+        stored = json.loads(store.ledger_path.read_text("utf-8"))
+        row = stored["fulfilment"][key]["9191486"]
+        checks.equal(
+            sorted(row.keys()),
+            ["at", "copies", "fulfilled"],
+            "the stored row is a COUNT, its capture ids, and a stamp — nothing else",
+        )
+        checks.equal(
+            [c for c in row["copies"] if "/" in str(c)],
+            [],
+            "and not one value is a position key — D36: a stored position names a "
+            "different card the moment a mid-box delete slides the box down one",
+        )
+        checks.ok(
+            isinstance(row["fulfilled"], int),
+            "`fulfilled` is a number rather than a length somebody has to trust",
+        )
+
+        # ------------------------------ 6. THE RENUMBER — capture_id, never position_key
+        #
+        # The real route, not a simulated shift. `renumber_blocked` refuses while the SKU
+        # carries a listing hold, so the pushed count set above is cleared first — D10
+        # ruling 1's own boundary, and clearing it here is what lets the shift happen at
+        # all rather than a convenience.
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.PUSHED, 0)
+
+        pulled_before = {
+            c.capture_id: c.key for c in store.read().inventory.cards.values()
+        }
+        checks.equal(
+            (pulled_before["o2"], pulled_before["o3"]),
+            ("3/2", "3/3"),
+            "the two pulled copies sit at 3/2 and 3/3 before the shift",
+        )
+        body = capture_server.do_remove_card(3, 1, {"capture_id": "o1"})
+        checks.equal(body["shifted"], 4, "the mid-box delete slides four records down one")
+
+        moved = store.read()
+        checks.equal(
+            moved.inventory.card_by_capture_id("o2").key,
+            "3/1",
+            "so both pulled copies moved: the one that WAS 3/2 is now 3/1",
+        )
+        checks.equal(
+            moved.inventory.cards["3/3"].capture_id,
+            "o4",
+            "AND POSITION 3/3 NOW HOLDS A CARD THAT WAS NEVER PULLED — a ledger storing "
+            "['3/2', '3/3'] would name o4 here and send that card to the buyer",
+        )
+        recorded = moved.ledger.recorded(key, "9191486")
+        checks.equal(
+            sorted(recorded.copies),
+            ["o2", "o3"],
+            "the ledger still names the same two physical cards, unmoved by the shift — "
+            "which is the whole reason it keys by capture_id",
+        )
+        checks.ok(
+            "o4" not in recorded.copies,
+            "and does not name the card that inherited a pulled position",
+        )
+        checks.equal(
+            recorded.fulfilled,
+            2,
+            "with the count untouched: `_drop_from_stores` remaps the three position-keyed "
+            "stores at every delete, and this one does not need remapping",
+        )
+
+        # --------------------------------- 7. THE LOAD-BEARING ONE: ingest cannot clobber
+        with store.write() as snapshot:
+            changed = snapshot.ledger.ingest([record(
+                "A-1", line("9191486", 3, name="Moonfall"), status="Shipped"
+            )])
+        checks.equal(
+            (changed.changed, changed.added), (1, 0), "a feed that says something new updates"
+        )
+        survived = store.read()
+        checks.equal(
+            (survived.ledger.fulfilled(key, "9191486"),
+             sorted(survived.ledger.recorded(key, "9191486").copies)),
+            (2, ["o2", "o3"]),
+            "AND THE FULFILMENT SURVIVES IT. Ingest replaces the feed's half by key, so a "
+            "count living in that record dies on the next sync — and the consequence is "
+            "the picker being sent to a slot whose card is already in the post",
+        )
+        checks.equal(
+            survived.ledger.get(key).status,
+            "Shipped",
+            "while the feed's own word is carried verbatim and unvalidated",
+        )
+        checks.ok(
+            survived.ledger.get(key).first_seen == after.ledger.get(key).first_seen,
+            "`first_seen` is the ONE field ingest preserves, exactly as Queue.upsert does",
+        )
+
+        # ------------------------------------------------------------- 8. the refusals
+        checks.raises(
+            order_store.UnknownOrder,
+            lambda: store.read().ledger.record_pull("tcgplayer:nope", "9191486", ["o3"]),
+            "a pull against an order the ledger has never ingested refuses — inventing it "
+            "would record a shipment for a purchase nobody can produce",
+        )
+        checks.raises(
+            order_store.UnknownOrderLine,
+            lambda: store.read().ledger.record_pull(key, "8608859", ["o3"]),
+            "and a pull against a SKU the buyer did not order",
+        )
+        checks.raises(
+            order_store.CopyNotIdentifiable,
+            lambda: store.read().ledger.record_pull(key, "9191486", [None]),
+            "a copy with no capture_id refuses rather than being counted blind — without "
+            "an identity the pull cannot be made idempotent, and a silent double-pull is "
+            "the worst outcome this feature has",
+        )
+        checks.raises(
+            order_store.OverFulfilled,
+            lambda: store.read().ledger.record_pull(key, "9191486", ["o4", "o5"]),
+            "and recording more copies than the buyer ordered refuses rather than clamping "
+            "— you cannot ship the fourth, so there is nothing to be gained by hiding it",
+        )
+
+        # THE ONE THIS MODULE EXISTS FOR: one physical card against two orders.
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("B-2", line("9191486", 2),
+                                           placed_at="2026-08-29T10:00:00.000+00:00")])
+        other = order_store.order_key("TCGplayer", "B-2")
+        caught = checks.raises(
+            order_store.CopyAlreadyPulled,
+            lambda: store.read().ledger.record_pull(other, "9191486", ["o2"]),
+            "a copy already recorded against ANOTHER order refuses — this is selling the "
+            "same physical card twice, said out loud rather than counted twice",
+        )
+        if caught is not None:
+            checks.ok(
+                key in str(caught) and "o2" in str(caught),
+                "and the refusal names the order and the copy holding it, so the operator "
+                "can go and look rather than guess",
+            )
+
+        checks.raises(
+            order_store.DuplicateOrderLine,
+            lambda: store.read().ledger.ingest([
+                record("C-3", line("9191486", 1), line("9191486", 2))
+            ]),
+            "an order carrying two lines for one SKU refuses — fulfilment is keyed by SKU, "
+            "so a count against it would have two owners and no way to say which",
+        )
+
+        # ----------------------------------------------------- 9. the reversal, and D26
+        with store.write() as snapshot:
+            gone = snapshot.ledger.forget_pull(key, "9191486", ["o3", "never-pulled"])
+        checks.equal(gone, 1, "the reversal removes what is there and skips what is not")
+        reversed_ = store.read()
+        checks.equal(
+            (reversed_.ledger.fulfilled(key, "9191486"),
+             reversed_.ledger.recorded(key, "9191486").copies),
+            (1, ["o2"]),
+            "moving the count and the ids TOGETHER — nothing else in the module writes "
+            "either, so they cannot come apart anywhere but there",
+        )
+        checks.equal(
+            store.read().ledger.holder_of("o3"),
+            None,
+            "and the released copy is free for another order, which is what makes the "
+            "reversal a reversal rather than a decrement",
+        )
+
+        # ------------------------- 10. NO ORDER STATE REACHES `master.STATES` (D26's trap)
+        #
+        # The failure this is aimed at is not abstract: `_state_before_sale` scans
+        # history.jsonl for the last event whose name is in `master.STATES`, so a ledger
+        # that logged an order state would make a sale's reversal restore a card to it.
+        checks.equal(
+            sorted(master.STATES),
+            sorted([master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED]),
+            "the state tuple is still the four — the ledger adds none",
+        )
+        capture_server.do_mark_sold(3, 2, {})
+        sold_at = store.read()
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("D-4", line("9191486", 1),
+                                           placed_at="2026-08-30T10:00:00.000+00:00")])
+        checks.equal(
+            capture_server._state_before_sale(Store().history(), "3/2"),
+            master.IDENTIFIED,
+            "and a sale's reversal still reads the right state back out of the log with "
+            "orders ingested either side of it — D26's removed/retired collision, refused "
+            "by this module holding no states at all",
+        )
+        checks.ok(
+            sold_at.inventory.cards["3/2"].state == master.SOLD,
+            "(the sale itself landed, so the assertion above is about a real reversal)",
+        )
+
+        # ------------------------------------------------- 11. unfulfilled, and its order
+        owing = [r.number for r in store.read().ledger.unfulfilled()]
+        checks.equal(
+            owing,
+            ["A-1", "B-2", "D-4"],
+            "orders still owing copies come back oldest-placed first — the same sequence "
+            "pipeline/orders.py:order_sequence serves them in, so a screen listing what is "
+            "outstanding and the resolver deciding who gets the last copy cannot disagree",
+        )
+
+    # ------------------------------- 12. parse drops what the dataclasses do not declare
+    #
+    # `store/master.py:parse` filters on `__annotations__`, and a field written but not
+    # declared is served, persisted, and SILENTLY DROPPED on the next reload — live-looking
+    # right up until the process restarts. Asserted at all THREE levels, because filtering
+    # only the record lets exactly that through one level down.
+    payload = {
+        "version": 1,
+        "orders": {
+            "tcgplayer:z-9": {
+                "source": "TCGplayer", "number": "Z-9", "invented": "gone",
+                "lines": [{"sku": "1", "quantity": 2, "also_invented": "gone"}],
+            },
+            "_note": {"source": "x", "number": "y"},
+        },
+        "fulfilment": {
+            "tcgplayer:z-9": {"1": {"fulfilled": 1, "copies": ["z"], "third": "gone"}}
+        },
+    }
+    parsed = order_store.Ledger.parse(payload)
+    got = parsed.get("tcgplayer:z-9")
+    checks.ok(
+        got is not None and not hasattr(got, "invented"),
+        "an undeclared field on the RECORD is dropped rather than carried",
+    )
+    checks.ok(
+        # `got.lines` rather than `got.lines[0]` first: without the filter the line's
+        # constructor raises TypeError and `parse` skips it, so the list is EMPTY — and an
+        # IndexError here would abort the block instead of naming the defect.
+        got is not None and got.lines and not hasattr(got.lines[0], "also_invented"),
+        "and on a LINE, which filtering only the record would have let through",
+    )
+    checks.ok(
+        not hasattr(parsed.recorded("tcgplayer:z-9", "1"), "third"),
+        "and on a PROGRESS row, which is the half holding the physical claim",
+    )
+    checks.equal(
+        parsed.get("_note"), None, "and an underscore key is skipped, as in Queue.parse"
+    )
+    checks.equal(
+        order_store.Ledger.parse(parsed.to_payload()).to_payload(),
+        parsed.to_payload(),
+        "and the round trip is exact, so to_payload and parse are each other's inverse",
+    )
+    checks.equal(
+        order_store.Ledger.parse({"orders": {"bad": {"number": "no source"}}}).orders,
+        {},
+        "a record that cannot be constructed is SKIPPED rather than raising — one "
+        "malformed order must not take every other order's fulfilment off the screen",
+    )
+
+    # ------------------------------------ 13. the lock is never held across I/O, checked
+    #
+    # `files.exclusive` polls at 50ms and gives up at 30s while the feeder captures a card
+    # every 623ms, so a fetch down here would stall real capture. It is a property of the
+    # module's imports rather than of its behaviour, so it is asserted that way — a
+    # behavioural test would have to hang to fail.
+    tree = ast.parse(Path(order_store.__file__).read_text("utf-8"))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    checks.equal(
+        sorted(imported & {"urllib", "http", "socket", "requests", "subprocess", "pathlib"}),
+        [],
+        "store/orders.py imports nothing that can reach the network or the filesystem — "
+        "the ledger is a data structure and session.py does its I/O, inside the lock it "
+        "already holds",
+    )
+    checks.equal(
+        sorted(n for n in imported if n in {"store", "pipeline"}),
+        [],
+        "and nothing from `pipeline`, which is why OrderLine is declared twice: the edge "
+        "runs the other way and a cycle is what reusing the resolver's would cost",
+    )
+
+
 def check_price_history(checks: Checks) -> None:
     """`pipeline/pricehistory.py` — the sku -> productId walk, and the readings over it.
 
@@ -12134,6 +12629,7 @@ def run() -> Result:
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_order_resolver(checks)
+    check_order_ledger(checks)
     check_crop_preview(checks)
     check_price_history(checks)
     return checks.result(

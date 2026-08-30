@@ -479,6 +479,36 @@ at a temporary directory, so nothing here touches the real inventory.
   than an absent one.** A case that only goes red when the whole feature is deleted does
   nothing to stop somebody clearing `pushed` the moment an export reports a live copy, which
   is the one thing this negative case exists to refuse.
+- **The order ledger is covered as of 2026-08-30, in its own isolated home (D63).**
+  `store/orders.py` persists what `pipeline/orders.py` deliberately does not, and the
+  cases work hardest on the two rules that make it safe to re-run. **Idempotence is
+  asserted as BYTE EQUALITY of `orders.json`, `inventory.json` and `history.jsonl` across
+  two syncs, never as a count** — D54's lesson said out loud, where a guard reading
+  `len(rows) == 0` was satisfied identically by the emitter correctly omitting a row and
+  by it overwriting two good rows with a bare header. A row count here goes green on a
+  ledger that threw its fulfilment away and re-ingested the same order over the top.
+
+  **The renumber case drives the real route rather than simulating a shift.** Five cards,
+  two copies pulled at 3/2 and 3/3, then `POST /inventory/3/1/remove`: both pulled copies
+  slide down one and **position 3/3 ends up holding a card that was never pulled**. A
+  ledger keyed by position ships that card; one keyed by `capture_id` does not. Asserted
+  as both halves, because the first alone is satisfied by a ledger that stores nothing.
+
+  **Six mutations were observed failing first, each through the assertion that owns it** —
+  fulfilment moved inside the replaced record (7 red), `changed_at` restamped
+  unconditionally (2), the pull's dedup dropped (1), `holder_of` not consulted (1), the
+  nested `__annotations__` filter removed (1), and capture ids stored as position keys
+  (7). **Three of them first failed by ABORTING the block rather than naming anything**,
+  and two assertions were changed for it: a mutation that raises out of the middle leaves
+  the case that covers it unrun and everything after it unreported. It is loud, so it is
+  not the silent pass this file fears most — but it is coverage of the traceback rather
+  than of the defect.
+
+  **What it does NOT cover, so a green harness is not misread**: nothing calls this module.
+  No route serves it, no screen draws it, and no command reads it, so these cases assert a
+  data structure and not a feature — the same standing `pipeline/pricehistory.py` carries,
+  and the same one the order resolver beside it has.
+
 - **7b's three routes are covered as of 2026-08-13**, the day they landed: `GET /queues`,
   `POST /review/<box>/<index>/answer` and `POST /inventory/<box>/<index>/sold` — the
   standing-queue read, D4's one-tap answer, and D10's mark-sold with its reversal. This

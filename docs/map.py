@@ -484,8 +484,8 @@ COMPONENTS = [
     {
         "path": "store/",
         "status": "built",
-        "does": "the master store: inventory, cache, standing queues",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15"],
+        "does": "the master store: inventory, cache, standing queues, order ledger",
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
@@ -501,9 +501,39 @@ COMPONENTS = [
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
+            # THE DURABLE HALF OF THE ORDER FLOW, and the split from pipeline/orders.py is
+            # the design rather than a packaging choice: the resolver's answer is true of
+            # one Inventory snapshot and of no other (D36), so it is recomputed on every
+            # read, while an order outlives every snapshot. Imports nothing from pipeline/,
+            # which is why OrderLine is declared in both — the edge runs the other way.
+            "orders.py": {"does": "inventory/orders.json — one record per {source}:{order_number}, "
+                                  "upserted. TWO TOP-LEVEL MAPS and the separation IS the guard: "
+                                  "`orders` is the feed's and is replaced wholesale on every sync, "
+                                  "`fulfilment` is ours and `ingest` cannot name it — a count "
+                                  "living in the replaced record dies on the next sync, and the "
+                                  "consequence is the picker sent to a slot whose card is already "
+                                  "in the post. Ingest writes NO card state and NO listing count, "
+                                  "so a second press is a no-op BY CONSTRUCTION rather than by a "
+                                  "guard, and an unchanged re-ingest rewrites no bytes because "
+                                  "`changed_at` is stamped only where the feed's content moved. "
+                                  "Fulfilment is a COUNT, never a list of positions (D36); where "
+                                  "an identity is unavoidable it is a `capture_id`, which survives "
+                                  "a renumber by construction. No order state reaches "
+                                  "`master.STATES` and nothing here logs to history.jsonl — both "
+                                  "would corrupt the sale and retirement reversals that scan that "
+                                  "log filtering on that tuple (D26). No I/O and no lock: "
+                                  "session.py writes it, fifth and last of five files whose set is "
+                                  "not atomic.",
+                          "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
+                                          "D29", "D36", "D53", "D63"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
             "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
-            "session.py": {"does": "lock-free read, or locked read-modify-write", "governed_by": ["D13"], "tested_by": ["T7"]},
+            # D53 and D63 because the header now prices what this module does NOT promise:
+            # the five files it replaces are each atomic and the SET of them is not, which
+            # is why D53's supervisor drains before it restarts and why the ledger is last.
+            "session.py": {"does": "lock-free read, or locked read-modify-write, over five files "
+                                   "that are each atomic and are not one transaction",
+                           "governed_by": ["D13", "D53", "D63"], "tested_by": ["T7"]},
         },
     },
     {
