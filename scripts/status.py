@@ -114,6 +114,14 @@ SOURCES = (
         "why": "read by decision_gists()",
     },
     {
+        "path": "scripts/icloud-sweep.py",
+        "kind": "file",
+        "requires": (),
+        "why": "counts iCloud Drive conflict copies — run by icloud() below. Run rather than "
+               "reimplemented, so the pattern that decides what a conflict copy IS lives in "
+               "one file",
+    },
+    {
         "path": "server/ports.py",
         "kind": "file",
         "requires": (),
@@ -693,6 +701,38 @@ def ports_and_store() -> List[str]:
     return out
 
 
+def icloud() -> List[str]:
+    """How many iCloud Drive conflict copies are lying in this tree.
+
+    Reported and never acted on. They are untracked, the pre-commit hook already refuses to
+    COMMIT one, and `make hooks` installs only what git tracks — so the two ways one could do
+    damage are closed and what is left is clutter that a person clears when they feel like it.
+    What was NOT closed until this line existed is noticing: they are invisible to every
+    normal command, and the way they surfaced was a commit failing on the repo-map orphan rule
+    and, once, one being installed as a git hook.
+
+    Silent when there are none, which is the ordinary case and will be the permanent one once
+    the repo moves off iCloud Drive.
+    """
+    found = resolve("scripts/icloud-sweep.py")
+    if not found:
+        return []
+    done = subprocess.run(
+        [sys.executable, str(found[0])],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    summary = ""
+    for line in done.stdout.splitlines():
+        if line.startswith("icloud-sweep:"):
+            summary = line.split(":", 1)[1].strip()
+    if not summary or summary == "no conflict copies":
+        return []
+    return [
+        field("iCloud copies", summary.split("  (")[0]),
+        cont("`make icloud-sweep` lists them; ARGS=--delete removes the identical ones"),
+    ]
+
+
 def store() -> List[str]:
     out = []
     for name, absent in (("inventory", "nothing captured yet"), ("runs", "no identify run yet")):
@@ -721,7 +761,7 @@ def render() -> str:
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
-    lines += ["", "REPO"] + repo() + hooks() + ports_and_store()
+    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
     lines += ["", "STORE"] + store()
 
     if MISSING:

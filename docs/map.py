@@ -458,7 +458,7 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D44"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; unprotected, "
                         "so a sibling hook's arrival would not be.",
@@ -505,6 +505,17 @@ COMPONENTS = [
                 # a second reason the audit's self-test does not — it exercises the guard by
                 # violating it, so wired into the commit path it would refuse its own commits.
                 "governed_by": ["D18", "D42"],
+            },
+            "icloud-sweep.py": {
+                "does": "lists iCloud Drive conflict copies (`foo 2.py`) and, with --delete, "
+                        "removes ONLY those byte-identical to their original. A differing copy "
+                        "is reported and left alone — it is not provably a duplicate, and "
+                        "guessing there is how a cleanup tool destroys work. Never touches a "
+                        "tracked file: `git ls-files --others` is its only enumeration.",
+                # D44 is the decision. D18 keeps it off the gate: it is the one target in this
+                # repo that can delete a file, so it is neither in `make check` nor in the
+                # git hook.
+                "governed_by": ["D18", "D44"],
             },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
