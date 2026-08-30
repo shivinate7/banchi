@@ -879,6 +879,47 @@ the owner chose the first, because the event name was already written into `hist
 disk. "Nothing catches it at import" stays true: there is no module-level assert in either
 file, and T7 is the only guard.
 
+### The `fixtures/` guard is one tool wide — found 2026-08-30
+
+`.claude/settings.json` denies `Write(./fixtures/**)` and `Edit(./fixtures/**)`. `CLAUDE.md`
+calls that directory ground truth and says never modify it. **Bash is not in the deny list**,
+so any write reached through a shell — a one-line `python3 -c` that opens a path under
+`fixtures/` for writing, a heredoc, `cp`, `sed -i` — goes straight past it, silently and with
+no prompt.
+
+**Measured the day it was found, by walking through it without noticing.** The session that
+built `fixtures/orders-shipping.csv` wrote it with a `python3` script and only discovered the
+rule existed *afterwards*, when a `Write` of a sidecar into the same directory was denied. The
+CSV was the deliverable and its creation was instructed, so nothing was harmed — what the
+episode establishes is that the guard did not participate in the decision at all. An agent
+that reaches for a script rather than for `Write` never learns the directory is protected.
+
+**What it costs is the four `_untouched` exports rather than the new file.** Those are the
+byte-exact ground truth T2 asserts against and D25 built the per-game catalogs from; a
+whitespace normalisation or a re-save through a CSV library would change bytes nothing in the
+harness re-derives, and the failure would surface as a fixture test disagreeing with a real
+TCGplayer export weeks later. The deny rule reads as protection against that and supplies it
+against two tools out of three.
+
+**Why it is not fixed here.** The permission layer is the wrong place: a deny list cannot see
+what a script writes at run time, and the pattern broad enough to catch it — denying `python3`,
+or shell redirection — would take `make harness`, `make check` and `scripts/docs-audit.py`
+down with it. That is the same trade D16 refuses for `--no-verify`, where switching off a
+prose reminder also switches off the three opsec rules.
+
+**The tractable route, named rather than built: check the bytes at commit time instead of
+intercepting the write.** Git already holds the hashes, so a pre-commit rule that refuses a
+staged modification to any pre-existing `fixtures/*_untouched.csv` is a read-only check on the
+path that already decides whether a commit proceeds — permitted by D18, unlike anything that
+writes. It would also be honest about the distinction the deny rule currently blurs: **adding**
+a fixture is ordinary work, and **modifying** the ground-truth four is what must not happen.
+Deliberately not built in the session that found it, at the owner's instruction.
+
+**Not the same gap as the PII one, though they rhyme.** This repo has no secret or PII scanning
+either — the pre-commit hook's only content rule is the code-card regex — so a fixture carrying
+buyer names would commit clean. That one is about what is *inside* a file nobody scans; this one
+is about *which tool* wrote it. Neither covers the other.
+
 ## Reporting defects — a check runs but can report the wrong thing
 
 ### `check_reason_codes` is anchored on the labels and the doc, so a bare constant is invisible
