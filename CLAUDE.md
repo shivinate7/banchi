@@ -235,14 +235,34 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
-  **THE LOCAL HALF IS TWO COMMANDS AND THE ONE-COMMAND FORM IS REFUSED** — `main` is often
-  checked out in no worktree here, so `git switch main && git pull` has nowhere to run, and the
-  combined refspec moves `refs/heads/main` and `refs/remotes/origin/main` in ONE transaction,
-  which leaves the hook judging the move against the origin/main it is about to replace:
+  **THE LOCAL HALF IS TWO STATES, AND ONE QUESTION TELLS THEM APART.** Ask which working tree,
+  if any, holds main — a clone running several worktrees is in either state on any given day,
+  and the command that is right in one is refused in the other:
+
+  ```bash
+  git worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/main$/{print w}'
+  ```
+
+  **Nothing printed — main is checked out nowhere.** Two commands, never the combined refspec
+  alone: that form moves `refs/heads/main` and `refs/remotes/origin/main` in ONE transaction,
+  which leaves the hook judging the move against the origin/main it is about to replace.
 
   ```bash
   git fetch origin && git fetch origin main:main
   ```
+
+  **A path printed — main is checked out there.** The form above is what git itself refuses
+  against a branch somebody is standing on (`fatal: refusing to fetch into branch
+  'refs/heads/main' checked out at …`), and that refusal is GIT's rather than the hook's, so
+  `PKMNSCAN_MAIN=off` answers nothing. Pull in that tree instead:
+
+  ```bash
+  git -C <that path> pull --ff-only
+  ```
+
+  **Never run that one without asking the question first.** It is correct only while main is the
+  branch in that tree; run blind while the main working tree sits on a feature branch, it
+  fast-forwards THAT branch, moves no protected ref, and so trips no hook.
 
   **It arms nothing.** `reference-transaction`'s allow rule 3 has always permitted a move to a
   commit origin already has, and a merged PR is exactly that commit — so this decides who runs

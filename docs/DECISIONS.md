@@ -3568,6 +3568,52 @@ under it — PR #22 merged between the write and the run. That is not a rare ali
 ordinary state of a clone running seven worktrees, which is the condition this whole entry
 exists for.
 
+**AND THE RECIPE ABOVE COVERS ONE OF TWO STATES, WHICH THE SAME DAY'S NEXT MERGE FOUND** (added
+2026-08-30, after PR #38). It reasons from *main is often checked out in no worktree at all*,
+which is true and is not always true: `main` was checked out in the main working tree, and
+`git fetch origin main:main` is exactly what git will not do to a branch somebody is standing on.
+
+    fatal: refusing to fetch into branch 'refs/heads/main' checked out at '/Users/shivinate/Developer/pkmnscan'
+
+**THAT REFUSAL IS GIT'S AND NOT THE HOOK'S, and telling them apart is most of why this is worth
+writing down.** Everything else in this entry is about a hook that refuses, so a session reading
+the word `refusing` here reaches for `PKMNSCAN_MAIN=off` — which changes nothing, because no hook
+has spoken yet, and which the paragraph above already forbids reaching for. The hook's own
+refusals name themselves and print the variable; this one names a path.
+
+**SO THE LOCAL HALF IS TWO STATES AND ONE QUESTION TELLS THEM APART.** Ask which working tree,
+if any, holds main:
+
+    git worktree list --porcelain | awk '/^worktree /{w=$2} /^branch refs\/heads\/main$/{print w}'
+
+Nothing printed — main is checked out nowhere, the state this entry was written against:
+
+    git fetch origin && git fetch origin main:main
+
+A path printed — main is checked out there, and it is the hook's own suggested remedy with the
+switch already done for you:
+
+    git -C <that path> pull --ff-only
+
+**NEITHER FORM IS NEWLY PERMITTED AND THE REASONING ABOVE IS UNTOUCHED.** Both are two
+transactions in the right order, so the hook still asks `merge-base --is-ancestor` against an
+`origin/main` that demonstrably holds the commit, and everything it refused before it refuses
+now. What is settled here is *which of two already-permitted moves applies*, which is the same
+shape as this entry's own amendment about who may run one.
+
+**THE UNCONDITIONAL SHORTCUT IS A FOOTGUN AND IS NAMED RATHER THAN LEFT TO BE FOUND.**
+`git -C <main tree> pull --ff-only` is correct only while main is the branch in that tree. Run
+without the question above, in the state this entry actually describes — the main working tree
+sitting on a feature branch — it fast-forwards **that feature branch** to its own remote. It
+does not move main, so no hook has anything to say about it, and the only symptom is a branch
+somebody else is working on having quietly advanced.
+
+**REJECTED: a `make` target that picks for you.** It would delete the choice, and the choice is
+not what goes wrong — the two incidents at the top of this entry are main moving *unasked*, and
+a target does not touch that. What it would cost is the thing this entry values: the move is a
+deliberate act performed on the owner's word, and a make target reads as routine plumbing. A
+recipe that covers both states is the whole fix.
+
 **WHAT IT COSTS IS RECORDED RATHER THAN DESIGNED AWAY, because it is real and it is this
 entry's own subject.** Advancing main reshapes what every live worktree is cut from, and both
 incidents at the top of this entry are that happening unasked. What makes it a decision now
