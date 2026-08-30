@@ -796,7 +796,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D43", "D12", "D46"],
                 "tested_by": ["T7"],
             },
             "pipeline_routes.py": {
@@ -938,11 +938,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D10", "D13", "D21", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D32", "D33", "D34", "D37"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D29", "D30", "D32", "D33", "D34", "D37", "D46"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1084,7 +1084,11 @@ COMPONENTS = [
             # seen it hold a real card — the distinction the whole entry note above is about,
             # and the one a reader skimming `does` lines would otherwise lose.
             "src/ReviewQueue.tsx": {
-                "does": "the review queue: one card at a time, photo first, the choices "
+                "does": "D43's catalog lookup for a card the pipeline offered no rows for — "
+                        "suggested on arrival from the card's own read, searchable by name, "
+                        "number or SKU, drawn in the rows' own slot and answered on the same "
+                        "digits; "
+                        "the review queue: one card at a time, photo first, the choices "
                         "BESIDE the photograph above 900px and stacked below it, the "
                         "reason as a human label over its machine string, candidate rows "
                         "priced from the export, and an answer that writes and advances with "
@@ -1096,7 +1100,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -1112,7 +1116,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41"],
+                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -1512,7 +1516,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

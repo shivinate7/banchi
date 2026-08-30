@@ -1437,3 +1437,71 @@
   font-size: 15px;
   color: var(--muted);
 }
+
+/* ------------------------------------------------------------------ D46's catalog lookup
+
+   The panel drawn where the candidate rows would be, for an entry the pipeline found no row
+   for. It borrows `.review-candidates` and `.review-candidate` wholesale — see the component
+   — so nothing here restyles a row; what is below is only the frame, the prose and the
+   search control.
+
+   NO BORDER AND NO SURFACE OF ITS OWN, unlike `.review-close`. That panel is a second thing
+   you may do to the card and is boxed to say so; this one IS the card's rows, standing where
+   they always stand, and boxing it would draw a container around the primary content of the
+   screen. */
+.review-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.review-catalog-empty {
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.review-catalog-more {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.review-catalog-search {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* Visible, not sr-only. The operator arrives here from a dead end, and an unlabelled box is
+   the one control on this screen whose purpose cannot be guessed from what is beside it. */
+.review-catalog-label {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* `--field`, not `--line`: docs/DESIGN.md gives that token to the boundary of something you
+   TYPE INTO and nowhere else, on the finding that `line` measures 1.24:1 and an empty input
+   is a rectangle with nothing else to find it by. */
+.review-catalog-input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-family: var(--body);
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+  padding: var(--s2) var(--s3);
+}
+
+.review-catalog-input:disabled {
+  color: var(--muted);
+}
