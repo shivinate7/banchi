@@ -4294,6 +4294,19 @@ exists so *"the Fulfiller's device can be pointed at this Mac by address"*, whic
 only because the default could not follow the address bar. It still wins, and is still the answer
 for pointing a device at a DIFFERENT machine.
 
+**`server.host` WAS HALF THE VITE CHANGE AND THE HOSTNAME TEST FOUND THE OTHER HALF.** `host:
+true` makes Vite LISTEN on every interface; it does not make it ACCEPT every name. Vite refuses
+a request whose `Host` header it does not recognise — DNS-rebinding protection — so the app
+answered fine at `http://192.168.1.125:5366` and returned *"Blocked request. This host
+(\"pkmnscan.lan\") is not allowed"* at the name the operator would actually type. **Reaching it
+by IP is not a test of reaching it by name**, and only the second one is the feature.
+
+`allowedHosts` is `['.lan', '.local']` rather than `true`. A leading dot admits a domain and its
+subdomains, so both the router's local record and Bonjour work while an arbitrary public
+hostname pointed at this machine is still refused; both suffixes are non-routable on the public
+internet, which is what makes the narrowing meaningful rather than decorative. `true` would
+switch the protection off for every name and was declined.
+
 **THE ORIGIN ALLOWLIST NEEDED NO CODE CHANGE.** `PKMNSCAN_ALLOWED_ORIGINS` already existed, is
 documented, is read fresh per request, and **extends the defaults rather than replacing them** —
 and `*` is compared as an exact string, so it refuses everything rather than reopening the hole
