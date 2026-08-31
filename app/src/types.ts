@@ -1852,3 +1852,39 @@ export type CodeExportResult = {
   order_id?: string
   buyer?: string | null
 }
+
+
+/** One built lot's receipt, as `GET /codes/lots` serves it. NEVER carries the codes —
+ *  the manifest is a file on disk and the screen links to it rather than rendering a
+ *  thousand bearer instruments into a page and its devtools network tab. */
+export type LotReceipt = {
+  lot_id: string
+  scope: string
+  delivery: string
+  venue: string
+  box: number | null
+  count: number
+  by_product: { product: string; display: string; premium: boolean; count: number }[]
+  sets: string[]
+  built_at: string
+}
+
+/** What `POST /codes/lots` answers — a plan when `built` is false, a built lot when true. */
+export type LotResult = {
+  count: number
+  box: number | null
+  scope: string
+  delivery: string
+  venue: string
+  built: boolean
+  premium_in_lot: number
+  by_product: { product: string; display: string; premium: boolean; count: number }[]
+  sets: { set: string; count: number }[]
+  note: string
+  sample?: string[]
+  lot_id?: string
+  /** name -> absolute path. The manifest is here and deliberately not inline. */
+  files?: Record<string, string>
+  listing?: string
+  packing?: string
+}

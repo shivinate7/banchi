@@ -262,3 +262,26 @@
 .codes-filter {
   margin-bottom: var(--s2);
 }
+
+/* The generated listing and packing slip, shown verbatim. Monospace because the packing
+   slip is aligned by spaces and a proportional face would break its columns. */
+.codes-pre {
+  font-family: var(--util);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s3);
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--ink);
+}
+
+.codes-panel h3 {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: var(--s3) 0 var(--s1);
+}

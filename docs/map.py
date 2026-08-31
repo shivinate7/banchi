@@ -596,6 +596,17 @@ COMPONENTS = [
                                     "reason to be weaker one track over. This module is why "
                                     "there is no OCR: the product is a capture claim (C10).",
                             "governed_by": ["D9", "D22", "D67"], "tested_by": ["T8"]},
+            "lots.py": {"does": "build a sellable lot out of the ledger and write the three "
+                                "artefacts a sale needs — the listing, the buyer's manifest "
+                                "and the operator's packing slip. A PHYSICAL lot is scoped to "
+                                "a BOX and takes the WHOLE box or is refused: chosen by count, "
+                                "the codes reserved and the cards pulled off the shelf are two "
+                                "different piles, and a lot taking 1,000 of a box's 1,003 "
+                                "produces a correct ledger and a packing slip that lies. The "
+                                "whole-box check asks what is PHYSICALLY in the box rather "
+                                "than what is sellable from it, which is what catches an "
+                                "unclaimed code and a code already reserved to another lot.",
+                        "governed_by": ["D14", "D24", "D67"], "tested_by": ["T8"]},
             "scan.py": {"does": "read a capture directory into ledger entries, and apply "
                                 "them. The CORE, shared by `cli/cmd_scan.py` and "
                                 "`server/codes_routes.py` so the command and the screen can "
@@ -1255,7 +1266,7 @@ COMPONENTS = [
                         "money, this one because it can COMMIT a bearer instrument — a code "
                         "handed to a buyer cannot be un-handed and double-selling one is "
                         "unrecoverable (C3).",
-                "governed_by": ["D14", "D24", "D33"], "tested_by": ["T8"],
+                "governed_by": ["D14", "D24", "D33", "D67"], "tested_by": ["T8"],
             },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "

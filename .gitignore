@@ -98,3 +98,9 @@ styles/*
 # swallow `harness/.cache` — which has its own line above and its own reason. No trailing
 # slash, per the rule at the top of this file: a worktree can put a link at this name.
 /.cache
+
+# Built lots. Every one holds a manifest of LIVE CODES — bearer instruments — plus a packing
+# slip naming the box they came out of. Derived and deletable the way `runs/` is: the ledger
+# under `inventory/` is the truth about what a lot reserved, and a lot directory is only a
+# rendering of it that can be rebuilt. Gitignored for `inventory/`'s reason, not a weaker one.
+lots/

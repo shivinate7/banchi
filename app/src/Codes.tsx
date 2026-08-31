@@ -1,7 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { describeFailure, exportCodes, getCodes, photoUrl, scanCodes, type Failure } from './server'
-import type { CodeEntry, CodeExportResult, CodeLedger, CodeScanResult } from './types'
+import {
+  buildLot,
+  describeFailure,
+  exportCodes,
+  getCodes,
+  getLots,
+  photoUrl,
+  scanCodes,
+  type Failure,
+} from './server'
+import type {
+  CodeEntry,
+  CodeExportResult,
+  CodeLedger,
+  CodeScanResult,
+  LotReceipt,
+  LotResult,
+} from './types'
 import './Codes.css'
 
 /* THE CODE-CARD TRACK, ON A ROUTE OF ITS OWN — C9, C10 and C11.
@@ -59,9 +75,21 @@ export function Codes() {
 
   const [filter, setFilter] = useState('')
 
+  /* THE LOT BUILDER. Box-scoped and physical by default, which is the shape the owner
+     settled on 2026-08-30: 1,000-card lots, shipped, eBay or TCGplayer only. */
+  const [lotBox, setLotBox] = useState('')
+  const [lotVenue, setLotVenue] = useState('ebay')
+  const [lotDelivery, setLotDelivery] = useState<'physical' | 'digital'>('physical')
+  const [lotPlan, setLotPlan] = useState<LotResult | null>(null)
+  const [lotId, setLotId] = useState('')
+  const [lotBuilt, setLotBuilt] = useState<LotResult | null>(null)
+  const [lots, setLots] = useState<LotReceipt[]>([])
+
   const load = useCallback(async () => {
     try {
-      setLedger(await getCodes())
+      const [ledgerNext, lotsNext] = await Promise.all([getCodes(), getLots()])
+      setLedger(ledgerNext)
+      setLots(lotsNext.lots)
       setFailure(null)
     } catch (err) {
       setFailure(describeFailure(err))
@@ -128,6 +156,61 @@ export function Codes() {
       setBusy(false)
     }
   }, [lane, orderId, load])
+
+  const planLot = useCallback(async () => {
+    const n = Number(lotBox)
+    if (lotDelivery === 'physical' && (!Number.isSafeInteger(n) || n < 1)) {
+      setFailure({
+        code: 'box_required',
+        message: 'A physical lot is scoped to a box — type the box number.',
+      })
+      return
+    }
+    setBusy(true)
+    setLotBuilt(null)
+    try {
+      setLotPlan(
+        await buildLot({
+          scope: lotDelivery === 'physical' ? 'box' : 'count',
+          delivery: lotDelivery,
+          venue: lotVenue,
+          box: Number.isSafeInteger(n) && n > 0 ? n : null,
+          count: lotDelivery === 'digital' ? Number(lotBox) || null : null,
+        }),
+      )
+      setFailure(null)
+    } catch (err) {
+      setLotPlan(null)
+      setFailure(describeFailure(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [lotBox, lotVenue, lotDelivery])
+
+  const commitLot = useCallback(async () => {
+    const n = Number(lotBox)
+    setBusy(true)
+    try {
+      const done = await buildLot({
+        scope: lotDelivery === 'physical' ? 'box' : 'count',
+        delivery: lotDelivery,
+        venue: lotVenue,
+        box: Number.isSafeInteger(n) && n > 0 ? n : null,
+        count: lotDelivery === 'digital' ? Number(lotBox) || null : null,
+        confirm: true,
+        lotId: lotId.trim() || undefined,
+      })
+      setLotBuilt(done)
+      setLotPlan(null)
+      setLotId('')
+      setFailure(null)
+      await load()
+    } catch (err) {
+      setFailure(describeFailure(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [lotBox, lotVenue, lotDelivery, lotId, load])
 
   const rows = useMemo(() => {
     if (ledger === null) return []
@@ -358,6 +441,164 @@ export function Codes() {
                   docs/specs/code-cards.md §6.3 names.
                 </p>
               </div>
+            )}
+          </section>
+
+          {/* -------------------------------------------------------------- the lots */}
+          <section className="codes-panel">
+            <h2>Build a lot</h2>
+            <p className="codes-quiet">
+              A physical lot is <strong>the whole box, or nothing</strong>. Anything left in
+              the box would go in the parcel anyway, so a lot that took only part of one
+              would produce a correct ledger and a packing slip that lies. Move the strays
+              out first — the refusal names them by index.
+            </p>
+            <div className="codes-row">
+              <div className="codes-lanes" role="group" aria-label="delivery">
+                {(['physical', 'digital'] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={lotDelivery === d ? 'is-on' : ''}
+                    onClick={() => {
+                      setLotDelivery(d)
+                      setLotPlan(null)
+                      setLotBuilt(null)
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <div className="codes-lanes" role="group" aria-label="venue">
+                {['ebay', 'tcgplayer'].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={lotVenue === v ? 'is-on' : ''}
+                    onClick={() => setLotVenue(v)}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+              <label className="codes-field">
+                <span>{lotDelivery === 'physical' ? 'Box' : 'How many'}</span>
+                <input
+                  inputMode="numeric"
+                  value={lotBox}
+                  onChange={(e) => setLotBox(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder={lotDelivery === 'physical' ? '12' : '1000'}
+                />
+              </label>
+              <button type="button" onClick={() => void planLot()} disabled={busy}>
+                Plan
+              </button>
+            </div>
+
+            {lotPlan === null ? null : (
+              <div className="codes-result">
+                <p>
+                  <strong>{lotPlan.count}</strong> code(s)
+                  {lotPlan.box === null ? '' : ` in box ${lotPlan.box}`}. {lotPlan.note}
+                </p>
+                {lotPlan.premium_in_lot > 0 ? (
+                  <p className="codes-warn">
+                    <strong>{lotPlan.premium_in_lot} PREMIUM code(s) are in this lot.</strong>{' '}
+                    A premium code lists at roughly 46x a booster. Selling one inside a bulk
+                    lot is the most expensive mistake on this track — check this was
+                    deliberate.
+                  </p>
+                ) : null}
+                <table className="codes-tiers">
+                  <tbody>
+                    {lotPlan.by_product.map((row) => (
+                      <tr key={row.product}>
+                        <td className={row.premium ? 'is-premium' : ''}>
+                          {row.premium ? 'premium' : 'bulk'}
+                        </td>
+                        <td>{row.display}</td>
+                        <td className="codes-num">{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="codes-row">
+                  <label className="codes-field">
+                    <span>Lot name</span>
+                    <input
+                      value={lotId}
+                      onChange={(e) => setLotId(e.target.value)}
+                      placeholder="ebay-2026-08-30-box12"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="codes-commit"
+                    onClick={() => void commitLot()}
+                    disabled={busy}
+                  >
+                    Reserve {lotPlan.count} code(s)
+                  </button>
+                </div>
+                <p className="codes-quiet">
+                  The name is how you find this sale again on a settlement statement weeks
+                  later, so pick something you will recognise. Leave it blank for a generated
+                  one.
+                </p>
+              </div>
+            )}
+
+            {lotBuilt === null ? null : (
+              <div className="codes-result is-done">
+                <p>{lotBuilt.note}</p>
+                {lotBuilt.listing === undefined ? null : (
+                  <>
+                    <h3>Listing</h3>
+                    <pre className="codes-pre">{lotBuilt.listing}</pre>
+                  </>
+                )}
+                {lotBuilt.packing === undefined ? null : (
+                  <>
+                    <h3>Packing slip</h3>
+                    <pre className="codes-pre">{lotBuilt.packing}</pre>
+                  </>
+                )}
+                <p className="codes-quiet">
+                  {/* THE MANIFEST IS A PATH, NOT A BLOCK OF TEXT. It is the product, and a
+                      thousand live codes rendered into this page would also land in every
+                      devtools network tab and screenshot that ever caught it. */}
+                  The buyer&rsquo;s manifest is a file:{' '}
+                  <code>{lotBuilt.files?.['manifest.txt']}</code>
+                </p>
+              </div>
+            )}
+
+            {lots.length === 0 ? null : (
+              <table className="codes-table">
+                <thead>
+                  <tr>
+                    <th>Lot</th>
+                    <th>Codes</th>
+                    <th>Box</th>
+                    <th>Delivery</th>
+                    <th>Venue</th>
+                    <th>Built</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lots.map((l) => (
+                    <tr key={l.lot_id}>
+                      <td>{l.lot_id}</td>
+                      <td className="codes-num">{l.count}</td>
+                      <td>{l.box ?? '—'}</td>
+                      <td>{l.delivery}</td>
+                      <td>{l.venue}</td>
+                      <td>{(l.built_at ?? '').slice(0, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </section>
 

@@ -11,6 +11,9 @@ preview that reserves nothing, then a named, confirmed commit.
     GET  /codes                    the ledger: counts, product tiers, every entry
     POST /codes/scan               decode a box's photographs into the ledger. FREE.
     POST /codes/export             preview a channel export, or COMMIT one to an order
+    GET  /codes/lots               every lot built so far, newest first
+    POST /codes/lots               plan a lot, or BUILD one — reserving its codes and
+                                   writing the listing, the manifest and the packing slip
 
 THE CODES TRAVEL IN THE CLEAR ON THIS WIRE, and that is correct rather than an oversight.
 The server binds loopback, the store is the owner's own machine, and the whole point of the
@@ -26,7 +29,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from codes import ledger, products, qr
+from codes import ledger, lots, products, qr
 from codes import scan as codescan
 from store import files
 from store.session import Store
@@ -287,5 +290,129 @@ def do_codes_export(payload: dict) -> Tuple[HTTPStatus, dict]:
     body["note"] = (
         f"{len(taken)} code(s) reserved against {order_id}. They will never be offered "
         "again. Mark them delivered once the buyer has them."
+    )
+    return HTTPStatus.OK, body
+
+
+# ------------------------------------------------------------------------------- the lots
+
+def do_codes_lots() -> dict:
+    """Every lot built so far. Reads receipts only — never a manifest, so no code is
+    served by this route that the ledger has not already served."""
+    return {"lots": lots.read_lots()}
+
+
+def _lot_id(payload: dict, *, scope: str, box: Optional[int], stamp: str) -> str:
+    """The lot's name, and it is also the order id the reservation is held under.
+
+    OPERATOR-SUPPLIED WHERE ONE IS GIVEN, because this string has to survive being pasted
+    into a marketplace's order reference and then read back off a settlement statement
+    weeks later. A generated name is a fallback rather than the norm.
+    """
+    given = str(payload.get("lot_id") or "").strip()
+    if given:
+        return lots.slug(given)
+    tail = f"box{box}" if scope == lots.SCOPE_BOX and box is not None else "mixed"
+    return lots.slug(f"lot-{stamp}-{tail}")
+
+
+def do_codes_lot(payload: dict) -> Tuple[HTTPStatus, dict]:
+    """Plan a lot, or build one. `confirm` is the line between them.
+
+    THE SAME TWO-STEP THE EXPORT USES, for the same reason: building a lot RESERVES its
+    codes permanently, and a reserved code is never offered again. Without `confirm` this
+    reserves nothing, writes nothing, and answers what the lot would contain.
+
+    A PHYSICAL LOT IS REFUSED UNLESS IT IS SCOPED TO A BOX, and `codes/lots.py` raises that
+    rather than this route checking it, so the CLI cannot reach a different answer. The
+    reason is in that module's header: chosen by count, the codes reserved and the cards
+    pulled off the shelf are two different piles.
+    """
+    scope = str(payload.get("scope") or lots.SCOPE_BOX).strip().lower()
+    delivery = str(payload.get("delivery") or lots.DELIVERY_PHYSICAL).strip().lower()
+    venue = str(payload.get("venue") or "ebay").strip().lower()
+    confirm = bool(payload.get("confirm"))
+
+    box = payload.get("box")
+    if box is not None:
+        try:
+            box = int(box)
+        except (TypeError, ValueError):
+            _refuse(HTTPStatus.BAD_REQUEST, "box_invalid",
+                    f"box was {payload.get('box')!r}; send a whole number.")
+    count = payload.get("count")
+    if count is not None:
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid",
+                    f"count was {payload.get('count')!r}; send a whole number, or omit it "
+                    "to take the whole box.")
+        if count < 1:
+            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid", "count is 1 or higher.")
+
+    # `premium` defaults to False — a lot is a BULK lot unless somebody says otherwise,
+    # which is the safe default given that the expensive mistake on this track runs in
+    # exactly one direction: a premium code swept into a penny lot.
+    raw_premium = payload.get("premium")
+    premium = None if raw_premium is None else bool(raw_premium)
+    if raw_premium is None:
+        premium = False
+
+    entries = ledger.read()
+    try:
+        taking, summary = lots.plan(
+            entries, scope=scope, delivery=delivery, box=box, count=count, premium=premium
+        )
+    except lots.LotError as exc:
+        _refuse(HTTPStatus.CONFLICT, "lot_not_possible", str(exc))
+
+    body = dict(summary)
+    body["venue"] = venue
+    body["built"] = False
+    if not confirm:
+        body["sample"] = [e.code for e in taking[:5]]
+        body["note"] = (
+            f"PREVIEW — nothing is reserved. Confirming assigns all {len(taking)} code(s) "
+            "to this lot permanently; a reserved code is never offered again."
+        )
+        return HTTPStatus.OK, body
+
+    stamp = ledger.now()[:10]
+    lot_id = _lot_id(payload, scope=scope, box=box, stamp=stamp)
+    buyer = str(payload.get("buyer") or "").strip() or None
+
+    with Store().write():
+        # RE-READ AND RE-PLAN INSIDE THE LOCK. The pool above was read without one, and a
+        # capture server or a `pkmnscan scan` writing between the two reads is exactly the
+        # race the store's single lock exists to settle.
+        entries = ledger.read()
+        if any(e.order_id == lot_id for e in entries):
+            _refuse(HTTPStatus.CONFLICT, "lot_exists",
+                    f"{lot_id} already has codes reserved against it. Lot names are how a "
+                    "sale is found again on a settlement statement, so they are never "
+                    "reused. Pick another.")
+        try:
+            lot = lots.build(
+                entries, lot_id=lot_id, scope=scope, delivery=delivery, venue=venue,
+                box=box, count=count, premium=premium, buyer=buyer,
+            )
+        except (lots.LotError, ledger.LedgerError) as exc:
+            _refuse(HTTPStatus.CONFLICT, "lot_not_possible", str(exc))
+        ledger.write(entries)
+        written = lots.write_artefacts(lot)
+
+    body["built"] = True
+    body["lot_id"] = lot.lot_id
+    body["count"] = lot.count
+    body["files"] = written
+    body["listing"] = lots.listing_text(lot)
+    body["packing"] = lots.packing_text(lot)
+    # THE MANIFEST IS NOT IN THIS ANSWER. It is the product, it is on disk, and a route that
+    # returned a thousand live codes inline would put them in every log and every devtools
+    # network tab that ever watched this request. The screen links to the file instead.
+    body["note"] = (
+        f"{lot.count} code(s) reserved to {lot.lot_id}. The manifest is at "
+        f"{written[lots.MANIFEST]} — send that file to the buyer."
     )
     return HTTPStatus.OK, body

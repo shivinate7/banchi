@@ -2,6 +2,8 @@ import type {
   AnswerResult,
   CodeExportResult,
   CodeLedger,
+  LotReceipt,
+  LotResult,
   CodeScanResult,
   StandDownReason,
   StandDownResult,
@@ -1847,4 +1849,53 @@ export async function exportCodes(input: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })) as CodeExportResult
+}
+
+
+/** Every lot built so far, newest first. Receipts only — no codes cross this wire. */
+export async function getLots(): Promise<{ lots: LotReceipt[] }> {
+  return (await request('/codes/lots', NO_CACHE)) as { lots: LotReceipt[] }
+}
+
+/**
+ * Plan a lot, or BUILD one.
+ *
+ * THE SAME TWO-STEP AS `exportCodes`, and for the same reason: building reserves every code
+ * in the lot permanently. Without `confirm` nothing is reserved and nothing is written.
+ *
+ * A PHYSICAL LOT MUST BE BOX-SCOPED, and the server refuses otherwise rather than trusting
+ * this call site. Chosen by count, the codes reserved and the cards pulled off the shelf are
+ * two different piles — and a physical lot is additionally refused unless it takes the
+ * WHOLE box, because "pull all of them except these three" is not an instruction anyone
+ * executes reliably against a thousand identical cards.
+ */
+export async function buildLot(input: {
+  scope: 'box' | 'count'
+  delivery: 'physical' | 'digital'
+  venue: string
+  box?: number | null
+  count?: number | null
+  premium?: boolean
+  confirm?: boolean
+  lotId?: string
+  buyer?: string | null
+}): Promise<LotResult> {
+  const payload: Record<string, unknown> = {
+    scope: input.scope,
+    delivery: input.delivery,
+    venue: input.venue,
+    premium: Boolean(input.premium),
+  }
+  if (typeof input.box === 'number') payload.box = input.box
+  if (typeof input.count === 'number') payload.count = input.count
+  if (input.confirm) {
+    payload.confirm = true
+    if (input.lotId) payload.lot_id = input.lotId
+    if (input.buyer) payload.buyer = input.buyer
+  }
+  return (await request('/codes/lots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as LotResult
 }

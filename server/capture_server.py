@@ -30,6 +30,8 @@
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
+    GET    /codes/lots                     every lot built so far, newest first
+    POST   /codes/lots                     plan a lot, or BUILD one — reserving its codes
     POST   /codes/scan                     decode a box's photographs into the ledger. FREE
     POST   /codes/export                   preview a channel export, or COMMIT one to an order
     GET    /boxes                          every box: its dividers, its fill, its capacity
@@ -7203,6 +7205,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_games())
             if path == "/codes":
                 return self._json(HTTPStatus.OK, codes_routes.do_codes())
+            if path == "/codes/lots":
+                return self._json(HTTPStatus.OK, codes_routes.do_codes_lots())
             if path == "/search":
                 # `keep_blank_values` so `?q=` reaches `_require_query` and is refused in
                 # `query_required` rather than looking like a request with no `q` at all —
@@ -7390,6 +7394,9 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(status, body)
             if path == "/codes/export":
                 status, body = codes_routes.do_codes_export(self._body())
+                return self._json(status, body)
+            if path == "/codes/lots":
+                status, body = codes_routes.do_codes_lot(self._body())
                 return self._json(status, body)
             if path == "/pipeline/preflight":
                 return self._json(

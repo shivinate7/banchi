@@ -178,10 +178,59 @@ the honest headline and it is not softened here.
 | Etsy / Gameflip / Kinguin | yes | permitted, effectively no buyers |
 | Whatnot / Mercari / FB / Amazon | **no — policy** | foreclosed |
 
-### 6.1 Destroying the card forecloses three things
+### 6.1 Destroying the card forecloses three things — CONDITIONALLY, and the condition changed
 
-D24 rules that the physical cards are disposed of once the code is extracted, and the owner
-reaffirmed it. It has a price, and it is stated here so nobody rediscovers it by surprise:
+**AMENDED 2026-08-30 by the owner's ruling. Read this before the list below.** The owner
+holds the PREMIUM code cards physically, in a box, at tracked locations, and will ship them.
+Only the BULK tier is destroyed. Everything below is therefore true **of a destroyed card and
+of nothing else** — the original draft stated it unconditionally and that was wrong.
+
+The consequences of the split, settled:
+
+- **TCGplayer is OPEN for the retained premium tier**, and the existing `join -> emit ->
+  Import to Staged` path already reaches it: 263 code-card rows in the fixture export, five
+  conditions each, a 16-column schema byte-identical to singles.
+- **TCGplayer's BULK lane is also open** — catalog product 253512, "Pokemon Code Card Bulk
+  Lot", **8,694 units/year, active 32 of 52 weeks, at $0.03-$0.04/card**, with real observed
+  orders of 1,100 / 1,425 / 700 / 300 cards. **But it cannot be listed by CSV**: bulk lots are
+  "Listings with Photos" through the seller portal, which is both a manual third-party UI step
+  (CLAUDE.md forbids one inside the autonomous pipeline) and a request for photographs of code
+  cards (the opsec rule forbids those). Unresolved; the owner rules.
+- **eBay's dispute defence is restored for anything shipped**, and only for Item Not Received.
+  It does nothing for Item Not As Described, which is the dispute code cards actually attract.
+- **The hybrid — ship the cards AND message the codes — is the worst case, not the best.** The
+  buyer redeems from the message, files INAD, and returns worthless redeemed cards. Zero of six
+  high-feedback specialists examined do it.
+
+### 6.1a The binding constraint is ABSORPTION, not price or postage
+
+The owner's pile is **~30,000 codes**. Measured against that:
+
+- TCGplayer's bulk SKU absorbs **8,694 units/year across every seller combined**, and already
+  carries **~19,300 standing units across 56 listings** at a $0.01-$0.02 floor. The pile alone
+  is roughly **3.5 years of total market demand**, queued behind two years of existing supply.
+- The best eBay 1,000-lot comparable sold **twice, lifetime**.
+- The entire PREMIUM tier absorbs **924 units and $231 gross per year, marketplace-wide**. At a
+  3% premium fraction the pile holds ~900 premium codes — about a year of the whole market's
+  appetite — decaying at a measured **-25%/year**.
+
+**Nothing in the pipeline can move that number.** It is why the lot builder's most valuable
+property is not the listing text but the guarantee that a code is never committed twice across
+two concurrently-listed venues, and why the honest expectation is a multi-year tail at
+clearing prices rather than a liquidation.
+
+### 6.1b Lot size and mixing, settled by measurement
+
+- **1,000 cards is the postage optimum**: $9.70 Ground Advantage = **$0.0097/code**, against
+  **$0.100-$0.168/code at 50**, which falls off the eBay Standard Envelope cliff on both weight
+  and thickness. There is no good lot size between 16 and ~250.
+- **15 cards is the eSE optimum** at $0.78 = $0.052/code, and 20 is the absolute ceiling on
+  thickness.
+- **Mixing costs nothing at scale**: the mixed-versus-named discount is ~80% at 5-count, 62% at
+  single-code retail, ~11% at 24-30, and **~0% by 50+**. So bulk lots need no set sorting, and
+  mixing only destroys value on small lots and singles — where the premium codes are.
+
+### 6.1c What the original list said, which still holds for a DESTROYED card
 
 1. **TCGplayer is foreclosed outright.** Its own help article permits code cards *"attached
    to a physical card"* and states that *"the sale of promo codes not attached to a physical
@@ -277,3 +326,39 @@ Named rather than buried, and none of it blocks the build.
 7. **Whether the code string itself encodes the product** is unverified in either direction.
    If it did, section 4's picker becomes unnecessary — worth ten minutes against the first
    real batch.
+
+---
+
+## 9. Lots
+
+`codes/lots.py` builds them; `#/codes` is where a human does. Two rules carry the design and
+both were found by reading generated output rather than by reasoning.
+
+**A PHYSICAL LOT IS SCOPED TO A BOX.** The obvious shape — "reserve any 1,000 sellable bulk
+codes" — commits codes A through J while the operator, standing at a shelf, grabs a different
+thousand cards. The buyer then receives cardboard whose codes were never committed to them,
+and the ledger is confidently wrong about both. No packing discipline fixes it, because the
+cards are indistinguishable by eye. A count-scoped lot is legal only for a DIGITAL sale, where
+nothing is pulled.
+
+**A PHYSICAL LOT TAKES THE WHOLE BOX OR IT IS REFUSED.** A lot that took 1,000 of a box's
+1,003 cards produces a correct ledger and a packing slip reading "Box 12, 1000 card(s)" — and
+the operator, holding that slip and that box, ships 1,003. Two of those three strays list at
+roughly 46x a booster. "Pull all of them except these three" is not an instruction anybody
+executes reliably against a thousand identical pieces of cardboard, so it is not offered:
+`plan` refuses and names the strays by index.
+
+**That check asks what is PHYSICALLY IN THE BOX, not what is sellable from it**, and the
+difference is two classes of card that a first version missed entirely — a code with no product
+claim, which every lot filter drops on purpose, and a code **already reserved to another lot**,
+which would then be shipped to two buyers. Only `delivered` means the cardboard has left. The
+second class was caught on real data: two cards in a demo box were already committed to an
+earlier order and would have gone out twice.
+
+**Three artefacts, because three different people read them.** `listing.txt` for the seller,
+once. `manifest.txt` for the BUYER — one code per line and nothing else, because it is pasted
+whole. `packing.txt` for the operator at the shelf. The manifest is **never returned inline by
+the route**: a thousand live codes in a JSON response also land in every devtools network tab
+and screenshot that catches it, so the screen links to the file.
+
+`lots/` is gitignored for `inventory/`'s reason and not a weaker one.

@@ -271,4 +271,90 @@ def run() -> Result:
              "right most of the time, which is exactly the problem: the times it is wrong a "
              "premium code leaves in a penny lot and nobody ever finds out")
 
+    # -------------------------------------------------------------- 5. the lot builder
+    from codes import lots
+
+    lot_codes = [_a_code(rng) for _ in range(9)]
+    stock = [
+        # box 20: six boosters — a clean, wholly-sellable bulk box.
+        ledger.Entry(code=lot_codes[0], box=20, index=1, product="booster", set_hint="PRE"),
+        ledger.Entry(code=lot_codes[1], box=20, index=2, product="booster", set_hint="PRE"),
+        ledger.Entry(code=lot_codes[2], box=20, index=3, product="booster", set_hint="PRE"),
+        ledger.Entry(code=lot_codes[3], box=20, index=4, product="booster", set_hint="PRE"),
+        ledger.Entry(code=lot_codes[4], box=20, index=5, product="booster", set_hint="PRE"),
+        ledger.Entry(code=lot_codes[5], box=20, index=6, product="booster", set_hint="PRE"),
+        # box 21: five boosters PLUS the three kinds of stray that would ride along in a
+        # parcel. Each is a different class and each was a real defect at some point.
+        ledger.Entry(code=lot_codes[6], box=21, index=1, product="booster"),
+        ledger.Entry(code=lot_codes[7], box=21, index=2, product="pc_etb"),   # premium
+        ledger.Entry(code=lot_codes[8], box=21, index=3),                      # no claim
+    ]
+
+    plan_entries, summary = lots.plan(
+        stock, scope=lots.SCOPE_BOX, delivery=lots.DELIVERY_PHYSICAL, box=20
+    )
+    c.equal(summary["count"], 6, "a clean box plans as the whole box")
+    c.equal(summary["premium_in_lot"], 0, "and a bulk lot carries no premium code")
+
+    c.raises(
+        lots.LotError,
+        lambda: lots.plan(stock, scope=lots.SCOPE_COUNT, count=3,
+                          delivery=lots.DELIVERY_PHYSICAL),
+        "a PHYSICAL lot chosen by COUNT is refused — the codes reserved and the cards "
+        "pulled off the shelf would be two different piles",
+    )
+
+    # THE BUG THIS PINS WAS FOUND BY READING A GENERATED PACKING SLIP. A box of 1,003 cards
+    # produced a 1,000-code lot and a slip reading "Box 12, 1000 card(s)"; every filter had
+    # worked, and the operator handed that slip and that box ships 1,003 — two of the three
+    # strays listing at ~46x a booster.
+    stray = c.raises(
+        lots.LotError,
+        lambda: lots.plan(stock, scope=lots.SCOPE_BOX, delivery=lots.DELIVERY_PHYSICAL,
+                          box=21),
+        "a box holding cards the lot would NOT take refuses outright, because 'pull box 21' "
+        "would ship them anyway",
+    )
+    message = str(stray or "")
+    c.ok("2 (" in message and "3 (" in message,
+         "and the refusal names the PREMIUM stray AND the unclaimed one — the second was "
+         "invisible to a first version that asked what was sellable rather than what was "
+         "physically in the box",
+         f"message was {message!r}")
+
+    # A reserved-elsewhere card is the third class, and it would be shipped to two buyers.
+    stock[6].state = ledger.RESERVED
+    stock[6].order_id = "some-other-lot"
+    other = c.raises(
+        lots.LotError,
+        lambda: lots.plan(stock, scope=lots.SCOPE_BOX, delivery=lots.DELIVERY_PHYSICAL,
+                          box=21),
+        "a card already reserved to ANOTHER lot also blocks the box",
+    )
+    c.ok("some-other-lot" in str(other or ""),
+         "and the refusal says which lot already owns it",
+         f"message was {str(other or '')!r}")
+
+    # A DIGITAL lot has nothing to pull, so the whole-box rule does not apply to it.
+    digital, _ = lots.plan(stock, scope=lots.SCOPE_COUNT, count=2,
+                           delivery=lots.DELIVERY_DIGITAL)
+    c.equal(len(digital), 2,
+            "a DIGITAL lot may be chosen by count — nothing is pulled, so nothing can be "
+            "pulled wrongly")
+
+    built = lots.build(stock, lot_id="t8-lot", scope=lots.SCOPE_BOX,
+                       delivery=lots.DELIVERY_PHYSICAL, venue="ebay", box=20)
+    c.equal(built.count, 6, "building the clean box takes all six")
+    c.equal(sorted(e.state for e in stock if e.box == 20),
+            [ledger.RESERVED] * 6,
+            "and every one of them is reserved — atomically, by the same guard that stops "
+            "a code being sold twice")
+    c.equal(lots.manifest_text(built).strip().splitlines(), built.codes,
+            "the manifest is exactly the lot's codes, one per line and nothing else — it "
+            "is pasted whole to a buyer, so anything that is not a code is work for them")
+    slip = lots.packing_text(built)
+    c.ok("THE WHOLE BOX" in slip and "Box 20" in slip,
+         "and the packing slip says to pull the whole box, which the check above is what "
+         "makes true")
+
     return c.result()

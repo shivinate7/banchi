@@ -3262,3 +3262,38 @@ eighth route: it reads a box's QRs, draws the two lanes, names every duplicate a
 unclaimed code, and commits a lane to a named order. The commit reserves permanently. The
 capture screen grew the product picker in the same change, driven by `product_game` off
 `GET /games` rather than by a game key written into the app.
+
+**AMENDED 2026-08-30 BY THE OWNER: THE PILE IS SPLIT AND ONLY HALF IS DESTROYED.**
+The premium code cards are KEPT physically, in a box, at tracked locations, and
+will be shipped; the bulk tier is destroyed. That reverses one of this entry's own
+conclusions, and the reversal is recorded rather than quietly edited.
+**That sentence was true of a destroyed card and was written as though it covered the track.**
+For the retained tier TCGplayer is open, and the existing `join -> emit ->
+Import to Staged` path already reaches it unchanged.
+
+**The owner also locked the channels: eBay and TCGplayer, nothing else.** The dedicated
+buylist lane is closed by that ruling, which moots the $0.01-versus-$0.05 uncertainty this
+entry's research left open. Lots are ~1,000 cards, shipped physically.
+
+**THE BINDING CONSTRAINT IS ABSORPTION, NOT PRICE.**
+At ~30,000 codes the pile is larger than the annual market on both venues: TCGplayer's bulk SKU absorbs 8,694 units a year across every
+seller and already carries ~19,300 standing units, and the entire premium tier absorbs 924
+units and $231 gross a year marketplace-wide against a pile holding roughly a year of it,
+decaying at -25%/year. No pipeline change moves that number. It is why `codes/lots.py`'s most
+valuable property is the guarantee a code is never committed twice across two concurrently
+listed venues.
+
+**A PHYSICAL LOT IS THE WHOLE BOX OR IT IS REFUSED.**
+Both halves of that rule were found by reading generated output rather than by argument. Scoping a physical lot by COUNT commits
+one thousand codes while the operator pulls a different thousand cards. Taking 1,000 of a box's
+1,003 produces a correct ledger and a packing slip that lies. And the check that catches the
+second has to ask what is PHYSICALLY IN THE BOX rather than what is sellable from it — a first
+version asked the latter and so missed both an unclaimed code and a code already reserved to
+another lot, the second of which would have been shipped to two buyers. That case was caught on
+real data, not in a test.
+
+**Still unsettled, and named rather than assumed.**
+TCGplayer's bulk-lot listing needs the seller portal's Listings-with-Photos flow, which is a manual third-party UI step CLAUDE.md
+forbids inside the pipeline AND asks for photographs of code cards the opsec rule forbids.
+TCGplayer's own guidance permits backs and edges only, so it is reconcilable — the owner rules.
+`docs/specs/code-cards.md` sections 6.1 and 9 carry the detail.
