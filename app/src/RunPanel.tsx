@@ -187,7 +187,8 @@ const READINGS = [
       'Finds the card in each photograph and sends only that, at 1200px on its longest side — ' +
       'the card, not the desk. Your photographs on disk are never touched. Box 2 measured it: ' +
       '$0.62 against the whole frame’s $0.72, and sharper on the collector number. One it ' +
-      'cannot find a card in is sent whole; on box 2 that was none of 544.',
+      'cannot find a card in is sent whole, and so is one where it found a box that is not ' +
+      'the card — walk the preview and it says which, and why.',
   },
   {
     key: 'cheapest',
@@ -197,7 +198,8 @@ const READINGS = [
     says:
       'The same crop to the card, sent smaller at 900px. The cheapest row measured on box 2 — ' +
       '$0.44 — and the softest: about 13% fewer pixels on the collector number than the whole ' +
-      'frame gives. A photograph it cannot find a card in is sent whole.',
+      'frame gives. A photograph it cannot find a card in — or finds the wrong box in — is ' +
+      'sent whole.',
   },
   {
     key: 'whole',
