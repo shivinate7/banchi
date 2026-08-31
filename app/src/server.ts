@@ -51,6 +51,7 @@ import type {
   PullTarget,
   ShippingBatch,
   ShippingForgotten,
+  TrendsPayload,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -1686,6 +1687,40 @@ export async function getPriceHistory(
     `/pipeline/runs/${encodeURIComponent(run)}/history?sku=${encodeURIComponent(sku)}`,
     NO_CACHE,
   )) as PriceHistoryPayload
+}
+
+/**
+ * The same reading for MANY SKUs at once — a shape and a sign each, for the strip on the row.
+ *
+ * D62 NAMED THIS CALL AND THE CONDITION FOR MAKING IT. That entry made the history a press
+ * per card precisely so a walk down fifty rows could not fire fifty requests, and it named
+ * what would reopen the question: the panel being wanted on every card, answered by a
+ * BATCHED route and a column on the row. The owner asked for exactly that on 2026-08-31, and
+ * D79 is the answer.
+ *
+ * SO IT IS STILL A PRESS AND MAY NEVER BECOME AN EFFECT. Nothing about this being one call
+ * instead of forty-six makes it cheap: it is ~92 requests at two free public mirrors, 37.7s
+ * cold and 0.15s warm, measured on `2026-08-31-box3-01`. A `useEffect` that fired it on mount
+ * would spend that on every visit to `#/pricing` for readings nobody asked for, which is the
+ * one way D62 said this feature could become rude — and the reason it is rude has nothing to
+ * do with how many HTTP calls the browser makes.
+ *
+ * `skus` IS THE CHUNK AND IT IS WHY THE STRIP FILLS IN WAVES. With none, the route walks the
+ * run's own table and skips the rows it can add nothing for; with a list, it fetches exactly
+ * those. The caller splits the open rows into small groups so 37 seconds arrives as six
+ * partial answers rather than one blank half-minute.
+ *
+ * IT PRICES NOTHING. Every field it carries is dimensionless or a date — see `TrendRange`,
+ * which says why the dollars stayed on the panel.
+ */
+export async function getPriceTrends(run: string, skus: string[] = []): Promise<TrendsPayload> {
+  /* `sku` REPEATS rather than carrying a comma list, matching `/scope`'s `set_ids` one route
+     down and for its reason: a comma inside a value is indistinguishable from the separator. */
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  return (await request(
+    `/pipeline/runs/${encodeURIComponent(run)}/trends${query === '' ? '' : `?${query}`}`,
+    NO_CACHE,
+  )) as TrendsPayload
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

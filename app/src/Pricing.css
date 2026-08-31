@@ -309,7 +309,16 @@
    between zones cannot be expressed — `column-gap` is one value on a grid container, and a
    wrapper around the four figures would stop them being items of the row's own grid, which
    is what keeps the decimal column aligned down the list. */
-/* THE TEMPLATE HANGS ON THE SECTION AND NOT ON THE LIST, because the caption is the list's
+/* THE TREND STRIP IS A REAL COLUMN AND NOT THE CARD'S SLACK, which is the one thing the
+   request for it got wrong and the thing this comment exists to record. The card is
+   `minmax(0, 1fr)`: it is not a wide column with space in it, it is whatever is LEFT after
+   the fixed ones, so the gap the graphs were asked to fill is a function of the window and
+   is zero at about 1150px — where the names are already ellipsizing. Drawn into that slack
+   the strip would be wide on a big monitor, absent on a laptop, and would have taken the
+   name's last readable characters on the way. 168px is 80 + 80 with `--s2` between, the two
+   sparks the cells draw, and it comes off the name deliberately and at every width.
+
+   THE TEMPLATE HANGS ON THE SECTION AND NOT ON THE LIST, because the caption is the list's
    SIBLING rather than its child — declared on `.pricing-list` it reached every row and no
    caption at all, which is precisely the drift the shared property exists to prevent, arrived
    at by the mechanism meant to stop it. `app/tests/pricing.spec.ts` compares the two computed
@@ -317,6 +326,7 @@
 .pricing-section {
   --pricing-cols:
     minmax(0, 1fr) /* the card                       */
+    168px /* the trend strip (D79)          */
     76px /* MARKET   max $4400.00          */
     76px /* DIRECT   max $1974.74          */
     84px /* LOW      max $49000.00         */
@@ -628,9 +638,19 @@
    THE 13px RESERVATION IS THE THING BEING PROTECTED. `nowrap` on both halves is what keeps
    this one line box tall in every state — with either half free to wrap, a row that acquired
    a long note would grow and the list would move under a finger already travelling to the
-   next field, which is the reflow D28 forbids. */
+   next field, which is the reflow D28 forbids.
+
+   THE COLUMN NUMBER IS COUNTED OFF `--pricing-cols` AND IS THE ONE THING HERE THAT BREAKS
+   WHEN A COLUMN IS ADDED. It read `2` — the card, then everything after it — until D79 put
+   the trend strip in at 2 and moved the reference block to 3. The symptom is worth writing
+   down because it does not look like this line: the note takes column 2 row 2, so
+   `.pricetrend`, which spans BOTH rows, can no longer fit there and is pushed into an
+   IMPLICIT twelfth column off the right edge — and every figure on the row slides one column
+   left, on the rows carrying a note and not on the rows without. The caption stays put, so it
+   reads as the reference block having come unaligned from its own headings. A future column
+   moves this number again. */
 .pricing-row-note {
-  grid-column: 2 / -1;
+  grid-column: 3 / -1;
   grid-row: 2;
   display: flex;
   justify-content: flex-end;
@@ -912,4 +932,51 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------- the trend strip's press
+
+   D79, and D62's condition discharged. It sits under the presets and above the list because it
+   is the same KIND of control — one press that changes every row at once — and because the
+   sentence beside it is what the strip's caveats hang on: the two spans, and the fact that the
+   ranges overlap and can point opposite ways.
+
+   IT IS `pricing-plain` AND NOT `pricing-preset`, which is the distinction worth keeping. A
+   preset WRITES — it fills unset rows and sets the run's rule, and `aria-pressed` says which
+   one is live. This reads. Drawing them alike would put a request to a public mirror in the
+   same register as an answer that ends up in `decisions.json`. */
+.pricing-trendbar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.pricing-trendbar-says {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  min-width: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* THE SPANS AT THE MACHINE REGISTER, because they are dates off the payload rather than
+   prose — the same treatment `.pricing-machine` gives a reason code, and the same
+   human-label-large rule docs/DESIGN.md states for an owner screen. */
+.pricing-trendbar-span {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.pricing-trendbar-says kbd {
+  font-family: var(--util);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink);
 }

@@ -1,7 +1,13 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 
-import type { HistoryRange, PriceHistoryPayload, PricingSku } from '../src/types'
+import type {
+  HistoryRange,
+  PriceHistoryPayload,
+  PricingSku,
+  TrendRange,
+  TrendsPayload,
+} from '../src/types'
 
 /* THE PRICING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -128,6 +134,10 @@ async function open(
     /** What `GET .../history` answers. `'refuse'` answers a named refusal, so the panel's
      *  failure arm is exercised against the same shape a real server sends. */
     history?: unknown | 'refuse'
+    /** What `GET .../trends` answers for the SKUs a chunk asks about — D79. A function, not a
+     *  payload, because the client CHUNKS the walk and the interesting cases are about which
+     *  SKUs each request carries. */
+    trends?: (skus: string[]) => unknown
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -174,6 +184,27 @@ async function open(
      there first. Every case that presses `T` reads `wire` to count how many times this was
      asked, because the load-bearing property of that panel is that it does NOT fire on a
      walk. */
+  /* D79's batched read. Registered BEFORE `/history` so Playwright's most-recent-first
+     matching puts the more specific pattern first — `/history`'s regex is unanchored and
+     would not match `/trends` in any case, but the ordering rule this file states above is
+     kept true rather than relied on to be harmless. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/trends/, async (route) => {
+    const url = new URL(route.request().url())
+    const asked = url.searchParams.getAll('sku')
+    /* THE QUERY VERBATIM, because `sku` REPEATS on this route rather than carrying a comma
+       list — `/scope`'s own rule, for its reason: a comma inside a value is indistinguishable
+       from the separator. A stub that flattened the repeats to `a,b,c` here would have to be
+       un-flattened by every case that reads it, with `String.split(',')` — the exact call
+       `app/eslint.config.js` refuses, and refuses because getting it wrong on real data is v1
+       bug 2. `URLSearchParams` is the reader. */
+    wire.push({ method: 'GET', path: `${url.pathname}${url.search}`, body: null })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify((options.trends ?? trends)(asked)),
+    })
+  })
+
   await page.route(/\/pipeline\/runs\/[^/]+\/history/, async (route) => {
     const url = new URL(route.request().url())
     wire.push({
@@ -361,6 +392,42 @@ function history(over: Partial<PriceHistoryPayload> = {}): PriceHistoryPayload {
     ...over,
   }
 }
+
+/** What the batched route answers for one chunk — D79.
+ *
+ *  IT ANSWERS ONLY WHAT IT WAS ASKED, which is the property the cases about chunking turn
+ *  on: the client walks the open rows eight at a time, and a stub that answered every SKU to
+ *  every request would make a walk that asked for the wrong ones pass. */
+function trends(asked: string[]): TrendsPayload {
+  const range = (name: string, fraction: string, points: number[]): TrendRange => ({
+    range: name,
+    from: name === 'month' ? '2026-08-01' : '2025-09-08',
+    to: '2026-08-30',
+    fraction,
+    points: points.map((p) => String(p)),
+  })
+  return {
+    run: RUN,
+    asked: asked.length,
+    skipped: 0,
+    skus: Object.fromEntries(
+      asked.map((sku) => [
+        sku,
+        {
+          product_id: 684125,
+          ranges: [
+            range('month', '0.7119', [13.58, 15.2, 18.4, 21.9, 23.63]),
+            range('annual', '-0.3389', [29.15, 26.0, 24.0, 21.0, 19.27]),
+          ],
+        },
+      ]),
+    ),
+    refused: {},
+  }
+}
+
+const strip = (page: Page) => page.locator('.pricing-row .pricetrend')
+const loadTrends = (page: Page) => page.getByRole('button', { name: /Load trends|Read again/ })
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
@@ -1731,4 +1798,113 @@ test('`p` closes a pinned reading, which is the half of the exclusion that was m
   await page.keyboard.press('p')
   await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
   await expect(panelOf(page)).toHaveCount(0)
+})
+
+
+// ------------------------------------------------------------------ the trend strip (D79)
+
+test('the strip draws nothing until it is asked for, and the press is what asks', async ({
+  page,
+}) => {
+  /* D62 MADE THE READ A PRESS AND D79 KEPT IT ONE. The batch is ~92 requests at two free
+     public mirrors, 37.7s cold — batching makes that one decision instead of fifty, not
+     cheap. A screen that read it on arrival would spend the walk on every visit for readings
+     nobody asked for, which is the rudeness D62 closed structurally. THE ASSERTION THAT
+     MATTERS IS THE WIRE ONE: an empty cell could equally be a request that answered nothing,
+     and this is a case about no request being made. */
+  const wire = await open(page)
+  await expect(page.locator(VIEW)).toBeVisible()
+  expect(wire.filter((call) => call.path.includes('/trends'))).toHaveLength(0)
+  await expect(strip(page).first()).toBeEmpty()
+
+  await loadTrends(page).click()
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  expect(wire.filter((call) => call.path.includes('/trends')).length).toBeGreaterThan(0)
+})
+
+test('the strip carries a shape and a sign, and no money at all', async ({ page }) => {
+  /* THE D8 GUARD AS A TEST RATHER THAN A PARAGRAPH, and the one case here most worth having.
+     The row already has four dollar columns and the field a listing price is typed into, so a
+     reading denominated in money would sit one column from that field and be one keystroke
+     from becoming a price — the reopening D62 refused by name. The vwap, its bound, the
+     liquidity and the spread all stay on the panel; a later session widening the strip's
+     payload to carry one of them fails here. */
+  await open(page)
+  await loadTrends(page).click()
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+
+  const text = (await strip(page).allTextContents()).join(' ')
+  expect(text).not.toContain('$')
+  expect(text).toMatch(/\+71\.2%/)
+  expect(text).toMatch(/−33\.9%|-33\.9%/)
+})
+
+test('a row this run can add nothing for is never asked about, and is not drawn as a failure', async ({
+  page,
+}) => {
+  /* THE OWNER'S INSTRUCTION OF 2026-08-31 — "I don't need the prices for the rows that have
+     none left" — and `at_cap` is the field the join writes, so the filter and the list's own
+     grouping of those rows read ONE fact rather than two rules kept in step. Asserted on the
+     WIRE and not only on the screen: an empty cell is what a refusal would draw too, and the
+     saving being claimed is the request not made. */
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '111', name: 'Open card' }),
+      sku({
+        sku: '222',
+        name: 'Closed card',
+        at_cap: true,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+      }),
+    ],
+  })
+  await loadTrends(page).click()
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+
+  const asked = wire
+    .filter((call) => call.path.includes('/trends'))
+    .flatMap((call) => new URL(call.path, 'http://x').searchParams.getAll('sku'))
+  expect(asked).toContain('111')
+  expect(asked).not.toContain('222')
+
+  /* AND THE COUNT IS ON SCREEN. Without it a strip over one of two rows reads as one
+     failure; `1 not asked` is what says the row was never a question. */
+  await expect(page.locator('.pricing-trendbar-says')).toContainText('1 not asked')
+  await expect(strip(page).nth(1)).toBeEmpty()
+})
+
+test('a SKU the batch answers for neither way is refused on the row, never left reading', async ({
+  page,
+}) => {
+  /* CLAUDE.md's HARD RULE, SPENT ON THE CLIENT. The route promises both directions; this is
+     the case where it breaks that promise anyway — a SKU in neither `skus` nor `refused`. It
+     must land as a refusal rather than sit on `reading…` for the rest of the session, which
+     is the silent drop that rule forbids wearing a spinner. */
+  await open(page, {
+    skus: [sku({ sku: '111', name: 'Answered' }), sku({ sku: '222', name: 'Dropped' })],
+    trends: (asked) => {
+      const full = trends(asked.filter((s) => s !== '222'))
+      return { ...full, asked: asked.length }
+    },
+  })
+  await loadTrends(page).click()
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
+  await expect(strip(page).nth(1)).toContainText('—')
+  await expect(strip(page).nth(1)).not.toContainText('reading')
+})
+
+test('the spans and the overlap caveat are stated once, above the list', async ({ page }) => {
+  /* D62's PANEL OWES A READER THREE THINGS AND AN 80px CELL CARRIES NONE OF THEM: that the
+     ranges overlap and routinely point opposite ways, what span each covers, and that the
+     wider one can be the staler. They are stated once here rather than forty-six times, which
+     is honest only because the spans are identical across every SKU of a run. Without the
+     sentence, `+71%` beside `−34%` on one row reads as a broken screen. */
+  await open(page)
+  await loadTrends(page).click()
+  const says = page.locator('.pricing-trendbar-says')
+  await expect(says).toContainText('2026-08-01')
+  await expect(says).toContainText('2025-09-08')
+  await expect(says).toContainText('The ranges overlap and are read separately')
+  /* AND EXACTLY ONCE. A span drawn per row is the failure this case exists to catch. */
+  await expect(page.locator('.pricing-trendbar-span')).toHaveCount(2)
 })
