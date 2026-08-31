@@ -1,0 +1,287 @@
+/* The code-card screen. Two populations, one of them worth 46x the other, and the whole of
+   the visual hierarchy is spent on keeping them apart. */
+
+.codes {
+  padding: var(--s5);
+  max-width: 1100px;
+}
+
+.codes-head h1 {
+  font-family: var(--display);
+  font-size: 28px;
+  margin: 0 0 var(--s2);
+}
+
+.codes-quiet {
+  color: var(--muted);
+  font-family: var(--body);
+  font-size: 14px;
+  max-width: 68ch;
+  margin: 0 0 var(--s3);
+}
+
+.codes-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s4);
+  margin: var(--s4) 0;
+}
+
+.codes-panel h2 {
+  font-family: var(--display);
+  font-size: 18px;
+  margin: 0 0 var(--s2);
+}
+
+/* The duplicate panel. A duplicate can mean a code that is worth nothing, so it gets the
+   one border in this file that is not the hairline. */
+.codes-panel.is-alarm {
+  border-color: var(--accent);
+  border-left-width: 3px;
+}
+
+.codes-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin: var(--s3) 0;
+}
+
+.codes-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.codes-field input {
+  font-family: var(--util);
+  font-size: 14px;
+  padding: var(--s2);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--ink);
+  min-width: 14ch;
+}
+
+.codes-field input:hover {
+  border-color: var(--field-hover);
+}
+
+.codes button {
+  font-family: var(--util);
+  font-size: 13px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.codes button:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--field-hover);
+}
+
+.codes button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codes button.codes-go,
+.codes button.codes-commit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.codes button.codes-go:hover:not(:disabled),
+.codes button.codes-commit:hover:not(:disabled) {
+  background: var(--pressed);
+  border-color: var(--pressed);
+}
+
+.codes-lanes {
+  display: flex;
+  gap: 0;
+}
+
+.codes-lanes button {
+  border-radius: 0;
+  text-transform: capitalize;
+}
+
+.codes-lanes button:first-child {
+  border-radius: var(--r) 0 0 var(--r);
+}
+
+.codes-lanes button:last-child {
+  border-radius: 0 var(--r) var(--r) 0;
+  border-left: none;
+}
+
+.codes-lanes button.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The tallies. The two lanes are the first numbers on the screen because they are the
+   decision; everything after them is detail. */
+.codes-tallies {
+  display: flex;
+  gap: var(--s5);
+  flex-wrap: wrap;
+  margin: var(--s3) 0;
+}
+
+.codes-tally {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.codes-tally-n {
+  font-family: var(--util);
+  font-weight: 600;
+  font-size: 26px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.codes-tally-label {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.codes-tally.is-premium .codes-tally-n {
+  color: var(--accent);
+}
+
+.codes-tally.is-warn .codes-tally-n {
+  color: var(--accent);
+}
+
+.codes-warn {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  border-left: 3px solid var(--accent);
+  padding-left: var(--s3);
+  max-width: 72ch;
+}
+
+.codes-fail {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  border-left: 3px solid var(--accent);
+  padding-left: var(--s3);
+}
+
+.codes-result {
+  margin-top: var(--s3);
+  font-family: var(--body);
+  font-size: 14px;
+}
+
+.codes-unread {
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--muted);
+  margin: var(--s2) 0;
+  padding-left: var(--s4);
+}
+
+.codes-codes {
+  font-family: var(--util);
+  font-size: 13px;
+  width: 100%;
+  max-width: 34ch;
+  padding: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.codes-tiers,
+.codes-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--util);
+  font-size: 13px;
+  margin-top: var(--s3);
+}
+
+.codes-tiers td,
+.codes-table td,
+.codes-table th {
+  border-bottom: 1px solid var(--line);
+  padding: var(--s2) var(--s3) var(--s2) 0;
+  text-align: left;
+}
+
+.codes-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.codes-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-premium {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A code that decoded but does not match the printed 3-4-3-3 layout. Marked, never refused:
+   a payload that survived the QR's own error correction is likelier to be a print run this
+   repo has not met than a misread. */
+.codes-table code.is-odd {
+  border-bottom: 1px dotted var(--accent);
+}
+
+.codes-table tr.is-reserved td,
+.codes-table tr.is-delivered td,
+.codes-table tr.is-dead td {
+  color: var(--muted);
+}
+
+.codes-filter {
+  margin-bottom: var(--s2);
+}
+
+/* The generated listing and packing slip, shown verbatim. Monospace because the packing
+   slip is aligned by spaces and a proportional face would break its columns. */
+.codes-pre {
+  font-family: var(--util);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s3);
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--ink);
+}
+
+.codes-panel h3 {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: var(--s3) 0 var(--s1);
+}

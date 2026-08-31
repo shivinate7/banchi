@@ -890,9 +890,15 @@ def check_server_routes(checks: Checks) -> None:
             "a PUT naming `state` is refused: listing transitions are not settable here",
         )
 
+        # `product` JOINED THIS TUPLE ON 2026-08-30 (D70, C10), and the assertion stays an
+        # exact ordered match rather than a membership test. The order is
+        # `master.CAPTURE_CLAIM_FIELDS`'s, because `PUT_FIELDS` is DERIVED from it — so this
+        # check is what notices a claim that reached the record and not the wire, which is
+        # the drift the derivation exists to make impossible and this line exists to prove
+        # still holds.
         checks.equal(
             capture_server.PUT_FIELDS,
-            ("set_hint", "variant", "game", "rarity_claim", "note"),
+            ("set_hint", "variant", "game", "rarity_claim", "product", "note"),
             "and the settable set is every capture claim, in the order the store names them",
         )
 
@@ -8612,10 +8618,15 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
+    # FIVE SINCE 2026-08-30, and `scan` is the only one of them that is free AND writes.
+    # Still an exact match rather than a superset check: the point of this line is that a
+    # command cannot appear in the dispatch without somebody editing this list, and a
+    # membership test would let one arrive unnoticed — which matters most for a command
+    # that touches the store, as `scan` does.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "reconcile"],
-        "four commands are registered, and only four",
+        ["emit", "identify", "join", "reconcile", "scan"],
+        "five commands are registered, and only five",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch

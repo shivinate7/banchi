@@ -10,6 +10,7 @@ import { Inventory } from './Inventory'
 import { Pricing } from './Pricing'
 import { Orders } from './Orders'
 import { Shipping } from './Shipping'
+import { Codes } from './Codes'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
@@ -222,6 +223,21 @@ const ROUTES: readonly Route[] = [
    * renders no chrome, so a mistyped chord landing on it would strand whoever pressed it in a
    * room with no door — they would have to know to type a hash to leave. A route reachable
    * only by a deliberate click cannot be arrived at by accident. */
+  /* THE CODE-CARD TRACK (C9-C11), AND `group: 'look'` RATHER THAN `'run'`. The four commands
+   * on `#/runs` are a session's loop and this is not one of them: a code-card box is read
+   * once, in seconds, with no model call and nothing to price — so it is reached when asked,
+   * which is exactly what this table's own definition of `look` says.
+   *
+   * NOT A PANEL ON `#/runs`, and D14 is the reason rather than screen size. That screen
+   * resolves cards against a TCGplayer export and prices them; a code is joined against
+   * nothing and priced against nothing. It would also sit the one control that hands over a
+   * bearer instrument beside the one that spends money, and those want different
+   * confirmations for different reasons.
+   *
+   * `d` FOR co-D-es, because `c` is the capture screen and this track's own initial is
+   * taken. Same rule the review queue's `q` follows — a letter out of the route's own name
+   * rather than an arbitrary slot. */
+  { path: '/codes', label: 'Codes', view: Codes, persona: 'owner', group: 'look', hotkey: 'd' },
   {
     path: '/fulfillment',
     label: 'Fulfillment',

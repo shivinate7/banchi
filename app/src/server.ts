@@ -1,5 +1,10 @@
 import type {
   AnswerResult,
+  CodeExportResult,
+  CodeLedger,
+  LotReceipt,
+  LotResult,
+  CodeScanResult,
   StandDownReason,
   StandDownResult,
   BoxRecord,
@@ -591,6 +596,12 @@ export async function capture(input: {
    * and the ladder walks exactly as it did before the field existed. */
   rarityClaim?: readonly string[]
   captureId: string
+  /* C10's product claim: which sealed product this code card came out of. Optional and
+   * NEVER defaulted — `undefined` sends no key at all, so the sidecar records no product and
+   * the Codes screen counts the card as unclaimed rather than filing it as a booster. Only
+   * the game named by `GameRegistry.product_game` uses it; sending it for another game is
+   * refused by the server as `product_invalid` rather than ignored. */
+  product?: string
 }): Promise<CardSummary> {
   const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
@@ -611,6 +622,7 @@ export async function capture(input: {
   if (hint) payload.set_hint = hint
   if (input.variant && input.variant.length > 0) payload.variant = input.variant
   if (input.rarityClaim && input.rarityClaim.length > 0) payload.rarity_claim = input.rarityClaim
+  if (input.product) payload.product = input.product
 
   /* 201 on a new card, 200 on a replay. Neither is inspected: `created` in the body says
    * the same thing in the shape the screen already reads. */
@@ -1804,6 +1816,117 @@ export async function putDecisions(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decisions }),
   })) as { ok: boolean; run: string; written: string }
+}
+
+/* ------------------------------------------------------------------ the code-card track */
+
+/** The whole code ledger. A read — reserves nothing, commits nothing. */
+export async function getCodes(): Promise<CodeLedger> {
+  return (await request('/codes', NO_CACHE)) as CodeLedger
+}
+
+/**
+ * Decode one box's photographs into the ledger.
+ *
+ * FREE, AND UNLIKE `startIdentify` THERE IS NO MONEY GATE HERE. The code-card primary path
+ * makes no model call and no network call of any kind — the redemption code IS the QR's
+ * payload — so there is nothing to confirm and nothing to spend. `preview` exists anyway,
+ * for the reason a dry run always exists: seeing what a write would do before it happens is
+ * worth having even when the write is cheap.
+ */
+export async function scanCodes(input: {
+  box: number
+  preview?: boolean
+}): Promise<CodeScanResult> {
+  return (await request('/codes/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ box: input.box, preview: Boolean(input.preview) }),
+  })) as CodeScanResult
+}
+
+/**
+ * Preview a channel export, or COMMIT one to an order.
+ *
+ * THE TWO-STEP IS D33's SHAPE FOR A DIFFERENT IRREVERSIBLE THING. D33 gates the route that
+ * spends money; this gates the one that hands over a bearer instrument. Without `confirm`
+ * nothing is reserved and the call is a pure read. With `confirm` and an `orderId` every
+ * code returned is reserved permanently and can never be offered to anybody else — which is
+ * C3's atomic dequeue and the structural defence against double-selling a code.
+ *
+ * ALL OR NOTHING: asking for more than the lane holds reserves NOTHING and refuses as
+ * `not_enough_codes`, rather than filling what it can.
+ */
+export async function exportCodes(input: {
+  lane: 'bulk' | 'premium'
+  product?: string | null
+  count?: number | null
+  confirm?: boolean
+  orderId?: string
+  buyer?: string | null
+}): Promise<CodeExportResult> {
+  const payload: Record<string, unknown> = { lane: input.lane }
+  if (input.product) payload.product = input.product
+  if (typeof input.count === 'number') payload.count = input.count
+  if (input.confirm) {
+    payload.confirm = true
+    payload.order_id = input.orderId
+    if (input.buyer) payload.buyer = input.buyer
+  }
+  return (await request('/codes/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as CodeExportResult
+}
+
+
+/** Every lot built so far, newest first. Receipts only — no codes cross this wire. */
+export async function getLots(): Promise<{ lots: LotReceipt[] }> {
+  return (await request('/codes/lots', NO_CACHE)) as { lots: LotReceipt[] }
+}
+
+/**
+ * Plan a lot, or BUILD one.
+ *
+ * THE SAME TWO-STEP AS `exportCodes`, and for the same reason: building reserves every code
+ * in the lot permanently. Without `confirm` nothing is reserved and nothing is written.
+ *
+ * A PHYSICAL LOT MUST BE BOX-SCOPED, and the server refuses otherwise rather than trusting
+ * this call site. Chosen by count, the codes reserved and the cards pulled off the shelf are
+ * two different piles — and a physical lot is additionally refused unless it takes the
+ * WHOLE box, because "pull all of them except these three" is not an instruction anyone
+ * executes reliably against a thousand identical cards.
+ */
+export async function buildLot(input: {
+  scope: 'box' | 'count'
+  delivery: 'physical' | 'digital'
+  venue: string
+  box?: number | null
+  count?: number | null
+  premium?: boolean
+  confirm?: boolean
+  lotId?: string
+  buyer?: string | null
+}): Promise<LotResult> {
+  const payload: Record<string, unknown> = {
+    scope: input.scope,
+    delivery: input.delivery,
+    venue: input.venue,
+    premium: Boolean(input.premium),
+  }
+  if (typeof input.box === 'number') payload.box = input.box
+  if (typeof input.count === 'number') payload.count = input.count
+  if (input.confirm) {
+    payload.confirm = true
+    if (input.lotId) payload.lot_id = input.lotId
+    if (input.buyer) payload.buyer = input.buyer
+  }
+  return (await request('/codes/lots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })) as LotResult
 }
 
 // ---------------------------------------------------------------------------- the orders

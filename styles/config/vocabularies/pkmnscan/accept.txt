@@ -263,3 +263,16 @@ Vite
 [Ww]orktrees
 [Ww]rite
 [Zz]sh
+QRs
+QR's
+defocus
+opencv
+sdist
+CMake
+dedupe
+zxing
+Reed-Solomon
+reCAPTCHA
+buylist
+buylists
+Tesseract

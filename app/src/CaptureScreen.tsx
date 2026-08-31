@@ -287,6 +287,9 @@ const SESSION_KEYS = {
   // second spelling of a vocabulary D22 says renders verbatim. Same clock as the rest: a
   // claim about the stack at the lens, dead when the tab closes.
   rarityClaim: 'pkmnscan.session.rarityClaim',
+  // C10's product claim. A scalar like `game` and `setHint`, not JSON like the claim above:
+  // a stack came out of one sealed product, so there is nothing to flatten.
+  product: 'pkmnscan.session.product',
   captureId: 'pkmnscan.session.captureId',
 } as const
 
@@ -392,6 +395,15 @@ function readSessionGame(): string | null {
  *  the same reason `readSessionFinish` does not — the vocabulary arrives from `GET /games`
  *  after the first render, and the effect beside the finish one drops what the registry
  *  disowns. */
+/** The product claim as stored. A plain string, unlike the two set-valued claims above it:
+ *  a stack came out of exactly one sealed product, so "two products at once" is not a state
+ *  the operator can be in. Unvalidated here and checked against the registry when it lands,
+ *  exactly as `readSessionGame` is. */
+function readSessionProduct(): string | null {
+  const raw = readSession(SESSION_KEYS.product)
+  return raw && raw.trim() ? raw.trim() : null
+}
+
 function readSessionRarityClaim(): string[] {
   const stored = readSession(SESSION_KEYS.rarityClaim)
   if (stored === null) return []
@@ -482,7 +494,16 @@ function blurActive(): void {
 /** Which field is open. One at a time, by construction: the state is a single id, so a
  *  second field cannot be open without closing the first — the mockup's rule enforced by
  *  the type rather than by bookkeeping. */
-type FieldId = 'box' | 'set' | 'rarity' | 'finish' | 'game' | 'camera' | 'rotation' | 'trigger'
+type FieldId =
+  | 'box'
+  | 'set'
+  | 'rarity'
+  | 'finish'
+  | 'game'
+  | 'product'
+  | 'camera'
+  | 'rotation'
+  | 'trigger'
 
 /* The field letters, none of which may be `c`, `u` or `s` — those are the run's own keys and
  * stay reserved (see CAPTURE_KEY). `v` for the camera because `c` is taken, `o` for rotation
@@ -496,6 +517,11 @@ const FIELD_KEYS: Readonly<Record<string, FieldId>> = {
   r: 'rarity',
   f: 'finish',
   g: 'game',
+  /* C10's product claim, and `p` was free. It costs one key out of `OPTION_KEYS`, at
+   * position 20 — past the longest authored vocabulary in the registry (thirteen), so no
+   * option row that exists today moves. `app/tests/capture-claims.spec.ts` pins the tenth
+   * through thirteenth rarities to `0 a d e` and is unaffected for the same reason. */
+  p: 'product',
   v: 'camera',
   o: 'rotation',
   t: 'trigger',
@@ -853,6 +879,13 @@ export function CaptureScreen() {
    * yet" and which would leave capture blocked behind a sentence about waiting for a server
    * that had already answered. */
   const [game, setGame] = useState<string | null>(readSessionGame)
+  /* C10's product claim, and it behaves exactly like `game` above: session state, resent
+   * with every capture, written to the record and the sidecar, correctable afterwards on the
+   * card that got it wrong. `null` is NO CLAIM and is never defaulted to `booster` — being
+   * right most of the time is precisely the problem, because the times it is wrong a $1.50
+   * Pokemon Center ETB code leaves in a penny lot and nobody finds out. The Codes screen
+   * counts unclaimed codes and refuses to put them in either lane for the same reason. */
+  const [product, setProduct] = useState<string | null>(readSessionProduct)
 
   /* The note on the LAST capture, and this is the only control on the screen that writes to
    * a card other than the one about to be photographed. `noteBusy` is deliberately separate
@@ -1049,7 +1082,8 @@ export function CaptureScreen() {
       SESSION_KEYS.rarityClaim,
       rarityClaim.length === 0 ? null : JSON.stringify(rarityClaim),
     )
-  }, [box, setHint, finish, game, rarityClaim])
+    writeSession(SESSION_KEYS.product, product)
+  }, [box, setHint, finish, game, rarityClaim, product])
 
   const loadStatus = useCallback(async () => {
     try {
@@ -1598,6 +1632,16 @@ export function CaptureScreen() {
           pickGame(entry.key)
           closeField()
         }
+      } else if (openField === 'product') {
+        const entry = (registry?.products ?? [])[nth]
+        if (entry !== undefined) {
+          // Re-pressing the claimed product takes it back out, exactly as the finish and
+          // rarity cells do. Getting back to NO CLAIM has to be reachable by the same key
+          // that made the claim — otherwise the only way out of a wrong product is a page
+          // reload, on the screen the operator spends hours in.
+          setProduct((current) => (current === entry.key ? null : entry.key))
+          closeField()
+        }
       } else if (openField === 'camera') {
         const device = camera.devices[nth]
         if (device !== undefined) camera.selectDevice(device.deviceId)
@@ -1898,6 +1942,12 @@ export function CaptureScreen() {
           // Same omission rule one claim over (D23): an empty claim sends no key, the
           // sidecar records nothing, and the ladder walks as if the field never existed.
           rarityClaim: rarityClaim.length === 0 ? undefined : rarityClaim,
+          // C10, and the omission rule is the other two's exactly: no claim sends no key,
+          // and the sidecar stays a record of claims actually made. What is NOT here is a
+          // default — an unclaimed code card reaches the Codes screen as unclaimed and is
+          // refused by both channel lanes, which is the loud outcome. Writing `booster`
+          // here would be the quiet one.
+          product: product ?? undefined,
           captureId,
         })
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
@@ -2628,6 +2678,71 @@ export function CaptureScreen() {
                 onToggle={() => toggleField('game')}
               />
             )}
+
+            {/* C10's PRODUCT CLAIM, and it is drawn ONLY for the game that claims one.
+                Which game that is comes from `registry.product_game` — the server's own
+                answer — rather than from a game key written on this side, which is the
+                registry mirror this file refuses everywhere else and is no more acceptable
+                for one string than for a whole vocabulary.
+
+                WHY THE CLAIM EXISTS AT ALL: code cards arrive in sealed-product batches, so
+                the operator can see the box the stack came out of while the camera cannot.
+                That is what retires C2's OCR half — a fiducial crop, an OCR engine, a
+                character whitelist and a hand-built SKU table replaced by one picker that is
+                right more often. `docs/specs/code-cards.md` §4 carries the argument.
+
+                THE PREMIUM MARK IS THE WHOLE POINT OF THE FIELD. A Pokemon Center ETB code
+                lists at roughly 46x a booster code, and the one mistake that costs real
+                money on this track is a premium code leaving in a bulk lot. */}
+            {registry !== null && game === registry.product_game ? (
+              openField === 'product' ? (
+                <OpenField
+                  k="P"
+                  label="Product"
+                  meta={
+                    product === null ? (
+                      <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
+                    ) : null
+                  }
+                  onClose={closeField}
+                >
+                  <div className="capture-opts">
+                    {registry.products.map((entry, nth) => (
+                      <Opt
+                        key={entry.key}
+                        k={OPTION_KEYS[nth]}
+                        on={product === entry.key}
+                        onPick={() =>
+                          setProduct((current) => (current === entry.key ? null : entry.key))
+                        }
+                        name={entry.display}
+                        trail={entry.premium ? 'premium' : undefined}
+                      />
+                    ))}
+                  </div>
+                  <p className="capture-quiet">
+                    Which sealed product this stack came out of. Leave it unclaimed if you do
+                    not know — an unclaimed code is counted on the Codes screen and refused by
+                    both channel lanes, which is louder than a wrong guess.
+                  </p>
+                </OpenField>
+              ) : (
+                <Row
+                  k="P"
+                  label="Product"
+                  right={
+                    product === null ? (
+                      <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
+                    ) : (
+                      <span className="capture-val">
+                        {registry.products.find((e) => e.key === product)?.display ?? product}
+                      </span>
+                    )
+                  }
+                  onToggle={() => toggleField('product')}
+                />
+              )
+            ) : null}
 
             {/* The device picker's job, in the row grammar — the CameraPicker component's
                 whole surface folded into this field so the sidebar has one control

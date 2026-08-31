@@ -30,7 +30,7 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
 make status         # where you are: next step, T1 score, branch. Start here.
 make harness        # all seven verification tests; the Stop hook runs it at turn end
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
-                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/.
+                    #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
                     #   files it is made of changes (D53) — so nothing here goes stale on a
                     #   `git pull`. The Makefile is not one of them: nothing reads it at run
@@ -53,6 +53,8 @@ make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 
+./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
+                                   #   FREE — no model call, no network. The QR IS the code.
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
@@ -176,16 +178,18 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
   has no name, because a name is optional and a placeholder would draw a fault where there is
   none.
-- **The app has nine screens and nine routes** — eight the owner's, one the Fulfiller's. It
+- **The app has ten screens and ten routes** — nine the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
   the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
   set by hand, and D69 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
   which says which copies a buyer gets and where they are, and the shipping lane, which says
-  which envelope an order goes in, out of a file the ledger has never seen. **The count above
-  was RECOUNTED from the `ROUTES` table rather than incremented**, which is the only way of
-  arriving at it that has ever been right.
+  which envelope an order goes in, out of a file the ledger has never seen. D70 added `#/codes` the same day — the code-card
+  track, which shares the rig and nothing downstream (D14). **The count above was RECOUNTED
+  from the `ROUTES` table rather than incremented**, which is the only way of arriving at it
+  that has ever been right, and it was recounted again when these two branches met: each had
+  incremented correctly against a tree the other had already moved.
 
   **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
   CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
@@ -408,6 +412,7 @@ D66  The order screen comes before the transport, and the shipping lane needs ne
 D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
 D68  A departed card's label names the record, because two of them in one box were the same string
 D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
+D70  The QR is the whole identification, the product is a claim, and the card is destroyed
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
@@ -424,6 +429,11 @@ D69  The order screen and the shipping lane get a route each, and the transport 
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. Not `docs/specs/order-flow.md`, the sell path.
+- `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
+  measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
+  the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and
+  NOT executed — every researched venue came back marginal). Read its §8 before trusting a
+  number: no real code card has ever been through this pipeline.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new
   server route) was built to it. 7b (review queue, Fulfillment view, inventory view,
