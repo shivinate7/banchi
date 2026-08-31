@@ -183,7 +183,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
   the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
-  set by hand, and D67 added `#/codes` the same day — the code-card track, which shares the rig
+  set by hand, and D70 added `#/codes` the same day — the code-card track, which shares the rig
   and nothing downstream (D14).
 
   **THIS SENTENCE WENT FALSE AGAIN THE MOMENT `#/codes` LANDED, AND WAS CORRECTED IN THE SAME
@@ -405,7 +405,7 @@ D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
 D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
-D67  The QR is the whole identification, the product is a claim, and the card is destroyed
+D70  The QR is the whole identification, the product is a claim, and the card is destroyed
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

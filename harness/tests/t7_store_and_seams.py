@@ -848,7 +848,7 @@ def check_server_routes(checks: Checks) -> None:
             "a PUT naming `state` is refused: listing transitions are not settable here",
         )
 
-        # `product` JOINED THIS TUPLE ON 2026-08-30 (D67, C10), and the assertion stays an
+        # `product` JOINED THIS TUPLE ON 2026-08-30 (D70, C10), and the assertion stays an
         # exact ordered match rather than a membership test. The order is
         # `master.CAPTURE_CLAIM_FIELDS`'s, because `PUT_FIELDS` is DERIVED from it — so this
         # check is what notices a claim that reached the record and not the wire, which is

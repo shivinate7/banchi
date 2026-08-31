@@ -3174,7 +3174,7 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 | 4 | Web Audio contexts created per-sound, never closed | Code review checklist |
 | 5 | CSV import matched by box+position, silently skipped identified cards, reported nothing for unmatched rows | Harness test 3 (bidirectional reporting) |
 
-## D67 — The QR is the whole identification, the product is a claim, and the card is destroyed
+## D70 — The QR is the whole identification, the product is a claim, and the card is destroyed
 
 Ratified 2026-08-30, by measurement and by the owner's standing instruction that the physical
 cards are disposed of. The code-card track's fork decisions carry the detail — **C9** (the

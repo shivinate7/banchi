@@ -560,7 +560,7 @@ COMPONENTS = [
         "status": "built",
         "does": "the code-card track: deterministic QR decoding, the code ledger, the "
                 "product tier",
-        "governed_by": ["D14", "D21", "D24", "D67"],
+        "governed_by": ["D14", "D21", "D24", "D70"],
         "note": "ITS OWN PACKAGE UNDER D14 — 'two tracks, one rig' shares the rig, the "
                 "capture server, the app shell and the photo storage, and shares NOTHING "
                 "downstream. `identify/` is the singles track's identification, a PAID "
@@ -581,7 +581,7 @@ COMPONENTS = [
                               "sells a stranger something that does not work. zxing-cpp, "
                               "PINNED to 2.3.0 because 3.x has no cp39 wheel and this venv "
                               "is Python 3.9.",
-                      "governed_by": ["D14", "D67"], "tested_by": ["T8"]},
+                      "governed_by": ["D14", "D70"], "tested_by": ["T8"]},
             "ledger.py": {"does": "the code ledger, keyed by the CODE rather than by the "
                                   "position — C8's first build used the position, and under "
                                   "D24 the card is destroyed, so the code is what outlives "
@@ -589,13 +589,13 @@ COMPONENTS = [
                                   "Reservation is all-or-nothing and REFUSES anything not "
                                   "held, which is the one guard against selling a code "
                                   "twice; a duplicate is recorded and never resolved.",
-                          "governed_by": ["D24", "D26", "D67"], "tested_by": ["T8"]},
+                          "governed_by": ["D24", "D26", "D70"], "tested_by": ["T8"]},
             "products.py": {"does": "which sealed product a code redeems, and what that is "
                                     "worth. The vocabulary is DERIVED from the real catalog, "
                                     "never invented — D22's rule for rarities, which has no "
                                     "reason to be weaker one track over. This module is why "
                                     "there is no OCR: the product is a capture claim (C10).",
-                            "governed_by": ["D9", "D22", "D67"], "tested_by": ["T8"]},
+                            "governed_by": ["D9", "D22", "D70"], "tested_by": ["T8"]},
             "lots.py": {"does": "build a sellable lot out of the ledger and write the three "
                                 "artifacts a sale needs — the listing, the buyer's manifest "
                                 "and the operator's packing slip. A PHYSICAL lot is scoped to "
@@ -606,14 +606,14 @@ COMPONENTS = [
                                 "whole-box check asks what is PHYSICALLY in the box rather "
                                 "than what is sellable from it, which is what catches an "
                                 "unclaimed code and a code already reserved to another lot.",
-                        "governed_by": ["D14", "D24", "D67"], "tested_by": ["T8"]},
+                        "governed_by": ["D14", "D24", "D70"], "tested_by": ["T8"]},
             "scan.py": {"does": "read a capture directory into ledger entries, and apply "
                                 "them. The CORE, shared by `cli/cmd_scan.py` and "
                                 "`server/codes_routes.py` so the command and the screen can "
                                 "never disagree about what a scan did. Nothing here writes "
                                 "except `apply`, and that takes an already-open session so "
                                 "the caller owns the lock's extent.",
-                        "governed_by": ["D14", "D67"], "tested_by": ["T8"]},
+                        "governed_by": ["D14", "D70"], "tested_by": ["T8"]},
         },
     },
     {
@@ -1015,7 +1015,7 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D67"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70"],
                 "status": "built",
             },
             "status.py": {
@@ -1266,7 +1266,7 @@ COMPONENTS = [
                         "money, this one because it can COMMIT a bearer instrument — a code "
                         "handed to a buyer cannot be un-handed and double-selling one is "
                         "unrecoverable (C3).",
-                "governed_by": ["D14", "D24", "D33", "D67"], "tested_by": ["T8"],
+                "governed_by": ["D14", "D24", "D33", "D70"], "tested_by": ["T8"],
             },
             "pipeline_routes.py": {
                 "does": "the pipeline seam: POST /pipeline/preflight (free, creates no run), "

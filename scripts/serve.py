@@ -111,7 +111,7 @@ WATCH_DIRS = (
     "cli",
     "identify",
     "geometry",
-    # THE CODE-CARD TRACK, ADDED 2026-08-30 WITH D67, AND ITS ABSENCE WAS CAUGHT THE ONLY
+    # THE CODE-CARD TRACK, ADDED 2026-08-30 WITH D70, AND ITS ABSENCE WAS CAUGHT THE ONLY
     # WAY AN ABSENCE FROM THIS TUPLE EVER IS — by an edit that did nothing. `codes/` landed
     # as a new package, `server/codes_routes.py` imports it, and a fix to
     # `codes/products.py` was invisible to the running server while the screen kept drawing
