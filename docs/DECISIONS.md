@@ -3600,6 +3600,18 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 **`--review-below-confidence` is surfaced**, because it is a routing question rather than a pricing one, it is written nowhere else, and it was reachable only from a terminal.
 
+### Three fields of the request are instructions, and they are guarded as such
+
+**`ExcludeListos` is `True` — listings with photos are excluded.** The owner's standing instruction, 2026-08-31. A seller-photo listing is usually a specific copy at a premium and it feeds `ExportLowestListingNotMe`, so including them moves the number D8 and D9 give pricing authority to.
+
+**It shipped `False`, and no decision ever chose that.** D65 captured the request body off the owner's own browser submit, so this field arrived carrying whatever the Pricing tab's checkbox happened to be set to that day. Eleven of the fourteen fields are transcription of somebody else's form; three are decisions, and they were sitting among the eleven with a comment beside each.
+
+**Nothing downstream could ever have caught it, which is what makes it a guard rather than a comment.** D64 measured `Photo URL` empty in all eleven exports, filtered and unfiltered — this axis leaves no trace in the file it narrows. A wrong value gives a clean join, a clean reconcile, a green `make check` and a mispriced listing, indefinitely.
+
+**So the three are hoisted into `STANDING_FILTERS` and spread last**, where a re-capture of the portal's body cannot silently paste over them, and `scripts/docs-audit.py`'s `export request` row blocks the commit on any value that has moved — naming the instruction rather than the literal, because somebody who has just changed a value already knows what the literal is. T7 asserts all three on the wire, which is the half a literal check cannot reach.
+
+**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job; `accept_narrower` is the honest answer once, and the baseline moves with it.
+
 **The rarity and condition axes stay unspent.** `Scope` carries `rarity_ids` and `condition_ids` and both remain empty: D64 measured that a condition filter thins a number's rows and that D3 rung 2 then decides a card from whichever row survived, and a rarity claim is per-card and would inherit the exact partial-claim defect this entry fixes.
 
 ---

@@ -12279,12 +12279,21 @@ def check_export_fetch(checks: Checks) -> None:
                     "empty list is the one that fails, and widening is the safe direction",
                 )
                 checks.equal(
-                    (sent.get("MyInventory"), sent.get("PrintingIds")),
-                    (False, ["0"]),
-                    "and two fields are never negotiable: the CATALOG rather than the "
-                    "operator's current listings, and All Printings — a number stocked in "
-                    "several finishes must arrive with all of them or D3 rung 2 decides it "
-                    "from whichever survived",
+                    (
+                        sent.get("MyInventory"),
+                        sent.get("PrintingIds"),
+                        sent.get("ExcludeListos"),
+                    ),
+                    (False, ["0"], True),
+                    "and THREE fields are never negotiable, asserted on the wire rather than "
+                    "in the literal: the CATALOG rather than the operator's current "
+                    "listings; All Printings, because a number stocked in several finishes "
+                    "must arrive with all of them or D3 rung 2 decides it from whichever "
+                    "survived; and listings-with-photos EXCLUDED, which is the owner's "
+                    "standing instruction and the one of the three that nothing downstream "
+                    "could ever catch — D64 measured `Photo URL` empty in every export, "
+                    "filtered and unfiltered, so a wrong value here is invisible in the file "
+                    "it narrows (D75)",
                 )
 
                 # ------------------- A HINT IS EVIDENCE ABOUT ITS OWN CARD AND NO OTHER

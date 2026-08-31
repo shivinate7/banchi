@@ -894,7 +894,7 @@ COMPONENTS = [
                 # D70 JOINS THEM AS A CITED FAILURE rather than a ruling: the `route rosters`
                 # row names D69 and D70 as the two entries whose routes a hand-typed roster
                 # missed, which is what that row exists to make impossible a third time.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D75"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D75", "D3", "D8", "D64", "D65"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1281,7 +1281,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69"],
+                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69", "D8", "D9", "D75"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
