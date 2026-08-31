@@ -190,12 +190,33 @@ The consequences of the split, settled:
 - **TCGplayer is OPEN for the retained premium tier**, and the existing `join -> emit ->
   Import to Staged` path already reaches it: 263 code-card rows in the fixture export, five
   conditions each, a 16-column schema byte-identical to singles.
-- **TCGplayer's BULK lane is also open** — catalog product 253512, "Pokemon Code Card Bulk
-  Lot", **8,694 units/year, active 32 of 52 weeks, at $0.03-$0.04/card**, with real observed
-  orders of 1,100 / 1,425 / 700 / 300 cards. **But it cannot be listed by CSV**: bulk lots are
-  "Listings with Photos" through the seller portal, which is both a manual third-party UI step
-  (CLAUDE.md forbids one inside the autonomous pipeline) and a request for photographs of code
-  cards (the opsec rule forbids those). Unresolved; the owner rules.
+- **TCGplayer's BULK lane is open, CSV-listable, and economically dead. All three.**
+  Corrected 2026-08-30 against first-party API reads after the owner challenged the first
+  draft, which was wrong.
+
+  **It IS an ordinary catalog product.** `productId 253512`, category 56 "Bulk Lots", group
+  2303 "Pokemon Bulk Card Lots", rarity "Code Card", `sellerListable: true`, and exactly ONE
+  SKU — `productConditionId 5274046`, condition "Unopened". That id is what the export's
+  `TCGplayer Id` column carries, so a CSV row for it is an ordinary row.
+
+  **Photos are policy, not a mechanism.** TCGplayer's Bulk Lots FAQ says verbatim "Do Bulk
+  Lots need to be added as Listings with Photos? **Yes.**" But of 56 live listings, **26 are
+  `listingType: standard` with zero images, zero title and zero description, and they hold
+  28,936 of the 31,493 standing units — 92%.** A CSV row produces exactly a standard listing.
+  So the first draft's "cannot be listed by CSV" was wrong; what is true is that 92% of the
+  inventory on this SKU is in open violation of a stated rule with no visible consequence,
+  which is a risk to weigh rather than a mechanism to route around.
+
+  **A standard listing has no title and no description**, so the CSV path commits you to
+  physical shipment with no way to say otherwise on the listing — and there is no "1,000-card
+  lot" structure at all. One SKU, priced per card; **the BUYER chooses the quantity**. Real
+  weekly sales run 1,425 / 1,100 / 975 / 734 / 700 / 558 units. This is a commodity listing,
+  not a lot.
+
+  **And it cannot absorb the pile.** The SKU's entire annual market across all 56 sellers is
+  **8,694 units — about $299 of gross merchandise value in a year** — against **31,493 units
+  already standing, roughly 3.6 years of demand.** Adding 30,000 takes it to about seven
+  years. The lane works and is not worth using at this scale.
 - **eBay's dispute defence is restored for anything shipped**, and only for Item Not Received.
   It does nothing for Item Not As Described, which is the dispute code cards actually attract.
 - **The hybrid — ship the cards AND message the codes — is the worst case, not the best.** The
@@ -206,9 +227,10 @@ The consequences of the split, settled:
 
 The owner's pile is **~30,000 codes**. Measured against that:
 
-- TCGplayer's bulk SKU absorbs **8,694 units/year across every seller combined**, and already
-  carries **~19,300 standing units across 56 listings** at a $0.01-$0.02 floor. The pile alone
-  is roughly **3.5 years of total market demand**, queued behind two years of existing supply.
+- TCGplayer's bulk SKU absorbs **8,694 units/year across every seller combined — about $299
+  of GMV** — and already carries **31,493 standing units across 56 listings** (re-counted
+  first-hand 2026-08-30; an earlier figure of ~19,300 was low). The pile alone is roughly
+  **3.5 years of total market demand**, queued behind **3.6 years** of existing supply.
 - The best eBay 1,000-lot comparable sold **twice, lifetime**.
 - The entire PREMIUM tier absorbs **924 units and $231 gross per year, marketplace-wide**. At a
   3% premium fraction the pile holds ~900 premium codes — about a year of the whole market's
@@ -362,3 +384,29 @@ the route**: a thousand live codes in a JSON response also land in every devtool
 and screenshot that catches it, so the screen links to the file.
 
 `lots/` is gitignored for `inventory/`'s reason and not a weaker one.
+
+---
+
+## 10. Seller level gates the whole TCGplayer plan
+
+Measured 2026-08-30 from TCGplayer's own help articles. **The item cap counts QUANTITY, not
+distinct products**, which is what makes it bite here:
+
+    Level 1     100 items        30,000 units is impossible
+    Level 2     500 items        still impossible
+    Level 3     50,000 items     one listing of 30,000 fits
+    Level 4     unlimited        and the ONLY level with Export Filtered CSV / Import to
+                                 Staged, and the only one that may set shipping to $0
+
+**So the CSV path this repo already emits is a Level 4 feature.** Below that, listing is UI
+work whatever the pipeline can produce. The owner's seller level is not recorded here and
+decides which of these paragraphs applies.
+
+**The $1.49 shipping minimum only fires under a $5.00 product total**, verified against twelve
+live listings: a $0.02 item with a $0.00 seller rate still charges the buyer $1.49, while a
+$9.00 item with a $0.00 seller rate charges $0.00. That matters in both directions — it is
+what makes a sub-$5 PREMIUM single net more than its own price, and it is why a $40 bulk order
+carries no shipping subsidy at all and the seller eats the postage.
+
+Tracking is advised over $20, **mandatory over $49.99**, signature over $250. Enforcement is
+by dispute forfeiture rather than a hard block.

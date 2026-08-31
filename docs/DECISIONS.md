@@ -3297,3 +3297,32 @@ TCGplayer's bulk-lot listing needs the seller portal's Listings-with-Photos flow
 forbids inside the pipeline AND asks for photographs of code cards the opsec rule forbids.
 TCGplayer's own guidance permits backs and edges only, so it is reconcilable — the owner rules.
 `docs/specs/code-cards.md` sections 6.1 and 9 carry the detail.
+
+**CORRECTED 2026-08-30 AFTER THE OWNER CHALLENGED THE PHOTO CLAIM, AND HE WAS RIGHT.**
+This entry recorded that TCGplayer's code-card bulk lot "cannot be listed by CSV" because bulk
+lots need Listings with Photos. First-party API reads settle it otherwise. `productId 253512`
+is an ORDINARY CATALOG PRODUCT — category 56, group 2303, rarity Code Card,
+`sellerListable: true`, one SKU at `productConditionId 5274046` — and 26 of its 56 live
+listings are `listingType: standard` carrying no image, no title and no description, holding
+**28,936 of 31,493 standing units**. A CSV row produces exactly that artefact. The photo rule
+is real policy and is not a mechanism, and 92% of the inventory on that SKU ignores it.
+
+**The lane is CSV-listable and still not worth using**, which is the more useful finding. The
+SKU's whole annual market is **8,694 units, about $299 of GMV**, against 31,493 units already
+standing — some 3.6 years of demand queued ahead. Thirty thousand more cards take it to about
+seven years.
+
+**There is no lot structure there at all.** One SKU, priced per card, and the BUYER picks the
+quantity; observed weekly sales run 1,425 / 1,100 / 975 / 734 / 700 / 558 units. So
+`codes/lots.py`'s fixed-lot model is right for eBay and does NOT describe TCGplayer, and that
+is recorded rather than papered over: the two venues want different shapes and only one is
+built.
+
+**Seller level gates it.** The item cap counts QUANTITY — Level 1 is 100 items, Level 2 is
+500, Level 3 is 50,000, Level 4 unlimited — and Export Filtered CSV / Import to Staged is
+**Level 4 only**, as is setting shipping to $0. The pipeline this repo emits is therefore a
+Level 4 feature, and below that listing is UI work whatever it produces.
+
+**The $1.49 shipping minimum fires only under a $5.00 product total**, verified across twelve
+live listings. That is what makes a sub-$5 premium single net more than its own price, and it
+is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
