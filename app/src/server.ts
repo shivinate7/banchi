@@ -413,7 +413,11 @@ function errorEnvelope(body: unknown): { code: string; message: string } | null 
   return { code, message }
 }
 
-/* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D53).
+/* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D73).
+ *
+ * D73 AND NOT D53, WHICH IS THE ENTRY THIS COMMENT CITED UNTIL 2026-08-30. D53 is the
+ * supervisor, the watcher and the restart — the thing this header lets you SEE. It never
+ * ruled on the header, and D73 checked that three ways before repointing seven comments.
  *
  * `make up` restarts the capture server on every Python edit, and a restart is otherwise
  * invisible from here — same port, same store. The alternative was a component polling
@@ -443,7 +447,7 @@ export function onServerBoot(listener: BootListener): () => void {
 
 function noteBoot(response: Response): void {
   const seen = response.headers.get('X-Pkmnscan-Boot')
-  /* A server that does not send it says nothing. Absent means either a server older than D53
+  /* A server that does not send it says nothing. Absent means either a server predating the header
    * or — far more likely in a test — a stubbed route, and inventing a reload from a missing
    * header would make every spec that stubs the wire report one. */
   if (seen === null || seen === '') return

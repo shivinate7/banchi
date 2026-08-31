@@ -1,4 +1,5 @@
 import tseslint from 'typescript-eslint'
+import reactHooks from 'eslint-plugin-react-hooks'
 
 /* eslint, flat config. Build-order step 7a item 6.
  *
@@ -262,6 +263,69 @@ export default tseslint.config(
         ...TWO_ARG_THEN_RULES,
         ...LOCAL_STORAGE_RULES,
       ],
+    },
+  },
+  {
+    /* MEASURED FIRST, THEN ADOPTED — and the finding list is why it is `error` and not `warn`.
+     *
+     * The header above declines shared presets and says how a preset gets adopted here: "by
+     * running it and reading the output, not a line someone adds because it is what the
+     * tseslint README shows." This block is the other end of that sentence. The rule was
+     * installed at `warn`, run, and the findings were read before anyone decided what they
+     * were worth. They are recorded here because a rule whose cost nobody wrote down is a
+     * rule the next person deletes to get their build green.
+     *
+     * WHAT IT FOUND, 2026-08-30, on a codebase of 96 effects and 207 `useState` calls it had
+     * never run against: SEVEN findings in three files, and one of them was a live bug.
+     *
+     *  - `CaptureScreen.tsx` omitted `product` from `doCapture`'s dependency array, in code
+     *    merged hours earlier. The claim is read as `product: product ?? undefined` and sent
+     *    with the photograph; picking a product changes none of the other eight dependencies,
+     *    so the memoised closure kept whatever the claim was when it was last built. The first
+     *    stack of a session sends `null`, which is loud — an unclaimed code card is refused by
+     *    both channel lanes. The SECOND stack sends stack one's product, on real cards, and
+     *    nothing downstream can tell. The call site had already declined to write a `booster`
+     *    default on the grounds that a quiet wrong claim is worse than a loud missing one; the
+     *    stale closure was that same defect arriving by the other door. THIS IS THE COST LINE
+     *    FOR THIS RULE: it caught, on its first run, exactly the class of bug the code beside
+     *    it was written to avoid.
+     *  - `Pricing.tsx` had a PAIR that could only be fixed together. `answers` and `unpriced`
+     *    were `?? {}` expressions rebuilt every render and read as dependencies, so every memo
+     *    below them was defeated while looking as though it worked. Memoising them alone would
+     *    have ARMED a second finding — `onKey` omitted `suggestionFor`, harmless only because
+     *    the churn above had been rebuilding the handler every paint. Fixing the first without
+     *    the second would have introduced a wrong price on a listing after a preset change.
+     *    A reviewer reading either finding alone would have called it noise.
+     *  - `ReviewQueue.tsx` was an argued omission whose comment ended: "this project has no
+     *    exhaustive-deps rule installed, so the omission is argued here rather than silenced
+     *    with a disable comment for a rule that does not exist." It carries the disable now.
+     *
+     * ONE argued exception out of seven findings, and one real bug. That ratio is what the
+     * header's third reason asks for — the rules here are "the ones worth stopping a build
+     * for" — so this one stops the build. At `warn` it would have guarded nothing: `eslint .`
+     * carries no `--max-warnings`, so warnings print and the target still exits 0, and a
+     * printed line nobody has to answer is the unread check this file spends three paragraphs
+     * arguing against.
+     *
+     * ONE RULE, NOT THE PRESET. Not `recommended` / `recommended-latest` / `flat`: v7 ships
+     * the React Compiler rule set behind those names, so adopting one switches on rules whose
+     * findings nobody has read — the purchase `docs/specs/audit-retirement.md` section 9
+     * declined over markdownlint-cli2. `rules-of-hooks` is off for the same reason and is its
+     * own measurement, which nobody has run.
+     *
+     * A BLOCK OF ITS OWN, TOUCHING NO OTHER RULE. The three blocks above each re-list their
+     * `no-restricted-syntax` array in full, and a later block that merged into one of them
+     * would silently drop whichever guards it did not name — the exact hole the second
+     * block's comment exists to warn about. Adding a block rather than editing one is what
+     * keeps all four guards intact in all three places.
+     *
+     * Scoped to `src/`, where the components and the hooks are. `tests/` is Playwright specs
+     * and the config files at the root are not React.
+     */
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/exhaustive-deps': 'error',
     },
   },
 )

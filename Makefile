@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -37,6 +37,7 @@ help:
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
+	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
@@ -300,6 +301,7 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory port-agreement
+	@$(MAKE) --no-print-directory screen-freshness
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -331,6 +333,20 @@ githooks-selftest:
 # on a machine that has none rather than on a defect.
 port-agreement:
 	@python3 scripts/port-agreement.py
+
+# Every server WRITE in app/src has a way back — a re-read, an invalidation signal, or a
+# reason in the code why none is owed. IN `check` AND NEVER IN THE GIT HOOK, and the reason is
+# port-agreement's exactly: it runs node, and the pre-commit hook runs a bare python3 with
+# nothing installed, so a check that needs a toolchain would fail on a machine that has none
+# rather than on a defect. The NPM_GUARD is here because it reads the TypeScript compiler out
+# of app/node_modules rather than shipping a second parser.
+#
+# It finds NOTHING on the tree it was written against — all 38 call sites were already covered
+# — so this is a regression guard and not a bug report. What it stops is write number 39
+# skipping the idiom, which is a thing no test and no type would have caught.
+screen-freshness:
+	$(NPM_GUARD)
+	@node scripts/screen-freshness.mjs
 
 # NOT IN `check`, AND NOT IN THE GIT HOOK. It is the one target here that can DELETE a file,
 # so D18's rule applies at its strongest: nothing that writes may run on the path that decides

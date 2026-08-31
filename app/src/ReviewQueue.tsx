@@ -1765,9 +1765,19 @@ export function ReviewQueue() {
     }
     // `lookupKey` rather than `lookupFor`: the row object is rebuilt on every queue read, so
     // depending on it would re-fetch on a poll that changed nothing about this card. The two
-    // are read out of `lookupFor` above, which is derived from the same key — this project
-    // has no exhaustive-deps rule installed, so the omission is argued here rather than
-    // silenced with a disable comment for a rule that does not exist.
+    // fields this effect reads are taken out of `lookupFor` above, which is derived from the
+    // same key, so the narrower dependency is the CORRECT one rather than a shortcut past the
+    // rule — widening it to `lookupFor` would fetch a catalog per poll for a card nobody
+    // touched.
+    //
+    // THE DISABLE IS NEW; THE ARGUMENT ABOVE IT IS NOT. This comment used to end "this project
+    // has no exhaustive-deps rule installed, so the omission is argued here rather than silenced
+    // with a disable comment for a rule that does not exist." That premise expired the day
+    // `react-hooks/exhaustive-deps` was switched on in `app/eslint.config.js`, and the line
+    // below is the sentence the paragraph was waiting for. A narrow disable naming its rule and
+    // carrying its reason is what this repo does with an argued exception — see the two scoped
+    // blocks at the foot of the eslint config.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookupKey])
 
   /* The typed search. Deliberately NOT debounced-on-keystroke: it is submitted, because a

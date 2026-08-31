@@ -724,7 +724,7 @@ COMPONENTS = [
         # declared suffix, which failed the commit until it was described. The two outcomes
         # from one change are the clearest statement of this hole available, so they are
         # recorded here rather than only in docs/DEBTS.md.
-        "source_suffixes": [".py", ".sh", ".txt"],
+        "source_suffixes": [".py", ".sh", ".txt", ".mjs"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
                 "with none has nothing to be an orphan of. Measured before the fix: "
@@ -832,6 +832,21 @@ COMPONENTS = [
                                         "provisioning, so a fresh clone would fail a commit over "
                                         "nothing.",
                                 "governed_by": ["D18", "D47"]},
+            "screen-freshness.mjs": {
+                "does": "proves every server WRITE in app/src has a way back — a re-read, an "
+                        "invalidation signal, or a reason in the code why none is owed. Twelve "
+                        "recognisers over the TypeScript AST, following the two indirections "
+                        "that hide a write (stored as a value, and behind a wrapper) and the "
+                        "five private helpers in server.ts that carry the method for ten "
+                        "exported writes. Found nothing on the tree it was written against: a "
+                        "regression guard for write 39, not a bug report.",
+                # D13 is why staleness matters at all — two devices on one store. D58 is why it
+                # is dangerous rather than untidy: a card's number counts the cards in the box,
+                # so a stale screen shows a number that now belongs to a different card. D18
+                # decides where it runs: node, like port-agreement.py, so `make check` and never
+                # the git hook. D14 is why it excludes the code-card track, by banner.
+                "governed_by": ["D13", "D14", "D18", "D58"],
+            },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -1577,13 +1592,13 @@ COMPONENTS = [
                                                "Fulfillment constraints table at once. NO "
                                                "AUTOMATED CASE — docs/DEBTS.md carries why, and "
                                                "what was verified by hand instead.",
-                                       "governed_by": ["D5", "D31", "D53"]},
+                                       "governed_by": ["D5", "D31", "D53", "D73"]},
             "src/ServerReloaded.css": {"does": "that notice: fixed bottom-left so it costs no "
                                                "layout on screens whose recorded complaint "
                                                "(D38, D40) is content pushed below the fold, "
                                                "pointer-events none, accent as an outline dot "
                                                "and never a fill",
-                                       "governed_by": ["D5", "D38", "D40", "D53"]},
+                                       "governed_by": ["D5", "D38", "D40", "D53", "D73"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -1591,11 +1606,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2174,7 +2189,7 @@ COMPONENTS = [
                                          "download. The weight ratio is a rendering and is "
                                          "never compared here; a float pass over that column "
                                          "moved the lane counts on the server.",
-                                 "governed_by": ["D53", "D61", "D66", "D69"]},
+                                 "governed_by": ["D53", "D61", "D66", "D69", "D73"]},
             "src/Shipping.css": {"does": "the lane table and its chips, at owner density. The "
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
