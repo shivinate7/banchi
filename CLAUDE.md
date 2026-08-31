@@ -214,22 +214,38 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   that has ever been right, and it was recounted again when these two branches met: each had
   incremented correctly against a tree the other had already moved.
 
-  **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
-  CHECKS IT — and on 2026-08-31 it turned out the TESTS had the same disease.**
-  `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand and never
-  saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the Cmd-arrow ring
-  and missed `#/codes`. Three screens were asserted by nothing and `make design-check` was
-  green, because a roster missing a route does not fail — it walks the routes it has. The
-  cursor sweep reads the nav strip now, and `scripts/docs-audit.py`'s `route rosters` row
-  fails a COMMIT where a spec's pinned list disagrees with `App.tsx`'s table. **That guard is
-  over the specs and not over this sentence**: the number below is still checked by nobody. `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
-  published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
-  not load-bearing prose. That argument holds for a number in a report and does not hold here,
-  where the sentence is what a session reads to learn the shape of the product. It was false
-  from D39 until D49 in FIVE places at once, none of which failed a check, and it was still
-  false in a sixth on 2026-08-30: `README.md`'s fenced screen list carried five entries and
-  was missing `runs` and `pricing` outright, so D69's repair had to restore two screens
-  before it could add two. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  **THE COUNT IN THIS FILE WAS WRONG MORE OFTEN THAN IT WAS RIGHT, AND NOTHING CHECKED IT
+  UNTIL 2026-08-31 — and when a reader finally arrived it turned out the TESTS had the same
+  disease.** `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand
+  and never saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the
+  Cmd-arrow ring and missed `#/codes`. Three screens were asserted by nothing and
+  `make design-check` was green, because a roster missing a route does not fail — it walks the
+  routes it has. The cursor sweep reads the nav strip now.
+
+  **The prose failed the same way, seven times.** It was false from D39 until D49 in FIVE
+  places at once, none of which failed a check; false in a sixth on 2026-08-30, when
+  `README.md`'s fenced screen list carried five entries and was missing `runs` and `pricing`
+  outright, so D69's repair had to restore two screens before it could add two; and false a
+  SEVENTH time hours after that repair, when D70's `#/codes` reached the `ROUTES` table and
+  this file and neither `README.md`'s list nor either of `docs/map.py`'s two route counts —
+  which then disagreed with each other as well as with the tree.
+
+  **Two `make docs-audit` rows end it, one over the specs and one over the prose.**
+  `route rosters` fails a COMMIT where a spec's pinned list of routes disagrees with
+  `App.tsx`'s table. `route census` does the same for every published screen or route count in
+  this file, in `README.md` and in `docs/map.py`, reconciled against that same table, so a
+  route added without recounting fails the commit. D18 deleted the last published count on
+  purpose, on the grounds that a verifiable fact nobody can disagree with is not load-bearing
+  prose; that argument holds for a number in a report and does not hold here, where the
+  sentence is what a session reads to learn the shape of the product. So this count stays and
+  gets a reader instead, and the two rulings sit side by side rather than one repealing the
+  other. **Recount from the table; never increment** — the instruction is unchanged, and it is
+  now enforced rather than asked for. The census row also refuses to go quiet: a claim reworded
+  past the pattern watching it is reported as an unwatched sentence, because a check that
+  silently stops covering prose is the failure it exists to end. What it deliberately does NOT
+  check is the ordinals in `docs/map.py`, which count the order routes were ADDED and not their
+  place in the table.
+  The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table

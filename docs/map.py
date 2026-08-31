@@ -186,9 +186,15 @@ BUILD_ORDER = [
              "the two-phase split. "
              "THE MONEY STEP SPAWNS DETACHED AND IS NEVER AWAITED, so a run outlives a "
              "restart of the server that started it; the free steps answer inside the request "
-             "with their own stdout attached. app/src/RunPanel.tsx draws it UNFOLDED on "
+             "with their own stdout attached. app/src/RunPanel.tsx drew it UNFOLDED on "
              "#/inventory — sharing one .browse-boxrun row with BoxOps, because the owner "
-             "overruled the fold on 2026-08-24 (D33, amended) — and "
+             "overruled the fold on 2026-08-24 (D33, amended). "
+             "IT HAS BEEN ON #/runs SINCE 2026-08-29 (D39), and this row is left saying so "
+             "rather than rewritten to have always meant that: what step 15 built is the "
+             "seam, and the address it was first reachable at is part of what it built. "
+             "The .browse-boxrun row it left is not empty — src/BoxRuns.tsx holds a status "
+             "line there and nothing that spends. What survived the move is the UNFOLDING, "
+             "which was the owner's ruling; the route is what changed under it. "
              "app/tests/run-panel.spec.ts is the check the hard rule says "
              "does not exist."},
 
@@ -926,7 +932,15 @@ COMPONENTS = [
                 # D70 JOINS THEM AS A CITED FAILURE rather than a ruling: the `route rosters`
                 # row names D69 and D70 as the two entries whose routes a hand-typed roster
                 # missed, which is what that row exists to make impossible a third time.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65"],
+                #
+                # D31 AND D39 JOIN FOR THE ROW BESIDE IT, the same shape one row later. The
+                # `route census` row names the routes whose arrival the published screen
+                # count failed to follow — D39's #/runs, D49's #/pricing, D69's two and
+                # D70's #/codes — because the incident is what the row is for, and a reader
+                # who does not know the count has been wrong seven times reads the check as
+                # pedantry. Illustrations, listed because the superset rule reads a citation
+                # literally; the ruling both rows enforce is D16's.
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1167,8 +1181,11 @@ COMPONENTS = [
                         "view worth looking at. Tracked, unlike the renders — it used to "
                         "live under captures/, which .gitignore excludes wholesale, so the "
                         "list could not be committed and a fresh clone started with none.",
-                # D5 is what the list is for: five owner screens and the Fulfiller's, which
-                # is the one render where the absence of the nav strip is the point. D13 is
+                # D5 is what the list is for: EIGHT owner screens and the Fulfiller's, which
+                # is the one render where the absence of the nav strip is the point. It said
+                # five while the file listed eight — the lines were added (pricing by D49,
+                # orders and shipping by D69) and the count beside them was not, the same
+                # drift the app/ entry below carries a paragraph about. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
                 # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
@@ -1459,11 +1476,14 @@ COMPONENTS = [
                 "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. The count "
                 "here is RECOUNTED off src/App.tsx's ROUTES table and never incremented: it "
-                "has been wrong more often than right and nothing reconciles it — it said "
+                "has been wrong more often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
-                "outright. What IS reconciled now is the specs: scripts/docs-audit.py's "
-                "`route rosters` row fails a commit where a spec's hand-typed list of routes "
-                "disagrees with that table. Playwright "
+                "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
+                "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
+                "`route census` fails a commit where a published count in this file, in "
+                "CLAUDE.md or in README.md disagrees with that table, and its "
+                "`route rosters` row fails one where a spec's hand-typed list of routes "
+                "does. Playwright "
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against step "
                 "6's component and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
@@ -1584,6 +1604,15 @@ COMPONENTS = [
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
                                     "the one place this shell takes a modifier. "
+                                    "`#/orders` AND `#/shipping` ARE THE EIGHTH AND NINTH, "
+                                    "2026-08-30 — D69 gave a route to each rather than making the "
+                                    "lane a mode of the order screen. They were absent from this "
+                                    "sentence while D69 sat in the `governed_by` list below it, "
+                                    "which is how the count above it read EIGHT for two routes "
+                                    "longer than it was true. These ordinals count the order the "
+                                    "routes were ADDED, not their place in the table — codes sits "
+                                    "eighth of ten there — which is why the `route census` row "
+                                    "checks the counts and deliberately not these. "
                                     "`#/codes` IS THE TENTH, 2026-08-30 — the code-card track "
                                     "on a route of its own under D14's two-tracks-one-rig, with "
                                     "the chord `d` because `c` is Capture. It sits in `look` "

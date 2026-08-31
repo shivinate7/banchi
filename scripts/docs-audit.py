@@ -4922,6 +4922,233 @@ def check_route_rosters(report: Report) -> None:
         f"{len(expected.get('all', []))} registered routes",
     )
 
+# ------------------------------------------------------------------------ the route census
+#
+# CLAUDE.md said, for months: "THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS
+# BEEN RIGHT, AND NOTHING CHECKS IT." This is the something, and it is the second half of a
+# pair — `route rosters` above reconciles a SPEC's hand-typed list of routes against the same
+# table, and was written days earlier for the same defect one directory over. Nothing had yet
+# read the prose. Seven times the published screen count has
+# disagreed with `app/src/App.tsx`'s ROUTES table — five at once between D39 and D49, a
+# sixth in README.md's fenced list that D69 had to repair before it could extend, and a
+# seventh on 2026-08-30 when D70's `#/codes` reached the table, CLAUDE.md and nothing else,
+# leaving docs/map.py claiming NINE routes in one entry and EIGHT in another.
+#
+# WHY THIS IS A CHECK AND NOT A DELETION, which is the other thing this repo does with a
+# number nobody maintains. `docs/GATES.md` step 5 deleted the server's route count on D18's
+# test — a verifiable fact with nothing in it a later session could disagree with is not
+# load-bearing prose — and CLAUDE.md explicitly rules the other way for this one: the
+# sentence is what a session reads to learn the shape of the product, so it stays and gets
+# a reader instead. Both are the same principle applied to different sentences; neither
+# repeals the other.
+#
+# THE ORDINALS IN docs/map.py ARE DELIBERATELY NOT CHECKED. "`#/codes` IS THE TENTH" counts
+# the order routes were ADDED, not the table's own order, where codes sits eighth of ten.
+# A positional reader would fire on correct prose, and a false positive that blocks teaches
+# `--no-verify`, which switches off the three opsec rules in the same hook (D16).
+
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19, "twenty": 20,
+}
+
+# Each entry is (pattern, kind, what the sentence says). `kind` names the quantity the
+# captured word must equal, resolved against the ROUTES table below. Anchored on the words
+# either side rather than on the number alone, so the many HISTORICAL counts these files
+# carry on purpose — "five after D31 merged", "#/boxes WAS the seventh", "It was six until
+# D31" — do not match anything and are left as the prose they are.
+_CENSUS_CLAIMS = (
+    ("has ([A-Za-z]+) screens and ([A-Za-z]+) routes", ("total", "total")),
+    ("([A-Za-z]+) the owner's, one the Fulfiller's", ("owner",)),
+    ("([A-Za-z]+) screens — capture", ("total",)),
+    ("all ([A-Za-z]+) routed", ("total",)),
+    ("All ([A-Za-z]+) open at a hash", ("total",)),
+    ("the other ([A-Za-z]+) carry", ("total_less_one",)),
+    ("([A-Za-z]+) routes behind", ("total",)),
+    ("the shell: ([A-Za-z]+) hash routes", ("total",)),
+    ("([A-Za-z]+) of them the owner's", ("owner",)),
+)
+
+# The manifest is its own quantity: `make screenshot` renders a SUBSET of the routes, so a
+# census claim about views.txt must be reconciled against that file and never against the
+# table. Kept in this row because it is the same failure — a list grew and the number
+# beside it did not (pricing by D49, orders and shipping by D69, against a comment that
+# still said five).
+_MANIFEST_CLAIM = ("([A-Za-z]+) owner screens and the Fulfiller's", "manifest_owner")
+
+
+def _census_pattern(readable: str) -> str:
+    """A claim's literal spaces, as `\\s+`.
+
+    THE PATTERNS ARE WRITTEN AS THE SENTENCE READS and never as a regex with the whitespace
+    hand-rolled, because hand-rolling it is how this row's first draft shipped a pattern
+    that matched nothing: `the owner's` with one space cannot match prose whose seam
+    `_census_text` has just widened, and a pattern that matches nothing reads exactly like
+    a pattern with nothing to say. One transformation, applied to every claim, so the class
+    of bug is gone rather than fixed one pattern at a time.
+    """
+    return readable.replace(" ", r"\s+")
+
+
+_CENSUS_DOCS = ("CLAUDE.md", "README.md", "docs/map.py")
+
+
+def _route_personas() -> Optional[List[Tuple[str, str]]]:
+    """ROUTES as an ordered [(path, persona)], or None when the table cannot be read.
+
+    Its own reader rather than `_routes_table()`'s: that one answers "which component does
+    this route render", which is a different question and drops the persona this row counts
+    by.
+    """
+    if not exists(APP_TSX):
+        return None
+    table = re.search(
+        r"const ROUTES[^=]*=\s*\[(.*?)\n\]", _strip_ts_comments(read(APP_TSX)), flags=re.S
+    )
+    if table is None:
+        return None
+    body = table.group(1)
+    starts = [m for m in re.finditer(r"path:\s*'([^']*)'", body)]
+    if not starts:
+        return None
+    out: List[Tuple[str, str]] = []
+    for index, match in enumerate(starts):
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(body)
+        persona = re.search(r"persona:\s*'([^']*)'", body[match.end():end])
+        out.append((match.group(1), persona.group(1) if persona else ""))
+    return out
+
+
+def _census_text(target: Path) -> str:
+    """The file's text with Python string-literal seams bridged, offsets preserved.
+
+    docs/map.py wraps its prose across adjacent literals, so "NINE of them the " and
+    "owner's" are one sentence to a reader and two to a regex — the quote-newline-quote
+    between them defeats any `\\s+`. THE OWNER COUNT WENT UNCHECKED THAT WAY on this row's
+    first draft: it reported ten published counts and green while the pattern watching the
+    owner subcount matched nothing at all, which the per-pattern guard below then caught.
+
+    Both quotes become spaces and every other character — the newlines included — stays
+    where it is, so `\\s+` bridges the seam and the line numbers in a finding still point
+    at the sentence.
+    """
+    text = read(target)
+    if target.suffix != ".py":
+        return text
+    return _bridge_literals(text)
+
+
+def _bridge_literals(text: str) -> str:
+    """The seam between two adjacent Python string literals, as whitespace.
+
+    Split out from the file reader so `--self-test` can reach the part with the logic in
+    it, the same split the renumber reader makes for the same reason: the filesystem is not
+    where this can be wrong.
+    """
+    return re.sub(r'"(\s*\n\s*)"', lambda m: " " + m.group(1) + " ", text)
+
+
+def check_route_census(report: Report) -> None:
+    """Every published route or screen count, against app/src/App.tsx's ROUTES table.
+
+    MECHANICAL, because each of these is provably wrong on the committed tree alone: the
+    table is in the repository, the sentence is in the repository, and they disagree or
+    they do not. That is D16's line for a blocking row, and it is the line CLAUDE.md's own
+    warning has been sitting on the wrong side of since D39.
+    """
+    routes = _route_personas()
+    if routes is None:
+        report.add("route census", MECHANICAL,
+                   [Finding(rel(APP_TSX),
+                            "the ROUTES table could not be read, so no published count can "
+                            "be checked against it. If the table moved or changed shape, "
+                            "this row's reader has to move with it.")])
+        return
+
+    total = len(routes)
+    owner = sum(1 for _, persona in routes if persona == "owner")
+    quantities = {
+        "total": total,
+        "owner": owner,
+        "total_less_one": total - 1,
+    }
+
+    manifest_owner = None
+    if exists(VIEWS_MANIFEST):
+        lines = [
+            line.strip()
+            for line in read(VIEWS_MANIFEST).splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        manifest_owner = sum(1 for line in lines if "#/fulfillment" not in line)
+        quantities["manifest_owner"] = manifest_owner
+
+    findings: List[Finding] = []
+    checked = 0
+    # Per-PATTERN tallies, across every file at once. The per-file guard below catches a
+    # doc that stops publishing a count altogether; this catches the subtler half, measured
+    # rather than reasoned about: reword ONE of CLAUDE.md's two claims and that file still
+    # yields a match, the row still prints green, and coverage has quietly gone from ten
+    # counts to eight. A pattern that matches nothing anywhere is not coverage — it is a
+    # regex keeping a green row company.
+    hits: Dict[str, int] = {}
+    for name in _CENSUS_DOCS:
+        target = ROOT / name
+        if not exists(target):
+            findings.append(Finding(name, "does not exist, and it publishes a route count."))
+            continue
+        text = _census_text(target)
+        seen_here = 0
+        claims = list(_CENSUS_CLAIMS)
+        if manifest_owner is not None:
+            claims = claims + [(_MANIFEST_CLAIM[0], (_MANIFEST_CLAIM[1],))]
+        for readable, kinds in claims:
+            for match in re.finditer(_census_pattern(readable), text):
+                for group, kind in enumerate(kinds, start=1):
+                    word = match.group(group)
+                    value = _NUMBER_WORDS.get(word.lower())
+                    if value is None:
+                        continue
+                    seen_here += 1
+                    checked += 1
+                    hits[readable] = hits.get(readable, 0) + 1
+                    expected = quantities[kind]
+                    if value != expected:
+                        line = text[:match.start()].count("\n") + 1
+                        findings.append(Finding(
+                            f"{name}:{line}",
+                            f"says {word.lower()} where app/src/App.tsx's ROUTES table has "
+                            f"{expected} ({kind.replace('_', ' ')}). The table is the count; "
+                            f"recount off it rather than incrementing this sentence.",
+                        ))
+        if not seen_here:
+            findings.append(Finding(
+                name,
+                "publishes no route or screen count this row can find. Either the sentence "
+                "was deleted — which is a decision, and D18's test allows it — or it was "
+                "reworded past every pattern in _CENSUS_CLAIMS, which switches this check "
+                "off in silence. Add the phrasing to that table, or drop this file from "
+                "_CENSUS_DOCS and say why.",
+            ))
+
+    for readable, _kinds in claims:
+        if not hits.get(readable):
+            findings.append(Finding(
+                rel(SELF),
+                f"the census claim {readable!r} matched nothing in {', '.join(_CENSUS_DOCS)}. "
+                "It covered a published count that has since been reworded or deleted, so "
+                "the sentence it was watching is now unwatched. Re-point the pattern at the "
+                "new phrasing, or drop it and say which sentence went.",
+            ))
+
+    summary = f"{checked} published counts against {total} routes ({owner} owner)"
+    if manifest_owner is not None:
+        summary += f", {manifest_owner} owner renders in the manifest"
+    report.add("route census", MECHANICAL, findings, summary)
+
+
 def check_positional_references(report: Report, docs: List[Path]) -> None:
     """A check named by its position, in the docs and in the code.
 
@@ -6146,6 +6373,31 @@ def self_test() -> int:
             str(found),
         )
 
+    # THE ROUTE CENSUS READS PROSE THAT IS WRAPPED, and both halves of that were wrong in
+    # its first draft: the seam between two Python string literals defeated the match, and
+    # the claims were written as regexes with the whitespace hand-rolled to one space. The
+    # result was a row that printed ten green counts while the owner subcount it named was
+    # matched by nothing at all. These three cases are that bug, kept.
+    print("\na claim wrapped across two string literals is still one sentence")
+    wrapped = '        "a hash router, NINE of them the "\n                "owner\'s — the capture"\n'
+    bridged = _bridge_literals(wrapped)
+    ok(len(bridged) == len(wrapped), "bridging preserves length, so a finding's line number still points at the sentence")
+    ok(bridged.count("\n") == wrapped.count("\n"), "and preserves the newlines it bridges across")
+    ok(
+        re.search(_census_pattern("([A-Za-z]+) of them the owner's"), bridged) is not None,
+        "the owner subcount matches once the seam is whitespace",
+        repr(bridged),
+    )
+    ok(
+        re.search(_census_pattern("([A-Za-z]+) of them the owner's"), wrapped) is None,
+        "and did not before, which is how it went unchecked",
+    )
+    ok(
+        _census_pattern("has ([A-Za-z]+) screens") == r"has\s+([A-Za-z]+)\s+screens",
+        "a claim is written as the sentence reads and compiled to flexible whitespace",
+        _census_pattern("has ([A-Za-z]+) screens"),
+    )
+
     report = Report()
     check_dispatch(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
@@ -6213,6 +6465,7 @@ def audit(staged_only: bool) -> Report:
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
+    check_route_census(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
