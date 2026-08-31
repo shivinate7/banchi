@@ -227,7 +227,7 @@ export function Codes() {
   }, [ledger, filter])
 
   return (
-    <div className="codes">
+    <main className="codes">
       <header className="codes-head">
         <h1>Code cards</h1>
         <p className="codes-quiet">
@@ -660,6 +660,6 @@ export function Codes() {
           </section>
         </>
       )}
-    </div>
+    </main>
   )
 }

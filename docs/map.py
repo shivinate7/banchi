@@ -852,7 +852,14 @@ COMPONENTS = [
                         "`--self-test` is what checks the checker. It NEVER writes, and it "
                         "parses with `ast` rather than importing, so it does not run "
                         "project code. Stdlib only — the pre-commit hook runs bare python3 "
-                        "with nothing installed.",
+                        "with nothing installed. IT AUDITS TWO TSX FILES AS WELL AS THE "
+                        "MARKDOWN, 2026-08-31: the `route rosters` row reads src/App.tsx's "
+                        "ROUTES table and reconciles it against any hand-typed list of "
+                        "routes in a Playwright spec, because that list going stale is "
+                        "silent — a roster missing a route walks the routes it has and stays "
+                        "green, which is how D69 and D70 left three screens asserted by "
+                        "nothing. It is here rather than in a spec because a browser must "
+                        "not run on the commit path (docs/GATES.md).",
                 # D2 is here because the file names it, not because it governs: one comment
                 # uses `C1` and `D2` as examples of a citation that could plausibly become
                 # a variable name one day. The superset rule reads a citation literally and
@@ -864,7 +871,7 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D53", "D60", "D67", "D69"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1387,16 +1394,21 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "step": 10,
-        "does": "the web app. NINE routes behind a hand-written hash router, EIGHT of them the "
+        "does": "the web app. TEN routes behind a hand-written hash router, NINE of them the "
                 "owner's — the capture screen that Gate B runs on, the runs screen the "
                 "pipeline lives on, the review queue, the pricing worklist, the order "
                 "screen and the shipping lane (D67 gave each its own route rather than "
                 "making one a mode of the other), the one "
-                "inventory view (D31 folded the box walk and the pull preview into it) and "
+                "inventory view (D31 folded the box walk and the pull preview into it), the "
+                "code-card screen D70 gave its own route, and "
                 "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. The count "
                 "here is RECOUNTED off src/App.tsx's ROUTES table and never incremented: it "
-                "has been wrong more often than right and nothing reconciles it. Playwright "
+                "has been wrong more often than right and nothing reconciles it — it said "
+                "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
+                "outright. What IS reconciled now is the specs: scripts/docs-audit.py's "
+                "`route rosters` row fails a commit where a spec's hand-typed list of routes "
+                "disagrees with that table. Playwright "
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against step "
                 "6's component and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
@@ -1496,7 +1508,7 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: EIGHT hash routes — five after D31 merged #/boxes "
+            "src/App.tsx": {"does": "the shell: TEN hash routes — five after D31 merged #/boxes "
                                     "and #/pull into #/inventory, plus #/runs, which D39 gave the "
                                     "pipeline on 2026-08-29 between Capture and the review queue, "
                                     "and #/pricing, which D49 gave hand-pricing on 2026-08-30 "
@@ -1517,14 +1529,14 @@ COMPONENTS = [
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
                                     "the one place this shell takes a modifier. "
-                                    "`#/codes` IS THE EIGHTH, 2026-08-30 — the code-card track "
+                                    "`#/codes` IS THE TENTH, 2026-08-30 — the code-card track "
                                     "on a route of its own under D14's two-tracks-one-rig, with "
                                     "the chord `d` because `c` is Capture. It sits in `look` "
                                     "rather than `run`: a code-card box is read once in seconds "
                                     "with no model call and nothing to price, so it is reached "
                                     "when asked, which is what this table's own definition of "
                                     "that group says.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D67", "D69"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D67", "D69", "D70"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -1545,8 +1557,14 @@ COMPONENTS = [
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
                                       "the file, because a duplicate can mean a code that is "
-                                      "worth nothing.",
-                              "governed_by": ["D14", "D32"]},
+                                      "worth nothing. Its disabled buttons read `default` "
+                                      "until 2026-08-31 — a (0,2,1) override of base.css's "
+                                      "(0,1,1) `not-allowed` floor, which is D50's 30-of-41 "
+                                      "class — and nothing caught it: the cursor sweep's "
+                                      "roster did not list this route, and this checkout's "
+                                      "store is empty (D43) so no disabled button renders for "
+                                      "it to see even now that it does.",
+                              "governed_by": ["D14", "D32", "D43", "D50"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, why this nav may never render on the "
                                     "Fulfillment view, and the two chip looks — the chord's, "
@@ -2394,25 +2412,33 @@ COMPONENTS = [
             },
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
-                        "different things. A live sweep walks the seven routes its own "
-                        "hand-written table lists — seven of NINE since D67 added #/orders and "
-                        "#/shipping, which are not in it yet — classifies each "
-                        "rendered control by tag, type and disabled state, and asserts the "
-                        "cursor the rule requires — no selector roster, so a control added next "
-                        "month cannot be missed. A synthetic case then probes base.css's floor "
+                        "different things. A live sweep walks EVERY registered route — the "
+                        "hashes are read off the nav strip, which App.tsx renders from the same "
+                        "ROUTES table it routes from — classifies each rendered control by tag, "
+                        "type and disabled state, and asserts the cursor the rule requires. No "
+                        "selector roster and, since 2026-08-31, no route roster either, so "
+                        "neither a control nor a SCREEN added next month can be missed. A "
+                        "synthetic case then probes base.css's floor "
                         "with elements it builds itself, because this checkout's store is empty "
                         "(D43) so no screen renders a DISABLED control — deleting the whole "
                         "disabled arm was mutation-tested and the live sweep alone PASSED, "
                         "which is 30 of the 41 original defects invisible. A third case asserts "
                         "the --field-hover edge responds and that no hover reflows the box. Run "
                         "by `make design-check`.",
-                "governed_by": ["D28", "D43", "D50"],
-                "note": "NOT a harness test and not registered in harness/run.py:TESTS — it "
-                        "starts a browser. KNOWN LIMIT, so a green run is read for what it is: "
-                        "between the two cases the floor is covered completely and a SCREEN's "
-                        "own override only where that screen renders it. A per-file rule on a "
-                        "control this empty store never draws is unchecked by either, and "
-                        "closing that needs fixtures for nine screens.",
+                "governed_by": ["D28", "D43", "D50", "D69", "D70"],
+                "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
+                        "its own header warning against exactly that. D69 added #/orders and "
+                        "#/shipping and D70 added #/codes; none reached the list, three screens "
+                        "were swept by nothing, and design-check stayed green — a roster missing "
+                        "a route walks the routes it has. Widening it found a live defect of the "
+                        "30-of-41 class on #/codes. NOT a harness test and not registered in "
+                        "harness/run.py:TESTS — it starts a browser. KNOWN LIMIT, so a green run "
+                        "is read for what it is: between the two cases the floor is covered "
+                        "completely and a SCREEN's own override only where that screen renders "
+                        "it. A per-file rule on a control this empty store never draws is "
+                        "unchecked by either — the #/codes defect was found by reading the "
+                        "sheet, not by the sweep — and closing that needs fixtures for ten "
+                        "screens.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
@@ -2442,8 +2468,14 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D51", "D67", "D69"],
-                "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D67", "D69", "D70"],
+                "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
+                        "derived from App.tsx could not assert the ORDER against anything "
+                        "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
+                        "marker that scripts/docs-audit.py's `route rosters` row checks against "
+                        "the table. Added after D70 put #/codes in the product's ring and not in "
+                        "this one, which left design-check red. TWO OF ITS CASES COULD NOT FAIL "
+                        "AND WERE CHANGED, which is the part "
                         "worth keeping. The leader-disarm case retried an assertion that "
                         "CHORD_MS satisfies on its own after a second, so it went green against "
                         "a build with the disarm deleted; it reads the attribute two frames "

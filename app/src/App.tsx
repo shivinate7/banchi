@@ -15,7 +15,7 @@ import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
 
-/* The app shell: nine routes across two personas, and the chrome that moves between them.
+/* The app shell: ten routes across two personas, and the chrome that moves between them.
  *
  * IT WAS SEVEN UNTIL 2026-08-23 AND D31 TOOK TWO. `#/boxes` and `#/pull` rendered the same 767
  * records `#/inventory` renders, and the owner named the result: they "read as separate
@@ -26,11 +26,18 @@ import './App.css'
  * `Inventory.tsx`.
  *
  * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
- * fixes: the gallery was the seventh and nothing was counting. NINE now (D69, 2026-08-30) —
- * capture, runs, review, pricing, orders, shipping, inventory, fulfillment, gallery — EIGHT
- * of them the owner's and ONE the Fulfiller's. The
- * not-rendered-rather-than-hidden rule for the Fulfiller's nav is untouched, because it was
- * never about how many owner routes there are.
+ * fixes: the gallery was the seventh and nothing was counting. TEN now — capture, runs,
+ * review, pricing, orders, shipping, inventory, codes, fulfillment, gallery — NINE of them
+ * the owner's and ONE the Fulfiller's. The not-rendered-rather-than-hidden rule for the
+ * Fulfiller's nav is untouched, because it was never about how many owner routes there are.
+ *
+ * THIS LINE SAID `NINE` FROM D70 UNTIL 2026-08-31, which is the paragraph below happening
+ * again in the same file, one entry later: D69 took the count to nine and was written down,
+ * D70 added `#/codes` and was not. The count above is RECOUNTED from the table rather than
+ * incremented — see below for why that is the only way of arriving at it that has ever been
+ * right — and `app/tests/cursor.spec.ts` was swept off a hand-typed roster that missed the
+ * same three routes for the same reason. Nothing reconciles THIS sentence; what is
+ * reconciled now is the specs, by `scripts/docs-audit.py`'s `route rosters` row.
  *
  * THIS COMMENT SAID `Five now` FROM D39 UNTIL D49, WHICH IS THE SAME DRIFT IN THE FILE THAT
  * OWNS THE TABLE. `#/runs` landed and this line was not touched, so the one place a reader

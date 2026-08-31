@@ -89,9 +89,20 @@
   border-color: var(--field-hover);
 }
 
+/* `not-allowed`, AND IT READ `default` UNTIL 2026-08-31. D50 corrected exactly this in two
+   other sheets — `.runs-plain` and `.review-close-choice`, "neither with a comment claiming it
+   meant to" — and `base.css`'s floor answers `not-allowed` for every `button:disabled` that
+   says nothing. This rule is (0,2,1) against that floor's (0,1,1), so it was not falling
+   through, it was overriding, which is the 30-of-41 class D50 was written for.
+
+   NOTHING CAUGHT IT, AND THAT IS THE POINT. `cursor.spec.ts`'s live sweep walked a hand-typed
+   roster this route was never added to; and even now that the roster is derived, this checkout's
+   store is empty (D43) so no disabled button on this screen renders for it to see. The synthetic
+   case in that file probes `base.css`'s floor with bare elements, so a screen's own override is
+   outside what it can reach. Found by reading the sheet while widening the roster. */
 .codes button:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .codes button.codes-go,
