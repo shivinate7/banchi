@@ -23,6 +23,21 @@ anthropic>=0.69
 Pillow>=9
 numpy>=1.21
 
+# zxing-cpp  the code-card track's QR decoder (codes/qr.py). The redemption code IS the
+#            QR's payload, so this is what makes the primary path for `pokemon_code`
+#            deterministic, local and free — no model call for the one field that must be
+#            exactly right, because it is the thing being sold.
+#
+# THE PIN IS LOAD-BEARING AND `>=` WOULD BREAK A CLEAN CLONE. This venv is Python 3.9.6
+# (`/usr/bin/python3` on this machine). The 3.x line dropped cp39 wheels, so plain
+# `pip install zxing-cpp` resolves 3.1.1 — whose `requires_python` is still >=3.9 — finds
+# no wheel, falls back to the sdist and DIES in CMake configure. It does not quietly pick
+# an older release. 2.3.0 ships a real cp39 universal2 wheel, 1.7 MB, no dependencies.
+# Revisit the pin only alongside a Python upgrade, and re-measure codes/qr.py if you do:
+# 3.1.x claims a materially better Version-1 detection rate, which is exactly the symbol
+# size a 1 cm code produces.
+zxing-cpp==2.3.0
+
 # Deliberately absent:
 #   requests   stdlib urllib covers both fetches this repo makes — pokemontcg.io, and
 #              D64's TCGplayer Filtered Export in server/tcg_export.py; one fewer
@@ -32,3 +47,18 @@ numpy>=1.21
 #   opencv     see the §4.5 note above — the fallback's trigger fired and it was
 #              declined anyway, because the tone path failed on a false premise
 #              rather than for want of a better segmentation library.
+#
+#              DECLINED A SECOND TIME, 2026-08-30, on a second measurement and for a
+#              different question. The code-card track needed a QR decoder and opencv
+#              ships two (`QRCodeDetector`, `QRCodeDetectorAruco`). A first pass took
+#              them — and its benchmark used frames at most 1600 px wide, which is not
+#              this rig: `app/src/useCamera.ts` asks for 3840x2160. Re-measured at that
+#              size over 88 frames, opencv's two detectors behind a six-rung recovery
+#              ladder scored 72.7% at 211 ms, including 0 of 8 on a card filling a
+#              quarter of the frame and 0 of 8 with glare on the QR. zxing-cpp scored
+#              100% at 67 ms. So the 46 MB stays unspent, and this entry now rests on two
+#              independent measurements rather than one.
+#   tesseract  C2 specified OCR of the printed SKU line to identify a code card's
+#              product. `codes/products.py` answers that from a capture-time claim
+#              instead, so no OCR engine is installed and none is needed. The argument is
+#              in that module and in docs/specs/code-cards.md.

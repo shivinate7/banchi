@@ -4807,7 +4807,19 @@ def self_test() -> int:
     main = ROOT / "cli" / "__main__.py"
     if main.exists():
         keys = dict_keys_from_assign(read(main), "COMMANDS")
-        ok(keys == ["identify", "join", "emit", "reconcile"], "COMMANDS read from cli/__main__.py", str(keys))
+        # WHAT THIS ROW IS FOR IS THE READER, NOT THE ROSTER. It pinned the exact four
+        # commands until 2026-08-30, which made it a second copy of a fact
+        # `harness/tests/t7_store_and_seams.py` already asserts exactly — including the "and
+        # only these" half, which is the part worth having and which belongs in the test that
+        # can refuse a command nobody declared. Two copies meant adding `scan` failed a check
+        # whose subject is `dict_keys_from_assign`, in a file that has no opinion about what
+        # commands should exist. So this asserts what it is actually testing: the reader
+        # returns a non-empty list of the real keys.
+        ok(
+            bool(keys) and "identify" in (keys or []) and "join" in (keys or []),
+            "COMMANDS read from cli/__main__.py",
+            str(keys),
+        )
     t3 = ROOT / "harness" / "tests" / "t3_join_coverage.py"
     if t3.exists():
         criteria = string_assign(read(t3), "PASS_CRITERIA")

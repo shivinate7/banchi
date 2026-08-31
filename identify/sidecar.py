@@ -75,6 +75,10 @@ _VARIANT_KEYS = ("variant", "metadata_finish", "finish")
 _GAME_KEYS = ("game",)
 # Same rule as `game`, first day, one spelling.
 _RARITY_CLAIM_KEYS = ("rarity_claim",)
+# C10's product claim. One spelling, no aliases, same rule as `game` and `rarity_claim`:
+# nothing has ever written this key under another name, and inventing spellings for a field
+# on its first day is how a vocabulary nothing audits gets started.
+_PRODUCT_KEYS = ("product",)
 _NOTE_KEYS = ("note",)
 
 
@@ -120,6 +124,12 @@ class Capture:
     # default rather than a silent Pokemon. A tuple for the same reason the dataclass is
     # frozen.
     rarity_claim: Optional[Tuple[str, ...]] = None
+    # C10's product claim: which sealed product this code card came out of, a key from
+    # `codes/products.py`. A plain string — unlike the two claims above it is single-valued,
+    # because a stack came out of exactly one product and "two products at once" is not a
+    # state the operator can be in. `None` is no claim and stays that way; there is no
+    # ladder that infers a product and no default that would not be a guess.
+    product: Optional[str] = None
     # Free text the operator typed AFTER the capture, describing a card the pipeline will
     # never identify. Read back only so a re-record carries it; nothing here parses it.
     note: Optional[str] = None
@@ -278,6 +288,33 @@ def _check_variant(value, game: Optional[str]):
     return (tuple(kept) or None), problem
 
 
+def _check_product(value):
+    """(product, problem) — C10's product claim, read defensively.
+
+    NOT GAME-SCOPED, UNLIKE THE TWO CHECKERS BELOW IT, and that difference is deliberate
+    rather than an oversight. A finish and a rarity are vocabulary the REGISTRY authors per
+    game (D22), so both have to be judged against the game the sidecar names. The product
+    vocabulary belongs to the code-card track alone — `codes/products.py` — and there is
+    exactly one game that carries it. Passing a game in here would imply a per-game product
+    list that does not exist and that nothing would keep honest.
+
+    AN UNKNOWN PRODUCT IS CARRIED FORWARD, NOT DROPPED, for `game`'s reason verbatim: a
+    dropped value reads as an absent one, and absent means "the operator made no claim" —
+    so a typo would silently become "unclaimed" and the card would be filed as unsorted
+    rather than as needing a correction. The problem is reported and the string survives.
+    """
+    if value is None:
+        return None, None
+    text = str(value).strip().lower()
+    if not text:
+        return None, None
+    from codes import products  # noqa: PLC0415 — a track-local import, not a hot path
+
+    if text not in products.KEYS:
+        return text, f"product {value!r} not in {products.KEYS}"
+    return text, None
+
+
 def _check_rarity_claim(value, game: Optional[str]):
     """(claim, problem) — the sidecar's `rarity_claim`, read defensively.
 
@@ -412,7 +449,7 @@ def load(
         sidecar_path = None
 
     sidecar_box = sidecar_index = None
-    set_hint = metadata_finish = game = rarity_claim = note = None
+    set_hint = metadata_finish = game = rarity_claim = note = product = None
     if payload is not None:
         sidecar_box = _as_int(_first(payload, _BOX_KEYS))
         sidecar_index = _as_int(_first(payload, _INDEX_KEYS))
@@ -440,6 +477,10 @@ def load(
         rarity_claim, claim_problem = _check_rarity_claim(raw_claim, game)
         if claim_problem:
             problems.append(claim_problem)
+        raw_product = _first(payload, _PRODUCT_KEYS)
+        product, product_problem = _check_product(raw_product)
+        if product_problem:
+            problems.append(product_problem)
         raw_note = _first(payload, _NOTE_KEYS)
         # No enum to check it against — it is prose. Trimmed to nothing is nothing.
         note = str(raw_note).strip() or None if raw_note is not None else None
@@ -486,6 +527,7 @@ def load(
         metadata_finish=metadata_finish,
         game=game,
         rarity_claim=rarity_claim,
+        product=product,
         note=note,
         source=source if resolved_box is not None else FROM_NOWHERE,
         problem="; ".join(problems) if problems else None,

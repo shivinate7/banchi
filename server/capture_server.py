@@ -29,6 +29,11 @@
                                            on the operator's word (D34)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
+    GET    /codes                          the code ledger: counts, tiers, every code (C8)
+    GET    /codes/lots                     every lot built so far, newest first
+    POST   /codes/lots                     plan a lot, or BUILD one — reserving its codes
+    POST   /codes/scan                     decode a box's photographs into the ledger. FREE
+    POST   /codes/export                   preview a channel export, or COMMIT one to an order
     GET    /boxes                          every box: its dividers, its fill, its capacity
     POST   /boxes                          register a box before any card goes into it
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
@@ -246,6 +251,7 @@ from urllib.parse import parse_qs, urlparse
 # not importable without this. Same idiom and same reason as harness/run.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from codes import products  # noqa: E402
 from pipeline import games, join, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
@@ -274,6 +280,7 @@ from store import orders as order_store  # noqa: E402
 # ways — by path as `make server` does, where sys.path[0] is server/, and as a package
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
+from server import codes_routes  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 # The shipping seam, below the line for the same reason and by the same rule (D61). It opens
 # no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
@@ -546,6 +553,11 @@ CLAIM_WIRE_NAMES = {
     # is no claim, exactly as `variant` and `set_hint` behave, and now for the same reason
     # rather than by coincidence: both claims are sets and an empty set is no claim (D3, D23).
     "rarity_claim": "rarity_claim",
+    # C10's product claim. Same spelling on the wire, in the sidecar and on the record —
+    # unlike `metadata_finish`/`variant` above, which differ only because that key was named
+    # before it had a shape and files on disk already use it. A field on its first day gets
+    # one name everywhere.
+    "product": "product",
     "note": "note",
 }
 
@@ -1372,6 +1384,35 @@ def _optional_rarity_claim(payload: dict, game: Optional[str]) -> Optional[List[
     return _check_rarity_members(_rarity_claim_shape(payload), game)
 
 
+def _optional_product(payload: dict) -> Optional[str]:
+    """C10's product claim, checked against `codes/products.py`. Absent is no claim.
+
+    NOT SCOPED TO THE GAME, unlike the finish and the rarity claim directly above. Those two
+    are per-game vocabulary the registry authors (D22), so both need the game in hand. The
+    product vocabulary belongs to the code-card track and there is one game that carries it;
+    taking a game here would imply a per-game product list that does not exist.
+
+    REFUSED RATHER THAN CARRIED, which is the opposite of what `identify/sidecar.py` does
+    with the same value, and the difference is the direction of travel. The sidecar READS a
+    file that already exists and must never drop what it cannot understand. This route is a
+    WRITE from a client that has just been served the vocabulary by `GET /games` — so a
+    product outside it is a client bug, and accepting it would put a value in the store that
+    no screen can render and no channel export can tier.
+    """
+    text = _optional_text(payload, "product")
+    if text is None:
+        return None
+    key = text.strip().lower()
+    if key not in products.KEYS:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "product_invalid",
+            f"product was {text!r}; use one of {', '.join(products.KEYS)}. "
+            "GET /games serves the product vocabulary.",
+        )
+    return key
+
+
 def _optional_text(payload: dict, key: str) -> Optional[str]:
     raw = payload.get(key)
     if raw is None:
@@ -2007,6 +2048,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
         "metadata_finish": _optional_variant(payload, game),
         "game": game,
         "rarity_claim": _optional_rarity_claim(payload, game),
+        "product": _optional_product(payload),
     }
     # AFTER THE CLAIMS, WHICH IS A CHANGE OF ORDER AND NOT AN OVERSIGHT. The claims are three
     # cheap string comparisons; this base64-decodes a photograph that can be tens of
@@ -2296,6 +2338,27 @@ def do_games() -> dict:
     return {
         "default": games.DEFAULT_GAME,
         "games": [dict(entry) for entry in games.GAMES],
+        # C10's product vocabulary, served BESIDE the registry rather than inside it. It
+        # belongs in this answer because the capture screen's product picker needs it and
+        # `GET /games` is already the one route that teaches the app a capture vocabulary —
+        # a second route for one list would be a second thing to fetch before the first
+        # shutter.
+        #
+        # NOT A FIELD ON THE `pokemon_code` REGISTRY ENTRY, and that is a hard constraint
+        # rather than a preference: `scripts/docs-audit.py` reads `pipeline/games.py` with
+        # `ast.literal_eval`, so that file may import nothing from this repo. Putting the
+        # list there would mean either a second hand-authored copy of `codes/products.py`
+        # or an import that breaks the audit.
+        "product_game": products.GAME,
+        "products": [
+            {
+                "key": entry["key"],
+                "display": entry["display"],
+                "premium": entry["premium"],
+                "redeem_limit": entry["redeem_limit"],
+            }
+            for entry in products.PRODUCTS
+        ],
     }
 
 
@@ -2479,6 +2542,8 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     # lock. Kept out of `incoming` until it is checked, so the apply loop below never sees
     # an unvalidated claim.
     claim_shape = _rarity_claim_shape(payload) if "rarity_claim" in payload else None
+    if "product" in payload:
+        incoming["product"] = _optional_product(payload)
     if "note" in payload:
         incoming["note"] = _optional_text(payload, "note")
 
@@ -8064,6 +8129,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
             handler()
         except BadRequest as exc:
             self._fail(exc.status, exc.code, str(exc))
+        except codes_routes.CodesRefusal as exc:
+            self._fail(exc.status, exc.code, str(exc))
         except pipeline_routes.PipelineRefusal as exc:
             # The pipeline module raises its own exception type rather than this file's,
             # because this file imports it and the reverse import would be a cycle. One
@@ -8168,6 +8235,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # pass so no two of them are offered the same physical card.
             if path == "/orders":
                 return self._json(HTTPStatus.OK, do_orders())
+            if path == "/codes":
+                return self._json(HTTPStatus.OK, codes_routes.do_codes())
+            if path == "/codes/lots":
+                return self._json(HTTPStatus.OK, codes_routes.do_codes_lots())
             if path == "/search":
                 # `keep_blank_values` so `?q=` reaches `_require_query` and is refused in
                 # `query_required` rather than looking like a request with no `q` at all —
@@ -8361,6 +8432,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # already reading — see `server/pipeline_routes.py`'s header for what that
             # replaces. The preflight beside it is free and creates no run at all, which is
             # what the screen must show before it may ask.
+            # The codes track's two writes. FREE — no model call anywhere on this
+            # track — so neither is behind D33's money gate. The export carries its own
+            # two-step instead, for a different irreversible thing: a code handed to a
+            # buyer cannot be un-handed. `server/codes_routes.py` has the argument.
+            if path == "/codes/scan":
+                status, body = codes_routes.do_codes_scan(self._body(), captures_root())
+                return self._json(status, body)
+            if path == "/codes/export":
+                status, body = codes_routes.do_codes_export(self._body())
+                return self._json(status, body)
+            if path == "/codes/lots":
+                status, body = codes_routes.do_codes_lot(self._body())
+                return self._json(status, body)
             if path == "/pipeline/preflight":
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Harness runner — T1-T7.
+"""Harness runner — T1-T8.
 
-`make harness` exits 0 only when all seven tests pass. Nothing in this project is "done"
+`make harness` exits 0 only when all eight tests pass. Nothing in this project is "done"
 until it does. See docs/GATES.md for the contract; every threshold there is a number, not
 an adjective, and the numbers live in the test modules next to the code that checks them.
 
@@ -9,7 +9,11 @@ T1-T4 are the original contract. T5 (pricing) and T6 (geometry) arrived with bat
 v2: a wrong price is a distinct failure from a wrong match, and a card the pipeline cannot
 find in its own photograph is a third thing again. Each earns its own failing test name.
 
-All seven tests always run, even after one fails. A runner that stops at the first failure
+T8 (code cards) arrived with C9-C11 on 2026-08-30, for the same reason: a code is a
+bearer instrument, and reading one wrong, selling one twice, or letting a premium one
+leave in a bulk lot are three different failures that must not hide inside one another.
+
+All eight tests always run, even after one fails. A runner that stops at the first failure
 hides the state of everything behind it, which is the opposite of what a status signal
 is for.
 """
@@ -29,6 +33,7 @@ from harness.tests import (  # noqa: E402
     t5_pricing,
     t6_geometry,
     t7_store_and_seams,
+    t8_codes,
 )
 
 # Explicit and ordered. No discovery magic: a test that silently stops being collected is
@@ -41,6 +46,7 @@ TESTS = [
     t5_pricing,
     t6_geometry,
     t7_store_and_seams,
+    t8_codes,
 ]
 
 

@@ -281,6 +281,18 @@ class Card:
     # order is the registry's stack order as the capture screen sends it, and nothing
     # downstream depends on it.
     rarity_claim: Optional[List[str]] = None
+    # C10's product claim: WHICH SEALED PRODUCT this code card came out of — a key from
+    # `codes/products.py`. Only `pokemon_code` uses it, and it is the field that retires
+    # C2's OCR half: code cards arrive in sealed-product batches, so the operator declares
+    # the product once per stack and the camera never has to read a SKU line. `None` is no
+    # claim, exactly like `rarity_claim` and for the same reason — there is no ladder that
+    # infers a product, so an absent one stays absent rather than defaulting to `booster`,
+    # which would silently file a $1.39 Pokemon Center ETB code as a $0.03 booster.
+    #
+    # ON `Card` RATHER THAN ONLY IN THE LEDGER, because a claim is a property of the capture
+    # and `codes/ledger.py` is written by a LATER step that may never run. A photographed
+    # card whose scan has not happened yet still knows what it is.
+    product: Optional[str] = None
     # Free text, and the only claim on this record a human writes in prose. It exists for
     # the ~1% of stock that is neither identified nor joined — the occasional Yu-Gi-Oh,
     # Weiss Schwarz, foreign-language or Magic card — where the operator says what it is so
@@ -343,7 +355,9 @@ class UnknownClaim(ValueError):
 # `photo` IS THE ONE MEMBER NO CLIENT EVER SENDS. It is derived — the path is not knowable
 # until the index is allocated — but it is a claim in every other respect: it is set at
 # capture, it must survive a re-record, and `identify` and `emit` both re-record it.
-CAPTURE_CLAIM_FIELDS = ("photo", "set_hint", "metadata_finish", "game", "rarity_claim", "note")
+CAPTURE_CLAIM_FIELDS = (
+    "photo", "set_hint", "metadata_finish", "game", "rarity_claim", "product", "note",
+)
 
 _undeclared = [name for name in CAPTURE_CLAIM_FIELDS if name not in Card.__annotations__]
 if _undeclared:  # pragma: no cover - import-time contract, not a branch under test

@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import cmd_emit, cmd_identify, cmd_join, cmd_reconcile, runs  # noqa: E402
+from cli import cmd_emit, cmd_identify, cmd_join, cmd_reconcile, cmd_scan, runs  # noqa: E402
 from identify import images  # noqa: E402
 from pipeline import pricing, routing, variant  # noqa: E402
 from store import files as store_files  # noqa: E402
@@ -61,6 +61,28 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=f"store: ${store_files.HOME_ENV} or the repo root",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    # ----------------------------------------------------------------------------- scan
+    #
+    # BEFORE `identify` IN THIS FILE BECAUSE IT COMES BEFORE IT IN THE WORK, and because a
+    # reader scanning the subcommand list should meet the free one first. For code cards it
+    # is not merely first, it is usually the whole of identification: the QR carries the
+    # redemption code, so there is nothing left for a model to read.
+    scan = sub.add_parser(
+        "scan",
+        help="read the QR codes off a directory of code-card photos. FREE — no model call.",
+    )
+    scan.add_argument("capture_dir", help="directory of photos + JSON sidecars")
+    scan.add_argument(
+        "--box",
+        type=int,
+        help="box number for photos whose sidecar and filename carry none",
+    )
+    scan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="report what would be written to the ledger and write nothing",
+    )
 
     # ------------------------------------------------------------------------- identify
     identify = sub.add_parser(
@@ -152,6 +174,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 COMMANDS = {
+    "scan": cmd_scan.run,
     "identify": cmd_identify.run,
     "join": cmd_join.run,
     "emit": cmd_emit.run,
