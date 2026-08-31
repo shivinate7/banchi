@@ -2131,11 +2131,11 @@ EXPORT_STANDING = (
         "ExcludeListos",
         True,
         "Exclude listings with photos — the owner's standing instruction (2026-08-31, D75). "
-        "A seller-photo listing is usually a specific copy at a premium and it feeds "
-        "`ExportLowestListingNotMe`, so including them moves the number D8 and D9 give "
-        "pricing authority to. NOTHING DOWNSTREAM CAN CATCH THIS: D64 measured `Photo URL` "
-        "empty in every export, filtered and unfiltered, so this axis leaves no trace in the "
-        "file and a wrong value is invisible forever.",
+        "It holds on the owner's word: what the flag changes in the file is NOT measured, "
+        "because the axis leaves no trace in it. NOTHING DOWNSTREAM CAN CATCH A WRONG VALUE: "
+        "D64 measured `Photo URL` empty in every export, filtered and unfiltered, so a wrong "
+        "value gives a clean join and a green `make check` forever. Do not flip this on a "
+        "reading of the field name — take it back to the owner.",
     ),
     (
         "MyInventory",

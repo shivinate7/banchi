@@ -148,9 +148,9 @@ _LOGON_MARKER = "account/logon"
 # `ExcludeListos` — EXCLUDE LISTINGS WITH PHOTOS. TRUE, and it is the owner's standing
 # instruction (2026-08-31). It shipped `False` because D65 captured the body off the owner's
 # browser and took whatever that checkbox happened to be set to; nothing recorded it as a
-# choice. A listing carrying a seller photo is usually a specific-copy listing and prices at a
-# premium, and it feeds `ExportLowestListingNotMe` — so including them moves the number D8 and
-# D9 give pricing authority to.
+# choice. WHAT IT CHANGES IN THE FILE IS NOT MEASURED — see D75, which records that as an open
+# measurement rather than reasoning past it. Do not flip this back on a reading of the field
+# name; it is the owner's instruction and it goes back to the owner.
 #
 # AND NOTHING DOWNSTREAM CAN EVER CHECK IT, WHICH IS WHY THE GUARD IS HERE. D64 measured
 # `Photo URL` empty in all eleven exports, filtered and unfiltered: this axis leaves NO trace
