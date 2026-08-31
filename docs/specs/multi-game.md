@@ -23,23 +23,19 @@ picker on the capture bar and `GET /games` serving the registry to it. `make doc
 clean but for two advisory questions, which section 6 explains and which are the rule working
 rather than a defect.
 
-**THE NOT-BUILT LIST, AS IT NOW STANDS (updated 2026-08-23, same day).** Since this file was
-written: the rarity claim's Python side and picker plumbing are BUILT (the ladder cross-check
-and chip narrowing; the prompt clause was built, measured for $0.17, LOST — holdout down 1.5
-points, high-confidence misses up two — and is switched off with the measurement cited at the
-switch; `docs/GATES.md`'s T1 section has the numbers). The multi-export join (D25) is BUILT,
-proven byte-identical on a single-export Pokemon run. **EVERYTHING THIS SENTENCE USED TO LIST
-AS UNBUILT IS BUILT, corrected 2026-08-25**: pooled non-located inventory (D24) is live —
-`pipeline/games.py` carries `"located": False` on `pokemon_code`, the server builds the pooled
-place block, and `app/tests/fulfillment.spec.ts` asserts a pooled card never reaches the
-Fulfiller's screen; both opsec discharges are made — `scripts/guard-opsec.sh` was re-enabled as
-a `PreToolUse` hook on 2026-08-23 with the narrowed pattern D16 prescribes, and
-`scripts/views.txt` names no code-card-renderable URL; and per-game finalisation landed as
-prompts — `riftbound_card_v1` and `one_piece_card_v1` are written, registered and dispatched
-to. What is still true, and is the honest remaining gap, is that **neither new game has met a
-card**: the store holds zero Riftbound and zero One Piece records, so every claim about those
-two prompts is a claim about a CSV and a schema rather than about a photograph. Section 9
-carries the original arguments.
+**Section 9 scoped five jobs and all five shipped** (corrected 2026-08-25): the rarity claim
+end to end (D23); the multi-export join (D25), proven byte-identical on a single-export
+Pokemon run; pooled non-located inventory (D24) — `pipeline/games.py` carries
+`"located": False` on `pokemon_code` and `app/tests/fulfillment.spec.ts` asserts a pooled card
+never reaches the Fulfiller's screen; both opsec discharges — `scripts/guard-opsec.sh`
+re-enabled with D16's narrowed pattern, and `scripts/views.txt` naming no code-card-renderable
+URL; and per-game finalization as prompts, `riftbound_card_v1` and `one_piece_card_v1` written,
+registered and dispatched to. That section keeps each argument.
+
+**One of the five was measured and lost, and the measurement is the point.** The rarity
+clause in the prompt was built, A/B'd for $0.17, and **switched off**: holdout fell 1.5
+points and high-confidence misses rose by two. `docs/GATES.md`'s T1 section has the numbers,
+and they are cited at the switch itself.
 
 **WHAT HAS MET A REAL CARD.** Nothing here. Gate B ran 53 Pokémon cards through a pipeline that
 had no `game` field in it. No Riftbound card, no One Piece card and no misc card has been
@@ -473,7 +469,13 @@ answer. It says nothing about identification, and it used to be read as though i
 
 ---
 
-## 9. NOT BUILT
+## 9. The five jobs this file scoped, and the argument behind each
+
+**All five are built.** The heading read "NOT BUILT" until 2026-08-30, by which point every
+item under it had shipped and the STATUS section above was carrying a paragraph-long
+correction to say so. The sections are kept for their arguments — the superset rule, the
+rung-0 prohibition, the union-not-intersection rule for finish chips — none of which the
+code states.
 
 ### 9.1 — The rarity claim, end to end (D23) — the job that pays
 
@@ -569,7 +571,7 @@ its own step so the fingerprint moves once, deliberately, with a re-measured T1.
 the whole of why it is separate from 9.1: a prompt change and an accuracy measurement in the same
 commit cannot say which one moved the number.
 
-### 9.5 — Per-game finalisation
+### 9.5 — Per-game finalization
 
 Riftbound and One Piece have exports and vocabularies and **no prompt**. Their `prompt` field says
 `unwritten` and asking for it refuses. Nothing has photographed a card of either game, so nothing has

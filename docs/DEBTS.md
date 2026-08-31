@@ -352,6 +352,15 @@ code, silently, because the line is real and the file is right. Grep the TITLE i
 reporter prints that too and it is exact. Nothing to fix at 1.55.1; the remedy is to stop
 writing the number down.
 
+**The same shape in the docs, and `doc hygiene` sees only its provable half.** Docs carry 52
+resolvable `path:line` citations. D74's row catches one failure — a number past the end of its
+file — and there are none today. **The common case is invisible**: a citation whose file is
+long enough but whose line has moved, which is exactly what `ReviewQueue.css:47` became when
+the comment it named slid to line 57. Nothing distinguishes that from a correct citation
+without knowing what the line should say. **The remedy is the same one this entry already
+gives** — cite the identifier, not the number — and the 2026-08-30 prose sweep applied it
+where it rewrote a citation rather than adding a check that cannot exist.
+
 ### What is not closed about the `make design-check` flakes
 
 Three flakes were reproduced and fixed 2026-08-30 — a `toBeVisible()` timeout answered by
@@ -407,7 +416,7 @@ at integration, and by hand is where it stays.
 other row prints green, the run exits 0, and the row is absent. A detector cannot detect its own
 absence, so there is a root to the recursion: unwire anything else and the commit fails, unwire
 *this* and only `--self-test` catches it. Related: **called is not run, and run is not looked** —
-a dispatched check returning before its `report.add` prints no row, which `check_raw_colour` does
+a dispatched check returning before its `report.add` prints no row, which `check_raw_color` does
 when `app/src/` is absent. And **`scripts/status.py` is not in `INVOKERS`**, so `audit invocation`
 does not see its call; it would find nothing if it did, since that row reads flags off a literal
 command line and `status.py` builds argv as a list.
@@ -469,7 +478,7 @@ it stands and cannot see what a change removed.
 ### The second fenced block in `docs/DESIGN.md` is not read
 
 `design tokens` reconciles the `## Tokens` fence against `app/src/tokens.css` both ways, and
-`raw colour` now blocks a hex anywhere in `app/src/*.css` — which closed the sharper half, the
+`raw color` now blocks a hex anywhere in `app/src/*.css` — which closed the sharper half, the
 `#ffffff` in `app/src/PullConfirm.css` that survived a design review and two integration passes.
 What is left is a document disagreeing with itself: step 6's three button states restate five of
 these hexes in a second fence nothing reads. Left out because D18's instinct is that deleting a

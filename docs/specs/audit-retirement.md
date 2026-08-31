@@ -96,14 +96,9 @@ Withdrawn — do not repropose:
   entry is arguing about the wrong thing. The staged half, 4(c), survives and asks the
   same question at the only moment it is actionable.
 
-**A pattern in this spec's own reliability, recorded for the next planning session.** Its
-mechanical figures held up under execution — the self-test sections measured 81 against a
-recorded 81, whole-unit deletions 102 against an implied 102, and the only arithmetic gap
-was the one boundary the spec itself flagged as estimated. Its claims about *runtime
-behaviour* did not: section 4 asserted a gated_on derivation that did not exist, and 4(b)
-assumed a git history that another rule deliberately erases. Count lines from the source
-and trust the number; assert what code does at run time and verify it before building on
-it.
+**This spec's own reliability record is in section 10**, where it belongs with the outcome
+rather than with the ledger. It was written out twice, in full and with the same four
+figures, and the second copy is the one kept.
 
 ## 2. staged-read
 
@@ -527,7 +522,7 @@ directly against this repo). Dates are release or last-push dates.
 | lychee 0.24.2 (2026-05-01) | run on this repo, offline and online: 2 links total; probe caught 1 of 8 reference styles used here | no adoption — these docs reference by backticked path, not link syntax |
 | Vale 3.17.1 (2026-08-05; repo moved to the vale-cli org) | run with a 3-rule custom style: 149 findings, ~99% false-positive against docs; strictly per-file architecture | conditional: adopt at build-order step 7 for Fulfiller-facing copy — the DESIGN.md banned-word list is its native job. When adopted, move check numbering and numbering in code to Vale rules: they are single-file regexes kept in Python only for the stdlib-only hook constraint |
 | markdownlint-cli2 (pushed 2026-08-10) | run: 565 findings, 91.7% one line-length rule | no adoption — syntax, never truth |
-| pre-commit framework | docs verified: pass_filenames and always_run model per-file vs repo-wide scope; it stashes unstaged changes | not adopted (cold-clone pip dependency). Its stash behaviour is the origin of staged-read. The pkmnscan commands check needs both scopes inside one check, which its model cannot express |
+| pre-commit framework | docs verified: pass_filenames and always_run model per-file vs repo-wide scope; it stashes unstaged changes | not adopted (cold-clone pip dependency). Its stash behavior is the origin of staged-read. The pkmnscan commands check needs both scopes inside one check, which its model cannot express |
 | Sybil 10.1.0 (2026-06) | docs verified | the only tool reaching the constant-versus-runtime seam; requires pytest in a repo with a custom harness. evidence-check covers the seam instead |
 | cog (pushed 2026-08-05) | releases and docs verified; a check mode and edit-guard checksums exist | rejected while freshness runs in the bare-python3 hook: PyPI package, and it executes embedded imports. The condition that flips it — freshness verification moving to CI — is recorded in D18 |
 | adr-tools (last push 2024-04) | README live-fetched | authoring only; no hooks, no path association |
@@ -547,10 +542,12 @@ This plan is executed. Ten commits, `3feb924..HEAD`. Read this section instead o
 nine above if you only need the end state; read the ledger in section 1 before
 reproposing anything.
 
-**What the audit checks now: 17 rows whole-tree, plus `coupling` under `--staged`.**
-Run `make docs-audit` for the roster — it is the register, and nothing restates it (D16).
-Fifteen block on exit 1; `numbering in code`, `evidence freshness` and `coupling` print
-on exit 2 and allow.
+**What the audit checks now: run `make docs-audit`.** The rendered roster is the register,
+every row is named there, and each says whether it blocks or allows. **This paragraph used
+to restate the count — "17 rows whole-tree" — beside the sentence saying nothing restates
+it (D16).** It was 36 whole-tree rows by 2026-08-30 and had been wrong for most of the
+interval. The restatement was the defect, not the number: a corrected figure only resets
+the clock, which is why none is written here. `docs/DEBTS.md` recorded the finding.
 
 **What changed, by name:**
 
@@ -596,7 +593,7 @@ one.
 **This spec's own accuracy record**, so the next planning session can calibrate its
 output. Its *mechanical* figures held: self-test sections measured 81 against a recorded
 81, whole-unit deletions 102 against an implied 102, and the only arithmetic gap was the
-one boundary it had itself flagged as estimated. Its claims about *runtime behaviour* did
+one boundary it had itself flagged as estimated. Its claims about *runtime behavior* did
 not: section 4 asserted a `gated_on` derivation that did not exist, and 4(b) assumed a git
 history that `docs/GATES.md` deliberately erases. Both were approved as verified fact and
 both failed on first execution. **Count lines from the source and trust the number; assert

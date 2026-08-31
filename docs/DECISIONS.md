@@ -3463,13 +3463,15 @@ That is correct about a process — nothing acts on a boot id. It is **false abo
 
 ### What is owed, and on which screens
 
-Measured screen by screen against the rig, which is one operator with a phone over the feeder and a Mac on the desk. **Five of the nine routes are structurally immune**: `#/pricing`, `#/orders` and `#/shipping` are written only from the Mac by the operator's own hand, `#/gallery` touches no server, and `#/` is itself the second device — its positions are allocated server-side and `next_index` returns on every response, so its own writes are self-correcting. `#/runs` already polls. `#/fulfillment` is a real third-party writer under D5 and is out of scope here for D31's reason.
+Measured screen by screen against the rig, which is one operator with a phone over the feeder and a Mac on the desk. **Six of the ten routes are structurally immune**: `#/pricing`, `#/orders` and `#/shipping` are written only from the Mac by the operator's own hand, `#/gallery` touches no server, and `#/` is itself the second device — its positions are allocated server-side and `next_index` returns on every response, so its own writes are self-correcting. `#/runs` already polls. `#/fulfillment` is a real third-party writer under D5 and is out of scope here for D31's reason.
+
+**`#/codes` is the sixth, and this entry counted nine against a table of ten until it was measured.** D70 routed it the same day this was written. It writes — `scanCodes`, `buildLot`, `exportCodes` — so it is not excused the way `#/gallery` is. **It is immune by `#/`'s shape, not by D24's pooling**: `app/src/Codes.tsx` renders no slot, the `box/index` it draws is D58's *stored* key behind `photoUrl` (D52), and `server/codes_routes.py` refuses a lot build on a stale claim.
 
 **Two screens are owed something. `#/inventory` is the urgent one** — it is the D58 screen, and a capture from the phone into the box being walked changes the labels the walk draws. `#/review` wants it on next glance.
 
-**The shape is a re-read when the operator returns to a screen, and never a re-render while they are on one — and one screen already does exactly this.** `app/src/Fulfillment.tsx:537` re-reads *"at the moments the list can have moved under it: coming back to it, and finishing a sale. Not a poll — a timer that re-reads while he is reading is a list that reorders under his thumb."* That is D28's argument reached independently from a real incident, and it is the pattern this entry generalises rather than invents. What that screen cannot do — and what nothing in the app can do — is notice a write that lands while the operator is sitting on it, which is precisely the hour-long case its own comment describes.
+**The shape is a re-read when the operator returns to a screen, and never a re-render while they are on one — and one screen already does exactly this.** `app/src/Fulfillment.tsx:537` re-reads *"at the moments the list can have moved under it: coming back to it, and finishing a sale. Not a poll — a timer that re-reads while he is reading is a list that reorders under his thumb."* That is D28's argument reached independently from a real incident, and it is the pattern this entry generalises rather than invents. What no screen in the app can do is notice a write landing while the operator sits on it — the hour-long case above.
 
-**Within one browser, "coming back to it" is already free.** `App.tsx` renders `<route.view />` against a table keyed by hash, and all nine views are distinct component types, so every route change unmounts the outgoing screen and every arrival is a full re-read. The gap is not navigation. It is the screen nobody is navigating away from. D28 rules that the list stops moving under a finger already travelling toward a number; that ruling is untouched here and `#/review` is named as prohibited from any automatic mid-session re-render. Returning to a screen is a different moment from working on one: a screen that has just been re-read has no claim to make, so it makes none. A notice with a control to press was the alternative and is refused — `docs/DESIGN.md` bans acknowledgements, and the one screen D28 reopened that ban for reopened it on grounds found inside the rule.
+**Within one browser, "coming back to it" is already free.** `App.tsx` renders `<route.view />` against a table keyed by hash, and all ten views are distinct component types, so every route change unmounts the outgoing screen and every arrival is a full re-read. The gap is not navigation. It is the screen nobody is navigating away from. D28 rules that the list stops moving under a finger already travelling toward a number; that ruling is untouched here and `#/review` is named as prohibited from any automatic mid-session re-render. A notice with a control to press was the alternative and is refused — `docs/DESIGN.md` bans acknowledgements, and the one screen D28 reopened that ban for reopened it on grounds found inside the rule.
 
 ### What a signal would cost, banked rather than built
 
@@ -3504,6 +3506,47 @@ The mechanism is adopted rather than re-argued. Every rule in `ServerReloaded.ts
 **BUILT: the re-read-on-return idiom, on one screen only** — `app/src/Fulfillment.tsx:537`, argued there from the incident above, plus the unmount-on-navigate that makes arrival a re-read everywhere. **RECORDED: this ruling, the two-questions distinction, the citation repair, and the terms a signal would have to meet.** **NEITHER: the generation counter, any signal that reaches a screen nobody is touching, the same idiom on `#/inventory`, and a test for any of it.** The distinction matters because the built half is the half that only helps when the operator was already going to act.
 
 **What would reopen this: a second pair of hands.** Every narrowing above rests on one operator moving between two devices. A real Fulfiller working `#/fulfillment` while the owner sells from `#/inventory` is two people writing at once, and the return-to-screen shape is too slow for it.
+
+---
+
+
+## D74 — A document is checked as a document, and every markdown file is linted rather than the four a session loads
+
+**Prose checking is scoped to what a file is, not to how much of it a session reads.** Ruled 2026-08-30, after a sweep of `docs/` found two defect classes that no row of `make docs-audit` was structurally able to see.
+
+**`make vale` ran over four files while `.vale.ini` always said `[*.md]`.** The target was the narrow half of that disagreement, so `docs/specs/` and `docs/design-refs/` had never been linted: **35 `AmericanSpelling` errors** had accumulated there, none reachable by any check in this repo. The file list is now `git ls-files '*.md'`, so a new document is linted the day it is committed rather than the day somebody remembers to add it to a target.
+
+**D60's scope is an argument about density, never a license to leave prose unspelled.** That entry rules on the four docs because they were `@`-loaded and cost tokens on every turn. Spelling costs nothing to check and is wrong in the same way everywhere, so the two scopes were never the same scope and the target had silently conflated them.
+
+**The vocabulary grew by 140 terms and was reviewed rather than blanket-accepted**, the way its first block was. Two candidates were checked in context before being let in — `evid` and `src` are shorthand names inside an algorithm description, and `moded` is a deliberate verbing — and the 35 spelling errors were fixed rather than accepted, which is what happened to `rasterises` the first time round.
+
+### The one label that was itself misspelled
+
+**`raw colour` became `raw color` on the owner's instruction, and the rename stopped at the row.** A row label is published prose — it is printed by `make docs-audit`, cited in `docs/DEBTS.md`, and named in the comments the `numbering in code` row polices — so a label spelled against the rule this entry sets was the rule contradicting itself in its own report. The label, `check_raw_color`, `_RAW_COLOR_RE`, the row's summary and its self-test messages all moved together.
+
+**It stopped there deliberately.** `colour` appears about 120 times across 29 source files, in comments and identifiers, and `.vale.ini` already records that widening the spelling rule to source *"would split the spelling inside single files and is a decision nobody has argued"*. This is not that widening: it is one published label brought into line with the report it appears in. `COLOUR`, the token-kind discriminator at `scripts/docs-audit.py`, is untouched — it is compared with `==` and never reaches a message, so it is not prose.
+
+### `doc hygiene`, and what it is for
+
+**Every other row reads a document's assertions; this one reads the file.** It is advisory, and it asks three questions decidable on the committed tree alone: a line that reads as an instruction to an editor, a second level-1 heading, and a `path:line` citation past the end of its file.
+
+**It exists because two real defects were invisible to a green audit for eight days.** `docs/specs/capture-server.md` carried *"Leave lines 37-38 exactly as they are. Insert a blank line and this blockquote after line 38"* inside a paragraph — and the paste that put it there deleted the sentence it was preserving, leaving a decapitated clause. `docs/specs/ui-research.md` was two documents in one file. Neither is a false claim about the code, so no row asked.
+
+**Advisory rather than blocking, and the second condition is why.** All three are provably true of the tree, which is D16's test for a blocking row, but *true* and *wrong* part company on a duplicate title: a file that deliberately carries two is a judgement, and a blocking row would settle it by fiat. What would earn a promotion is a second instance of the instruction case reaching main.
+
+**Mutation-tested three ways** — the committed instruction, the second heading, and a citation past a file's end — each caught, and the row green when all three are reverted.
+
+### The check that was prototyped and refused
+
+**A `reachability claims` row was built, measured, and thrown out the same hour.** It would have paired a registered route from `ROUTES` with a nearby not-built phrase, and it was aimed at the sharpest staleness this sweep found: `docs/specs/shipping-export.md` said no route, client function or screen reached its modules on the same day D69 gave them all three.
+
+**It fired 13 times and every one was a false positive.** Sentences like *"No history on `#/inventory` — that is the ruling above, not an omission"* are claims about a feature inside a route, not about the route's reachability, and nothing separates the two without reading the sentence. **A permanently-lit advisory is worse than a silent check**, on this repo's own finding from the committed-staleness row it dropped for the same reason: one row stuck on teaches sessions to skip exit 2 against every row that uses it.
+
+**The staleness it was aimed at is a process fact rather than a tree fact.** Both of this sweep's worst findings — that one and D73's route count — came from two branches landing on one day, each correct against a tree the other had already moved. Nothing readable from a single commit can see that, which is why it is recorded here and in `docs/DEBTS.md` rather than guarded.
+
+### What this is not
+
+**It is not a claim that the docs are now current.** It is two mechanisms and one sweep. `docs/DEBTS.md` cluster 1 still holds the five docs-to-code checks that walk one way, and this entry does not touch them — they are blocked on a decision about advisory severity that this row's existence does not settle.
 
 ---
 

@@ -62,7 +62,7 @@ fixture, no surviving city+zip pairing, no `@` anywhere in the file.
 `Tracking #` and `Carrier` are **empty on all 331 rows** — present and blank, not omitted.
 Kept as-is because that is the real shape. Do not write a reader that assumes they carry
 data. The owner's earlier single-row export was likewise blank in both, so this is not an
-artefact of one selection.
+artifact of one selection.
 
 ## `Product Weight` is a catalog constant, not a measured package weight
 
@@ -127,16 +127,25 @@ that lands.
 
 ## STATUS
 
-**RECORDED AND NOW READ; STILL NOT A FEATURE.** Amended 2026-08-30 (D61), and the two halves
-of the old sentence went in opposite directions.
+**RECORDED, READ, AND NOW REACHABLE.** Amended twice on 2026-08-30 — first by D61, which made
+this format something the code reads, then by D69, which gave it a screen.
 
-It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."* The
-second half is false as of D61 — `pipeline/shipping.py` reads this format and routes an
-order by the cut derived above, `pipeline/pirateship.py` writes the Pirate Ship import, and
-`harness/tests/t7_store_and_seams.py:check_shipping_lane` asserts the lane counts against
-this fixture's 331 real orders. The first half stands exactly as written: **no route, no
-client function, and no screen reaches either module**, so under `CLAUDE.md`'s
-route-is-not-a-feature rule this is not landed and must not be reported as one.
+It read: *"RECORDED, not BUILT. Nothing reads this file and nothing reads the fixture."*
+**Both halves are now false.** `pipeline/shipping.py` reads this format and routes an order by
+the cut derived above, `pipeline/pirateship.py` writes the Pirate Ship import, and
+`harness/tests/t7_store_and_seams.py:check_shipping_lane` asserts the lane counts against this
+fixture's 331 real orders. Reachability followed within the day: `#/shipping` is in `ROUTES`,
+`POST /shipping/batches` is served by `server/shipping_routes.py`, `app/src/server.ts` carries
+the client functions, and `app/tests/shipping.spec.ts` asserts the screen.
+
+**The intermediate wording — "no route, no client function, and no screen reaches either
+module" — was true for part of one day and false by the end of it**, because D61 and D69
+landed on the same date and each was written against a tree the other had moved. That
+sentence was `CLAUDE.md`'s route-is-not-a-feature test applied correctly and answered by a
+tree that had already moved past it.
+`docs/specs/order-pipeline.md`'s step table is the register for what is reachable; this file
+is the register for the format, and it should not have been carrying a reachability claim at
+all.
 
 **Two of this document's own limits are answered by the build rather than by re-measurement,
 and one is not:**

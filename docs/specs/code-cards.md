@@ -217,7 +217,7 @@ The consequences of the split, settled:
   **8,694 units — about $299 of gross merchandise value in a year** — against **31,493 units
   already standing, roughly 3.6 years of demand.** Adding 30,000 takes it to about seven
   years. The lane works and is not worth using at this scale.
-- **eBay's dispute defence is restored for anything shipped**, and only for Item Not Received.
+- **eBay's dispute defense is restored for anything shipped**, and only for Item Not Received.
   It does nothing for Item Not As Described, which is the dispute code cards actually attract.
 - **The hybrid — ship the cards AND message the codes — is the worst case, not the best.** The
   buyer redeems from the message, files INAD, and returns worthless redeemed cards. Zero of six
