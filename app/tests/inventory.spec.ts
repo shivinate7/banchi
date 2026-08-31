@@ -2772,6 +2772,23 @@ test('the address holds one line at both widths, including the longest label the
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
      and the block is measured for a second line. */
+
+  /* WAIT FOR THE WEB FONT BEFORE MEASURING ANYTHING, and this is the fix for the flake
+     `docs/DEBTS.md` recorded on 2026-08-30 as "one test that flakes under parallel load".
+     The cause is not load and not layout settling — it is `display=swap`. `app/index.html`
+     fetches Martian Mono and Atkinson Hyperlegible from Google Fonts with `&display=swap`,
+     which is a deliberate instruction to PAINT IN THE FALLBACK FIRST and re-lay-out when the
+     real face arrives. Every number this test asserts is an advance width, and the comment
+     above prices them at "Martian Mono's 0.70em advance" — so a measurement taken before the
+     swap is measuring a different typeface and answers a different question.
+
+     That is why it failed under seven parallel workers and passed alone and on re-run: the
+     workers contend for the font fetch, and a re-run has it cached. `document.fonts.ready`
+     resolves once every face used on the page has settled, so it removes the window rather
+     than waiting a guessed number of milliseconds inside it. Nothing here is weakened — the
+     same two assertions run against the same numbers, on the font they were computed for. */
+  await page.evaluate(() => document.fonts.ready.then(() => true))
+
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await page.locator('.position-parts').first().waitFor()

@@ -1,4 +1,11 @@
-"""The ONE outbound call this server makes, and the only place allowed to make it.
+"""The outbound call to the seller admin host, and the only place allowed to make it.
+
+IT SAID "THE ONE OUTBOUND CALL THIS SERVER MAKES" UNTIL 2026-08-30, AND IT IS NOW ONE OF
+TWO. `server/order_transport.py` is the other (D67), against a different host. The
+guarantee that actually mattered was never the count — it is that an outbound call lives
+in its OWN MODULE, names ONE host, reads its credential AT CALL TIME, and never lets that
+credential into a return value. That holds for both files, and it is restated below in
+that form rather than being deleted along with the number that went stale.
 
 `server/capture_server.py` said for months that this process "holds no API key and makes no
 outbound call". D33 broke half of that already — a route there can START A CHILD that spends
@@ -45,6 +52,20 @@ admin route answers `302 -> /admin/account/logon` unauthenticated:
 so a plain client carrying the portal's session cookies satisfies it. This is NOT the
 order-management API, which lives on another host and answers `www-authenticate: Bearer` —
 the two were conflated once while this was being scoped, and reached the wrong conclusion.
+
+THAT LAST CLAUSE WAS MEASURED FALSE ON 2026-08-30 AND IS CORRECTED HERE RATHER THAN
+DELETED (D67). `order-management-api.tcgplayer.com` answers NO `www-authenticate` header on
+any path probed; it is a COOKIE SESSION authenticated by the same `TCGAuthTicket_Production`
+cookie `_cookie()` below reads, because that cookie is scoped to `.tcgplayer.com` and both
+hosts sit under it. The portal's own XHR sets no `Authorization` header either. The
+sentence stands because the CONFLATION it warns about was real and the two hosts genuinely
+are different — what was wrong was the scheme it attributed to the second one.
+
+WHAT GENUINELY DOES NOT TRANSFER BETWEEN THE TWO HOSTS IS THE BODY CONVENTION, NOT THE
+AUTH. This host needs Knockout's `postJson` form — `model=<json>`, form-urlencoded, which
+is D65's shape — and the order host takes a plain JSON document. A client carrying this
+file's request shape over there fails, and it fails in a way that reads like an auth
+problem. That is the trap this paragraph exists to keep somebody out of.
 """
 
 from __future__ import annotations

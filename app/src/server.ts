@@ -37,6 +37,14 @@ import type {
   RunStepResult,
   TcgSets,
   RunSummary,
+  IngestResult,
+  OrderIngestOrder,
+  OrdersFetched,
+  OrdersPayload,
+  PullResult,
+  PullTarget,
+  ShippingBatch,
+  ShippingForgotten,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -1775,4 +1783,202 @@ export async function putDecisions(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decisions }),
   })) as { ok: boolean; run: string; written: string }
+}
+
+// ---------------------------------------------------------------------------- the orders
+
+/**
+ * Every order, and where the copies for the open ones are (D63, D67).
+ *
+ * ONE SNAPSHOT ON THE SERVER, WHICH IS WHY THIS IS ONE CALL AND NOT TWO. The list and the
+ * resolution are computed from the same read, so they cannot disagree; two fetches could
+ * straddle a sale and show a card both on hand and gone. A screen that wants either half
+ * calls this.
+ *
+ * A READ. It writes nothing, holds nothing and spends nothing, and it may be polled.
+ */
+export async function getOrders(): Promise<OrdersPayload> {
+  return (await request('/orders', NO_CACHE)) as OrdersPayload
+}
+
+/**
+ * Take the feed's word for what was bought. D63's one map: it touches `orders.json` and
+ * cannot touch `inventory.json`, because `Ledger.ingest` holds no `Inventory`.
+ *
+ * THIS FUNCTION DOES NOT PROJECT, AND THAT IS THE WHOLE DESIGN. Its argument is ALREADY the
+ * projection, minted by `app/src/orderPaste.ts` — so exactly one place in this app decides
+ * what leaves the browser about a purchase, and a reviewer asking "where does the buyer's
+ * name get dropped" has one file to read. A second module composing an ingest body would be
+ * a second door onto the same wire, and the whitelist guarantee would be gone. The server's
+ * three allowlist tuples are the backstop, not the boundary: an unprojected paste refuses by
+ * name (`field_not_settable`) rather than being stored with the extra fields trimmed.
+ *
+ * A SECOND IDENTICAL PASTE IS A NO-OP DOWN TO THE BYTE and answers `wrote_nothing: true`.
+ * Refusals worth branching on: `orders_required` (an empty list, which is not the same
+ * answer as "learned nothing"), `too_many_orders`, `duplicate_line` (409 — two lines sharing
+ * a SKU would make "how many have we pulled" a question with two answers), and
+ * `order_key_invalid`, whose only real cause is a colon in the SOURCE.
+ */
+export async function ingestOrders(orders: readonly OrderIngestOrder[]): Promise<IngestResult> {
+  return (await request('/orders/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    /* `{ orders }` AND NOTHING ELSE. The array is passed through rather than rebuilt field
+     * by field — the opposite of `answerGroup` above — because rebuilding it here would be
+     * this module owning a second copy of the projection `orderPaste.ts` owns. What makes
+     * that safe is that the argument's type is the projection: a wider object cannot reach
+     * this line without being typed as one first. */
+    body: JSON.stringify({ orders }),
+  })) as IngestResult
+}
+
+/**
+ * Ask TCGplayer for this account's own orders, instead of pasting them (D67).
+ *
+ * FREE, AND IT IS NOT THE MONEY GATE. `POST /pipeline/identify` is still the one route in
+ * this product that can cause a charge. This is a read against
+ * `order-management-api.tcgplayer.com` with the session cookie already in `.env` — the same
+ * account session `fetchExport` uses one host over — and it writes nothing at all, not even
+ * the ledger.
+ *
+ * IT ANSWERS EXACTLY WHAT `ingestOrders` TAKES, so the result's `orders` array is sent on
+ * unaltered. That is the shape's whole purpose: no adapter between the two, and the fetch
+ * enters the app through the same one door the paste does.
+ *
+ * `range` is one of the transport's `KNOWN_RANGES`; omit it for its default. Refusals worth
+ * branching on are the transport's own codes — `order_cookie_missing`,
+ * `order_seller_key_rejected` (a 403, which reads exactly like an expired session and is
+ * not one: `PKMNSCAN_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
+ * sentence naming what to fix.
+ */
+export async function fetchOrders(range?: string): Promise<OrdersFetched> {
+  return (await request('/orders/fetch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(range === undefined ? {} : { range }),
+  })) as OrdersFetched
+}
+
+/* One route in both directions — `POST /orders/pull`, with `{"undo": true}` to reverse — and
+ * two exported wrappers over it, for `sale()`'s own reason above: a boolean at the call site
+ * reads as `pull(target, true)` and the reader has to come here to learn which way that goes.
+ *
+ * BODY-ADDRESSED AND NOT PATH-ADDRESSED, which is forced rather than chosen. An order key is
+ * `source:number` and a NUMBER may legally contain a colon — `store/orders.py` splits on the
+ * FIRST one for exactly that reason — so a key in a path segment would need an escaping rule
+ * that the one place it is composed does not have.
+ */
+async function pull(body: Record<string, unknown>): Promise<PullResult> {
+  return (await request('/orders/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as PullResult
+}
+
+/**
+ * Record copies against one order line and mark them sold (D63).
+ *
+ * ONE CARD, ONE PRESS. The route takes a LIST because `record_pull` takes a sequence and
+ * validate-all-then-write-all is the same code either way — not because a screen should
+ * offer a batch control. Nothing in this product picks two cards at once.
+ *
+ * READ `places[0]?.label` FOR THE RECEIPT, NEVER `sales[0]?.card.place.label`. The places
+ * come back AS THEY WERE BEFORE THE WRITE, one per target in request order; a sale moves the
+ * box's occupancy (D58), so by the time the answer is composed the card is departed and its
+ * own label reads `Box 3 · departed`.
+ *
+ * Refusals worth branching on: `pull_entry_refused` aggregates the per-target ones
+ * (`duplicate_target`, `capture_id_mismatch` — the row on screen is aimed at a card that is
+ * no longer at that slot, so re-read before retrying — `card_not_found`, `sku_mismatch`),
+ * and `order_not_ingested`, `sku_not_on_order`, `copy_already_pulled` and `over_fulfilled`
+ * are the ledger's. A refusal anywhere leaves `orders.json` AND `inventory.json` unmoved.
+ */
+export async function pullCopy(
+  line: { source: string; number: string; sku: string },
+  targets: readonly PullTarget[],
+): Promise<PullResult> {
+  return pull({
+    /* camelCase in the argument, snake_case on the wire, HERE AND ONLY HERE — this module's
+     * standing rule. The line is named field by field so a caller's wider row cannot put an
+     * extra key on the wire, where `_reject_unknown` refuses the whole request. */
+    source: line.source,
+    number: line.number,
+    sku: line.sku,
+    targets: targets.map(({ box, index, capture_id }) => ({ box, index, capture_id })),
+  })
+}
+
+/**
+ * Put pulled copies back: un-record them against the line and reverse the sale.
+ *
+ * IT SENDS `{ undo: true, targets }` AND NOTHING ELSE. The caller does not name the line and
+ * CANNOT — the server scans the ledger for whoever holds each `capture_id`, which is the one
+ * identity a renumber cannot move. An undo that also named an order is refused rather than
+ * obeyed with the order ignored, which is why this wrapper cannot take one.
+ *
+ * Two refusals worth telling apart: `pull_not_recorded` means the ledger has no record of
+ * this copy at all, and the remedy is `#/inventory`'s own sale undo rather than this route;
+ * `pull_spans_lines` means the targets belong to two different lines, and the remedy is to
+ * undo them separately.
+ */
+export async function undoPull(targets: readonly PullTarget[]): Promise<PullResult> {
+  return pull({
+    undo: true,
+    targets: targets.map(({ box, index, capture_id }) => ({ box, index, capture_id })),
+  })
+}
+
+// -------------------------------------------------------------------------- the shipping
+
+/**
+ * Read TCGplayer's `Orders → Export Shipping` file into D61's three lanes.
+ *
+ * THE BATCH LIVES IN THE CAPTURE SERVER'S MEMORY AND TOUCHES NO DISK. D61 rules that buyer
+ * PII passes through and is not persisted, so what comes back is a handle with a half-hour
+ * TTL — not a run artefact, not a cache entry, not a log line. A server restart drops it,
+ * and `make up` reloads on any Python edit under `server/`, so an edit during a session IS a
+ * restart. Two devices do not share a batch either: the phone that read the export cannot
+ * download the import file from the laptop.
+ *
+ * WHAT COMES BACK CARRIES NO BUYER. No name, no address, no city, no postcode — see
+ * `ShippingRow` in types.ts, where the absence is the design. Those details cross this wire
+ * exactly once, as the CSV `shippingFileUrl` downloads.
+ *
+ * The body is the `CsvUpload` object itself and nothing more.
+ */
+export async function readShippingExport(upload: CsvUpload): Promise<ShippingBatch> {
+  return (await request('/shipping/batches', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: upload.name, content: upload.content }),
+  })) as ShippingBatch
+}
+
+/**
+ * Where a batch's import CSV can be downloaded — the file that goes into Pirate Ship.
+ *
+ * A URL RATHER THAN A FETCH, because the browser's own download is what the operator wants.
+ * The same idiom as `runFileUrl` above and for the same argument: a CSV in a text area is
+ * not a file anybody can import.
+ *
+ * It is a GET, so it is not behind the origin gate every write on this server sits behind —
+ * which is why the batch id is 128 random bits rather than a counter.
+ */
+export function shippingFileUrl(batch: string, file: string): string {
+  return `${base}/shipping/batches/${encodeURIComponent(batch)}/file?name=${encodeURIComponent(file)}`
+}
+
+/**
+ * Drop a batch now rather than in half an hour.
+ *
+ * THE WAY BACK CLAUDE.md's HARD RULE ASKS OF ANYTHING THAT HOLDS A BUYER'S ADDRESS, and the
+ * reason the TTL is a backstop rather than the only release. The answer names what was
+ * removed, matching every other delete this server answers; a later `shippingFileUrl` for
+ * that batch is a 404 with a sentence saying it was forgotten.
+ */
+export async function forgetShippingExport(batch: string): Promise<ShippingForgotten> {
+  return (await request(`/shipping/batches/${encodeURIComponent(batch)}`, {
+    method: 'DELETE',
+  })) as ShippingForgotten
 }

@@ -54,6 +54,20 @@ runs          http://localhost:5173/#/runs
 # `views exposure` question the other owner routes raise does not arise here either.
 pricing       http://localhost:5173/#/pricing
 
+# The order screen and the shipping lane, both routed 2026-08-30 (D67). Two renders because
+# they are two questions asked at two moments: `#/orders` is "which copies does this buyer get
+# and where are they", read out of D63's ledger, and `#/shipping` is "which envelope does this
+# order go in", read out of a file TCGplayer exports and the ledger has never seen.
+#
+# BOTH RENDER THEIR EMPTY STATE AND THAT IS THE POINT OF LOOKING. The order screen with no
+# orders ingested draws its own way in rather than a blank; the shipping screen holds nothing
+# at all until an export is uploaded, so its empty state is the whole screen a person meets
+# first. Neither draws a buyer's name, address, city, state or postcode: the shipping screen is
+# typed so it cannot (see `ShippingRow`), and the buyer's details reach the browser exactly
+# once, as the CSV download, which no render can capture.
+orders        http://localhost:5173/#/orders
+shipping      http://localhost:5173/#/shipping
+
 # The Fulfiller's, and the one render where the absence of something is the point: no nav
 # strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
 # not what enforces it — it is what lets a person see the view the assertions describe, at the
