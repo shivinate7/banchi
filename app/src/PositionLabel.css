@@ -118,15 +118,115 @@
    digit count. Box 2 tops out at 543; a fourth digit widens its own row only. */
 .position-parts[data-lead='slot'] .position-path { order: 2; }
 .position-parts[data-lead='slot'] .position-slot { order: 1; }
-.position-parts[data-lead='slot'] .position-num { min-width: 3ch; }
+.position-parts[data-lead='slot'] .position-num,
+.position-parts[data-lead='slot'] .position-void { min-width: 3ch; }
+
+/* AND THE RESERVE IS THE WHOLE COLUMN, NOT THE FIGURE, once a row in it can have no figure.
+   `3ch` above holds the digits; it does not hold the KEY beside them, which every live row has
+   and a departed row does not — so the same list drew its live paths at x=866.2 and its two
+   departed paths at x=827.9, a 38.3px hang, which is the ragged column this whole `lead` exists
+   to prevent, reintroduced by the row that has least to say.
+
+   THE 38.3px IS THE KEY EXACTLY, and this expression is that measurement rather than a padding
+   that looked right. `CARD` is four cells of Martian Mono at `.position-key`'s size — the same
+   `clamp` two rules up, 11px in this list — and mono advance is 0.70em with 0.08em of tracking,
+   so 4 x 0.78 x 11 = 34.32px, plus `.position-slot`'s own `--s1` gap = 38.32px. Measured
+   difference: 38.328px.
+
+   `CARD` IS THE ONLY KEY THIS EVER HOLDS, because `pipeline/join.py:Position.label` is the one
+   composer of the string and it ends every located label on `Card N`. That is an assumption and
+   it is asserted rather than trusted: `app/tests/inventory.spec.ts` reads the x of a live path
+   and a departed one and requires the same number, so a label that ends on a longer word fails
+   there instead of hanging by the difference. */
+.position-parts[data-lead='slot'] .position-slot {
+  min-width: calc(3ch + var(--s1) + 4 * 0.78 * clamp(var(--pos-path, 11px), 0.295em, 13px));
+}
+
+/* ---- the number column of a card that is in no slot ---- */
+
+/* `Box 3 · departed · 3/36` IS RANKED LIKE EVERY OTHER LABEL, AND THIS IS THE COLUMN IT LEAVES
+   EMPTY. D58 refuses a slot number for a card that has left and D68 refuses the store key in that
+   number's place; what neither asks for is the pre-D41 plain string, which is what the component
+   drew instead until this existed — 44px and wrapped in the walk panel, the loudest row in the
+   copies list. The state and the store key ride the path now (`DEPARTED 3/36`, one key/value pair
+   in the same register as `SECTION 1`), and the figure is a dash.
+
+   1em AND MUTED, WHICH IS THE WHOLE ARGUMENT IN TWO DECLARATIONS. The size holds the column open
+   at whatever `--pos-slot` the site chose, so a departed row is the same height as a live one and
+   its path starts at the same x; the colour keeps it in the register of an absence rather than an
+   answer. A dash at `--ink` would be a figure, and a dash below 1em would let the row shrink and
+   the column ripple.
+
+   `text-align: center` IS FOR THE RESERVE, NOT FOR THE DASH. `lead='slot'` reserves three digits
+   so every path in a column starts at one x; a single glyph left-aligned in that box sits under
+   the hundreds digit of the row above, which reads as a number that lost its other two. */
+.position-void {
+  font-size: 1em;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+/* WHEN THERE IS NO FIGURE, THE PATH IS THE PAYLOAD — and this is a DERIVATION, which is why it
+   is here rather than in five stylesheets. `--pos-slot` is the number a site chooses because the
+   slot figure is that screen's answer; a departed card has no figure, so at the shipped 11px the
+   whole answer collapses into the metadata register and a singleton reads as a block that failed
+   to load. Measured on the walk panel: `BOX 2 / DEPARTED 2/4` at 11px under a 44px heading, in
+   the panel whose payload it is.
+
+   `clamp(11px, 0.45em, 20px)` IS `.position-key`'S ARGUMENT AT A DIFFERENT RANK, and the same
+   `em` resolution: this sets `font-size`, so the unit is against `.position-parts` — the site's
+   own `--pos-slot`. 19.8px at 44, 14.4px at 32, and the 11px floor at 20, so a site never draws
+   its path below the register it draws its metadata in. 20px is the ceiling because past it the
+   path stops being a path and becomes a second heading.
+
+   SINGLETONS ONLY, AND `lead` IS ALREADY THAT DISTINCTION. In a LIST the row with no figure is
+   the one with least to say and promoting it would make a sold copy the loudest line in the
+   copies list — which is the fault this whole change removes. A site that disagrees still sets
+   `--pos-path` itself; this is a default, not a lock. */
+.position-parts[data-lead='path']:has(.position-void) {
+  --pos-path: clamp(11px, 0.45em, 20px);
+}
+
+/* THE MARK ITSELF IS DRAWN ONLY WHERE THERE IS A COLUMN TO MARK, which is what `lead` already
+   means: `slot` is "this block is one row of many and its figures are in a hard column", `path`
+   is a singleton. A held place is legible against the rows above it; the same dash beside a lone
+   label has nothing to hold and reads as a stray mark. The ELEMENT is rendered either way — it is
+   what a site asks about with `:has(.position-void)` when it wants to re-rank a block that has no
+   figure, and keeping the slot column present in both forms is what makes that one question
+   rather than two.
+
+   IN `content` AND NOT IN THE COMPONENT, because a dash in the DOM joins `textContent` and the
+   label stops reading as the label: `.browse-position` greps as `BOX 2DEPARTED 2/4—`. It is
+   typography, it is `aria-hidden`, and this is where typography lives. */
+.position-parts[data-lead='slot'] .position-void::before {
+  content: '\2014';
+}
+
+/* AND IT SITS UNDER THE DIGITS, NOT UNDER THE KEY. The reserve two rules up holds the whole
+   column — key, gap and figure — and the void is its only child, so it starts at the column's
+   left edge and the dash lands under `CARD` while the numbers it stands in for are 38px to the
+   right. `margin-left: auto` pushes its 3ch box to the column's far edge, which is the figure's
+   own box, and `text-align: center` then centres the glyph in it. The mark means "no number
+   here", so it belongs where the numbers are. */
+.position-parts[data-lead='slot'] .position-void {
+  margin-left: auto;
+}
 
 /* ---- the store key a label may end on (D68) ---- */
 
-/* `Box 3 · departed · 3/31` RENDERS AS A LABEL WITH A NOTE UNDER IT, never as a figure. The body
-   keeps the site's own size — it is the same plain string this component drew for a departed card
-   before the key existed — and the key drops to the muted register on its own line, so the row
-   grows by one small line rather than by a second line of the site's payload face. Measured on the
-   copies list: 72.8px of 28px label wrapped to two lines, against 45.5px here.
+/* A LABEL THAT NAMES NO POSITION RENDERS AS A LABEL WITH A NOTE UNDER IT, never as a figure. The
+   body keeps the site's own size — it is a sentence and it is drawn as one — and the key drops to
+   the muted register on its own line, so the row grows by one small line rather than by a second
+   line of the site's payload face.
+
+   ITS ONE CALLER IS THE POOLED ROW (D24, D69). `Pokémon code cards · pooled · 5/12` has no
+   coordinate to rank: `pooled` is a state like `departed`, but the part in front of it is a game's
+   display name rather than a `<word> <number>` pair, so there is no path to hang it on and no
+   figure to leave empty. A pooled card is nowhere; a departed card is in a box. That is the line
+   this rule sits on, and it is why the departed label crossed it in D69 and this one did not.
 
    `.position-key`'S OWN EXPRESSION, NOT A SECOND ONE. The key beside a slot figure and the key
    under a plain label are the same fact drawn in the same register, and this file's whole argument
@@ -161,9 +261,17 @@
 .position-run-key { margin-right: var(--s1); }
 .position-run-num { font-weight: 700; color: var(--ink); letter-spacing: 0; }
 
-/* THE FIVE SITE RULES LIVE IN THEIR OWN STYLESHEETS, not here — `.browse-position` in
+/* THE SEVEN SITE RULES LIVE IN THEIR OWN STYLESHEETS, not here — `.browse-position` in
    BoxBrowse.css, `.review-position` in ReviewQueue.css, `.card-locations-label` in
-   CardLocations.css, `.capture-label` and `.capture-inline-label` in CaptureScreen.css. Each one
-   sets `--pos-slot` and almost nothing else. Kept apart deliberately: a site's register belongs
-   beside that site's other type, and gathering all five here would make this file the place a
-   screen's size is changed, which is how a shared component becomes a bottleneck. */
+   CardLocations.css, `.capture-label` and `.capture-inline-label` in CaptureScreen.css, and
+   `.inventory-lone-place` and `.inventory-confirm-place` in Inventory.css. Each one sets
+   `--pos-slot` and almost nothing else. Kept apart deliberately: a site's register belongs beside
+   that site's other type, and gathering all seven here would make this file the place a screen's
+   size is changed, which is how a shared component becomes a bottleneck.
+
+   IT WAS FIVE UNTIL D69 AND THE PROSE SAID IT REACHED EVERY OWNER SITE, WHICH WAS FALSE. The two
+   added are both in `Inventory.tsx` and both drew `Position.label` raw: the lone-copy panel, which
+   is what a card with no name and no SKU renders through and therefore what 629 of 682 records on
+   the owner's Mac render through, and the retire dialog. Neither was found by a check — the lone
+   panel HAS a spec, and that spec asserted its two bars and never looked at the label beside them.
+   Both were found by marking a card sold in a browser. */

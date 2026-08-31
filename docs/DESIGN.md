@@ -251,16 +251,37 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
   `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
   paragraph above exists to prevent.
-- **It reaches every OWNER site as of 2026-08-29 (D41, amended), and the size is per site.** Six
-  of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28 and
-  slot-first, the capture stage at 32, its undo sidebar at 20, and three in-sentence mentions in a
-  `run` form that keeps the rank and drops the geometry. **The structure is shared and the figure
-  never is** — the warning this paragraph used to carry is measured now: 44px down a seven-copy
-  list costs +86px and drops a copy below the fold.
+- **It reaches every OWNER site as of 2026-08-30 (D41, amended; D69), and the size is per site.**
+  Eight of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28
+  and slot-first, the capture stage at 32, its undo sidebar at 20, the lone-copy panel at 20, the
+  retire dialog at 20, and three in-sentence mentions in a `run` form that keeps the rank and drops
+  the geometry. **The structure is shared and the figure never is** — the warning this paragraph
+  used to carry is measured now: 44px down a seven-copy list costs +86px and drops a copy below the
+  fold.
+- **This line said "every OWNER site" and "six" from 2026-08-29 and was wrong on both counts until
+  D69.** The two it missed are both in `Inventory.tsx`, and the first of them is the one most of
+  the store is drawn by: the lone-copy panel is what a card with no name and no SKU renders
+  through, which on the owner's Mac is 629 of 682 records. It went on printing the raw label in the
+  utility face, and the way that surfaced was a sold card — `Box 1 · departed · 1/1` as a run of
+  words and interpuncts, which is what the owner reported. **Nothing checked either.** The lone
+  panel has a spec; that spec asserts its two position bars and never looked at the label beside
+  them. Both were found by pressing `Mark sold` in a browser over a real store, which is the same
+  instrument `docs/GATES.md` step 7 records as the only thing that could tell.
 - **A sixth site needs two rules, and they are the whole of the scale.** The gap is `--s5` at a
   figure of 40px or more and `--s3` below, so it always lands on the spacing scale above. And a
-  promoted slot is a slot NUMBER or the label renders whole — without that guard D24's pooled
-  label draws the lowercase word `pooled` as a 300px figure.
+  promoted slot is a slot NUMBER, never a word — without that guard D24's pooled label draws the
+  lowercase word `pooled` as a 300px figure.
+- **A label with no figure is still ranked, and it is the FIGURE that goes (D69).** A departed
+  card's label ends on a state where a slot number would be (`Box 3 · departed · 3/36`). Refusing
+  the whole treatment over that was the shipped behavior and it drew the pre-D41 plain string at
+  the site's payload size — 44px and wrapped in the `#/inventory` band, the loudest row in the
+  copies list. The state and the store key ride the path as one more key/value pair, the number
+  column is drawn empty, and two site-free derivations carry it: **in a list** the reserve holds
+  the whole slot column, key included, so a figure-less row's path starts at the same x as every
+  other (it hung 38.3px left before); **as a singleton** the path re-ranks to
+  `clamp(11px, 0.45em, 20px)`, because with no figure the path is the payload. What still renders
+  whole is a label naming no position at all — the pooled row, where the part in front of the
+  state is a game's display name and there is no coordinate to rank.
 - **The Fulfiller's two sites are not owner sites and never take it.** His labels stay plain text
   under `app/tests/fulfillment.spec.ts`'s 32px tabular floor, and the guard is that his components
   do not import the shared one — not a selector prefix, which is the thing a refactor drops.

@@ -12,6 +12,7 @@ import type { Failure } from './server'
 import {
   ServerError,
   describeFailure,
+  isDeparted,
   markSold,
   photoUrl,
   retireCard,
@@ -22,6 +23,7 @@ import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
+import { PositionLabel } from './PositionLabel'
 import { useSearch } from './useSearch'
 import './Inventory.css'
 
@@ -899,7 +901,21 @@ function CopiesPanel({
           <p className="inventory-machine">place: absent · key {row.key}</p>
         ) : (
           <div className="inventory-lone">
-            <span className="inventory-lone-place">{lone.place.label ?? `pooled · ${row.key}`}</span>
+            {/* THE SIXTH OWNER SITE, AND IT IS THE ONE MOST OF THE STORE IS DRAWN BY (D69).
+                D41's treatment reached five sites and this was not one of them, so it went on
+                printing `Position.label` raw — and the sentence directly above says how much of
+                the store that is: 629 of 682 records have no name and no SKU, so this panel is
+                what nearly every card renders through. Marking one sold made it unmissable:
+                `Box 1 · departed · 1/1` as a plain string, which is exactly the rendering the
+                owner reported. Found by pressing the button in a browser over a real store; the
+                spec fixture is a multi-copy group and never reaches this branch.
+
+                THE POOLED FALLBACK IS UNCHANGED and still renders whole: `pooled · 5/2` has no
+                coarse `<word> <number>` part, so the component refuses it and draws the string,
+                which is what it drew here before. */}
+            <span className="inventory-lone-place">
+              <PositionLabel label={lone.place.label ?? `pooled · ${row.key}`} />
+            </span>
             {/* THE TWO DEPTHS REACH THE 92% OF THE STORE THAT HAS NO GROUP. This is where they
                 matter most and where they were nearly left out: 629 of the 682 records on this
                 Mac are captured-and-never-identified, so `GET /search` cannot reach them and
@@ -910,8 +926,18 @@ function CopiesPanel({
                 NEVER FOR A POOLED CARD (D24). It is a count and not a location, so there is no
                 box to draw and no section to be inside — the same refusal `CardLocations` makes
                 on its own rows, and `sectionDepthOf` refuses the second scale for it besides.
-                The label slot above already says the pooled fact where the position would be. */}
-            {lone.place.located === false ? null : (
+                The label slot above already says the pooled fact where the position would be.
+
+                AND NEVER FOR A DEPARTED ONE EITHER (D68's ruling, reaching its third screen in
+                D69). This drew an empty track captioned `no longer in the box` under every sold
+                card — the same empty bar D68 deleted from the copies list, on the same grounds:
+                a bar cannot draw a card that is in no place, and the walk has omitted it since
+                D58. Two of the three screens rendering "one copy and where it is" had been fixed
+                and this one had not, so they disagreed about the same card again. Found the way
+                the other two were: by selling a card in a browser. `isDeparted` is the one
+                predicate that tells a card that has left from a box the server could not
+                count — the second answers `label: null` and keeps the panel it already has. */}
+            {lone.place.located === false || isDeparted(lone.place) ? null : (
               <PositionBar
                 place={lone.place}
                 persona="owner"
@@ -1181,7 +1207,16 @@ function RetirePanel({
           />
         )}
 
-        <p className="inventory-confirm-place">{copy.place.label}</p>
+        {/* Treated for the same reason as everywhere else (D69): this is the string somebody
+            checks against the card in their hand, and it was the last owner-side position label
+            still drawn as a run of words and interpuncts. A departed card cannot reach here — a
+            card that has left is not one you can retire — so this is consistency rather than a
+            defect fixed, and it is listed as a site in docs/DESIGN.md with the other six. */}
+        {/* NULL STAYS NULL, which is what this drew before: `Place.label` is null for a pooled
+            copy and for a box the server could not count, and neither is a position to name. */}
+        <p className="inventory-confirm-place">
+          {copy.place.label === null ? null : <PositionLabel label={copy.place.label} />}
+        </p>
         {copy.place.box_name === null ? null : (
           <p className="inventory-confirm-boxname">{copy.place.box_name}</p>
         )}

@@ -441,9 +441,17 @@ def departed_label(box: int, index: int) -> str:
     IT ENDS ON A KEY AND NEVER ON A BARE NUMBER, and that is load-bearing rather than a taste
     call. `PositionLabel.tsx` promotes the last `·`-part of a label to a slot figure whenever it
     is all digits, so `Box 1 · departed · 67` would draw **67 at 44px in the slot column** — the
-    exact lie D58 refuses, reintroduced by a renderer. `1/67` fails that guard, so the string is
-    drawn whole, which is what `app/tests/inventory.spec.ts` already asserts for the shorter
-    form and now asserts for this one.
+    exact lie D58 refuses, reintroduced by a renderer. `1/67` is not all digits, so it is peeled
+    off as a store key before anything is promoted, and `app/tests/inventory.spec.ts` asserts
+    that nothing in the panel is drawn at the figure's size.
+
+    WHAT THE RENDERER DOES WITH THE REST CHANGED IN D69, AND THIS STRING DID NOT. Until then the
+    word `departed` made the whole label unrankable and every screen drew it raw at its payload
+    size — the pre-D41 plain string, back on `#/inventory` for exactly the cards that had been
+    sold. The client ranks it now (`BOX 1` / `DEPARTED 1/67`, and no figure at all), which is a
+    change of VIEW only: this function's output is byte-for-byte what it was, because the ordering
+    the renderer relies on — coarse parts first, the state where a slot number would be, the store
+    key last — is the ordering it already had.
 
     IT NAMES NO DOOR, AND THAT IS DELIBERATE. `sold` and `retired` are different departures
     with different reversals, and both are already on the record beside this string — every

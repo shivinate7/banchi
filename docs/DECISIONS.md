@@ -3119,6 +3119,39 @@ The label change alone was **worse than the defect on two of the three surfaces*
 ---
 
 
+## D69 — A card with no slot is ranked like every other, and it is the figure that goes
+
+**`PositionLabel` composes `Box 3 · departed · 3/36` into the same treatment every live card gets, with the number column drawn empty.** Built 2026-08-30, reported by the owner in one sentence: *"I marked something sold on inventory, and it immediately deferred back to the OLD UI that I thought we totally eliminated."*
+
+**It had. Selling a card was the way back to it.** D41 replaced a plain `Box 2 · Section 1 · Card 14` string with a ranked block of key/figure pairs, and D41's own numeric guard — *"a promoted slot is a slot NUMBER or the label renders whole"* — threw out any label whose last part was not all digits. `join.departed_label` ends on the word `departed`. So the guard refused the whole treatment for exactly the cards that had left, and `whole()` handed the raw server string back to a site whose font-size is its payload register. Two of the five sites have no CSS bail, and both drew it:
+
+- **The walk panel drew `Box 2 · departed` at 44px, wrapped onto two lines.** That is the pre-D41 rendering, in the panel D41 exists to have unwrapped, and its own entry measures why: 27 cells of Martian Mono at 0.70em advance is 453.6px into a 448.8px track.
+- **The copies list drew it at 28px as the loudest row in the list.** Live rows above it read `CARD 1` / `BOX 2 ME01 commons` / `SECTION 1`, ranked; the sold ones read as an unbroken string in the payload face. The least useful row was again the most prominent — the same failure D68 measured at 154.2px and thought it had fixed by demoting the store key.
+
+**What the guard was protecting is the FIGURE, and refusing the treatment was never the only way to protect it.** D58 refuses the slot number for a card that has left, because that number now belongs to the card that closed up behind it; D68 adds that the store key must not take the number's place. Both are statements about the slot column. Neither asks for the plain string, and both survive here untouched — there is no `.position-num` in a departed block at all.
+
+### The composition, which uses the vocabulary already there rather than a new one
+
+**The state joins the path and carries the store key as its value.** `DEPARTED 3/36` is the same `<key> <value>` shape as the `BOX 3` above it and as the `SECTION 1` it stands in for, so a departed row costs the same two path lines a live row costs and reads in the same register. It also retires `.position-storekey`'s orphan sub-line for this label: the key is no longer a note under a string, it is the value of the thing that explains it.
+
+**The shape that ranks is narrow on purpose, and the pooled label is what it keeps out.** A state terminal ranks only when every part in front of it is `<word> <number>`. `Pokémon code cards · pooled · 5/12` (`join.place_text`, D24) has a lowercase terminal too, but its one coarse part seams to `POKÉMON CODE / cards` — a key/value split of a phrase that has neither — so it still renders whole, at `.review-position`'s existing bail size. **A pooled card is nowhere; a departed card is in a box.** That is the line, and it is why one crossed it and the other did not.
+
+### Two derivations, because a site-by-site answer is how this drifts back
+
+- **In a list the reserve is the whole slot column, not the figure.** `lead='slot'` exists so every row's path starts at one x, and the shipped `min-width: 3ch` held the digits without holding the `CARD` beside them — which a figure-less row does not have. Measured: live paths at x=866.2, the two departed paths at x=827.9, a **38.3px hang**, which is exactly `CARD` at `.position-key`'s 11px (4 × 0.78 × 11 = 34.32px) plus `.position-slot`'s `--s1` gap. The reserve is now the whole column and `app/tests/inventory.spec.ts` reads both coordinates and requires one number, so the assumption that the last key is always the four letters of `CARD` fails there rather than hanging by the difference.
+- **As a singleton the path re-ranks, because with no figure the path is the payload.** `clamp(11px, 0.45em, 20px)` against the site's own `--pos-slot` — 19.8px at 44, 14.4px at 32, the 11px floor at 20 — which is `.position-key`'s argument at a different rank and lives beside it for the same reason: **it is a derivation from `--pos-slot`, not a size a screen chose.** At the shipped 11px the walk panel's whole answer sat in the metadata register and read as a panel that had failed to load. `lead` is already the list/singleton distinction, so nothing new decides this; in a list the row with least to say must stay the quietest, which is the fault this entry removes.
+
+**The dash in the empty column is `content`, not markup.** It is typography and it is `aria-hidden`, and a dash in the DOM joins `textContent` — `.browse-position` greps as `BOX 2DEPARTED 2/4—` for every spec, screenshot diff and copy-paste that reads the rendered label. It is drawn only under `lead='slot'`: a held place is legible against the rows above it, and the same glyph beside a lone label has nothing to hold.
+
+**The server string did not change and neither did any composer.** `Position.label` emits exactly what it emitted, `aria-label` carries it verbatim, and this is a change of VIEW — which is the property D41 named as what makes a client-side split legitimate at all. The renderer relies only on the ordering the label already had: coarse parts first, the state where a slot number would be, the store key last.
+
+**Two specs floored the defect and are corrected rather than deleted.** `a departed card draws no number` asserted `.position-parts` count **zero** and read the raw string as text — a floor on the component *refusing* the label. `two departed copies of one card draw two different rows` read `.position-storekey`. Both were written to protect D58 and D68, both did, and both stated the protection as *the absence of the treatment*. They now assert the invariant directly: no `.position-num` anywhere in the panel, a void in its place, and the ranked path. **This is the failure mode `docs/GATES.md` step 7 already records one register up** — every check green while nothing on the commit path looks at what a human can see. Here the checks were not merely silent; they were holding the defect in place.
+
+**What it does not cover, and why:** the pooled row still renders whole with its key demoted beneath it, which is `.position-plain`'s only remaining caller. Ranking it would mean inventing a key/figure split for a string that names no position, which is the thing D41's guard exists to prevent and which this entry narrows rather than repeals.
+
+---
+
+
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
 **The heading read "do not build until all gates pass" UNTIL 2026-08-25, AND NO GATE HAS BEEN CURRENT SINCE 2026-08-23.** All three passed; `CLAUDE.md` and `docs/GATES.md` both say the gating system is retired and that nothing is blocked behind one. A list whose whole force came from a control that no longer exists reads as either binding or void, and neither is right. What actually holds these items back is `CLAUDE.md`'s standing rule — *scope is argued, not gated* — so the bar is a decision entry and an argument, not a gate that will never fire.

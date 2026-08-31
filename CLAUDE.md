@@ -400,6 +400,7 @@ D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
 D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
 D68  A departed card's label names the record, because two of them in one box were the same string
+D69  A card with no slot is ranked like every other, and it is the figure that goes
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
