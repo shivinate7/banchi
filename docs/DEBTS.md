@@ -1174,28 +1174,52 @@ was read. Corrected here rather than by rewriting the message, because the messa
 and this file is where what-we-actually-know lives.
 
 
-### Two additions from the order-pipeline branch, and one of them is weaker than it looks
+### The two readings are not rivals, and the earlier withdrawal was too broad
 
-**A font wait was added to a DIFFERENT case — `the address holds one line at both widths` —
-and it is hardening, not a reproduction.** That case asserts advance widths and prices itself
-at "Martian Mono's 0.70em advance", while `app/index.html` fetches that face with
-`&display=swap`; `await page.evaluate(() => document.fonts.ready.then(() => true))` makes it
-measure the typeface it was computed for. **It has never been observed failing**, so this is a
-latent correctness fix. The branch that added it first proposed `display=swap` as *the* cause
-of the recorded red and supported that with run counts alone — 2 reds in 9 runs before, 1 in
-37 after. **The investigation above supersedes that**: it captured error text under controlled
-load and found the failures in `open()`, with the geometry stable at 0px across 120 loaded
-samples with fonts already loaded. Run counts are not a diagnosis, and the earlier claim is
-withdrawn rather than quietly left standing.
+**Three different failures were in play and only one of them is about fonts.** They were briefly
+written up as competing explanations; they are not, and the record is corrected here rather than
+by editing the accounts above.
 
-**A genuine and unrelated race was found and fixed in `shipping.spec.ts`.** It asserted
-`expect(await orders.allTextContents()).toEqual([...])`. `allTextContents()` is a SNAPSHOT
-with no auto-wait: it reads once, and a list that has not rendered yet reads as `[]`. **This
-one was observed** — it took a captured red on the first full-suite run of the new screen. The
-web-first `await expect(orders).toHaveText([...])` retries and asserts the same count, text and
-order, and now inherits the 15s allowance set above. Eight such non-retrying reads exist in the
-suite; the three in `shipping.spec.ts` are fixed and the remaining five are recorded here —
-three in `inventory.spec.ts`, two elsewhere — none of them observed failing.
+**One — the recorded red is the wait, and fonts have nothing to do with it.** A `toBeVisible()`
+timeout in a case's own `open()`: the app had not rendered at all. Answered by `expect.timeout`
+in `app/playwright.config.ts`. Nothing about a typeface would have changed it.
+
+**Two — the geometry `Received: 1.5` has a cause AND an exposure, and each got its own fix.**
+The investigation above named the mover in its own words — *"row 1 growing as a face swaps in"* —
+and that IS the `&display=swap` re-layout. What made it observable was the case reading two tops
+eleven round-trips apart and subtracting them as though they came from one layout. **So both
+readings are correct at different layers**: the swap is what moves the grid, the split read is
+what let a moving grid be reported as two columns coming apart. Reading both tops in one
+`evaluate` closes the exposure; `app/tests/fontsReady.ts` closes the cause. Either alone would
+have made that case green, which is exactly why one branch could measure the geometry stable
+"with `document.fonts` already loaded" while the other concluded fonts mattered — both were
+looking at a true thing.
+
+**What WAS over-claimed, and stays withdrawn:** that `display=swap` was *the* cause of the
+recorded red, supported by run counts alone (2 in 9 before, 1 in 37 after). It was not; that red
+was the wait, and run counts are not a diagnosis. The narrower claim — that a measurement taken
+inside the swap window measures the wrong typeface — stands, and is now enforced everywhere
+rather than in one case.
+
+**Three — `shipping.spec.ts` was a plain race and neither of the above.**
+`expect(await orders.allTextContents()).toEqual([...])`: `allTextContents()` is a SNAPSHOT with
+no auto-wait, so it read `[]` before the rows rendered. **Observed**, on the first full-suite run
+of the new screen. Now `await expect(orders).toHaveText([...])`, which retries and asserts the
+same count, text and order.
+
+### The font wait is now everywhere geometry is measured
+
+`app/tests/fontsReady.ts:settleFonts` is called after all **nine** `page.goto` sites in the four
+files that measure type — `inventory.spec.ts` (15 `getBoundingClientRect` reads),
+`fulfillment.spec.ts` (4), `cursor.spec.ts` (3), `pricing.spec.ts` (1). The earlier note here
+recorded 21 sites as knowingly unfixed; that debt is **closed**, and it cost nine lines rather
+than the four-file rewrite that was declined, because fonts settle once per page load and not
+once per measurement. No assertion, threshold or allowance was touched.
+
+**Five non-retrying reads remain** — three in `inventory.spec.ts`, two elsewhere — of the eight
+originally counted. None has been observed failing, and `expect(await …innerText())` is a
+narrower hazard than the list form that actually broke: a substring assertion on a rendered
+element is far likelier to be non-empty when it is read.
 
 ## A Playwright line number is not a line in the file — found 2026-08-30
 

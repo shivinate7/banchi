@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
  *
@@ -883,6 +884,7 @@ async function battery(page: Page, where: string, hasControls = true): Promise<v
 async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise<Store> {
   const states = await stubServer(page, wire, mood)
   await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
   await expect(
     view(page),
     `no Fulfillment view at ${VIEW_ROUTE} — is the route registered in App.tsx?`,
@@ -1503,6 +1505,7 @@ test('the ordinary flow passes the whole table at every step', async ({ page }) 
 test('the screen while the cards load is his too', async ({ page }) => {
   await stubServer(page, [], { slow: true })
   await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
   await expect(view(page)).toContainText('Getting the cards.')
   // The one screen that offers nothing to press, and the only call site that says so.
   await battery(page, 'loading', false)
@@ -1516,6 +1519,7 @@ test('the screen when the cards do not load is his too, and trying again works',
   const mood: Mood = { fail: true }
   await stubServer(page, [], mood)
   await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
 
   // What happened, and what to do next — in his words, and none of the server's.
   await expect(view(page)).toContainText('The cards did not load. Try again.')
@@ -1543,6 +1547,7 @@ test('a body this screen cannot read fails the same way a dead server does', asy
     })
   })
   await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
 
   await expect(view(page)).toContainText('The cards did not load. Try again.')
   await expect(view(page), 'the screen is still waiting for an answer it already had').not.toContainText(
