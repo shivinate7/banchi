@@ -134,7 +134,7 @@ const FETCH_ACK: Record<string, { send: 'acceptUnverified' | 'acceptNarrower'; l
   export_narrower: { send: 'acceptNarrower', label: 'Fetch anyway — I narrowed it' },
 }
 
-/* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D75), in the operator's words.
+/* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D76), in the operator's words.
  *
  * THE SAME TWO-SIZE RULE THE REVIEW QUEUE'S REASONS FOLLOW: a sentence a person reads, with
  * the machine string kept beside it rather than instead of it. The reason is the whole point
@@ -160,7 +160,7 @@ const SCOPE_CHOICES = [
 ] as const
 type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
 
-/* D75's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
+/* D76's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
  * be: D49 makes `decisions.json` the one place a pricing answer is written, `#/pricing` is
  * the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
  * because a SECOND place to say `rule` already produced 48 cards about to list at a price
@@ -228,7 +228,8 @@ const READINGS = [
       'Finds the card in each photograph and sends only that, at 1200px on its longest side — ' +
       'the card, not the desk. Your photographs on disk are never touched. Box 2 measured it: ' +
       '$0.62 against the whole frame’s $0.72, and sharper on the collector number. One it ' +
-      'cannot find a card in is sent whole; on box 2 that was none of 544.',
+      'cannot find a card in is sent whole, and so is one where it found a box that is not ' +
+      'the card — walk the preview and it says which, and why.',
   },
   {
     key: 'cheapest',
@@ -238,7 +239,8 @@ const READINGS = [
     says:
       'The same crop to the card, sent smaller at 900px. The cheapest row measured on box 2 — ' +
       '$0.44 — and the softest: about 13% fewer pixels on the collector number than the whole ' +
-      'frame gives. A photograph it cannot find a card in is sent whole.',
+      'frame gives. A photograph it cannot find a card in — or finds the wrong box in — is ' +
+      'sent whole.',
   },
   {
     key: 'whole',
@@ -384,7 +386,7 @@ export function RunPanel({ cart }: RunPanelProps) {
 
   const [bypass, setBypass] = useState(false)
 
-  /* ------------------------------------------------------ D75: the fetch's scope, as a lever
+  /* ------------------------------------------------------ D76: the fetch's scope, as a lever
    *
    * `scopeInfo` is the server's own answer to "what would a press ask for, and why" — the
    * counts, this game's registry rule, and the derived scope. It is READ, never recomputed:
@@ -1011,7 +1013,7 @@ export function RunPanel({ cart }: RunPanelProps) {
       setFetchRefusal(null)
       let answer: ExportFetched
       try {
-        /* THE SCOPE TRAVELS WITH THE ACKNOWLEDGEMENT, NOT INSTEAD OF IT (D75). A retry
+        /* THE SCOPE TRAVELS WITH THE ACKNOWLEDGEMENT, NOT INSTEAD OF IT (D76). A retry
            after `export_narrower` must ask for the same scope the first press did, or the
            operator answers a question about one file and gets another. */
         answer = await fetchExport(openRun, {
@@ -1668,9 +1670,24 @@ export function RunPanel({ cart }: RunPanelProps) {
                       </span>
                     )}
                     {/* A REFUSAL IS NOT THE SAME FACT AS THE CROP BEING OFF, and `rect` alone
-                        cannot tell them apart. */}
+                        cannot tell them apart. Nor are the two refusals the same fact as each
+                        other: nothing found is a photograph to look at, and a box refused as
+                        unfit is a detector that answered confidently and wrongly. */}
                     {preview.sample.method == null && <span>no card found — sent whole</span>}
+                    {preview.sample.crop_refused != null && (
+                      <span>card found, crop refused — sent whole</span>
+                    )}
                   </p>
+                  {preview.sample.crop_refused != null && (
+                    /* THE GUARD'S OWN SENTENCE, VERBATIM, UNDER THE PICTURE IT EXPLAINS.
+                       `identify/images.py:crop_refusal` writes a sentence rather than a flag
+                       precisely so it can be read here — the box came back looking like a
+                       card and was a rectangle INSIDE one, and the operator is looking at a
+                       whole frame with no other way to know why. Same treatment as
+                       `band_absent` above, and for the same reason: the pipeline's words, not
+                       this screen's summary of them. */
+                    <p className="run-step-note run-step-fine">{preview.sample.crop_refused}</p>
+                  )}
 
                   {/* THE WALK. Arrow keys do the same thing, which is what the owner asked
                       for; these exist because a key with no visible control is a key nobody
@@ -1912,7 +1929,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                     there is nothing to resolve them by.
                   </p>
 
-                  {/* ------------------------------------------------- D75: the routing lever
+                  {/* ------------------------------------------------- D76: the routing lever
                       HERE AND NOT ON `#/pricing`, because it is not a pricing answer. It
                       decides which resolved cards face a human, `join` is the command that
                       applies it, and it was reachable only from a terminal. `--rule` and
@@ -1934,7 +1951,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                     </select>
                   </label>
 
-                  {/* ------------------------------------------- D75: the fetch scope, drawn
+                  {/* ------------------------------------------- D76: the fetch scope, drawn
                       WHAT THE PRESS WILL ASK FOR, BEFORE IT IS PRESSED. The receipt below
                       says what was asked AFTER the file is on disk, which is one moment too
                       late to correct it. Every value here is read off
@@ -2131,7 +2148,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                           ? ` (unmatched: ${fetched.asked.unresolved_hints.join(', ')})`
                           : ''}
                         {/* WHICH VOICE CHOSE IT, ON THE RECEIPT AS WELL AS ON THE CONTROL
-                            (D75). The panel above says what a press WILL ask for; this says
+                            (D76). The panel above says what a press WILL ask for; this says
                             what the press that already happened asked for — and a receipt
                             that reported the scope without the reason is what let a
                             one-hinted-card narrowing look like a correct answer. */}

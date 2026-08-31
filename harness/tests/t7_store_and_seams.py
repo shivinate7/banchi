@@ -12293,12 +12293,12 @@ def check_export_fetch(checks: Checks) -> None:
                     "standing instruction and the one of the three that nothing downstream "
                     "could ever catch — D64 measured `Photo URL` empty in every export, "
                     "filtered and unfiltered, so a wrong value here is invisible in the file "
-                    "it narrows (D75)",
+                    "it narrows (D76)",
                 )
 
                 # ------------------- A HINT IS EVIDENCE ABOUT ITS OWN CARD AND NO OTHER
                 #
-                # D75, AND THE DEFECT IT IS NAMED FOR. D65 gathered the hints that EXISTED
+                # D76, AND THE DEFECT IT IS NAMED FOR. D65 gathered the hints that EXISTED
                 # and never counted the cards carrying none, so a box sorted by rarity with
                 # one set hint on one card scoped the whole export to that one set — and
                 # every unhinted card queued `no_catalog_row` behind a fetch that reported
@@ -12334,7 +12334,7 @@ def check_export_fetch(checks: Checks) -> None:
                     sent().get("SetNameIds"),
                     ["4242"],
                     "a box where EVERY card carries a hint and the hint resolves still "
-                    "narrows to that set — D65's saving is intact, and D75 narrows the "
+                    "narrows to that set — D65's saving is intact, and D76 narrows the "
                     "condition rather than removing it",
                 )
                 hint_cards(1)
@@ -12403,7 +12403,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                 # ------------------------------- THE LEVER'S POSITION, BEFORE IT IS PULLED
                 #
-                # `GET .../scope` (D75). The receipt named the scope AFTER the file was on
+                # `GET .../scope` (D76). The receipt named the scope AFTER the file was on
                 # disk, so the one moment an operator could correct a wrong scope was the one
                 # moment it was not on screen. FREE and it presses nothing — asserted by the
                 # POST count, because "it did not fetch" is the property, not a side effect.

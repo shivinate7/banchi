@@ -186,7 +186,7 @@ PROMPT_STRATEGIES = (
 # list does not contain is a band nothing knows how to cut.
 CROP_BAND_NAMES = ("title", "number")
 
-# ------------------------------------------- how wide this game's export is fetched (D75)
+# ------------------------------------------- how wide this game's export is fetched (D76)
 #
 # WHICH AXIS THE FETCH IS ALLOWED TO NARROW ON, PER GAME. D65 scoped
 # `POST /admin/pricing/downloadexportcsv` by the set hints the box's own cards carry, on the
@@ -392,7 +392,7 @@ GAMES = (
             "Secret Rare": ("holo",),
             "Rainbow Rare": ("holo",),
         },
-        # D75. `sets` because the whole category is NOT measured: 220 sets in the live
+        # D76. `sets` because the whole category is NOT measured: 220 sets in the live
         # picker, and the widest Pokemon file this repo holds is four of them. So the fetch
         # narrows — but only where every card in the run carries a hint and every hint
         # resolved, which is the condition D65's first build did not check.
@@ -439,7 +439,7 @@ GAMES = (
         # after it, but `Position.label` is never rendered for one and it never enters the
         # pull flow or the Fulfillment view — there is nothing to walk to. This flag is the
         # concrete form of D14's "two tracks, one rig".
-        # D75. `sets`, and it is the same unmeasured Pokemon category as above. Code cards
+        # D76. `sets`, and it is the same unmeasured Pokemon category as above. Code cards
         # rarely carry a set hint, so in practice this widens — which is correct and is what
         # it already did; what changed is that a single hinted card can no longer narrow it.
         "export_scope": "sets",
@@ -538,7 +538,7 @@ GAMES = (
             "Showcase": ("foil",),
             "Promo": ("normal", "foil"),
         },
-        # D75, AND THE ONE ENTRY THAT EARNS `category`. The file named at the top of this
+        # D76, AND THE ONE ENTRY THAT EARNS `category`. The file named at the top of this
         # module — fixtures/riftbound_export_untouched.csv, 10078 rows, 1.6 MB — is the
         # ENTIRE English catalogue in one download, per the owner. So there is nothing for a
         # set filter to buy here and a real hazard in spending one: a box sorted by rarity
@@ -645,7 +645,7 @@ GAMES = (
             "PR": ("normal", "foil"),
             "DON!!": ("normal", "foil"),
         },
-        # D75. `sets`, and NOT `category`, on the same asymmetry this module already uses to
+        # D76. `sets`, and NOT `category`, on the same asymmetry this module already uses to
         # decide how far a matrix may be narrowed: the committed One Piece export is three
         # sets out of many, so nothing here has measured the whole category. It is the most
         # likely next `category` — 3622 rows for three sets suggests a small catalogue — and
@@ -814,7 +814,7 @@ def is_catalogued(key: str) -> bool:
 
 
 def export_scope(key: str) -> str:
-    """How wide this game's Filtered Export is fetched — `category` or `sets` (D75).
+    """How wide this game's Filtered Export is fetched — `category` or `sets` (D76).
 
     DEFAULTS TO `sets`, WHICH IS THE ONE THAT CANNOT BE WRONG BY OMISSION. `sets` still
     widens to the whole category unless the run's cards unanimously ask for a narrower file,

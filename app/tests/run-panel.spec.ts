@@ -414,7 +414,7 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"games": []}' })
   })
 
-  /* D75's scope preview. Registered panel-wide because EVERY case that opens a run now draws
+  /* D76's scope preview. Registered panel-wide because EVERY case that opens a run now draws
      it, and a case that wanted a different scope re-registers over this one. A one-game run
      whose cards are only partly hinted, which is the shape the defect was found in. */
   await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
@@ -1442,7 +1442,7 @@ test('a hint that resolved to nothing says so, because the export silently widen
   await expect(page.locator('.run-fetched')).toContainText('OGN')
 })
 
-/* ------------------------------------------------------------------ D75: the scope as a lever
+/* ------------------------------------------------------------------ D76: the scope as a lever
  *
  * THE PROPERTY IS THAT A HUMAN CAN SEE AND CHANGE THE SCOPE BEFORE PRESSING. `CLAUDE.md`'s
  * route-is-not-a-feature rule is the whole reason these three exist rather than the server

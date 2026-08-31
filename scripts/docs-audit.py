@@ -2130,7 +2130,7 @@ EXPORT_STANDING = (
     (
         "ExcludeListos",
         True,
-        "Exclude listings with photos — the owner's standing instruction (2026-08-31, D75). "
+        "Exclude listings with photos — the owner's standing instruction (2026-08-31, D76). "
         "It holds on the owner's word: what the flag changes in the file is NOT measured, "
         "because the axis leaves no trace in it. NOTHING DOWNSTREAM CAN CATCH A WRONG VALUE: "
         "D64 measured `Photo URL` empty in every export, filtered and unfiltered, so a wrong "
@@ -2429,7 +2429,7 @@ def check_game_vocabulary(report: Report) -> None:
                 )
             )
 
-        # D75's per-game fetch width. Two provable things and nothing softer: the value is
+        # D76's per-game fetch width. Two provable things and nothing softer: the value is
         # one of the two the registry publishes, and `category` — the claim that a whole
         # TCGplayer category comes down in one file — cannot be authored for a game naming
         # no category to fetch. Both are the shape of a literal, which is what keeps this row

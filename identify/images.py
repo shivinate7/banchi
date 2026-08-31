@@ -32,8 +32,10 @@ from typing import Optional
 import geometry
 
 try:  # reported as a message at call time, not as a traceback at import
+    import numpy as np
     from PIL import Image
 except ImportError:  # pragma: no cover - environment problem, not logic
+    np = None
     Image = None
 
 MAX_EDGE = 1568
@@ -89,6 +91,11 @@ class Prepared:
     original_size: tuple
     sent_size: tuple
     resized: bool
+    # WHY THIS IMAGE WAS NOT CROPPED although a crop was asked for and a card WAS found —
+    # `crop_refusal`'s sentence, or None. Carried rather than logged because two screens and
+    # the preflight all have to say it: a run that silently sent whole frames would report
+    # itself as having cropped, and the operator's only evidence would be the bill.
+    crop_refused: Optional[str] = None
 
     @property
     def data_b64(self) -> str:
@@ -137,52 +144,20 @@ def downscale(image, max_edge: int = MAX_EDGE):
 def card_rect(size, box, aspect: float = geometry.CARD_ASPECT):
     """WHERE THE CARD IS in a frame of `size`: corrected, UNPADDED, and in float pixels.
 
-    THE PAD WAS A FLAT GUESS AND IT CUT COLLECTOR NUMBERS OFF. Box 2's first run sent 544
-    cards cropped at a flat 4%: 38 came back with NO number at all, and a further handful
-    came back with the wrong one — `0342`, `0326`, `0934`, which are NATIONAL POKEDEX
-    numbers read off the artwork strip once the real collector number had been cropped
-    away. A blank is recoverable by the name fallback; a confident wrong number is the
-    failure D23 says no confidence threshold catches.
+    A THIN DELEGATE SINCE 2026-08-31, and the arithmetic and its whole argument now live in
+    `geometry.corrected_bounds`. It moved because a THIRD caller needed it and could not reach
+    it here: `geometry/crop.py:registered_card` cuts the crop-retry bands as fractions of the
+    detected box, and `geometry/` may not import `identify/` — so the correction was applied
+    on the primary image and not on the retry, and the retry is the rung that exists to
+    recover a number the primary lost. Measured on box 2's 543 photographs, the retry's number
+    band stopped at 0.953 of a card-shaped rectangle at the median and 0.935 at worst, and
+    `box2/0340.jpg` came out with NO collector number in the band at all.
 
-    The cause is measurable and was sitting in the detector's own output the whole time. A
-    card is `CARD_ASPECT` — 63/88, 0.716 — and the detected boxes came back at a MEDIAN of
-    0.790, with the failures at 0.801 and the worst at 0.822. The box is systematically too
-    SHORT for its width, because the border search locks onto the artwork's strong inner
-    edges more readily than the card's own bottom border. A flat margin cannot fix a
-    proportional error: 92% of the cards that DID keep their number had the same distortion
-    and merely landed on the right side of it.
-
-    SO THE CORRECTION IS COMPUTED, NOT GUESSED. If the box is short for its width, restore
-    the height a real card of that width would have. The pad is then a genuine safety
-    margin on a box that is already the right shape, rather than the only thing standing
-    between the crop and the number.
-
-    Applied symmetrically. The observed deficit sits at the bottom — the number end — but
-    `CardBox` reports no per-edge confidence, so attributing the whole correction downward
-    would be inventing a fact. Symmetric costs a few pixels at the top and cannot be wrong
-    about which edge was short.
-
-    ONLY EVER GROWS. A box already taller than its width implies is left alone: that is a
-    box with room to spare, and narrowing it would be this defect in the other direction.
-
-    UNPADDED AND UNROUNDED ON PURPOSE, which is what makes it worth its own name. The pad
-    is a safety margin on the CUT (`crop_rect`), not a statement about where the cardboard
-    is — and the second caller wants the cardboard: the run panel's preview measures the
-    number band off this rectangle, and measuring it off the padded one would put the band
-    a few percent low on every card. Rounding belongs at the cut for the same reason.
+    THE NAME STAYS BECAUSE THE CALLERS AND THE DECISIONS USE IT. This is the pixel-space
+    question `crop_rect` and the run panel's band both ask, and a rename would move a
+    docstring several entries cite for the sake of deleting one line.
     """
-    width, height = size
-    left, top = box.left * width, box.top * height
-    right, bottom = box.right * width, box.bottom * height
-    box_w, box_h = right - left, bottom - top
-
-    if aspect and box_h > 0 and (box_w / box_h) > aspect:
-        want_h = box_w / aspect
-        grow = (want_h - box_h) / 2.0
-        top -= grow
-        bottom += grow
-
-    return left, top, right, bottom
+    return geometry.corrected_bounds(size, box, aspect)
 
 
 def crop_rect(
@@ -214,6 +189,158 @@ def crop_rect(
     )
 
 
+# ------------------------------------------------- IS THE DETECTED BOX ACTUALLY THE CARD?
+#
+# `geometry.detect_card` answers "not found" honestly and it has no way to answer "found the
+# wrong thing". On the real rig it sometimes locks onto a rectangle INSIDE the card — the
+# rules-text panel, the artwork frame — and returns it with a card's aspect, a passing border
+# score and no sign of trouble. Cropping to that sends a sliver of the card with the collector
+# number outside it, which is the box-2 failure `card_rect` was written for arriving by a
+# different road: a confident wrong number, the one thing D23 says no threshold catches.
+#
+# MEASURED 2026-08-31 over all 867 photographs in the owner's three real boxes — box 1 (133
+# Riftbound), box 2 (543 Pokemon), box 3 (191 Riftbound). `detect_card` returned a box for
+# every one of them and refused none. NINE were confirmed wrong by eye, all in box 3, and on
+# the PADDED rectangle that is actually cut the two populations read:
+#
+#                             area of the frame            detail the crop keeps
+#     858 correct              0.300 - 0.988                   0.438 - 0.995
+#       9 wrong                0.068 - 0.270                   0.152 - 0.435
+#
+# NEITHER COLUMN IS SAFE ON ITS OWN, and that is why this is two measurements rather than one
+# constant. On area the gap is 0.270 to 0.300 — and box 1's smallest correct crop sits exactly
+# on 0.300, because box 1 is shot further back and its correct crops are genuinely small. On
+# detail the gap is 0.435 to 0.438, which is under a percent. A threshold in either gap on its
+# own is a number fitted to one rig, not a margin.
+#
+# So the rule is an AND, and each leg covers the other's boundary: a crop under 30% of the
+# frame has to justify itself by keeping at least half the frame's detail. Over the measured
+# set that refuses all 9 wrong crops and none of the 858 correct ones. The legs are doing
+# separate work — 27 correct crops (box 1, area 0.300-0.362) fall under the DETAIL line and
+# are kept by the area leg, while every wrong crop is under BOTH.
+#
+# ERRING TOWARD REFUSAL IS THE CHEAP DIRECTION, which is what lets a threshold sit on a
+# boundary at all. A refusal sends the whole frame: more image tokens, the reading the run
+# made before `--crop` existed, and a correct answer. A false accept sends a picture with the
+# collector number cut out of it and gets a confident answer about nothing.
+#
+# ONE RIG, ONE DAY, 867 FRAMES — read this the way docs/GATES.md says to read T6's green.
+# What is established is that these two numbers separate these two populations; what is not
+# is a rate at which detection goes wrong.
+
+# A CROP SMALLER THAN THIS HAS TO JUSTIFY ITSELF. Above it, nothing is asked: a crop that is
+# most of the frame cannot be a rectangle inside the card.
+SMALL_CROP_AREA = 0.30
+
+# And this is how it justifies itself — the share of the frame's detail it keeps.
+MIN_CROP_DETAIL = 0.50
+
+# A PLAIN FLOOR WAS TRIED HERE AND TAKEN OUT AGAIN, which is worth the four lines. "Refuse any
+# crop under 10% of the frame, whatever else is true" is the obvious guard and it is the one a
+# person reaches for first. Over the measured set it catches nothing the rule above does not —
+# every one of the nine is under BOTH lines — and it has a case where it is simply wrong: T6's
+# own `_scene(scale=0.55)` is a small card correctly found on a plain mat, 8% of the frame and
+# keeping 94% of its detail, and a floor refuses it. A second rule that adds no catch and
+# subtracts a correct crop is not redundancy.
+
+# The detail measure runs here. It is a ratio of sums over the whole frame, so it is stable
+# under the resize, and 256px keeps the whole guard at ~25ms a frame.
+DETAIL_EDGE = 256
+
+
+def detail_share(image, rect) -> float:
+    """Of all the DETAIL in the frame, the share `rect` keeps. In [0, 1].
+
+    Detail is the summed absolute luminance gradient — the measure that already answers
+    "where is the structure in this picture", and the one `geometry/detect.py`'s border
+    search is built on, so the guard and the detector are reading the same signal.
+
+    WHY THIS IS THE SECOND AXIS AND NOT, SAY, A TIGHTER ASPECT GATE. The failure being caught
+    is a rectangle cut out of the middle of the card, and the thing that is unmistakably true
+    of it is that the rest of the card is still outside the crop — sharp, structured, and
+    thrown away. A crop of the subject keeps the subject. A crop that discards more than half
+    of everything the photograph has to say is a crop of a piece of something.
+
+    It is a RATIO, so it needs no calibration to the rig: a dark backdrop, a bright desk and a
+    busy tray all cancel out of the numerator and the denominator together.
+    """
+    _require()
+    if np is None:  # pragma: no cover - environment problem
+        raise ImageError("the crop guard needs numpy — run `make venv`")
+    gray = image.convert("L")
+    scale = DETAIL_EDGE / float(max(gray.size))
+    if scale < 1.0:
+        gray = gray.resize(
+            (max(1, int(gray.width * scale)), max(1, int(gray.height * scale))),
+            Image.BILINEAR,
+        )
+    array = np.asarray(gray, dtype=np.float32)
+    if array.shape[0] < 2 or array.shape[1] < 2:
+        return 0.0
+    dx = np.abs(np.diff(array, axis=1))
+    dy = np.abs(np.diff(array, axis=0))
+    energy = np.zeros_like(array)
+    # Each difference belongs to both pixels it was taken between, so a gradient on the crop's
+    # own boundary is not silently assigned to the side that happens to be outside it.
+    energy[:, :-1] += dx
+    energy[:, 1:] += dx
+    energy[:-1, :] += dy
+    energy[1:, :] += dy
+    total = float(energy.sum())
+    if total <= 0:
+        # A frame with no gradient anywhere has no detail to lose. Nothing about it is
+        # evidence against the crop, so the guard is told it passed rather than failed —
+        # a blank photograph is a photograph problem, not a detection problem.
+        return 1.0
+    width, height = image.size
+    rows, columns = array.shape
+    x0 = max(0, min(columns, int(round(rect[0] / float(width) * columns))))
+    x1 = max(x0, min(columns, int(round(rect[2] / float(width) * columns))))
+    y0 = max(0, min(rows, int(round(rect[1] / float(height) * rows))))
+    y1 = max(y0, min(rows, int(round(rect[3] / float(height) * rows))))
+    return float(energy[y0:y1, x0:x1].sum()) / total
+
+
+def crop_refusal(
+    image, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT
+) -> Optional[str]:
+    """Why this box must NOT be cropped to, or None to go ahead. See the block above.
+
+    A SENTENCE RATHER THAN A BOOLEAN, because every caller has to say this out loud. The
+    preflight prints it before any money is spent, the run panel's preview draws no rectangle
+    and shows it instead, and a crop retry that refuses here sends the card to a human. A
+    silent fallback to the whole frame would be the run quietly not doing what the operator
+    asked for, which is the one thing `--crop`'s own preflight line exists to prevent.
+
+    `image` is an open image or a path. The path form is for the crop-retry path, which holds
+    a filename rather than a frame — and having it open the file here keeps PIL inside this
+    module, where the rest of the repo's image handling already lives.
+    """
+    _require()
+    if not isinstance(image, Image.Image):
+        try:
+            with Image.open(image) as opened:
+                opened.load()
+                return crop_refusal(opened, box, pad, aspect)
+        except Exception as exc:
+            raise ImageError(f"{image}: {exc}") from exc
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return "the frame has no pixels"
+    left, top, right, bottom = crop_rect(image.size, box, pad, aspect)
+    area = ((right - left) * (bottom - top)) / float(width * height)
+    if area >= SMALL_CROP_AREA:
+        return None
+    kept = detail_share(image, (left, top, right, bottom))
+    if kept < MIN_CROP_DETAIL:
+        return (
+            f"the crop is {area * 100:.0f}% of the frame and keeps only {kept * 100:.0f}% of "
+            f"its detail, so most of what the photograph has to show is outside it — that is "
+            f"a crop of part of the card, not of the card. Sent whole."
+        )
+    return None
+
+
 def card_crop(image, box, pad: float = CROP_PAD, aspect: float = geometry.CARD_ASPECT):
     """The detected card plus `pad`, clamped to the frame. `box` is a `geometry.CardBox`.
 
@@ -239,6 +366,11 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
     `crop_box` is an optional detected card. WHEN IT IS PASSED THE VERBATIM PATH BELOW
     CANNOT BE TAKEN — the bytes on disk are no longer what should be sent — which is why the
     crop happens before the `resized` test rather than after it.
+
+    UNLESS `crop_refusal` REFUSES THE BOX, in which case the whole frame is what should be
+    sent and the reason travels back on `Prepared.crop_refused`. The guard is applied HERE, at
+    the one place the bytes are made, so nothing downstream can hold a box this function
+    declined and cut with it anyway.
     """
     _require()
     path = Path(path)
@@ -249,8 +381,13 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
         with Image.open(path) as opened:
             opened.load()
             original_size = opened.size
+            refused = None
             if crop_box is not None:
-                opened = card_crop(opened, crop_box)
+                refused = crop_refusal(opened, crop_box)
+                if refused is not None:
+                    crop_box = None
+                else:
+                    opened = card_crop(opened, crop_box)
             scaled, resized = downscale(opened, max_edge)
             if crop_box is not None:
                 # Re-encode ALWAYS. A cropped image that happened to land inside the cap is
@@ -273,6 +410,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                     original_size=original_size,
                     sent_size=original_size,
                     resized=False,
+                    crop_refused=refused,
                 )
             data = encode(scaled)
             return Prepared(
@@ -282,6 +420,7 @@ def prepare(path, max_edge: int = MAX_EDGE, crop_box=None) -> Prepared:
                 original_size=original_size,
                 sent_size=scaled.size,
                 resized=resized,
+                crop_refused=refused,
             )
     except ImageError:
         raise

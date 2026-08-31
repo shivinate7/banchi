@@ -950,22 +950,19 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
         }
 
+    # THE CUT THE RUN WILL ACTUALLY MAKE, WHICH IS NOT ALWAYS THE ONE DETECTION PROPOSED.
+    # `prepare` applies `images.crop_refusal` and can decline a box that came back looking
+    # fine — a rectangle inside the card, which sends the collector number outside the bytes.
+    # Reading the refusal off `prepared` rather than re-running the guard is the same rule
+    # `_parse_preflight` follows and the same one `crop_rect` exists for: the preview draws
+    # what was made, never a second opinion about it.
+    crop_refused = prepared.crop_refused
     rect = (
         identify_images.crop_rect(prepared.original_size, detected)
-        if crop and detected is not None
+        if crop and detected is not None and crop_refused is None
         else None
     )
 
-    # THE REGISTRY DECIDES WHETHER THERE IS A BAND AT ALL, per card, off the card's own game.
-    # `game_or_default` rather than the raw claim: D21 puts the backfill at the read, and a
-    # sidecar written before that field existed is a Pokemon card.
-    game = capture.game_or_default
-    try:
-        claims = games.get(game)["crop_bands"]
-    except Exception:
-        # An unregistered game is refused by the run itself, by name. Here it simply means no
-        # band — guessing one would be the defect this block exists to fix.
-        claims = ()
     # THE PICTURE IS THE PAYLOAD, NOT THE FILE ON DISK (the owner, 2026-08-29: *"the crop
     # preview should also show the depixelation reflected as you change the options"*). The
     # frame used to draw `GET /photo`, which is the same bytes at every reading — so the one
@@ -1014,6 +1011,12 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             # a card going at whole-frame cost when they asked for a crop. This is the only
             # field that tells them apart.
             "method": detected.method if detected is not None else None,
+            # WHY THE CARD WAS FOUND AND STILL NOT CROPPED TO. A third fact, and it is not
+            # either of the two above: `method` says a card was located, `rect: null` says
+            # nothing was cut, and only this says the box was refused and what was wrong with
+            # it. Without it the preview would draw a whole frame over a found card and give
+            # the operator no way to tell that from the crop simply being switched off.
+            "crop_refused": crop_refused,
             # THE SENT BYTES THEMSELVES. The frame draws these rather than the stored
             # photograph, so the picture changes when the reading does — and the 1:1 view
             # below is a region of this same file, which is why the two can never disagree.
@@ -2216,7 +2219,7 @@ def do_tcg_sets(game: str) -> dict:
 def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
     """Per game in this run: how many cards, how many carry a set hint, and which hints.
 
-    COUNTED, NOT COLLECTED, AND THAT IS THE WHOLE OF D75. The shape here used to be a set of
+    COUNTED, NOT COLLECTED, AND THAT IS THE WHOLE OF D76. The shape here used to be a set of
     hint strings, which cannot answer "did EVERY card carry one" — a set of hints has already
     forgotten how many cards there were. `cards` and `hinted` are the two numbers the
     unanimity rule turns on, so they are what this returns.
@@ -2274,7 +2277,7 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     chosen by `game` in the request or is the run's only one.
 
     WIDENING IS ALWAYS SAFE AND NARROWING NEVER IS — AND THE FIRST BUILD COUNTED THE WRONG
-    THING (D75). It collected the hints that EXISTED and never counted the cards carrying
+    THING (D76). It collected the hints that EXISTED and never counted the cards carrying
     none, so a box sorted by rarity with one set hint on one card scoped the whole export to
     that one set. Measured on a synthetic 200-card Riftbound run: `SetNameIds` came back
     `["77"]`, 199 cards had no catalog row to match, and the positive check passed because
@@ -2408,7 +2411,7 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
     elif not hints:
         scope_used, chosen_by, reason = "category", "cards", "no_hints"
     elif unhinted > 0:
-        # THE DEFECT D75 IS NAMED FOR. Some cards carry a hint and some do not, so the hints
+        # THE DEFECT D76 IS NAMED FOR. Some cards carry a hint and some do not, so the hints
         # describe part of the box and the export would be cut to that part. Every unhinted
         # card outside those sets would queue `no_catalog_row` behind a fetch that reported
         # success — which is exactly what the owner hit on a Riftbound box sorted by rarity.
@@ -2435,7 +2438,7 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
         "unresolved_hints": list(unresolved),
         "sets": names,
         # KEPT, AND IT IS THE SAME FACT `scope` CARRIES. Every client written against D65
-        # reads this boolean; `scope`, `chosen_by` and `reason` are what D75 adds beside it,
+        # reads this boolean; `scope`, `chosen_by` and `reason` are what D76 adds beside it,
         # because "the whole category" was never the interesting half — WHY it went wide is.
         "widened": scope_used == "category",
         "scope": scope_used,
@@ -2455,7 +2458,7 @@ def do_pipeline_scope(name: str, payload: dict) -> dict:
     FREE, AND IT PRESSES NOTHING. `POST .../export` is what fetches; this answers the
     question that press used to answer only in hindsight — the receipt named the scope AFTER
     the file was on disk, so the one moment an operator could have corrected a wrong scope
-    was the one moment they could not see it. D75 makes it a lever, and a lever needs its
+    was the one moment they could not see it. D76 makes it a lever, and a lever needs its
     current position drawn.
 
     IT REFUSES ALMOST NOTHING, WHICH IS THE OPPOSITE POSTURE FROM THE FETCH. A mixed-game run

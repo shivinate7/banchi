@@ -1749,7 +1749,7 @@ export async function getTcgSets(game: string): Promise<TcgSets> {
 }
 
 /**
- * What a fetch WOULD ask TCGplayer for, before one is pressed (D75).
+ * What a fetch WOULD ask TCGplayer for, before one is pressed (D76).
  *
  * FREE, AND IT PRESSES NOTHING. The same three fields `fetchExport` takes go out here, so the
  * panel describes the scope the button is about to send rather than a second guess at it.
@@ -1783,7 +1783,7 @@ export async function fetchExport(
     /** Which category to ask for. Required only where the run holds more than one game —
      *  one fetch answers for one category, because `CategoryId` is scalar in the portal. */
     game?: string
-    /** D75's axis. Absent uses the game's own rule from the registry. */
+    /** D76's axis. Absent uses the game's own rule from the registry. */
     scope?: 'category' | 'sets'
     /** TCGplayer set ids, ticked by hand. Outranks both the rule and the cards' own hints:
      *  the unanimity rule guesses at what the box is, and this is somebody saying. */

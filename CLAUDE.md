@@ -151,7 +151,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   formula; what it gained is the box's occupancy. **The dividers editor speaks the same space**
   and `do_put_box` maps it back through `join.divider_index` before the store sees an index.
 
-- **A SET HINT ON SOME CARDS NARROWS NOTHING, AND HOW WIDE TO ASK IS A PER-GAME RULE** (D75).
+- **A SET HINT ON SOME CARDS NARROWS NOTHING, AND HOW WIDE TO ASK IS A PER-GAME RULE** (D76).
   The Filtered Export is fetched to a scope this process names (D65), and the scope is decided
   by three voices in order: an explicit `set_ids` from the operator, then the game's own
   `export_scope` in `pipeline/games.py` — `category` for riftbound, whose whole 10,078-row
@@ -445,7 +445,8 @@ D71  A card with no slot is ranked like every other, and it is the figure that g
 D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
 D74  A document is checked as a document, and every markdown file is linted rather than the four a session loads
-D75  A hint is evidence about its own card, and how wide to ask is a per-game rule
+D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted, and the shape correction reaches both crop paths
+D76  A hint is evidence about its own card, and how wide to ask is a per-game rule
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

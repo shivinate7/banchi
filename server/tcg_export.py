@@ -139,7 +139,7 @@ _LOGON_MARKER = "account/logon"
 
 # ------------------------------------------------- THE FIELDS THAT ARE NOT A PER-REQUEST CHOICE
 #
-# THREE STANDING INSTRUCTIONS, HOISTED OUT OF THE REQUEST BODY SO THEY CAN BE GUARDED (D75).
+# THREE STANDING INSTRUCTIONS, HOISTED OUT OF THE REQUEST BODY SO THEY CAN BE GUARDED (D76).
 # They used to be three literals among fourteen in `Scope.model` with a comment beside each,
 # which is exactly the shape a value gets changed in without anybody noticing: the body is
 # copied from the portal's own submit, so the next person to re-capture it will paste over all
@@ -148,7 +148,7 @@ _LOGON_MARKER = "account/logon"
 # `ExcludeListos` — EXCLUDE LISTINGS WITH PHOTOS. TRUE, and it is the owner's standing
 # instruction (2026-08-31). It shipped `False` because D65 captured the body off the owner's
 # browser and took whatever that checkbox happened to be set to; nothing recorded it as a
-# choice. WHAT IT CHANGES IN THE FILE IS NOT MEASURED — see D75, which records that as an open
+# choice. WHAT IT CHANGES IN THE FILE IS NOT MEASURED — see D76, which records that as an open
 # measurement rather than reasoning past it. Do not flip this back on a reading of the field
 # name; it is the owner's instruction and it goes back to the owner.
 #

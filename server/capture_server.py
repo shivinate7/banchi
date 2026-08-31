@@ -512,7 +512,7 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # is latent rather than live. Ordered defensively all the same: the day somebody adds a
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
-# What a fetch WOULD ask TCGplayer for, before one is pressed (D75). Same hazard as the
+# What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
 # three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
 _RUN_SCOPE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/scope$")
@@ -8330,7 +8330,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 )
             match = _RUN_SCOPE_RE.match(path)
             if match:
-                # D75's lever, drawn before it is pulled. `game`, `scope` and `set_ids` are
+                # D76's lever, drawn before it is pulled. `game`, `scope` and `set_ids` are
                 # the same three fields `POST .../export` takes, so the screen asks this
                 # route the identical question it is about to press — which is what stops the
                 # panel describing a scope different from the one the button would send.
