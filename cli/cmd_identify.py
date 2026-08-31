@@ -82,6 +82,16 @@ WEAK_CONFIDENCE = "low"
 DETECTED = "found"
 NOT_DETECTED = "not_found"
 NOT_ATTEMPTED = "not_attempted"
+# A card was found and the box was not fit to cut to — `images.crop_refusal` said so. A
+# THIRD state rather than `NOT_DETECTED`, because the two ask for different things: not_found
+# is a photograph to look at, unfit is a detector that answered confidently and wrongly.
+UNFIT_CROP = "unfit_crop"
+
+# How many of the guard's refusals the preflight prints in full before it summarises. Enough
+# to see the pattern — one bad frame reads as a card that moved, five in a row reads as the
+# rig — and few enough that a box where the guard fires on everything cannot bury the
+# figures above it.
+UNFIT_CROPS_SHOWN = 5
 
 # The refusal code for a card whose sidecar names a game outside the registry. Its
 # siblings — `unwritten_prompt`, `unknown_strategy` — live in `identify/batch.py`, where
@@ -265,6 +275,23 @@ def _crop_attachments(item: Item, say) -> List[batch.Attachment]:
         say(f"  {item.key}: card not found in the frame — no crop retry")
         return []
 
+    # THE SAME GUARD THE FIRST READING USES, over the same box, for a sharper reason. A retry
+    # is what happens after a reading came back malformed or unsure, and the bands it attaches
+    # are cut out of THIS rectangle — so a box that is really the card's rules-text panel
+    # sends an enlarged picture of the rules text and calls it the collector number. That is
+    # the retry answering confidently about nothing, which §4.5 rung 3 sends to a human
+    # instead.
+    try:
+        unfit = images.crop_refusal(
+            item.capture.photo, box, aspect=item.entry["card_aspect"]
+        )
+    except images.ImageError as exc:
+        unfit = f"the photograph could not be re-read to check the crop — {exc}"
+    if unfit is not None:
+        item.detection = UNFIT_CROP
+        say(f"  {item.key}: the detected box is not the card — {unfit} No crop retry.")
+        return []
+
     item.detection = DETECTED
     regions = geometry.crop_regions(item.capture.photo, box, bands=bands)
     attachments = []
@@ -441,6 +468,7 @@ def run(args, say) -> int:
 
     items = [Item(capture=capture) for capture in captures]
     cropped = 0
+    unfit: List[Item] = []
     for item in items:
         _attach_registry(item)
         try:
@@ -458,11 +486,19 @@ def run(args, say) -> int:
                     box = geometry.detect_card(item.capture.photo)
                 except Exception:
                     box = None
-                if box is not None:
-                    cropped += 1
             item.prepared = images.prepare(
                 item.capture.photo, max_edge=args.max_edge, crop_box=box
             )
+            # COUNTED OFF WHAT WAS ACTUALLY MADE, not off what was asked for. `prepare`
+            # applies `images.crop_refusal` and can decline a box detection did return —
+            # a rectangle inside the card, which crops the collector number away — so a
+            # counter incremented beside `detect_card` above would report a crop that
+            # never happened. Three outcomes, and the preflight names all three.
+            if box is not None:
+                if item.prepared.crop_refused is None:
+                    cropped += 1
+                else:
+                    unfit.append(item)
         except images.ImageError as exc:
             item.error = str(exc)
             item.status = "unreadable"
@@ -561,10 +597,24 @@ def run(args, say) -> int:
         # is to say what is about to be sent. A refusal count of anything but zero is worth
         # seeing before spending: it means some cards are going as whole frames at whole-frame
         # cost, which is safe but is not what was asked for.
-        refused = len(items) - cropped
+        #
+        # TWO KINDS OF REFUSAL, AND THEY ARE NOT THE SAME FACT. Detection refusing means no
+        # card was found in the frame and the operator should look at the photograph. The
+        # guard refusing means a card WAS found and the box was not fit to cut to — a
+        # rectangle inside the card, which is a detector finding rather than a rig one. A
+        # single "sent whole" figure covering both would point at the wrong thing.
+        not_found = len(items) - cropped - len(unfit)
         say(f"crop            to the detected card +{images.CROP_PAD*100:.0f}% "
             f"— {cropped} cropped"
-            + (f", {refused} sent whole (detection refused)" if refused else ""))
+            + (f", {not_found} sent whole (no card found)" if not_found else "")
+            + (f", {len(unfit)} sent whole (box unfit to crop to)" if unfit else ""))
+        # THE REASON, PER CARD, BEFORE ANY MONEY. `crop_refusal` writes a sentence rather
+        # than a flag precisely so it can be read here; a count alone would tell the operator
+        # that something was refused and nothing about what to do next.
+        for item in unfit[:UNFIT_CROPS_SHOWN]:
+            say(f"                {item.key}: {item.prepared.crop_refused}")
+        if len(unfit) > UNFIT_CROPS_SHOWN:
+            say(f"                and {len(unfit) - UNFIT_CROPS_SHOWN} more like it")
     say(
         f"prompt          {fingerprint}  (crop retry {prompt.retry_fingerprint()}, "
         f"rarity clause {prompt.rarity_fingerprint()})"
@@ -888,6 +938,7 @@ def run(args, say) -> int:
     failed = [i for i in items if i.identification is None]
     stale = [i for i in items if i.stale_prompt]
     not_detected = [i for i in items if i.detection == NOT_DETECTED]
+    unfit_crops = [i for i in items if i.detection == UNFIT_CROP]
 
     say("")
     say(f"identified      {len(answered)}/{len(items)}")
@@ -907,6 +958,15 @@ def run(args, say) -> int:
         say(f"not detected    {len(not_detected)} card(s) could not be found in frame; "
             f"no crop retry was possible:")
         for item in not_detected:
+            say(f"                  {item.key} {item.capture.photo.name}")
+    if unfit_crops:
+        # KEPT APART FROM `not detected`, because they ask for different things. A card
+        # nothing could find is a photograph to look at; a card whose box the guard refused
+        # is a detector that answered confidently and wrongly, and a run full of these is a
+        # rig finding rather than a scatter of bad frames.
+        say(f"unfit crop      {len(unfit_crops)} card(s) were located and the box was not "
+            f"the card, so no crop retry was sent:")
+        for item in unfit_crops:
             say(f"                  {item.key} {item.capture.photo.name}")
     if disagreements:
         say(f"disagreements   {len(disagreements)} human-cleared answer(s) the model now "

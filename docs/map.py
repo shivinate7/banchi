@@ -530,7 +530,8 @@ COMPONENTS = [
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
-            "images.py": {"does": "downscale, encode, hash a photograph for the API", "governed_by": ["D2", "D23"]},
+            "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
+                          "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
         },
     },
     {

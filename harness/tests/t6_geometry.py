@@ -5,7 +5,7 @@ card in the frame: a wrong crop produces a miss indistinguishable from a bad rea
 does it confidently. So detection gets its own failing test name rather than hiding inside
 a green identification run.
 
-Pass: detected rectangle within tolerance across the sweep; bands contain their target; no card -> not found; a ground the tone path cannot segment is still found by its borders; the cut and the rectangle the run panel draws are one computation
+Pass: detected rectangle within tolerance across the sweep; bands contain their target; no card -> not found; a ground the tone path cannot segment is still found by its borders; the cut and the rectangle the run panel draws are one computation; a box that is a rectangle inside the card is refused before it can be cut to
 
 The sweep is offset, scale and rotation. The bands are the title band and the number
 corner, and each must contain its target region. "Not found" is a refusal, never a guess.
@@ -37,7 +37,9 @@ digits.
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import replace
+from pathlib import Path
 
 from harness.tests import Checks, Result
 
@@ -46,7 +48,8 @@ DESCRIPTION = "Card boundary detection and crop-retry bands"
 PASS_CRITERIA = (
     "detected rectangle within tolerance across the sweep; bands contain their target; "
     "no card -> not found; a ground the tone path cannot segment is still found by its "
-    "borders; the cut and the rectangle the run panel draws are one computation"
+    "borders; the cut and the rectangle the run panel draws are one computation; a box "
+    "that is a rectangle inside the card is refused before it can be cut to"
 )
 
 # Angle tolerance in degrees. The fine search steps at 0.25, so anything inside half a
@@ -413,5 +416,75 @@ def run() -> Result:
             "a card against the frame's edge pads into nothing rather than off the picture",
             f"{clamped} against {frame.size}",
         )
+
+    # --- a box that is a rectangle INSIDE the card is refused ------------------------------
+    #
+    # THE FAILURE `detect_card` CANNOT REPORT. It answers "not found" honestly and has no way
+    # to answer "found the wrong thing" — on the real rig it sometimes locks onto the card's
+    # rules-text panel and returns it with a card's aspect and a passing border score.
+    # Measured 2026-08-31 over all 867 photographs in the owner's three boxes: a box came back
+    # for every one and NINE were wrong, every one of them a rectangle inside the card.
+    # `identify/images.py:crop_refusal` is the guard, and this is its shape, not its rate.
+    #
+    # SYNTHETIC, LIKE EVERYTHING ELSE HERE, and constructed rather than photographed: the
+    # wrong box is made by shrinking a CORRECT one onto the card's lower half, which is where
+    # the real ones landed. What is asserted is that the guard tells the two apart and that
+    # `prepare` acts on the answer — a guard nothing consults is a comment.
+    honest = geometry.detect_card(_rig_scene(numpy, Image, ImageDraw))
+    rig = _rig_scene(numpy, Image, ImageDraw)
+    if c.ok(honest is not None, "the guard's fixture is a rig frame with a card in it"):
+        c.ok(
+            images.crop_refusal(rig, honest) is None,
+            "a box that IS the card is cropped to — the guard's cost is a whole frame, so it "
+            "may not fire on the crops the run exists to make",
+            f"keeps {images.detail_share(rig, images.crop_rect(rig.size, honest)):.3f} of "
+            f"the frame's detail",
+        )
+
+        # The card's lower third, card-shaped, exactly like the nine real ones.
+        width = (honest.right - honest.left) * 0.42
+        inner = replace(
+            honest,
+            left=honest.left + width * 0.2,
+            right=honest.left + width * 1.2,
+            top=honest.bottom - (honest.bottom - honest.top) * 0.42,
+        )
+        refusal = images.crop_refusal(rig, inner)
+        c.ok(
+            refusal is not None,
+            "a card-shaped rectangle cut out of the card's own lower half is refused — it "
+            "crops the collector number away and answers confidently, which is the failure "
+            "no confidence threshold catches",
+        )
+        c.ok(
+            isinstance(refusal, str) and "%" in (refusal or ""),
+            "and the refusal is a SENTENCE with its figures in it, not a flag — the preflight "
+            "prints it and the run panel draws it, and neither can explain a boolean",
+            refusal,
+        )
+
+        # THE GUARD IS APPLIED WHERE THE BYTES ARE MADE, which is the only placement that
+        # cannot be bypassed. Observed failing against a `prepare` that cropped to whatever
+        # box it was handed.
+        with tempfile.TemporaryDirectory() as workspace:
+            photo = Path(workspace) / "card.jpg"
+            rig.save(photo, quality=92)
+            whole = images.prepare(photo)
+            refused = images.prepare(photo, crop_box=inner)
+            cropped = images.prepare(photo, crop_box=honest)
+            c.ok(
+                refused.crop_refused is not None
+                and refused.sent_size == whole.sent_size,
+                "`prepare` handed a refused box sends the WHOLE FRAME and says why — the run "
+                "costs more and reads exactly as it did before `--crop` existed",
+                f"{refused.sent_size} against a whole frame at {whole.sent_size}",
+            )
+            c.ok(
+                cropped.crop_refused is None
+                and cropped.sent_size != whole.sent_size,
+                "and a box the guard accepts is still cropped to, so the guard costs the run "
+                "nothing where detection was right",
+                f"{cropped.sent_size} against a whole frame at {whole.sent_size}",
+            )
 
     return c.result()

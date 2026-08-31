@@ -950,22 +950,19 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "sample": {"box": capture.box, "index": capture.index, "unreadable": str(exc)},
         }
 
+    # THE CUT THE RUN WILL ACTUALLY MAKE, WHICH IS NOT ALWAYS THE ONE DETECTION PROPOSED.
+    # `prepare` applies `images.crop_refusal` and can decline a box that came back looking
+    # fine — a rectangle inside the card, which sends the collector number outside the bytes.
+    # Reading the refusal off `prepared` rather than re-running the guard is the same rule
+    # `_parse_preflight` follows and the same one `crop_rect` exists for: the preview draws
+    # what was made, never a second opinion about it.
+    crop_refused = prepared.crop_refused
     rect = (
         identify_images.crop_rect(prepared.original_size, detected)
-        if crop and detected is not None
+        if crop and detected is not None and crop_refused is None
         else None
     )
 
-    # THE REGISTRY DECIDES WHETHER THERE IS A BAND AT ALL, per card, off the card's own game.
-    # `game_or_default` rather than the raw claim: D21 puts the backfill at the read, and a
-    # sidecar written before that field existed is a Pokemon card.
-    game = capture.game_or_default
-    try:
-        claims = games.get(game)["crop_bands"]
-    except Exception:
-        # An unregistered game is refused by the run itself, by name. Here it simply means no
-        # band — guessing one would be the defect this block exists to fix.
-        claims = ()
     # THE PICTURE IS THE PAYLOAD, NOT THE FILE ON DISK (the owner, 2026-08-29: *"the crop
     # preview should also show the depixelation reflected as you change the options"*). The
     # frame used to draw `GET /photo`, which is the same bytes at every reading — so the one
@@ -1014,6 +1011,12 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             # a card going at whole-frame cost when they asked for a crop. This is the only
             # field that tells them apart.
             "method": detected.method if detected is not None else None,
+            # WHY THE CARD WAS FOUND AND STILL NOT CROPPED TO. A third fact, and it is not
+            # either of the two above: `method` says a card was located, `rect: null` says
+            # nothing was cut, and only this says the box was refused and what was wrong with
+            # it. Without it the preview would draw a whole frame over a found card and give
+            # the operator no way to tell that from the crop simply being switched off.
+            "crop_refused": crop_refused,
             # THE SENT BYTES THEMSELVES. The frame draws these rather than the stored
             # photograph, so the picture changes when the reading does — and the 1:1 view
             # below is a region of this same file, which is why the two can never disagree.

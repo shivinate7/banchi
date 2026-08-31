@@ -422,6 +422,7 @@ D70  The QR is the whole identification, the product is a claim, and the card is
 D71  A card with no slot is ranked like every other, and it is the figure that goes
 D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
+D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

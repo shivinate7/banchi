@@ -1506,9 +1506,24 @@ export function RunPanel({ cart }: RunPanelProps) {
                       </span>
                     )}
                     {/* A REFUSAL IS NOT THE SAME FACT AS THE CROP BEING OFF, and `rect` alone
-                        cannot tell them apart. */}
+                        cannot tell them apart. Nor are the two refusals the same fact as each
+                        other: nothing found is a photograph to look at, and a box refused as
+                        unfit is a detector that answered confidently and wrongly. */}
                     {preview.sample.method == null && <span>no card found — sent whole</span>}
+                    {preview.sample.crop_refused != null && (
+                      <span>card found, crop refused — sent whole</span>
+                    )}
                   </p>
+                  {preview.sample.crop_refused != null && (
+                    /* THE GUARD'S OWN SENTENCE, VERBATIM, UNDER THE PICTURE IT EXPLAINS.
+                       `identify/images.py:crop_refusal` writes a sentence rather than a flag
+                       precisely so it can be read here — the box came back looking like a
+                       card and was a rectangle INSIDE one, and the operator is looking at a
+                       whole frame with no other way to know why. Same treatment as
+                       `band_absent` above, and for the same reason: the pipeline's words, not
+                       this screen's summary of them. */
+                    <p className="run-step-note run-step-fine">{preview.sample.crop_refused}</p>
+                  )}
 
                   {/* THE WALK. Arrow keys do the same thing, which is what the owner asked
                       for; these exist because a key with no visible control is a key nobody
