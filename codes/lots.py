@@ -1,4 +1,4 @@
-"""Building a sellable lot out of the ledger, and the three artefacts a sale needs.
+"""Building a sellable lot out of the ledger, and the three artifacts a sale needs.
 
 A LOT IS SCOPED TO A BOX, AND THAT IS THE WHOLE DESIGN. The obvious shape — "reserve any
 1,000 sellable bulk codes" — is broken for a PHYSICAL sale and broken in a way that is
@@ -329,7 +329,7 @@ def build(entries, *, lot_id: str, scope: str, delivery: str, venue: str,
     )
 
 
-# ------------------------------------------------------------------------- the artefacts
+# ------------------------------------------------------------------------- the artifacts
 
 def listing_text(lot: Lot) -> str:
     """Title and description, for the seller to paste once.
@@ -444,7 +444,7 @@ def packing_text(lot: Lot) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_artefacts(lot: Lot) -> Dict[str, str]:
+def write_artifacts(lot: Lot) -> Dict[str, str]:
     """Write the three files plus a machine-readable receipt. Returns {name: path}."""
     directory = lot_dir(lot.lot_id)
     directory.mkdir(parents=True, exist_ok=True)

@@ -377,7 +377,7 @@ which would then be shipped to two buyers. Only `delivered` means the cardboard 
 second class was caught on real data: two cards in a demo box were already committed to an
 earlier order and would have gone out twice.
 
-**Three artefacts, because three different people read them.** `listing.txt` for the seller,
+**Three artifacts, because three different people read them.** `listing.txt` for the seller,
 once. `manifest.txt` for the BUYER — one code per line and nothing else, because it is pasted
 whole. `packing.txt` for the operator at the shelf. The manifest is **never returned inline by
 the route**: a thousand live codes in a JSON response also land in every devtools network tab

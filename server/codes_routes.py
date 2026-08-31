@@ -400,7 +400,7 @@ def do_codes_lot(payload: dict) -> Tuple[HTTPStatus, dict]:
         except (lots.LotError, ledger.LedgerError) as exc:
             _refuse(HTTPStatus.CONFLICT, "lot_not_possible", str(exc))
         ledger.write(entries)
-        written = lots.write_artefacts(lot)
+        written = lots.write_artifacts(lot)
 
     body["built"] = True
     body["lot_id"] = lot.lot_id

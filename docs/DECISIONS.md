@@ -2931,7 +2931,7 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
@@ -3304,7 +3304,7 @@ lots need Listings with Photos. First-party API reads settle it otherwise. `prod
 is an ORDINARY CATALOG PRODUCT — category 56, group 2303, rarity Code Card,
 `sellerListable: true`, one SKU at `productConditionId 5274046` — and 26 of its 56 live
 listings are `listingType: standard` carrying no image, no title and no description, holding
-**28,936 of 31,493 standing units**. A CSV row produces exactly that artefact. The photo rule
+**28,936 of 31,493 standing units**. A CSV row produces exactly that artifact. The photo rule
 is real policy and is not a mechanism, and 92% of the inventory on that SKU ignores it.
 
 **The lane is CSV-listable and still not worth using**, which is the more useful finding. The

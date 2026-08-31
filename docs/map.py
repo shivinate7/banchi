@@ -597,7 +597,7 @@ COMPONENTS = [
                                     "there is no OCR: the product is a capture claim (C10).",
                             "governed_by": ["D9", "D22", "D67"], "tested_by": ["T8"]},
             "lots.py": {"does": "build a sellable lot out of the ledger and write the three "
-                                "artefacts a sale needs — the listing, the buyer's manifest "
+                                "artifacts a sale needs — the listing, the buyer's manifest "
                                 "and the operator's packing slip. A PHYSICAL lot is scoped to "
                                 "a BOX and takes the WHOLE box or is refused: chosen by count, "
                                 "the codes reserved and the cards pulled off the shelf are two "
