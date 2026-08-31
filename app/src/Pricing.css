@@ -362,14 +362,19 @@
   color: var(--ink);
 }
 
-/* --------------------------------------------------------------- the sunk group's heading
+/* -------------------------------------------------------------- the sunk groups' headings
 
-   THE ROWS THAT ADD NOTHING SINK, AND ONE HEADING SAYS WHY FOR ALL OF THEM. The sentence was
-   drawn in the right margin of every row it applied to — twenty copies of "every copy in this
-   run is already listed or has left the box" running down a 51-row section, in the same 10px
-   muted register as the row notes it was sitting among, on rows that want nothing from the
-   operator at all. Once it is a heading it is stated once, and the rows under it need not
-   restate it.
+   THE ROWS THAT WANT NOTHING FROM THE OPERATOR SINK, AND ONE HEADING SAYS WHY FOR EACH SET.
+   The sentence was drawn in the right margin of every row it applied to — twenty copies of
+   "every copy in this run is already listed or has left the box" running down a 51-row
+   section, in the same 10px muted register as the row notes it was sitting among, on rows that
+   want nothing from the operator at all. Once it is a heading it is stated once, and the rows
+   under it need not restate it.
+
+   THREE TIERS DOWN A SECTION, in the order the owner asked for: the rows still wanting a
+   price, then the ones they have already held, then the ones this run can add nothing for.
+   Every heading is this one class — what differs is where the sentence comes from, and
+   `Pricing.tsx` carries that.
 
    IT IS SUBORDINATE TO THE SECTION HEAD AND IT LOOKS IT. Same `--util` face and same muted
    ink, but sentence case rather than uppercase: the section titles are three fixed labels and
@@ -395,10 +400,12 @@
   color: var(--muted);
 }
 
-/* THE FIRST GROUP CARRIES THE SINK LINE AND THE SECOND DOES NOT. Between two groups the rows
-   above are already answered, so a second rule would divide two halves of one silence; the
-   row's own bottom border is separation enough there. `~` and not `+` because the heading is a
-   sibling of every row in the list rather than the parent of its own. */
+/* THE FIRST GROUP CARRIES THE SINK LINE AND THE REST DO NOT. It is the line under the last row
+   this run is still waiting on an answer for, which is the one boundary in the section worth
+   drawing; between two sunk groups the rows above are already answered or unanswerable, so a
+   second rule would divide two halves of one silence and the row's own bottom border is
+   separation enough. `~` and not `+` because the heading is a sibling of every row in the list
+   rather than the parent of its own. */
 .pricing-row ~ .pricing-group-head {
   margin-top: var(--s3);
   border-top: 1px solid var(--line);
