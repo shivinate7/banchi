@@ -31,6 +31,12 @@ a word here moved.
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
+**Step 11 has a SECOND FORM, recorded 2026-08-30 and not built: T6 below.** The owner wants an
+order to drive the inventory walk rather than being pulled from a list. It is a different way of
+doing step 11 and not a fifteenth step, so it gets no row here and it takes nothing away from the
+`built` above — the pull that exists works and is reachable. T6 is where the want, its three
+determinations and its costs are written down.
+
 **`store/orders.py` was the one piece that was wired, and it is now written to by a screen.**
 `store/session.py` carries `Ledger` in `Snapshot` and writes it last on every store write.
 `inventory/orders.json` did not exist before this session; the re-emit in section 1 created it,
@@ -262,6 +268,101 @@ govern the file, and the order id T2 carries into Pirate Ship is what makes the 
 
 **pkmnscan never writes order status back to TCGplayer** — tcgtracking owns mark-shipped, and two
 authors on one shipment is D34's problem twice.
+
+### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen
+
+**Recorded 2026-08-30 on the owner's want, and NOTHING HERE IS BUILT.** An order of 3x card X and
+2x card Y should land the operator on card X inside `#/inventory`, under its own photograph; the
+third copy marked sold should advance the screen to card Y on its own. Zero attention spent on
+navigation between drawers, which is the same sentence `CLAUDE.md` opens with about capture.
+
+**It is a second form of step 11 rather than a fifteenth step, and it is downstream of neither T4
+nor T5.** It needs the ledger, the resolver and the walk; all three are built and reachable, so
+this can be taken whenever the owner wants it. What it replaces is the *gesture*: today the pull
+is a button on a list of picks, and the operator carries the position in their head to the drawer.
+
+#### Nothing in it is new machinery, and this is the useful half of the record
+
+| what | where | what it already does |
+|---|---|---|
+| the handoff | `app/src/runHandoff.ts` | scope carried between two screens through `sessionStorage`, D27's carve-out rather than a new one; validated field by field; falls through rather than guessing; not cleared by being read |
+| the jump | `BoxBrowse`'s `goTo: {key, at}` (D45) | the walk already takes a jump request from OUTSIDE, switching box if it has to, with a counter so one target may be asked for twice |
+| its only caller today | `app/src/Inventory.tsx` `walkTo` | one line, fed by a press on a copy's position label |
+| the address | `PickRow.box`/`.index` against `SearchCopy.key` | `"<box>/<index>"` IS `store/master.py`'s position key, so the resolver's picks are ALREADY spelled in the walk's own address space and the handoff needs no adapter |
+| the pick list | `app/src/CardLocations.tsx` | every copy of a SKU, across boxes, each label a walk-to |
+| the gesture | D57 | the one-press sale, its twenty-second undo on the row AND on a receipt that outlives the row's unmount |
+| the resolution | `GET /orders` | the picks, their `held_by`, and all six reasons out of ONE store snapshot |
+
+#### Three determinations, which are the whole of the design work
+
+**1. The queue is a queue of LINES, not of positions.** D7 puts the three copies of one SKU in
+three different boxes, and the obvious reading is that a line therefore has to be exploded into
+three queued positions. It does not, and the owner's own question is what settles it: searching a
+card on `#/inventory` already shows that SKU across boxes. `do_search` renders a SKU's group
+**whole** — every copy, including ones the query did not match — and D45 already makes each of
+those position labels one press away. So landing the walk on the LINE puts its whole pick list on
+screen for free, and the queue advances per line: three of X, then two of Y, which is the shape
+the want was stated in. **A queue of positions would stand a second pick list beside the panel
+already drawn**, which is the second-renderer failure section 4 names and this repo has recorded
+three times.
+
+**What the copies panel is blind to, and the queue must therefore carry: `held_by`.**
+`resolve_all` is a one-pass allocation over the WHOLE open set, and the double-book guard is its
+single most important property — section 2's transcript is a second order for one SKU correctly
+getting no picks at all. `CardLocations` reads `GET /search`, which knows nothing of the ledger,
+so a copy already spoken for by another buyer looks identical to a free one there. The handoff
+carries the resolver's `picks` and their `held_by` beside the line, and the walk marks a copy that
+is spoken for. **This is the one fact the reused panel cannot supply and the only thing the
+handoff has to add.**
+
+**2. The sale on the walk has to be the PULL, and this is the seam the feature is really about.**
+It is already named in the tree: `do_order_pull`'s undo refuses with *"If it was marked sold on
+#/inventory, reverse it there."* `POST /inventory/<box>/<index>/sold` writes card state and **not**
+the ledger, so a card sold on the walk while an order is driving it leaves the line uncounted and
+the order open forever — the operator would ship a card the ledger still says is owed. While a
+queue is running the control posts `POST /orders/pull` with the row's own `capture_id`, which
+brings three guards the plain sale does not have: the aim check (`capture_id_mismatch` rather than
+selling whatever sits at that slot after a mid-box delete — D10 ruling 1, D58), `over_fulfilled`
+(nothing is clamped, because you cannot ship the fourth), and `copy_already_pulled`.
+
+**The undo goes through the same door.** `undoPull` and `undoSale` reverse different writes, and a
+receipt offering the wrong one leaves the ledger holding a copy the store says is on hand. D57's
+receipt already outlives the row's unmount, which is exactly what this needs: a successful pull
+makes the resolver stop offering the copy, so the row goes.
+
+**3. The advance reads the line's `outstanding` off the server and never counts in the client.**
+`Orders.tsx` re-reads after every write for this reason and its own header says why — a pull
+changes the resolution of every OTHER line that wanted the same SKU. A client-side decrement would
+advance past a line the server refused, which is the one failure mode that ends with a buyer short
+and nothing on screen saying so.
+
+#### What it costs, named rather than designed away
+
+- **Every advance across boxes discards the mass-select.** A shelf change clears the ticks (D31,
+  because the write the selection feeds is box-scoped), and D45 already pays this. What is new is
+  that the shelf now changes on an advance the operator did not press rather than on a label they
+  did, so a selection on its way to `#/runs` through D39's handoff can vanish without a gesture.
+- **`#/inventory` acquires a MODE, and it stays a mode.** D31 merged two routes away on the
+  grounds that they were modes of one, and `App.tsx`'s chord table is a ROUTE table whose own
+  comment rules out a second key space reaching modes inside a route. What this needs is a banner
+  saying which order is driving and a way out of it — not a route, not a chord.
+- **It is owner-side only**, which is D31's downstream rule rather than an omission.
+  `app/src/PositionLabel.tsx`'s header records that the Fulfiller's screens never import it, and
+  he has no walk to drive.
+- **It is built over an ingest nobody has proved.** Section 6's standing line — that pasted JSON
+  is a sufficient input until somebody pastes a real order — is not discharged by this, and a
+  queue makes the unproven path longer rather than shorter.
+
+**Done:** an order in the ledger is handed from `#/orders` to the walk; each line lands under its
+own photograph; each copy is pulled with the aim check and its own way back; the queue advances on
+the server's `outstanding` and stops when the order is complete. **Reachable at both ends** — the
+handoff control on `#/orders`, the banner and its exit on `#/inventory` — which is `CLAUDE.md`'s
+route-is-not-a-feature rule applied before the work starts instead of after.
+
+**What this does not decide.** Whether the queue survives a reload: `runHandoff.ts` argues that
+case one register down and the argument is stronger here, since a pull walk is minutes standing at
+a drawer rather than seconds between two screens. And nothing whatsoever about postage, which is
+D61's ruling and `#/shipping`'s answer, computed from a file this ledger has never seen.
 
 ---
 
