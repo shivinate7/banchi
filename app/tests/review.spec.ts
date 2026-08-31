@@ -548,3 +548,135 @@ test('the search box does not answer the card when a digit is typed into it', as
   expect(sent.filter((s) => s.method === 'POST')).toHaveLength(0)
   await expect(box).toHaveValue('1')
 })
+
+/* ------------------------------------- D75: the rows are there and they are the wrong card */
+
+/* THE CASE D46 COULD NOT REACH, and it is not hypothetical: box 3 card 66 in the owner's own
+   store, and the only open entry in it. `Nasus, Ascended` was read with its number misread as
+   `8/298` — a REAL key in that export, belonging to `Get Excited!` — so the entry carries two
+   confident candidate rows for a different card at $0.07 and $0.29, while the card's own row
+   (`046/166`, Near Mint Foil, $0.74) sits in the same file. D46 offered the export only where
+   the pipeline offered nothing, so the only moves here were to answer with a wrong row, skip
+   forever, or close the card.
+
+   The fixture keeps the real shape rather than the real strings' spirit only: the candidates
+   are a DIFFERENT NAME from the read, which is the whole diagnostic. */
+const WRONG_ROWS: Entry[] = [
+  {
+    ...entry(66, 'rarity_claim_mismatch', '0.07', [
+      {
+        sku: '8925477',
+        name: 'Get Excited!',
+        set: 'Origins',
+        number: '008/298',
+        condition: 'Near Mint',
+        market: '0.07',
+      },
+      {
+        sku: '8925482',
+        name: 'Get Excited!',
+        set: 'Origins',
+        number: '008/298',
+        condition: 'Near Mint Foil',
+        market: '0.29',
+      },
+    ]),
+    read: { name: 'Nasus, Ascended', number: '8/298', set: '' },
+  },
+]
+
+test('an entry with rows is not offered the export unasked', async ({ page }) => {
+  const sent = await open(page, WRONG_ROWS)
+  await expect(page.locator('.review-candidate').first()).toContainText('Get Excited!')
+
+  /* D46'S SECOND ARGUMENT, KEPT. It refused to fetch a catalog beside a good list of rows —
+     "a second, looser list beside a good one is how a screen teaches you to stop reading the
+     first" — and that is an argument about what appears UNASKED, which D75 does not touch.
+     The timeout is the assertion: an arrival fetch would already have been sent. */
+  await page.waitForTimeout(200)
+  expect(sent.filter((s) => s.url.includes('/catalog?'))).toHaveLength(0)
+  await expect(page.locator('.review-catalog')).toHaveCount(0)
+})
+
+test('the operator can overrule the pipeline rows and search the export instead', async ({
+  page,
+}) => {
+  const sent = await open(page, WRONG_ROWS)
+  await page.getByRole('button', { name: /search the export/i }).click()
+
+  await expect.poll(() => sent.filter((s) => s.url.includes('/catalog?')).length).toBe(1)
+
+  /* ONE LIST, NOT TWO. Both are answered on digits, so a screen showing both would make `1`
+     mean two different rows — which is the mis-write this swap exists to make impossible
+     rather than merely unlikely. */
+  const rows = page.locator('.review-candidate')
+  await expect(rows).toHaveCount(CATALOG_ROWS.length)
+  await expect(rows.first()).toContainText('Master Yi, Wuju Master')
+  await expect(page.locator('.review-choice')).not.toContainText('Get Excited!')
+})
+
+test('a digit answers the row that is on screen, not the row the entry holds', async ({
+  page,
+}) => {
+  const sent = await open(page, WRONG_ROWS)
+  await page.getByRole('button', { name: /search the export/i }).click()
+  await expect(page.locator('.review-candidate').first()).toContainText('Master Yi')
+
+  await page.keyboard.press('1')
+
+  await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBeGreaterThan(0)
+  const body = sent.find((s) => s.method === 'POST')!.body as {
+    sku: string
+    from_catalog?: boolean
+  }
+  /* THE SILENT MIS-WRITE THIS FILE EXISTS TO CATCH. The keyboard handler picked its list by
+     `candidates.length > 0` for as long as the two lists could not both exist — so the first
+     build of D75 would have seen the export's first row, been pressed `1`, and written the
+     ENTRY's first row: `Get Excited!`, a different card, onto a real position, with no
+     refusal because that SKU is a perfectly good candidate. */
+  expect(body.sku).toBe(CATALOG_ROWS[0]!.sku)
+  expect(body.sku).not.toBe(WRONG_ROWS[0]!.candidates[0]!.sku)
+  expect(body.from_catalog).toBe(true)
+})
+
+test('escape comes back to the pipeline rows and writes nothing', async ({ page }) => {
+  const sent = await open(page, WRONG_ROWS)
+  await page.getByRole('button', { name: /search the export/i }).click()
+  await expect(page.locator('.review-candidate').first()).toContainText('Master Yi')
+
+  await page.keyboard.press('Escape')
+
+  await expect(page.locator('.review-candidate').first()).toContainText('Get Excited!')
+  await expect(page.locator('.review-catalog')).toHaveCount(0)
+  /* Leaving a list is not an answer. The card is still queued and still unanswered — which is
+     what makes this a way back rather than a third way past a card. */
+  expect(sent.filter((s) => s.method === 'POST')).toHaveLength(0)
+})
+
+test('a zero-candidate card is not offered a control that would toggle one list for itself', async ({
+  page,
+}) => {
+  await open(page, NO_ROWS)
+  await expect(page.locator('.review-catalog')).toBeVisible()
+
+  /* It is already showing the export, so the control has nothing to swap to. Drawing it
+     would be a button whose two states are identical — the shape `CLEAR_KEY` states the rule
+     for: a control that is drawn while it does nothing is the opposite of what showing it is
+     for. */
+  await expect(page.getByRole('button', { name: /search the export/i })).toHaveCount(0)
+})
+
+test('the reason the pipeline gave has a sentence, and it says the rows may be another card', async ({
+  page,
+}) => {
+  await open(page, WRONG_ROWS)
+
+  /* `rarity_claim_mismatch` had a chip label and no sentence from the day the reason shipped,
+     so this screen drew "a reason this screen has no sentence for" over the one open entry in
+     the owner's store. It is the ONLY reason the pipeline emits that can mean the candidate
+     rows themselves are the wrong card, and nothing else on screen says so. */
+  const sentence = page.locator('.review-sentence')
+  await expect(sentence).not.toContainText('no sentence for')
+  await expect(sentence).toContainText('rarities claimed at capture')
+  await expect(sentence).toContainText('different card')
+})

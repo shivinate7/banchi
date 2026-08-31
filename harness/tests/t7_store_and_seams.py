@@ -7704,9 +7704,19 @@ def check_review_catalog(checks: Checks) -> None:
     match could find it and the photograph was perfectly good.
 
     THE GUARD IS NARROWED, NOT REMOVED, AND THAT IS WHAT MOST OF THIS BLOCK ASSERTS. A bare
-    SKU still refuses. The flag only reaches an entry with NO candidates. The SKU is re-read
-    out of THIS CARD'S OWN export inside the write lock, so an unknown one refuses and a
-    condition the client invented is discarded rather than believed.
+    SKU still refuses. The SKU is re-read out of THIS CARD'S OWN export inside the write
+    lock, so an unknown one refuses and a condition the client invented is discarded rather
+    than believed.
+
+    D75 WIDENED WHICH ENTRIES THE FLAG REACHES, AND THIS BLOCK ASSERTS BOTH HALVES. It used
+    to reach only an entry with NO candidates, on D46's reasoning that a card the pipeline
+    found rows for already has its answer on screen. Box 3 card 66 was the counter-example
+    and it was the only open entry in the owner's store: `Nasus, Ascended`, its number
+    misread as `8/298` — a real key in that export, belonging to `Get Excited!` — so the
+    entry carried two confident rows for a different card while the card's own row sat in
+    the same file. What is asserted now is the pair that actually matters: an entry WITH
+    rows accepts a catalog answer, and an entry WITH rows still refuses an UNFLAGGED SKU it
+    was never offered.
     """
     checks.note("")
     checks.note("REVIEW CATALOG — GET /review/<box>/<index>/catalog, and D46's answer")
@@ -7874,18 +7884,76 @@ def check_review_catalog(checks: Checks) -> None:
             "pipeline — after the write there is no other evidence which happened",
         )
 
-        # --- the flag reaches nothing it should not ---
+        # --- D75: an entry WITH rows, whose rows are the wrong card ---
+        #
+        # THIS BLOCK REPLACES AN ASSERTION THAT SAID THE OPPOSITE, and the reversal is the
+        # whole of D75. It read: "an entry WITH candidates is unaffected by the flag: it
+        # still answers only from the rows it was offered, which is the laundering guard D46
+        # must not reach." That sentence conflated two guards. The laundering guard is that
+        # no string a client sends becomes a listing on its own, and it is asserted twice
+        # above and once again below — the SKU is re-read out of the card's own export and
+        # the condition comes off that row. What the old assertion ALSO froze was that "the
+        # pipeline offered rows" means "the pipeline was right", which box 3 card 66
+        # falsified: `Nasus, Ascended` with its number misread as `8/298`, two confident
+        # `Get Excited!` rows, and the card's real row in the same export.
 
-        refusal(
+        answered_over = answers(
             checks,
             lambda: capture_server.do_review_answer(
                 1,
                 3,
                 {"sku": "9192027", "condition": "Near Mint Foil", "from_catalog": True},
             ),
+            "D75: an entry WITH candidate rows can be answered from the catalog, because "
+            "rows the pipeline offered can be the wrong card and only a human can see that",
+        )
+        if answered_over is not None:
+            checks.equal(
+                Store().read().inventory.cards["1/3"].sku,
+                "9192027",
+                "D75: and the row a human found is what lands, over the rows it was offered",
+            )
+            over_line = [
+                event
+                for event in Store().history()
+                if event.get("event") == "answered" and event.get("position") == "1/3"
+            ]
+            checks.ok(
+                bool(over_line) and over_line[-1].get("from_catalog") is True,
+                "D75: the history line says a HUMAN found this row — the case that most "
+                "needs saying, because here the pipeline had a confident offer and was "
+                "overruled, and the old `not candidates` clause omitted the flag exactly "
+                "here",
+            )
+
+        # --- and the guard that is NOT widened ---
+        #
+        # The flag is what widened; the offer did not. An answer that does not claim a human
+        # went and found the row still may not name one the pipeline never proposed.
+        # `reopen`, NOT a second `upsert`: that one refuses a position a human has cleared,
+        # exactly so a later run cannot re-ask a settled question, and a test that reached
+        # around the refusal would be asserting against a store no code path can produce.
+        # This is D28's undo hole, used the way the undo uses it — the entry keeps the
+        # candidate rows it was built with.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/3"].sku = None
+            snapshot.inventory.cards["1/3"].condition = None
+            checks.ok(
+                snapshot.review.reopen("1/3"),
+                "the answered entry reopens, which is what makes the next check a real one",
+            )
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                1, 3, {"sku": "9192027", "condition": "Near Mint Foil"}
+            ),
             "sku_not_a_candidate",
-            "an entry WITH candidates is unaffected by the flag: it still answers only from "
-            "the rows it was offered, which is the laundering guard D46 must not reach",
+            "WITHOUT the flag an entry with rows still answers only from those rows — D75 "
+            "widened which entries the flag reaches and not what an unflagged answer may say",
+        )
+        checks.ok(
+            Store().read().inventory.cards["1/3"].sku is None,
+            "and that refusal wrote nothing",
         )
 
 

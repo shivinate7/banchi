@@ -37,6 +37,19 @@ const RING = [
   '#/orders',
   '#/shipping',
   '#/inventory',
+  /* D70's codes screen, and IT WAS MISSING FROM HERE FROM THE DAY THAT ROUTE LANDED. The
+     product's ring is derived — `GROUP_ORDER` then every route with a `hotkey` — so adding a
+     row with `hotkey: 'd'` put `#/codes` at the end of the `look` group and therefore at the
+     end of the ring, while this list still ended at `#/inventory`. The last assertion in the
+     walk below reads "the step lands nowhere new", and it went red saying `#/codes`.
+
+     THE LIST IS THE STALE HALF, NOT THE ROUTE. App.tsx's own comment on the ring says a
+     separate list would be "a second answer to a question the table has already answered,
+     and the first screen added without being put in both would be the bug" — which is the
+     failure this file just had one level up, in a fixture written to spell the ring out so a
+     re-order of ROUTES cannot silently redefine what is being asserted. That trade is still
+     the right one; the price is that a new hotkeyed route lands here too. */
+  '#/codes',
 ] as const
 
 /** What each of those routes renders, so a step is asserted to have ARRIVED rather than
@@ -50,6 +63,11 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/orders': 'main.orders',
   '#/shipping': 'main.shipping',
   '#/inventory': 'main.inventory',
+  /* `.codes` AND NOT `main.codes`, which is a fact about that screen rather than a looser
+     selector chosen here: `Codes.tsx` renders a `<div className="codes">` where the other
+     nine render a `<main>`. Asserted as what is actually there, because a selector written
+     to match the pattern would fail for a reason that has nothing to do with the ring. */
+  '#/codes': '.codes',
 }
 
 /* Every read any of these screens makes on mount, answered with the smallest honest payload.
@@ -69,6 +87,27 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
   await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* D70's two reads. Both are on mount and both are `Promise.all`'d, so an unstubbed one
+     leaves that screen never resolving and the last step of the walk asserting against a
+     view that never arrives.
+
+     EVERY MEMBER OF `CodeLedger`, INCLUDING THE EMPTY ONES, and that is not tidiness. The
+     screen filters `ledger.entries` in a `useMemo` that guards only the null case, so a
+     short payload throws inside render, React unmounts the tree, and the step reports as
+     "`.codes` not found" — which reads exactly like a route that failed to resolve. Cost one
+     debugging pass to see that the ROUTE was fine and the STUB was not. */
+  await page.route(/\/codes$/, (route) =>
+    json(route, {
+      counts: {},
+      total: 0,
+      lanes: { bulk: 0, premium: 0, unclaimed: 0 },
+      by_product: [],
+      duplicates: [],
+      entries: [],
+      products: [],
+    }),
+  )
+  await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
   /* The order screen reads on mount and the shipping screen does not — it holds nothing until
      an export is uploaded — which is why only one of D69's two routes appears here. The
      `counts` map carries all six reasons including the zeros, exactly as `GET /orders` does:
@@ -178,13 +217,19 @@ test('the step walks the strip in the order it is drawn, and the last screen is 
      A case pressing the step ON his view could not: `enabled` refuses there AND the ring does,
      so no single mutation makes it fail, and docs/GATES.md's rule is that a case which cannot
      fail is not coverage. `app/tests/fulfillment.spec.ts` asserts the nav is not drawn. */
+  /* DERIVED FROM `RING`, NOT NAMED. It read `#/inventory` in both places until `#/codes`
+     was added to the ring above and made that screen the second-to-last — so the assertion
+     failed saying the step had landed somewhere new when what had actually moved was the end
+     of the ring. A named screen turns "the ring does not wrap" into "the ring ends HERE",
+     which is a different claim and one this case was never trying to make. */
+  const last = RING[RING.length - 1]!
   await page.keyboard.press('Meta+ArrowRight')
-  await expect(page.locator(VIEW['#/inventory'])).toBeVisible()
-  expect(page.url()).toContain('#/inventory')
+  await expect(page.locator(VIEW[last])).toBeVisible()
+  expect(page.url()).toContain(last)
 })
 
 test('the step walks back, and the first screen is the first', async ({ page }) => {
-  await open(page, '#/inventory')
+  await open(page, RING[RING.length - 1]!)
 
   for (const previous of [...RING].reverse().slice(1)) {
     await page.keyboard.press('Meta+ArrowLeft')
@@ -255,7 +300,7 @@ test('the strip advertises the step once, at the end of the ring', async ({ page
      can reach, and the two routes after it are the two it cannot. */
   const links = page.locator('.app-nav-link')
   const lastRing = links.nth(RING.length - 1)
-  await expect(lastRing).toHaveAttribute('href', '#/inventory')
+  await expect(lastRing).toHaveAttribute('href', RING[RING.length - 1]!)
   const ring = await lastRing.boundingBox()
   const chips = await hint.boundingBox()
   const aside = await links.last().boundingBox()
