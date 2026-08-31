@@ -4538,6 +4538,265 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
     )
 
 
+
+# ------------------------------------------------------- route rosters in the specs
+
+# A `//` or `/* */` comment, so a route named in PROSE is not read as a route the file
+# pins. Both spec files below discuss routes they deliberately do not walk — nav.spec.ts
+# reasons about `#/fulfillment` at length and asserts nothing on it — and counting those
+# would fire this check at a file that is behaving.
+TS_COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+
+# `ROUTE-ROSTER all` or `ROUTE-ROSTER hotkey`, in a comment directly above the literal it
+# governs. A marker rather than a filename list inside this script: the spec that pins the
+# routes is the file that has to say so, and a registry here would be a second list to keep
+# in step with the first — which is the whole defect this check exists for, relocated.
+ROSTER_MARK = re.compile(r"ROUTE-ROSTER\s+(all|hotkey)\b")
+
+# `#/`, `#/runs`, and the `/#/runs` form `page.goto` takes. Normalised to the first.
+ROUTE_HASH = re.compile(r"'/?(#/[a-z-]*)'")
+
+# How many pinned route hashes make a file a roster. Two is a spec that opens on its own
+# screen and one other; three is a list of screens somebody typed out, and a list of
+# screens somebody typed out is the thing that goes stale.
+ROSTER_FLOOR = 3
+
+
+def _strip_ts_comments(text: str) -> str:
+    return TS_COMMENT.sub(" ", text)
+
+
+def _balanced(text: str, start: int) -> str:
+    """The literal beginning at `start`, to its matching bracket. '' if unbalanced.
+
+    Bracket-matched rather than regexed to the next `]`: `VIEW` below is an object of
+    objects in every version of this file that has more than one shape, and a non-greedy
+    match to the first closer would silently read half a roster and pass on the half.
+    """
+    pairs = {"[": "]", "{": "}"}
+    opener = text[start]
+    closer = pairs.get(opener)
+    if closer is None:
+        return ""
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == opener:
+            depth += 1
+        elif char == closer:
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return ""
+
+
+def app_routes() -> Tuple[List[Tuple[str, str, bool]], List[str], List[Finding]]:
+    """`App.tsx`'s ROUTES table as (path, group, has hotkey), plus GROUP_ORDER.
+
+    Read from the source rather than from a browser, because this check runs at a commit
+    and `make design-check` starts a browser (docs/GATES.md's contract keeps that off the
+    hook path). The table is the register either way — `App.tsx` routes from it, renders
+    its nav from it and derives its Cmd-arrow ring from it, which is the property that
+    makes reconciling a test's hand-typed copy against it meaningful.
+    """
+    findings: List[Finding] = []
+    if not exists(APP_TSX):
+        return [], [], [Finding(rel(APP_TSX), "is missing, so no route roster can be checked.")]
+
+    source = _strip_ts_comments(read(APP_TSX))
+
+    anchor = re.search(r"const\s+ROUTES\s*:[^=]*=\s*", source)
+    if anchor is None:
+        return [], [], [
+            Finding(
+                rel(APP_TSX),
+                "defines no `const ROUTES` this reader can find, so the specs below are\n"
+                "reconciled against nothing. Reconcile this extractor with the table.",
+            )
+        ]
+    table = _balanced(source, anchor.end())
+    if not table:
+        return [], [], [Finding(rel(APP_TSX), "`const ROUTES` does not close — unbalanced brackets?")]
+
+    rows: List[Tuple[str, str, bool]] = []
+    index = 0
+    while True:
+        opening = table.find("{", index)
+        if opening == -1:
+            break
+        row = _balanced(table, opening)
+        if not row:
+            break
+        index = opening + len(row)
+        path = re.search(r"path:\s*'([^']*)'", row)
+        group = re.search(r"group:\s*'([^']*)'", row)
+        if path is None or group is None:
+            findings.append(
+                Finding(
+                    rel(APP_TSX),
+                    f"a ROUTES row carries no {'path' if path is None else 'group'}: {row[:60]}…",
+                )
+            )
+            continue
+        rows.append((path.group(1), group.group(1), "hotkey:" in row))
+
+    order = re.search(r"const\s+GROUP_ORDER\s*:[^=]*=\s*", source)
+    groups: List[str] = []
+    if order is not None:
+        groups = re.findall(r"'([^']*)'", _balanced(source, order.end()))
+    if not groups:
+        findings.append(
+            Finding(rel(APP_TSX), "defines no readable `GROUP_ORDER`, so a nav ORDER cannot be derived.")
+        )
+    return rows, groups, findings
+
+
+def expected_rosters() -> Tuple[Dict[str, List[str]], List[Finding]]:
+    """The two rosters a spec may pin, in the order the nav draws them.
+
+    `all` is every registered route; `hotkey` is the Cmd-arrow ring, which `App.tsx`
+    itself derives as `hotkey !== undefined` over GROUP_ORDER-then-table. Both are built
+    here the same way the shell builds them, so a re-ordered table moves both together.
+    """
+    rows, groups, findings = app_routes()
+    if not rows or not groups:
+        return {}, findings
+    drawn = [row for group in groups for row in rows if row[1] == group]
+    missing = [row[0] for row in rows if row[1] not in groups]
+    if missing:
+        findings.append(
+            Finding(
+                rel(APP_TSX),
+                "these routes carry a group GROUP_ORDER does not draw, so the nav renders "
+                f"no link for them: {', '.join(missing)}",
+            )
+        )
+    return (
+        {
+            "all": [f"#{path}" for path, _, _ in drawn],
+            "hotkey": [f"#{path}" for path, _, keyed in drawn if keyed],
+        },
+        findings,
+    )
+
+
+def check_route_rosters(report: Report) -> None:
+    """A hand-typed list of routes in a spec, against `App.tsx`'s own table.
+
+    **The failure this exists for, in full, because it happened twice inside two days.**
+    `app/tests/cursor.spec.ts` swept "every route" off seven hashes somebody typed out. D69
+    added `#/orders` and `#/shipping`; D70 added `#/codes`. None of the three was added to
+    that list, so three screens were asserted by nothing — and the spec's own header spends
+    a paragraph explaining that a pinned roster is exactly the defect it must not have. The
+    list was four lines under the warning. `make design-check` stayed green throughout,
+    because a roster that is missing a route does not fail: it simply walks the routes it
+    has. `app/tests/nav.spec.ts` pinned the same ring and did go red on D70 — but only
+    because its "never a wrap" case happened to step off the end of the list it knew about,
+    which is luck rather than coverage.
+
+    **So the guard is at the commit and not in a browser.** `docs/GATES.md`'s contract keeps
+    Playwright off the hook path, and this needs no browser: `App.tsx` is the register — it
+    routes from ROUTES, renders the nav from ROUTES, and derives the Cmd-arrow ring from
+    ROUTES — so a text reconciliation against it answers the question a browser would.
+
+    **Declared, not sniffed.** A spec that pins three or more routes has to say WHICH roster
+    it is pinning, in a `ROUTE-ROSTER all` or `ROUTE-ROSTER hotkey` comment above the
+    literal, and the literal is then checked in order against the table. Sniffing every
+    array of hashes would be the check inventing an intent the file never stated: `#/gallery`
+    appears in nav.spec.ts as a route the ring deliberately CANNOT reach, and a check that
+    read it as a missing ring member would be wrong in the direction that gets a guard
+    disabled. Three is the floor because two is a spec that opens on its own screen and one
+    other, and three is a list somebody typed.
+
+    **A spec that derives its roster trips nothing, which is the point.** `cursor.spec.ts`
+    now reads the nav strip at run time, so it pins one hash — the way in — and this check
+    has nothing to reconcile there. That is the better fix and this row does not replace it;
+    it covers the specs where a pinned list is deliberate, and it catches a pinned list
+    creeping back into one where it is not.
+    """
+    expected, findings = expected_rosters()
+    specs = sorted(glob_files(APP_TESTS, "*.spec.ts"), key=rel)
+
+    marked = 0
+    for spec in specs:
+        code = _strip_ts_comments(read(spec))
+        pinned = {match for match in ROUTE_HASH.findall(code)}
+        text = read(spec)
+        marks = list(ROSTER_MARK.finditer(text))
+
+        if not marks:
+            if len(pinned) >= ROSTER_FLOOR:
+                findings.append(
+                    Finding(
+                        rel(spec),
+                        f"pins {len(pinned)} routes ({', '.join(sorted(pinned))}) and declares no\n"
+                        "roster. A list of screens typed by hand goes stale silently — the route\n"
+                        "added next month is simply not in it and nothing goes red. Either derive\n"
+                        "the list at run time (see cursor.spec.ts), or put `ROUTE-ROSTER all` or\n"
+                        "`ROUTE-ROSTER hotkey` in a comment above the literal so this row can\n"
+                        "check it against App.tsx's ROUTES table.",
+                    )
+                )
+            continue
+
+        for mark in marks:
+            marked += 1
+            kind = mark.group(1)
+            line = text.count("\n", 0, mark.start()) + 1
+            where = f"{rel(spec)}:{line}"
+            if not expected:
+                continue
+            # FROM THE `=`, NOT FROM THE MARKER. `const VIEW: Record<(typeof RING)[number],
+            # string> = {` puts a `[` in the TYPE, and a reader that took the first bracket
+            # after the comment read `[number]` and reported a roster with no routes in it —
+            # a failure that says "you pinned nothing", which is not what is wrong and is not
+            # a message anybody could act on. The assignment is the only `=` between a marker
+            # and the literal it governs.
+            assign = text.find("=", mark.end())
+            opening = (
+                min(
+                    (found for found in (text.find(bracket, assign) for bracket in "[{") if found != -1),
+                    default=-1,
+                )
+                if assign != -1
+                else -1
+            )
+            literal = _balanced(text, opening) if opening != -1 else ""
+            if not literal:
+                findings.append(
+                    Finding(where, "declares a roster with no array or object literal under it.")
+                )
+                continue
+            found = ROUTE_HASH.findall(_strip_ts_comments(literal))
+            want = expected[kind]
+            if found != want:
+                absent = [route for route in want if route not in found]
+                extra = [route for route in found if route not in want]
+                detail = []
+                if absent:
+                    detail.append(f"missing: {', '.join(absent)}")
+                if extra:
+                    detail.append(f"not a `{kind}` route: {', '.join(extra)}")
+                if not detail:
+                    detail.append("same routes, wrong order")
+                findings.append(
+                    Finding(
+                        where,
+                        f"declares `ROUTE-ROSTER {kind}` and does not match App.tsx's table.\n"
+                        + "\n".join(detail)
+                        + f"\nwant: {', '.join(want)}"
+                        + f"\nhave: {', '.join(found)}",
+                    )
+                )
+
+    report.add(
+        "route rosters",
+        MECHANICAL,
+        findings,
+        f"{marked} declared roster{'' if marked == 1 else 's'} against "
+        f"{len(expected.get('all', []))} registered routes",
+    )
+
 def check_positional_references(report: Report, docs: List[Path]) -> None:
     """A check named by its position, in the docs and in the code.
 
@@ -5609,6 +5868,61 @@ def self_test() -> int:
     # only one whose failure mode is an ABSENT row. Every case below is a way for the
     # reconciliation to look like it ran: a reader that cannot see a loop, a check renamed
     # out of the prefix, an exemption nobody re-read.
+    print("\nthe route-roster reader survives the shapes the specs actually take")
+    # THE `[number]` CASE IS HERE BECAUSE IT SHIPPED BROKEN FOR ONE RUN. `Record<(typeof
+    # RING)[number], string>` puts a bracket in the TYPE, and a reader that took the first
+    # bracket after the marker read `[number]`, found no routes in it, and reported "you
+    # pinned nothing" — a finding that is not what is wrong and that nobody could act on.
+    # A reader that reports the wrong defect is worse than one that reports none, because
+    # the first thing a person does with it is stop believing the row.
+    shaped = (
+        "/* ROUTE-ROSTER hotkey */\n"
+        "const RING = [\n  '#/',\n  '#/runs',\n] as const\n"
+        "/* ROUTE-ROSTER all */\n"
+        "const VIEW: Record<(typeof RING)[number], string> = {\n"
+        "  '#/': 'main.capture',\n  '#/codes': 'main.codes',\n}\n"
+    )
+    marks = list(ROSTER_MARK.finditer(shaped))
+    ok(len(marks) == 2, "two markers in one file are both found", f"found {len(marks)}")
+    read_back = []
+    for mark in marks:
+        assign = shaped.find("=", mark.end())
+        opening = min(
+            (found for found in (shaped.find(bracket, assign) for bracket in "[{") if found != -1),
+            default=-1,
+        )
+        read_back.append(ROUTE_HASH.findall(_strip_ts_comments(_balanced(shaped, opening))))
+    ok(read_back[0] == ["#/", "#/runs"], "an array roster reads in order", str(read_back[0]))
+    ok(
+        read_back[1] == ["#/", "#/codes"],
+        "an object roster reads its KEYS, past a `[number]` in the type",
+        str(read_back[1]),
+    )
+
+    # A route named in prose is not a route the file pins. Both specs discuss routes they
+    # deliberately do not walk, and counting those would fire the "declare a roster" arm at
+    # a file that is behaving.
+    ok(
+        ROUTE_HASH.findall(_strip_ts_comments("// the ring cannot reach '#/gallery'\nopen('/#/runs')"))
+        == ["#/runs"],
+        "a route named in a comment is not counted as pinned",
+    )
+
+    # The live table, read the way the check reads it. An extractor that silently returns
+    # nothing would make every roster below it "missing everything" — loud, but wrong about
+    # which side moved.
+    live, live_findings = expected_rosters()
+    ok(
+        bool(live.get("all")) and live["all"][0] == "#/",
+        "App.tsx's ROUTES table is readable and starts at the capture screen",
+        f"{live.get('all')} / {[f.message for f in live_findings]}",
+    )
+    ok(
+        set(live.get("hotkey", [])) <= set(live.get("all", [])) and live.get("hotkey") != live.get("all"),
+        "the hotkey ring is a proper subset of the registered routes",
+        f"ring {live.get('hotkey')} of {live.get('all')}",
+    )
+
     print("\nevery check defined is reconciled against the ones audit() calls")
     with tempfile.TemporaryDirectory() as tmp:
         fixture = Path(tmp) / "fixture.py"
@@ -5772,6 +6086,7 @@ def audit(staged_only: bool) -> Report:
     check_raw_color(report)
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
+    check_route_rosters(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
