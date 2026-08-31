@@ -393,14 +393,23 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   describe last moved**, while `TRACKS`, which NOTHING read, was wrong in two ways for three
   weeks. **A section of this file with no consumer is now a failed commit** — `make
   docs-audit`'s `map sections` row — because a claim with no reader has no way of ever being
-  contradicted. `build order mirror` checks the step numbers against `docs/GATES.md`'s
-  numbered list, which the map's header had claimed to mirror since 2026-08-04 with nothing
-  verifying it.
+  contradicted. `build order mirror` reconciles the step ids against `docs/GATES.md`'s two
+  lists, per list and in both directions — a claim the map's header had made since
+  2026-08-04 with nothing verifying it.
 
-  **`BUILD_ORDER` is a backlog, not a schedule, and is deliberately not extended.** Step 15
-  is the last step anybody added; D34 and after landed past it and none of them is a step.
-  Step 9 is the one row that still describes the future — nothing has vendored the catalog.
-  A session looking for what to do next reads the recent decision entries, not that list.
+  **The build order is two lists, `SHIPPED` and `OPEN`, and it was one numbered list telling
+  a lie its own shape forced on it until 2026-08-31** (D80). Rendered the only way a numbered
+  list can be, `make status` said *"Build step 9 of 15"* — while 13, 14 and 15 were done, 9
+  had been deferred by choice for a week, and everything from D34 onward had landed under no
+  step at all. Every row was true; the sequence the numbering implied was not. `SHIPPED` is ordered
+  by the date work landed, `OPEN` is **not ordered and has no `next`** — ranking two open
+  items is yours, and "exactly one step is next" is what forced a false answer to it.
+  **`n` is a stable id, never renumbered**: 218 references to `step <n>` live in this tree,
+  74 of them `step 7`, and a renumber leaves every one pointing at a real step that is not
+  the one meant — which nothing can detect, because a stale number still resolves. Steps 16
+  to 19 were added for work that had landed with no step, and **step 12 was culled**, the
+  only row ever removed: it named no deliverable and its "only then" pointed at the retired
+  gating system.
 - docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 
   **These three are NOT `@`-loaded, and that is deliberate (D60).** At 627KB they cost
@@ -493,7 +502,7 @@ D79  The reading goes on every row, because the operator answered D62's own meas
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 ```
 
-- docs/GATES.md — gates, harness contract, build order.
+- docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.

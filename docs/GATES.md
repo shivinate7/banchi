@@ -962,7 +962,29 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
 
 ---
 
-## Build order
+## What shipped
+
+**This was one numbered list with a `status` field until 2026-08-31, and its shape was
+telling a lie no individual row was telling.** Rendered the only way a numbered list can be,
+it said *"Build step 9 of 15"* — while 13, 14 and 15 were done, 9 had been deferred by choice
+for a week, and everything from D34 onward had landed with no step at all. So it is two lists now: this
+one, ordered by the date the work landed, and **What is open** below, which is not ordered
+and has no "next" — ranking two open items is the owner's call, and "exactly one is next" is
+what forced a false answer to it.
+
+**The numbers are stable ids and are never renumbered.** 218 references to `step <n>` live in
+this tree — 74 of them `step 7` — so a renumber would leave every one pointing at a real step
+that is not the one meant, which nothing could detect, because a stale number still resolves.
+That is why the ids below run out of order and why there is a hole at 12. `docs/map.py`'s
+`SHIPPED` and `OPEN` carry the same ids, and `make docs-audit`'s `build order mirror` row
+checks both directions, so adding or culling a step is a two-file edit a machine watches.
+
+**Step 12 was culled — the only row ever removed.** It read *"Only then: scale, polish,
+deferred list"*, named no deliverable, and its *"only then"* pointed at the gating system
+retired on 2026-08-23. It then spent a week `blocked` on step 9, a dependency invented on its
+behalf so it would not have to claim a blocker that no longer existed. The deferred list it
+named lives in `docs/DECISIONS.md` and is that file's to open or close.
+
 
 1. ~~Repo init, fixtures committed, git from commit zero~~ — done.
 2. ~~**Scaffolding**: `Makefile`, `.claude/settings.json` hooks, `scripts/screenshot.sh`,
@@ -1077,27 +1099,14 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
 8. ~~Gate B smoke test~~ — passed 2026-08-22, 53 cards end to end. The run's record and
    measurements are in the Gate B section above; the six defects it caught are fixed with
    regression tests in T3 and T7.
-9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
-    - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
-      `make` target that refreshes it and records the upstream commit SHA.
-    - Build the SQLite index. Cards join to sets by *filename* — `printedTotal` is only in
-      `sets/en.json`, and it is half the join key.
-    - Fill the image mirror from `images.pokemontcg.io`: rate-limited, resumable,
-      manifest-driven, per-file skip on a non-empty existing file. Destination is
-      overridable by `PKMNSCAN_IMAGE_MIRROR` (D15); move `harness/images/` there too.
-      Dry-run the `Content-Length` sum first — ~16.7 GB is extrapolated from a 197-image
-      sample, so confirm before committing the disk.
-
-    Deliberately after Gate B: no production code reads this data. `harness/eval/fixtures.py`
-    is the only consumer, step 4's batch script does not depend on it, and a warm harness run
-    already makes zero network calls. Retiring the retry/backoff scaffolding in that file is
-    part of the step, not a follow-up.
-10. Feeder integration (Gate C).
+10. ~~Feeder integration (Gate C)~~ — **passed 2026-08-22** and tuned at the rig
+    2026-08-23. The motion trigger, its two specs, and the 85/85 live run on box 95.
+    The trigger half is confirmed; the pipeline half is not, and the Gate C section
+    above says which is which.
 11. ~~Get the free pokemontcg.io key at dev.pokemontcg.io~~ — done 2026-08-03. Read from
     `.env` as `POKEMONTCG_API_KEY`; keyless limits covered the harness but not set-scale
     processing. Step 9 removes the need for it.
-12. Only then: scale, polish, deferred list.
-13. **Order flow, boxes, and search** — spec at `docs/specs/order-flow.md`. the store's fungible-copy model (D7 amended), the box
+13. ~~**Order flow, boxes, and search**~~ — **done 2026-08-23.** Spec at `docs/specs/order-flow.md`. the store's fungible-copy model (D7 amended), the box
     object and its retroactive capacity (D20), per-box section layouts (D10 amended), the
     search-and-sell screens on both sides, and the operations D26-D30 ratify.
 
@@ -1121,7 +1130,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     read as complete while three of its operations were unusable. They are reachable now,
     and `app/tests/inventory.spec.ts` asserts it. `CLAUDE.md`'s route-is-not-a-feature rule
     is that discovery written down as a standing rule.
-14. **Multi-game** — spec at `docs/specs/multi-game.md`. four capture choices plus `misc`, per D21-D25. Landed: the vendored
+14. ~~**Multi-game**~~ — **done 2026-08-24.** Spec at `docs/specs/multi-game.md`. four capture choices plus `misc`, per D21-D25. Landed: the vendored
     registry with four real TCGplayer exports behind it, four audit rows, per-game dispatch,
     and `game` through all ten capture hops with the picker on the capture bar.
 
@@ -1150,7 +1159,7 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     about a CSV and a schema, not about a photograph. Same standing as T6's synthetic
     composites before Gate B.
 
-15. **The pipeline seam: the four commands, reachable from a screen** — D33, built
+15. ~~**The pipeline seam: the four commands, reachable from a screen**~~ — **done 2026-08-24.** D33, built
     2026-08-24. spec-less by choice; the decision entry carries the whole argument.
 
     **THE LARGEST INSTANCE OF `CLAUDE.md`'s route-is-not-a-feature RULE THIS REPO HAS HAD,
@@ -1174,6 +1183,9 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     started in a terminal.
 
     `app/src/RunPanel.tsx` draws it UNFOLDED, the owner having overruled the fold on 2026-08-24
+    — **on `#/inventory` until 2026-08-29, when D39 gave the pipeline `#/runs` of its own.**
+    Left saying so rather than rewritten to have always meant `#/runs`: what this step built
+    is the seam, and the address it was first reachable at is part of what it built
     (D33, amended), and `app/tests/run-panel.spec.ts` is the check the hard rule says does not
     exist — the strongest of its cases being negative: **before the free preflight has answered,
     the control that spends does not exist.** Absent, not disabled.
@@ -1193,12 +1205,70 @@ read `T03:08:22+00:00` with no fractional part, and the cadence figures still co
     its refusals. Recorded here rather than left to be assumed from a green spec, in the same
     words this file uses for T6's synthetic composites.
 
-**THE FIRST TWO OF THESE THREE were appended rather than inserted, and that is forced rather
-than tidy.**
-`scripts/docs-audit.py`'s repo-map check compares the set of step numbers here against
-`docs/map.py` in BOTH directions, so renumbering 10-12 to make room would have to land in
-four files at once. Appending costs nothing and the ordering is carried by `status` and
-`blocked_by`, not by the integers.
+16. ~~**Hand pricing: the price a listing goes out at, set by a person**~~ — **done
+    2026-08-30.** D49, D54, D59, D62, D78. `#/pricing` is a worklist of one row per SKU with
+    D49's deliberate holds, D62's price history beside the hold, D59's per-SKU live cap and
+    D54's re-emit that adds and never subtracts. **What this step did NOT do**: nothing
+    prices automatically and nothing here reads a market. D8 keeps the TCGplayer export as
+    the only price source; this is where a human overrides it, one row at a time.
+
+17. ~~**The order pipeline: the ledger, the order screen, the shipping lane**~~ — **done
+    2026-08-30.** D48, D61, D63, D64, D65, D66, D69, D71 — steps 8 to 12 of
+    `docs/specs/order-pipeline.md`. D63's two-map ledger, D64/D65's fetched Filtered Export
+    with completeness as a delta rather than a claim, `#/orders` saying which copies a buyer
+    gets and where they are, and `#/shipping` routing a real export into D61's three lanes,
+    the third of which is *"I cannot tell"*. `server/order_transport.py` fetches this
+    account's own orders over the cookie session D69 measured before it was written.
+    **What this step did NOT do** is step 20 below — the shipped status and the tracking
+    write-back. Both endpoints were seen on the wire and deliberately left alone.
+
+18. ~~**The code-card track reaches a screen**~~ — **done 2026-08-30.** D70, D14, D24 and
+    C1-C11: the QR decode at 140 of 140 physically-possible frames with zero mis-reads and
+    87 ms each, the ledger with C3's atomic dequeue, the product claim that retired C2's
+    OCR, and `#/codes`. **What this step did NOT do**, in `docs/specs/code-cards.md`
+    section 8's own words: **no real code card has ever been through this pipeline** —
+    every measurement in the track is synthetic. The channel decision is RECORDED AND NOT
+    EXECUTED; six venue families were researched and every one came back marginal, which is
+    what the track is actually waiting on.
+
+19. ~~**The rig's guards, and the docs that check themselves**~~ — **done 2026-08-31.**
+    D42, D43, D44, D47, D53, D60, D72, D73, D74, D80. Not a feature, and a step anyway, on
+    the same footing as steps 1-3: `main` moves only by pull request behind two local git
+    hooks standing in for the branch protection GitHub will not sell on this plan; every
+    checkout gets its own store **and** its own ports, so a worktree can no longer answer
+    the main tree's capture screen; one link that is always live, with the supervisor
+    re-execing itself; and the audit rows that keep these documents from drifting. **It is
+    listed because it was a week of work no step accounted for** — which is how this list
+    came to read as though nothing had happened since 2026-08-24.
+
+## What is open
+
+**Two things, and they are not ranked.** There is no `next` here and no `blocked`: both are
+unblocked, and which one matters more is the owner's to say on the day. `docs/map.py`'s
+`OPEN` carries the same two ids.
+
+9. **Vendor the pokemontcg.io catalog** — see D15. Three pieces, in order:
+    - Snapshot `PokemonTCG/pokemon-tcg-data` into the repo (183 files, 27.4 MB) with a
+      `make` target that refreshes it and records the upstream commit SHA.
+    - Build the SQLite index. Cards join to sets by *filename* — `printedTotal` is only in
+      `sets/en.json`, and it is half the join key.
+    - Fill the image mirror from `images.pokemontcg.io`: rate-limited, resumable,
+      manifest-driven, per-file skip on a non-empty existing file. Destination is
+      overridable by `PKMNSCAN_IMAGE_MIRROR` (D15); move `harness/images/` there too.
+      Dry-run the `Content-Length` sum first — ~16.7 GB is extrapolated from a 197-image
+      sample, so confirm before committing the disk.
+
+    Deliberately after Gate B: no production code reads this data. `harness/eval/fixtures.py`
+    is the only consumer, step 4's batch script does not depend on it, and a warm harness run
+    already makes zero network calls. Retiring the retry/backoff scaffolding in that file is
+    part of the step, not a follow-up.
+
+20. **The shipped status and the tracking write-back** — steps 13 and 14 of
+    `docs/specs/order-pipeline.md`, and the only part of that spec that is neither built nor
+    merely unproven. Both endpoints were seen on the wire while D69 was being measured and
+    were deliberately left alone: writing a tracking number back is the first thing this
+    project would do that a **buyer** sees, and D69 ruled that the screen comes before the
+    transport. Nothing blocks it but the doing of it.
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed

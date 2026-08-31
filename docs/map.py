@@ -41,201 +41,225 @@ Pure literals only — no imports, no computation. scripts/docs-audit.py reads i
 that way: an audit must not run project code.
 """
 
-# --------------------------------------------------------------------------- build order
+# ------------------------------------------------------------------ what shipped, what is open
 #
-# Mirrors the numbered list in docs/GATES.md. status: done | next | blocked
+# TWO LISTS, BECAUSE ONE LIST WAS TELLING A LIE ITS OWN SHAPE FORCED IT TO TELL. This was a
+# single numbered `BUILD_ORDER` with a `status` field until 2026-08-31, and `make status`
+# rendered it the only way a numbered list can be rendered — "Build step 9 of 15" — while
+# steps 13, 14 and 15 were done, step 9 had been deferred by choice for a week, and
+# everything from D34 onward had landed with no step at all. Every individual row was true. The SEQUENCE
+# the numbering implied was not, and no amount of correct rows fixes a shape that lies.
 #
-# THE MIRROR IS CHECKED as of 2026-08-31 — `make docs-audit`'s `build order mirror` row
-# fails a commit where the step NUMBERS here and the numbered list under `## Build order`
-# in docs/GATES.md are not the same set. It checks the numbers and deliberately not the
-# titles or the statuses: the two files word a step differently on purpose, and GATES.md
-# marks a step done by striking it through rather than by a field. What it catches is the
-# only drift that matters — a step added to one file and not the other.
+# So `status` is gone and the list a step is in IS its status. `SHIPPED` is ordered by the
+# date the work landed and `on` carries that date. `OPEN` is not ordered at all and has no
+# `next`: ranking two open items is the owner's call, and the old "exactly one is next" rule
+# is precisely what forced a false answer to it — step 9 held `next` for nine days across
+# two owners' worth of re-sequencing while the actual work went elsewhere.
 #
-# THIS LIST STOPPED BEING THE SCHEDULE ON 2026-08-24 AND IS A BACKLOG NOW. Step 15 is the
-# last step anybody added; D34 through D77 landed after it, and not one of them is a step
-# here. That is not drift and it is not this file falling behind: work is proposed, argued
-# and recorded in docs/DECISIONS.md, and the build order is what is left of an ordering
-# that has already happened. Step 9 is the exception and is genuinely open — nothing has
-# vendored the catalog, `make status` is right to say so, and it is the one row here that
-# still describes the future.
+# `n` IS A STABLE ID AND IS NEVER REUSED OR RENUMBERED. Not for tidiness — 218 references to
+# `step <n>` live in this tree, across CLAUDE.md, README.md, .claude/settings.json, six
+# specs, docs/DECISIONS.md, harness code and Playwright specs, and 74 of them say `step 7`.
+# A renumber would leave every one of them pointing at a real step that is not the one meant,
+# which is D72's citation drift with nothing able to detect it — after a renumber the stale
+# number still resolves. So the ids here are out of order in `SHIPPED` (11 landed before 4)
+# and there is a hole where 12 was, and both are correct.
 #
-# So this list is NOT renumbered, extended or rewritten to cover the decisions. Steps 1-15
-# are the record of an order that was really followed, and the same rule docs/GATES.md
-# applies to its measurements applies here: what happened is not edited to match a later
-# tree. A session looking for what to do next reads the last decision entries, not this.
+# STEP 12 WAS CULLED, and it is the only row ever removed from this list. It read "Scale,
+# polish, deferred list" and was never a step: it named no deliverable, its `Only then:`
+# premise in docs/GATES.md pointed at the gating system retired on 2026-08-23, and it then
+# spent a week `blocked` on step 9 — a dependency invented on its behalf to keep it from
+# claiming a blocker that no longer existed. The deferred list it named lives in
+# docs/DECISIONS.md and is that file's to open or close.
 #
-# `next` means unblocked and NOT STARTED. There is deliberately no "in progress": the
-# earlier draft called step 5 `current`, which read as work underway when step 4 had just
-# landed and step 5 had not been touched. Exactly one step is `next`, and the repo-map
-# check enforces that — two of them is the drift this vocabulary exists to prevent.
-#
-# A step whose scope was split part-way through keeps `next` until every part is built, and
-# its `note` carries what shipped and what did not. That is the whole handling: no fourth
-# status, because a fourth status is what this vocabulary refuses, and a `note` nobody can
-# misread costs nothing. Precedent is step 6, which held `next` with its tokens locked and
-# its component unbuilt and said exactly that in the note; step 7 is the same shape at a
-# larger size, and its note argues the case rather than leaving the reader to infer it.
-#
-# `blocked_by` names the step or gate that unblocks it, never a date.
+# `make docs-audit`'s `build order mirror` row checks the ids in both lists against the two
+# lists in docs/GATES.md, in both directions. A step landing in one file and not the other
+# fails the commit, which is what makes culling and adding a two-file edit rather than a
+# four-file one — the reason docs/GATES.md gave for appending rather than inserting.
 
-BUILD_ORDER = [
-    {"step": 1, "title": "Repo init, fixtures committed, git from commit zero", "status": "done"},
-    {"step": 2, "title": "Scaffolding: Makefile, hooks, screenshot script, failing harness", "status": "done"},
-    {"step": 3, "title": "Verification harness T1-T4", "status": "done"},
-    {"step": 4, "title": "Batch script v2: Batch API, variant ladder, catalog join", "status": "done",
-     "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card — that is Gate B."},
-    {"step": 5, "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state", "status": "done",
+SHIPPED = [
+    {"n": 1, "on": "2026-07-26", "title": "Repo init, fixtures committed, git from commit zero",
+     "note": ""},
+    {"n": 2, "on": "2026-07-26", "title": "Scaffolding: Makefile, hooks, screenshot script, failing harness",
+     "note": ""},
+    {"n": 3, "on": "2026-07-26", "title": "Verification harness T1-T4",
+     "note": ""},
+    {"n": 11, "on": "2026-08-03", "title": "pokemontcg.io API key",
+     "note": "done 2026-08-03; step 9 removes the need for it."},
+    {"n": 4, "on": "2026-08-03", "title": "Batch script v2: Batch API, variant ladder, catalog join",
+     "note": "code done 2026-08-03, harness green T1-T6. Never run against a real card \u2014 that is Gate "
+              "B."},
+    {"n": 5, "on": "2026-08-11", "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state",
      "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. Shipped with no harness "
-             "coverage; T7 closed that 2026-08-13 — every route, every named refusal, and the "
-             "sidecar seam. What it still does not reach is in docs/DEBTS.md."},
-    {"step": 6, "title": "Design tokens locked, one component built against them", "status": "done",
-     "note": "tokens locked 2026-08-12 by interview; the pull-confirm built against them 2026-08-12 "
-             "at app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by "
-             "`make design-check`. Building it caught two places where docs/design-refs/locked.html "
-             "disagrees with docs/DESIGN.md — see that directory's README."},
-    {"step": 7, "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view", "status": "done",
+              "coverage; T7 closed that 2026-08-13 \u2014 every route, every named refusal, and the sidecar "
+              "seam. What it still does not reach is in docs/DEBTS.md."},
+    {"n": 6, "on": "2026-08-12", "title": "Design tokens locked, one component built against them",
+     "note": "tokens locked 2026-08-12 by interview; the pull-confirm built against them 2026-08-12 at "
+              "app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by `make "
+              "design-check`. Building it caught two places where docs/design-refs/locked.html "
+              "disagrees with docs/DESIGN.md \u2014 see that directory's README."},
+    {"n": 7, "on": "2026-08-13", "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view",
      "note": "BOTH HALVES BUILT 2026-08-13 on branch step-7-capture-app. 7a is "
-             "docs/specs/capture-app.md's scope — the shell and its three routes, the capture "
-             "screen, undo, the pull preview, the trigger seam, the eslint rules, and "
-             "DELETE /inventory/<box>/<index>. 7b is the review queue, the Fulfillment view, "
-             "the inventory SKU view and mark-sold, plus three more server routes "
-             "(GET /queues, POST /review/<box>/<index>/answer, POST /inventory/<box>/<index>/sold). "
-             "7b WAS BUILT BEFORE GATE B, WHICH ITS OWN SPEC FORBIDS, at the owner's explicit "
-             "instruction; that spec's STATUS section carries what it costs and its sections 0 "
-             "and 9 are left standing and marked overtaken. That short form USED to be that "
-             "7b's screens display data no run has ever produced; Gate B ran them 2026-08-22 "
-             "and it is no longer true. The review queue held 16 real entries and the owner "
-             "answered every one. What survives of it is narrower and still real: all 16 "
-             "carried ONE reason code of twelve, and the whole run priced $0.04-$0.40, so the "
-             "price-driven row hierarchy has still never seen the mixed-value list it sorts "
-             "for. "
-             "THIS ROW IS `done` AND STEP 8 IS `next`, which the previous note called the "
-             "owner's call to make on the day rather than by editing this file. It is made "
-             "now because nothing is left to build: with 7b shipped there is no remaining "
-             "step-7 scope for `next` to point at, and `make status` sending whoever runs it "
-             "to a physical twenty-card run against a build that has never met a card is now "
-             "an accurate instruction rather than a premature one. "
-             "WIRED 2026-08-13, in a pass after the build: all three screens are registered in "
-             "app/src/App.tsx's ROUTES table, app/src/server.ts carries a client function per "
-             "new route, and the shell draws no nav over the Fulfillment view. `make "
-             "design-check` went from 16 failures to 30 of 30 passing on that change alone — "
-             "every one of those failures was the unregistered route, exactly as the spec was "
-             "written to report. See the app/ entry below."},
-    {"step": 8, "title": "Gate B smoke test, 20 cards end to end", "status": "done",
-     "note": "PASSED 2026-08-22, and over-delivered: 53 real ME01 cards through the feeder, "
-             "53/53 identified once the frames were stored upright, joined, emitted, staged on "
-             "TCGplayer through two clean reconcile round trips, and the pull preview showed "
-             "the right photo at the right physical location. Six defects were found by the run "
-             "and fixed the same day — the Batch API custom_id refusal, "
-             "the capture canvas leak, the idle-scheduled JPEG encoder, the cross-queue "
-             "release leak, review answers that nothing consumed, and the post-import re-emit "
-             "double-count. THREE OF THE SIX CARRY A REGRESSION TEST, each observed failing "
-             "against the old code before the fix was restored: the cross-queue release leak "
-             "in T7, and the last two in T3. The other three carry none, and the reason is "
-             "structural rather than an oversight — _custom_id lives in cli/cmd_identify.py "
-             "and no harness case names it, and the two capture-latency fixes are in app/, "
-             "which no harness test reaches at all (this file's app/ entry says so in its own "
-             "note). docs/GATES.md's Gate B section carries the run's measurements."},
-    {"step": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror", "status": "next",
-     "was_blocked_by": "step 13, which is done as of 2026-08-24 — the sequencing was the "
-                       "owner's and never technical, so finishing 13 is what released it",
-     "note": "THE GATE DEPENDENCY WAS RETIRED, NOT SATISFIED, and the difference matters to "
-             "anyone reading this row later. This step carried `blocked_by: Gate C` from "
-             "2026-08-22, when the owner re-sequenced it behind motion capture — not because "
-             "anything here conflicts with that work (it touches no app code) but because one "
-             "`next` is the rule and he chose which. On 2026-08-23 the owner retired the "
-             "gating system outright: A, B and C have all passed, docs/GATES.md is a record of "
-             "runs rather than a schedule, and no step may be blocked behind a gate any more "
-             "because none is open. So the blocker was removed by the gates ceasing to be a "
-             "schedule, NOT by Gate C being cleared out of this step's way. "
-             "There is deliberately no Gate D. Nothing waits on this but the doing of it: "
-             "snapshot the repo, build the SQLite index (cards join to sets by FILENAME — "
-             "printedTotal lives only in sets/en.json and is half the join key), then fill the "
-             "image mirror with the Content-Length dry run first. D15."},
-    {"step": 10, "title": "Feeder integration (Gate C)", "status": "done",
-     "note": "THIS STEP WAS GATE C — its original `blocked_by: Gate C` named the gate that IS "
-             "this work, a circularity that was harmless while Gate B was open and stopped "
-             "being so when it passed. BUILT 2026-08-22: the motion trigger at app/src/motion.ts "
-             "behind trigger.ts's seam, a mode toggle and HUD on the capture screen, and both "
-             "a machine spec and a live browser spec in app/tests. "
-             "TUNED AND RUN AT THE RIG, which is the half that could not be built and is why "
-             "this row is `done` rather than `done except the physical part`: Gate C passed and "
-             "docs/GATES.md carries what it measured. docs/specs/motion-trigger.md is the spec."},
-    {"step": 11, "title": "pokemontcg.io API key", "status": "done", "note": "done 2026-08-03; step 9 removes the need for it."},
-    {"step": 12, "title": "Scale, polish, deferred list", "status": "blocked", "blocked_by": "step 9",
-     "note": "ITS BLOCKER WAS `all gates` AND THE GATES ARE RETIRED (2026-08-23), so this row "
-             "had to name something real or stop claiming to be blocked. It is genuinely "
-             "behind step 9 — the deferred list is scale work, and scale work reads the "
-             "vendored catalog — so the blocker is re-pointed at the step rather than deleted. "
-             "What this row does NOT do is decide that docs/DECISIONS.md's Deferred list is "
-             "open: that list says 'do not build until all gates pass', all gates now have, "
-             "and whether that sentence is thereby spent is the owner's ruling to make in that "
-             "file rather than a consequence anybody may infer from this one."},
-    {"step": 13, "title": "Order flow, boxes, and search", "status": "done",
-     "note": "D7's fungible copies, D20's box object with its retroactive capacity, D10's "
-             "per-box sections, and the search-and-sell screens. "
-             "THIS ROW CARRIED AN `Outstanding` LIST OF FIVE ITEMS THAT WERE ALL ALREADY ON "
-             "DISK, and it stayed `next` for a day after there was nothing left in it to "
-             "build. Re-derived by grep on 2026-08-24 rather than from the previous note, "
-             "which is the same correction docs/GATES.md's own step 13 records making: D26's "
-             "retire and re-shoot have routes AND client functions AND controls, D27's "
-             "sessionStorage is in CaptureScreen.tsx, D28's answer undo is in server.ts, D29's "
-             "group answer has do_review_group_answer and answerReviewGroup, and D30's gap "
-             "convention ships as `neighbors` and `section_gaps` on every located card. D31 "
-             "then merged #/boxes and #/pull into #/inventory, so the screens this step names "
-             "by their old routes are modes of one. "
-             "A STALE `next` IS WORSE THAN A STALE `done`, which is why this row is worth a "
-             "note rather than a one-word edit: `make status` reads this field to answer "
-             "\"do this next\", so a step that is finished and still says `next` sends every "
-             "session that asks to re-audit work that is already committed."},
-    {"step": 14, "title": "Multi-game: four capture choices plus misc", "status": "done",
-     "note": "D21-D25. pipeline/games.py behind four real TCGplayer exports, four audit rows, "
-             "per-game dispatch, `game` through all ten capture hops with the picker on the "
-             "capture bar, the rarity claim end to end, the repeatable --export with per-game "
-             "catalogs and one import file per game (D25), pooled non-located inventory with "
-             "both opsec discharges, and per-game finalisation — riftbound_card_v1 and "
-             "one_piece_card_v1 exist, are registered and carry parsers. "
-             "THE RARITY CLAUSE WAS BUILT, MEASURED, AND SWITCHED OFF because it lost: "
-             "holdout 0.9706 -> 0.9559 for $0.17, with high-confidence misses up two. The "
-             "claim's other two jobs — the ladder cross-check and the chip narrowing — are "
-             "what D23 now rests on. pokemon_card_v1 did not move: 1ef974bf511d, unchanged, "
-             "because prompt_fingerprint hashes ONE profile's fields. "
-             "WHAT NO AMOUNT OF CODE CLOSES: neither new game has met a card. The store holds "
-             "zero Riftbound and zero One Piece records, so every claim about those two "
-             "prompts is a claim about a CSV and a schema, not about a photograph."},
-    {"step": 15, "title": "The pipeline seam: the four commands, reachable from a screen", "status": "done",
-     "note": "D33, built 2026-08-24. THE LARGEST INSTANCE OF CLAUDE.md's "
-             "route-is-not-a-feature RULE THIS REPO HAS HAD, and nobody had counted it: the "
-             "four commands have existed since step 4 and have been through a 53-card run and "
-             "a 544-card run, and until this step they could be reached only by typing at a "
-             "terminal — which docs/GATES.md names as what Gate B did not close. "
-             "server/pipeline_routes.py is its own module because it is the one part of the "
-             "server that can cause money to be spent: ONE route does, it is named for it, it "
-             "refuses without an explicit confirm, and it refuses a second run over a capture "
-             "directory a live run is already reading. The preflight beside it is free and "
-             "creates no run directory at all. Everything else — the reads, and "
-             "join/emit/reconcile — is free and re-runnable, which is the property D1 gave "
-             "the two-phase split. "
-             "THE MONEY STEP SPAWNS DETACHED AND IS NEVER AWAITED, so a run outlives a "
-             "restart of the server that started it; the free steps answer inside the request "
-             "with their own stdout attached. app/src/RunPanel.tsx drew it UNFOLDED on "
-             "#/inventory — sharing one .browse-boxrun row with BoxOps, because the owner "
-             "overruled the fold on 2026-08-24 (D33, amended). "
-             "IT HAS BEEN ON #/runs SINCE 2026-08-29 (D39), and this row is left saying so "
-             "rather than rewritten to have always meant that: what step 15 built is the "
-             "seam, and the address it was first reachable at is part of what it built. "
-             "The .browse-boxrun row it left is not empty — src/BoxRuns.tsx holds a status "
-             "line there and nothing that spends. What survived the move is the UNFOLDING, "
-             "which was the owner's ruling; the route is what changed under it. "
-             "app/tests/run-panel.spec.ts is the check the hard rule says "
-             "does not exist."},
+              "docs/specs/capture-app.md's scope \u2014 the shell and its three routes, the capture screen, "
+              "undo, the pull preview, the trigger seam, the eslint rules, and DELETE "
+              "/inventory/<box>/<index>. 7b is the review queue, the Fulfillment view, the inventory "
+              "SKU view and mark-sold, plus three more server routes (GET /queues, POST "
+              "/review/<box>/<index>/answer, POST /inventory/<box>/<index>/sold). 7b WAS BUILT BEFORE "
+              "GATE B, WHICH ITS OWN SPEC FORBIDS, at the owner's explicit instruction; that spec's "
+              "STATUS section carries what it costs and its sections 0 and 9 are left standing and "
+              "marked overtaken. That short form USED to be that 7b's screens display data no run has "
+              "ever produced; Gate B ran them 2026-08-22 and it is no longer true. The review queue "
+              "held 16 real entries and the owner answered every one. What survives of it is narrower "
+              "and still real: all 16 carried ONE reason code of twelve, and the whole run priced "
+              "$0.04-$0.40, so the price-driven row hierarchy has still never seen the mixed-value list "
+              "it sorts for. THIS ROW IS `done` AND STEP 8 IS `next`, which the previous note called "
+              "the owner's call to make on the day rather than by editing this file. It is made now "
+              "because nothing is left to build: with 7b shipped there is no remaining step-7 scope for "
+              "`next` to point at, and `make status` sending whoever runs it to a physical twenty-card "
+              "run against a build that has never met a card is now an accurate instruction rather than "
+              "a premature one. WIRED 2026-08-13, in a pass after the build: all three screens are "
+              "registered in app/src/App.tsx's ROUTES table, app/src/server.ts carries a client "
+              "function per new route, and the shell draws no nav over the Fulfillment view. `make "
+              "design-check` went from 16 failures to 30 of 30 passing on that change alone \u2014 every one "
+              "of those failures was the unregistered route, exactly as the spec was written to report. "
+              "See the app/ entry below."},
+    {"n": 8, "on": "2026-08-22", "title": "Gate B smoke test, 20 cards end to end",
+     "note": "PASSED 2026-08-22, and over-delivered: 53 real ME01 cards through the feeder, 53/53 "
+              "identified once the frames were stored upright, joined, emitted, staged on TCGplayer "
+              "through two clean reconcile round trips, and the pull preview showed the right photo at "
+              "the right physical location. Six defects were found by the run and fixed the same day \u2014 "
+              "the Batch API custom_id refusal, the capture canvas leak, the idle-scheduled JPEG "
+              "encoder, the cross-queue release leak, review answers that nothing consumed, and the "
+              "post-import re-emit double-count. THREE OF THE SIX CARRY A REGRESSION TEST, each "
+              "observed failing against the old code before the fix was restored: the cross-queue "
+              "release leak in T7, and the last two in T3. The other three carry none, and the reason "
+              "is structural rather than an oversight \u2014 _custom_id lives in cli/cmd_identify.py and no "
+              "harness case names it, and the two capture-latency fixes are in app/, which no harness "
+              "test reaches at all (this file's app/ entry says so in its own note). docs/GATES.md's "
+              "Gate B section carries the run's measurements."},
+    {"n": 10, "on": "2026-08-22", "title": "Feeder integration (Gate C)",
+     "note": "THIS STEP WAS GATE C \u2014 its original `blocked_by: Gate C` named the gate that IS this "
+              "work, a circularity that was harmless while Gate B was open and stopped being so when it "
+              "passed. BUILT 2026-08-22: the motion trigger at app/src/motion.ts behind trigger.ts's "
+              "seam, a mode toggle and HUD on the capture screen, and both a machine spec and a live "
+              "browser spec in app/tests. TUNED AND RUN AT THE RIG, which is the half that could not be "
+              "built and is why this row is `done` rather than `done except the physical part`: Gate C "
+              "passed and docs/GATES.md carries what it measured. docs/specs/motion-trigger.md is the "
+              "spec."},
+    {"n": 13, "on": "2026-08-23", "title": "Order flow, boxes, and search",
+     "note": "D7's fungible copies, D20's box object with its retroactive capacity, D10's per-box "
+              "sections, and the search-and-sell screens. THIS ROW CARRIED AN `Outstanding` LIST OF "
+              "FIVE ITEMS THAT WERE ALL ALREADY ON DISK, and it stayed `next` for a day after there was "
+              "nothing left in it to build. Re-derived by grep on 2026-08-24 rather than from the "
+              "previous note, which is the same correction docs/GATES.md's own step 13 records making: "
+              "D26's retire and re-shoot have routes AND client functions AND controls, D27's "
+              "sessionStorage is in CaptureScreen.tsx, D28's answer undo is in server.ts, D29's group "
+              "answer has do_review_group_answer and answerReviewGroup, and D30's gap convention ships "
+              "as `neighbors` and `section_gaps` on every located card. D31 then merged #/boxes and "
+              "#/pull into #/inventory, so the screens this step names by their old routes are modes of "
+              "one. A STALE `next` IS WORSE THAN A STALE `done`, which is why this row is worth a note "
+              "rather than a one-word edit: `make status` reads this field to answer \"do this next\", so "
+              "a step that is finished and still says `next` sends every session that asks to re-audit "
+              "work that is already committed."},
+    {"n": 14, "on": "2026-08-24", "title": "Multi-game: four capture choices plus misc",
+     "note": "D21-D25. pipeline/games.py behind four real TCGplayer exports, four audit rows, per-game "
+              "dispatch, `game` through all ten capture hops with the picker on the capture bar, the "
+              "rarity claim end to end, the repeatable --export with per-game catalogs and one import "
+              "file per game (D25), pooled non-located inventory with both opsec discharges, and "
+              "per-game finalisation \u2014 riftbound_card_v1 and one_piece_card_v1 exist, are registered "
+              "and carry parsers. THE RARITY CLAUSE WAS BUILT, MEASURED, AND SWITCHED OFF because it "
+              "lost: holdout 0.9706 -> 0.9559 for $0.17, with high-confidence misses up two. The "
+              "claim's other two jobs \u2014 the ladder cross-check and the chip narrowing \u2014 are what D23 "
+              "now rests on. pokemon_card_v1 did not move: 1ef974bf511d, unchanged, because "
+              "prompt_fingerprint hashes ONE profile's fields. WHAT NO AMOUNT OF CODE CLOSES: neither "
+              "new game has met a card. The store holds zero Riftbound and zero One Piece records, so "
+              "every claim about those two prompts is a claim about a CSV and a schema, not about a "
+              "photograph."},
+    {"n": 15, "on": "2026-08-24", "title": "The pipeline seam: the four commands, reachable from a screen",
+     "note": "D33, built 2026-08-24. THE LARGEST INSTANCE OF CLAUDE.md's route-is-not-a-feature RULE "
+              "THIS REPO HAS HAD, and nobody had counted it: the four commands have existed since step "
+              "4 and have been through a 53-card run and a 544-card run, and until this step they could "
+              "be reached only by typing at a terminal \u2014 which docs/GATES.md names as what Gate B did "
+              "not close. server/pipeline_routes.py is its own module because it is the one part of the "
+              "server that can cause money to be spent: ONE route does, it is named for it, it refuses "
+              "without an explicit confirm, and it refuses a second run over a capture directory a live "
+              "run is already reading. The preflight beside it is free and creates no run directory at "
+              "all. Everything else \u2014 the reads, and join/emit/reconcile \u2014 is free and re-runnable, "
+              "which is the property D1 gave the two-phase split. THE MONEY STEP SPAWNS DETACHED AND IS "
+              "NEVER AWAITED, so a run outlives a restart of the server that started it; the free steps "
+              "answer inside the request with their own stdout attached. app/src/RunPanel.tsx drew it "
+              "UNFOLDED on #/inventory \u2014 sharing one .browse-boxrun row with BoxOps, because the owner "
+              "overruled the fold on 2026-08-24 (D33, amended). IT HAS BEEN ON #/runs SINCE 2026-08-29 "
+              "(D39), and this row is left saying so rather than rewritten to have always meant that: "
+              "what step 15 built is the seam, and the address it was first reachable at is part of "
+              "what it built. The .browse-boxrun row it left is not empty \u2014 src/BoxRuns.tsx holds a "
+              "status line there and nothing that spends. What survived the move is the UNFOLDING, "
+              "which was the owner's ruling; the route is what changed under it. "
+              "app/tests/run-panel.spec.ts is the check the hard rule says does not exist."},
+    {"n": 16, "on": "2026-08-30", "title": "Hand pricing: the price a listing goes out at, set by a person",
+     "note": "D49, D54, D59, D62, D78. #/pricing is a worklist of one row per SKU with the deliberate "
+              "holds D49 rules on, the price history D62 puts beside the hold, D59's per-SKU live cap, "
+              "and D54's re-emit that adds and never subtracts. NOT BUILT: nothing prices automatically "
+              "and nothing here reads a market. D8 makes the TCGplayer export the only price source and "
+              "that is unchanged \u2014 this step is where a human overrides it, one row at a time."},
+    {"n": 17, "on": "2026-08-30", "title": "The order pipeline: the ledger, the order screen, the shipping lane",
+     "note": "D48, D61, D63, D64, D65, D66, D69, D71. Steps 8 to 12 of docs/specs/order-pipeline.md: "
+              "D63's two-map ledger, D64/D65's fetched Filtered Export with completeness as a delta "
+              "rather than a claim, #/orders saying which copies a buyer gets and where they are, and "
+              "#/shipping routing a real export into D61's three lanes \u2014 the third of which is 'I "
+              "cannot tell'. server/order_transport.py fetches this account's own orders over the "
+              "cookie session D69 measured before it was written. WHAT THIS STEP DID NOT DO is step 20: "
+              "the shipped status and the tracking write-back. Both endpoints were seen on the wire and "
+              "deliberately not built, and that is a step of its own below rather than a footnote here."},
+    {"n": 18, "on": "2026-08-30", "title": "The code-card track reaches a screen",
+     "note": "D70, D14, D24, and C1-C11. The QR decode measured at 140 of 140 physically-possible "
+              "frames with zero mis-reads at 87ms each, the ledger with C3's atomic dequeue, the "
+              "product claim that retired C2's OCR, and #/codes. The primary path is D2's opposite in "
+              "every respect: local, deterministic, free, and loudly absent rather than confident. NOT "
+              "DONE, and docs/specs/code-cards.md section 8 says it in these words: NO REAL CODE CARD "
+              "HAS EVER BEEN THROUGH THIS PIPELINE \u2014 every measurement in the track is synthetic. The "
+              "channel decision is RECORDED AND NOT EXECUTED; six venue families were researched and "
+              "every one came back marginal, which is what the track is actually waiting on."},
+    {"n": 19, "on": "2026-08-31", "title": "The rig's guards, and the docs that check themselves",
+     "note": "D42, D43, D44, D47, D53, D60, D72, D73, D74, D80. Not a feature and it is a step anyway, "
+              "on the same footing as steps 1-3: main moves only by pull request with two local git "
+              "hooks standing in for branch protection GitHub will not sell on this plan, every "
+              "checkout gets its own store AND its own ports so a worktree can no longer answer the "
+              "main tree's capture screen, one link that is always live with the supervisor re-execing "
+              "itself, and the audit rows that keep this file and its siblings from drifting. THE "
+              "REASON IT IS LISTED: it was a week of work that no step accounted for, so the build "
+              "order read as if nothing had happened since 2026-08-24 while `make status` reported step "
+              "9 of 15."},
+]
 
+OPEN = [
+    {"n": 9, "title": "Vendor the pokemontcg.io catalog: snapshot, SQLite index, image mirror",
+     "was_blocked_by": "step 13, which is done as of 2026-08-24 \u2014 the sequencing was the owner's and never "
+              "technical, so finishing 13 is what released it",
+     "note": "THE GATE DEPENDENCY WAS RETIRED, NOT SATISFIED, and the difference matters to anyone "
+              "reading this row later. This step carried `blocked_by: Gate C` from 2026-08-22, when the "
+              "owner re-sequenced it behind motion capture \u2014 not because anything here conflicts with "
+              "that work (it touches no app code) but because one `next` is the rule and he chose "
+              "which. On 2026-08-23 the owner retired the gating system outright: A, B and C have all "
+              "passed, docs/GATES.md is a record of runs rather than a schedule, and no step may be "
+              "blocked behind a gate any more because none is open. So the blocker was removed by the "
+              "gates ceasing to be a schedule, NOT by Gate C being cleared out of this step's way. "
+              "There is deliberately no Gate D. Nothing waits on this but the doing of it: snapshot the "
+              "repo, build the SQLite index (cards join to sets by FILENAME \u2014 printedTotal lives only "
+              "in sets/en.json and is half the join key), then fill the image mirror with the "
+              "Content-Length dry run first. D15."},
+    {"n": 20, "title": "The shipped status and the tracking write-back",
+     "note": "Steps 13 and 14 of docs/specs/order-pipeline.md, and the only part of that spec that is "
+              "NEITHER built nor merely unproven. Both endpoints were seen on the wire while D69 was "
+              "being measured and were deliberately left alone: writing a tracking number back is the "
+              "first thing this project would do that a buyer sees, and D69 ruled that the screen comes "
+              "before the transport. Nothing blocks it but the doing of it."},
 ]
 
 # --------------------------------------------------------------------------------- gates
 
-# status: passed | next | blocked. Same vocabulary as BUILD_ORDER, same reason.
+# status: passed | next | blocked. This vocabulary OUTLIVED the build order's, which was
+# deleted on 2026-08-31 (D80) when the list became SHIPPED and OPEN. It survives here
+# because a gate genuinely was a sequence — A then B then C — and all three passed.
 
 GATES = [
     {"gate": "A", "status": "passed", "on": "2026-07-26",

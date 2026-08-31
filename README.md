@@ -13,7 +13,7 @@ docs/map.py                the repo as data: built vs TBD, and what governs each
                            entries whose file has outrun the prose about it.
 docs/DECISIONS.md          settled decisions + rationale (read on demand)
 docs/CODES-DECISIONS.md    same, for the codes track
-docs/GATES.md              gates, harness contract, build order
+docs/GATES.md              gates, harness contract, what shipped and what is open
 docs/DESIGN.md             design tokens, Fulfillment view constraints
 docs/specs/                interviewed specs, executed in a clean session
 .claude/skills/            on-demand domain knowledge (TCGplayer CSV schema)
@@ -56,8 +56,8 @@ rules it enforces are off. That failure is silent: nothing prints, nothing exits
 commit that leaks a live code looks like every commit before it. `make status` prints an
 `Git hooks` line so an unarmed clone says so, rather than being found out by a leak.
 
-`make status` first, especially after time away: it prints the next build-order step, the
-last T1 score and the branch — all read from the repo, none of it written
+`make status` first, especially after time away: it prints what has shipped and what is
+open, the last T1 score and the branch — all read from the repo, none of it written
 down anywhere a person has to remember to update. Stdlib only, so it works before
 `make venv` and without an API key.
 

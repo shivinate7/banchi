@@ -4065,7 +4065,7 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 | section | reader before this entry | state |
 |---|---|---|
 | `COMPONENTS` | the audit, the hook, `make status` | current, 2,400 lines of it |
-| `BUILD_ORDER` | `make status` | accurate; frozen at step 15 since 2026-08-24 |
+| `BUILD_ORDER` | `make status` | every row accurate; the SHAPE was lying — see below |
 | `GATES` | the audit, reconciled against `docs/GATES.md` | correct |
 | `TRACKS` | **nothing** | wrong twice, for three weeks |
 
@@ -4082,3 +4082,13 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 **`--stale` reports what no audit row can, and is deliberately not one.** It is the blame measurement above, run on demand. A note written to outlive a refactor is not a defect, so it ranks suspicion and never fails — the same reasoning that keeps `views exposure` advisory, one step further out.
 
 **The docstring's own consumer list is checked, because it was wrong in the way that matters most.** It said "three consumers" and omitted `scripts/status.py` — **the only one a person runs**. A reader asking how to look at this file was told, by the file, that there was no way to.
+
+**The build order was the second half of the same disease, and the harder half, because every individual row in it was true.** It was one numbered list with a `status` field, and a numbered list renders one way: `make status` led with **"Build step 9 of 15"**. At that moment 13, 14 and 15 were done, step 9 had been deferred by choice for a week while the owner shipped pricing, orders and the code-card track, and D34 through D79 had landed with no step at all. **No correction to any row fixes that**, which is why the first pass at this entry left the list alone and argued that it was a backlog — a defense of the shape, offered instead of a repair.
+
+**So `status` is deleted and the list a step is in IS its status.** `SHIPPED` is ordered by the date the work landed; `OPEN` is **not ordered and carries no `next`**. Dropping `next` is the point rather than a side effect: the rule "exactly one step is next" required *something* to hold the flag, so step 9 held it for nine days across two rounds of re-sequencing while the work went elsewhere. A rule that forces an answer will get a false one when there is no true one to give. Ranking two open items is the owner's call, `make status` has no standing to make it, and its `DO THIS NEXT` heading made it anyway.
+
+**`n` is a stable id and is never renumbered, and this is not tidiness.** 218 references to `step <n>` live in this tree — CLAUDE.md, README.md, `.claude/settings.json`, six specs, this file, harness code and Playwright specs — and **74 of them say `step 7`**. A renumber leaves every one pointing at a real step that is not the one meant, and **nothing could detect it, because a stale number still resolves**: D72's citation drift, at eight times the scale of the incident that earned D72 its own audit row. So the ids run out of order in `SHIPPED` (11 landed before 4) and there is a hole where 12 was, and both are correct.
+
+**Steps 16 to 19 were added for work that had already landed** — hand pricing, the order pipeline, the code-card track, and the rig's guards — and each carries what it did NOT do in the same row, because that is the half a shipped-list is tempted to drop. **Step 12 was culled, the only row ever removed from this list.** It read *"Only then: scale, polish, deferred list"*, named no deliverable, and its *"only then"* pointed at the gating system retired on 2026-08-23; it then spent a week `blocked` on step 9, a dependency invented on its behalf so it would not have to claim a blocker that no longer existed.
+
+**Culling is affordable now, and it was not before.** `docs/GATES.md` carried a paragraph explaining that steps were appended rather than inserted because renumbering "would have to land in four files at once" and nothing watched them. `build order mirror` reconciles the ids in both files, per list, in both directions — so adding, moving or removing a step is a two-file edit a machine refuses to let you do halfway.

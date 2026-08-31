@@ -130,18 +130,21 @@ def shape(data: Dict[str, object], resolved: Dict[str, Tuple[str, List[str]]]) -
         out += field(str(track.get("name")), f"{track.get('status')} · owns {owns} · "
                                              f"{track.get('decisions')} · {track.get('rules')}")
 
-    build = data.get("BUILD_ORDER") or []
-    done = [s for s in build if s.get("status") == "done"]          # type: ignore[union-attr]
-    nxt = [s for s in build if s.get("status") == "next"]           # type: ignore[union-attr]
-    blocked = [s for s in build if s.get("status") == "blocked"]    # type: ignore[union-attr]
-    out += rule("BUILD ORDER")
-    out += field("steps", f"{len(build)} — {len(done)} done, {len(nxt)} next, {len(blocked)} blocked")
-    for step in nxt + blocked:
-        mark = "next" if step.get("status") == "next" else f"blocked on {step.get('blocked_by')}"
-        out += field(f"  {step.get('step')}.", f"{step.get('title')}  [{mark}]")
-    out += wrap("A BACKLOG, NOT A SCHEDULE, since 2026-08-24 — see the section header in "
-                "docs/map.py. Work is proposed and recorded in docs/DECISIONS.md; step 9 is "
-                "the one row here that still describes the future.", 2)
+    shipped = data.get("SHIPPED") or []
+    open_steps = data.get("OPEN") or []
+    out += rule("SHIPPED")
+    out += wrap("Ordered by the date the work landed. `n` is a stable id and is never "
+                "renumbered — 218 references in this tree name one — so the ids run out of "
+                "order and there is a hole where 12 was culled.", 2)
+    out.append("")
+    for step in shipped:
+        out += field(f"{step.get('on')}", f"{step.get('n')}. {step.get('title')}")
+
+    out += rule("OPEN")
+    out += wrap("Not ordered, and there is no `next`: ranking these is the owner's call.", 2)
+    out.append("")
+    for step in open_steps:
+        out += field(f"  {step.get('n')}.", str(step.get("title")))
 
     out += rule("PACKAGES")
     for component in data.get("COMPONENTS") or []:  # type: ignore[union-attr]

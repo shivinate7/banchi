@@ -1921,7 +1921,8 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
 
     data = literals_from_module(MAP)
     components = data.get("COMPONENTS") or []
-    build_order = data.get("BUILD_ORDER") or []
+    shipped = data.get("SHIPPED") or []
+    open_steps = data.get("OPEN") or []
     gates = data.get("GATES") or []
     if not components:
         report.add("repo map", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
@@ -2029,31 +2030,42 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
             )
         )
 
-    # Exactly one thing is next. Two is how "current" stopped meaning anything the first
-    # time: step 4 was done, step 5 untouched, and both read as the place work was
-    # happening. Zero is just as wrong — it means nothing is unblocked.
+    # THE `status` FIELD IS GONE AND SO IS THE RULE THAT READ IT. This block enforced
+    # "exactly one build-order step is `next`", which was right while the build order was a
+    # sequence and became the thing forcing a false answer once it was not: step 9 held
+    # `next` for nine days while the work went to pricing, orders and the codes track,
+    # because the rule required SOMETHING to hold it. The list a step is in is its status
+    # now — `SHIPPED` or `OPEN` — and `OPEN` is deliberately unranked (D80).
     #
-    # GATES NO LONGER PARTICIPATE. The tuple below read `(("build-order step", build_order),
-    # ("gate", gates))` until 2026-08-23, when the owner retired the gating system: all three
-    # gates passed, none is current, and `docs/GATES.md` became a record of runs rather than a
-    # schedule. "Exactly one gate is next" is a question about a schedule, so with the
-    # schedule gone it could only ever fail — a row that cannot pass is worse than no row,
-    # because it teaches a reader to skip the report. The build-order half is untouched and
-    # still blocks: steps ARE still sequenced.
-    #
-    # What did NOT move is the gate/GATES.md reconciliation immediately below. That one asks
-    # whether the map's record of a gate agrees with the record in `docs/GATES.md`, which is a
-    # question about history and stays worth answering exactly as long as the history does.
-    for label, rows in (("build-order step", build_order),):
-        nxt = [row for row in rows if row.get("status") == "next"]
-        if len(nxt) != 1 and rows:
-            named = ", ".join(str(row.get("step", row.get("gate", "?"))) for row in nxt) or "none"
-            findings.append(
-                Finding(
+    # What replaces it is the invariant a two-list shape actually has: an id is in exactly
+    # one list, ids are unique, and a shipped step carries the date it landed. Those are the
+    # ways this shape can be wrong, and each is decidable.
+    seen: Dict[int, str] = {}
+    for label, rows in (("SHIPPED", shipped), ("OPEN", open_steps)):
+        for row in rows:
+            number = row.get("n")
+            if number is None:
+                findings.append(Finding("docs/map.py", f"a {label} step carries no `n`: {str(row)[:60]}…"))
+                continue
+            if number in seen:
+                findings.append(Finding(
                     "docs/map.py",
-                    f"exactly one {label} must be `next`; found {len(nxt)} ({named}).",
-                )
-            )
+                    f"step {number} is in {seen[number]} and in {label}. An id is in exactly "
+                    f"one list — the list IS the status.",
+                ))
+            seen[number] = label
+            if label == "SHIPPED" and not row.get("on"):
+                findings.append(Finding(
+                    "docs/map.py",
+                    f"SHIPPED step {number} carries no `on` date. SHIPPED is ordered by when "
+                    f"the work landed, so a row with no date cannot be placed in it.",
+                ))
+            if label == "OPEN" and row.get("on"):
+                findings.append(Finding(
+                    "docs/map.py",
+                    f"OPEN step {number} carries `on: {row.get('on')}` — a landing date on "
+                    f"something that has not landed. Move it to SHIPPED or drop the field.",
+                ))
 
     # Gate status has two homes; they must agree.
     gates_text = read(ROOT / "docs" / "GATES.md") if exists(ROOT / "docs" / "GATES.md") else ""
@@ -2074,13 +2086,11 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                 )
             )
 
-    # Build-order steps are numbered in docs/GATES.md; the map must cover the same set.
-    in_gates = {int(n) for n in re.findall(r"^(\d{1,2})\.\s", gates_text, re.MULTILINE)}
-    in_map = {step.get("step") for step in build_order}
-    for number in sorted(in_gates - in_map):
-        findings.append(Finding("docs/map.py", f"build-order step {number} is in docs/GATES.md but missing here."))
-    for number in sorted(n for n in in_map - in_gates if isinstance(n, int)):
-        findings.append(Finding("docs/map.py", f"build-order step {number} is listed here but not in docs/GATES.md."))
+    # THE STEP-SET RECONCILIATION THAT LIVED HERE MOVED TO `build order mirror` (D80). It
+    # scanned docs/GATES.md for `^\d+\.` across the WHOLE FILE, so any numbered list anywhere
+    # in it joined the step set, and it knew nothing about which list a step was in — it
+    # could not have told a shipped step from an open one, which is now half the claim. The
+    # replacement reads the two headings and reconciles each separately, in both directions.
 
     report.add("repo map", MECHANICAL, findings, f"{claimed} entries match the tree")
 
@@ -2443,26 +2453,30 @@ def check_map_sections(report: Report) -> None:
 
 # ------------------------------------------------- the build order against its own source
 
-# The numbered list under `## Build order` in docs/GATES.md, which docs/map.py's BUILD_ORDER
-# says in its own header that it mirrors. Bounded at the next `## ` so a numbered list
-# anywhere else in that file cannot join in.
+# The numbered lists under `## What shipped` and `## What is open` in docs/GATES.md, which
+# docs/map.py's SHIPPED and OPEN say in their own header that they mirror. Each is bounded
+# at the next `## ` so a numbered list anywhere else in that file cannot join in.
 _GATES_STEP = re.compile(r"^(\d+)\.\s", re.M)
 
 
 def check_build_order_mirror(report: Report) -> None:
-    """docs/map.py's BUILD_ORDER step numbers are docs/GATES.md's numbered list.
+    """docs/map.py's SHIPPED and OPEN ids are docs/GATES.md's two lists, in both directions.
 
-    The map's own header has claimed `Mirrors the numbered list in docs/GATES.md` since
-    2026-08-04 and nothing checked it, which is this repo's recurring failure class — two
-    decisions that must agree, only one of which moves — sitting on the sentence that says
-    they agree.
+    The map has claimed to mirror that file since 2026-08-04 and nothing checked it, which is
+    this repo's recurring failure class — two decisions that must agree, only one of which
+    moves — sitting on the sentence that says they agree.
 
-    **Numbers only, deliberately.** The two files word a step differently on purpose, and
-    GATES.md marks a step done by STRIKING IT THROUGH rather than by carrying a status
-    field, so reconciling titles or statuses would fail on files that are both correct. The
-    step numbers are the one thing that must be identical for the word `mirrors` to be
-    true, and a step added to one file and not the other is the only drift that has ever
-    happened here.
+    **Ids, and which list they are in. Deliberately not the titles or the prose.** The two
+    files word a step differently on purpose and GATES.md marks one done by striking it
+    through rather than by a field, so reconciling text would fail on files that are both
+    correct. What must be identical is the id set per list, because that is the whole of what
+    `mirrors` promises — and a step landing in one file and not the other, or done in one and
+    open in the other, is the only drift that has happened here.
+
+    **This row is what made culling step 12 a two-file edit instead of a four-file one.**
+    GATES.md used to carry a paragraph explaining that steps were APPENDED rather than
+    inserted because renumbering "would have to land in four files at once" and nothing
+    watched them. One of those files now watches the other three (D80).
     """
     gates = ROOT / "docs" / "GATES.md"
     if not exists(MAP) or not exists(gates):
@@ -2470,27 +2484,40 @@ def check_build_order_mirror(report: Report) -> None:
                    [Finding("docs/", "docs/map.py or docs/GATES.md is missing.")])
         return
 
-    steps = {row.get("step") for row in (literals_from_module(MAP).get("BUILD_ORDER") or [])}
+    data = literals_from_module(MAP)
     text = read(gates)
-    start = re.search(r"^##\s+Build order\s*$", text, re.M)
-    if start is None:
-        report.add("build order mirror", MECHANICAL, [Finding(
-            "docs/GATES.md",
-            "has no `## Build order` heading, so docs/map.py's claim to mirror its "
-            "numbered list is reconciled against nothing.",
-        )])
-        return
-    rest = text[start.end():]
-    end = re.search(r"^##\s", rest, re.M)
-    listed = {int(n) for n in _GATES_STEP.findall(rest[: end.start() if end else len(rest)])}
-
     findings: List[Finding] = []
-    for number in sorted(listed - steps):
-        findings.append(Finding("docs/map.py", f"docs/GATES.md lists step {number}; BUILD_ORDER has no such step."))
-    for number in sorted(steps - listed):
-        findings.append(Finding("docs/GATES.md", f"BUILD_ORDER has step {number}; the numbered list has no such step."))
+    total = 0
+
+    for name, heading in (("SHIPPED", "What shipped"), ("OPEN", "What is open")):
+        mine = {row.get("n") for row in (data.get(name) or [])}
+        start = re.search(r"^##\s+" + re.escape(heading) + r"\s*$", text, re.M)
+        if start is None:
+            findings.append(Finding(
+                "docs/GATES.md",
+                f"has no `## {heading}` heading, so docs/map.py's `{name}` is reconciled "
+                f"against nothing.",
+            ))
+            continue
+        rest = text[start.end():]
+        stop = re.search(r"^##\s", rest, re.M)
+        listed = {int(n) for n in _GATES_STEP.findall(rest[: stop.start() if stop else len(rest)])}
+        total += len(mine)
+        for number in sorted(listed - mine):
+            findings.append(Finding(
+                "docs/map.py",
+                f"docs/GATES.md lists step {number} under `{heading}`; the map's `{name}` "
+                f"has no such id.",
+            ))
+        for number in sorted(mine - listed):
+            findings.append(Finding(
+                "docs/GATES.md",
+                f"the map's `{name}` has step {number}; `## {heading}` does not list it.",
+            ))
+
     report.add("build order mirror", MECHANICAL, findings,
-               f"{len(steps)} steps, the same set in both files")
+               f"{total} steps, the same ids in both files, in the same two lists")
+
 
 
 def observed_triples(committed_only: bool) -> Set[Tuple[str, str, str]]:
