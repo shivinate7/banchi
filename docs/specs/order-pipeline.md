@@ -21,13 +21,20 @@ the last thing edited in that build rather than the first: `make design-check` i
 in this repo that can see reachability, and it was green over `#/orders` and `#/shipping` before
 a word here moved.
 
+**Reviewed against the tree again on 2026-08-30 and once more on 2026-08-31, and nothing in the
+table below changed state either time.** What the pass did change is written where it belongs rather than summarised
+here: three sentences that had gone stale inside hours (the cookie, T0's probe, section 8's
+"first time"), a store that moved thirty-one sales under section 1, a transcript in section 2
+that lost its only `resolved` outcome, one work item that was in the code's header and in no list
+here (T2b), and a `T6` that collided with the harness's own.
+
 | step | state |
 |---|---|
-| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). The transport's endpoints, auth kind, body shape and four refusal codes were measured; the stored cookie has never been sent to that host. Section 6. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). The transport's endpoints, auth kind, body shape and four refusal codes were measured, and `search` has since run authenticated against the live host and returned three real orders. `detail` — the half that carries a buyer's name and address — has not. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
 | 11 pull | **built and reachable.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. |
-| 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship. |
+| 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship, and its three Rubber Stamp columns render empty — `POST /shipping/batches/<batch>/stamps` is specified and not built (T2b). |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
@@ -41,9 +48,13 @@ determinations and its costs are written down.
 `store/session.py` carries `Ledger` in `Snapshot` and writes it last on every store write.
 `inventory/orders.json` did not exist before this session; the re-emit in section 1 created it,
 empty, with both of D63's maps. **It has still never held a real order** — nothing below the
-paste box has been pressed against one, which is why section 6's last line stands.
+paste box has been pressed against one, which is why section 6's last line stands. **It is emptier
+than that phrasing suggests**: thirty-one real sales landed in this store on 2026-08-30 and every
+one of them went through `#/inventory` rather than through the pull, so the ledger is not merely
+unproven, it is being bypassed by the fulfilment that is actually happening. Section 1's
+re-measure.
 
-**The three modules that had full T7 coverage and no reachability now have both.**
+**The three modules that had full harness-T7 coverage and no reachability now have both.**
 `pipeline/orders.py` is read by `GET /orders`; `pipeline/shipping.py` and
 `pipeline/pirateship.py` are read by `POST /shipping/batches` and its file route. Each has a
 route, a client function in `app/src/server.ts`, a control on a screen, and — where it writes —
@@ -61,12 +72,42 @@ Measured after the re-emit described below, and after the `3/37` stamp that foll
 
 | | |
 |---|---|
-| cards | **715** — 703 identified, 11 sold, 1 retired |
+| cards | **715** — 703 identified, 11 sold, 1 retired *(see the re-measure below)* |
 | carry a SKU | **217**, across **102 distinct SKUs** |
 | stamped by box | 1 → 133/133 · 2 → 45/543 · 3 → **39/39** |
 | unstamped | **498**, every one of them in box 2 — 497 identified, 1 retired |
 | listing copies | 167 `pushed`, 0 `staged`, 0 `live`, across 117 rows |
 | ledger | `inventory/orders.json` present, both maps empty |
+
+**The table above is one snapshot of three, and the store outran it twice inside two days.** It is
+left exactly as taken, because it is what section 2's transcripts were run against and rewriting
+it would leave those transcripts describing a store no number here reports.
+
+| measured | cards | states | SKU / distinct | box 3 | listings |
+|---|---|---|---|---|---|
+| 2026-08-30, above | 715 | 703 · 11 · 1 | 217 / 102 | 39/39 | 167 `pushed`, 0 `live`, 117 rows |
+| 2026-08-30, later | 715 | 672 · 42 · 1 | 217 / 102 | 39/39 | unchanged |
+| **2026-08-31** | **867** | **824 · 42 · 1** | **367 / 159** | **189/191** | **282 `pushed`, 4 `live`, 169 rows** |
+
+States are identified · sold · retired. Between the first two, thirty-one cards were sold. Between
+the second and the third, **152 new cards were captured and identified into box 3** and the
+listing side moved with them. Box 1 is 133/133 and box 2 is 45/543 throughout; the 497 unstamped
+sub-threshold cards in box 2 have not moved at all, and box 3 has picked up 2 unstamped of its own,
+so the unstamped total is 500 rather than 498.
+
+**The ledger row is the one that did not move, and that is the finding rather than the footnote.**
+Both of D63's maps are still empty across all three snapshots. **Not one of the forty-two sales in
+this store went through `POST /orders/pull`** — every one was an `#/inventory` mark-sold press,
+which writes card state and never the ledger. Real fulfilment is happening here and it is going
+around the order screen. That is the seam T6's determination 2 is about, measured rather than
+predicted, and it is why section 6's standing line about a real order is not merely unfinished
+bookkeeping.
+
+**The general point is worth more than any of the three rows**, and it governs how this file
+should be read: **the store is not a fixture and every measurement taken against it is perishable.**
+Three snapshots in two days, two of them a day old before the ink dried. A number here is evidence
+of a moment, and a session that finds one stale has found the store moving rather than the file
+lying.
 
 ### The 497 unstamped cards are not a failure, and reading them as one is the trap
 
@@ -97,7 +138,10 @@ Diffed against a copy of the store taken immediately before:
 
 **Purely additive, which is D54, and no sold card was resurrected, which is D57's invariant
 measured rather than argued.** Before it, an eight-copy order for Rengar, Trophy Hunter resolved
-`short` on five picks; after it, `resolved` on eight.
+`short` on five picks; after it, `resolved` on eight. **That last clause was true for a few hours
+and is not true now** — all eight of that SKU's copies are sold as of the re-measure above, so the
+same order resolves `no_copies_on_hand` today. What the backfill proved is unaffected: it is a
+statement about the emit being additive, not about the store staying still.
 
 It left box 3 one card short of stamped — `3/37`, sold, which no emit reaches — and a `sold` line
 at 20:43 UTC carried a SKU onto that one too. That is why the table above reads 39/39 and why
@@ -132,6 +176,20 @@ better.** Order `A2FFC195-B8B497-80225` sold 3× Moonfall and the plan advertise
 `short`, one of three. The resolver reporting a shortfall correctly is worth more as evidence
 than a pick list that only existed on a particular afternoon.
 
+**AND THE SAME THING HAS SINCE HAPPENED TO THE `resolved` LINE, WHICH IS THE ONE THIS TRANSCRIPT
+COULD LEAST AFFORD TO LOSE.** The `BOX2-PLUS-UNKNOWN` row above picks `3/1, 3/2` for Rengar; both
+were sold in the thirty-one sales section 1 re-measures, along with the other six copies of that
+SKU. Re-run today the row answers `no_copies_on_hand`, and **this file no longer holds a single
+`resolved` outcome demonstrated against the live store.** The transcript is kept as taken — it is
+dated evidence, and the second time a demonstration here has decayed for the same reason, which is
+the point worth carrying: **`resolve_all`'s output is a function of a store that moves under it,
+so any transcript of it is perishable by construction.** Three of the four reasons this
+transcript demonstrated still reproduce as written; `resolved` is not unreachable — 824 cards are
+still `identified` as of the third snapshot, and an order against any SKU with a copy on hand would
+produce one — it is only that no order **written down here** produces one any more. What is NOT weakened is the double-book
+guard, which is a property of one pass over the open set rather than of which copies happen to be
+on hand.
+
 ### The router and the emitter, against the committed fixture
 
 ```
@@ -150,16 +208,23 @@ waiting for a location. **The >=$50 lane is complete apart from a screen.**
 
 ## 3. The work, in order
 
+**The `T0`–`T6` below are work items in this file and NOT the harness's tests.** The two schemes
+overlapped the moment T6 was added below on 2026-08-30 — the harness's own T6 is
+`harness/tests/t6_geometry.py` and its T7 is `harness/tests/t7_store_and_seams.py`, and both are
+cited in this file. Every reference to one of those now says `harness` in front of the number; a
+bare `T4` is this section's.
+
 The order below is D66's, and D66 carries the argument. Three claims decide it: a transport-first
 session cannot state a Done this repo accepts, the shipping lane depends on neither the screen nor
 the transport, and the transport question is one probe rather than one session.
 
 ### T0 — free, no code, hours
 
-- **Probe `order-management-api` auth** with the cookie already in `.env`. The admin host answers a
-  cookie-session 302 and D64 satisfies it with stdlib `urllib`; this host answers a Bearer
-  challenge, and the D64 result does not transfer between them. The answer decides whether T3 is a
-  Python client or a browser relay, and nothing else in this file depends on it.
+- ~~**Probe `order-management-api` auth**~~ — **answered 2026-08-30**, and the guess in the
+  sentence that stood here was wrong: this host does NOT answer a Bearer challenge. The auth is a
+  cookie session, the same `TCGAuthTicket_Production` the admin portal takes, so T3 is a Python
+  client and not a browser relay. Measured in the owner's own browser, then confirmed by an
+  authenticated `search`. Section 6, and `server/order_transport.py`'s STATUS block.
 - **Rule on box 2's disposition** — 108 SKUs, 497 copies, all sub-threshold. Not this pipeline's
   work, but it is the oldest thing in the store waiting on a person.
 - ~~Re-emit `runs/2026-08-30-box3-01`~~ — **done 2026-08-30**, section 1.
@@ -231,6 +296,28 @@ convention instead of a module. The screen is typed so it cannot draw a buyer �
 carries no name, no street, no city, no postcode — and those details cross the wire exactly
 once, as the CSV download.
 
+### T2b — the rubber stamps, which this file's work list did not carry until now
+
+`POST /shipping/batches/<batch>/stamps`, declared in `server/shipping_routes.py`'s own header as
+SPECIFIED AND NOT BUILT, and carried in no work item here until now. It fills Pirate Ship's three
+Rubber Stamp columns from the order ledger, so **the label in the operator's hand IS the pick
+instruction** — section 2's transcript already notes those three columns rendering empty and
+waiting for a location. The wire carries `stamp` on every row and `stamps` on the batch as nulls
+today, so the route changes no type and no component.
+
+**One of its two stated blockers has cleared and the other has not.** That header names them: both
+of D63's maps being empty, and needing a `store.orders.OrderRecord -> pipeline.orders.Order`
+adapter "that the order branch also needs, which is exactly the two-branches-one-file collision
+D66 told us to avoid." **The order branch landed, and the adapter is now
+`server/capture_server.py:_engine_order`, whose own docstring calls itself THE ONLY ADAPTER** — so
+the collision D66 was avoiding cannot happen any more and that half of the refusal is spent. The
+empty-ledger half stands: until a real order is pulled, this control can only ever answer
+"nothing", which makes it the one item here that is genuinely blocked on the ingest nobody has
+proved rather than on a session.
+
+**Done:** a batch whose orders are in the ledger renders with its Rubber Stamp columns filled, and
+one whose orders are not renders them empty rather than guessing.
+
 ### T3 — the transport
 
 **Built 2026-08-30 as `server/order_transport.py`, and the probe T0 describes was answered by
@@ -240,8 +327,7 @@ relay. `POST /orders/fetch` answers EXACTLY the body `POST /orders/ingest` accep
 the fetch needed no adapter and enters through the same one door the paste does. What is NOT
 established is in section 6.
 
-Whatever T0's probe returns. **The deliverable is that a fetch replaces a paste behind the control
-T1 already built.** Ingest writes no card state and no listing count, so a replay is a no-op — and
+**The deliverable is that a fetch replaces a paste behind the control T1 already built.** Ingest writes no card state and no listing count, so a replay is a no-op — and
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
 
@@ -259,7 +345,8 @@ The tcgtracking call for the sub-$50 lane, under **D33's gate verbatim**: a free
 count and the premium on screen, an explicit `confirm`, and the spending control **absent** until
 the preflight has answered. This is the second route in this repo that can spend money.
 
-**Done:** T7 asserts the refusal without `confirm`, and that replaying one order id creates nothing.
+**Done:** harness T7 asserts the refusal without `confirm`, and that replaying one order id
+creates nothing.
 
 ### T5 — closing the loop
 
@@ -422,8 +509,8 @@ checkout's `.env`; every response shape is documentation-verified. The rate limi
 and the per-label price are all claims from outside this tree.
 
 **Nobody has fed Pirate Ship the CSV `pipeline/pirateship.py` emits.** Their importer maps columns
-on the far side of a seam no committed fixture can hold. This is the same standing as T6's
-synthetic composites, and it is why `Name` is pre-joined rather than left to their mapper.
+on the far side of a seam no committed fixture can hold. This is the same standing as harness
+T6's synthetic composites, and it is why `Name` is pre-joined rather than left to their mapper.
 
 **An order feed HAS been read, and the half that matters has not.** Amended 2026-08-30, when
 T3 landed. What was MEASURED, in the owner's own logged-in browser: the two endpoints, their
@@ -455,9 +542,13 @@ came off the wire.
 does, as `products[].skuId` — which is why the transport is two calls and not one. That is
 measured now rather than carried from a planning session.
 
-**The browser extension in `tcgtracking-bridge-v2.4.2/` is READ MATERIAL AND NOT A COMPONENT.** It
-is a codebase `make check` never sees, `docs/map.py` does not map, and the git hooks do not
-guard. Nothing in this repo calls it or depends on it.
+**The browser extension `tcgtracking-bridge-v2.4.2` is READ MATERIAL AND NOT A COMPONENT, AND IT
+IS NOT IN THIS REPOSITORY.** It was supplied by the owner and read during T3's design; it has
+never been committed, is in no worktree, and is not on disk beside this checkout — so the bare
+path `tcgtracking-bridge-v2.4.2/` written here and at `server/order_transport.py:50` names
+nothing a reader can open, and is kept only to say what was corroborated against what. `make
+check` never sees it, `docs/map.py` does not map it, the git hooks do not guard it, and nothing
+in this repo calls it or depends on it.
 
 **Postage economics, volumes and account state** — the letter rate, the insurance premium, the
 347-orders-in-90-days figure, the seller level — are all external facts carried from the planning
@@ -481,9 +572,12 @@ paragraphs above it have.
   defect left no residue.
 - **`3/13` is sold with an empty `name`.** SKU and number are present, so it resolves; only what a
   screen would draw is wrong.
-- **Nothing is `live`.** 167 copies at `pushed`, none staged, none live. `store/master.py` already
-  records this state in its own comments, so it is known rather than newly broken — but any screen
-  drawing a live count against these SKUs draws zero.
+- ~~**Nothing is `live`.**~~ **No longer true as of 2026-08-31**, and it changed without anything
+  in this pipeline touching it: the store now holds **4 `live` copies across two SKUs** (`9189317`
+  ×3, `9199579` ×1) against 282 `pushed` over 169 rows. The observation is kept because the
+  reasoning attached to it was wrong in a way worth naming — a screen drawing a live count was
+  said to draw zero, and one drawing it today does not. `store/master.py`'s comments describe the
+  earlier state.
 
 ---
 
@@ -500,5 +594,9 @@ with a measurement. **T1 being built does not do it** — the screen is the thin
 possible to try, and section 6's last paragraph says what a session would have to hold to strike
 the line.
 
-**The stored cookie reaching `order-management-api` for the first time**, which is the other
-half of T3 and is one press away rather than one build away.
+~~**The stored cookie reaching `order-management-api` for the first time**~~ — **happened
+2026-08-30**, and it reopened nothing: `search` returned three real orders under the cookie
+already in `.env`, which is what closed the session question in section 6. What is left of that
+bullet is **`detail` running against the live host**, still one press away rather than one build
+away, and still the half that would first put a buyer's name and address through
+`project_order` outside a fixture.

@@ -30,7 +30,7 @@ help:
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
 	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
-	@echo "  make harness      T1-T7 verification tests. Run at turn end by the Stop hook."
+	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
 	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
 	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
