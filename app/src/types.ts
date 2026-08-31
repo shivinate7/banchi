@@ -232,7 +232,7 @@ export type ServerStatus = {
    *  whole-second timestamps written two hours after the millisecond fix landed, because the
    *  process predated it.
    *
-   *  Optional because a server older than D53 does not send it, and the honest response to
+   *  Optional because a server predating the header (D73) does not send it, and the honest response to
    *  its absence is to say nothing rather than to claim a reload. */
   boot_id?: string
   started_at?: number

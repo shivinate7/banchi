@@ -2902,7 +2902,7 @@ What holds instead: one host, one method, one route, in one module with one call
 
 This is cookie-session auth, not the order-management API, which is another host answering `www-authenticate: Bearer`. The two were conflated once while this was scoped and reached the wrong conclusion.
 
-**Amended 2026-08-30: the `Bearer` half is measured false, and the sentence stands because the conflation it warns about was real.** The order host is a cookie session on the same `.tcgplayer.com` ticket this table's host uses; what does not transfer between the two is the body convention, not the auth. D67 has the capture.
+**Amended 2026-08-30: the `Bearer` half is measured false, and the sentence stands because the conflation it warns about was real.** The order host is a cookie session on the same `.tcgplayer.com` ticket this table's host uses; what does not transfer between the two is the body convention, not the auth. D69 has the capture.
 
 **Whether export scope can be set by request is therefore unanswered.** It needs one authenticated probe, which needs the cookie, which only the owner can place. If scope can be set, the better design is to ask for a scoped export rather than inspect a broad one: fetch the sets the run needs with printings and conditions unfiltered, and the file is complete within scope by construction. That is recorded and not built, because a path that has never run must not carry a comment claiming a property nobody measured.
 
@@ -3081,7 +3081,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **What survives is one probe, not a session.** The admin host answers a cookie-session 302 and `order-management-api` answers a Bearer challenge; two hosts, two schemes, and D64's result does not transfer. That question is answered by one request, and the spec puts it in the free work rather than letting a build be organised around it.
 
-**Amended 2026-08-30 (D67): the probe ran, and answered cookie rather than Bearer.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the same `TCGAuthTicket_Production` cookie the admin host uses — one `.tcgplayer.com` session, two hosts — so *two hosts, two schemes* is one scheme, and D64's result DOES transfer as far as auth is concerned. The paragraph is amended rather than removed because its structural claim was right: one request settled it, and organising a build around the answer would have been organising it around a guess. What does not transfer is the body convention — form-urlencoded `model=<json>` there, plain JSON here. The capture, the two calls, the required `sellerKey` and the 403 that reads like an expired session are all in D67.
+**Amended 2026-08-30 (D69): the probe ran, and answered cookie rather than Bearer.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the same `TCGAuthTicket_Production` cookie the admin host uses — one `.tcgplayer.com` session, two hosts — so *two hosts, two schemes* is one scheme, and D64's result DOES transfer as far as auth is concerned. The paragraph is amended rather than removed because its structural claim was right: one request settled it, and organising a build around the answer would have been organising it around a guess. What does not transfer is the body convention — form-urlencoded `model=<json>` there, plain JSON here. The capture, the two calls, the required `sellerKey` and the 403 that reads like an expired session are all in D69.
 
 ### The relay, if it is built, is work this repo cannot verify
 
@@ -3093,7 +3093,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 ### What would reopen this
 
-**A screen that turns out to need the feed to be built at all** — the claim here is that pasted JSON is a sufficient input, and it is untested until somebody pastes one. **Or the probe answering Bearer**, which does not change the order but does change what the transport session is. *(It did not: the probe ran 2026-08-30 and answered cookie — see the amendment above and D67.)*
+**A screen that turns out to need the feed to be built at all** — the claim here is that pasted JSON is a sufficient input, and it is untested until somebody pastes one. **Or the probe answering Bearer**, which does not change the order but does change what the transport session is. *(It did not: the probe ran 2026-08-30 and answered cookie — see the amendment above and D69.)*
 
 ---
 
@@ -3399,6 +3399,113 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 **Two specs floored the defect and are corrected rather than deleted.** `a departed card draws no number` asserted `.position-parts` count **zero** and read the raw string as text — a floor on the component *refusing* the label. `two departed copies of one card draw two different rows` read `.position-storekey`. Both were written to protect D58 and D68, both did, and both stated the protection as *the absence of the treatment*. They now assert the invariant directly: no `.position-num` anywhere in the panel, a void in its place, and the ranked path. **This is the failure mode `docs/GATES.md` step 7 already records one register up** — every check green while nothing on the commit path looks at what a human can see. Here the checks were not merely silent; they were holding the defect in place.
 
 **What it does not cover, and why:** the pooled row still renders whole with its key demoted beneath it, which is `.position-plain`'s only remaining caller. Ranking it would mean inventing a key/figure split for a string that names no position, which is the thing D41's guard exists to prevent and which this entry narrows rather than repeals.
+
+---
+
+
+## D72 — A renumbered entry takes its citations with it, and the branch's own history is what says one moved
+
+**Built 2026-08-30, after `docs/map.py` was found citing D67 in 24 places where it meant D69.** The order-screen entry was D67 while its branch was open; main took 67 and 68, and the renumber to D69 reached `docs/DECISIONS.md` and some prose but not the map's citations. Nine OTHER D67 citations in that same file were the real entry — the number-composition one — so no sweep could be run blind, and the wrong ones read as ordinary prose: *"the order transport (D67)"*, *"(D67) gave each its own route"*.
+
+**EVERY DECISION CHECK THIS REPO HAD ASKS WHETHER A CITED ID EXISTS, AND A RENUMBER BREAKS NONE OF THEM.** `check_decision_ids` says the same thing about a duplicate heading in its own comment — *"the citation is then not wrong in a way anything can see — it points at a real heading, just not the intended one"* — and that sentence is exactly as true when one entry moves as when two share a number. `check_map`'s superset rule is one-directional by construction: a decision a file cites must appear in `governed_by`, so a **wrong** entry there is invisible, and prose inside a `does` string is read by nothing at all.
+
+**Thirteen renumber events are in this repo's history and the collisions are structural.** `D50 -> D51 -> D53`, `D50 -> D52 -> D54`, `D61 -> D62 -> D64`, `D65 -> D66`, `D67 -> D69`, `D67 -> D70`, `D69 -> D71`. Several branches take "the next free number" against one base and all of them merge; D16 already carries the three-headings-at-D50 incident, which is the same collision landing a step earlier.
+
+### The title is the identity, and the branch is the scope
+
+**A renumber is a heading that KEPT ITS NAME AND CHANGED ITS ID**, which is the one pair no id-based check can see and the only signal that needs no judgement. `moves_across` reads it out of a sequence of states and is pure for exactly that reason: the git walk around it cannot run without a repository, and the logic that could be wrong is the part that must be testable. Five cases in `--self-test` floor it, and every id in them is real history rather than invented, so the data does not fall into the illustration problem `governed_by` already carries for `D2`.
+
+**An entry that moved TWICE reports its FIRST id.** `D50 -> D51 -> D53` is real, and the citations that need chasing were written while it was D50; reporting the middle id would name a number nobody wrote and miss every site.
+
+**Branch-scoped, which is what makes it quiet.** The renumber that matters is the one this branch did, and the files that matter are the ones this branch touched — a `D67` that main already had is not this branch's to move. On main, `merge-base` is `HEAD` and the row is empty for nothing. `origin/main` is the reference rather than `main`, because a worktree commonly has no local `main`: CLAUDE.md's merge discipline keeps it checked out somewhere else.
+
+**NOT `--staged`, AND THAT IS THE LOAD-BEARING HALF.** The `D67 -> D69` renumber was committed in `9d7f473`, a MERGE — *"Merge origin/main: D67 was taken twice over"* — and git runs no pre-commit hook for a merge commit. A staged-only check would have missed it, and would have missed most of the thirteen: renumbering is what a session does while resolving a merge, by definition. Reading the branch's own commits catches it however it was committed, and the Stop hook runs this at turn end.
+
+### Advisory, because the last step is a judgement and the list is the product
+
+**Replayed against `9d7f473` it names nine files, and two of them were wrong.** `docs/map.py` and `app/src/Orders.css` carried the corruption; the other seven — `CLAUDE.md`, `app/src/types.ts`, `app/tests/inventory.spec.ts`, `docs/DEBTS.md`, `harness/tests/t7_store_and_seams.py`, `scripts/docs-audit.py`, `server/capture_server.py` — cite the number-composition entry and are correct. **Nothing mechanical separates those two groups**, and a check that blocked would have to be right about which is which. What nobody had was the list, and the list is what this row is.
+
+**A file naming BOTH ids is annotated and is not evidence either way.** `docs/map.py` named both and was wrong in 24 places and right in 9; `app/src/types.ts` named both and is right in both. The finding says so rather than ranking on it, because a hint that reads as a verdict is worse than none.
+
+### The app was never scanned, which is the second half
+
+**`decision ids in code` walked `python_files()` and reported "citations in `.py` all resolve" — accurately, and over half the citations.** `app/` holds hundreds more in `.ts`, `.tsx` and `.css` comments, and a dangling id in one of them resolved to nothing and was reported by nothing. The scan now covers those three suffixes at the same advisory severity and for the same reason the Python row is advisory: `D2` could plausibly be a variable one day.
+
+**Measured when it landed: zero dangling ids in the app.** So this is a floor rather than a repair — it found nothing because there was nothing, which is the only honest way to describe a check that goes green on its first run.
+
+### What this does not decide
+
+**Not whether two branches may take one number** — they will, and D16's duplicate-heading rule is what blocks the collision itself. This entry is about the repair afterwards. **Not whether a citation is semantically right**: an id that never moved and was wrong from the day it was typed is invisible here and to everything else, and the only reader that catches it is a human reading the entry. **And not the `governed_by` direction** — a curated entry that names a decision the file never mentions is legitimate by that field's own definition, and checking it would fire on every one.
+
+### What would reopen this
+
+**D100.** `_DECISION_RE` is `\bD([1-9][0-9]?)\b` and the heading pattern matches two digits, so at three digits every citation check in this file goes silently vacuous — it is recorded in `docs/DEBTS.md` rather than fixed here, because fixing it untested against a tree that has no such id is how a regex gets loosened for nothing. **Or a renumber done by rewriting history** rather than by a commit, which leaves no state pair to compare and is invisible to this.
+
+---
+
+## D73 — The boot header says the code changed, nothing says the data did, and only one of those is a citation error
+
+**A screen goes stale because nobody is touching it, which is precisely when it has no traffic for a header to ride on — so the boot header's trick cannot be played a second time, and what is owed instead is a re-read at the moment the operator comes back.** Ruled 2026-08-30, after an exhaustive-deps sweep over `app/src` turned up nothing stale on the write path and made it clear the staleness this product actually has arrives from the other device.
+
+**This is not hypothetical and the repo has the receipt.** `app/src/Fulfillment.tsx:537` says it in the first person: *"The list was read once at mount and never again, which is what let him tap Mark sold on a card the other device had already sold — the stale row was still on screen an hour later."* One missing re-read, one wrong sale, no error anywhere, and an hour of a screen quietly lying.
+
+### Two questions wearing one name
+
+`X-Pkmnscan-Boot` answers **did the code change under you**. `server/capture_server.py:302` computes `BOOT_ID` at import, `:308` names the header, `:7986` exposes it across origins, and `:2258` repeats it in `GET /status`. `app/src/server.ts:444` reads it off every response inside `request()` and `:437` hands it to listeners. Two screens consume it. It is a good mechanism and this entry changes none of it.
+
+It cannot answer **did the data change under you**, and the gap is not a missing feature — it is the same fact from the other side. A restart happens *while the operator is working*, so there is traffic in flight for the header to ride. A screen goes stale for exactly the opposite reason: nobody has touched it. There is no traffic to ride, and the only way to manufacture some is the timer `app/src/ServerReloaded.tsx` records building, proving and throwing out. **A data-generation header is not a smaller version of the boot header. It is the thing the boot header's own design note explains you cannot have.**
+
+### The sentence that is true of a process and false of a store
+
+`server/capture_server.py:8002` argues the header is honest because *"an idle app learns nothing, and it does not need to: a stale server harms nothing until the next request, and the next request is exactly what carries this."*
+
+That is correct about a process — nothing acts on a boot id. It is **false about a store view**, because the screen is not the only consumer of its own contents. Under D58 a card's number counts the cards in the box, so a screen that has not re-read does not show an old number, it shows a number that now belongs to a **different card**; the operator reads it, counts to it in a drawer, and pulls the wrong card. The harm lands *before* any request, which is the one condition that sentence assumes away. This repo has already measured the identical shape once, in the photo cache at `server/capture_server.py:2314` — *"the operator's reading of that screen is that the delete did not happen, and the next press deletes the card that slid in."* That was fixed with a validator on the response, not with a channel.
+
+**The write is safe; the reading is not.** D58 is explicit that the stored index never moves, so a stale screen's write still lands on the record it names. The residue is entirely a number a human copies off a screen. One correction to the tempting narrow version of this: the phone is not immune either. `app/src/CaptureScreen.tsx:181` holds `UndoTarget = { box; index; label: string | null }` — the server's own rendered label, cached when the capture response landed — and a sale from the Mac in front of those cards renumbers it under D58.
+
+### What is owed, and on which screens
+
+Measured screen by screen against the rig, which is one operator with a phone over the feeder and a Mac on the desk. **Five of the nine routes are structurally immune**: `#/pricing`, `#/orders` and `#/shipping` are written only from the Mac by the operator's own hand, `#/gallery` touches no server, and `#/` is itself the second device — its positions are allocated server-side and `next_index` returns on every response, so its own writes are self-correcting. `#/runs` already polls. `#/fulfillment` is a real third-party writer under D5 and is out of scope here for D31's reason.
+
+**Two screens are owed something. `#/inventory` is the urgent one** — it is the D58 screen, and a capture from the phone into the box being walked changes the labels the walk draws. `#/review` wants it on next glance.
+
+**The shape is a re-read when the operator returns to a screen, and never a re-render while they are on one — and one screen already does exactly this.** `app/src/Fulfillment.tsx:537` re-reads *"at the moments the list can have moved under it: coming back to it, and finishing a sale. Not a poll — a timer that re-reads while he is reading is a list that reorders under his thumb."* That is D28's argument reached independently from a real incident, and it is the pattern this entry generalises rather than invents. What that screen cannot do — and what nothing in the app can do — is notice a write that lands while the operator is sitting on it, which is precisely the hour-long case its own comment describes.
+
+**Within one browser, "coming back to it" is already free.** `App.tsx` renders `<route.view />` against a table keyed by hash, and all nine views are distinct component types, so every route change unmounts the outgoing screen and every arrival is a full re-read. The gap is not navigation. It is the screen nobody is navigating away from. D28 rules that the list stops moving under a finger already travelling toward a number; that ruling is untouched here and `#/review` is named as prohibited from any automatic mid-session re-render. Returning to a screen is a different moment from working on one: a screen that has just been re-read has no claim to make, so it makes none. A notice with a control to press was the alternative and is refused — `docs/DESIGN.md` bans acknowledgements, and the one screen D28 reopened that ban for reopened it on grounds found inside the rule.
+
+### What a signal would cost, banked rather than built
+
+`store/session.py:125` is the single funnel every mutation passes through: exclusive lock, re-read inside it, five JSON files written whole on a clean exit. A counter incremented there covers a capture, a sale, a review answer, a retirement, a divider, an order ingest and a pull without any of them being taught about it, and there is no second door to forget.
+
+**Coalescing is a requirement and not a refinement**, and the number that settles it is already recorded: `docs/GATES.md:884` puts the feeder at a median 623 ms over 84 intervals. Anything that fired per generation would fire twice a second for the length of a box — furniture inside a minute, and worse than silence, because it teaches the operator to ignore the one that matters. A monotonic counter can be compared and coalesced; a random id like `BOOT_ID` cannot.
+
+### Why not a live connection, measured rather than assumed
+
+The owner asked whether this should be less of a static app. It was costed properly rather than declined on precedent, and **the objection is not capacity**: `server/capture_server.py:8583` is a `ThreadingHTTPServer` with one thread per connection and no pool, so a stream starves nothing.
+
+It is the drain. Every verb funnels through `_dispatch`, which counts requests in flight; a stream that sits inside it never leaves, so every save of a watched Python file becomes a 35-second stall, a 40-second supervisor grace, a SIGKILL, and a `check history.jsonl` warning about a store that is fine. D53 restarts the server many times in a working session. There is a second cost that is worse for being quiet: `app/tests/cursor.spec.ts:138` waits for `networkidle`, which an open stream never reaches, and the wait is inside a `.catch` — so the suite would stay green and get roughly three and a half minutes slower with nothing on screen to say why. A WebSocket adds a dependency to the one process that may never need `make venv`, to buy a duplex transport for a simplex problem.
+
+**None of that argues against liveness; it argues against a persistent connection as the first thing to build.** The header-plus-return-to-screen shape contaminates no test, by the mechanism that already makes the boot header safe: a stubbed route sends no header and is therefore silent by construction.
+
+### The citation repair
+
+`ServerReloaded.tsx` opens by citing D53 for the boot id. **D53 does not contain the words `onServerBoot`, `X-Pkmnscan-Boot`, `boot_id`, `BOOT_ID` or `ServerReloaded` — not once.** Checked three ways: a case-insensitive search of this file for "boot" returns five hits, every one `launchctl bootout`, "imported at boot", "will not boot" or "fails to boot"; the identifiers appear in `app/src/`, `server/capture_server.py` and `docs/DEBTS.md` and in no ref's `docs/DECISIONS.md`; and D53 is byte-identical between this worktree and main.
+
+**Seven sites cite D53 for the header or the notice and now point here**: `app/src/ServerReloaded.tsx:1` and `:18`, `app/src/ServerReloaded.css:1`, `app/src/server.ts:416` and `:446`, `app/src/types.ts:235`, `app/src/Shipping.tsx:147`. **Five are correct and are left alone** — `app/src/types.ts:230`, `app/src/App.tsx:787`, `server/capture_server.py:8002`, `server/order_transport.py:542` and `server/tcg_export.py:102` all cite D53 for the watcher, the supervisor or the restart, which are genuinely D53's.
+
+The mechanism is adopted rather than re-argued. Every rule in `ServerReloaded.tsx`'s header stands unchanged: no poll, silence on absence, never on first sight, `role="status"`, expires on its own, hung off `hasChrome` so it never draws on the Fulfiller's view. What changes is which entry it stands on.
+
+### What it costs
+
+- **`docs/DEBTS.md` records that the reload notice has no automated case.** Three were attempted; two passed against a build with the notice rendered unconditionally and were deleted rather than kept, and the third failed outright. Anything built here inherits that difficulty, and the honest move is the one already made — name what is verified and what is not, rather than ship a green row that asserts nothing.
+- **A return-to-screen re-read is per screen by construction.** It does not preserve `app/src/server.ts` as the only module that participates, which is a real cost the one-observation-point rule was bought to avoid. Stated rather than denied.
+- **`markSold` and `undoSale` take `(box, index)` and carry no aim check.** Only `removeCardInPlace` and the order pull are `capture_id`-aimed. The wire does not refuse a stale press, so nothing here may be argued from the belief that it does.
+
+**D13 is not reopened.** The store, the photographs and the truth stay on this Mac.
+
+**BUILT: the re-read-on-return idiom, on one screen only** — `app/src/Fulfillment.tsx:537`, argued there from the incident above, plus the unmount-on-navigate that makes arrival a re-read everywhere. **RECORDED: this ruling, the two-questions distinction, the citation repair, and the terms a signal would have to meet.** **NEITHER: the generation counter, any signal that reaches a screen nobody is touching, the same idiom on `#/inventory`, and a test for any of it.** The distinction matters because the built half is the half that only helps when the operator was already going to act.
+
+**What would reopen this: a second pair of hands.** Every narrowing above rests on one operator moving between two devices. A real Fulfiller working `#/fulfillment` while the owner sells from `#/inventory` is two people writing at once, and the return-to-screen shape is too slow for it.
 
 ---
 

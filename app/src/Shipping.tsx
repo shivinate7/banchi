@@ -144,7 +144,7 @@ export function Shipping() {
   const [gone, setGone] = useState<string | null>(null)
   const pick = useRef<HTMLInputElement>(null)
 
-  /* THE BOOT NOTICE (D53). The batch lives in the capture server's memory and nowhere else, so
+  /* THE BOOT NOTICE (D73). The batch lives in the capture server's memory and nowhere else, so
      a restart takes it with it — and the `<a download>` below would go on pointing at a batch
      that no longer exists, failing as a dead download rather than as a sentence. `onServerBoot`
      fires when the server's boot id changes, which is the one observation point in the app that

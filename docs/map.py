@@ -724,7 +724,7 @@ COMPONENTS = [
         # declared suffix, which failed the commit until it was described. The two outcomes
         # from one change are the clearest statement of this hole available, so they are
         # recorded here rather than only in docs/DEBTS.md.
-        "source_suffixes": [".py", ".sh", ".txt"],
+        "source_suffixes": [".py", ".sh", ".txt", ".mjs"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
                 "with none has nothing to be an orphan of. Measured before the fix: "
@@ -832,6 +832,21 @@ COMPONENTS = [
                                         "provisioning, so a fresh clone would fail a commit over "
                                         "nothing.",
                                 "governed_by": ["D18", "D47"]},
+            "screen-freshness.mjs": {
+                "does": "proves every server WRITE in app/src has a way back — a re-read, an "
+                        "invalidation signal, or a reason in the code why none is owed. Twelve "
+                        "recognisers over the TypeScript AST, following the two indirections "
+                        "that hide a write (stored as a value, and behind a wrapper) and the "
+                        "five private helpers in server.ts that carry the method for ten "
+                        "exported writes. Found nothing on the tree it was written against: a "
+                        "regression guard for write 39, not a bug report.",
+                # D13 is why staleness matters at all — two devices on one store. D58 is why it
+                # is dangerous rather than untidy: a card's number counts the cards in the box,
+                # so a stale screen shows a number that now belongs to a different card. D18
+                # decides where it runs: node, like port-agreement.py, so `make check` and never
+                # the git hook. D14 is why it excludes the code-card track, by banner.
+                "governed_by": ["D13", "D14", "D18", "D58"],
+            },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -871,7 +886,16 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70"],
+                # D72 IS THE RULING; D50, D51 and D67 ARE THE WORKED EXAMPLE IT CITES. The
+                # renumber check names this repo's real chains — D50 -> D51 -> D53, and the
+                # D67 -> D69 move that occasioned it — in its comments and in the self-test
+                # data, deliberately: an id that exists keeps that data out of the very
+                # illustration problem D2 above records. The superset rule reads them
+                # literally either way, so they are listed, and this is what they are.
+                # D70 JOINS THEM AS A CITED FAILURE rather than a ruling: the `route rosters`
+                # row names D69 and D70 as the two entries whose routes a hand-typed roster
+                # missed, which is what that row exists to make impossible a third time.
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1119,7 +1143,7 @@ COMPONENTS = [
                 # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
                 # render that draws no stored capture photo, so the `views exposure` question
                 # the others raise does not arise for it.
-                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D67", "D69"],
+                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D69"],
             },
         },
     },
@@ -1258,7 +1282,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D67", "D69"],
+                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1345,7 +1369,7 @@ COMPONENTS = [
                 # ledger the deferred stamps route would read; D66 is why the lane got a
                 # surface of its own rather than a badge on the order screen; D69 is the
                 # route. D58 is the stored index the stamps route will have to speak.
-                "governed_by": ["D58", "D61", "D63", "D66", "D67"],
+                "governed_by": ["D58", "D61", "D63", "D66", "D69"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "
                         "every refusal path is exercisable with no network. WHAT T7 CANNOT "
@@ -1354,7 +1378,7 @@ COMPONENTS = [
                         "it is one upload by the owner.",
             },
             "order_transport.py": {
-                "does": "the order transport (D67): this account's own orders off "
+                "does": "the order transport (D69): this account's own orders off "
                         "order-management-api.tcgplayer.com, cookie-authenticated with the "
                         "same TCGPLAYER_STORE_COOKIE the export uses — one .tcgplayer.com "
                         "session, two hosts. Stdlib urllib, one host, an https-or-loopback "
@@ -1370,9 +1394,9 @@ COMPONENTS = [
                         "missing filters.sellerKey answers 403 rather than 400 and reads "
                         "exactly like an expired session. Twenty-one named refusal codes.",
                 # D63 is the ledger this feeds; D65 is the body convention it deliberately does
-                # not carry over; D66 is the build order it discharges; D67 is the capture and
+                # not carry over; D66 is the build order it discharges; D69 is the capture and
                 # the entry. D34 and D53 are cited in its own text.
-                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D67"],
+                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69"],
                 "tested_by": ["T7"],
                 "note": "THE AUTHENTICATED SUCCESS PATH IS UNEXERCISED. The wire shapes were "
                         "captured off the owner's own logged-in browser and every refusal is "
@@ -1397,7 +1421,7 @@ COMPONENTS = [
         "does": "the web app. TEN routes behind a hand-written hash router, NINE of them the "
                 "owner's — the capture screen that Gate B runs on, the runs screen the "
                 "pipeline lives on, the review queue, the pricing worklist, the order "
-                "screen and the shipping lane (D67 gave each its own route rather than "
+                "screen and the shipping lane (D69 gave each its own route rather than "
                 "making one a mode of the other), the one "
                 "inventory view (D31 folded the box walk and the pull preview into it), the "
                 "code-card screen D70 gave its own route, and "
@@ -1536,7 +1560,7 @@ COMPONENTS = [
                                     "with no model call and nothing to price, so it is reached "
                                     "when asked, which is what this table's own definition of "
                                     "that group says.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D67", "D69", "D70"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69", "D70"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -1589,13 +1613,13 @@ COMPONENTS = [
                                                "Fulfillment constraints table at once. NO "
                                                "AUTOMATED CASE — docs/DEBTS.md carries why, and "
                                                "what was verified by hand instead.",
-                                       "governed_by": ["D5", "D31", "D53"]},
+                                       "governed_by": ["D5", "D31", "D53", "D73"]},
             "src/ServerReloaded.css": {"does": "that notice: fixed bottom-left so it costs no "
                                                "layout on screens whose recorded complaint "
                                                "(D38, D40) is content pushed below the fold, "
                                                "pointer-events none, accent as an outline dot "
                                                "and never a fill",
-                                       "governed_by": ["D5", "D38", "D40", "D53"]},
+                                       "governed_by": ["D5", "D38", "D40", "D53", "D73"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -1603,11 +1627,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D67", "D68", "D69"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2135,9 +2159,9 @@ COMPONENTS = [
                                             "The lookups take a `string` and fall back to the "
                                             "code itself, so drift arrives on screen as a "
                                             "machine string rather than as a blank row.",
-                                    "governed_by": ["D9", "D16", "D22", "D63", "D67"]},
+                                    "governed_by": ["D9", "D16", "D22", "D63", "D69"]},
             "src/orderPaste.ts": {"does": "THE ONE PLACE IN THIS APP THAT DECIDES WHAT LEAVES "
-                                          "THE BROWSER ABOUT A PURCHASE (D67). It reads pasted "
+                                          "THE BROWSER ABOUT A PURCHASE (D69). It reads pasted "
                                           "order JSON and projects it to "
                                           "{source, number, placed_at, status, lines[]} by "
                                           "ALLOWLIST — no buyer, no address, no city, no "
@@ -2149,16 +2173,16 @@ COMPONENTS = [
                                           "rather than being stored with fields quietly "
                                           "trimmed. src/server.ts:ingestOrders takes this "
                                           "output verbatim, so there is exactly one door.",
-                                  "governed_by": ["D13", "D63", "D67"]},
+                                  "governed_by": ["D13", "D63", "D69"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
                                          "disagree about. One decode, one refusal shape, one "
                                          "CsvUpload — a second reader is how a file that joins "
                                          "on one screen refuses on another.",
-                                 "governed_by": ["D33", "D61", "D67"]},
+                                 "governed_by": ["D33", "D61", "D69"]},
             "src/Orders.tsx": {"does": "#/orders: which copies this buyer gets, and where they "
-                                       "are (D67). One read of GET /orders answers the order "
+                                       "are (D69). One read of GET /orders answers the order "
                                        "list and the resolution out of ONE store snapshot, so "
                                        "the two cannot disagree; each line draws its reason "
                                        "large with the machine string beneath it, the six-way "
@@ -2171,27 +2195,27 @@ COMPONENTS = [
                                        "behind the same control. IT DRAWS NO POSTAGE LANE: "
                                        "that is D61's question and #/shipping's answer, "
                                        "computed from a file this screen never sees.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D67", "D69"]},
+                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D69"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D67"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69"]},
             "src/Shipping.tsx": {"does": "#/shipping: TCGplayer's Orders -> Export Shipping "
                                          "file read into D61's three lanes, with the Pirate "
                                          "Ship import CSV as a download and a way to forget the "
-                                         "batch (D67). It knows NO buyer — no name, no address, "
+                                         "batch (D69). It knows NO buyer — no name, no address, "
                                          "no city, no postcode — and the absence is the design: "
                                          "those details cross the wire exactly once, as the "
                                          "download. The weight ratio is a rendering and is "
                                          "never compared here; a float pass over that column "
                                          "moved the lane counts on the server.",
-                                 "governed_by": ["D53", "D61", "D66", "D67"]},
+                                 "governed_by": ["D53", "D61", "D66", "D69", "D73"]},
             "src/Shipping.css": {"does": "the lane table and its chips, at owner density. The "
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
-                                 "governed_by": ["D40", "D50", "D61", "D67"]},
+                                 "governed_by": ["D40", "D50", "D61", "D69"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -2468,7 +2492,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D67", "D69", "D70"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -2495,7 +2519,7 @@ COMPONENTS = [
                                              "pre-write place rather than the sale's departed "
                                              "label. Not a harness test — it starts a browser; "
                                              "`make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D67"]},
+                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -2507,7 +2531,7 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D66", "D67"]},
+                                       "governed_by": ["D16", "D61", "D66", "D69"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to decisions.json, a "

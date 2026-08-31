@@ -47,7 +47,13 @@ make server         # Python capture server. :8000 in the main tree, its own por
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
-make check          # harness + docs-audit + both self-tests + lint + typecheck
+make check          # harness + docs-audit + both self-tests + port-agreement +
+                    #   screen-freshness + ignore-check + lint + vale + typecheck.
+                    #   The line above said five of those nine for months.
+make screen-freshness # every server write in app/src has a way back: a re-read, an
+                    #   invalidation signal, or a reason in the code why none is owed.
+                    #   Needs node, so it is in `check` and never in the git hook.
+                    #   Finds nothing today — it guards write number 39.
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
@@ -421,6 +427,8 @@ D68  A departed card's label names the record, because two of them in one box we
 D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
 D70  The QR is the whole identification, the product is a claim, and the card is destroyed
 D71  A card with no slot is ranked like every other, and it is the figure that goes
+D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
+D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
