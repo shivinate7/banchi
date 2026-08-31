@@ -2102,10 +2102,13 @@ COMPONENTS = [
             # every run. This is where that decision is made, per SKU, with every export cell
             # in front of it.
             "src/Pricing.tsx": {"does": "#/pricing: the hand-pricing worklist. One row per SKU a "
-                                        "run matched, sorted market-descending — except that a "
-                                        "SKU this run can add nothing for sinks to the bottom "
-                                        "of its section under a heading naming why (D78) — "
-                                        "carrying ALL "
+                                        "run matched, sorted market-descending inside three "
+                                        "tiers per section: the rows still wanting a price, the "
+                                        "ones already held, then the ones this run can add "
+                                        "nothing for, each sunk tier under a heading naming why "
+                                        "(D78). The hold tier is a SNAPSHOT taken at load, so a "
+                                        "press of H never moves the row under the hand. "
+                                        "Carrying ALL "
                                         "fourteen export columns that hold data — the owner's "
                                         "\"all the data from the CSV shown when I make the "
                                         "decision\". The run's rule PREFILLS every row as a "
@@ -2613,7 +2616,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

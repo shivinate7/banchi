@@ -15,6 +15,7 @@ import type {
   DecisionsDocument,
   PricingPayload,
   PricingSku,
+  PricingTable,
   RunDetail,
   RunFile,
   RunSummary,
@@ -205,6 +206,37 @@ function groupOf(sku: PricingSku): string | null {
   return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
 }
 
+/** THE HEADING OVER THE ROWS THE OPERATOR HAS ALREADY ANSWERED WITH A HOLD. The screen's own
+ *  sentence and not the server's, because a hold is this screen's answer (D49) and
+ *  `decisions.json` records the reason per SKU rather than one for the group — the machine
+ *  token stays on each row, which is where a `withheld: bullish` is greppable from. */
+const HELD_HEAD = 'held back from this run'
+
+/** THE SKUs DRAWN AS HELD WHEN THE PAGE OPENED — a snapshot, taken in `load` and untouched
+ *  until the next one, which is what makes a hold sink on the REOPENING and never under the
+ *  hand that just pressed `H` (D28, D78).
+ *
+ *  READ THE WAY THE ROW READS IT, and that is why this walks the table rather than the two
+ *  answer maps: `targetOf` decides which map a row's answer lives in, so a stale `overrides`
+ *  key for a `no_market_data` SKU draws nothing and must sink nothing. The group and the word
+ *  `Holding` are then the same test, run once each.
+ *
+ *  `'unlisted'` COUNTS, and it is not an edge case: it is the answer a `no_market_data` row
+ *  takes to say this card is not being listed, it draws `Holding` in the price column exactly
+ *  as a reasoned hold does, and it keeps the card out of the same import file. A group of rows
+ *  that will not list is the honest set; one that took the reasoned half alone would leave the
+ *  other half sitting among the unanswered rows looking like work. */
+function heldOnArrival(table: PricingTable, doc: DecisionsDocument): ReadonlySet<string> {
+  const overrides = (doc.overrides ?? {}) as Record<string, unknown>
+  const unpriced = (doc.no_market_data ?? {}) as Record<string, unknown>
+  const out = new Set<string>()
+  for (const row of table.skus) {
+    const standing = targetOf(row.bucket) === 'overrides' ? overrides[row.sku] : unpriced[row.sku]
+    if (isWithheld(standing)) out.add(row.sku)
+  }
+  return out
+}
+
 /** One thing the list draws: a heading, or a row. Discriminated on `head` because the two are
  *  SIBLINGS in the list rather than a heading owning a nested list of its own — the caption
  *  above them is a sibling of the rows for the same reason, and a wrapper would stop the rows
@@ -222,6 +254,9 @@ export function Pricing() {
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
+  /* THE HOLDS AS THE SERVER LAST HANDED THEM OVER. State and not a memo over `doc`: the whole
+   * property is that it does NOT track the document the operator is editing. */
+  const [sunkHolds, setSunkHolds] = useState<ReadonlySet<string>>(() => new Set())
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
 
   /* ------------------------------------------------------------- the price history (D62)
@@ -359,6 +394,7 @@ export function Pricing() {
         answer.decisions ?? { rule: answer.pricing.rule, basis: answer.pricing.basis }
       setPayload(answer)
       setDoc(held)
+      setSunkHolds(heldOnArrival(answer.pricing, held))
       savedDoc.current = held
       failedDoc.current = null
       setFailure(null)
@@ -376,6 +412,7 @@ export function Pricing() {
       }
     } catch (err) {
       setPayload(null)
+      setSunkHolds(new Set())
       setFailure(describeFailure(err))
     }
   }, [])
@@ -580,38 +617,57 @@ export function Pricing() {
 
   /** THE LIST AS IT IS DRAWN, SECTION BY SECTION, AND THE ONLY PLACE THAT ORDER IS DECIDED.
    *
-   *  A ROW THAT CAN ADD NOTHING SINKS. `cli/cmd_join.py` writes `pricing.json` market-
-   *  descending and that stands — inside each group it is untouched — but a SKU whose every
-   *  copy is already listed or has left the box is not a decision this run is waiting on, and
-   *  at the top of the section it puts the run's most expensive non-questions in front of the
-   *  operator's eye. They go to the bottom of their own section, under a heading naming the
-   *  reason; the rows that still want a price keep the top.
+   *  A ROW THAT WANTS NOTHING FROM THE OPERATOR SINKS. `cli/cmd_join.py` writes
+   *  `pricing.json` market-descending and that stands — inside every group it is untouched —
+   *  but a SKU whose every copy is already listed, or one already answered with a hold, is not
+   *  a decision this run is waiting on, and at the top of the section it puts the run's most
+   *  expensive non-questions in front of the operator's eye. Three tiers, in the order the
+   *  operator asked for them: the rows that still want a price, then the ones they have
+   *  already held, then the ones this run can add nothing for at all.
    *
-   *  GROUPED BY THE SENTENCE, IN FIRST-APPEARANCE ORDER, and there are three of them (D59):
-   *  every copy gone, at the cap, or held by an import this pipeline has not seen land. They
-   *  have three different remedies, so they are three headings and never one bucket of
-   *  leftovers. `Map` insertion order is what orders them — an alphabetical or count-based
-   *  rule would be a second opinion about importance that nothing here has grounds for.
+   *  THE SUNK TIER IS THE DEEPER FACT WHERE A ROW IS BOTH. A held row that is ALSO at the cap
+   *  goes under the cap's heading, because the hold changes nothing about a SKU this run was
+   *  never going to add a row for — and its `withheld` token still draws beside it, so the
+   *  hold is not lost by being outranked.
    *
-   *  D28 IS WHY THIS IS SAFE AT ALL. The list must not move under a finger already travelling
-   *  to the next field, and every input to this order — `bucket`, `at_cap`, `nothing_to_add`
-   *  — is written by the join and read off disk. Nothing the operator types on this screen can
-   *  move a row out of its group, the same way nothing typed can move one between sections. */
+   *  THE CAP TIER IS GROUPED BY THE SENTENCE, IN FIRST-APPEARANCE ORDER, and there are three
+   *  of them (D59): every copy gone, at the cap, or held by an import this pipeline has not
+   *  seen land. They have three different remedies, so they are three headings and never one
+   *  bucket of leftovers. `Map` insertion order is what orders them — an alphabetical or
+   *  count-based rule would be a second opinion about importance that nothing here has grounds
+   *  for. The hold tier is ONE heading over all of them, because the reason is per SKU and
+   *  already drawn on the row.
+   *
+   *  D28 IS WHY THIS IS SAFE AT ALL, AND IT IS WHY THE HOLDS COME FROM A SNAPSHOT. The list
+   *  must not move under a finger already travelling to the next field. `bucket`, `at_cap` and
+   *  `nothing_to_add` are written by the join and read off disk, so they cannot move a row
+   *  mid-session at all; a hold is this screen's own answer and could, so `sunkHolds` is the
+   *  set as it stood when the page opened and a press of `H` does not move the row under the
+   *  hand that pressed it. It sinks on the reopening, which is what the owner asked for.
+   *
+   *  SO A ROW CAN OUTLIVE ITS GROUP FOR ONE SESSION, and that is the trade taken deliberately:
+   *  release a hold and the row keeps its place under the heading until the next load, drawing
+   *  a price field. The row tells the truth about itself; the heading says why the group is
+   *  there. The alternative is the list moving under the release, which D28 closed. */
   const sections = useMemo(
     () =>
       SECTIONS.map((section) => {
         const inSection = rows.filter((row) => row.bucket === section.bucket)
         const items: Drawn[] = []
+        const holds: PricingSku[] = []
         const closed = new Map<string, PricingSku[]>()
         for (const sku of inSection) {
           const why = groupOf(sku)
-          if (why === null) {
-            items.push({ head: null, sku })
-            continue
-          }
-          const group = closed.get(why)
-          if (group === undefined) closed.set(why, [sku])
-          else group.push(sku)
+          if (why !== null) {
+            const group = closed.get(why)
+            if (group === undefined) closed.set(why, [sku])
+            else group.push(sku)
+          } else if (sunkHolds.has(sku.sku)) holds.push(sku)
+          else items.push({ head: null, sku })
+        }
+        if (holds.length > 0) {
+          items.push({ head: HELD_HEAD, count: holds.length })
+          for (const sku of holds) items.push({ head: null, sku })
         }
         for (const [why, group] of closed) {
           items.push({ head: why, count: group.length })
@@ -619,7 +675,7 @@ export function Pricing() {
         }
         return { ...section, total: inSection.length, items }
       }).filter((section) => section.total > 0),
-    [rows],
+    [rows, sunkHolds],
   )
 
   /** Every drawn row's SKU, top to bottom, across every section — what Enter and the arrows

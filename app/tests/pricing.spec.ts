@@ -963,6 +963,180 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
   await expect(fields.nth(1)).toHaveAttribute('aria-label', 'Price for Wattrel')
 })
 
+/* THE HOLD TIER, WHICH IS THE SECOND HALF OF THE SAME ASK.
+ *
+ * The owner, the day D78 landed: *"make it so that upon a reopening that page those that were
+ * held are also moved down in their own category (after prices, before all are sold/listed)"*.
+ * Three tiers, and the order is theirs — the rows that still want a price, the rows they have
+ * already answered with a hold, then the rows this run can add nothing for at all.
+ *
+ * ONE HEADING OVER ALL THE HOLDS, unlike the cap tier's one-per-sentence. The reason is per
+ * SKU and is already drawn on the row as `withheld: <reason>`; a heading per reason would
+ * scatter three rows across three headings to restate what each row already says. */
+test('a held row sinks between the prices and the rows that can add nothing', async ({
+  page,
+}) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+      }),
+      sku({ sku: '8608659', name: 'Wattrel' }),
+      sku({ sku: '8608959', name: 'Kled' }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: { '8608659': { withheld: 'bullish' } },
+    },
+  })
+
+  await expect(page.locator('.pricing-name')).toHaveText([
+    'Articuno',
+    'Kled',
+    'Wattrel',
+    'Dunsparce',
+  ])
+
+  const drawn = await page
+    .locator('.pricing-list > *')
+    .evaluateAll((nodes) => nodes.map((node) => node.className))
+  expect(drawn).toEqual([
+    'pricing-row',
+    'pricing-row',
+    'pricing-group-head',
+    'pricing-row',
+    'pricing-group-head',
+    'pricing-row',
+  ])
+
+  const heads = page.locator('.pricing-group-head .pricing-group-why')
+  await expect(heads).toHaveText([
+    'held back from this run',
+    'every copy in this run is already listed or has left the box',
+  ])
+
+  /* AND THE REASON IS STILL ON THE ROW. The heading says the group is held; which hold it is
+     stays greppable from the screen to `decisions.json` (D49), which is the whole argument for
+     drawing the machine string at all. */
+  await expect(page.locator('.pricing-row').nth(2).locator('.pricing-machine')).toHaveText(
+    'withheld: bullish',
+  )
+})
+
+/* A HELD ROW THAT IS *ALSO* AT THE CAP GOES UNDER THE CAP'S HEADING, and the case exists
+ * because the two tiers overlap in the store: a card can be at the live cap and withheld at
+ * once. The hold changes nothing about a SKU this run was never going to add a row for, so the
+ * deeper fact wins the placement — and the hold is not lost by being outranked, because its
+ * token still draws beside it. */
+test('a row that is both held and at the cap sinks to the deeper heading', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+      }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: { '8608459': { withheld: 'keeping' } },
+    },
+  })
+
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
+    'every copy in this run is already listed or has left the box',
+  ])
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-machine')).toHaveText(
+    'withheld: keeping',
+  )
+})
+
+/* THE SINK HAPPENS ON THE REOPENING AND NEVER UNDER THE HAND THAT PRESSED `H`, which is D28
+ * held to in the one place on this screen where the order's input is an answer the operator can
+ * change: `bucket`, `at_cap` and `nothing_to_add` are the join's and cannot move mid-session,
+ * and a hold is this screen's own. A row that jumped down the list on the press would take the
+ * next row up to meet a finger already travelling to it.
+ *
+ * BOTH HALVES IN ONE CASE, because either alone passes against a wrong screen: a case that only
+ * checked the press passes against a screen that never sinks holds at all, and one that only
+ * checked the reload passes against a screen that sinks them the instant they are taken. */
+test('a hold taken now does not move its row, and has moved it by the next load', async ({
+  page,
+}) => {
+  const skus = [
+    sku({ sku: '8608859', name: 'Articuno' }),
+    sku({ sku: '8608459', name: 'Dunsparce' }),
+    sku({ sku: '8608659', name: 'Wattrel' }),
+  ]
+  await open(page, { skus })
+
+  await page.locator('.pricing-row').nth(1).getByRole('button', { name: 'Hold Dunsparce' }).click()
+  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-machine')).toHaveText(
+    'withheld: keeping',
+  )
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+  await expect(page.locator('.pricing-group-head')).toHaveCount(0)
+
+  /* THE SECOND OPENING, WITH THE SERVER NOW CARRYING THE ANSWER. Registered after `open`,
+     which is what makes it win — Playwright matches handlers newest first. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: RUN,
+        pricing: {
+          run: RUN,
+          threshold: '0.40',
+          floor: '0.40',
+          rule: 'match',
+          basis: 'market',
+          presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
+          games: [
+            {
+              game: 'pokemon',
+              import_listed: 'import-listed.csv',
+              import_subthreshold: 'import-subthreshold.csv',
+            },
+          ],
+          skus,
+          bands: [],
+        },
+        decisions: {
+          rule: 'match',
+          basis: 'market',
+          sub_threshold: null,
+          overrides: { '8608459': { withheld: 'keeping' } },
+        },
+        remembered_sub_threshold: null,
+      }),
+    })
+  })
+  await page.reload()
+  await settleFonts(page)
+
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel', 'Dunsparce'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
+    'held back from this run',
+  ])
+})
+
 test('a row is the same height whether or not it carries a note', async ({ page }) => {
   await open(page, {
     skus: [sku(), sku({ sku: '8608459', name: 'Dunsparce' })],
