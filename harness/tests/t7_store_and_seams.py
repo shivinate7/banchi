@@ -12287,6 +12287,145 @@ def check_export_fetch(checks: Checks) -> None:
                     "from whichever survived",
                 )
 
+                # ------------------- A HINT IS EVIDENCE ABOUT ITS OWN CARD AND NO OTHER
+                #
+                # D75, AND THE DEFECT IT IS NAMED FOR. D65 gathered the hints that EXISTED
+                # and never counted the cards carrying none, so a box sorted by rarity with
+                # one set hint on one card scoped the whole export to that one set — and
+                # every unhinted card queued `no_catalog_row` behind a fetch that reported
+                # success and a positive check that PASSED, because the set asked for did
+                # arrive. Measured on the owner's own Riftbound box, and reproduced on a
+                # synthetic 200-card run before the fix: `SetNameIds` came back `["77"]`.
+                #
+                # ASSERTED OFF THE POST BODY, never off the response: a fetch that answers
+                # with the right file proves nothing about what was asked for, and asking
+                # for too little is precisely the failure that still returns a valid CSV.
+                identifications = directory / pipeline_routes.run_files.IDENTIFICATIONS
+
+                def hint_cards(hinted):
+                    """Give the first `hinted` of the run's cards a set hint, clear the rest."""
+                    payload = json.loads(identifications.read_text())
+                    for at, key in enumerate(sorted(payload["cards"])):
+                        payload["cards"][key].pop("set_hint", None)
+                        if at < hinted:
+                            payload["cards"][key]["set_hint"] = "SV09"
+                    identifications.write_text(json.dumps(payload))
+
+                def sent(payload=None):
+                    stub["mode"] = "csv"
+                    stub["body"] = whole.read_bytes()
+                    stub["posted"] = []
+                    fetch({"accept_narrower": True, "accept_unverified": True, **(payload or {})})
+                    return json.loads(
+                        urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
+                    ) if stub["posted"] else {}
+
+                hint_cards(2)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["4242"],
+                    "a box where EVERY card carries a hint and the hint resolves still "
+                    "narrows to that set — D65's saving is intact, and D75 narrows the "
+                    "condition rather than removing it",
+                )
+                hint_cards(1)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["0"],
+                    "and one hinted card among unhinted ones widens to the whole category. "
+                    "This is the defect: the hints describe part of the box, a filter built "
+                    "from them cuts the export to that part, and every card outside it "
+                    "queues no_catalog_row behind a fetch that reported success",
+                )
+                hint_cards(0)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["0"],
+                    "a box with no hint at all widens, as it always did",
+                )
+
+                # -------------------------------------- THE GAME'S OWN RULE, AND THE OPERATOR
+                checks.equal(
+                    (games.export_scope("riftbound"), games.export_scope("pokemon")),
+                    ("category", "sets"),
+                    "the registry carries the per-game rule: riftbound's whole English "
+                    "catalogue is one 10078-row file and has nothing a set filter would buy, "
+                    "and Pokemon's whole category is not measured so it still narrows",
+                )
+                checks.equal(
+                    games.export_scope("nobody_registered_this"),
+                    games.DEFAULT_EXPORT_SCOPE,
+                    "and a game outside the registry answers the DEFAULT rather than raising "
+                    "— unlike `games.get`, because the question is how wide to ask rather "
+                    "than what a card is, and the safe answer to the first is the wider one",
+                )
+
+                hint_cards(2)
+                checks.equal(
+                    sent({"scope": "category"}).get("SetNameIds"),
+                    ["0"],
+                    "the operator widens a box the cards would have narrowed — `scope` is "
+                    "the axis, and asking for more than the inference is always safe",
+                )
+                hint_cards(0)
+                checks.equal(
+                    sent({"set_ids": [4242]}).get("SetNameIds"),
+                    ["4242"],
+                    "and ticking sets by hand narrows a box that carries no hint at all. A "
+                    "hint is a guess about one card; a person ticking a set is making the "
+                    "claim about the BOX that the inference was trying to reconstruct",
+                )
+                status, raw, _ = fetch({"set_ids": [999999]})
+                checks.equal(
+                    (status, error_code(raw)),
+                    (400, "set_ids_unknown"),
+                    "a set id the portal's own category does not publish is refused HERE, "
+                    "because the portal answers a body it cannot read with a 200 carrying "
+                    "its System Error page — which reads exactly like a rejected cookie",
+                )
+                status, raw, _ = fetch({"scope": "everything"})
+                checks.equal(
+                    (status, error_code(raw)),
+                    (400, "scope_invalid"),
+                    "and an axis that is not one of the two is refused by name rather than "
+                    "falling through to the game's rule, which would silently answer a "
+                    "different question from the one asked",
+                )
+
+                # ------------------------------- THE LEVER'S POSITION, BEFORE IT IS PULLED
+                #
+                # `GET .../scope` (D75). The receipt named the scope AFTER the file was on
+                # disk, so the one moment an operator could correct a wrong scope was the one
+                # moment it was not on screen. FREE and it presses nothing — asserted by the
+                # POST count, because "it did not fetch" is the property, not a side effect.
+                hint_cards(1)
+                stub["posted"] = []
+                status, raw, _ = request(
+                    port, "GET", f"/pipeline/runs/{directory.name}/scope"
+                )
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, stub["posted"]),
+                    (200, []),
+                    "the scope preview answers 200 and POSTs nothing — it reads the run and "
+                    "the portal's set list, and never asks for a file",
+                )
+                checks.equal(
+                    [(g["game"], g["cards"], g["hinted"], g["policy"]) for g in body["games"]],
+                    [("pokemon", 2, 1, "sets")],
+                    "and it publishes the evidence the rule reads — how many cards, how many "
+                    "carry a hint, and this game's own rule — which is the fact that was "
+                    "invisible while one hinted card could scope a whole box's export",
+                )
+                checks.equal(
+                    (body["asked"]["scope"], body["asked"]["reason"]),
+                    ("category", "partial_hints"),
+                    "and it says WHICH of the three voices chose the scope and why, in the "
+                    "same shape the fetch's own receipt carries — a scope is only "
+                    "correctable by somebody who can see what decided it",
+                )
+                hint_cards(0)
+
                 # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
                 #
                 # THE REFUSAL'S OWN REMEDY, EXERCISED. `tcg_session_expired` tells the

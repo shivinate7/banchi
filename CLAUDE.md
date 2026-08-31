@@ -151,6 +151,21 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   formula; what it gained is the box's occupancy. **The dividers editor speaks the same space**
   and `do_put_box` maps it back through `join.divider_index` before the store sees an index.
 
+- **A SET HINT ON SOME CARDS NARROWS NOTHING, AND HOW WIDE TO ASK IS A PER-GAME RULE** (D75).
+  The Filtered Export is fetched to a scope this process names (D65), and the scope is decided
+  by three voices in order: an explicit `set_ids` from the operator, then the game's own
+  `export_scope` in `pipeline/games.py` — `category` for riftbound, whose whole 10,078-row
+  English catalogue is one file, `sets` everywhere else — then the run's cards. **The cards may
+  narrow only when they are UNANIMOUS**: every card of that game carrying a hint, and every
+  hint resolving. D65's first build collected the hints that existed and never counted the
+  cards carrying none, so one hinted card in a 200-card box scoped the whole export to one set
+  and the other 199 queued `no_catalog_row` behind a fetch that reported success.
+
+  `GET /pipeline/runs/<name>/scope` draws all of it before the button is pressed and presses
+  nothing; `#/runs` renders it, and `asked.reason` says which voice chose. **`--rule` and
+  `--basis` are deliberately NOT on that screen** — D49 makes `decisions.json` the one place a
+  pricing answer is written and `#/pricing` the press that writes it.
+
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
   nothing else: an undeclared box renders as ONE section, `card` is the index, and
@@ -430,6 +445,7 @@ D71  A card with no slot is ranked like every other, and it is the figure that g
 D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
 D74  A document is checked as a document, and every markdown file is linted rather than the four a session loads
+D75  A hint is evidence about its own card, and how wide to ask is a per-game rule
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

@@ -323,8 +323,7 @@ COMPONENTS = [
                                  "exports, and it REFUSES on an empty vocabulary rather than "
                                  "falling back to Pokemon's — riftbound and one_piece ship "
                                  "unverified because no export for either has ever been seen.",
-                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18",
-                                         "D21", "D22", "D23", "D24", "D25", "D65"],
+                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D75"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -895,7 +894,7 @@ COMPONENTS = [
                 # D70 JOINS THEM AS A CITED FAILURE rather than a ruling: the `route rosters`
                 # row names D69 and D70 as the two entries whose routes a hand-typed roster
                 # missed, which is what that row exists to make impossible a third time.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D75"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1251,7 +1250,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D75"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1341,7 +1340,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19", "D75"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1627,11 +1626,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73", "D75"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D39", "D75"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2316,7 +2315,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D75"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -2335,7 +2334,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64", "D75"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -2554,7 +2553,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D75"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

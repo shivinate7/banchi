@@ -48,6 +48,7 @@
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
+    GET    /pipeline/runs/<name>/scope    what a fetch would ask TCGplayer for, and why
     POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
@@ -511,6 +512,10 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # is latent rather than live. Ordered defensively all the same: the day somebody adds a
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
+# What a fetch WOULD ask TCGplayer for, before one is pressed (D75). Same hazard as the
+# three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
+# `no_such_step` if this were declared after it. GET only — it presses nothing.
+_RUN_SCOPE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/scope$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -8322,6 +8327,33 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_history(match.group(1), asked[0]),
+                )
+            match = _RUN_SCOPE_RE.match(path)
+            if match:
+                # D75's lever, drawn before it is pulled. `game`, `scope` and `set_ids` are
+                # the same three fields `POST .../export` takes, so the screen asks this
+                # route the identical question it is about to press — which is what stops the
+                # panel describing a scope different from the one the button would send.
+                #
+                # `set_ids` REPEATS rather than carrying a comma list, because a comma inside
+                # one value is exactly how a query-string list starts lying and `parse_qs`
+                # already gives the honest shape for free.
+                asked = parse_qs(parsed.query, keep_blank_values=True)
+                wanted: dict = {}
+                if asked.get("game", [""])[0]:
+                    wanted["game"] = asked["game"][0]
+                if asked.get("scope", [""])[0]:
+                    wanted["scope"] = asked["scope"][0]
+                ids = [v for v in asked.get("set_ids", []) if v.strip()]
+                if ids:
+                    # NOT COERCED SILENTLY. A non-numeric id reaches the handler as the
+                    # string it was and is refused there by name, rather than being dropped
+                    # here into a scope that quietly means something else.
+                    wanted["set_ids"] = [
+                        int(v) if v.strip().isdigit() else v for v in ids
+                    ]
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_scope(match.group(1), wanted)
                 )
             match = _RUN_ITEM_RE.match(path)
             if match:

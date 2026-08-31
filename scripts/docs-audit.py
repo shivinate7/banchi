@@ -2137,7 +2137,9 @@ GAME_REQUIRED_KEYS = frozenset({
     "condition_by_finish", "finish_by_rarity", "located", "join_key", "prompt",
     "crop_bands", "card_aspect", "catalogued", "unverified",
 })
-GAME_OPTIONAL_KEYS = frozenset({"product_line_rarities", "tcgplayer_category_id", "set_aliases"})
+GAME_OPTIONAL_KEYS = frozenset(
+    {"product_line_rarities", "tcgplayer_category_id", "set_aliases", "export_scope"}
+)
 
 # The `join_key` an uncatalogued game must name. Written here rather than read out of the
 # module for the same reason GAME_REQUIRED_KEYS is: renaming the strategy in the registry
@@ -2392,6 +2394,30 @@ def check_game_vocabulary(report: Report) -> None:
                     f"and a condition string with no finish is unreachable.",
                 )
             )
+
+        # D75's per-game fetch width. Two provable things and nothing softer: the value is
+        # one of the two the registry publishes, and `category` — the claim that a whole
+        # TCGplayer category comes down in one file — cannot be authored for a game naming
+        # no category to fetch. Both are the shape of a literal, which is what keeps this row
+        # blocking rather than advisory.
+        scope = entry.get("export_scope")
+        if scope is not None:
+            if scope not in set(data.get("EXPORT_SCOPES") or ()):
+                findings.append(
+                    Finding(
+                        where,
+                        f"export_scope {scope!r} is not one of "
+                        f"{', '.join(sorted(data.get('EXPORT_SCOPES') or ()))}.",
+                    )
+                )
+            elif scope == "category" and not entry.get("tcgplayer_category_id"):
+                findings.append(
+                    Finding(
+                        where,
+                        "export_scope is `category` but the entry names no "
+                        "`tcgplayer_category_id`, so there is no category to fetch whole.",
+                    )
+                )
 
         if entry.get("join_key") not in join_keys:
             findings.append(

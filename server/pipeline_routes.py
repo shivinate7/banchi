@@ -2213,23 +2213,21 @@ def do_tcg_sets(game: str) -> dict:
     }
 
 
-def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
-    """What to ask TCGplayer for, derived from what the box was captured as (D65).
+def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
+    """Per game in this run: how many cards, how many carry a set hint, and which hints.
 
-    THE CLAIMS THE OPERATOR ALREADY MADE ARE THE SCOPE. A card carries its game and, where
-    the operator set one, a set hint — so a box captured as Riftbound/Unleashed already says
-    which category and which set its export needs. Nothing new is asked of them.
+    COUNTED, NOT COLLECTED, AND THAT IS THE WHOLE OF D75. The shape here used to be a set of
+    hint strings, which cannot answer "did EVERY card carry one" — a set of hints has already
+    forgotten how many cards there were. `cards` and `hinted` are the two numbers the
+    unanimity rule turns on, so they are what this returns.
 
-    ONE CATEGORY PER FETCH, because `CategoryId` is scalar in the portal's own request. A
-    mixed-game run therefore fetches once per game, which the join composes; the game is
-    chosen by `game` in the request or is the run's only one.
+    ONE COUNTER FOR THE PREVIEW AND THE FETCH. `GET .../scope` draws what a press would ask
+    for and `POST .../export` presses it; two implementations of "how many cards are hinted"
+    would be a screen that can disagree with the request it launches, which is the same class
+    of defect as the estimate `_parse_preflight` refuses to recompute.
 
-    WIDENING IS ALWAYS SAFE AND NARROWING NEVER IS. A hint that resolves to no set, or a box
-    with no hints at all, drops the set filter and takes the whole category. That is slower
-    and larger — Riftbound entire is 10,118 rows against Unleashed's 2,201 — and it cannot
-    miss a card. Guessing a set the box is not in would.
+    Returns `(every game the cards claim, the subset with a catalog to ask for)`.
     """
-    payload_game = payload.get("game")
     cards = (files.read_json(directory / run_files.IDENTIFICATIONS) or {}).get("cards") or {}
     if not cards:
         raise PipelineRefusal(
@@ -2239,16 +2237,61 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
             f"identify` first.",
         )
 
-    by_game: Dict[str, set] = {}
+    by_game: Dict[str, dict] = {}
     for record in cards.values():
         game = record.get("game") or game_registry.DEFAULT_GAME
         hint = (record.get("set_hint") or "").strip()
-        by_game.setdefault(game, set())
+        held = by_game.setdefault(game, {"cards": 0, "hinted": 0, "hints": set()})
+        held["cards"] += 1
         if hint:
-            by_game[game].add(hint)
+            held["hinted"] += 1
+            held["hints"].add(hint)
 
-    catalogued = {g: h for g, h in by_game.items() if (game_registry.get(g) or {}).get("catalogued", True)
-                  and (game_registry.get(g) or {}).get("tcgplayer_category_id")}
+    # A GAME STRING NOBODY REGISTERED IS DROPPED HERE RATHER THAN RAISED. `games.get` refuses
+    # an unknown key by design and `identify/sidecar.py` deliberately carries one through
+    # unchanged, so a single bad sidecar reaching this line used to be a 500 on a free route.
+    # It has no category id, so it has nothing to ask for and belongs in neither branch.
+    catalogued: Dict[str, dict] = {}
+    for key, held in by_game.items():
+        try:
+            entry = game_registry.get(key)
+        except game_registry.UnknownGame:
+            continue
+        if entry.get("catalogued", True) and entry.get("tcgplayer_category_id"):
+            catalogued[key] = held
+    return by_game, catalogued
+
+
+def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
+    """What to ask TCGplayer for: the run's own claims, the game's rule, and the operator.
+
+    THE CLAIMS THE OPERATOR ALREADY MADE ARE THE DEFAULT SCOPE (D65). A card carries its game
+    and, where the operator set one, a set hint — so a box captured as Riftbound/Unleashed
+    already says which category and which set its export needs, and nothing new is asked.
+
+    ONE CATEGORY PER FETCH, because `CategoryId` is scalar in the portal's own request. A
+    mixed-game run therefore fetches once per game, which the join composes; the game is
+    chosen by `game` in the request or is the run's only one.
+
+    WIDENING IS ALWAYS SAFE AND NARROWING NEVER IS — AND THE FIRST BUILD COUNTED THE WRONG
+    THING (D75). It collected the hints that EXISTED and never counted the cards carrying
+    none, so a box sorted by rarity with one set hint on one card scoped the whole export to
+    that one set. Measured on a synthetic 200-card Riftbound run: `SetNameIds` came back
+    `["77"]`, 199 cards had no catalog row to match, and the positive check passed because
+    the set that was asked for did arrive. A hint is now evidence about the card that carries
+    it and about no other card, so a set filter needs the box to be UNANIMOUS.
+
+    THREE THINGS DECIDE, IN THIS ORDER, and each is reported in `asked` so the screen can say
+    which one spoke:
+
+      the operator   explicit `set_ids` is a claim about this box that outranks every
+                     inference, in both directions. `scope` alone picks the axis.
+      the game       `games.export_scope` — `category` where the whole catalogue is measured
+                     to come down in one file (riftbound), `sets` everywhere else.
+      the cards      under `sets`: every card hinted and every hint resolved, or it widens.
+    """
+    payload_game = payload.get("game")
+    by_game, catalogued = _scope_counts(directory)
     if not catalogued:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
@@ -2276,12 +2319,113 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
             f"separately and the join takes them together.",
         )
 
-    category = int(game_registry.get(game)["tcgplayer_category_id"])
-    hints = sorted(catalogued[game])
-    vocabulary = tcg_export.filters(category)
-    set_ids, unresolved = tcg_export.match_sets(
-        hints, vocabulary.get("Sets") or [], game_registry.get(game).get("set_aliases")
-    )
+    entry = game_registry.get(game)
+    category = int(entry["tcgplayer_category_id"])
+    held = catalogued[game]
+    hints = sorted(held["hints"])
+    total, hinted = int(held["cards"]), int(held["hinted"])
+    unhinted = total - hinted
+
+    policy = game_registry.export_scope(game)
+    wanted = payload.get("scope")
+    if wanted is not None and wanted not in game_registry.EXPORT_SCOPES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "scope_invalid",
+            f"`scope` is one of {', '.join(game_registry.EXPORT_SCOPES)}, or absent to use "
+            f"this game's own rule ({policy}).",
+        )
+    chosen = payload.get("set_ids")
+
+    set_ids: Tuple[int, ...] = ()
+    unresolved: Tuple[str, ...] = ()
+    names: List[str] = []
+    vocabulary: Optional[dict] = None
+
+    def _vocabulary() -> dict:
+        """The portal's set list, fetched at most once and only where a name is needed.
+
+        LAZY BECAUSE THE WHOLE-CATEGORY PATH DOES NOT NEED IT. `getjsonfilters` is a second
+        network round trip against the same host, and a fetch that has already decided to
+        take every set has nothing to resolve and no name to print.
+        """
+        nonlocal vocabulary
+        if vocabulary is None:
+            vocabulary = tcg_export.filters(category)
+        return vocabulary
+
+    def _names(ids) -> List[str]:
+        wanted_ids = {str(i) for i in ids}
+        return [
+            str(e.get("Text"))
+            for e in (_vocabulary().get("Sets") or [])
+            if str(e.get("Value")) in wanted_ids
+        ]
+
+    if chosen is not None:
+        # THE OPERATOR NAMING SETS OUTRANKS EVERYTHING, INCLUDING THE UNANIMITY RULE ABOVE.
+        # The rule exists because a hint is evidence about one card; a person ticking sets on
+        # `#/runs` is making a claim about the BOX, which is the thing the inference was
+        # trying to guess. Validated against the portal's own vocabulary rather than passed
+        # through, because an id the portal does not know comes back as `System Error` — a
+        # 200 carrying an HTML page that reads exactly like a rejected cookie.
+        if not isinstance(chosen, list) or not chosen:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "set_ids_invalid",
+                "`set_ids` must be a non-empty array of TCGplayer set ids, or absent to let "
+                "this run's own claims decide. An empty array is refused rather than read "
+                "as every set.",
+            )
+        wanted_ids: List[int] = []
+        for value in chosen:
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise PipelineRefusal(
+                    HTTPStatus.BAD_REQUEST,
+                    "set_ids_invalid",
+                    f"`set_ids` holds {value!r}, which is not a TCGplayer set id. `0` is the "
+                    f"portal's all-sets row — send `scope` as `category` for that.",
+                )
+            wanted_ids.append(value)
+        known = {str(e.get("Value")) for e in (_vocabulary().get("Sets") or [])}
+        stray = [i for i in wanted_ids if str(i) not in known]
+        if stray:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "set_ids_unknown",
+                f"TCGplayer's {game} category has no set with id "
+                f"{', '.join(str(i) for i in stray)}. The portal answers a body it cannot "
+                f"read with its System Error page, which reads like an expired session, so "
+                f"this refuses here instead.",
+            )
+        set_ids = tuple(dict.fromkeys(wanted_ids))
+        names = _names(set_ids)
+        scope_used, chosen_by, reason = "sets", "operator", None
+    elif (wanted or policy) == "category":
+        scope_used = "category"
+        chosen_by = "operator" if wanted is not None else "policy"
+        reason = "operator_asked" if wanted is not None else "game_policy"
+    elif not hints:
+        scope_used, chosen_by, reason = "category", "cards", "no_hints"
+    elif unhinted > 0:
+        # THE DEFECT D75 IS NAMED FOR. Some cards carry a hint and some do not, so the hints
+        # describe part of the box and the export would be cut to that part. Every unhinted
+        # card outside those sets would queue `no_catalog_row` behind a fetch that reported
+        # success — which is exactly what the owner hit on a Riftbound box sorted by rarity.
+        scope_used, chosen_by, reason = "category", "cards", "partial_hints"
+    else:
+        set_ids, unresolved = tcg_export.match_sets(
+            hints, _vocabulary().get("Sets") or [], entry.get("set_aliases")
+        )
+        if unresolved:
+            scope_used, chosen_by, reason = "category", "cards", "unresolved_hints"
+            set_ids = ()
+        elif not set_ids:
+            scope_used, chosen_by, reason = "category", "cards", "no_hints_resolved"
+        else:
+            names = _names(set_ids)
+            scope_used, chosen_by, reason = "sets", "cards", None
+
     scope = tcg_export.Scope(category_id=category, set_ids=set_ids)
     asked = {
         "game": game,
@@ -2289,14 +2433,82 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
         "hints": list(hints),
         "set_ids": list(set_ids),
         "unresolved_hints": list(unresolved),
-        "sets": [
-            str(e.get("Text"))
-            for e in (vocabulary.get("Sets") or [])
-            if str(e.get("Value")) in {str(i) for i in set_ids}
-        ],
-        "widened": not set_ids,
+        "sets": names,
+        # KEPT, AND IT IS THE SAME FACT `scope` CARRIES. Every client written against D65
+        # reads this boolean; `scope`, `chosen_by` and `reason` are what D75 adds beside it,
+        # because "the whole category" was never the interesting half — WHY it went wide is.
+        "widened": scope_used == "category",
+        "scope": scope_used,
+        "policy": policy,
+        "chosen_by": chosen_by,
+        "reason": reason,
+        "cards": total,
+        "hinted": hinted,
+        "unhinted": unhinted,
     }
     return scope, asked
+
+
+def do_pipeline_scope(name: str, payload: dict) -> dict:
+    """`GET /pipeline/runs/<name>/scope` — what a fetch would ask TCGplayer for, and why.
+
+    FREE, AND IT PRESSES NOTHING. `POST .../export` is what fetches; this answers the
+    question that press used to answer only in hindsight — the receipt named the scope AFTER
+    the file was on disk, so the one moment an operator could have corrected a wrong scope
+    was the one moment they could not see it. D75 makes it a lever, and a lever needs its
+    current position drawn.
+
+    IT REFUSES ALMOST NOTHING, WHICH IS THE OPPOSITE POSTURE FROM THE FETCH. A mixed-game run
+    is a refusal at `POST` (`game_required`, one category per request) and is simply a LIST
+    here, because a screen that must ask which game cannot draw the picker if the route that
+    would tell it the games refuses to answer without one.
+
+    AND IT DEGRADES THE WAY `GET /tcg/sets` DOES, for the same reason one step further along:
+    resolving a hint to a set id needs the portal, and no cookie, no network or a portal
+    outage must not blank a panel whose other half — the counts, the game's rule, the reason
+    it would widen — is local and knowable. `asked` is null with `reason` naming the refusal
+    code; every count above it still draws.
+    """
+    directory = _open_run(name)
+    _, catalogued = _scope_counts(directory)
+
+    games = [
+        {
+            "game": key,
+            "display": str((game_registry.get(key) or {}).get("display") or key),
+            "category_id": int(game_registry.get(key)["tcgplayer_category_id"]),
+            "cards": int(held["cards"]),
+            "hinted": int(held["hinted"]),
+            "unhinted": int(held["cards"]) - int(held["hinted"]),
+            "hints": sorted(held["hints"]),
+            "policy": game_registry.export_scope(key),
+        }
+        for key, held in sorted(catalogued.items())
+    ]
+
+    asked: Optional[dict] = None
+    reason: Optional[str] = None
+    message: Optional[str] = None
+    if games:
+        try:
+            _, asked = _scope_for_run(directory, payload)
+        except PipelineRefusal as caught:
+            # THE REFUSAL IS DATA HERE, NOT A STATUS. `game_required` over a two-game run is
+            # the screen's cue to draw a picker, and `set_ids_unknown` over a stale tick is
+            # the cue to redraw the list — both are worth saying and neither is worth
+            # withholding the counts for.
+            reason, message = caught.code, str(caught)
+        except tcg_export.FetchRefusal as caught:
+            reason, message = caught.code, caught.message
+
+    return {
+        "run": directory.name,
+        "games": games,
+        "scopes": list(game_registry.EXPORT_SCOPES),
+        "asked": asked,
+        "reason": reason,
+        "message": message,
+    }
 
 
 def do_pipeline_export(name: str, payload: dict) -> dict:

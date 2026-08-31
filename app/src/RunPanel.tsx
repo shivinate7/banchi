@@ -4,8 +4,10 @@ import {
   cropPreview,
   describeFailure,
   fetchExport,
+  getExportScope,
   getRun,
   getRuns,
+  getTcgSets,
   photoUrl,
   preflightRun,
   putDecisions,
@@ -17,6 +19,7 @@ import {
 import type {
   CropPreview,
   ExportFetched,
+  ExportScope,
   RunDetail,
   RunPreflight,
   RunStartFailure,
@@ -130,6 +133,44 @@ const FETCH_ACK: Record<string, { send: 'acceptUnverified' | 'acceptNarrower'; l
   export_unverified: { send: 'acceptUnverified', label: 'Fetch anyway — nothing to compare' },
   export_narrower: { send: 'acceptNarrower', label: 'Fetch anyway — I narrowed it' },
 }
+
+/* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D75), in the operator's words.
+ *
+ * THE SAME TWO-SIZE RULE THE REVIEW QUEUE'S REASONS FOLLOW: a sentence a person reads, with
+ * the machine string kept beside it rather than instead of it. The reason is the whole point
+ * of the panel — a scope is only correctable by somebody who can see which of the three
+ * voices chose it — so a bare `partial_hints` on screen would be the vocabulary-nothing-audits
+ * failure `docs/DESIGN.md` names, arriving by the other road. */
+const SCOPE_REASON: Record<string, string> = {
+  game_policy: "this game's whole catalogue comes down in one file, so there is nothing a set filter would buy",
+  operator_asked: 'you asked for the whole category',
+  no_hints: 'no card in this run carries a set hint',
+  partial_hints: 'some cards carry no set hint, and a filter built from the rest would drop them',
+  unresolved_hints: 'a hint here matches no TCGplayer set, and guessing which one is not safe',
+  no_hints_resolved: 'no hint here resolved to a TCGplayer set',
+}
+
+/* THE THIRD OPTION IS NOT A THIRD AXIS. `rule` means "leave it to the run" — the game's own
+ * registry rule, then the cards' unanimity — and it is the default because it is the answer
+ * that is right without anybody looking. The other two are overrides and say so. */
+const SCOPE_CHOICES = [
+  { key: 'rule', label: 'What this run implies' },
+  { key: 'category', label: 'Every set in the category' },
+  { key: 'sets', label: 'Only the sets I tick' },
+] as const
+type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
+
+/* D75's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
+ * be: D49 makes `decisions.json` the one place a pricing answer is written, `#/pricing` is
+ * the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
+ * because a SECOND place to say `rule` already produced 48 cards about to list at a price
+ * nobody had chosen. Confidence routing is a routing question, it is written nowhere else,
+ * and it was reachable only from a terminal. */
+const REVIEW_BELOW = [
+  { key: 'low', label: 'low (default)' },
+  { key: 'medium', label: 'medium — queue more' },
+  { key: 'none', label: 'none — queue nothing on confidence' },
+] as const
 
 const STEPS = [
   {
@@ -342,6 +383,113 @@ export function RunPanel({ cart }: RunPanelProps) {
   }, [])
 
   const [bypass, setBypass] = useState(false)
+
+  /* ------------------------------------------------------ D75: the fetch's scope, as a lever
+   *
+   * `scopeInfo` is the server's own answer to "what would a press ask for, and why" — the
+   * counts, this game's registry rule, and the derived scope. It is READ, never recomputed:
+   * `_scope_counts` answers both this route and the fetch, so the panel cannot describe a
+   * scope different from the one the button sends.
+   *
+   * `choice`, `game` and `ticked` are the OVERRIDES, and they are held per run rather than
+   * globally so that opening a second run does not inherit the first one's ticks — the same
+   * reason `readings` is keyed by box a few dozen lines up. */
+  const [scopeInfo, setScopeInfo] = useState<ExportScope | null>(null)
+  const [scopeGame, setScopeGame] = useState<string | null>(null)
+  const [scopeChoice, setScopeChoice] = useState<ScopeChoice>('rule')
+  const [scopeTicked, setScopeTicked] = useState<number[]>([])
+  /* The portal's set list for the chosen game, for the tick list. Empty is a legitimate
+   * answer and draws a sentence rather than a fault — `GET /tcg/sets` degrades to `[]` with a
+   * reason whenever the cookie is stale, and D65 argues at length that it must. */
+  const [setList, setSetList] = useState<{ name: string; id: string }[]>([])
+  const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
+
+  /* THE PREVIEW IS FETCHED ONCE PER (RUN, GAME) AND NOT PER KEYSTROKE. Resolving a hint is a
+   * round trip to TCGplayer's own host, so re-asking it every time a checkbox moves would put
+   * the portal behind a tick box. What the overrides change is drawn locally from what this
+   * already returned; only the game changes what the server would have to resolve. */
+  useEffect(() => {
+    if (openRun === null) {
+      setScopeInfo(null)
+      return
+    }
+    let live = true
+    void (async () => {
+      try {
+        const answer = await getExportScope(
+          openRun,
+          scopeGame === null ? {} : { game: scopeGame },
+        )
+        if (!live) return
+        setScopeInfo(answer)
+        /* THE PICKER STARTS ON WHAT THE SERVER CHOSE, not on the first row. A run holding one
+         * game has no picker at all and this is where that game's name comes from; a run
+         * holding two draws one, and `asked` is null until the operator answers it. */
+        if (scopeGame === null && answer.asked !== null) setScopeGame(answer.asked.game)
+      } catch {
+        /* A PANEL THAT CANNOT PREVIEW ITS SCOPE STILL FETCHES. This is the free half; the
+           button below is unaffected, and every refusal it can make is drawn where it lands. */
+        if (live) setScopeInfo(null)
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [openRun, scopeGame])
+
+  /* The tick list's vocabulary, loaded only when there is something to tick. */
+  useEffect(() => {
+    const game = scopeGame ?? scopeInfo?.asked?.game ?? scopeInfo?.games[0]?.game ?? null
+    if (game === null || scopeChoice !== 'sets') return
+    let live = true
+    void (async () => {
+      try {
+        const answer = await getTcgSets(game)
+        if (live) setSetList(answer.sets)
+      } catch {
+        if (live) setSetList([])
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [scopeGame, scopeChoice, scopeInfo])
+
+  /* THE THREE FIELDS THE FETCH SENDS, composed in ONE place so the sentence the panel draws
+   * and the request the button makes are the same decision read twice. */
+  const scopeOptions = useMemo(() => {
+    const game = scopeGame ?? undefined
+    if (scopeChoice === 'category') return { game, scope: 'category' as const }
+    if (scopeChoice === 'sets') return { game, setIds: scopeTicked }
+    return { game }
+  }, [scopeGame, scopeChoice, scopeTicked])
+
+  /* THE SENTENCE UNDER THE CONTROLS, and it is the whole reason this panel exists. D65's
+   * receipt said what was asked for AFTER the file was on disk — so the one moment an
+   * operator could correct a wrong scope was the one moment it was not on screen. Composed
+   * from the same three values `scopeOptions` sends, so the two cannot drift.
+   *
+   * `null` where there is nothing honest to say yet — a mixed-game run before a game is
+   * picked, or a preview the portal would not answer. The panel draws the refusal instead. */
+  const scopeSentence = useMemo(() => {
+    const chosen =
+      scopeInfo?.games.find((g) => g.game === (scopeGame ?? scopeInfo?.asked?.game)) ?? null
+    const every = `every set in ${chosen?.display ?? 'this category'}`
+    if (scopeChoice === 'category') return `${every} — you asked for the whole category.`
+    if (scopeChoice === 'sets') {
+      if (scopeTicked.length === 0) return 'Tick at least one set, or the fetch has nothing to ask for.'
+      const names = setList
+        .filter((row) => scopeTicked.includes(Number(row.id)))
+        .map((row) => row.name)
+      return `${names.join(', ')} — your tick, which outranks both the rule and the hints.`
+    }
+    const asked = scopeInfo?.asked ?? null
+    if (asked === null) return null
+    const what = asked.scope === 'category' ? every : asked.sets.join(', ')
+    const why = asked.reason === null ? null : SCOPE_REASON[asked.reason]
+    return why === undefined || why === null ? `${what}.` : `${what} — ${why}.`
+  }, [scopeInfo, scopeGame, scopeChoice, scopeTicked, setList])
+
 
   /* THE CROP PREVIEW'S STATE. `previewFor` is the reading-and-offset the strip on screen was
    * drawn for, compared against the one the controls currently name — the same shape
@@ -863,7 +1011,13 @@ export function RunPanel({ cart }: RunPanelProps) {
       setFetchRefusal(null)
       let answer: ExportFetched
       try {
-        answer = await fetchExport(openRun, ack === undefined ? {} : { [ack]: true })
+        /* THE SCOPE TRAVELS WITH THE ACKNOWLEDGEMENT, NOT INSTEAD OF IT (D75). A retry
+           after `export_narrower` must ask for the same scope the first press did, or the
+           operator answers a question about one file and gets another. */
+        answer = await fetchExport(openRun, {
+          ...scopeOptions,
+          ...(ack === undefined ? {} : { [ack]: true }),
+        })
       } catch (err) {
         /* Caught here rather than left to `guard`, because this is the refusal the operator
            may be able to ANSWER and the control that answers it is drawn from this state. A
@@ -873,7 +1027,11 @@ export function RunPanel({ cart }: RunPanelProps) {
         return
       }
       setFetched(answer)
-      const result = await runStep(openRun, 'join', { fetched: [answer.file], bypass })
+      const result = await runStep(openRun, 'join', {
+        fetched: [answer.file],
+        bypass,
+        reviewBelowConfidence: reviewBelow,
+      })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       await loadRuns()
@@ -891,7 +1049,11 @@ export function RunPanel({ cart }: RunPanelProps) {
       const chosen = Array.from(exportPick.current?.files ?? [])
       if (chosen.length === 0 || openRun === null) return
       const uploads = await Promise.all(chosen.map(readUpload))
-      const result = await runStep(openRun, 'join', { exports: uploads, bypass })
+      const result = await runStep(openRun, 'join', {
+        exports: uploads,
+        bypass,
+        reviewBelowConfidence: reviewBelow,
+      })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       await loadRuns()
@@ -1749,12 +1911,150 @@ export function RunPanel({ cart }: RunPanelProps) {
                     claim that was right every time. Cards with no claim are unaffected —
                     there is nothing to resolve them by.
                   </p>
+
+                  {/* ------------------------------------------------- D75: the routing lever
+                      HERE AND NOT ON `#/pricing`, because it is not a pricing answer. It
+                      decides which resolved cards face a human, `join` is the command that
+                      applies it, and it was reachable only from a terminal. `--rule` and
+                      `--basis` deliberately stay off this screen — see REVIEW_BELOW. */}
+                  <label className="run-field run-field-inline">
+                    Send to review at or below
+                    <select
+                      className="run-select"
+                      value={reviewBelow}
+                      onChange={(event) =>
+                        setReviewBelow(event.target.value as 'none' | 'low' | 'medium')
+                      }
+                    >
+                      {REVIEW_BELOW.map((row) => (
+                        <option key={row.key} value={row.key}>
+                          {row.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {/* ------------------------------------------- D75: the fetch scope, drawn
+                      WHAT THE PRESS WILL ASK FOR, BEFORE IT IS PRESSED. The receipt below
+                      says what was asked AFTER the file is on disk, which is one moment too
+                      late to correct it. Every value here is read off
+                      `GET .../scope`; nothing on this screen recomputes a scope. */}
+                  {scopeInfo === null ? null : (
+                    <div className="run-scope">
+                      <p className="run-scope-head">The export this run will ask for</p>
+
+                      {/* ONE CATEGORY PER FETCH, so a mixed-game run must answer this before
+                          anything else can be drawn. The picker is absent for the ordinary
+                          one-game run rather than drawn with a single option. */}
+                      {scopeInfo.games.length < 2 ? null : (
+                        <label className="run-field run-field-inline">
+                          Category
+                          <select
+                            className="run-select"
+                            value={scopeGame ?? ''}
+                            onChange={(event) => {
+                              setScopeGame(event.target.value)
+                              setScopeTicked([])
+                            }}
+                          >
+                            <option value="">Pick one…</option>
+                            {scopeInfo.games.map((row) => (
+                              <option key={row.game} value={row.game}>
+                                {row.display} · {row.cards} card{row.cards === 1 ? '' : 's'}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+
+                      {/* THE EVIDENCE THE RULE READS, SO THE RULE IS ARGUABLE. `12 of 200
+                          carry a set hint` is the fact that decides whether a set filter is
+                          safe, and it was invisible — which is how one hinted card came to
+                          scope a whole box's export. */}
+                      {scopeInfo.games
+                        .filter((row) => row.game === (scopeGame ?? scopeInfo.asked?.game))
+                        .map((row) => (
+                          <p className="run-step-note run-step-fine" key={row.game}>
+                            {row.hinted} of {row.cards} card{row.cards === 1 ? '' : 's'} carry a
+                            set hint
+                            {row.hints.length === 0 ? '' : ` (${row.hints.join(', ')})`}.{' '}
+                            {row.display}&rsquo;s own rule is{' '}
+                            <code>{row.policy}</code>
+                            {row.policy === 'category'
+                              ? ' — its whole catalogue comes down in one file.'
+                              : ' — narrow to the hinted sets, but only if every card carries one.'}
+                          </p>
+                        ))}
+
+                      <div className="run-scope-choices">
+                        {SCOPE_CHOICES.map((row) => (
+                          <label className="run-toggle" key={row.key}>
+                            <input
+                              type="radio"
+                              name="run-scope-choice"
+                              checked={scopeChoice === row.key}
+                              onChange={() => setScopeChoice(row.key)}
+                            />
+                            {row.label}
+                          </label>
+                        ))}
+                      </div>
+
+                      {scopeChoice !== 'sets' ? null : (
+                        <div className="run-scope-sets">
+                          {setList.length === 0 ? (
+                            <p className="run-step-note run-step-fine">
+                              No set list — that needs the same TCGplayer session the fetch
+                              does. Pick another option, or put a fresh cookie in{' '}
+                              <code>.env</code>.
+                            </p>
+                          ) : (
+                            setList.map((row) => (
+                              <label className="run-toggle" key={row.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={scopeTicked.includes(Number(row.id))}
+                                  onChange={(event) =>
+                                    setScopeTicked((held) =>
+                                      event.target.checked
+                                        ? [...held, Number(row.id)]
+                                        : held.filter((id) => id !== Number(row.id)),
+                                    )
+                                  }
+                                />
+                                {row.name}
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {scopeSentence === null ? null : (
+                        <p className="run-scope-says">{scopeSentence}</p>
+                      )}
+                      {/* THE PREVIEW'S OWN REFUSAL, WHICH IS NOT THE FETCH'S. A mixed-game run
+                          says `game_required` here and the picker above is the answer; a stale
+                          cookie says so here long before the button would. */}
+                      {scopeInfo.message === null ? null : (
+                        <>
+                          <p className="run-step-note run-step-fine">{scopeInfo.message}</p>
+                          <p className="run-machine">{scopeInfo.reason}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="run-actions">
                     <button
                       type="button"
                       className="run-button"
                       disabled={busy !== null}
-                      onClick={() => void doStep('join', { dryRun: true, bypass })}
+                      onClick={() =>
+                        void doStep('join', {
+                          dryRun: true,
+                          bypass,
+                          reviewBelowConfidence: reviewBelow,
+                        })
+                      }
                     >
                       {busy === 'join' ? 'Working…' : 'Preview'}
                     </button>
@@ -1762,7 +2062,9 @@ export function RunPanel({ cart }: RunPanelProps) {
                       type="button"
                       className="run-button"
                       disabled={busy !== null}
-                      onClick={() => void doStep('join', { bypass })}
+                      onClick={() =>
+                        void doStep('join', { bypass, reviewBelowConfidence: reviewBelow })
+                      }
                     >
                       Join again
                     </button>
@@ -1828,6 +2130,18 @@ export function RunPanel({ cart }: RunPanelProps) {
                         {!fetched.asked.widened && fetched.asked.unresolved_hints.length > 0
                           ? ` (unmatched: ${fetched.asked.unresolved_hints.join(', ')})`
                           : ''}
+                        {/* WHICH VOICE CHOSE IT, ON THE RECEIPT AS WELL AS ON THE CONTROL
+                            (D75). The panel above says what a press WILL ask for; this says
+                            what the press that already happened asked for — and a receipt
+                            that reported the scope without the reason is what let a
+                            one-hinted-card narrowing look like a correct answer. */}
+                        {fetched.asked.reason === null ||
+                        SCOPE_REASON[fetched.asked.reason] === undefined
+                          ? ''
+                          : ` — ${SCOPE_REASON[fetched.asked.reason]}`}
+                        {fetched.asked.cards === undefined
+                          ? ''
+                          : ` (${fetched.asked.hinted} of ${fetched.asked.cards} hinted).`}
                       </p>
                       <p className="run-step-note run-step-fine">
                         {fetched.verified.length > 0
