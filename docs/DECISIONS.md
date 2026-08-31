@@ -2334,6 +2334,32 @@ It becomes `Card 29` only when 180 sells, which is a card in its own section and
 
 **And `cli/resolve.py` built every `Position` with no layout at all**, which is older than D58 and is fixed with it: a box-2 queue entry was written as `Section 1 · Card 300` where the app rendered `Section 4 · Card 48`. Two renderers, two answers, and nothing had ever compared them. `box_views` is that walk, and **T7 asserts the two spell one address on a real card** — the same shape `make port-agreement` uses for the other pair that has to agree.
 
+### The same defect at a second site — `pricing.json` (amendment, 2026-08-30)
+
+**The queue was not the only stored rendering, and `pricing.json` is the one that was on a screen.** `cli/cmd_join.py:_pricing_table` writes `{"box", "index", "label"}` per matched SKU, `GET /pipeline/runs/<name>/pricing` served the stored string verbatim, and `app/src/Pricing.tsx` drew it into `.pricing-photo-caption` under the copy's photograph. Found by sweeping for the shape the section above describes, not by a failure.
+
+**Measured on the owner's store, both runs that have a pricing table:**
+
+| run | positions | unchanged | departed | renumbered |
+|---|---|---|---|---|
+| `2026-08-29-box1-01` | 113 | 4 | 18 | 91 |
+| `2026-08-30-box3-01` | 33 | 0 | 20 | 13 |
+| | **146** | **4** | **38** | **104** |
+
+Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declares a divider — so all 104 are cards that closed up over a departure in front of them and all 38 are copies pointed at a slot they have left.
+
+**This one was LIVE where the queue's was latent.** Those 92 entries were all `cleared_by_human` and `open_entries` served none of them. All 146 of these are served the moment either run is opened, under a photograph `photoUrl` addresses BY SLOT — so the picture was always the index's current occupant while the caption was the join's, and nothing on the screen said which was which.
+
+**Same posture: re-rendered at read, file untouched.** `server/pipeline_routes.py:_relabel_positions` composes against the live store on every request and serves the stored string never; `box` and `index` travel exactly as written, because they are the key `photoUrl` is aimed by. No re-join corrects those 146 — opening the screen does.
+
+**Through `cli/resolve.py:box_views`, which is forced rather than preferred:** `capture_server` imports `pipeline_routes`, so reaching `_Places` is the cycle `PipelineRefusal` exists to avoid. Not a second renderer — it is the walk the paragraph above says T7 already holds against `_Places`.
+
+**`place_text` rather than `Position.label`, which fixed a pooled bug on the way past.** `pokemon_code` is `located: False` **and** `catalogued: True`, so its cards do reach a join — and were landing here wearing the one string D24 says may never be printed for them. Its store key also keeps two copies of one SKU from drawing the identical caption in a strip built for stepping between them (D68).
+
+**A box the walk will not answer for gets `null`, never an index-space label** — the store-wide degrade, or a box deleted out from under the run. A bare `BoxView()` would render both in the numbering this entry replaced, beside captions drawn in the other one. The screen shows `no label · <box>/<index>`, which is `BoxBrowse`'s fallback rather than a new vocabulary.
+
+**Two things here are deliberately NOT fixed.** The stored `box`/`index` KEYS go stale too under a mid-box delete (D36); `cli/resolve.py:paperwork_for` realigns them by hashing photographs for the order path, which is too much for a route a screen opens, and it is benign here only because `photoUrl` addresses by slot as well, so caption and picture now agree. And `GET .../file?name=pricing.json` still hands the raw file: a download is the artifact, not a rendering of it.
+
 ### What is deliberately not changed
 
 - **`next_index`, `box_fill`, `allocate_capture` and the store schema.** No migration. D10's permanent gap survives intact in the one place it was ever load-bearing — the allocator — which is why T7's two hardest cases, `check_allocator`'s and `check_mark_sold`'s, are untouched.

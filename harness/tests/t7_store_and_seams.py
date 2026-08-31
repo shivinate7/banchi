@@ -9171,6 +9171,166 @@ def check_pricing_route(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_pricing_labels(checks: Checks) -> None:
+    """`pricing.json`'s position labels are re-rendered on every read, and the file never moves.
+
+    THE SAME DEFECT D58 FIXED FOR THE REVIEW QUEUE, ON THE SCREEN THAT PRICES. `cli/cmd_join.py:
+    _pricing_table` writes `{"box", "index", "label"}` per matched SKU and `cli/runs.py` makes a
+    run an immutable input, so that label is a snapshot of a rendering — and D56 states the rule
+    one register up: never write down an answer nobody can correct; join it when it is read.
+    `capture_server._queue_row` has obeyed it since D58 and this route did not, so a copy sold
+    after the join went on drawing `Box 3 · Section 1 · Card 1` at a slot whose occupant had
+    closed up behind it, under a photograph `photoUrl` addresses BY SLOT — the caption naming
+    one card and the picture showing another.
+
+    BOTH MOVEMENTS ARE ASSERTED, BECAUSE THEY FAIL SEPARATELY AND A BUILD CAN GET EITHER ONE
+    ALONE. A sale moves the CARDS; a divider edit moves the SECTIONS. `Position.layout` maps the
+    dividers into the same counting space as the slots precisely so the two compose, and a
+    re-render that consulted the store for one and not the other would pass half of this block.
+
+    THE FILE IS ASSERTED AS BYTES, NOT AS A FIELD, AND THAT IS D54'S LESSON RATHER THAN
+    THOROUGHNESS. D58 kept the stored label on disk deliberately — nothing already written
+    moves, and every run made before this lands is corrected the next time a screen opens it —
+    so "the route re-rendered" and "the route rewrote the run directory" are two different
+    builds, and only a byte comparison tells them apart. A field check is satisfied identically
+    by a handler that quietly rewrote the table it read.
+
+    THE BASELINE CASE IS THE ONE THAT LOOKS LIKE PADDING AND IS NOT. Before anything departs,
+    the re-rendered label and the stored one are the same string — the two spaces coincide until
+    the first departure, which is what makes this additive and what makes the three cases after
+    it about a real difference rather than about a renderer that answers differently for its own
+    reasons.
+
+    TWO CONTRACTS ARE CHECKED AT `_position_label` RATHER THAN THROUGH THE ROUTE, and the reason
+    is that neither is reachable from a joined run without breaking the store to get there: the
+    pooled branch (a game whose cards a join reaches but a box walk skips) and the no-view
+    branch (a box `box_views` will not answer for, which is the store-wide degrade
+    `check_place_neighbors` already drives). What they assert is the door, not the wiring — the
+    wiring is the three cases above.
+    """
+    checks.note("")
+    checks.note("PRICING LABELS — the stored string is never served (D58)")
+
+    def positions(name: str) -> dict:
+        """`box/index` -> the label the ROUTE answers, for the one SKU this run matches."""
+        table = pipeline_routes.do_pipeline_pricing(name)["pricing"]
+        row = next(s for s in table["skus"] if s["sku"] == ARTICUNO_SKU)
+        return {f"{p['box']}/{p['index']}": p["label"] for p in row["positions"]}
+
+    def written(run_dir) -> dict:
+        """The same map, off the FILE — what `join` froze and what may never be served."""
+        table = json.loads(run_dir.path(runs.PRICING).read_text("utf-8"))
+        row = next(s for s in table["skus"] if s["sku"] == ARTICUNO_SKU)
+        return {f"{p['box']}/{p['index']}": p["label"] for p in row["positions"]}
+
+    with isolated_home():
+        # Two sections over four cards — dividers at 1 and 3 — so a divider has cards on both
+        # sides of it and a departure in front of one can be told from a departure behind it.
+        capture_server.do_create_box({"box": 3, "sections": [1, 3]})
+        run_dir, _ = seam_run(
+            checks, [(3, at, "Articuno", "161", None) for at in (1, 2, 3, 4)]
+        )
+        name = run_dir.directory.name
+        joined_bytes = run_dir.path(runs.PRICING).read_bytes()
+
+        at_join = {
+            "3/1": "Box 3 · Section 1 · Card 1",
+            "3/2": "Box 3 · Section 1 · Card 2",
+            "3/3": "Box 3 · Section 2 · Card 1",
+            "3/4": "Box 3 · Section 2 · Card 2",
+        }
+        checks.equal(
+            written(run_dir),
+            at_join,
+            "`join` writes four positions under one SKU and a label for each — D7's "
+            "aggregation seen from the pricing table, and the fixture the rest of this "
+            "block moves the store out from under",
+        )
+        checks.equal(
+            positions(name),
+            at_join,
+            "and with nothing departed and no divider touched the route answers the SAME "
+            "four strings — the counting space and the index space coincide until the first "
+            "departure, which is what makes re-rendering additive rather than a second "
+            "numbering system arriving on the screen",
+        )
+
+        # --- a copy leaves after the join -------------------------------------------------
+        capture_server.do_mark_sold(3, 1, {})
+        checks.equal(
+            positions(name),
+            {
+                "3/1": "Box 3 · departed · 3/1",
+                "3/2": "Box 3 · Section 1 · Card 1",
+                "3/3": "Box 3 · Section 2 · Card 1",
+                "3/4": "Box 3 · Section 2 · Card 2",
+            },
+            "SELL A COPY AND ITS CAPTION STOPS NAMING A SLOT — `Box 3 · departed · 3/1`, with "
+            "the store key D68 put there so two departed copies of one SKU are not one string "
+            "— while the card behind it takes the number it vacated. The stored label said "
+            "`Section 1 · Card 1` for BOTH rows, which is the exact lie D58 refuses",
+        )
+        checks.equal(
+            run_dir.path(runs.PRICING).read_bytes(),
+            joined_bytes,
+            "and the run directory is untouched to the byte — D58 keeps the stored label on "
+            "disk and serves none of it, so nothing already written moves and no re-join is "
+            "needed to correct a run made before this",
+        )
+
+        # --- a divider moves after the join -----------------------------------------------
+        # COUNT SPACE, because that is what `do_put_box` takes (D58): "section 2 starts at the
+        # 3rd card on hand". Three cards remain — 2, 3 and 4 — so this puts the divider in
+        # front of index 4, one card further back than it was.
+        capture_server.do_put_box(3, {"sections": [1, 3]})
+        checks.equal(
+            positions(name),
+            {
+                "3/1": "Box 3 · departed · 3/1",
+                "3/2": "Box 3 · Section 1 · Card 1",
+                "3/3": "Box 3 · Section 1 · Card 2",
+                "3/4": "Box 3 · Section 2 · Card 1",
+            },
+            "MOVE A DIVIDER AND EVERY CAPTION BEHIND IT FOLLOWS — 3/3 crosses from section 2 "
+            "into section 1 and 3/4 becomes the section's first card. This is the failure D58 "
+            "MEASURED at 15 of 92 review entries: a label describing a sectioning that is no "
+            "longer in the plastic, on the screen somebody prices from",
+        )
+        checks.equal(
+            run_dir.path(runs.PRICING).read_bytes(),
+            joined_bytes,
+            "and the file is STILL byte-identical after the second movement — the route "
+            "composes and never writes back, which a field comparison could not tell from a "
+            "handler quietly rewriting the table it had just read (D54's lesson)",
+        )
+
+        # --- the two branches that are doors rather than wiring ---------------------------
+        inventory = Store().read().inventory
+        views = resolve.box_views(inventory)
+        checks.equal(
+            pipeline_routes._position_label(views, inventory, 9, 1),
+            None,
+            "a box `box_views` will not answer for — deleted out from under the run, or the "
+            "store-wide degrade — answers NULL rather than an index-space label. A bare "
+            "`BoxView()` would render `Box 9 · Section 1 · Card 1` in the numbering D58 "
+            "replaced, silently, beside three captions drawn in the other one",
+        )
+
+        capture_server.do_capture(capture_payload(5, game="pokemon_code"))
+        pooled = Store().read().inventory
+        answer = pipeline_routes._position_label(
+            resolve.box_views(pooled), pooled, 5, 1
+        )
+        checks.ok(
+            answer is not None and "Section" not in answer and answer.endswith(" · 5/1"),
+            "and a POOLED copy is named by the pooled fact and its store key, never by a "
+            "section — `pokemon_code` is `located: False` AND `catalogued: True`, so its "
+            "cards do reach a join and did land in this table wearing a label D24 says may "
+            "never be printed for them (`place_text`, not `Position.label`)",
+            f"answered {answer!r}",
+        )
+
+
 def check_withholding(checks: Checks) -> None:
     """A withheld SKU writes no row, moves no count, and is still FINDABLE (D49).
 
@@ -15396,6 +15556,7 @@ def run() -> Result:
     check_pricing_authority(checks)
     check_withholding(checks)
     check_pricing_route(checks)
+    check_pricing_labels(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)

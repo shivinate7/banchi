@@ -810,6 +810,21 @@ export function Pricing() {
     [photoFor, rows],
   )
 
+  /* THE COPY THE STRIP IS CURRENTLY ON, resolved once instead of four times inside the panel.
+     The photograph, its caption and the `n of m` all have to name the SAME copy, and four
+     independent `positions[at % length]` expressions were four chances for them not to.
+     `null` where the row carries no position at all — `positions[NaN]` for an empty list —
+     which `cli/cmd_join.py:_pricing_table` never writes (`pipeline/join.py`: no matched SKU
+     may hold zero positions) and so means a hand-edited file rather than a state the pipeline
+     produces. The panel degrades to the no-label form rather than throwing. */
+  const photoAt = useMemo(
+    () =>
+      photoSku === null || photoFor === null
+        ? null
+        : photoSku.positions[photoFor.at % photoSku.positions.length] ?? null,
+    [photoSku, photoFor],
+  )
+
   /* THE PINNED CARD, RESOLVED AGAINST THE CURRENT ROWS. `rows` is what the section filter and
      the held filter leave, so a card filtered out from under an open panel resolves to null
      and the panel closes itself — which is right: a reading floating over a list that no
@@ -1202,15 +1217,24 @@ export function Pricing() {
 
       {photoSku === null || photoFor === null ? null : (
         <aside className="pricing-photo" aria-label={`Photograph of ${photoSku.name}`}>
-          <img
-            src={photoUrl(
-              photoSku.positions[photoFor.at % photoSku.positions.length]?.box ?? 0,
-              photoSku.positions[photoFor.at % photoSku.positions.length]?.index ?? 0,
-            )}
-            alt={photoSku.name}
-          />
+          <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
           <p className="pricing-photo-caption">
-            {photoSku.positions[photoFor.at % photoSku.positions.length]?.label}
+            {/* THE SERVER'S STRING, COMPOSED ON THIS READ, never the one frozen into
+                `pricing.json` at join time (D58, on D56's rule). It matters here more than
+                anywhere the same string is drawn larger: `photoUrl` addresses the photograph
+                above BY SLOT, so the picture has always been the index's current occupant
+                while the stored caption was the join's. A copy sold since now reads
+                `Box 3 · departed · 3/17` instead of pointing at the card that closed up
+                behind it, and a divider moved since reads against the layout in the box
+                today. Nothing is composed here — `server/pipeline_routes.py` sends the
+                finished string, as every other position on every other screen arrives.
+
+                `no label · <key>` IS `BoxBrowse`'s OWN FALLBACK and is one vocabulary with
+                it, for its reason: the server answers null where it will not name a place,
+                and `3/17` bare reads like a position and is not one. */}
+            {photoAt === null
+              ? null
+              : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}
             {' · '}
             {(photoFor.at % photoSku.positions.length) + 1} of {photoSku.positions.length}
           </p>
