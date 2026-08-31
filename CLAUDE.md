@@ -413,6 +413,7 @@ D67  The number a screen draws is composed once, and the set code D55 strips for
 D68  A departed card's label names the record, because two of them in one box were the same string
 D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
 D70  The QR is the whole identification, the product is a claim, and the card is destroyed
+D71  A card with no slot is ranked like every other, and it is the figure that goes
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

@@ -1519,6 +1519,60 @@ test('the card with no group gets both depths too — it is most of the store', 
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5 so far')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
+
+  /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
+   * the branch 92% of the store draws through and asserted only the two bars, so the label beside
+   * them went on being the raw server string in the utility face — D41's treatment shipped to five
+   * sites and this was not one of them. Nothing failed, because nothing here read it. */
+  const lone = page.locator('.inventory-lone-place .position-parts')
+  await expect(lone).toHaveCount(1)
+  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 2')
+  await expect(page.locator('.inventory-lone-place .position-num')).toHaveText('2')
+  await expect(page.locator('.inventory-lone-place .position-plain')).toHaveCount(0)
+})
+
+test('a sold card with no group is ranked too, and draws no bar', async ({ page }) => {
+  /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D71).
+   * That entry deleted an empty track captioned `where this sits in the box is not known yet`
+   * from the copies list, on the grounds that a bar cannot draw a card that is in no place and
+   * that the walk has omitted it since D58 — two screens agreeing about one card. This panel is
+   * the third, it kept drawing the bar, and its caption had by then become `no longer in the box`,
+   * which is a true sentence under an empty track that still reads as a measurement that failed.
+   *
+   * BOTH HALVES WERE FOUND BY PRESSING THE BUTTON IN A BROWSER over a real store, not by a spec:
+   * every fixture that reaches the lone panel had a live card in it, and every fixture with a
+   * departed card had a name and a SKU and so drew a group instead. The two conditions had never
+   * been in one record. This case is that record. */
+  const shared: Cards = {
+    ...CARDS,
+    '2/4': card({
+      index: 4,
+      state: 'sold',
+      name: null,
+      sku: null,
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 3,
+    }),
+  }
+  await open(page, BOXES, { cards: shared, search: (query) => searchAnswer(query, shared) })
+  await expandAll(page)
+  await page.locator('.browse-row').nth(3).click()
+
+  /* No name and no SKU, so there is no group to FETCH — the screen never asks, and the stub above
+     is the type's, not this case's. That is the branch: this is the lone panel rather than the
+     copies list, the same one the case above walks, with the card sold. */
+  await expect(page.locator('.inventory-lone')).toHaveCount(1)
+
+  const lone = page.locator('.inventory-lone-place .position-parts')
+  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · 2/4')
+  await expect(page.locator('.inventory-lone-place .position-path')).toHaveText('BOX 2DEPARTED 2/4')
+  await expect(page.locator('.inventory-lone-place .position-num')).toHaveCount(0)
+  await expect(page.locator('.inventory-lone-place .position-void')).toHaveCount(1)
+  await expect(page.locator('.inventory-lone-place .position-plain')).toHaveCount(0)
+
+  /* AND NO BAR, which is D68's ruling reaching its third screen. */
+  await expect(page.locator('.inventory-lone .position-bar')).toHaveCount(0)
 })
 
 test('a departed card draws no number, and the cards behind it count past it', async ({
@@ -1573,25 +1627,40 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * `join.departed_label`'s string, and the one composer of it. The position bar cannot draw
    * a card that is in no place, so it is absent rather than drawn at zero. */
   await page.locator('.browse-row').nth(3).click()
-  /* Read as TEXT and not through `.position-parts`, which is the assertion rather than a
-     workaround: `PositionLabel` promotes the last part of a label only when it is a slot
-     NUMBER (D41's numeric guard), so a departed card is rendered whole and there is no
-     figure to promote. A version that split this string would draw the word `departed` at
-     44px as though it were a slot. */
-  await expect(page.locator('.browse-position')).toHaveText('Box 2 · departed2/4')
-  await expect(page.locator('.browse-position .position-parts')).toHaveCount(0)
+
+  /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D71). It read the raw
+   * string as text and asserted `.position-parts` count ZERO — a floor on the component
+   * REFUSING a departed label — and what that refusal actually drew was the pre-D41 plain
+   * string: `Box 2 · departed` at 44px in the face the address is drawn in, wrapped onto two
+   * lines, in the panel D41 exists to have unwrapped. A sold card was the only card left on
+   * this screen rendered the old way, and the owner found it by selling one.
+   *
+   * WHAT THOSE ASSERTIONS WERE PROTECTING IS THE FIGURE, and it is asserted below unweakened:
+   * the guard that refused the label was aimed at the word `departed` being promoted to 44px,
+   * and refusing the whole treatment was never the only way to stop that. */
+  const panel = page.locator('.browse-position .position-parts')
+  await expect(panel).toHaveCount(1)
+  await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · 2/4')
+  await expect(page.locator('.browse-position .position-plain')).toHaveCount(0)
   await expect(page.locator('.browse-band .position-bar')).toHaveCount(0)
 
-  /* THE KEY IS DEMOTED, AND THAT IS THE ASSERTION RATHER THAN ITS PRESENCE (D68). `.browse-
-   * position` sets `--pos-slot: 44px`, so a store key promoted into the slot column would draw
-   * `2/4` at 44px in the figure position of a card that is in no slot — D58's lie, put back by
-   * a renderer. It rides the muted register instead, which is the same expression
-   * `.position-key` uses and is what makes the departed panel cost one small line rather than
-   * a second line of the payload face. */
-  const key = page.locator('.browse-position .position-storekey')
-  await expect(key).toHaveText('2/4')
-  await expect(key).toHaveCSS('font-size', '12.98px')
+  /* NO FIGURE AT ALL, WHICH IS D58 AND D68 IN ONE ASSERTION. D58 refuses the slot number for a
+   * card that has left; D68 adds that the store key must not take that number's place. Both are
+   * the same statement about this panel — nothing is drawn at `--pos-slot`'s 44px — and the void
+   * is what holds the column open in its stead. */
   await expect(page.locator('.browse-position .position-num')).toHaveCount(0)
+  await expect(page.locator('.browse-position .position-void')).toHaveCount(1)
+
+  /* AND THE STATE AND THE KEY ARE RANKED RATHER THAN LEFT AS A STRING WITH A NOTE UNDER IT.
+   * `DEPARTED 2/4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
+   * stands in for, which is what makes a departed row cost the same two path lines a live one
+   * costs. 19.8px because a block with no figure re-ranks its path — `clamp(11px, 0.45em, 20px)`
+   * against this site's 44px, the derivation `PositionLabel.css` states beside `.position-key`'s.
+   * At the shipped 11px the whole answer sat in the metadata register and the panel read as one
+   * that had failed to load, which is the second half of what selling a card did to this screen. */
+  const path = page.locator('.browse-position .position-path')
+  await expect(path).toHaveText('BOX 2DEPARTED 2/4')
+  await expect(path).toHaveCSS('font-size', '19.8px')
 })
 
 test('the census greps to the store, and the identity line says what the box holds', async ({
@@ -3434,8 +3503,23 @@ test('two departed copies of one card draw two different rows', async ({ page })
 
   const gone = page.locator('.card-locations-row', { hasText: 'departed' })
   await expect(gone).toHaveCount(2)
-  await expect(gone.nth(0).locator('.position-storekey')).toHaveText('2/4')
-  await expect(gone.nth(1).locator('.position-storekey')).toHaveText('2/5')
+  /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This
+     read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
+     the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
+     ranked. The pair is still what separates the two records, which is all D68 asked for. */
+  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED 2/4')
+  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED 2/5')
+
+  /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
+     `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every
+     row's path starts at one x; the shipped reserve held the DIGITS only, so these two rows —
+     which have a key-less void where `CARD 1` sits — hung 38.3px to the left of every live one.
+     The reserve is the whole column now, and 38.3px is `CARD` plus the gap exactly. It is read
+     as a coordinate rather than as a width because a width can be right while the row it is on
+     is not: what matters is that a person's eye finds one edge down the list. */
+  const livePath = await page.locator('.card-locations-row .position-path').first().boundingBox()
+  const gonePath = await gone.nth(0).locator('.position-path').boundingBox()
+  expect(gonePath?.x).toBeCloseTo(livePath?.x ?? -1, 0)
 
   /* AND NO BAR UNDER EITHER (D68). This list drew one — an empty track captioned `where this
    * sits in the box is not known yet`, which reads as the server having failed rather than as

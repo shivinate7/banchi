@@ -342,7 +342,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -1689,15 +1689,26 @@ COMPONENTS = [
                         "slot that is not digits, which is what keeps D24's pooled label "
                         "(`... \u00b7 pooled`) from drawing a lowercase word as a 300px figure. "
                         "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
-                        "the firewall is the component graph, not a selector.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68"]},
+                        "the firewall is the component graph, not a selector. A TERMINAL THAT IS "
+                        "A STATE RATHER THAN A NUMBER IS RANKED TOO (D71): `... \u00b7 departed "
+                        "\u00b7 3/36` puts the state and the store key on the path and draws the "
+                        "number column EMPTY, because what D58 refuses is the figure. Refusing "
+                        "the whole treatment over it is what put the pre-D41 plain string back "
+                        "on two screens for exactly the cards that had been sold.",
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
                         "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
-                        "classes exist only where the component rendered them.",
-                "governed_by": ["D31", "D41", "D68"]},
+                        "classes exist only where the component rendered them. TWO DERIVATIONS "
+                        "CARRY A LABEL WITH NO FIGURE (D71): in a list the reserve holds the whole "
+                        "slot column, key included, so a figure-less row's path starts at the same "
+                        "x as every other (it hung 38.3px left); as a singleton the path re-ranks "
+                        "to clamp(11px, 0.45em, 20px), because with no figure the path is the "
+                        "payload. The dash in the empty column is `content`, so it never joins the "
+                        "label's textContent.",
+                "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
                         "2026-08-30). `after` / `before` as a muted mono key column with the two "
@@ -1844,7 +1855,7 @@ COMPONENTS = [
                         "#/fulfillment is untouched, its two-step being a displacement guard a "
                         "real double-tap sale earned.",
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31",
-                                "D33", "D38", "D39", "D45", "D57"],
+                                "D33", "D38", "D39", "D41", "D45", "D57", "D58", "D68", "D71"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -1854,8 +1865,12 @@ COMPONENTS = [
                         "once in the sale's photo-confirm, then none again once D57 deleted "
                         "that panel on 2026-08-30. The scrim and the confirm rules survive it "
                         "because the retirement inherited them, and a choice between four "
-                        "reasons has never been a screen with one thing to do.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D57"],
+                        "reasons has never been a screen with one thing to do. IT CARRIES TWO "
+                        "OF `PositionLabel`'s SEVEN SITE RULES (D71): `.inventory-lone-place` "
+                        "and `.inventory-confirm-place`, both at a 20px figure. Both drew the "
+                        "raw label until then, and the first is what 92% of the store renders "
+                        "through \u2014 a card with no name and no SKU has no group to draw.",
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -2504,7 +2519,7 @@ COMPONENTS = [
                         "whole write, its receipt, its undo window and the `already_sold` path "
                         "were unasserted while the control changed what one press does to a "
                         "real card. Six cases now cover it, three of them mutation-tested.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
