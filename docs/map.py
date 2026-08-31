@@ -349,6 +349,19 @@ COMPONENTS = [
             "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not, "
                                    "over a per-game finish vocabulary and a set-valued rung 1 claim",
                            "governed_by": ["D3", "D12", "D21", "D22", "D23"], "tested_by": ["T3", "T4"]},
+            # ONE MATCHER, WHERE THERE WERE TWO. The fetch scoped the export by its rules and
+            # the join narrowed a colliding key by different ones, so a hint could scope
+            # correctly and then fail to disambiguate the very rows it fetched. Merging them
+            # also fixed a live defect: `set_matches` is PAIRWISE, so `SV` matched four sets
+            # and join.py returned all four as a confident narrowing with no `set_ambiguous`.
+            # D22 because the alias table it consults is still hand-authored — what the
+            # abbreviation rule removed is the need to author a row per set code, not the
+            # table itself.
+            "setnames.py": {"does": "does this hint name this set — the one ladder the export fetch "
+                                    "and the join both read. Label, colon side, guarded prefix, then "
+                                    "a <=4-character abbreviation; ambiguity answers None and both "
+                                    "callers widen rather than guess.",
+                            "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
@@ -861,6 +874,22 @@ COMPONENTS = [
                 # in `make check` beside the other two self-tests rather than on the commit
                 # path.
                 "governed_by": ["D18", "D43"],
+            },
+            "set-hint-agreement.py": {
+                "does": "port-agreement.py's shape, one decision over: proves "
+                        "`server/tcg_export.py:match_sets` and `app/src/setHint.ts` resolve a "
+                        "capture-time set hint to the same set. Python resolves it when the "
+                        "export is FETCHED; TypeScript answers the same question at the rig, "
+                        "while the operator types, so a disagreement makes the screen say "
+                        "MATCHED over a hint the fetch will miss — worse than the silence it "
+                        "replaced, because a verdict gets trusted. Compares the one fact both "
+                        "stake a claim on (did it resolve, and to which set) rather than the "
+                        "verdict shapes, which differ on purpose: TypeScript splits Python's "
+                        "single miss into `ambiguous` and `unmatched` so a sentence can be "
+                        "written from it. The cases are D65's own measured vocabulary.",
+                # D65 authors the matcher and the whitelist field. D18 decides where this
+                # runs: node again, so `make check` and never the commit path.
+                "governed_by": ["D18", "D65"],
             },
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -1729,7 +1758,10 @@ COMPONENTS = [
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5", "D27", "D41", "D50"]},
+                                      # D65 for the two accent modifiers the set hint's verdict
+                                      # draws — accent's "the system is unsure" job at text
+                                      # weight, because nothing there refuses anything.
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -2282,6 +2314,27 @@ COMPONENTS = [
                                         "BoxOps' own 32px so the two panels in this screen agree "
                                         "about how tall a control is.",
                                 "governed_by": ["D5", "D33", "D39"]},
+            "src/setHint.ts": {
+                "does": "WHETHER A TYPED SET HINT NAMES A REAL SET, ANSWERED AT THE RIG "
+                        "(D65, amended 2026-08-31). The field always had rules and never drew "
+                        "them: a `datalist` offers TCGplayer's set names and says nothing "
+                        "about the string actually typed, so `Spiritforge` and `Spiritforged` "
+                        "look identical at the capture screen and part company an hour later "
+                        "at the fetch — one scopes the export, the other resolves to nothing "
+                        "and widens to the whole category. Mirrors "
+                        "`server/tcg_export.py:match_sets` rule for rule (alias table, then "
+                        "exact, prefix, colon-code; ambiguous resolves to nothing) and is "
+                        "asserted against it by scripts/set-hint-agreement.py, because a "
+                        "screen that says MATCHED where the fetch misses is worse than the "
+                        "silence it replaced. `unchecked` is a first-class verdict: with no "
+                        "vocabulary — no cookie, no network, the list not yet fetched — the "
+                        "screen says it cannot tell rather than accusing the operator. It "
+                        "JUDGES AND NEVER REFUSES; every string is still storable.",
+                # D65 authors the matcher, the vocabulary and the datalist-not-a-select rule;
+                # D19 is the 623 ms cadence that forbids a per-keystroke round trip; D22 is
+                # the hand-authored alias table this folds through.
+                "governed_by": ["D19", "D22", "D65"],
+            },
             "src/runScope.ts": {"does": "WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS "
                                         "IT — one answer, three screens (D56). `boxOf` prefers "
                                         "the `box` the server now sends and keeps the "

@@ -637,3 +637,182 @@ test('an expired session says so where the suggestions would have been', async (
   await hint.fill('sv09')
   await expect(hint).toHaveValue('sv09')
 })
+
+// ------------------------------- the vocabulary is drawn as a RULE, not only offered (D65)
+
+/* THE FIELD ALWAYS HAD RULES AND DREW NONE OF THEM. A `datalist` offers the real set names
+   and says nothing at all about the string typed, so `Spiritforge` and `Spiritforged` look
+   identical at the rig and part company an hour of captures later at the fetch: one scopes
+   the export to that set, the other resolves to nothing and widens to the whole category.
+   These cases are that verdict, in the two registers the box field beside it already uses —
+   a terse meta pinned to the entry, and a sentence under the field.
+
+   EVERY ONE OF THEM ALSO ASSERTS THAT NOTHING IS REFUSED. That is not politeness about
+   coverage: D65's rule is that the rig does not stop for an autocomplete, and a verdict that
+   grew teeth would break it. So each case types its string and reads it back. */
+
+const RIFTBOUND_SETS = {
+  game: 'riftbound',
+  sets: [
+    { name: 'Origins', id: '24000' },
+    { name: 'Origins: Proving Grounds', id: '24001' },
+    { name: 'Spiritforged', id: '24020' },
+    /* A TWO-WORD SET, so the abbreviation rule is exercised across a space and not only
+       inside one word — `SEC` is Secret Garden the same way `SFD` is Spiritforged. */
+    { name: 'Secret Garden', id: '24040' },
+  ],
+  aliases: { OGN: 'Origins' },
+  reason: null,
+}
+
+/** The live state pinned to the right of the entry — the box field's `next 60` / `new box`,
+ *  one field over. */
+function hintMeta(page: Page) {
+  return page.locator('.capture-open .capture-entrymeta')
+}
+
+/** The sentence under the field: what that state MEANS. */
+function hintNote(page: Page) {
+  return page.locator('.capture-open .capture-opennote')
+}
+
+test('a hint that names no set says so, and the capture screen still takes it', async ({
+  page,
+}) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+  await hint.fill('Spiritfoged')
+
+  /* THE TYPO THIS EXISTS FOR, and it is a DROPPED MIDDLE LETTER rather than a truncation on
+     purpose: `Spiritforge` is a unique PREFIX of `Spiritforged` and resolves, which is the
+     completion case below. This one resolves to nothing, and before the verdict the two were
+     indistinguishable until the export came back wide. */
+  await expect(hintMeta(page)).toHaveText(/names no set/i)
+  await expect(hintNote(page)).toContainText('No set of')
+  await expect(hintNote(page)).toContainText('widens to the whole game')
+
+  /* NOT A REFUSAL. The string is still what the field holds, and the note says what will
+     happen to it rather than asking for a different one. */
+  await expect(hint).toHaveValue('Spiritfoged')
+
+  /* And it is visible from the ROW, so a stack captured against a typo does not need the
+     field opened to be found. */
+  await page.keyboard.press('Escape')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('Spiritfoged')
+  await expect(row.locator('.capture-sub')).toHaveText(/names no set/i)
+})
+
+test('a hint that names a set says that instead, and says nothing at rest', async ({ page }) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+  await hint.fill('spiritforged')
+
+  /* FOLDED, because `match_sets` folds: the operator types what is on the divider and the
+     case it is written in is not a claim about anything. */
+  await expect(hintMeta(page)).toHaveText(/names a set/i)
+  await expect(hintNote(page)).toContainText('Spiritforged')
+
+  /* The ordinary case is drawn as the ordinary case — the row carries the value and no
+     annotation, so the mark on a bad hint means something. */
+  await page.keyboard.press('Escape')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('spiritforged')
+  await expect(row.locator('.capture-sub')).toHaveCount(0)
+})
+
+test('a three-letter set code names its set, and the typo one letter away still does not', async ({
+  page,
+}) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+
+  /* `SFD` IS SPIRITFORGED AND NOTHING IN THE STRING SAYS SO. It is not a prefix, not a colon
+     code, and had no row in `pipeline/games.py:set_aliases` — before the abbreviation rule it
+     resolved to nothing and silently widened the export to all of Riftbound. The rule is the
+     hint's own letters, in order, through the set's name. */
+  await hint.fill('SFD')
+  await expect(hintMeta(page)).toHaveText(/enter completes/i)
+  await expect(hintNote(page)).toContainText('Spiritforged')
+
+  /* THE CAP IS WHAT KEEPS THIS OFF MISSPELLED NAMES, and it is the half worth asserting:
+     uncapped, the same subsequence rule reads `Spiritfoged` as Spiritforged too, and then
+     almost every string "names a set" and the warning above never fires again. Eleven
+     characters is a name that is wrong, not a code. */
+  await hint.fill('Spiritfoged')
+  await expect(hintMeta(page)).toHaveText(/names no set/i)
+
+  /* And a code answering to two sets resolves to neither, the same as any other tie. */
+  await hint.fill('SEC')
+  await expect(hintMeta(page)).toHaveText(/enter completes/i)
+  await expect(hintNote(page)).toContainText('Secret Garden')
+})
+
+test('Enter completes a hint that resolved to one set but is not its name', async ({ page }) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+  await hint.fill('Spirit')
+
+  /* A UNIQUE PREFIX RESOLVES THE EXPORT AND IS STILL NOT THE SET'S NAME, which is the form
+     `pipeline/join.py:set_matches` needs at join time — one fold, no shape rules. So the
+     keystroke that leaves the field is the one that makes the stored string exact. */
+  await expect(hintMeta(page)).toHaveText(/enter completes/i)
+  await hint.press('Enter')
+
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('Spiritforged')
+})
+
+test('an ambiguous hint names the sets it could be, and resolves to none of them', async ({
+  page,
+}) => {
+  await routeSets(page, RIFTBOUND_SETS)
+  await open(page)
+  await page.keyboard.press('h')
+
+  const hint = page.getByLabel('Set hint')
+
+  /* `Origins` AND `Origins: Proving Grounds` ARE THE REAL SHAPE, and the hint that cannot
+     choose between them is one letter short of both — `Origins` itself is a set's own name
+     and resolves outright on rule one. A prefix answering to two sets answers to neither, so
+     `match_sets` calls it a MISS and widens. The screen says which two it is between, because
+     that is the fact that lets the operator choose; `match_sets` cannot. */
+  await hint.fill('Origin')
+  await expect(hintMeta(page)).toHaveText(/2 sets/i)
+  await expect(hintNote(page)).toContainText('Origins: Proving Grounds')
+  await expect(hintNote(page)).toContainText('widens to all of')
+
+  /* Enter does not complete what did not resolve. */
+  await hint.press('Enter')
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('Origin')
+  await expect(row.locator('.capture-sub')).toHaveText(/names no set/i)
+})
+
+test('a hint is never accused while there is no list to check it against', async ({ page }) => {
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: 'tcg_cookie_missing' })
+  await open(page, { 'pkmnscan.session.setHint': 'Spiritfoged' })
+
+  /* THE VERDICT IS `unchecked`, WHICH IS NOT `unmatched`. No cookie, no network, the portal
+     down — this screen cannot tell, and D65's whole rule is that it degrades to the control
+     it was before rather than to an accusation. The row carries the hint and no mark. */
+  const row = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+  await expect(row).toContainText('Spiritfoged')
+  await expect(row.locator('.capture-sub')).toHaveCount(0)
+
+  await page.keyboard.press('h')
+  await expect(hintMeta(page)).toHaveText(/not checked/i)
+  await expect(hintNote(page)).toContainText('stored exactly as typed')
+})

@@ -434,3 +434,7 @@ undo's
 [Ww]ireframe
 [Uu]nspelled
 [Vv]erbing
+matchers
+Spiritforged
+Paldea
+Paldean

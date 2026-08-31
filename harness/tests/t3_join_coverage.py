@@ -108,6 +108,12 @@ BOX = 3
 
 
 SECOND_SET = "SV08: Surging Sparks"
+# A second set sharing the FIRST's colon side, which is the shape that broke the pairwise
+# `set_matches`. The pairing is invented — the committed fixture is single-set and a
+# collision cannot be produced from it — but the shape is not: four live Pokemon sets are
+# `SV: Prismatic Evolutions`, `SV: Paldean Fates`, `SV: Scarlet & Violet 151` and
+# `SV: Shrouded Fable`, and `SV` names every one of them.
+SHARED_SIDE_SET = "SV09: Paldean Fates"
 CLONED_HOLO_SKU = "9100001"
 CLONED_REVERSE_SKU = "9100002"
 COLLIDING_KEY = "003/159"
@@ -130,7 +136,7 @@ def _card(
     )
 
 
-def _multi_set_catalog(export):
+def _multi_set_catalog(export, second_set=SECOND_SET):
     """SYNTHETIC: the SV09 export plus 003/159 cloned into a second Set Name.
 
     Labelled, because the committed fixture is single-set and a cross-set collision cannot
@@ -151,7 +157,7 @@ def _multi_set_catalog(export):
                 row,
                 **{
                     tcgcsv.SKU_COLUMN: sku,
-                    tcgcsv.SET_COLUMN: SECOND_SET,
+                    tcgcsv.SET_COLUMN: second_set,
                     tcgcsv.NAME_COLUMN: "Pikachu",
                     tcgcsv.MARKET_PRICE_COLUMN: "5.00",
                 },
@@ -1714,6 +1720,36 @@ def run() -> Result:
     c.ok(
         not join.set_matches("sv1", "SV19: Nothing"),
         "and a hint is never a substring match — sv1 must not select sv19",
+    )
+
+    # THE HINT THAT ANSWERS TO BOTH SETS, which is the shape a pairwise predicate cannot see.
+    # `set_matches` is asked about ONE name at a time, so a hint matching both candidate sets
+    # narrowed the rows to BOTH of them and `Catalog.candidates` returned that as decisive:
+    # no `set_ambiguous`, no review, and a card listed off a two-set pile.
+    #
+    # IT NEEDS ITS OWN CATALOG AND THAT IS THE POINT. Against `multi` the two sets are `SV09:`
+    # and `SV08:`, whose colon sides differ, so the old predicate matched NEITHER and this case
+    # would have passed against the very code it is here to catch. `SHARED_SIDE_SET` gives the
+    # two sets one colon side, which is the live shape: `SV` names four real sets at once.
+    # Resolution is set-wise now and a tie answers None, so this card reaches a human.
+    shared = _multi_set_catalog(export, second_set=SHARED_SIDE_SET)
+    both = join.join_batch(
+        [_card(24, "Butterfree", "003", metadata="reverse_holo", set_hint="SV09")],
+        shared,
+        router=join.default_router(),
+    )
+    c.equal(
+        [q.destination.reason for q in both.queued],
+        [routing.SET_AMBIGUOUS],
+        "a hint answering to BOTH candidate sets reviews rather than narrowing to both",
+    )
+    c.equal(list(both.matches), [], "...and lists nothing off the two-set pile")
+
+    # And a three-letter set code the alias table never carried resolves at the join, not just
+    # at the export fetch — the two used to be different matchers and only one knew codes.
+    c.ok(
+        join.set_matches("SSP", SECOND_SET),
+        "a set code resolves at join time: SSP is Surging Sparks by the shared ladder",
     )
 
     for label, hint in (("no hint", None), ("a hint naming neither set", "sv5")):
