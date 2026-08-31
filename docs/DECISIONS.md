@@ -3736,6 +3736,26 @@ So the property D46 protected — no string a client sends becomes a listing on 
 
 **What would reopen this: `from_catalog` appearing on entries whose offered rows were right.** D46 named the same tripwire pointing the other way and it still holds — if the flag starts landing on cards a better join would have placed, the fix is upstream. This entry adds the near side of it: if the flag starts landing on entries **with** candidates at a rate that is not rare, the number read is the thing to fix, not the screen. Box 3's read is already the second measured instance of that (D55, 7 of 39 across three separators), and this is the third symptom of one defect.
 
+## D78 — A run's reason for adding nothing is a heading, and the rows under it sink
+
+**Built 2026-08-31, on the owner's ask, over a screenshot of `#/pricing` on a Riftbound box.** Two sentences, one after the other: *"can we have it so that 'every copy in this run is already listed or sold' rows go to the bottom?"* and *"instead of each of those rows having that quoted subtext, instead it's a header and these rows fall under it"*. They are one change, and the second is what makes the first worth doing.
+
+**What was on that screen.** Of the eight LISTED rows visible, five carried `every copy in this run is already listed or has left the box` in their own right margin — including the top two, at $39.10 and $30.93. The list is sorted market-descending (`cli/cmd_join.py:_pricing_table`, and it stays that way), so the run's most expensive **non-questions** stood where the eye starts, five copies of one sentence ran down the column, and the rows that actually wanted a price were read around them.
+
+**The rule: a row this run can add nothing for sinks to the bottom of its own section, under a heading naming why.** Inside every group the market order is untouched. The sections are untouched — nothing crosses one, because `bucket` is still decided by the Market cell alone.
+
+**Grouped by the SENTENCE, not by `at_cap`, and that is D59 held to.** `pipeline/join.py:SkuMatch.nothing_to_add` composes three of them — every copy already listed or gone, at the live cap, or held by an import this pipeline has not seen land — because they have three different remedies. Three headings, then, in first-appearance order down the wire; never one bucket of leftovers under a word like *skipped*, which would be the client re-deciding that the three are the same thing. A `pricing.json` an older join wrote carries `at_cap` with no sentence beside it, and those rows group under the bare fact, which is all `at_cap` means.
+
+**D28 is why this may be done at all.** The list must not move under a finger already travelling to the next field. Every input to this order — `bucket`, `at_cap`, `nothing_to_add` — is written by `join` and read off disk, so nothing the operator types on this screen can move a row out of its group, the same way nothing typed can move one between sections. The heading is deliberately not `sticky` for the same reason: a heading that detaches and rides the scroll is that motion arriving from the other direction.
+
+**The advance now steps the order that is DRAWN, and the bug it would otherwise have been is worth recording.** `Enter` and the arrows walked the wire array. That was correct only by coincidence: the wire is market-descending with `None` last, which puts the three buckets in the same order the three sections are drawn in. Sinking a group moves a row within its section and ends the coincidence — stepping the wire would have sent the focus from a row near the top down to one drawn at the bottom of the section and back up again, on a screen whose whole gesture is type, Enter, type.
+
+**The row's second line is the operator's own note now, and it gained a string it used to swallow.** The reason won that line over the hold's note, on the argument that the reason is the fact about the run and the note is an aside. With the reason a heading, a row that is both at the cap and withheld draws the note — the one string on that line nothing else on the screen holds a copy of. The 13px reservation that keeps every row the same height is unchanged and still carries the machine token beside it.
+
+**What would reopen this: a group with one row in it, over and over.** The heading costs a line, and it buys nothing over a row's own margin when it covers a single row. Measured on the shape that produced this — five rows, one reason — it is plainly right. If a real run draws three headings of one row each, the answer is a threshold, not a return to the subtext.
+
+---
+
 ---
 
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
