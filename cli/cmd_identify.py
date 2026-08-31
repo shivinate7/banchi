@@ -293,7 +293,9 @@ def _crop_attachments(item: Item, say) -> List[batch.Attachment]:
         return []
 
     item.detection = DETECTED
-    regions = geometry.crop_regions(item.capture.photo, box, bands=bands)
+    regions = geometry.crop_regions(
+        item.capture.photo, box, bands=bands, aspect=item.entry["card_aspect"]
+    )
     attachments = []
     # The registered card first and then the game's own bands, in the registry's order. For
     # `pokemon` that is card, title, number — byte-identical to the fixed triple this loop

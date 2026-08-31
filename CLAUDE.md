@@ -430,7 +430,7 @@ D71  A card with no slot is ranked like every other, and it is the figure that g
 D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
 D74  A document is checked as a document, and every markdown file is linted rather than the four a session loads
-D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted
+D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted, and the shape correction reaches both crop paths
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

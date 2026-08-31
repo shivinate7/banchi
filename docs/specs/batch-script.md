@@ -616,6 +616,12 @@ frame instead, and the preflight names that count SEPARATELY from the detection 
 above and prints the reason per card. The same guard stands in front of the crop retry in
 §4.5, where the bands would otherwise be cut out of the wrong rectangle and sent as evidence.
 
+**And §4.5's bands are now cut from a card-shaped rectangle**, which they were not until
+2026-08-31 — D75's amendment. `card_rect`'s aspect correction reached the primary image and
+not `geometry/crop.py:registered_card`, so every band was a fraction of a box measured at a
+median aspect of 0.789 against a real card's 0.716. It moved down into
+`geometry.corrected_bounds` so both paths share one computation.
+
 **D3 rung 1's claim is a SET.** One member determines exactly as this table's behavior
 always described; two or more filter the candidate rows and let rungs 2 and 3 choose within
 what survives. `--variant` is unchanged by that — it still fills a gap and still never

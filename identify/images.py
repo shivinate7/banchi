@@ -144,52 +144,20 @@ def downscale(image, max_edge: int = MAX_EDGE):
 def card_rect(size, box, aspect: float = geometry.CARD_ASPECT):
     """WHERE THE CARD IS in a frame of `size`: corrected, UNPADDED, and in float pixels.
 
-    THE PAD WAS A FLAT GUESS AND IT CUT COLLECTOR NUMBERS OFF. Box 2's first run sent 544
-    cards cropped at a flat 4%: 38 came back with NO number at all, and a further handful
-    came back with the wrong one — `0342`, `0326`, `0934`, which are NATIONAL POKEDEX
-    numbers read off the artwork strip once the real collector number had been cropped
-    away. A blank is recoverable by the name fallback; a confident wrong number is the
-    failure D23 says no confidence threshold catches.
+    A THIN DELEGATE SINCE 2026-08-31, and the arithmetic and its whole argument now live in
+    `geometry.corrected_bounds`. It moved because a THIRD caller needed it and could not reach
+    it here: `geometry/crop.py:registered_card` cuts the crop-retry bands as fractions of the
+    detected box, and `geometry/` may not import `identify/` — so the correction was applied
+    on the primary image and not on the retry, and the retry is the rung that exists to
+    recover a number the primary lost. Measured on box 2's 543 photographs, the retry's number
+    band stopped at 0.953 of a card-shaped rectangle at the median and 0.935 at worst, and
+    `box2/0340.jpg` came out with NO collector number in the band at all.
 
-    The cause is measurable and was sitting in the detector's own output the whole time. A
-    card is `CARD_ASPECT` — 63/88, 0.716 — and the detected boxes came back at a MEDIAN of
-    0.790, with the failures at 0.801 and the worst at 0.822. The box is systematically too
-    SHORT for its width, because the border search locks onto the artwork's strong inner
-    edges more readily than the card's own bottom border. A flat margin cannot fix a
-    proportional error: 92% of the cards that DID keep their number had the same distortion
-    and merely landed on the right side of it.
-
-    SO THE CORRECTION IS COMPUTED, NOT GUESSED. If the box is short for its width, restore
-    the height a real card of that width would have. The pad is then a genuine safety
-    margin on a box that is already the right shape, rather than the only thing standing
-    between the crop and the number.
-
-    Applied symmetrically. The observed deficit sits at the bottom — the number end — but
-    `CardBox` reports no per-edge confidence, so attributing the whole correction downward
-    would be inventing a fact. Symmetric costs a few pixels at the top and cannot be wrong
-    about which edge was short.
-
-    ONLY EVER GROWS. A box already taller than its width implies is left alone: that is a
-    box with room to spare, and narrowing it would be this defect in the other direction.
-
-    UNPADDED AND UNROUNDED ON PURPOSE, which is what makes it worth its own name. The pad
-    is a safety margin on the CUT (`crop_rect`), not a statement about where the cardboard
-    is — and the second caller wants the cardboard: the run panel's preview measures the
-    number band off this rectangle, and measuring it off the padded one would put the band
-    a few percent low on every card. Rounding belongs at the cut for the same reason.
+    THE NAME STAYS BECAUSE THE CALLERS AND THE DECISIONS USE IT. This is the pixel-space
+    question `crop_rect` and the run panel's band both ask, and a rename would move a
+    docstring several entries cite for the sake of deleting one line.
     """
-    width, height = size
-    left, top = box.left * width, box.top * height
-    right, bottom = box.right * width, box.bottom * height
-    box_w, box_h = right - left, bottom - top
-
-    if aspect and box_h > 0 and (box_w / box_h) > aspect:
-        want_h = box_w / aspect
-        grow = (want_h - box_h) / 2.0
-        top -= grow
-        bottom += grow
-
-    return left, top, right, bottom
+    return geometry.corrected_bounds(size, box, aspect)
 
 
 def crop_rect(

@@ -3553,7 +3553,7 @@ The mechanism is adopted rather than re-argued. Every rule in `ServerReloaded.ts
 
 ---
 
-## D75 — A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted
+## D75 — A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted, and the shape correction reaches both crop paths
 
 **`geometry.detect_card` answers "not found" honestly and has no way to answer "found the wrong thing", so the crop path asks the frame instead: a crop under 30% of it that keeps under half its detail is not cut, and the whole frame is sent.** Ruled 2026-08-31, from the owner's own screenshot of `#/runs` drawing a crop rectangle over a card's rules-text panel and reporting it as the payload.
 
@@ -3592,7 +3592,7 @@ This is what lets a threshold sit near a boundary at all, and it is `geometry/de
 
 `identify/images.py:crop_refusal`, called from `prepare` — **the one place the bytes are made** — so nothing downstream can hold a box that was declined and cut with it anyway. `card_crop` and `crop_rect` are untouched: they remain the pure cut and the pure rectangle, and T6's identity between them still holds.
 
-**It returns a sentence, never a boolean**, because every caller has to say this out loud and none of them can explain a flag:
+**It returns a sentence, never a flag**, because every caller has to say this out loud and none of them can explain a true-or-false:
 
 - `Prepared.crop_refused` carries it, so a run cannot report itself as having cropped while sending whole frames.
 - The preflight prints the count **apart from** `no card found` and then the reasons themselves, before any money. The two are not the same fact: nothing found is a photograph to look at, and a box refused is a detector that answered confidently and wrongly.
@@ -3605,9 +3605,23 @@ This is what lets a threshold sit near a boundary at all, and it is `geometry/de
 
 **One rig, one day, 867 frames.** What is established is that these two numbers separate these two populations. What is **not** established is a rate at which detection goes wrong: nine is nine of the owner's own boxes, not a percentage of anything, and every one of them is Riftbound in a stand with a stack behind it. Read it exactly the way `docs/GATES.md` says to read the border search's 53/53 — that number is a rate at which the card is FOUND, and a wrong box and a right one both count as found, which is why it could stand for eight days beside this.
 
-**BUILT**: `crop_refusal` and `detail_share`, the guard inside `prepare`, the guard on the crop-retry path, the preflight's two figures and its reasons, the closing report's `unfit crop`, `crop_refused` on the preview wire, and the sentence rendered on `#/runs`. **RECORDED**: this entry, the two populations in `identify/images.py` beside the constants, and `docs/GATES.md`'s T6 section. **NEITHER**: any change to `geometry/detect.py`, a rate for how often it is wrong, and a second detection method for a card whose border is against another card — which is the only thing that would actually recover those nine crops rather than decline them.
+### Amended the same day: the correction was on one crop path and not the other
 
-**What would reopen this: a rig whose correct crops are genuinely small.** Both numbers are fractions of the frame, and a camera moved back far enough would put correct crops under both lines and send every card whole. That costs money rather than accuracy, and the preflight's figure is what would say so — a nonzero `box unfit to crop to` on a box where the crops look right is this entry asking to be re-measured.
+**A second defect on the same path, found by another session tracing how `identify` recovers a badly-cropped card, and routed here by the owner.** `card_rect`'s aspect correction — restore the height a real card of this width would have, because the border search comes back systematically short at the number end — was applied to the primary image `--crop` sends and to the run panel's band preview, and **not** to `geometry/crop.py:registered_card`, out of which every crop-retry band is cut as a fraction.
+
+**It was reported as read off the code and not observed. It is observed now.** Over box 2's 543 photographs the registered card's aspect ran to a median of **0.789** against a real card's 0.716 — the same 0.790 median `card_rect` already recorded — which puts `NUMBER_BAND`'s bottom edge at **0.953 of a card-shaped rectangle at the median and 0.935 at worst**. On **`box2/0340.jpg`**, whose box bottom sits at 0.756 of the frame where its neighbors sit at 0.805, the number band contained the weakness/resistance/retreat row and **no collector number at all**. That is the last automatic rung enlarging the wrong strip to 600px and answering confidently — the `0342` failure mode again, reached from the retry rather than from the first pass.
+
+**The fix is one computation, not a second copy**, which is the rule `crop_rect`'s own docstring states. The correction moved down into `geometry.corrected_bounds` with its whole argument, because `geometry/` may not import `identify/` and that layering is exactly why the retry path could not reach it. `identify/images.py:card_rect` is now a delegate and keeps its name: several entries cite it, and renaming it to save one line would move a docstring they point at.
+
+**Clamped to the canvas in `registered_card`**, because the correction only grows and a card near the frame's edge would otherwise be cut against nothing and padded black — a black bar pretending to be cardboard moves every band below it.
+
+**What the fix does not do.** It is **symmetric**, so a box short only at the bottom — which `box2/0340.jpg` is — recovers half its deficit and no more. `CardBox` reports no per-edge confidence, and attributing the whole correction downward would be inventing a fact; the entry this amends is the one that already says so. 0340's number went from outside the band to inside it at the band's edge, and sixteen box-2 bands sampled evenly across the run all contain their number after the change.
+
+**BUILT**: `geometry.corrected_bounds` and both callers through it, the aspect wired from the registry to `crop_regions`, and T6's regression case — which is a real one: a box 10% short at the bottom holds 0.088 of the number box in its band before the fix, under T6's 0.10 floor, and 0.157 after.
+
+**BUILT**: `crop_refusal` and `detail_share`, the guard inside `prepare`, the guard on the crop-retry path, the two figures the preflight prints and its reasons, the closing report's `unfit crop`, `crop_refused` on the preview wire, and the sentence rendered on `#/runs`. **RECORDED**: this entry, the two populations in `identify/images.py` beside the constants, and `docs/GATES.md`'s T6 section. **NEITHER**: any change to `geometry/detect.py`, a rate for how often it is wrong, and a second detection method for a card whose border is against another card — which is the only thing that would actually recover those nine crops rather than decline them.
+
+**What would reopen this: a rig whose correct crops are genuinely small.** Both numbers are fractions of the frame, and a camera moved back far enough would put correct crops under both lines and send every card whole. That costs money rather than accuracy, and the figure the preflight prints is what would say so — a nonzero `box unfit to crop to` on a box where the crops look right is this entry asking to be re-measured.
 
 ---
 

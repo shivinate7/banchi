@@ -496,6 +496,52 @@ def _detect_by_edges(image, aspect: float) -> Optional[CardBox]:
     )
 
 
+def corrected_bounds(size, box: CardBox, aspect: Optional[float] = CARD_ASPECT):
+    """Where the card is in a canvas of `size`: `(left, top, right, bottom)` in float pixels.
+
+    THE BOX AS DETECTED IS SYSTEMATICALLY TOO SHORT FOR ITS WIDTH, and this restores the
+    height a real card of that width would have. It lives here rather than beside either
+    caller because BOTH crop paths need it and a second copy is a rectangle that can disagree
+    with the one it claims to describe, with no way to tell which drifted.
+
+    THE MEASUREMENT, kept in full because it is what makes this arithmetic rather than a
+    guess. Box 2's first run sent 544 cards cropped at a flat 4% margin: 38 came back with NO
+    collector number at all, and a handful came back with the wrong one — `0342`, `0326`,
+    `0934`, which are NATIONAL POKEDEX numbers read off the artwork strip once the real
+    collector number had been cropped away. A blank is recoverable by the name fallback; a
+    confident wrong number is the failure D23 says no confidence threshold catches. A card is
+    `CARD_ASPECT` — 63/88, 0.716 — and the detected boxes came back at a MEDIAN of 0.790,
+    with the failures at 0.801 and the worst at 0.822: the border search locks onto the
+    artwork's strong inner edges more readily than the card's own bottom border. A flat margin
+    cannot fix a proportional error.
+
+    APPLIED SYMMETRICALLY. The observed deficit sits at the bottom — the number end — but
+    `CardBox` reports no per-edge confidence, so attributing the whole correction downward
+    would be inventing a fact. Symmetric costs a few pixels at the top and cannot be wrong
+    about which edge was short.
+
+    ONLY EVER GROWS. A box already taller than its width implies is left alone: that is a box
+    with room to spare, and narrowing it would be this defect in the other direction.
+
+    UNPADDED, UNROUNDED AND UNCLAMPED. The pad is a safety margin on a CUT and belongs to
+    whoever is cutting; this is a statement about where the cardboard is, and a caller that
+    wants the cardboard — the run panel's band preview measures its strip off this — would
+    have the strip a few percent low if it read a padded rectangle instead.
+    """
+    width, height = size
+    left, top = box.left * width, box.top * height
+    right, bottom = box.right * width, box.bottom * height
+    box_w, box_h = right - left, bottom - top
+
+    if aspect and box_h > 0 and (box_w / box_h) > aspect:
+        want_h = box_w / aspect
+        grow = (want_h - box_h) / 2.0
+        top -= grow
+        bottom += grow
+
+    return left, top, right, bottom
+
+
 def detect_card(source, aspect: Optional[float] = CARD_ASPECT) -> Optional[CardBox]:
     """Find the card, or return None. None means "a human should look", never "guess".
 

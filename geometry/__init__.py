@@ -64,6 +64,7 @@ from geometry.detect import (  # noqa: F401
     CardBox,
     GeometryError,
     UnknownCardShape,
+    corrected_bounds,
     detect_card,
 )
 from geometry.crop import (  # noqa: F401

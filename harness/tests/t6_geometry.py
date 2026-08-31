@@ -417,6 +417,39 @@ def run() -> Result:
             f"{clamped} against {frame.size}",
         )
 
+    # --- the retry's bands are cut from a CARD-SHAPED rectangle ----------------------------
+    #
+    # THE ASYMMETRY THIS CATCHES. `geometry.corrected_bounds` restores the height a real card
+    # of that width would have, because the border search comes back systematically short at
+    # the bottom — the number end. It was applied to the primary image `--crop` sends and NOT
+    # to the retry's bands, which are cut as FRACTIONS of the registered card: the bottom 18%
+    # of a box 12% too short is not the bottom 18% of the card. Measured over box 2's 543
+    # photographs, the registered card's aspect ran to a median of 0.789 against 0.716, and
+    # `box2/0340.jpg`'s number band held the weakness row and no collector number at all.
+    #
+    # ASSERTED BY CONTENT, like every other band check here. A short box is constructed from a
+    # correct one, and what is checked is that the number box is still inside the band it is
+    # named for — asserting the rectangle would only prove the arithmetic was not edited.
+    frame = _scene(Image, ImageDraw, angle=0.0, scale=0.9)
+    true_box = geometry.detect_card(frame)
+    if c.ok(true_box is not None, "the band fixture is a frame with a card in it"):
+        short_box = replace(
+            true_box, bottom=true_box.bottom - (true_box.bottom - true_box.top) * 0.10
+        )
+        short = geometry.crop_regions(frame, short_box)
+        c.ok(
+            _share(numpy, short[geometry.REGION_NUMBER], NUMBER_RGB) >= PRESENT,
+            "a box 10% short at the bottom still yields a number band with the number box in "
+            "it — the retry is the rung that recovers a number the first reading lost, and a "
+            "600px enlargement of the wrong strip is that failure with more pixels",
+            f"{_share(numpy, short[geometry.REGION_NUMBER], NUMBER_RGB):.3f} of the band",
+        )
+        c.ok(
+            _share(numpy, short[geometry.REGION_TITLE], TITLE_RGB) >= PRESENT,
+            "and the title band still contains the title bar — the correction is symmetric, "
+            "so it may not walk the top band off the card while rescuing the bottom one",
+        )
+
     # --- a box that is a rectangle INSIDE the card is refused ------------------------------
     #
     # THE FAILURE `detect_card` CANNOT REPORT. It answers "not found" honestly and has no way

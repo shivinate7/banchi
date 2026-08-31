@@ -550,10 +550,10 @@ COMPONENTS = [
                 "no rig photo lives here. Still not a detection rate: one rig, one lighting "
                 "state, one day.",
         "modules": {
-            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses",
-                          "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses, and the shape correction both crop paths share",
+                          "governed_by": ["D1", "D22", "D23", "D75"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
-                        "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+                        "governed_by": ["D1", "D22", "D75"], "tested_by": ["T6"]},
         },
     },
     {
