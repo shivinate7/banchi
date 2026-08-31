@@ -2833,6 +2833,27 @@ test('the address holds one line at both widths, including the longest label the
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
      and the block is measured for a second line. */
+
+  /* WAIT FOR THE WEB FONT BEFORE MEASURING, AS HARDENING AND NOT AS A FIX FOR THE RECORDED
+     FLAKE — that one was diagnosed properly on the branch that landed as `6c70d55`, by loading
+     the rig and CAPTURING the error text: 9 of 80 loaded repeats failed in `open()` on a
+     `toBeVisible()` timeout, none on an assertion, and the geometry case that remained was a
+     case subtracting two layouts rather than a screen that moves. `docs/DEBTS.md` carries that
+     reading; this comment does not restate it.
+
+     WHY THIS AWAIT IS STILL WORTH ITS LINE. Every number this case asserts is an advance width
+     — the comment above prices them at "Martian Mono's 0.70em advance" — and `app/index.html`
+     fetches that face from Google Fonts with `&display=swap`, which paints a fallback first and
+     re-lays-out when the real one arrives. That same swap is what the other investigation names
+     as the thing that moves the grid under a split measurement. Here the whole assertion is a
+     font metric, so waiting for the face is a precondition of measuring the right typeface at
+     all rather than a timing guess. It weakens nothing: the same numbers, on the font they were
+     computed for.
+
+     NOT PRESENTED AS MEASURED. This case has never been observed failing, so this is a latent
+     correctness fix and not a reproduction. */
+  await page.evaluate(() => document.fonts.ready.then(() => true))
+
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await page.locator('.position-parts').first().waitFor()

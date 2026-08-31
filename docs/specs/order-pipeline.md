@@ -15,40 +15,50 @@ touch at exactly one function, `do_mark_sold`.
 
 ## STATUS
 
+**Rewritten 2026-08-30, after T1, T2 and T3 landed.** The table below says `built` only where
+a human can reach the thing from a screen — `CLAUDE.md`'s rule, and the reason this section was
+the last thing edited in that build rather than the first: `make design-check` is the only check
+in this repo that can see reachability, and it was green over `#/orders` and `#/shipping` before
+a word here moved.
+
 | step | state |
 |---|---|
-| 8 order in | **missing.** No transport of any kind. |
-| 9 resolve | **built, runs correctly, unreachable.** `pipeline/orders.py` |
-| 10 route | **built, runs correctly, unreachable.** `pipeline/shipping.py` (D61) |
-| 11 pull | **missing.** No screen. `do_mark_sold` exists and is reached only by the sell path. |
-| 12 ship | **half built, unreachable.** `pipeline/pirateship.py` writes the spreadsheet; the tcgtracking call does not exist. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). The transport's endpoints, auth kind, body shape and four refusal codes were measured; the stored cookie has never been sent to that host. Section 6. |
+| 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
+| 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
+| 11 pull | **built and reachable.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. |
+| 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship. |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
-**`store/orders.py` is the one piece that is wired.** `store/session.py` carries `Ledger` in
-`Snapshot` and writes it last on every store write. `inventory/orders.json` did not exist before
-this session; the re-emit in section 1 created it, empty, with both of D63's maps. The plumbing
-is therefore proven and the file has never held an order.
+**`store/orders.py` was the one piece that was wired, and it is now written to by a screen.**
+`store/session.py` carries `Ledger` in `Snapshot` and writes it last on every store write.
+`inventory/orders.json` did not exist before this session; the re-emit in section 1 created it,
+empty, with both of D63's maps. **It has still never held a real order** — nothing below the
+paste box has been pressed against one, which is why section 6's last line stands.
 
-**Three modules have full T7 coverage and no reachability at all** — `pipeline/orders.py`,
-`pipeline/shipping.py`, `pipeline/pirateship.py`. No route, no function in `app/src/server.ts`,
-no subcommand beyond `identify | join | emit | reconcile`, no screen. Their only importer outside
-`harness/tests/t7_store_and_seams.py` is `pipeline/shipping.py` importing `pipeline/pirateship.py`.
-`make harness` and `make check` are green over every one of them, which is `CLAUDE.md`'s
-route-is-not-a-feature rule and this repo's own recorded failure, at three modules at once.
+**The three modules that had full T7 coverage and no reachability now have both.**
+`pipeline/orders.py` is read by `GET /orders`; `pipeline/shipping.py` and
+`pipeline/pirateship.py` are read by `POST /shipping/batches` and its file route. Each has a
+route, a client function in `app/src/server.ts`, a control on a screen, and — where it writes —
+a receipt and a way back. What has NOT changed is why that paragraph was written: `make harness`
+and `make check` were green over all three while none of them could be used, and neither of those
+targets can see reachability today either. `app/tests/orders.spec.ts` and
+`app/tests/shipping.spec.ts` are what can, and `make design-check` is deliberately off the commit
+path.
 
 ---
 
 ## 1. The store this has to run against
 
-Measured after the re-emit described below.
+Measured after the re-emit described below, and after the `3/37` stamp that followed it.
 
 | | |
 |---|---|
 | cards | **715** — 703 identified, 11 sold, 1 retired |
-| carry a SKU | **216**, across **102 distinct SKUs** |
-| stamped by box | 1 → 133/133 · 2 → 45/543 · 3 → **38/39** |
-| unstamped | **497**, every one of them in box 2 |
+| carry a SKU | **217**, across **102 distinct SKUs** |
+| stamped by box | 1 → 133/133 · 2 → 45/543 · 3 → **39/39** |
+| unstamped | **498**, every one of them in box 2 — 497 identified, 1 retired |
 | listing copies | 167 `pushed`, 0 `staged`, 0 `live`, across 117 rows |
 | ledger | `inventory/orders.json` present, both maps empty |
 
@@ -80,8 +90,12 @@ Diffed against a copy of the store taken immediately before:
     history lines added        4
 
 **Purely additive, which is D54, and no sold card was resurrected, which is D57's invariant
-measured rather than argued.** Box 3 now has no unstamped card. Before it, an eight-copy order
-for Rengar, Trophy Hunter resolved `short` on five picks; after it, `resolved` on eight.
+measured rather than argued.** Before it, an eight-copy order for Rengar, Trophy Hunter resolved
+`short` on five picks; after it, `resolved` on eight.
+
+It left box 3 one card short of stamped — `3/37`, sold, which no emit reaches — and a `sold` line
+at 20:43 UTC carried a SKU onto that one too. That is why the table above reads 39/39 and why
+section 7 has one fewer loose end than it was written with.
 
 ---
 
@@ -151,6 +165,31 @@ the pick list, all six reasons, and the pull.
 
 **Done:** an order is pasted, walked and pulled end to end, and the ledger holds what was taken.
 
+**Done as it now stands, 2026-08-30.** Route `#/orders`, chord `,o`. `GET /orders` answers the
+order list and the resolution out of ONE store snapshot so the two cannot disagree;
+`POST /orders/ingest` takes the projection and nothing else; `POST /orders/pull` records the
+copies and sells them in one `Store.write()`, and carries its own reversal. Client functions
+`getOrders`, `ingestOrders`, `fetchOrders`, `pullCopy` and `undoPull` in `app/src/server.ts`.
+The screen is `app/src/Orders.tsx`: the way in (paste and fetch behind one control), the six-way
+counts breakdown drawn including its zeros, the open/fulfilled split taken from `open` — the
+LEDGER's answer, never the feed's `status` string — every line's reason large with the machine
+string beneath it and a remedy where there is one, each pick's place block and its `held_by`, and
+a twenty-second receipt carrying the undo.
+
+**Three things it does deliberately.** The pull is aimed by the row's own `capture_id`, so a
+mid-box delete or a re-shoot between render and press is refused rather than selling whatever is
+at that slot. The receipt reads `places[]` — the labels as they were BEFORE the write — and never
+`sales[].card.place.label`, which reads `Box 3 · departed` by the time the answer is composed
+(D58). The undo lives on the receipt rather than in the row, because a successful pull makes the
+resolver stop offering the copy and the row unmounts.
+
+**What remains unmeasured about it.** Nobody has pasted a real order, so section 6's line stands
+unchanged: pasted JSON being a sufficient input is still an argument. `sku_unknown` is
+structurally unreachable from this route and always draws a zero — the route passes no
+`paperwork=`, and `do_orders`'s docstring says why — so five of the six reasons are all this
+screen can ever show. The counts, the spoken-for row, the aim and the receipt are asserted in
+`app/tests/orders.spec.ts` against stubbed routes; none of them has met the real server.
+
 **Why first, and not the transport:** the resolver, the labels and the ledger are all built and
 demonstrated in section 2, so a screen fed by pasted JSON is a complete product with no network
 in it. The transport is then a better source behind a control that already exists. The alternative
@@ -169,12 +208,44 @@ location in `Rubber Stamp`, which is optional by construction. **The limit is th
 engine**: if the badge and the download draw on T1's screen, two branches revise one file, which
 this repo has paid for twice. Sequence them, or give the lane its own surface.
 
+**Taken 2026-08-30: its own surface.** Route `#/shipping`, chord `,s`, `app/src/Shipping.tsx`,
+`POST /shipping/batches` with `GET /shipping/batches/<batch>/file` and
+`DELETE /shipping/batches/<batch>` beside it. Not sequencing, and the reason is scheduling
+first: the order screen was being designed in the same build, so "sequence them" would have put
+one finished design in a drawer for a session with nothing else to do.
+
+**The split earns an independent argument besides, and it is the better one.**
+`server/shipping_routes.py` opens by saying it is the one module in this server that holds a
+buyer's name and street address, and containing that at a FILE boundary is exactly what
+`server/tcg_export.py` does for the session cookie: an operator asking "where does the PII go"
+reads one file, and a reviewer can check the answer by reading it rather than by tracing a
+screen. Folding the lane into the order screen would have put those routes in
+`server/capture_server.py` beside forty that hold none, and the boundary would have been a
+convention instead of a module. The screen is typed so it cannot draw a buyer — `ShippingRow`
+carries no name, no street, no city, no postcode — and those details cross the wire exactly
+once, as the CSV download.
+
 ### T3 — the transport
+
+**Built 2026-08-30 as `server/order_transport.py`, and the probe T0 describes was answered by
+measurement in the owner's own logged-in browser rather than by a request from this tree.** The
+auth is a cookie session and not a Bearer challenge, so T3 is a Python client and not a browser
+relay. `POST /orders/fetch` answers EXACTLY the body `POST /orders/ingest` accepts, which is why
+the fetch needed no adapter and enters through the same one door the paste does. What is NOT
+established is in section 6.
 
 Whatever T0's probe returns. **The deliverable is that a fetch replaces a paste behind the control
 T1 already built.** Ingest writes no card state and no listing count, so a replay is a no-op — and
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
+
+**The shape a second fetch should take is already in the tree**, landed by D65 after this file was
+written. `server/tcg_export.py` is this server's one outbound call: stdlib `urllib`, one host and
+one method reachable from it, the secret read at call time and present in no return value, refusal
+message or log line, ten named failure codes because "the fetch failed" is three different
+problems, and a control on `#/runs` that a person presses. It is **not** the order host — its
+cookie session is the admin portal's and does not transfer — so what carries over is the shape and
+not the auth.
 
 ### T4 — the envelope, and the money gate
 
@@ -216,8 +287,9 @@ buyer's address should never become something the server has to remember to drop
 `capture_id`. D10 lets a mid-box delete slide every higher index down one, so a position written
 down today names a different card tomorrow — D63 measured exactly that.
 
-**The route count is updated in five places**: `CLAUDE.md`, `README.md`, `docs/map.py`,
-`app/src/App.tsx`, `scripts/views.txt`. `CLAUDE.md` already warns in its own words that this count
+**The route count is updated in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
+`app/src/App.tsx` — and `scripts/views.txt` gains a LINE rather than a number, which is the one a
+session looking for a count will not find. `CLAUDE.md` already warns in its own words that this count
 has been wrong more often than right and that nothing checks it.
 
 ---
@@ -252,25 +324,52 @@ and the per-label price are all claims from outside this tree.
 on the far side of a seam no committed fixture can hold. This is the same standing as T6's
 synthetic composites, and it is why `Name` is pre-joined rather than left to their mapper.
 
-**No order feed has been read.** The claim that only the browser extension's order detail carries
-per-line SKUs comes from testing three CSVs, and this session tested none of them. There is no
-extension in this tree, so any relay work is in a codebase `make check` never sees, `docs/map.py`
-does not map, and the git hooks do not guard.
+**An order feed HAS been read, and the half that matters has not.** Amended 2026-08-30, when
+T3 landed. What was MEASURED, in the owner's own logged-in browser: the two endpoints, their
+methods, the query string and the request bodies; that the auth is a cookie session and not a
+Bearer challenge; that `TCGAuthTicket_Production` is scoped to `.tcgplayer.com` and therefore
+serves this host and the admin portal alike; that omitting `filters.sellerKey` answers 403 rather
+than 400; that `GET /orders` answers 405 because `/orders` is a prefix and not a route; and that
+refusals come back as RFC 7807 problem+json. Corroborated against
+`tcgtracking-bridge-v2.4.2/background.js`, a third-party extension the owner supplied, which
+bridges the same flow through the same two endpoints.
+
+**What has NOT happened is the authenticated success path.** The `TCGPLAYER_STORE_COOKIE` value
+stored in `.env` has never been sent to that host — not by hand, not in a test — because the
+harness classifier refuses to let a credential leave a Bash process, and that refusal was
+respected rather than routed around. So the MECHANISM is proven and the VALUE is not: the first
+real run is what answers whether this particular cookie authenticates there, and a failure
+arrives as `order_session_expired` with the remedy in the message. `server/order_transport.py`'s
+own STATUS block is the primary record of this and says the same thing at greater length.
+
+**It is also still true that the search result carries no per-line SKU** — only the order detail
+does, as `products[].skuId` — which is why the transport is two calls and not one. That is
+measured now rather than carried from a planning session.
+
+**The browser extension in `tcgtracking-bridge-v2.4.2/` is READ MATERIAL AND NOT A COMPONENT.** It
+is a codebase `make check` never sees, `docs/map.py` does not map, and the git hooks do not
+guard. Nothing in this repo calls it or depends on it.
 
 **Postage economics, volumes and account state** — the letter rate, the insurance premium, the
 347-orders-in-90-days figure, the seller level — are all external facts carried from the planning
 session. They decided the lanes and none of them is checkable from here.
 
 **That pasted JSON is a sufficient input for T1** is an argument, not a measurement, until
-somebody pastes one.
+somebody pastes one. **It is still an argument as of 2026-08-30, with T1 built and reachable**,
+and the screen shipping is not what settles it: `app/tests/orders.spec.ts` drives the paste
+against a stubbed `POST /orders/ingest`, which proves the projection and proves nothing about
+whether a real marketplace's JSON survives it. **This line may be struck only by a session
+holding a transcript of a real order pasted, walked and pulled** — the same standing the two
+paragraphs above it have.
 
 ---
 
 ## 7. Loose ends found in the store
 
-- **`3/37` is sold and carries no SKU.** No order line can ever match it, and no re-emit will fix
-  it: emit walks `uncommitted_positions`, and a sold copy is not among them. It is the permanent
-  residue of the stamping defect, and it is one card.
+- ~~**`3/37` is sold and carries no SKU.**~~ **Closed 2026-08-30**, and not by a re-emit — emit
+  walks `uncommitted_positions` and a sold copy is not among them, so that reasoning held and the
+  stamp came from the sale itself. **No sold card in the store now lacks a SKU**, so the stamping
+  defect left no residue.
 - **`3/13` is sold with an empty `name`.** SKU and number are present, so it resolves; only what a
   screen would draw is wrong.
 - **Nothing is `live`.** 167 copies at `pushed`, none staged, none live. `store/master.py` already
@@ -288,4 +387,9 @@ somebody pastes one.
 T3 is.
 
 **A real order pulled end to end**, which is the first thing here that would replace an argument
-with a measurement.
+with a measurement. **T1 being built does not do it** — the screen is the thing that makes it
+possible to try, and section 6's last paragraph says what a session would have to hold to strike
+the line.
+
+**The stored cookie reaching `order-management-api` for the first time**, which is the other
+half of T3 and is one press away rather than one build away.
