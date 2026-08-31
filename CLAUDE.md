@@ -28,7 +28,9 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
                     #   `.claude/launch.json` from this checkout's own slot before any work
                     #   starts, so a worktree can no longer preview the MAIN tree (D43).
 make status         # where you are: next step, T1 score, branch. Start here.
-make harness        # all seven verification tests; the Stop hook runs it at turn end
+make harness        # all EIGHT verification tests; the Stop hook runs it at turn end. It said
+                    #   seven until 2026-08-31 — `t8_codes.py` landed with the code-card track
+                    #   and nothing counts these either (see the route-count warning below).
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
                     #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
@@ -456,11 +458,18 @@ D77  The pipeline's rows can be the wrong card, so the export is reachable from 
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/order-pipeline.md` — steps 8 to 14: an order arrives, a card is pulled, an
   envelope is stamped, tracking goes back. Every number in it was
-  measured rather than carried forward — section 6 names what it could not check.
-  **Steps 8 to 12 are BUILT as of 2026-08-30 (D69)**: `#/orders` pulls a real order out of the
-  ledger and `#/shipping` routes a real export into three lanes, both reachable from the nav,
-  and `server/order_transport.py` fetches this account's own orders over the cookie session
-  D69 measured. **Steps 13 and 14 — the shipped status and the tracking write-back — are
+  measured rather than carried forward — section 6 names what it could not check. **Those numbers
+  are perishable and the file says so**: the store moved three times in two days, and §1 carries
+  all three snapshots rather than the latest. Finding one stale means the store moved.
+  **Steps 8 to 12 are BUILT as of 2026-08-30 (D69)**: `#/orders` resolves an order to the copies
+  that fill it and pulls them, `#/shipping` routes a real export into three lanes, both reachable
+  from the nav, and `server/order_transport.py` fetches this account's own orders over the cookie
+  session D69 measured — `search` has run authenticated and returned three real orders.
+  **`inventory/orders.json` has still never held a real one**, so "pulls a real order out of the
+  ledger", which this pointer claimed until 2026-08-31, was a screen's capability read as a
+  history. All forty-two sales in the store went through `#/inventory` instead, and §1 measures
+  that. One piece INSIDE step 12 is also unbuilt — `POST /shipping/batches/<batch>/stamps`, the
+  Rubber Stamp fill, §3's T2b. **Steps 13 and 14 — the shipped status and the tracking write-back — are
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **Its T6 — an order DRIVING the inventory walk, so the screen advances
