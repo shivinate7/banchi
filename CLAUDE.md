@@ -429,7 +429,11 @@ D71  A card with no slot is ranked like every other, and it is the figure that g
   D69 measured. **Steps 13 and 14 — the shipped status and the tracking write-back — are
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
-  order was discharged. Not `docs/specs/order-flow.md`, the sell path.
+  order was discharged. **Its T6 — an order DRIVING the inventory walk, so the screen advances
+  from card to card as each copy is pulled — is RECORDED and NEITHER, on the owner's want of
+  2026-08-30.** It is a second form of step 11 rather than a fifteenth step; §3 carries the
+  three determinations, of which the one that bites is that the walk's control has to post the
+  pull and not the sale. Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
   measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
   the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and
