@@ -2070,7 +2070,10 @@ COMPONENTS = [
             # every run. This is where that decision is made, per SKU, with every export cell
             # in front of it.
             "src/Pricing.tsx": {"does": "#/pricing: the hand-pricing worklist. One row per SKU a "
-                                        "run matched, sorted market-descending, carrying ALL "
+                                        "run matched, sorted market-descending — except that a "
+                                        "SKU this run can add nothing for sinks to the bottom "
+                                        "of its section under a heading naming why (D78) — "
+                                        "carrying ALL "
                                         "fourteen export columns that hold data — the owner's "
                                         "\"all the data from the CSV shown when I make the "
                                         "decision\". The run's rule PREFILLS every row as a "
@@ -2086,17 +2089,19 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
                                         "note lands in a second grid row every zone but the card "
                                         "leaves empty; right-aligned tabular money, so decimal "
                                         "alignment carries magnitude and no guessed type band "
-                                        "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
+                                        "does; one rule under the last row this run can still "
+                                        "act on, which is the sunk group's heading (D78). NO "
+                                        "SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.

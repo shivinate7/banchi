@@ -842,7 +842,7 @@ test('the caption and the rows share one grid template, so they cannot drift', a
 
 // -------------------------------------------------- why a row adds nothing (D59)
 
-test('a row that adds nothing draws the reason the SERVER composed, verbatim', async ({
+test('the reason a row adds nothing is a heading, composed by the SERVER, verbatim', async ({
   page,
 }) => {
   /* THE SENTENCE IS THE SERVER'S AND THE CLIENT MAY NOT COMPOSE ONE. This note read
@@ -894,10 +894,14 @@ test('a row that adds nothing draws the reason the SERVER composed, verbatim', a
     ],
   })
 
-  const notes = page.locator('.pricing-row .pricing-row-note')
-  await expect(notes).toHaveCount(2)
-  await expect(notes.nth(0)).toHaveText(pending)
-  await expect(notes.nth(1)).toHaveText('nothing to add this run')
+  /* ONE HEADING PER REASON, AND THE ROWS THEMSELVES SAY NOTHING. Two reasons here, so two
+     headings — the three the join composes have three different remedies and are never merged
+     into one bucket of leftovers. */
+  const heads = page.locator('.pricing-group-head')
+  await expect(heads).toHaveCount(2)
+  await expect(heads.nth(0).locator('.pricing-group-why')).toHaveText(pending)
+  await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText('nothing to add this run')
+  await expect(page.locator('.pricing-row .pricing-row-note')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
      composes something the assertion above happens to match. Neither row may claim the export
@@ -905,14 +909,79 @@ test('a row that adds nothing draws the reason the SERVER composed, verbatim', a
   await expect(page.locator(VIEW)).not.toContainText('already holds')
 })
 
+/* THE ORDER THE ROWS ARE DRAWN IN, WHICH IS NOT THE ORDER THEY ARRIVE IN.
+ *
+ * `cli/cmd_join.py` writes `pricing.json` market-descending, so a SKU whose every copy is
+ * already listed or has left the box lands wherever its market price puts it — which on the
+ * owner's box 3 was the top three rows of a 51-row section, three of the most expensive
+ * non-questions in the run standing where the eye starts. They sink; the rows that still want
+ * a price keep the top, in the market order the join gave them.
+ *
+ * THE FIXTURE INTERLEAVES ON PURPOSE. A case whose sunk row is already last would pass against
+ * a screen that reorders nothing at all. */
+test('a row that adds nothing sinks to the bottom of its section, under its heading', async ({
+  page,
+}) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+      }),
+      sku({ sku: '8608659', name: 'Wattrel' }),
+    ],
+  })
+
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel', 'Dunsparce'])
+
+  /* THE HEADING IS BETWEEN THEM AND NOT MERELY SOMEWHERE ON THE PAGE, which is the whole of
+     what the owner asked for: the sentence stops being every row's own subtext and becomes the
+     line those rows fall under. Read off the list's children in order, so a heading drawn
+     above the section or after the last row fails. */
+  const drawn = await page
+    .locator('.pricing-list > *')
+    .evaluateAll((nodes) => nodes.map((node) => node.className))
+  expect(drawn).toEqual([
+    'pricing-row',
+    'pricing-row',
+    'pricing-group-head',
+    'pricing-row',
+  ])
+
+  /* AND ENTER STEPS THE ORDER THAT IS DRAWN. The advance walked the WIRE order, and got away
+     with it for as long as the wire's market-descending sort happened to draw the sections in
+     their own order. Sinking a group ends that: stepping the wire here would send the focus
+     from the first row down to `Dunsparce` at the bottom of the section and back up again. */
+  const fields = field(page)
+  await fields.nth(0).focus()
+  await page.keyboard.press('Enter')
+  await expect(fields.nth(1)).toBeFocused()
+  await expect(fields.nth(1)).toHaveAttribute('aria-label', 'Price for Wattrel')
+})
+
 test('a row is the same height whether or not it carries a note', async ({ page }) => {
   await open(page, {
-    skus: [sku(), sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0 })],
+    skus: [sku(), sku({ sku: '8608459', name: 'Dunsparce' })],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: { '8608459': { withheld: 'bullish', note: 'holding for the set rotation' } },
+    },
   })
 
   /* D28's other half — the list must not move under a finger. The note lands in a second grid
      row that every zone but the card leaves empty by construction, so a row that acquires a
-     sentence costs no height and a hundred-row list cannot reflow when one does. */
+     sentence costs no height and a hundred-row list cannot reflow when one does.
+
+     THE NOTE IS A HOLD'S NOW AND NOT `at_cap`'s. The run's reason for adding nothing moved to
+     the group heading, so the only string that still lands on this line per-row is the
+     operator's own — which is the string this invariant has to survive, because it is the one
+     nothing bounds the length of. */
   const rows = page.locator('.pricing-row')
   await expect(rows.nth(1).locator('.pricing-row-note')).toBeVisible()
   const heights = await rows.evaluateAll((nodes) =>
@@ -933,25 +1002,20 @@ test('a row is the same height whether or not it carries a note', async ({ page 
  * written on `bullish` would be 129px — still too wide, but a fix that merely bought 20px
  * would pass it and ship the wrap.
  *
- * BOTH AT ONCE ON THE LAST ROW, because a held row with an `at_cap` sentence is where the two
- * strings actually collided, and it is a shape the store produces: a card can be at the live
- * cap and withheld at the same time. */
-test('a held row is the same height as a priced one, reason and sentence together', async ({
+ * BOTH AT ONCE ON THE LAST ROW, because a held row carrying a note is where the two strings
+ * actually collided, and it is a shape the store produces: a card can be withheld with a
+ * reason the operator typed at the same time. The colliding string used to be `at_cap`'s
+ * sentence, which has since moved up to the group heading — a NOTE of the same length stands
+ * in its place, because the length was the whole of the pressure and the operator's note is
+ * now the only string on this line nothing bounds. */
+test('a held row is the same height as a priced one, reason and note together', async ({
   page,
 }) => {
   await open(page, {
     skus: [
       sku(),
       sku({ sku: '8608459', name: 'Dunsparce' }),
-      sku({
-        sku: '8608659',
-        name: 'Wattrel',
-        at_cap: true,
-        add_to_quantity: 0,
-        copies_out: 4,
-        nothing_to_add:
-          '0 live and 4 on an import this pipeline has not seen land — 4 of the 4 this SKU may have out',
-      }),
+      sku({ sku: '8608659', name: 'Wattrel' }),
     ],
     decisions: {
       rule: 'match',
@@ -959,7 +1023,10 @@ test('a held row is the same height as a priced one, reason and sentence togethe
       sub_threshold: null,
       overrides: {
         '8608459': { withheld: 'next_batch' },
-        '8608659': { withheld: 'next_batch', note: 'waiting on rotation' },
+        '8608659': {
+          withheld: 'next_batch',
+          note: 'waiting on the set rotation before this one goes back out',
+        },
       },
     },
   })
@@ -1491,4 +1558,3 @@ test('`p` closes a pinned reading, which is the half of the exclusion that was m
   await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
   await expect(panelOf(page)).toHaveCount(0)
 })
-

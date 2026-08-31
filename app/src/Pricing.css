@@ -362,6 +362,68 @@
   color: var(--ink);
 }
 
+/* --------------------------------------------------------------- the sunk group's heading
+
+   THE ROWS THAT ADD NOTHING SINK, AND ONE HEADING SAYS WHY FOR ALL OF THEM. The sentence was
+   drawn in the right margin of every row it applied to — twenty copies of "every copy in this
+   run is already listed or has left the box" running down a 51-row section, in the same 10px
+   muted register as the row notes it was sitting among, on rows that want nothing from the
+   operator at all. Once it is a heading it is stated once, and the rows under it need not
+   restate it.
+
+   IT IS SUBORDINATE TO THE SECTION HEAD AND IT LOOKS IT. Same `--util` face and same muted
+   ink, but sentence case rather than uppercase: the section titles are three fixed labels and
+   read as labels, while this is a sentence `pipeline/join.py` composed and reads as one. The
+   rule above it is the sink made visible — everything below this line in the section is
+   answered, and the operator's eye can stop there.
+
+   NOT `sticky`. D28 forbids the list moving under a finger already travelling to the next
+   field, and a heading that detaches and rides the scroll is that motion arriving from the
+   other direction. */
+.pricing-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s3) 0 var(--s1);
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+/* THE FIRST GROUP CARRIES THE SINK LINE AND THE SECOND DOES NOT. Between two groups the rows
+   above are already answered, so a second rule would divide two halves of one silence; the
+   row's own bottom border is separation enough there. `~` and not `+` because the heading is a
+   sibling of every row in the list rather than the parent of its own. */
+.pricing-row ~ .pricing-group-head {
+  margin-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.pricing-group-head ~ .pricing-group-head {
+  border-top: 0;
+}
+
+/* THE SENTENCE YIELDS AND THE COUNT NEVER DOES, for the reason `.pricing-row-why` yields to
+   the machine token below: the sentence is prose and an ellipsis costs it nothing an operator
+   cannot read from the rows themselves, and "4 SKUs" truncated is a wrong number rather than a
+   shortened one. */
+.pricing-group-why {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pricing-group-count {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* ROW HEIGHT IS INVARIANT ACROSS EVERY STATE, and the note is what makes it so: a second
    grid row that every zone but the card leaves empty by construction, so a row that acquires
    a sentence costs nothing and a list of a hundred cannot reflow when one does. */
