@@ -20,15 +20,25 @@ purpose, and a second fetch is not a reason to spend the dependency the first on
 for.
 
 --------------------------------------------------------------------------------------------
-STATUS, PLAINLY, BECAUSE THE INTERESTING HALF IS UNEXERCISED
+STATUS, PLAINLY: THE SESSION IS PROVEN AND THE DETAIL CALL IS NOT
 --------------------------------------------------------------------------------------------
 
-**The authenticated success path has never run.** Not once, not in a test, not by hand. The
-harness classifier refuses to let a credential leave a Bash process — it refused twice while
-the wire capture this module is written from was being taken, and that refusal was respected
-rather than routed around — so the `TCGPLAYER_STORE_COOKIE` value stored in `.env` has never
-been sent to this host. What IS established, and was measured in the owner's own logged-in
-browser on 2026-08-30:
+**`search` HAS NOW RUN AUTHENTICATED, 2026-08-30, and returned three real orders.** The
+operator ran it — an agent may not read `.env` here, which is `.claude/settings.json`'s rule
+and was left standing rather than worked around. What that one call settles is more than the
+session: the `TCGPLAYER_STORE_COOKIE` value stored in `.env` DOES authenticate this host, so
+one credential really does serve the admin portal and the order API; `PKMNSCAN_TCG_SELLER_KEY`
+was accepted, so the 403 shape is understood correctly; the plain-JSON body was accepted, so
+D65's form encoding really is the wrong shape here and not merely a different one; and the
+response parsed and projected without raising.
+
+**`detail` AND `fetch_open_orders` ARE STILL UNEXERCISED AGAINST THE LIVE HOST**, and that is
+the half that carries a buyer's name and address. `products[].skuId` has been read in the
+BROWSER and never through this module, so `project_order`'s drop of `buyerName`,
+`shippingAddress` and `paymentType` is proven against T7's fixtures and against nothing that
+came off the wire. Whoever presses Fetch first exercises it; until then this line stands.
+
+What was measured in the owner's own logged-in browser on 2026-08-30, before any of that:
 
   - the endpoints, their methods, their query string and their request bodies;
   - that the auth is a cookie session and NOT a Bearer challenge;
@@ -41,9 +51,8 @@ Corroborated against `tcgtracking-bridge-v2.4.2/background.js`, a third-party MV
 the owner supplied, which bridges this same flow with the same two endpoints, the same
 `credentials: 'include'`, and the same `Origin`/`Referer` pair.
 
-**What the first real run answers** is whether the specific stored cookie authenticates THIS
-host. The mechanism is proven; the value is not. If it does not, the failure arrives as
-`order_session_expired` and the remedy is the one that message prints.
+**The session question is closed** — see the top of this block. A session that later expires
+still arrives as `order_session_expired`, and the remedy is the one that message prints.
 
 Every refusal path in this file is reachable without a network. `search_body`,
 `project_order` and `problem_note` are pure functions and are public for exactly that reason:

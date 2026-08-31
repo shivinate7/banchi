@@ -635,9 +635,10 @@ at a temporary directory, so nothing here touches the real inventory.
   the oldest, which is how much buyer PII this process can hold at once stated as a fact
   rather than as a comment.
 
-  **The transport half is what is decidable without a live session, and its status is
-  unchanged by a green run**: `server/order_transport.py`'s authenticated success path has
-  still never run. What is asserted is that `project_order`'s four keys are an allowlist and
+  **The transport half is what is decidable without a live session, and a green run still says
+  nothing about the live one**: `server/order_transport.py`'s `search` HAS since run
+  authenticated (2026-08-30, three real orders, run by the operator because an agent may not
+  read `.env`), while `detail` and `fetch_open_orders` have not. What is asserted is that `project_order`'s four keys are an allowlist and
   that `buyerName`, `shippingAddress` and `paymentType` are dropped where they are parsed — on
   the line as well as at the top — while `skuId` survives coerced to a string; that the search
   body goes out as a plain JSON document with `Content-Type: application/json` and **not**

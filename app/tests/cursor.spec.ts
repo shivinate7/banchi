@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 
 /* WHAT A CONTROL SAYS TO THE POINTER, ASSERTED WHERE NOTHING ELSE COULD SEE IT.
  *
@@ -135,6 +136,7 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
 
   for (const [route, view] of ROUTES) {
     await page.goto(`/${route}`)
+    await settleFonts(page)
     await page.waitForLoadState('networkidle').catch(() => {})
     await expect(
       page.locator(view),
@@ -174,6 +176,7 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
      is for: it renders components against the tokens without needing a store behind them, and
      it is already what `make screenshot` and step 6's own spec point at. */
   await page.goto('/#/gallery')
+  await settleFonts(page)
   await expect(page.locator('main.gallery')).toBeVisible()
 
   const field = page.locator('.search-field-box').first()
@@ -259,6 +262,7 @@ const SHAPES: [html: string, want: string, why: string][] = [
 
 test('the cursor floor answers for every shape a control can take', async ({ page }) => {
   await page.goto('/#/gallery')
+  await settleFonts(page)
   await expect(page.locator('main.gallery')).toBeVisible()
 
   const results = await page.evaluate((shapes) => {

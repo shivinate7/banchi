@@ -2289,6 +2289,18 @@ COMPONENTS = [
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
             },
+            "tests/fontsReady.ts": {
+                "does": "one helper, `settleFonts`, awaited after every `page.goto` in the four "
+                        "specs that measure type. `app/index.html` fetches its two faces with "
+                        "`&display=swap`, which paints a fallback first and re-lays-out on "
+                        "arrival — right for a reader, wrong for a ruler, because a "
+                        "`getBoundingClientRect` taken inside that window measures a different "
+                        "typeface than the assertion was computed against. It closes the CAUSE "
+                        "of the narrower half of the design-check flake; `expect.timeout` and a "
+                        "one-`evaluate` read close the recorded red and the exposure. Weakens no "
+                        "assertion. Not a harness test; it has no test of its own and is "
+                        "exercised by every spec that imports it.",
+                "governed_by": ["D16", "D38", "D50"]},
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
                         "every screen sits under: D51's Cmd-arrow steps the ring in the order "

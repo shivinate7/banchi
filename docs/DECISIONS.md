@@ -3175,7 +3175,7 @@ The label change alone was **worse than the defect on two of the three surfaces*
 
 **A 403 is `order_seller_key_rejected` and is NOT an expired session.** `filters.sellerKey` is required and its absence answers 403 rather than 400, so a client that reads 403 as "log in again" sends the operator to re-authenticate over a body bug. The key is the lowercased prefix of every order number this account has: account-identifying rather than secret, so it belongs in `.env` as `PKMNSCAN_TCG_SELLER_KEY` and not in a constant.
 
-**What is still unverified, said plainly**: whether the specific `TCGPLAYER_STORE_COOKIE` value in `.env` authenticates this host. The mechanism is proven and the stored string was never sent — a credential was not allowed to leave a shell, and that refusal was respected rather than routed around. The first real fetch answers it.
+**Verified 2026-08-30, after this entry was written**: the operator ran `order_transport.search(page_size=3)` against the live host and got three real orders back, so the stored `TCGPLAYER_STORE_COOKIE` does authenticate it and one credential serves both hosts. An agent may not read `.env` here, so the run was the operator's. **`detail` and `fetch_open_orders` are still unexercised against the live host**, and they are the half that carries a buyer's name and address — the PII projection is proven against fixtures only.
 
 ### What this does not decide
 

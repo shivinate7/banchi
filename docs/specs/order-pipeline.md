@@ -334,13 +334,21 @@ refusals come back as RFC 7807 problem+json. Corroborated against
 `tcgtracking-bridge-v2.4.2/background.js`, a third-party extension the owner supplied, which
 bridges the same flow through the same two endpoints.
 
-**What has NOT happened is the authenticated success path.** The `TCGPLAYER_STORE_COOKIE` value
-stored in `.env` has never been sent to that host — not by hand, not in a test — because the
-harness classifier refuses to let a credential leave a Bash process, and that refusal was
-respected rather than routed around. So the MECHANISM is proven and the VALUE is not: the first
-real run is what answers whether this particular cookie authenticates there, and a failure
-arrives as `order_session_expired` with the remedy in the message. `server/order_transport.py`'s
-own STATUS block is the primary record of this and says the same thing at greater length.
+**The session question is CLOSED, 2026-08-30.** The operator ran
+`server.order_transport.search(page_size=3)` against the live host and it returned three real
+orders. An agent may not read `.env` in this repo — `.claude/settings.json` denies it, and that
+was left standing rather than worked around — so the run was theirs. It settles four things at
+once: the stored `TCGPLAYER_STORE_COOKIE` DOES authenticate `order-management-api`, so one
+credential serves both hosts; `PKMNSCAN_TCG_SELLER_KEY` was accepted; the plain-JSON body was
+accepted, so D65's form encoding is the wrong shape here rather than merely a different one; and
+the response parsed and projected without raising.
+
+**`detail` and `fetch_open_orders` remain unexercised against the live host**, which is the half
+that carries a buyer's name and address. `products[].skuId` was read in the BROWSER and never
+through this module, so the PII projection is proven against fixtures and against nothing that
+came off the wire.
+
+`server/order_transport.py`'s own STATUS block is the primary record and says this at greater length.
 
 **It is also still true that the search result carries no per-line SKU** — only the order detail
 does, as `products[].skuId` — which is why the transport is two calls and not one. That is

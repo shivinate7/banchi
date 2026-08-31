@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -817,6 +818,7 @@ async function open(
   })
 
   await page.goto(VIEW_ROUTE)
+  await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
   /* THE SECTION HEADERS AND NOT A CARD ROW, because the walk arrives fully collapsed since
      2026-08-23 and there are no card rows until something asks for them. A header is the
@@ -2852,7 +2854,7 @@ test('the address holds one line at both widths, including the longest label the
 
      NOT PRESENTED AS MEASURED. This case has never been observed failing, so this is a latent
      correctness fix and not a reproduction. */
-  await page.evaluate(() => document.fonts.ready.then(() => true))
+  await settleFonts(page)
 
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })

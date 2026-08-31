@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 
 import type { HistoryRange, PriceHistoryPayload, PricingSku } from '../src/types'
 
@@ -306,6 +307,7 @@ async function open(
   })
 
   await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
+  await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
 }
