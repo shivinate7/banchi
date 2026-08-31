@@ -1,5 +1,5 @@
 /**
- * The shape of a price, on the row — D78, the batched half of D62.
+ * The shape of a price, on the row — D79, the batched half of D62.
  *
  * D62 GAVE THE HISTORY A PANEL AND A PRESS PER CARD, AND NAMED WHAT WOULD REOPEN IT: *"the
  * panel being opened on every card… the honest answer is a batched route — `readings_for_rows`

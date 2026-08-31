@@ -16,6 +16,7 @@ import type {
   DecisionsDocument,
   PricingPayload,
   PricingSku,
+  PricingTable,
   RunDetail,
   RunFile,
   RunSummary,
@@ -68,7 +69,7 @@ import './Pricing.css'
  *  is a courtesy and the undo stack behind it is what matters. */
 const UNDO_DEPTH = 10
 
-/** How many SKUs one batched trend request asks about — D78.
+/** How many SKUs one batched trend request asks about — D79.
  *
  *  IT IS A LATENCY NUMBER AND NOT A COURTESY ONE. The server sleeps `COURTESY_DELAY_SECONDS`
  *  between live fetches whatever the chunking, so this changes nothing the mirrors see; what
@@ -188,6 +189,72 @@ function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' 
   return bucket === 'no_market_data' ? 'no_market_data' : 'overrides'
 }
 
+/** WHY THIS RUN ADDS NO ROW FOR THIS SKU, AS A HEADING — or null for the ordinary row that
+ *  adds one. The sentence is `pipeline/join.py:SkuMatch.nothing_to_add` verbatim and is never
+ *  reassembled here (D59); the fallback states the bare fact `at_cap` means, for a
+ *  `pricing.json` an older join wrote with no sentence beside it.
+ *
+ *  IT IS A GROUP KEY AND NOT A ROW NOTE, which is the whole of the change. Every row that
+ *  cannot add carried the same sentence in its own right margin — 51 SKUs deep, that is one
+ *  sentence drawn twenty times down a list whose remaining rows are the ones with an answer
+ *  still to give. Rows sharing a reason share a heading, and the reason is stated once.
+ *
+ *  THE SERVER SAYS WHY AND THE SCREEN DRAWS IT, WHICH IS THE PART THAT WAS PAID FOR. This
+ *  sentence used to be "nothing to add this run — TCGplayer already holds {live_before}",
+ *  composed on the client out of the export's live column alone — which reads 0 for every copy
+ *  sitting on an import nobody has reconciled. Measured on the owner's store: 167 pushed copies
+ *  across 72 SKUs, zero live and zero staged, and `live_before` reads 0 on every SKU of both
+ *  runs on disk — so wherever it drew at all it read "TCGplayer already holds 0" under a row
+ *  adding nothing BECAUSE TCGplayer was holding them. A row that stops appearing in an import
+ *  file is close enough to the silent drop `CLAUDE.md` forbids that saying nothing would have
+ *  beaten saying that.
+ *
+ *  THE FALLBACK IS NOT DEFENSIVE PADDING. This table is `pricing.json` READ OFF DISK, and a
+ *  file an earlier join wrote carries `at_cap` with no sentence beside it — measured, both runs
+ *  in `runs/` today. An older file states the bare fact, which is exactly what `at_cap` means,
+ *  and invents no reason for it. Those rows group under it together, which is the honest
+ *  reading: one heading over the cards this run adds nothing for and no claim as to why. */
+function groupOf(sku: PricingSku): string | null {
+  return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
+}
+
+/** THE HEADING OVER THE ROWS THE OPERATOR HAS ALREADY ANSWERED WITH A HOLD. The screen's own
+ *  sentence and not the server's, because a hold is this screen's answer (D49) and
+ *  `decisions.json` records the reason per SKU rather than one for the group — the machine
+ *  token stays on each row, which is where a `withheld: bullish` is greppable from. */
+const HELD_HEAD = 'held back from this run'
+
+/** THE SKUs DRAWN AS HELD WHEN THE PAGE OPENED — a snapshot, taken in `load` and untouched
+ *  until the next one, which is what makes a hold sink on the REOPENING and never under the
+ *  hand that just pressed `H` (D28, D78).
+ *
+ *  READ THE WAY THE ROW READS IT, and that is why this walks the table rather than the two
+ *  answer maps: `targetOf` decides which map a row's answer lives in, so a stale `overrides`
+ *  key for a `no_market_data` SKU draws nothing and must sink nothing. The group and the word
+ *  `Holding` are then the same test, run once each.
+ *
+ *  `'unlisted'` COUNTS, and it is not an edge case: it is the answer a `no_market_data` row
+ *  takes to say this card is not being listed, it draws `Holding` in the price column exactly
+ *  as a reasoned hold does, and it keeps the card out of the same import file. A group of rows
+ *  that will not list is the honest set; one that took the reasoned half alone would leave the
+ *  other half sitting among the unanswered rows looking like work. */
+function heldOnArrival(table: PricingTable, doc: DecisionsDocument): ReadonlySet<string> {
+  const overrides = (doc.overrides ?? {}) as Record<string, unknown>
+  const unpriced = (doc.no_market_data ?? {}) as Record<string, unknown>
+  const out = new Set<string>()
+  for (const row of table.skus) {
+    const standing = targetOf(row.bucket) === 'overrides' ? overrides[row.sku] : unpriced[row.sku]
+    if (isWithheld(standing)) out.add(row.sku)
+  }
+  return out
+}
+
+/** One thing the list draws: a heading, or a row. Discriminated on `head` because the two are
+ *  SIBLINGS in the list rather than a heading owning a nested list of its own — the caption
+ *  above them is a sibling of the rows for the same reason, and a wrapper would stop the rows
+ *  being what the section's own grid template applies to. */
+type Drawn = { head: string; count: number } | { head: null; sku: PricingSku }
+
 type Undo = { sku: string; target: 'overrides' | 'no_market_data'; before: unknown }
 
 export function Pricing() {
@@ -199,6 +266,9 @@ export function Pricing() {
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
+  /* THE HOLDS AS THE SERVER LAST HANDED THEM OVER. State and not a memo over `doc`: the whole
+   * property is that it does NOT track the document the operator is editing. */
+  const [sunkHolds, setSunkHolds] = useState<ReadonlySet<string>>(() => new Set())
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
 
   /* ------------------------------------------------------------- the price history (D62)
@@ -232,7 +302,7 @@ export function Pricing() {
    * what decides staleness; this only avoids asking it twice in one sitting. */
   const [history, setHistory] = useState<Record<string, HistoryRead>>({})
 
-  /* ---------------------------------------------------------------- the trend strip (D78)
+  /* ---------------------------------------------------------------- the trend strip (D79)
    *
    * D62 MADE THE HISTORY A PRESS PER CARD AND NAMED WHAT WOULD REOPEN IT — *"the panel being
    * opened on every card… the honest answer is a batched route and a column on the row"*. The
@@ -363,7 +433,7 @@ export function Pricing() {
   }, [])
 
   const load = useCallback(async (name: string) => {
-    /* THE TREND STRIP IS THIS RUN'S AND DIES WITH IT (D78). `history` above deliberately
+    /* THE TREND STRIP IS THIS RUN'S AND DIES WITH IT (D79). `history` above deliberately
        survives a run change — a card's sales history is a fact about the CARD — but the strip
        is a reading over the rows this run still wants an answer for, and which rows those are
        is a fact about the run. Abandoning the walk is the other half: a chunked read started
@@ -384,6 +454,7 @@ export function Pricing() {
         answer.decisions ?? { rule: answer.pricing.rule, basis: answer.pricing.basis }
       setPayload(answer)
       setDoc(held)
+      setSunkHolds(heldOnArrival(answer.pricing, held))
       savedDoc.current = held
       failedDoc.current = null
       setFailure(null)
@@ -401,6 +472,7 @@ export function Pricing() {
       }
     } catch (err) {
       setPayload(null)
+      setSunkHolds(new Set())
       setFailure(describeFailure(err))
     }
   }, [])
@@ -603,6 +675,86 @@ export function Pricing() {
 
   const rows = useMemo(() => table?.skus ?? [], [table])
 
+  /** THE LIST AS IT IS DRAWN, SECTION BY SECTION, AND THE ONLY PLACE THAT ORDER IS DECIDED.
+   *
+   *  A ROW THAT WANTS NOTHING FROM THE OPERATOR SINKS. `cli/cmd_join.py` writes
+   *  `pricing.json` market-descending and that stands — inside every group it is untouched —
+   *  but a SKU whose every copy is already listed, or one already answered with a hold, is not
+   *  a decision this run is waiting on, and at the top of the section it puts the run's most
+   *  expensive non-questions in front of the operator's eye. Three tiers, in the order the
+   *  operator asked for them: the rows that still want a price, then the ones they have
+   *  already held, then the ones this run can add nothing for at all.
+   *
+   *  THE SUNK TIER IS THE DEEPER FACT WHERE A ROW IS BOTH. A held row that is ALSO at the cap
+   *  goes under the cap's heading, because the hold changes nothing about a SKU this run was
+   *  never going to add a row for — and its `withheld` token still draws beside it, so the
+   *  hold is not lost by being outranked.
+   *
+   *  THE CAP TIER IS GROUPED BY THE SENTENCE, IN FIRST-APPEARANCE ORDER, and there are three
+   *  of them (D59): every copy gone, at the cap, or held by an import this pipeline has not
+   *  seen land. They have three different remedies, so they are three headings and never one
+   *  bucket of leftovers. `Map` insertion order is what orders them — an alphabetical or
+   *  count-based rule would be a second opinion about importance that nothing here has grounds
+   *  for. The hold tier is ONE heading over all of them, because the reason is per SKU and
+   *  already drawn on the row.
+   *
+   *  D28 IS WHY THIS IS SAFE AT ALL, AND IT IS WHY THE HOLDS COME FROM A SNAPSHOT. The list
+   *  must not move under a finger already travelling to the next field. `bucket`, `at_cap` and
+   *  `nothing_to_add` are written by the join and read off disk, so they cannot move a row
+   *  mid-session at all; a hold is this screen's own answer and could, so `sunkHolds` is the
+   *  set as it stood when the page opened and a press of `H` does not move the row under the
+   *  hand that pressed it. It sinks on the reopening, which is what the owner asked for.
+   *
+   *  SO A ROW CAN OUTLIVE ITS GROUP FOR ONE SESSION, and that is the trade taken deliberately:
+   *  release a hold and the row keeps its place under the heading until the next load, drawing
+   *  a price field. The row tells the truth about itself; the heading says why the group is
+   *  there. The alternative is the list moving under the release, which D28 closed. */
+  const sections = useMemo(
+    () =>
+      SECTIONS.map((section) => {
+        const inSection = rows.filter((row) => row.bucket === section.bucket)
+        const items: Drawn[] = []
+        const holds: PricingSku[] = []
+        const closed = new Map<string, PricingSku[]>()
+        for (const sku of inSection) {
+          const why = groupOf(sku)
+          if (why !== null) {
+            const group = closed.get(why)
+            if (group === undefined) closed.set(why, [sku])
+            else group.push(sku)
+          } else if (sunkHolds.has(sku.sku)) holds.push(sku)
+          else items.push({ head: null, sku })
+        }
+        if (holds.length > 0) {
+          items.push({ head: HELD_HEAD, count: holds.length })
+          for (const sku of holds) items.push({ head: null, sku })
+        }
+        for (const [why, group] of closed) {
+          items.push({ head: why, count: group.length })
+          for (const sku of group) items.push({ head: null, sku })
+        }
+        return { ...section, total: inSection.length, items }
+      }).filter((section) => section.total > 0),
+    [rows, sunkHolds],
+  )
+
+  /** Every drawn row's SKU, top to bottom, across every section — what Enter and the arrows
+   *  step through.
+   *
+   *  IT IS THE DRAWN ORDER AND NOT `rows`, AND THE TWO AGREED UNTIL THE GROUPS SANK.
+   *  `cli/cmd_join.py` sorts the wire market-descending with `None` last, which happens to put
+   *  the three buckets in the three sections' own order — so stepping the wire array walked the
+   *  screen by coincidence, and this array was `rows.map` for as long as that held. Sinking a
+   *  group moves a row within its section and ends it: the advance reads what is drawn, rather
+   *  than a second sequence that has to keep agreeing with it. */
+  const order = useMemo(
+    () =>
+      sections.flatMap((section) =>
+        section.items.flatMap((item) => (item.head === null ? [item.sku.sku] : [])),
+      ),
+    [sections],
+  )
+
   /** What the strip has actually got, for the one line above the list that says so. Counted
    *  rather than tracked: `trends` IS the record, and a second counter kept in step with it
    *  would be a second answer to the same question. */
@@ -629,7 +781,6 @@ export function Pricing() {
 
   const move = useCallback(
     (sku: string, by: number) => {
-      const order = rows.map((row) => row.sku)
       const at = order.indexOf(sku)
       const next = order[at + by]
       if (next === undefined) return
@@ -641,7 +792,7 @@ export function Pricing() {
       // that defect re-introduced by the fix for it.
       field?.scrollIntoView({ block: 'nearest' })
     },
-    [rows],
+    [order],
   )
 
   const commit = useCallback(
@@ -827,7 +978,7 @@ export function Pricing() {
   )
 
   /**
-   * READ THE SHAPE OF EVERY ROW STILL WAITING ON AN ANSWER — one press, D78.
+   * READ THE SHAPE OF EVERY ROW STILL WAITING ON AN ANSWER — one press, D79.
    *
    * IT IS A PRESS AND MAY NEVER BECOME AN EFFECT. D62 closed the follow-focus read
    * structurally because a walk down this list would fire one request per arrow key at a free
@@ -1357,7 +1508,7 @@ export function Pricing() {
         </span>
       </div>
 
-      {/* THE TREND STRIP'S ONE PRESS — D78, and D62's condition discharged.
+      {/* THE TREND STRIP'S ONE PRESS — D79, and D62's condition discharged.
           That entry made the history a press per card so a walk down the list could not fire a
           request per arrow key, and named what would reopen it: the panel wanted on every card,
           answered by a batched route and a column on the row. This is that press. It is still a
@@ -1414,14 +1565,12 @@ export function Pricing() {
 
       {note === null ? null : <p className="pricing-refusal">{note.text}</p>}
 
-      {SECTIONS.map((section) => {
-        const inSection = rows.filter((row) => row.bucket === section.bucket)
-        if (inSection.length === 0) return null
+      {sections.map((section) => {
         return (
           <section className="pricing-section" key={section.bucket}>
             <div className="pricing-section-head">
               <h2 className="pricing-section-title">{section.title}</h2>
-              <span className="pricing-section-count">{inSection.length} SKUs</span>
+              <span className="pricing-section-count">{section.total} SKUs</span>
             </div>
             <p className="pricing-section-note">{section.note}</p>
 
@@ -1455,20 +1604,40 @@ export function Pricing() {
             </div>
 
             <div className="pricing-list">
-              {inSection.map((sku) => {
+              {section.items.map((item) => {
+                /* THE HEADING FOR THE ROWS UNDER IT, AND IT IS AN `h3` BECAUSE THAT IS WHAT IT
+                   IS. The section's own title is the `h2` above; these rows are a named part
+                   of it, so the reason is announced once to a screen reader on the way in
+                   rather than repeated in the right margin of every row it covers. No
+                   wrapper: the rows stay direct children of the list, which is what the
+                   section's grid template is written against. */
+                if (item.head !== null) {
+                  return (
+                    <h3 className="pricing-group-head" key={`why:${item.head}`}>
+                      <span className="pricing-group-why">{item.head}</span>
+                      <span className="pricing-group-count">
+                        {item.count === 1 ? '1 SKU' : `${item.count} SKUs`}
+                      </span>
+                    </h3>
+                  )
+                }
+                const sku = item.sku
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
                 /* The row's sentence, decided here rather than in the markup, because the
-                   second line now composes it with the held token below and a ternary that
-                   also had to yield a value would have been unreadable. `at_cap` still wins
-                   over the hold's note: it is the fact about this run, and the note is the
-                   operator's own aside. */
-                const why = sku.at_cap
-                  ? (sku.nothing_to_add ?? 'nothing to add this run')
-                  : withheld && standing !== 'unlisted' && standing.note
-                    ? standing.note
-                    : null
+                   second line composes it with the held token below and a ternary that also
+                   had to yield a value would have been unreadable.
+
+                   IT IS THE OPERATOR'S NOTE AND NOTHING ELSE NOW. `at_cap`'s sentence used to
+                   win this line, which meant a row that was BOTH at the cap and withheld with
+                   a note drew the reason and swallowed the note — the one string on the row
+                   nobody else on the screen holds a copy of. The reason moved up to the
+                   group's heading, where it is stated once for every row it covers, so the
+                   row keeps the aside. */
+                const why = withheld && standing !== 'unlisted' && standing.note
+                  ? standing.note
+                  : null
                 return (
                   <div
                     className="pricing-row"
@@ -1504,7 +1673,7 @@ export function Pricing() {
                     </div>
 
                     {/* WHICH OF THESE IS MOVING — the question a list answers and a panel
-                        cannot (D78). A shape and a sign; every figure a reading has stays on
+                        cannot (D79). A shape and a sign; every figure a reading has stays on
                         `T`'s panel, where there is room to draw the anchor at size and its
                         bound muted beneath it. `undefined` draws an empty cell, which is the
                         honest rendering of a row nobody has asked about. */}
@@ -1623,33 +1792,18 @@ export function Pricing() {
                       T
                     </button>
 
-                    {/* THE SERVER SAYS WHY; THIS DRAWS IT. The sentence here used to be
-                        "nothing to add this run — TCGplayer already holds {live_before}",
-                        composed on the client out of the export's live column alone — which
-                        reads 0 for every copy sitting on an import nobody has reconciled.
-                        Measured on the owner's store: 167 pushed copies across 72 SKUs,
-                        zero live and zero staged, and `live_before` reads 0 on every SKU of
-                        both runs on disk — so wherever this note drew at all it read
-                        "TCGplayer already holds 0" under a row adding nothing BECAUSE
-                        TCGplayer was holding them. A row that stops appearing in an import
-                        file is close enough to the silent drop `CLAUDE.md` forbids that
-                        saying nothing would have beaten saying that.
-
-                        `nothing_to_add` is composed in `pipeline/join.py` beside the numbers
-                        and names which of the three reasons applies, because they have three
-                        different remedies (D59). The fallback is not defensive padding: this
-                        table is `pricing.json` READ OFF DISK, and a file written by an
-                        earlier join carries `at_cap` with no sentence beside it — measured,
-                        both runs in `runs/` today. So an older file states the bare fact,
-                        which is exactly what `at_cap` means, and invents no reason for
-                        it. */}
-                    {/* ONE LINE, TWO REGISTERS, RIGHT-ALIGNED TOGETHER. The sentence and the
-                        held row's machine token are both `--util` 10px muted and both belong
-                        to this row, and the row reserves exactly ONE 13px line for that
-                        register — so they share it rather than contend for it. The token is
-                        last, which puts it flush right, directly under the `Holding` it
-                        belongs to, and leaves the reading order human-then-machine that
-                        docs/DESIGN.md's rule asks for.
+                    {/* WHAT THIS ROW ALONE HOLDS. The run's reason for adding nothing is
+                        the group's heading above these rows — `groupOf` carries why — so what
+                        is left here is the operator's own note on a hold, which is per-row by
+                        nature and is the one string on the screen nothing else keeps a copy
+                        of. */}
+                    {/* ONE LINE, TWO REGISTERS, RIGHT-ALIGNED TOGETHER. The note and the held
+                        row's machine token are both `--util` 10px muted and both belong to
+                        this row, and the row reserves exactly ONE 13px line for that register
+                        — so they share it rather than contend for it. The token is last, which
+                        puts it flush right, directly under the `Holding` it belongs to, and
+                        leaves the reading order human-then-machine that docs/DESIGN.md's rule
+                        asks for.
 
                         THE SENTENCE YIELDS AND THE TOKEN NEVER DOES. `pricing-row-why`
                         ellipsizes and carries its full text in `title`; the token is

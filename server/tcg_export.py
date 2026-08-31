@@ -83,6 +83,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 import envfile  # noqa: E402
+from pipeline import setnames  # noqa: E402
 
 # The seller portal's own download. A constant rather than something a request can name: a
 # route that fetched any URL a client sent, carrying the operator's session cookie, would be
@@ -504,46 +505,32 @@ def match_sets(hints, sets, aliases=None) -> Tuple[Tuple[int, ...], Tuple[str, .
     """Capture-time set hints -> TCGplayer set ids. Returns (matched ids, hints that missed).
 
     THE HINT IS THE OPERATOR'S SHORTHAND AND THE SET NAME IS TCGPLAYER'S, and nothing
-    guarantees they are the same string. Measured against the two the store actually holds:
-    `UNL` against `Unleashed`, and `ME01` against `ME01: Mega Evolution`. Three rules, tried
-    in order, each stricter than a substring search would be:
+    guarantees they are the same string. The ladder that bridges them lives in
+    `pipeline/setnames.py` and is SHARED WITH THE JOIN, which used to answer this same
+    question by its own different rules — so a hint could scope the export correctly and then
+    fail to narrow the very rows it fetched. Read that module for the rules, for why an
+    ambiguous hint is a miss rather than a guess, and for what a three-letter set code does.
 
-      exact      case-folded equality.
-      prefix     the hint is a case-folded prefix of the name. `UNL` -> `Unleashed`.
-      code       the name's leading token before `:` equals the hint. `ME01` -> `ME01: ...`.
-
-    AN AMBIGUOUS HINT MATCHES NOTHING RATHER THAN GUESSING. Two sets sharing a prefix is a
-    real shape — `Origins` and `Origins: Proving Grounds` — and picking either would scope the
-    export to a set the box may not be in. The hint is returned as unresolved instead, and the
-    caller widens to the whole category, which is slower and always correct.
-
-    Substring is deliberately NOT one of the rules. `Origins` appears inside
-    `Origins: Proving Grounds`, so a substring test makes every hint that names a base set
-    ambiguous with its own sub-sets and resolves nothing.
+    WHAT THIS FUNCTION STILL OWNS IS THE ID. The portal's request takes set ids and the
+    resolver answers in names, so the mapping back is here. The `All Set Names` row (`0`) is
+    dropped BEFORE resolution rather than after: dropped after, it would make a real set look
+    ambiguous and silently widen the very fetch it was excluded from.
     """
-    by_id = [(str(entry.get("Text") or ""), str(entry.get("Value") or "")) for entry in sets]
-    # RULE ZERO: the game's own alias table, folded before the shape rules run. `MEG` and
-    # `ME01` name one set in two vocabularies and no string rule bridges them, so the registry
-    # carries the pairing (D65). An alias resolves to another HINT rather than to an id, so
-    # the three rules below still do the matching and the table never repeats a full set name.
-    folded = {str(k).strip().casefold(): str(v) for k, v in (aliases or {}).items()}
+    by_id = [
+        (str(entry.get("Text") or ""), str(entry.get("Value") or ""))
+        for entry in sets
+        if str(entry.get("Value") or "") != "0"
+    ]
+    names = [text for text, _value in by_id]
     matched, missed = [], []
     for hint in hints:
-        raw = str(hint or "").strip()
-        needle = folded.get(raw.casefold(), raw).strip().casefold()
-        if not needle:
+        if not str(hint or "").strip():
             continue
-        found = [v for t, v in by_id if t.casefold() == needle]
-        if not found:
-            found = [v for t, v in by_id if t.casefold().startswith(needle)]
-        if not found:
-            found = [v for t, v in by_id if t.split(":")[0].strip().casefold() == needle]
-        # `0` is the "All Set Names" row and is not a set; matching it would silently widen.
-        found = [v for v in found if v != "0"]
-        if len(found) == 1:
-            matched.append(int(found[0]))
-        else:
+        chosen = setnames.resolve(hint, names, aliases)
+        if chosen is None:
             missed.append(str(hint))
+            continue
+        matched.extend(int(value) for text, value in by_id if text == chosen)
     return tuple(dict.fromkeys(matched)), tuple(dict.fromkeys(missed))
 
 

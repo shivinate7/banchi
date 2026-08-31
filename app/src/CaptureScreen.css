@@ -594,6 +594,22 @@
   white-space: nowrap;
 }
 
+/* The set hint naming no set TCGplayer publishes — accent's "the system is unsure" job,
+   at text weight, which is the same borrowing `.capture-meta-alert` and `.capture-val-alert`
+   already make on this screen. NOT a fault and drawn as none: the string is stored, the
+   capture happens, and what the operator loses is the export scoping (D65). A halt outline
+   here would claim a refusal that never happens. */
+.capture-entrymeta-alert {
+  color: var(--accent);
+}
+
+/* The sentence under the field, when it is the one carrying the flag. Colour only — the
+   note keeps `.capture-opennote`'s body face, size and measure, because a sentence that
+   changed weight as you typed would move the field's own height at a 623 ms cadence. */
+.capture-note-alert {
+  color: var(--accent);
+}
+
 /* ---- option rows ---- */
 
 .capture-opts {

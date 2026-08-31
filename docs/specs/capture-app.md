@@ -421,6 +421,14 @@ two different sets has nothing to break the tie and reviews as `set_ambiguous` �
 case in T3. Free text rather than a picker because there is no catalog in the repo until
 build-order step 9; a picker has no list to offer yet.
 
+**THE LAST SENTENCE IS OVERTAKEN AND THE ONES BEFORE IT ARE NOT (D65, 2026-08-30, amended
+2026-08-31).** There is a list to offer: TCGplayer publishes the set names for a category and
+`GET /tcg/sets` serves them, so the field is free text over a real vocabulary. It suggests
+through a `datalist` rather than constraining through a `select` — the rig may not be
+refused — and since the amendment it also SAYS whether what is typed names one of them, which
+is the fact that decides whether the export scopes to a set or widens to the whole game. The
+verdict is a note beside a field that still takes any string at all.
+
 ### 5.4 — Undo
 
 One tap, no dialog, repeating. Each press removes the newest card in the current box.

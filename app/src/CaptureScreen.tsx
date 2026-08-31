@@ -17,6 +17,8 @@ import {
   undoCapture,
   updateCard,
 } from './server'
+import { resolveSetHint } from './setHint'
+import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
 import { motionTrigger } from './motion'
 import type { MotionDiagnostics } from './motion'
@@ -275,6 +277,72 @@ function hintReason(code: string | null): string {
   if (code === 'tcg_cookie_missing') return 'no TCGplayer session — set one in .env'
   if (code === 'no_category') return 'no TCGplayer category for this game'
   return `set list unavailable (${code})`
+}
+
+/* WHAT THE HINT FIELD SAYS ABOUT WHAT IS IN IT (D65, amended 2026-08-31).
+ *
+ * THE FIELD ALWAYS HAD RULES AND NEVER DREW THEM. D65 gave the hint a vocabulary and a
+ * `datalist`, and a `datalist` is a suggestion box: it offers the real set names and says
+ * nothing at all about the string actually typed. So `Spiritforge` and `Spiritforged` look
+ * identical at the rig, and they part company an hour of captures later at the fetch — one
+ * scopes the export to that set, the other resolves to nothing and widens to the whole
+ * category. The operator learns which they typed from a row count on a different screen.
+ *
+ * TWO REGISTERS, BECAUSE THE BOX FIELD BESIDE IT ALREADY HAS TWO. A terse meta pinned to
+ * the right of the entry — `next 60`, `new box` — for the state, and a sentence under the
+ * field for what that state means. This is that grammar applied to the one other free-text
+ * field on the screen; nothing here is a new shape.
+ *
+ * NOTHING IN EITHER OF THEM REFUSES. Every string is still storable, `unmatched` included,
+ * and the sentence says what happens to it rather than asking for a different one. D65's
+ * reason stands: the rig does not stop for an autocomplete. */
+function hintMetaText(verdict: HintVerdict): string {
+  // Short enough not to squeeze the entry — `.capture-entrymeta` never wraps, and the box
+  // beside it is where the operator is typing.
+  // `no hint` rather than `optional`, which the head row two lines up already says: the meta
+  // reports the STATE of what is typed, and repeating the field's own modality there would
+  // spend the one line beside the entry on a word already on screen.
+  if (verdict.state === 'blank') return 'no hint'
+  if (verdict.state === 'unchecked') return 'not checked'
+  if (verdict.state === 'ambiguous') return `${verdict.among.length} sets`
+  if (verdict.state === 'unmatched') return 'names no set'
+  return verdict.exact ? 'names a set' : 'enter completes'
+}
+
+/** The same verdict as a sentence, in the operator's terms rather than the matcher's.
+ *  `game` is the registry's display name — `Pokémon`, `Riftbound` — because "widens to the
+ *  whole category" is TCGplayer's word for a thing the operator calls a game. */
+function hintNoteText(verdict: HintVerdict, game: string): string {
+  if (verdict.state === 'blank') {
+    return (
+      'Optional, and it has to name a set TCGplayer publishes. Left empty, a collector ' +
+      'number that matches rows in two sets comes back as a review rather than a listing.'
+    )
+  }
+  if (verdict.state === 'unchecked') return 'Stored exactly as typed.'
+  if (verdict.state === 'matched') {
+    // THE SECOND SENTENCE USED TO SAY THE JOIN READ ONLY THE FULL NAME, and it was true when
+    // it was written: the fetch and the join were two matchers with two rule sets, so a code
+    // scoped the export and then failed to narrow the rows it had fetched. They are one
+    // ladder now (`pipeline/setnames.py`), so completing is a courtesy to the next reader of
+    // the sidecar rather than something the pipeline needs.
+    return verdict.exact
+      ? `Names ${verdict.set}, and the export will scope to that set.`
+      : `Resolves to ${verdict.set}, and the export will scope to that set. Enter writes the name out.`
+  }
+  if (verdict.state === 'ambiguous') {
+    // The ambiguity is the whole message, so the sets themselves are named: `Origins` and
+    // `Origins: Proving Grounds` is the shape, and knowing which two is how you pick one.
+    return (
+      `${verdict.among.length} sets answer to that — ${verdict.among.slice(0, 3).join(', ')}` +
+      `${verdict.among.length > 3 ? ', …' : ''} — so it names none of them, and the export ` +
+      `widens to all of ${game}.`
+    )
+  }
+  return (
+    `No set of ${game} answers to that. It is still stored and still sent to the model; ` +
+    `what it will not do is scope the export, which widens to the whole game.`
+  )
 }
 
 const SESSION_KEYS = {
@@ -785,24 +853,34 @@ export function CaptureScreen() {
    * list empty so the control is the plain text input it has always been. The rig does not
    * stop for an autocomplete. */
   const [tcgSets, setTcgSets] = useState<
-    Record<string, { names: string[]; reason: string | null }>
+    Record<
+      string,
+      { sets: SetOption[]; aliases: Record<string, string>; reason: string | null }
+    >
   >({})
+  /* THE NAMES AND THE ALIAS TABLE ARE KEPT APART, where this used to concatenate them into
+     one list of strings for the `datalist` and throw the distinction away. `resolveSetHint`
+     needs them apart: an alias resolves to another HINT and the shape rules then match THAT,
+     which is `server/tcg_export.py:match_sets`'s rule zero and cannot be expressed over a
+     flattened list. The suggestions are still the concatenation — see `hintSuggestions`. */
   const loadSets = useCallback(
     (forGame: string) => {
       if (!forGame || tcgSets[forGame] !== undefined) return
       void getTcgSets(forGame)
-        .then((answer) => {
-          const names = answer.sets.map((row: { name: string }) => row.name)
-          const codes = Object.keys(answer.aliases ?? {})
+        .then((answer) =>
           setTcgSets((prev) => ({
             ...prev,
-            [forGame]: { names: [...codes, ...names], reason: answer.reason },
-          }))
-        })
+            [forGame]: {
+              sets: answer.sets.map((row: { name: string }) => ({ name: row.name })),
+              aliases: answer.aliases ?? {},
+              reason: answer.reason,
+            },
+          })),
+        )
         .catch(() =>
           setTcgSets((prev) => ({
             ...prev,
-            [forGame]: { names: [], reason: 'unreachable' },
+            [forGame]: { sets: [], aliases: {}, reason: 'unreachable' },
           })),
         )
     },
@@ -1398,6 +1476,35 @@ export function CaptureScreen() {
       if (game !== null) loadSets(game)
     }
   }, [openField, game, loadSets])
+
+  /* WHETHER WHAT IS TYPED NAMES A REAL SET, ANSWERED WHILE IT IS BEING TYPED.
+   *
+   * `undefined` until the field has been opened once for this game, which is D65's laziness
+   * and not a defect: most sessions never touch the hint, and the vocabulary costs a
+   * TCGplayer round trip. `resolveSetHint` reads an absent vocabulary as `unchecked` — the
+   * verdict that says THIS SCREEN CANNOT TELL — so the loading window, a game with no sets
+   * and an expired session all render as silence rather than as an accusation. */
+  const hintVocabulary = game === null ? undefined : tcgSets[game]
+  const hintVerdict = useMemo<HintVerdict>(
+    () => resolveSetHint(setHint, hintVocabulary?.sets ?? [], hintVocabulary?.aliases ?? {}),
+    [setHint, hintVocabulary],
+  )
+
+  /* The `datalist`'s entries: the alias codes the owner types, then TCGplayer's own names.
+     Concatenated HERE rather than in the store, so `hintVerdict` can still tell them apart
+     (an alias resolves to another hint; a name resolves to itself). */
+  const hintSuggestions = useMemo<string[]>(
+    () =>
+      hintVocabulary === undefined
+        ? []
+        : [...Object.keys(hintVocabulary.aliases), ...hintVocabulary.sets.map((row) => row.name)],
+    [hintVocabulary],
+  )
+
+  /** Flagging, in `--accent`'s "the system is unsure" job. A hint that names no set is not
+   *  an error — nothing is refused and the capture is unaffected — so it is drawn at text
+   *  weight, never as a halt. `ambiguous` joins it: `match_sets` returns both as misses. */
+  const hintAlert = hintVerdict.state === 'unmatched' || hintVerdict.state === 'ambiguous'
 
   /* WHAT THE BOX FILTER SHOWS. Substring on the box number — `9` keeps 9, 19, 95 and 99,
    * which is the mockup's own worked example — capped at nine rows, and the reason for the
@@ -3116,49 +3223,89 @@ export function CaptureScreen() {
               />
             )}
 
-            {/* Free text, not a picker: there is no catalog in the repo until build-order
-                step 9, so a picker has no list to offer. Optional, and worth the field —
-                without it a collector number that matches rows in two sets reviews as
-                `set_ambiguous`. */}
+            {/* Free text over a real vocabulary (D65): TCGplayer publishes the set names
+                and the operator types shorthand, so the field suggests without constraining
+                and JUDGES WITHOUT REFUSING. Optional, and worth the field — without it a
+                collector number that matches rows in two sets reviews as `set_ambiguous`. */}
             {openField === 'set' ? (
-              <OpenField k="H" label="Set hint" meta="optional" onClose={closeField}>
+              <OpenField
+                k="H"
+                label="Set hint"
+                /* THE RULE, WHERE THE WORD `optional` STOOD ALONE. Optional it remains; what
+                   the meta never said is that the field has a vocabulary at all, which is
+                   the fact an operator needs BEFORE they type rather than after. */
+                meta="optional · a real set name"
+                onClose={closeField}
+              >
                 <form
                   className="capture-entry"
                   onSubmit={(event) => {
                     event.preventDefault()
+                    /* ENTER COMPLETES BEFORE IT CLOSES. A hint that resolved through an
+                       alias, a prefix or a colon-code scopes the export correctly and is
+                       still not the set's NAME — which is the form `pipeline/join.py:
+                       set_matches` needs at join time, one fold and no shape rules. So the
+                       keystroke that leaves the field also makes the stored string exact.
+                       It never invents one: nothing resolved, nothing rewritten. */
+                    if (hintVerdict.state === 'matched' && !hintVerdict.exact) {
+                      setSetHint(hintVerdict.set)
+                    }
                     closeField()
                     blurActive()
                   }}
                 >
                   <span />
-                  <input
-                    ref={hintRef}
-                    className="capture-filter"
-                    type="text"
-                    placeholder="sv09"
-                    aria-label="Set hint"
-                    list="capture-set-names"
-                    value={setHint}
-                    onChange={(event) => setSetHint(event.target.value)}
-                  />
-                  {/* A DATALIST AND NOT A SELECT, which is the whole reason this is safe to
-                      add to the rig's own screen. It suggests without constraining: free text
-                      still works, an empty list is indistinguishable from the control before
-                      D65, and nothing here can refuse a capture. */}
-                  <datalist id="capture-set-names">
-                    {(game === null ? [] : tcgSets[game]?.names ?? []).map((name: string) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
-                  {/* WHY THERE ARE NO SUGGESTIONS, WHICH SILENCE DOES NOT SAY. The list
-                      degrading to empty is the correct behaviour — the rig never stops for an
-                      autocomplete — but degrading INVISIBLY is a different thing, and an
-                      expired session looks exactly like a game that has no sets. The reason
-                      already rides on the response and was being thrown away. */}
-                  {game !== null && tcgSets[game]?.reason ? (
-                    <em className="capture-sub">{hintReason(tcgSets[game].reason)}</em>
-                  ) : null}
+                  {/* THE BOX FIELD'S OWN SHAPE, and deliberately the same one: an entry with
+                      its live state pinned to the right end, reading as one control. That
+                      field says `next 60` / `new box`; this one says whether what is typed
+                      names a set. Two free-text fields, one grammar. */}
+                  <div className="capture-entrybox">
+                    <input
+                      ref={hintRef}
+                      className="capture-filter"
+                      type="text"
+                      placeholder="sv09"
+                      aria-label="Set hint"
+                      list="capture-set-names"
+                      value={setHint}
+                      onChange={(event) => setSetHint(event.target.value)}
+                    />
+                    {/* A DATALIST AND NOT A SELECT, which is the whole reason this is safe to
+                        add to the rig's own screen. It suggests without constraining: free
+                        text still works, an empty list is indistinguishable from the control
+                        before D65, and nothing here can refuse a capture. */}
+                    <datalist id="capture-set-names">
+                      {hintSuggestions.map((name: string) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                    <span
+                      className={
+                        hintAlert ? 'capture-entrymeta capture-entrymeta-alert' : 'capture-entrymeta'
+                      }
+                    >
+                      {hintMetaText(hintVerdict)}
+                    </span>
+                  </div>
                 </form>
+                {/* WHY THERE ARE NO SUGGESTIONS, WHICH SILENCE DOES NOT SAY. The list
+                    degrading to empty is the correct behaviour — the rig never stops for an
+                    autocomplete — but degrading INVISIBLY is a different thing, and an
+                    expired session looks exactly like a game that has no sets. The reason
+                    already rides on the response and was being thrown away.
+
+                    IT TAKES PRECEDENCE OVER THE VERDICT, because there is no verdict: with
+                    no vocabulary every hint is `unchecked`, and a sentence about what the
+                    typing means would be a second sentence saying less than this one. */}
+                {hintVocabulary === undefined ? null : hintVocabulary.reason ? (
+                  <p className="capture-opennote">
+                    {hintReason(hintVocabulary.reason)}. The hint is stored exactly as typed.
+                  </p>
+                ) : (
+                  <p className={hintAlert ? 'capture-opennote capture-note-alert' : 'capture-opennote'}>
+                    {hintNoteText(hintVerdict, gameEntry?.display ?? 'this game')}
+                  </p>
+                )}
               </OpenField>
             ) : (
               <Row
@@ -3168,7 +3315,16 @@ export function CaptureScreen() {
                   setHint.trim() === '' ? (
                     <span className="capture-val is-default">none</span>
                   ) : (
-                    <span className="capture-val">{setHint.trim()}</span>
+                    /* AT REST THE VERDICT IS ONE WORD OR NOTHING. A hint that names a set is
+                       the ordinary case and says nothing extra; one that names none carries
+                       the sub and the accent, so a stack captured against a typo is visible
+                       from the row rather than only from inside the field. Silent while the
+                       vocabulary has never been fetched — this screen does not accuse a
+                       string it has not checked. */
+                    <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
+                      {setHint.trim()}
+                      {hintAlert ? <em className="capture-sub">names no set</em> : null}
+                    </span>
                   )
                 }
                 onToggle={() => toggleField('set')}

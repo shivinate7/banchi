@@ -1399,7 +1399,7 @@ export type PriceHistoryPayload = {
 /** ONE RANGE OF ONE SKU AS A ROW DRAWS IT — a shape and a sign, and deliberately no money.
  *
  *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D62's panel is where a
- *  reading's figures live; D78 gives the row a strip and gives it exactly what a 90px cell
+ *  reading's figures live; D79 gives the row a strip and gives it exactly what a 90px cell
  *  can carry honestly. The row already has four dollar columns and the field a listing price
  *  is typed into, so a fifth figure — a READING rather than a price — would sit inches from
  *  that field inviting a copy across, which is the D8 reopening D62 refused by name. Anything
@@ -1422,7 +1422,7 @@ export type TrendRange = {
   points: (string | null)[]
 }
 
-/** Many SKUs' shapes in one read — D78, the batched half of D62.
+/** Many SKUs' shapes in one read — D79, the batched half of D62.
  *
  *  BOTH DIRECTIONS, WHICH IS `CLAUDE.md`'s HARD RULE AND VISIBLE IN THIS TYPE. Every SKU the
  *  route was asked about comes back in `skus` or in `refused`, never absent, and `skipped`

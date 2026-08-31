@@ -514,7 +514,7 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 
-# D78's batched read, beside D62's single one. `/history` answers one SKU for the panel and
+# D79's batched read, beside D62's single one. `/history` answers one SKU for the panel and
 # `/trends` answers many for the row strip — two routes because they carry two different
 # payloads for two different drawings, not one route with a mode: the panel needs every figure
 # a reading has and the strip needs a shape and a sign, and a shared handler would send the
@@ -8387,7 +8387,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _RUN_TRENDS_RE.match(path)
             if match:
                 # THE SAME READ, BATCHED, AND IT LEAVES THIS MACHINE FOR THE SAME REASON.
-                # D62 named this route and the condition for building it; D78 is the owner
+                # D62 named this route and the condition for building it; D79 is the owner
                 # answering that condition. It is still a press — nothing polls it — and what
                 # changed is that one press covers the list instead of one card.
                 #

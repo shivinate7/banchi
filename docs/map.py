@@ -349,6 +349,19 @@ COMPONENTS = [
             "variant.py": {"does": "the variant ladder: four rungs that infer, under a rung 0 that does not, "
                                    "over a per-game finish vocabulary and a set-valued rung 1 claim",
                            "governed_by": ["D3", "D12", "D21", "D22", "D23"], "tested_by": ["T3", "T4"]},
+            # ONE MATCHER, WHERE THERE WERE TWO. The fetch scoped the export by its rules and
+            # the join narrowed a colliding key by different ones, so a hint could scope
+            # correctly and then fail to disambiguate the very rows it fetched. Merging them
+            # also fixed a live defect: `set_matches` is PAIRWISE, so `SV` matched four sets
+            # and join.py returned all four as a confident narrowing with no `set_ambiguous`.
+            # D22 because the alias table it consults is still hand-authored — what the
+            # abbreviation rule removed is the need to author a row per set code, not the
+            # table itself.
+            "setnames.py": {"does": "does this hint name this set — the one ladder the export fetch "
+                                    "and the join both read. Label, colon side, guarded prefix, then "
+                                    "a <=4-character abbreviation; ambiguity answers None and both "
+                                    "callers widen rather than guess.",
+                            "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
             "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
                            "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
@@ -862,6 +875,22 @@ COMPONENTS = [
                 # path.
                 "governed_by": ["D18", "D43"],
             },
+            "set-hint-agreement.py": {
+                "does": "port-agreement.py's shape, one decision over: proves "
+                        "`server/tcg_export.py:match_sets` and `app/src/setHint.ts` resolve a "
+                        "capture-time set hint to the same set. Python resolves it when the "
+                        "export is FETCHED; TypeScript answers the same question at the rig, "
+                        "while the operator types, so a disagreement makes the screen say "
+                        "MATCHED over a hint the fetch will miss — worse than the silence it "
+                        "replaced, because a verdict gets trusted. Compares the one fact both "
+                        "stake a claim on (did it resolve, and to which set) rather than the "
+                        "verdict shapes, which differ on purpose: TypeScript splits Python's "
+                        "single miss into `ambiguous` and `unmatched` so a sentence can be "
+                        "written from it. The cases are D65's own measured vocabulary.",
+                # D65 authors the matcher and the whitelist field. D18 decides where this
+                # runs: node again, so `make check` and never the commit path.
+                "governed_by": ["D18", "D65"],
+            },
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -1253,7 +1282,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D78"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1343,7 +1372,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D62", "D64", "D65", "D68", "D76", "D78"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D62", "D64", "D65", "D68", "D76", "D79"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1629,11 +1658,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D78"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D78"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1729,7 +1758,10 @@ COMPONENTS = [
             "src/CaptureScreen.css": {"does": "its layout, at the dense end of docs/DESIGN.md's one "
                                               "system, two densities. Owner-side; the Fulfillment "
                                               "floors do not govern here.",
-                                      "governed_by": ["D3", "D5", "D27", "D41", "D50"]},
+                                      # D65 for the two accent modifiers the set hint's verdict
+                                      # draws — accent's "the system is unsure" job at text
+                                      # weight, because nothing there refuses anything.
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -2070,7 +2102,13 @@ COMPONENTS = [
             # every run. This is where that decision is made, per SKU, with every export cell
             # in front of it.
             "src/Pricing.tsx": {"does": "#/pricing: the hand-pricing worklist. One row per SKU a "
-                                        "run matched, sorted market-descending, carrying ALL "
+                                        "run matched, sorted market-descending inside three "
+                                        "tiers per section: the rows still wanting a price, the "
+                                        "ones already held, then the ones this run can add "
+                                        "nothing for, each sunk tier under a heading naming why "
+                                        "(D78). The hold tier is a SNAPSHOT taken at load, so a "
+                                        "press of H never moves the row under the hand. "
+                                        "Carrying ALL "
                                         "fourteen export columns that hold data — the owner's "
                                         "\"all the data from the CSV shown when I make the "
                                         "decision\". The run's rule PREFILLS every row as a "
@@ -2086,17 +2124,19 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
                                         "note lands in a second grid row every zone but the card "
                                         "leaves empty; right-aligned tabular money, so decimal "
                                         "alignment carries magnitude and no guessed type band "
-                                        "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
+                                        "does; one rule under the last row this run can still "
+                                        "act on, which is the sunk group's heading (D78). NO "
+                                        "SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -2118,7 +2158,7 @@ COMPONENTS = [
                                              "FOR NOTHING — only the press does. The footer is "
                                              "the only place the two differ on screen — Close "
                                              "against Keep open.",
-                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62", "D78"],
+                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62", "D79"],
                                      "note": "IT PRICES NOTHING AND WRITES NOTHING. The two "
                                              "ranges OVERLAP and are drawn side by side with a "
                                              "sentence saying so — measured on Vilemaw the day it "
@@ -2137,7 +2177,7 @@ COMPONENTS = [
                                             "sizes, and is the property to preserve if this is "
                                             "ever re-laid-out.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
-            # D78 is the batched half of D62, and D62 is why this file is separate from
+            # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
             # questions. D8 governs it for PriceHistory.tsx's reason, and harder — a reading
@@ -2156,7 +2196,7 @@ COMPONENTS = [
                                            "cell is the honest drawing of a row nobody asked "
                                            "about, which is every at-cap row and every row "
                                            "before the press.",
-                                   "governed_by": ["D5", "D8", "D9", "D22", "D28", "D49", "D50", "D62", "D78"],
+                                   "governed_by": ["D5", "D8", "D9", "D22", "D28", "D49", "D50", "D62", "D79"],
                                    "note": "THE SPARK GEOMETRY IS IMPORTED FROM PriceHistory.tsx "
                                            "RATHER THAN COPIED, because the rule a copy would "
                                            "lose is the subtle one: a bucket with no price "
@@ -2175,7 +2215,7 @@ COMPONENTS = [
                                            "list a coloured percentage would be the loudest "
                                            "thing on screen, over the least authoritative thing "
                                            "on it.",
-                                   "governed_by": ["D5", "D28", "D41", "D50", "D62", "D78"]},
+                                   "governed_by": ["D5", "D28", "D41", "D50", "D62", "D79"]},
             "src/cardNumber.ts": {
                 "does": "ONE COMPOSER OF THE COLLECTOR NUMBER FOR EVERY SCREEN THAT DRAWS ONE "
                         "(D67). There were three, one per screen, and no two the same: the "
@@ -2316,6 +2356,27 @@ COMPONENTS = [
                                         "BoxOps' own 32px so the two panels in this screen agree "
                                         "about how tall a control is.",
                                 "governed_by": ["D5", "D33", "D39"]},
+            "src/setHint.ts": {
+                "does": "WHETHER A TYPED SET HINT NAMES A REAL SET, ANSWERED AT THE RIG "
+                        "(D65, amended 2026-08-31). The field always had rules and never drew "
+                        "them: a `datalist` offers TCGplayer's set names and says nothing "
+                        "about the string actually typed, so `Spiritforge` and `Spiritforged` "
+                        "look identical at the capture screen and part company an hour later "
+                        "at the fetch — one scopes the export, the other resolves to nothing "
+                        "and widens to the whole category. Mirrors "
+                        "`server/tcg_export.py:match_sets` rule for rule (alias table, then "
+                        "exact, prefix, colon-code; ambiguous resolves to nothing) and is "
+                        "asserted against it by scripts/set-hint-agreement.py, because a "
+                        "screen that says MATCHED where the fetch misses is worse than the "
+                        "silence it replaced. `unchecked` is a first-class verdict: with no "
+                        "vocabulary — no cookie, no network, the list not yet fetched — the "
+                        "screen says it cannot tell rather than accusing the operator. It "
+                        "JUDGES AND NEVER REFUSES; every string is still storable.",
+                # D65 authors the matcher, the vocabulary and the datalist-not-a-select rule;
+                # D19 is the 623 ms cadence that forbids a per-keystroke round trip; D22 is
+                # the hand-authored alias table this folds through.
+                "governed_by": ["D19", "D22", "D65"],
+            },
             "src/runScope.ts": {"does": "WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS "
                                         "IT — one answer, three screens (D56). `boxOf` prefers "
                                         "the `box` the server now sends and keeps the "
@@ -2594,7 +2655,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

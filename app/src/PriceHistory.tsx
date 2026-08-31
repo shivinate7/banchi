@@ -121,7 +121,7 @@ function direction(fraction: string | null): string {
  *  SHARED WITH `PriceTrend.tsx` BECAUSE THE SUBTLE RULE IS THE ONE A COPY WOULD LOSE. A
  *  bucket with no price BREAKS THE LINE rather than interpolating across it — measured on
  *  Vilemaw's annual, whose oldest buckets are a card that had not been printed yet (21 of 52
- *  on the run D78 was built against), and joining through them would draw a year-long slope
+ *  on the run D79 was built against), and joining through them would draw a year-long slope
  *  that never happened. Two implementations of that would be one implementation of it and one
  *  slope nobody could see was invented. The panel and the row differ only in W, H and what
  *  they draw around it, so those are arguments and the geometry is not. */

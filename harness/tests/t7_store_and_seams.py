@@ -13116,7 +13116,7 @@ def check_history_route(checks: Checks) -> None:
             pipeline_routes.do_pipeline_history(name, "9189317")
             checks.ok(True, "and a second read is served from the same warm cache")
 
-            # ------------------------------------------- the batched read (D78)
+            # ------------------------------------------- the batched read (D79)
             #
             # THE SAME WARM CACHE AND THE SAME SOCKET BAN. `readings_for_rows` walks the
             # identical `Market`, so a batch that opened a connection would trip `no_sockets`
@@ -13142,7 +13142,7 @@ def check_history_route(checks: Checks) -> None:
                 [p["market"] for p in answer["ranges"][0]["points"] if p["market"] is not None],
                 "and the strip's points are the panel's own bucket prices, in the same order",
             )
-            # NO MONEY ON THIS PAYLOAD, WHICH IS D78's RULE AS A TEST RATHER THAN A PARAGRAPH.
+            # NO MONEY ON THIS PAYLOAD, WHICH IS D79's RULE AS A TEST RATHER THAN A PARAGRAPH.
             # The row draws this one column from the field a listing price is typed into, so
             # every figure it carries is dimensionless or a date. A later session adding `vwap`
             # here would be reopening D8 by widening a serializer.

@@ -3057,6 +3057,50 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **`match_sets` stays regardless.** 677 of the store's cards already carry free-text hints and those runs must keep joining; an exact hint costs the matcher nothing, because rule one matches and the other two never run.
 
+### The field had rules and drew none of them (amended 2026-08-31)
+
+**A `datalist` offers a vocabulary and says nothing about the string actually typed.** That is the whole of the defect the owner reported: the hint became a whitelist field above, and the control still looked like the free-text box it replaced. `Spiritforge` and `Spiritforged` are indistinguishable at the rig. They part company an hour of captures later at the fetch — one scopes the export to that set, the other resolves to nothing and widens to the category — and the operator learns which they typed from a row count on a different screen.
+
+**So the field says which of the two it is, while it is being typed.** `app/src/setHint.ts` resolves the hint against the vocabulary the field is already offering and answers in five states: `blank`, `unchecked`, `matched` (with the set, and whether the hint IS its name), `ambiguous`, `unmatched`.
+
+**Two registers, because the Box field beside it already has two.** A terse meta pinned to the right of the entry for the state — that field's own `next 60` / `new box` — and a sentence under the field for what the state means. Nothing here is a new shape; it is the screen's existing grammar applied to the one other free-text field on it.
+
+**It judges and never refuses, which is the rule above unamended.** Every string can still be stored, `unmatched` included; the sentence says what will happen to the hint rather than asking for a different one. Accent at text weight, which is `docs/DESIGN.md`'s "the system is unsure" job — never a halt outline, because nothing is halted.
+
+**`unchecked` is a first-class verdict and the reason the feature is safe.** No cookie, no network, the list not yet fetched: the screen says it cannot tell rather than accusing the operator of a typo it has no way to see. The at-rest row is silent in that state too. An empty vocabulary already had to leave the field working; now it also has to leave it quiet.
+
+**Enter completes a hint that resolved but is not the set's name.** An alias, a prefix or a colon-code scopes the export correctly and is still not the string `pipeline/join.py:set_matches` wants at join time — that matcher folds and compares, with no prefix rule to save it. The keystroke that leaves the field is therefore the one that makes the stored hint exact, which is what "exact by construction" above promised and the `datalist` alone never delivered. It completes nothing that did not resolve.
+
+**The copy is asserted against the original, because a verdict gets trusted where silence did not.** `scripts/set-hint-agreement.py` runs `app/src/setHint.ts` under node against `server/tcg_export.py:match_sets` over 22 hints drawn from this entry's own measured vocabulary, and compares the one fact both stake a claim on: did this hint resolve, and to which set. A screen that says MATCHED where the fetch misses is worse than the field was before this section. This is `scripts/port-agreement.py`'s shape one decision over, and it is off the commit path for the same reason: it runs node.
+
+**What the two sides may still differ on is the shape of a MISS, deliberately.** `match_sets` returns one "missed" list; the screen splits it into `ambiguous` and `unmatched`, because "two sets answer to that — `Origins` and `Origins: Proving Grounds`" is an instruction and "no match" is not. The agreement check reduces both to resolved-or-not, which is the claim that has to hold.
+
+
+### There were two matchers, and a set code resolved to neither (amended 2026-08-31)
+
+**The paragraph above about Enter completing a hint is overtaken, and the sentence that overtook it is the point.** It said an alias or a prefix "is still not the string `pipeline/join.py:set_matches` wants at join time", and that was true: this repo answered *does this hint name this set* in two places, by two different rules. The fetch had a prefix rule and raw case-folding. The join folded `sv09` and `sv9` together and matched either side of a colon. So a hint could scope the export correctly and then fail to narrow the very rows it had fetched, and the verdict this entry added to the capture screen predicted only the first half of that.
+
+**One ladder now, in `pipeline/setnames.py`, read by both.** Whole label, then either colon side, then a guarded prefix, then an abbreviation. `server/tcg_export.py:match_sets` keeps only what is genuinely its own — mapping a resolved name back to the portal's set id, and dropping the `All Set Names` row before resolution rather than after, since dropped after it makes a real set look ambiguous.
+
+**Merging them fixed a defect that was live and had nothing to do with set codes.** `set_matches` is PAIRWISE — one hint against one name — so it cannot see how many sets answered. Four did: `SV` matches `SV: Prismatic Evolutions`, `SV: Paldean Fates`, `SV: Scarlet & Violet 151` and `SV: Shrouded Fable`, and `Catalog.candidates` handed all four sets' rows back as a confident narrowing with no `set_ambiguous` and no review. Resolution is set-wise now and answers `None` on a tie, so that card reaches a human with its photo (D2, D3). `set_matches` survives as the yes/no question T3 asks of one pair, delegating to the shared ladder.
+
+**A set code is derived from the set's own name, not looked up.** The letters of a short hint, in order, anchored on the first, running through the name with any block code taken off the front: `SFD` finds Spiritforged, `OGN` Origins, `VEN` Vendetta, `TEF` Temporal Forces, `JTG` Journey Together. There is no rule that yields the ONE official code — `TEF` is two letters of Temporal plus one of Forces, `SFD` is a squeeze of a single word, `OGN` skips two letters and keeps a third — so every ordered squeeze is accepted and ambiguity throws out the ones answering to more than one set.
+
+**THE RULE NEVER HAS TO KNOW WHICH SQUEEZE IS OFFICIAL, AND THAT IS THE PROPERTY THAT SAVED THIS SECTION FROM ITS AUTHOR.** An earlier draft named `VDT` as Vendetta's code. It is not; `VEN` is, and `VDT` was a session pattern-matching three consonants out of a set name and then citing itself. Because the rule accepts every ordered squeeze, both strings resolve to Vendetta and no code changed — but the entry asserted a fact about the world that nothing had checked, which is precisely what D22 exists to stop, and it did so two paragraphs after arguing that scraping was unnecessary because no source had to be trusted.
+
+**The alternative was scraping a code table, and BOTH halves of the argument against it were wrong.** The claim was that a scrape yields only *code to community name*, and that the second hop — community name to TCGplayer's own label — is published nowhere. It is published: `https://tcgcsv.com/tcgplayer/<category>/groups` serves TCGplayer's own group names, unauthenticated, and this repo already vendors fixtures from that host. Measured against it on 2026-08-31, the derivation covers **6 of 7 Riftbound codes and 13 of 22 Pokémon SV01-onwards codes**. It is a good reduction of the table, not a replacement for it, and the session that argued otherwise had never looked at a full-size vocabulary.
+
+**Three of the four hand-authored alias rows are dead and the fourth is load-bearing** — `TEF`, `JTG` and `OGN` derive; `MEG` does not, because `ME: Mega Evolution Promo`, `ME01: Mega Evolution` and `MEE: Mega Evolution Energies` all answer to it and a tie widens. An earlier draft of this paragraph called all four dead, having measured against an eight-set list assembled by hand; against TCGplayer's real 29 SV/ME sets that is false. The dead rows are kept anyway: D22 makes the table the owner's, and a row costs a dictionary lookup.
+
+**Every miss at full scale is a TIE, and not one code resolved to the wrong set.** Nine Pokémon codes and one Riftbound code need a row, and each is a code answering to two or more sets — `PAL` to Paldea Evolved and Paldean Fates, `MEG` to the three Mega Evolution groups, `SCR` to Stellar Crown and the four `Scarlet & Violet` ones. That is the failure this rule was designed to have: the export widens, which is slower and cannot miss a card.
+
+**Two guards, both measured before either rule was written.** The abbreviation is capped at four characters, because uncapped it silently resolves `Spiritfoged`, `Vendeta` and `Orgins` to their intended sets — which sounds like a feature until you notice almost every string then "names a set" and the typo warning this section added never fires again. And a prefix may not split a number: `unl` is Unleashed and `sv` is every SV set, but `sv1` is not `SV19`, which `harness/tests/t3_join_coverage.py` asserted long before the two matchers met.
+
+**What bounds the damage is the rule's position and the game picker, and the measurement says so — but read what the measurement was over.** The abbreviation is tried last, so it can never take a hint that already resolves. Against the real committed export lists, judged within the game the operator has already chosen, thirteen of thirteen strings resolved to the intended set and none resolved wrongly. **Seven of those thirteen are codes with a source** — typed by the owner, or already hand-authored in `set_aliases`, or carried by store records. **The other six were chosen by the session to exercise the rule's shapes** and are not evidence that anybody types them. The number is a claim about the MATCHER and not about the vocabulary; a claim about the vocabulary needs the owner or the rig, and this entry does not make one. The only way it returns the WRONG set is for the operator's own set to be missing from TCGplayer's list — if their set is there, the code either finds it or ties with another, and a tie widens. An earlier draft of this section quoted a one-in-twelve error rate; that number was measured across games, typing Pokémon codes at a Riftbound vocabulary, which the game picker makes unreachable. It is recorded here because the wrong measurement nearly bought a worse design.
+
+**Measured at full size on 2026-08-31, after this entry twice recorded a number taken off the fixtures.** TCGplayer lists 12 Riftbound groups and 29 Pokémon SV/ME ones. Ties do become commoner with scale, exactly as predicted, and the failure that grows is the rule declining to fire rather than answering wrongly — the wrong-set count at full size is zero. What the fixtures could not have shown is how MUCH commoner: nine of twenty-two Pokémon codes tie, which is what turns the hand-authored table from a legacy into a live requirement.
+
+**One wrong answer does exist, and it is older than the abbreviation rule.** `SP` is Riftbound's Special collection, TCGplayer lists no such set, and `SP` resolves to `Spiritforged` by the PREFIX rule — which has answered that way since `match_sets` shipped. It is left alone: narrowing prefix would take `UNL` and `VEN` with it, and both are real codes for sets TCGplayer does list.
 ---
 
 ## D66 — The order screen comes before the transport, and the shipping lane needs neither
@@ -3736,9 +3780,45 @@ So the property D46 protected — no string a client sends becomes a listing on 
 
 **What would reopen this: `from_catalog` appearing on entries whose offered rows were right.** D46 named the same tripwire pointing the other way and it still holds — if the flag starts landing on cards a better join would have placed, the fix is upstream. This entry adds the near side of it: if the flag starts landing on entries **with** candidates at a rate that is not rare, the number read is the thing to fix, not the screen. Box 3's read is already the second measured instance of that (D55, 7 of 39 across three separators), and this is the third symptom of one defect.
 
+## D78 — A run's reason for adding nothing is a heading, the rows under it sink, and a hold sinks on the reopening
+
+**Built 2026-08-31, on the owner's ask, over a screenshot of `#/pricing` on a Riftbound box.** Two sentences, one after the other: *"can we have it so that 'every copy in this run is already listed or sold' rows go to the bottom?"* and *"instead of each of those rows having that quoted subtext, instead it's a header and these rows fall under it"*. They are one change, and the second is what makes the first worth doing.
+
+**What was on that screen.** Of the eight LISTED rows visible, five carried `every copy in this run is already listed or has left the box` in their own right margin — including the top two, at $39.10 and $30.93. The list is sorted market-descending (`cli/cmd_join.py:_pricing_table`, and it stays that way), so the run's most expensive **non-questions** stood where the eye starts, five copies of one sentence ran down the column, and the rows that actually wanted a price were read around them.
+
+**The rule: a row this run can add nothing for sinks to the bottom of its own section, under a heading naming why.** Inside every group the market order is untouched. The sections are untouched — nothing crosses one, because `bucket` is still decided by the Market cell alone.
+
+**Grouped by the SENTENCE, not by `at_cap`, and that is D59 held to.** `pipeline/join.py:SkuMatch.nothing_to_add` composes three of them — every copy already listed or gone, at the live cap, or held by an import this pipeline has not seen land — because they have three different remedies. Three headings, then, in first-appearance order down the wire; never one bucket of leftovers under a word like *skipped*, which would be the client re-deciding that the three are the same thing. A `pricing.json` an older join wrote carries `at_cap` with no sentence beside it, and those rows group under the bare fact, which is all `at_cap` means.
+
+**D28 is why this may be done at all.** The list must not move under a finger already travelling to the next field. Every input to this order — `bucket`, `at_cap`, `nothing_to_add` — is written by `join` and read off disk, so nothing the operator types on this screen can move a row out of its group, the same way nothing typed can move one between sections. The heading is deliberately not `sticky` for the same reason: a heading that detaches and rides the scroll is that motion arriving from the other direction.
+
+**The advance now steps the order that is DRAWN, and the bug it would otherwise have been is worth recording.** `Enter` and the arrows walked the wire array. That was correct only by coincidence: the wire is market-descending with `None` last, which puts the three buckets in the same order the three sections are drawn in. Sinking a group moves a row within its section and ends the coincidence — stepping the wire would have sent the focus from a row near the top down to one drawn at the bottom of the section and back up again, on a screen whose whole gesture is type, Enter, type.
+
+**The row's second line is the operator's own note now, and it gained a string it used to swallow.** The reason won that line over the hold's note, on the argument that the reason is the fact about the run and the note is an aside. With the reason a heading, a row that is both at the cap and withheld draws the note — the one string on that line nothing else on the screen holds a copy of. The 13px reservation that keeps every row the same height is unchanged and still carries the machine token beside it.
+
+**What would reopen this: a group with one row in it, over and over.** The heading costs a line, and it buys nothing over a row's own margin when it covers a single row. Measured on the shape that produced this — five rows, one reason — it is plainly right. If a real run draws three headings of one row each, the answer is a threshold, not a return to the subtext.
+
+### Amended the same day — a held row sinks too, and it sinks on the REOPENING
+
+**The owner, an hour later:** *"make it so that upon a reopening that page those that were held are also moved down in their own category (after prices, before all are sold/listed)"*. Three tiers now, and the order is theirs: the rows still wanting a price, then the ones already answered with a hold, then the ones this run can add nothing for.
+
+**The timing is in the ask, and it is the part that matters.** The two sinks have different inputs. `bucket`, `at_cap` and `nothing_to_add` are the join's and cannot change while the screen is open, so sinking on them is free of D28. **A hold is this screen's own answer** (D49), and a row that dropped down the list the instant `H` was pressed would take the next row up to meet a finger already travelling to it — the exact motion D28 closed. So the group is read from `sunkHolds`, the set as it stood when `load` last ran, and it re-sorts on the next opening.
+
+**Read the way a ROW reads it, which is why the snapshot walks the table rather than the two answer maps.** `targetOf` decides which map a row's answer lives in, so a stale `overrides` key for a `no_market_data` SKU draws nothing and must sink nothing. The group and the word `Holding` are then the same test, run once each.
+
+**`"unlisted"` counts as held, and it is not an edge.** It is the answer a `no_market_data` row takes to say this card is not being listed, it draws `Holding` in the price column exactly as a reasoned hold does, and it keeps the card out of the same import file. A group of rows that will not list is the honest set; taking the reasoned half alone would leave the other half among the unanswered rows looking like work.
+
+**ONE heading over all the holds, unlike the cap tier's one per sentence.** The reason is per SKU and is already drawn on the row as `withheld: <reason>` — the string D49 spent a line of chrome on precisely so it can be grepped from the screen to `decisions.json`. A heading per reason would scatter three rows across three headings to restate what each row already says.
+
+**Where a row is both held and at the cap, the cap wins the placement.** The hold changes nothing about a SKU this run was never going to add a row for, so the deeper fact takes it; the `withheld` token still draws beside it, so the hold is not lost by being outranked. This is the same precedence the row's note line used to have, kept rather than reinvented.
+
+**A row can outlive its group for one session, and that is the trade, taken with eyes open.** Release a hold and the row keeps its place under the heading until the next load, drawing a price field. The row tells the truth about itself and the heading says why the group is there; the alternative is the list moving under the release, which is the thing being bought. The browser case asserts both halves in one test — a case checking only the press passes against a screen that never sinks holds, and one checking only the reload passes against a screen that sinks them on the press.
+
 ---
 
-## D78 — The reading goes on every row, because the operator answered D62's own measurement
+---
+
+## D79 — The reading goes on every row, because the operator answered D62's own measurement
 
 **Built 2026-08-31, on the owner's ask: "Can we use this blank space in pricing between card and market to load and show the daily + weekly graphs that T loads?"**
 This is not a reopening. D62 closed with the condition for its own amendment and named the

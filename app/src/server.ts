@@ -1696,7 +1696,7 @@ export async function getPriceHistory(
  * per card precisely so a walk down fifty rows could not fire fifty requests, and it named
  * what would reopen the question: the panel being wanted on every card, answered by a
  * BATCHED route and a column on the row. The owner asked for exactly that on 2026-08-31, and
- * D78 is the answer.
+ * D79 is the answer.
  *
  * SO IT IS STILL A PRESS AND MAY NEVER BECOME AN EFFECT. Nothing about this being one call
  * instead of forty-six makes it cheap: it is ~92 requests at two free public mirrors, 37.7s

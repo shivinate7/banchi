@@ -1901,7 +1901,7 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
     column on the row rather than a panel beside it. The measurement is whether the operator
     presses `T` more often than they press `H`."* The owner answered that measurement on
     2026-08-31 by asking for the graphs on every row. This is the route that entry specified,
-    built to the shape it specified, and D78 records what the answer cost.
+    built to the shape it specified, and D79 records what the answer cost.
 
     IT IS STILL A PRESS AND THAT IS THE WHOLE OF D62 THAT SURVIVES INTACT. Nothing polls
     this and no render fires it: a screen that read it on mount would turn every visit to

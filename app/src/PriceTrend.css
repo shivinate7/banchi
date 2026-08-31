@@ -1,4 +1,4 @@
-/* The trend strip on a pricing row — D78.
+/* The trend strip on a pricing row — D79.
  *
  * IT SPANS BOTH GRID ROWS, like `.pricing-id` beside it. `.pricing-row` reserves `32px 13px`,
  * and the second is the note line every zone but the card leaves empty by construction — so
