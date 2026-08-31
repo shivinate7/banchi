@@ -29,6 +29,7 @@ import {
 } from './server'
 import './ReviewQueue.css'
 import { reasonLabel } from './reasons'
+import { collectorNumber as sharedCollectorNumber } from './cardNumber'
 
 /* The review queue — build-order step 7b, specified in docs/DESIGN.md's own section.
  *
@@ -184,15 +185,19 @@ function claimMembers(field: string | string[] | null | undefined): string[] | n
   return members.length === 0 ? null : members
 }
 
-/* The collector number as the model returned it, unpadded, exactly as PullPreview.tsx shows
- * it and for the same reason: `pipeline/join.py:join_key` zero-fills to three digits to
- * match the export's `Number` column, and doing that here would put a string on screen that
- * nothing in the run ever said. */
+/* THE COMPOSITION MOVED TO `cardNumber.ts` AND THE RENDERING DID NOT CHANGE (D67). This copy
+ * was the correct one of the three — it already folded a blank on both halves — and it is gone
+ * for the reason the other two are: one composer, so the next screen cannot write a fourth.
+ *
+ * WHAT THIS SCREEN DELIBERATELY DOES NOT GET IS THE SET-CODE FOLD. `QueueRead` carries no
+ * `number_display`, so this composes the raw pair and shows exactly what the model returned —
+ * `UNL / 120/219` and all. D55 was FOUND by the owner reading that string here three times in
+ * one afternoon; a queue that quietly tidied it would have hidden its own evidence. The
+ * inventory screens draw the folded form because they are naming a card that is already in a
+ * box; this one is judging the read that put it there.
+ */
 function collectorNumber(read: QueueRead): string | null {
-  const number = text(read.number)
-  if (number === null) return null
-  const total = text(read.printed_total)
-  return total === null ? number : `${number}/${total}`
+  return sharedCollectorNumber({ number: read.number, printed_total: read.printed_total })
 }
 
 /** The one condition string the candidates offer, or null when they offer none or several.

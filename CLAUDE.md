@@ -181,7 +181,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
   the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
-  set by hand, and D67 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
+  set by hand, and D69 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
   which says which copies a buyer gets and where they are, and the shipping lane, which says
   which envelope an order goes in, out of a file the ledger has never seen. **The count above
   was RECOUNTED from the `ROUTES` table rather than incremented**, which is the only way of
@@ -194,7 +194,7 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   where the sentence is what a session reads to learn the shape of the product. It was false
   from D39 until D49 in FIVE places at once, none of which failed a check, and it was still
   false in a sixth on 2026-08-30: `README.md`'s fenced screen list carried five entries and
-  was missing `runs` and `pricing` outright, so D67's repair had to restore two screens
+  was missing `runs` and `pricing` outright, so D69's repair had to restore two screens
   before it could add two. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
@@ -405,7 +405,9 @@ D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
 D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
-D67  The order screen and the shipping lane get a route each, and the transport was measured before it was written
+D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
+D68  A departed card's label names the record, because two of them in one box were the same string
+D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
@@ -415,10 +417,10 @@ D67  The order screen and the shipping lane get a route each, and the transport 
 - `docs/specs/order-pipeline.md` — steps 8 to 14: an order arrives, a card is pulled, an
   envelope is stamped, tracking goes back. Every number in it was
   measured rather than carried forward — section 6 names what it could not check.
-  **Steps 8 to 12 are BUILT as of 2026-08-30 (D67)**: `#/orders` pulls a real order out of the
+  **Steps 8 to 12 are BUILT as of 2026-08-30 (D69)**: `#/orders` pulls a real order out of the
   ledger and `#/shipping` routes a real export into three lanes, both reachable from the nav,
   and `server/order_transport.py` fetches this account's own orders over the cookie session
-  D67 measured. **Steps 13 and 14 — the shipped status and the tracking write-back — are
+  D69 measured. **Steps 13 and 14 — the shipped status and the tracking write-back — are
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. Not `docs/specs/order-flow.md`, the sell path.

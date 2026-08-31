@@ -2017,6 +2017,66 @@ def run() -> Result:
             f"set code: {glued!r} gives up its prefix and nothing else",
         )
 
+    # ---------------------------------------------------------------- D67: the same shape, read
+    # by a SCREEN. `strip_set_code` is the published rule and `_repair_set_code` is now a reader
+    # of it, so the two can no longer drift — the case below is what would go red if a second
+    # regex appeared. It is asserted in BOTH directions on purpose: the repair still answers None
+    # where nothing was removed (the ladder needs a candidate-or-nothing) and the strip still
+    # answers the string (a screen needs something to draw).
+    for intact in ("P-044", "T02 // T03", "056/298", "SP3/006", "R04"):
+        c.equal(
+            join.strip_set_code(intact),
+            intact,
+            f"D67: {intact!r} is a real identifier and the display strip leaves it alone",
+        )
+        c.equal(
+            join._repair_set_code(intact),
+            None,
+            f"D67: and the ladder's reader of the same shape still answers None for {intact!r}",
+        )
+    for glued, bare in (
+        ("UNL \u2022 198/219", "198/219"),
+        ("UNL \u00b7 080/219", "080/219"),
+        ("UNL - 150/219", "150/219"),
+        ("UNL / 120/219", "120/219"),
+    ):
+        c.equal(
+            join.strip_set_code(glued),
+            bare,
+            f"D67: {glued!r} is drawn as {bare!r} — one shape rule, two readers",
+        )
+
+    # THE COMPOSITION, AND THE HALF THAT COST A QUARTER OF THE STORE. `printed_total` arrives as
+    # `""` on 174 of the owner's 676 numbered records — every Riftbound card, which prints one
+    # identifier and has no denominator — and the two client copies of this tested it for `null`
+    # alone, one line below testing `number` for null OR blank. Those rendered `198/219/`.
+    # The first case here is red against that spelling; the rest hold the shape around it.
+    for number, total, drawn in (
+        ("198/219", "", "198/219"),
+        ("198/219", None, "198/219"),
+        ("UNL \u2022 198/219", "", "198/219"),
+        ("025", "132", "025/132"),
+        ("  025  ", " 132 ", "025/132"),
+        ("161", "159", "161/159"),
+        ("", "132", None),
+        (None, "132", None),
+        ("  ", None, None),
+    ):
+        c.equal(
+            join.display_number(number, total),
+            drawn,
+            f"D67: {number!r} + {total!r} is drawn as {drawn!r}",
+        )
+
+    # NO `zfill`, WHICH IS THE ONE THING THIS MUST NOT BORROW FROM ITS NEIGHBOUR. `join_key`
+    # pads to three digits because the export's `Number` column is padded; the same string on a
+    # screen would be a number nothing in the run ever said.
+    c.equal(
+        (join.display_number("25", "132"), join.join_key("25", "132")),
+        ("25/132", "025/132"),
+        "D67: the display form and the key form of one card differ, and both are correct",
+    )
+
     # THE NAME RUNG IS STILL REACHED, by a code that is well-formed and simply wrong — which is
     # the case D35 exists for and which no strip can repair. Kept alongside the case above so a
     # future change cannot quietly delete the rung by making every bad code recoverable.

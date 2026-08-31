@@ -15,6 +15,7 @@ import type {
 import type { Failure } from './server'
 import {
   describeFailure,
+  isDeparted,
   positionLabel,
   getBoxes,
   getQueues,
@@ -28,6 +29,7 @@ import {
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
+import { collectorNumber } from './cardNumber'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
 import './BoxBrowse.css'
@@ -255,9 +257,29 @@ function sectionsOf(rows: Row[]): Section[] {
  * shows the label whole rather than a guess. */
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return String(row.card.card)
+  if (hasDeparted(row.card)) return `departed · ${row.key}`
   const label = positionLabel(row.card)
   if (label !== null) return label
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
+}
+
+/** A record that is still in this box's index space and in none of its slots — sold or retired.
+ *
+ *  `slot === null` AND A LABEL, WHICH IS TWO TESTS BECAUSE THE FIELD HAS TWO CAUSES. `types.ts`
+ *  says so on `Place.slot`: it is null for a card that has left AND for one the server could not
+ *  count. The second answers `label: null` as well — there is no honest label when the cards
+ *  could not be counted — so the label is what tells the design fact from the fault, and the
+ *  fault keeps the panel `BoxBrowse` already draws for it. `card` is null with it, which is why `rowSlot` above reaches this
+ *  line at all — `_flat_place` omits the flat `card` key rather than sending it null.
+ *
+ *  THE FULL LABEL IS WHAT THIS REPLACES AND IT DID NOT FIT. `Box 3 · departed · 3/31` measures
+ *  177px into a 169px cell, so the browser ellipsised it — and what an ellipsis takes off the end
+ *  is exactly the store key that D68 put there to tell two departed copies apart. Four departed
+ *  Moonfalls drew `Box 3 · departed · 3…` four times. `Box 3 · ` is the part worth spending:
+ *  this walk is scoped to one shelf, named in the panel above and in every section header, which
+ *  is the same argument that took the box out of those headers. */
+function hasDeparted(card: InventoryCard): boolean {
+  return isDeparted(card.place)
 }
 
 
@@ -670,7 +692,7 @@ function marketText(card: InventoryCard, read: MarketRead | undefined): string {
 function detailsOf(card: InventoryCard, market: MarketRead | undefined): Detail[] {
   return [
     { label: 'Card', value: card.name ?? 'not identified yet', mono: card.name === null },
-    { label: 'Number', value: collectorNumber(card), mono: true },
+    { label: 'Number', value: numberCell(card), mono: true },
     /* THE MODEL'S OWN HEDGE, DIRECTLY UNDER THE READ IT HEDGES. `confidence` qualifies the two
      * rows above it and nothing else, so it sits against them rather than at the bottom of the
      * panel — D35's failure mode is a name-and-number pair a human has to judge, and five rows
@@ -859,9 +881,12 @@ function waitingFor(firstSeen: string): string {
   return Number.isNaN(at) ? 'unknown age' : sinceText(at)
 }
 
-function collectorNumber(card: InventoryCard): string {
-  if (card.number === null) return 'none'
-  return card.printed_total === null ? card.number : `${card.number}/${card.printed_total}`
+/* `none` IS THIS SCREEN'S WORD AND THE COMPOSITION IS `cardNumber.ts`'S (D67). What was here
+ * tested `printed_total === null` one line below a test of `number` for the same, and the store
+ * writes `""` on 174 of its 676 numbered records — so a quarter of the walk drew `198/219/`.
+ * The fact row wants a word rather than a blank cell, which is the one thing this keeps. */
+function numberCell(card: InventoryCard): string {
+  return collectorNumber(card) ?? 'none'
 }
 
 

@@ -24,6 +24,25 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   reporter: [['list']],
+  // THE FIRST OF THIS SUITE'S TWO RECORDED FLAKES WAS THIS NUMBER, AND IT IS A WAIT RATHER
+  // THAN AN ASSERTION. Playwright's default is 5s, and under `fullyParallel` every worker's
+  // first act is `await expect(page.locator(VIEW)).toBeVisible()` — a cold Vite dev server
+  // compiling the module graph for N contexts at once. Measured on this rig at 40 workers
+  // against 12 spinning CPU hogs: 9 of 80 repeats of one case failed, every one of them on
+  // that first visibility wait and none of them on an assertion; with the wait lengthened the
+  // same 80 passed, the slowest whole case taking 5.276s. 15s is ~3x that.
+  //
+  // RAISING THIS WEAKENS NOTHING, which is the distinction D16 turns on. It does not change
+  // what is asserted or the value asserted against — it changes how long a true statement is
+  // given to become true, and a statement that is false is still false at 15s. What it costs
+  // is slower reporting of a genuine failure, and `fulfillment.spec.ts` already pays that
+  // knowingly with a 60s `toHaveCount` of its own.
+  //
+  // WHAT IT IS NOT IS A CURE FOR A STARVED RIG. At 40 workers against 12 hogs a context can
+  // fail to render at all rather than slowly: with the allowance raised to 120s, 10 of 80
+  // still failed and one took 122s. A wait cannot answer that, and that load is 4x
+  // oversubscription — `make design-check` runs 7 workers. See docs/DEBTS.md.
+  expect: { timeout: 15_000 },
   use: {
     baseURL: DEV_URL,
   },

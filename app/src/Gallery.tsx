@@ -136,6 +136,9 @@ const GROUP: SearchGroup = {
   names: ['Thievul'],
   number: '108',
   printed_total: '198',
+  /* What the server composes and the screen draws (D67). Spelled out rather than derived: the
+     gallery is a fixture of the WIRE, and a field it computed for itself would stop being one. */
+  number_display: '108/198',
   set_hint: 'me01',
   condition: 'Near Mint',
   listed: { pushed: 0, staged: 1, live: 2 },

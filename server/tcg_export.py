@@ -1,7 +1,7 @@
 """The outbound call to the seller admin host, and the only place allowed to make it.
 
 IT SAID "THE ONE OUTBOUND CALL THIS SERVER MAKES" UNTIL 2026-08-30, AND IT IS NOW ONE OF
-TWO. `server/order_transport.py` is the other (D67), against a different host. The
+TWO. `server/order_transport.py` is the other (D69), against a different host. The
 guarantee that actually mattered was never the count — it is that an outbound call lives
 in its OWN MODULE, names ONE host, reads its credential AT CALL TIME, and never lets that
 credential into a return value. That holds for both files, and it is restated below in
@@ -54,7 +54,7 @@ order-management API, which lives on another host and answers `www-authenticate:
 the two were conflated once while this was being scoped, and reached the wrong conclusion.
 
 THAT LAST CLAUSE WAS MEASURED FALSE ON 2026-08-30 AND IS CORRECTED HERE RATHER THAN
-DELETED (D67). `order-management-api.tcgplayer.com` answers NO `www-authenticate` header on
+DELETED (D69). `order-management-api.tcgplayer.com` answers NO `www-authenticate` header on
 any path probed; it is a COOKIE SESSION authenticated by the same `TCGAuthTicket_Production`
 cookie `_cookie()` below reads, because that cookie is scoped to `.tcgplayer.com` and both
 hosts sit under it. The portal's own XHR sets no `Authorization` header either. The

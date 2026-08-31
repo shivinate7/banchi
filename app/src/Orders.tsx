@@ -23,7 +23,7 @@ import type {
 } from './types'
 import './Orders.css'
 
-/* THE ORDER SCREEN — which copies this buyer gets, and where they are (D67).
+/* THE ORDER SCREEN — which copies this buyer gets, and where they are (D69).
  *
  * ONE READ ANSWERS BOTH HALVES. `GET /orders` computes the order list and the resolution out of
  * ONE store snapshot, and this screen makes exactly one call for the pair. Two calls could

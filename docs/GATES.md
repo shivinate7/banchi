@@ -570,7 +570,7 @@ at a temporary directory, so nothing here touches the real inventory.
   eleven against a real queue. Same standing as T6's synthetic composites: self-consistency
   over a wider range than the evidence covers.
 
-- **The order screen's three routes are covered as of 2026-08-30 (D67), in four isolated
+- **The order screen's three routes are covered as of 2026-08-30 (D69), in four isolated
   homes.** `check_order_screen` covers `GET /orders`, `POST /orders/ingest` and
   `POST /orders/pull`. `check_order_resolver` already covers the resolver over an `Inventory`
   and `check_order_ledger` the ledger over a file; **neither of them can fail on the route**,
@@ -598,7 +598,7 @@ at a temporary directory, so nothing here touches the real inventory.
 
   **And the screen is asserted to draw NO postage lane** — the order answer's key set and the
   line answer's key set are both pinned whole, so `OrderResolution.ships_in_an_envelope`
-  cannot arrive on this wire quietly. D67 makes that a prohibition rather than an omission:
+  cannot arrive on this wire quietly. D69 makes that a prohibition rather than an omission:
   the lanes are D61's answer, computed from an export this screen has never read.
 
   **Idempotence is byte equality and never a row count**, which is `check_order_ledger`'s own
@@ -611,7 +611,7 @@ at a temporary directory, so nothing here touches the real inventory.
   A fourth copy against a line of three is refused rather than clamped: you cannot ship the
   fourth. **One equality ties the extraction**: `_sell`'s body is exactly the nine keys
   `do_mark_sold` answers, so the pull and the sale button hand the app one shape.
-- **The shipping routes and the order transport are covered as of 2026-08-30 (D67), in one
+- **The shipping routes and the order transport are covered as of 2026-08-30 (D69), in one
   isolated home, and the transport half opens no socket at all.**
   `check_shipping_routes` runs the same committed 331-order Export Shipping file through
   `POST /shipping/batches`: 166 envelope / 126 parcel / 39 unjudged, all six reasons as one

@@ -2893,7 +2893,7 @@ def check_withhold_reasons(report: Report) -> None:
 def check_order_reasons(report: Report) -> None:
     """The six order-line reasons, reconciled across the two languages that declare them.
 
-    D67's order screen looks a reason UP rather than re-deriving it from whatever the line
+    D69's order screen looks a reason UP rather than re-deriving it from whatever the line
     carries beside it, so `app/src/orderReasons.ts:ORDER_REASONS` is a second independent
     declaration of `pipeline/orders.py:LINE_REASONS`. That is the shape `check_reason_codes`
     and `check_withhold_reasons` above both exist for, and exactly the drift D16 exists to

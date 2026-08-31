@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react'
 
 import type { SearchCopy, SearchGroup, SectionDetail } from './types'
-import { photoUrl, placeSentence } from './server'
+import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
 import './CardLocations.css'
 import { PositionLabel } from './PositionLabel'
+import { collectorNumber } from './cardNumber'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -71,18 +72,6 @@ function saidState(state: string): string {
  *  into server.ts. */
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
-}
-
-/** The collector number as the model returned it, unpadded, or null when there is none.
- *
- *  `pipeline/join.py:join_key` zero-fills to three digits to match the export's `Number`
- *  column; doing that here would put a string on screen that nothing in the run ever said.
- *  Same rule and the same shape as the card-shaped twin in `Inventory.tsx` — this one takes a
- *  group, which is why it is not that one. */
-function collectorNumber(group: SearchGroup): string | null {
-  const { number, printed_total } = group
-  if (number === null || number.trim() === '') return null
-  return printed_total === null ? number : `${number}/${printed_total}`
 }
 
 export type CardLocationsProps = {
@@ -423,7 +412,15 @@ function OwnerRows({
                   own note: a second caption in his view is a second sentence somebody decided
                   he needs to read, and that is the owner's call rather than a side effect of
                   an owner-side ask. */}
-              {pooled ? null : (
+              {/* AND NO BAR FOR A DEPARTED COPY EITHER (D68), which is `BoxBrowse.tsx`'s
+                  existing ruling applied to the other list of the same cards: `app/tests/
+                  inventory.spec.ts` already asserts the walk draws none, on the grounds that a
+                  bar cannot draw a card that is in no place. This list drew one anyway — an
+                  empty track with `where this sits in the box is not known yet` under it, four
+                  times over on one search — so the two screens disagreed about the same card.
+                  What the row keeps is the fact itself: the label says `departed`, the state
+                  says which door, and the neighbours still say what it sat between. */}
+              {pooled || isDeparted(copy.place) ? null : (
                 <PositionBar
                   place={copy.place}
                   persona="owner"

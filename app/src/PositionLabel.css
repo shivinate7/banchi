@@ -120,6 +120,32 @@
 .position-parts[data-lead='slot'] .position-slot { order: 1; }
 .position-parts[data-lead='slot'] .position-num { min-width: 3ch; }
 
+/* ---- the store key a label may end on (D68) ---- */
+
+/* `Box 3 · departed · 3/31` RENDERS AS A LABEL WITH A NOTE UNDER IT, never as a figure. The body
+   keeps the site's own size — it is the same plain string this component drew for a departed card
+   before the key existed — and the key drops to the muted register on its own line, so the row
+   grows by one small line rather than by a second line of the site's payload face. Measured on the
+   copies list: 72.8px of 28px label wrapped to two lines, against 45.5px here.
+
+   `.position-key`'S OWN EXPRESSION, NOT A SECOND ONE. The key beside a slot figure and the key
+   under a plain label are the same fact drawn in the same register, and this file's whole argument
+   is that one expression serves every site's scale: 11px at 28 and 12.98px at 44. */
+.position-plain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.position-storekey {
+  font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- the run form: the same ranking, laid out in one dimension ---- */
 
 .position-run-path,

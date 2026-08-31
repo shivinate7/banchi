@@ -54,7 +54,7 @@ runs          http://localhost:5173/#/runs
 # `views exposure` question the other owner routes raise does not arise here either.
 pricing       http://localhost:5173/#/pricing
 
-# The order screen and the shipping lane, both routed 2026-08-30 (D67). Two renders because
+# The order screen and the shipping lane, both routed 2026-08-30 (D69). Two renders because
 # they are two questions asked at two moments: `#/orders` is "which copies does this buyer get
 # and where are they", read out of D63's ledger, and `#/shipping` is "which envelope does this
 # order go in", read out of a file TCGplayer exports and the ledger has never seen.

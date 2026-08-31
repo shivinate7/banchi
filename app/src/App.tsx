@@ -25,7 +25,7 @@ import './App.css'
  * `Inventory.tsx`.
  *
  * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
- * fixes: the gallery was the seventh and nothing was counting. NINE now (D67, 2026-08-30) —
+ * fixes: the gallery was the seventh and nothing was counting. NINE now (D69, 2026-08-30) —
  * capture, runs, review, pricing, orders, shipping, inventory, fulfillment, gallery — EIGHT
  * of them the owner's and ONE the Fulfiller's. The
  * not-rendered-rather-than-hidden rule for the Fulfiller's nav is untouched, because it was
@@ -100,7 +100,7 @@ type Route = {
  * now being one screen. `#/runs` took its place in the middle of that sentence on 2026-08-29,
  * which is where the work actually happens: it was inside `#/inventory` — the `look` row — and
  * the four commands are the loop, not a lookup. `#/orders` and `#/shipping` extend that
- * sentence past the point where the cards stop being ours (D67): shoot, run, answer, price,
+ * sentence past the point where the cards stop being ours (D69): shoot, run, answer, price,
  * orders arrive, orders ship. The
  * Fulfiller's view and the component sheet sit after that run of six because neither is a
  * step in it. `group` now says that out loud rather than leaving it to the order alone, which
@@ -158,7 +158,7 @@ const ROUTES: readonly Route[] = [
     group: 'run',
     hotkey: 'p',
   },
-  /* THE ORDER SCREEN AND THE SHIPPING LANE, 2026-08-30 (D67). Two routes rather than one,
+  /* THE ORDER SCREEN AND THE SHIPPING LANE, 2026-08-30 (D69). Two routes rather than one,
    * and they sit here — after `#/pricing`, before `#/inventory` — because the `run` group
    * reads in the order the work happens and this is where the work happens: shoot, run,
    * answer, price, ORDERS ARRIVE, ORDERS SHIP. The two questions are genuinely different and
@@ -331,7 +331,7 @@ function hasChrome(route: Route | undefined): boolean {
  * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
  *
  * `s` IS THE LIVE PROOF OF THE PARAGRAPH ABOVE. `CaptureScreen.tsx:SECTION_KEY` is a bare
- * `s` that puts a divider in a box, and D67 gave the same letter to `#/shipping` — the two
+ * `s` that puts a divider in a box, and D69 gave the same letter to `#/shipping` — the two
  * cannot collide, because an armed leader consumes the second press here and delivers it
  * nowhere. If a change ever moves this listener off the capture phase, that is the pair that
  * breaks first, and it breaks by writing a divider nobody asked for.
@@ -517,7 +517,7 @@ function useLeader(enabled: boolean, path: string): number | null {
  * keys the chord already had (2026-08-30): "cmd+arrow keys doesn't have me going in order
  * between c r q p i, can you resolve?"
  *
- * The chord is a JUMP — seven destinations since D67, each reached by naming it. What the shell has never
+ * The chord is a JUMP — seven destinations since D69, each reached by naming it. What the shell has never
  * had is a STEP, and the nav is drawn in the order the work happens: shoot, run the pipeline,
  * answer what it could not, price it, then look up where a card is. "The next one along" was
  * the one thing about that row a key could not say. Cmd-arrow was already being pressed for

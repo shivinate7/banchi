@@ -300,6 +300,22 @@ export type InventoryCard = {
   section?: number
   card?: number
 
+  /** The collector number as a screen draws it — `198/219`, unpadded, with a glued set code
+   *  removed (D67). `pipeline/join.py:display_number` composes it and `cardNumber.ts` is the
+   *  only thing here that reads it.
+   *
+   *  A FOURTH FLAT DECORATION AND THE ONLY UNCONDITIONAL ONE. The three above are a POSITION
+   *  and are omitted when the server cannot work one out; a number is a fact about the card, so
+   *  a pooled row and a row whose box will not coerce both carry theirs. Null where the card
+   *  has no number at all.
+   *
+   *  IT DOES NOT REPLACE `number` AND `printed_total` BELOW, which stay exactly as the store
+   *  holds them — what the model read, D36's durable fact and what `identifications.json` is
+   *  reconciled against. This is the rendering. Optional for the reason every decoration here
+   *  is: an absent key is what an older server actually sends, and `collectorNumber` composes
+   *  the raw pair when it is missing. */
+  number_display?: string | null
+
   /** The fourth decoration, typed late: `do_inventory` has sent the whole `Place` block
    *  beside the three flat keys since the block existed, and nothing on this side read it
    *  until D24 needed the one field only the block carries. A POOLED CARD IS THE ROW THAT
@@ -1068,6 +1084,16 @@ export type SearchGroup = {
   names: string[]
   number: string | null
   printed_total: string | null
+
+  /** The whole collector number as a screen draws it, agreed across the copies, or null.
+   *
+   *  AGREED ON THE FOLDED FORM, WHICH IS WHY IT IS A THIRD FIELD AND NOT A RENDERING OF THE TWO
+   *  ABOVE (D67). `_agreed` returns null the moment the copies disagree, correctly — but five
+   *  copies of one card storing `198/219`, `UNL • 198/219` and `UNL - 198/219` are not
+   *  disagreeing about the card, only about what the model glued to the front of it. Folded,
+   *  they agree and the group can draw a number; genuinely different reads (`044/106` against
+   *  `044/166`) still null both fields and the group still says nothing. */
+  number_display: string | null
   set_hint: string | null
   condition: string | null
 
@@ -1745,7 +1771,7 @@ export type ExportFetched = {
 
 /* ============================================================================ THE ORDERS
  *
- * D63's ledger on the wire, and D67's screen reading it. Field names are the SERVER'S, in
+ * D63's ledger on the wire, and D69's screen reading it. Field names are the SERVER'S, in
  * the server's own case, for the reason every block above this one is: a rename here is a
  * second spelling of one contract, and the renaming would have to happen somewhere anyway.
  * Nothing in this file is validated at run time — `server.ts` casts, and its own comment
@@ -1904,7 +1930,7 @@ export type OrdersPayload = {
  *  whatever was pasted and NAMES what it dropped; `server/capture_server.py`'s three
  *  allowlist tuples are the backstop, so an unprojected paste refuses BY NAME rather than
  *  being stored with those fields quietly trimmed. A field added here is a field that leaves
- *  the machine, and it has to be argued for in D67's entry before it is typed here. */
+ *  the machine, and it has to be argued for in D69's entry before it is typed here. */
 export type OrderIngestLine = {
   sku: string
   quantity: number

@@ -1103,27 +1103,123 @@ supervisor's stdout line reporting the stack up, which reads as an unregistered 
 backticked inline and is an indented output block now, and a bare `make` span that read as a
 target called "make" when it sat beside another make span on one line.
 
-## `make design-check` has one test that flakes under parallel load
+## `make design-check` has one test that flakes under parallel load — resolved 2026-08-30
 
-**`app/tests/inventory.spec.ts:2799` — "the photograph is sized by its column, not by the rows beside it" — failed once in a full run and passed alone and on re-run.** Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately afterwards was 256 of 256.
+**What it argued.** `app/tests/inventory.spec.ts` — "the photograph is sized by its column,
+not by the rows beside it" — failed once in a full run and passed alone and on re-run.
+Observed 2026-08-30 while D65 landed. 255 passed, 1 failed; the same suite immediately
+afterwards was 256 of 256. The mechanism was given as rendered geometry: D38 sizes the
+photograph off its column, so the assertion reads back a computed width, and a layout that
+has not settled reports a number that is right a frame later. No error text was captured, so
+that was a hypothesis rather than a reading.
 
-**FIXED 2026-08-30, and the cause was NOT load.** The paragraph below is the hypothesis this entry was written with; it is kept because it was reasonable and wrong, and because the shape of the error is worth being able to find again.
+**IT WAS TWO FLAKES, AND THE HYPOTHESIS WAS HALF RIGHT.** Both were reproduced on
+2026-08-30 by loading the rig, and they answer to different fixes.
 
-> ~~It measures rendered geometry, which is the shape most sensitive to load. D38 sizes the photograph off its column, so the assertion reads back a computed width, and a layout that has not settled reports a number that is right a frame later.~~
+### One — the wait, which is what the recorded red almost certainly was
 
-**The cause is `display=swap`.** `app/index.html:14` fetches Martian Mono and Atkinson Hyperlegible from Google Fonts with `&display=swap`, which is a deliberate instruction to the browser to PAINT IN THE FALLBACK FACE FIRST and re-lay-out when the real one arrives. Every number these tests assert is an advance width — the test's own comment prices them at *"Martian Mono's 0.70em advance"* — so a measurement taken before the swap is measuring a **different typeface** and answering a different question. `document.fonts.ready` appeared nowhere in the suite.
+At 40 workers against 12 spinning CPU hogs, 80 repeats of that one case: **9 failed, and
+every one of them failed in `open()` on `expect(page.locator(VIEW)).toBeVisible()` at the
+5000 ms default — the app had not rendered yet. Not one failed on an assertion.** With the
+allowance lengthened the same 80 passed, the slowest whole case taking 5.276s.
 
-**That explains all three symptoms at once**, which the load hypothesis only explained one of: it fails under seven parallel workers (they contend for the font fetch, widening the window), it passes alone (no contention), and it passes on re-run (the font is cached). It also means the suite had a silent dependency on reaching `fonts.googleapis.com` — these layout assertions were never hermetic.
+**`expect: { timeout: 15_000 }` in `app/playwright.config.ts`, and it weakens no assertion.**
+Nothing about what is asserted or the value asserted against changed; what changed is how
+long a true statement is given to become true, and a false one is still false at 15s. The
+cost is slower reporting of a genuine failure, which `app/tests/fulfillment.spec.ts` already
+pays knowingly with a 60s `toHaveCount` and a 90s `test.setTimeout` of its own.
 
-**The fix is `await page.evaluate(() => document.fonts.ready.then(() => true))` before the measurements**, which removes the window rather than waiting a guessed number of milliseconds inside it. No assertion was changed — the same numbers are asserted, against the font they were computed for — so D16's prohibition on editing an assertion to make it pass is not engaged. **Measured: 2 failures in 9 runs before, 18 consecutive clean runs after.** At the observed rate that is roughly a 1% chance of being luck.
+### Two — the case subtracting two layouts, which is the geometry the entry guessed at
 
-**THE SAME CLASS IS STILL PRESENT ELSEWHERE AND IS NOT FIXED.** There are 22 `getBoundingClientRect` measurements across `inventory.spec.ts` (14), `fulfillment.spec.ts` (4), `cursor.spec.ts` (3) and `pricing.spec.ts` (1), and only the one named above now waits for the font. The others have not been observed flaking, and a blind sweep of four spec files was declined rather than done unreviewed. **A red in any of them should be read as this before it is read as a defect.**
+**`Received: 1.5` against `expect(Math.abs(under.y - mid.y)).toBeLessThanOrEqual(1)`, twice
+in 320 loaded repeats at 30 workers against 8 hogs.** The two columns are flush and stay
+flush: 120 loaded samples that read both tops inside ONE `page.evaluate` came back at
+115.25px and 115.25px, a 0px gap, every single time, with `document.fonts` already loaded
+and no scroll. **What was unstable was the case, not the screen.** `mid` is read forty lines
+and eleven `boundingBox()` round-trips before `under`, and the two were subtracted as though
+they came from one layout — so anything that moves the grid inside that window (row 1
+growing as a face swaps in) is reported as two columns that have come apart.
 
-**A second, unrelated flake was found and fixed in the same pass.** `shipping.spec.ts` asserted `expect(await orders.allTextContents()).toEqual([...])`. `allTextContents()` is a SNAPSHOT with no auto-wait: it reads once, and a list that has not rendered yet reads as `[]`. That is a race, not a font problem, and the web-first `await expect(orders).toHaveText([...])` retries and asserts the same count, text and order. Eight such non-retrying reads exist in the suite; the three in `shipping.spec.ts` are fixed and the rest are recorded here.
+**Both tops now come out of one `evaluate`.** Same two elements, same tops, same 1px
+allowance — this is a measurement fix, not a loosened assertion, which is the line D16 draws.
+400 loaded repeats at the same 30/8 afterwards: clean.
 
-**A claim was published against the failing run.** The commit that added D65's capture-screen reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1 failed, and the true count is 256. The number was written before the output was read. Corrected here rather than by rewriting the message, because the message is history and this file is where what-we-actually-know lives.
+**The other two comparisons in that case have the same shape and are left alone.**
+`mid.width - shot.width` and `rows.x` against `mid.x + mid.width` also pair an early read
+with a late one, and both are named here rather than rewritten because neither has ever gone
+red and both carry far more room than the drift is worth: 8px of declared slack against a
+measured 0, and a 41px column gap. A case is not improved by rewriting assertions that have
+not failed.
 
----
+### What is NOT closed
+
+**A starved rig is not a slow one, and no wait answers it.** At 40 workers against 12 hogs —
+4x oversubscription on a 15-core machine — a context can fail to render at all: with the
+allowance raised to 120s, 10 of 80 still failed and one took 122 seconds. At that same load
+the full suite also loses `fulfillment.spec.ts` on `main.fulfillment`,
+`capture-claims.spec.ts` on the Finish row, and `capture-undo.spec.ts` on a capture that
+never landed — it expects `Card 10` and the stack's newest is `Card 9`, which is a DROPPED
+PRESS rather than a slow one and is the only one of those a longer wait could never be the
+answer to. None of it is reachable from `make design-check`, which runs 7 workers here.
+
+One more sighting is on the record and is neither explained nor reproduced: at 15 workers,
+before either fix, `app/tests/cursor.spec.ts` — "a typed-into field darkens its edge under
+the pointer, and nothing moves" — failed once in nine runs. Its message was not captured, so
+it is named here rather than diagnosed.
+
+**A claim was published against the failing run.** The commit that added D65's capture-screen
+reason line said "design-check 257" in its message; the run it quoted was 255 passed and 1
+failed, and the true count at that commit was 256. The number was written before the output
+was read. Corrected here rather than by rewriting the message, because the message is history
+and this file is where what-we-actually-know lives.
+
+
+### Two additions from the order-pipeline branch, and one of them is weaker than it looks
+
+**A font wait was added to a DIFFERENT case — `the address holds one line at both widths` —
+and it is hardening, not a reproduction.** That case asserts advance widths and prices itself
+at "Martian Mono's 0.70em advance", while `app/index.html` fetches that face with
+`&display=swap`; `await page.evaluate(() => document.fonts.ready.then(() => true))` makes it
+measure the typeface it was computed for. **It has never been observed failing**, so this is a
+latent correctness fix. The branch that added it first proposed `display=swap` as *the* cause
+of the recorded red and supported that with run counts alone — 2 reds in 9 runs before, 1 in
+37 after. **The investigation above supersedes that**: it captured error text under controlled
+load and found the failures in `open()`, with the geometry stable at 0px across 120 loaded
+samples with fonts already loaded. Run counts are not a diagnosis, and the earlier claim is
+withdrawn rather than quietly left standing.
+
+**A genuine and unrelated race was found and fixed in `shipping.spec.ts`.** It asserted
+`expect(await orders.allTextContents()).toEqual([...])`. `allTextContents()` is a SNAPSHOT
+with no auto-wait: it reads once, and a list that has not rendered yet reads as `[]`. **This
+one was observed** — it took a captured red on the first full-suite run of the new screen. The
+web-first `await expect(orders).toHaveText([...])` retries and asserts the same count, text and
+order, and now inherits the 15s allowance set above. Eight such non-retrying reads exist in the
+suite; the three in `shipping.spec.ts` are fixed and the remaining five are recorded here —
+three in `inventory.spec.ts`, two elsewhere — none of them observed failing.
+
+## A Playwright line number is not a line in the file — found 2026-08-30
+
+**The entry above cited `app/tests/inventory.spec.ts:2799`. At the commit it was written
+against (`3ca904e`), line 2799 of that file is `  }` and the case it names is at line 2565.**
+The number was copied from the reporter, which is the only place it is ever printed, and it
+is wrong there for nearly every test in the suite — checked by walking `--reporter=json`'s
+location for all of them and comparing it against the line the title actually sits on.
+**254 of 256 at `3ca904e`; 257 of 259 on the tree this entry lands in**, where that same case
+has moved to line 2612 and is reported at 2827.
+
+**The transform is what moves them, and the sign goes both ways.** Playwright strips the
+TypeScript and reports against the generated file, so a spec loses the lines its type-only
+constructs occupied and gains the lines its long ones are re-broken into. Measured with a
+probe spec in this repo's own `app/tests`: a test on source line 24 with no annotations above
+it reported 23, and the same test on line 27 with a 22-line `type` block above it reported 3.
+Clearing `$TMPDIR/playwright-transform-cache-501` changes nothing — it is not staleness.
+
+**What it costs: a citation nobody can follow.** Every failure this repo has ever pasted into
+a commit message or a doc carries one of these numbers, and a session that opens the file at
+it lands on unrelated code — silently, because the line is real and the file is right. Grep
+the TITLE instead; the reporter prints that too and it is exact. Recorded rather than fixed
+because there is nothing here to fix: it is the tool's behaviour at 1.55.1, and the repo's
+own remedy is to stop writing the number down.
 
 ## The large label is not unique, and what tells them apart is drawn small (2026-08-30)
 
@@ -1131,80 +1227,101 @@ Found by the owner looking at five copies of Moonfall in box 3 and seeing the `N
 disagree between them. Two defects and one symptom, separated here because only two of the
 three are defects.
 
-### `printed_total` is guarded as `null` and arrives as an empty string
+### `printed_total` is guarded as `null` and arrives as an empty string — closed 2026-08-30
 
-`app/src/BoxBrowse.tsx:864` and `app/src/CardLocations.tsx:85` carry the same expression:
+Recorded and closed the same day, by **D67**. What it argued: `app/src/BoxBrowse.tsx` and
+`app/src/CardLocations.tsx` carried one expression — `printed_total === null ? number :
+${number}/${printed_total}` — **one line below a guard on `number` that tested null OR blank**.
+The store writes `""` there on **174 of 676 numbered records**, which is every Riftbound card,
+so a quarter of the store rendered `198/219/`. Why it sat: the two call sites are one of the
+pairs `docs/DESIGN.md` would rather see merged than edited twice.
 
-    return printed_total === null ? number : `${number}/${printed_total}`
+**What shipped**: `app/src/cardNumber.ts`, one composer for all three screens — the third copy,
+in `ReviewQueue.tsx`, was the correct one and is gone for the same reason the other two are, so
+a fourth cannot be written. One emptiness test, both halves. `app/tests/inventory.spec.ts`
+asserts it with and without the server's own composition, because the two repairs are
+independent.
 
-**The line above it in both guards `number` for `null` or blank, and this one guards
-`printed_total` for `null` alone.** Two emptiness tests in one function, one field apart.
-`printed_total` is stored as `""` on **174 of 715 records that also carry a number**, so those
-take the else branch and render a trailing separator with nothing behind it — `198/219/`.
+### The set code the model glued on is stripped for the key and never for the display — closed 2026-08-30
 
-Cosmetic, and it costs a quarter of the store. Not fixed here because the two call sites are
-one of the pairs `docs/DESIGN.md` would rather see merged than edited twice, and merging them
-is a change with an argument attached rather than a one-line repair.
+Closed by **D67**. What it argued: D55 removes a glued-on set code by shape and only after the
+join key has missed — a rule about matching, applied by nothing that draws. Ten numbers in the
+store carry one across **four** separators (the entry said nine and three; the middle dot at
+`1/124` is the fourth, and `_SET_CODE_PREFIX` already covered it). And it propagated:
+`_agreed` returns None when copies disagree, so five copies of Moonfall spelling one number three ways
+made the **group** report nothing while each card's own row showed its own variant.
 
-### The set code the model glued on is stripped for the key and never for the display
+**What shipped**: `join.strip_set_code` publishes D55's shape and `_repair_set_code` becomes a
+reader of it, so there is one regex rather than two. The server folds where it composes for a
+screen (`number_display` on every inventory row and on both group shapes), agrees on the folded
+value, and matches on it too — the last so that a number the screen printed can be typed back.
+The raw fields are untouched everywhere. Measured: 2,607 export cells matched zero, 10 store
+records changed, **7 of the 11 silent groups recovered** and the four real disagreements stayed
+silent.
 
-D55 removes a glued-on set code **by shape, and only after the join key has missed** — that is
-a rule about matching, and nothing applies it to what a screen draws. **Nine numbers carry
-one, with three different separators**: `UNL • 198/219`, `UNL - 198/219`, `UNL / 120/219`.
-
-**The visible cost is larger than nine rows, because disagreement propagates.**
-`server/capture_server.py:_agreed` returns `None` when the copies of a group do not all say
-the same thing, deliberately and for a good reason — a number lifted off whichever copy the
-dict yielded first would be a confident answer about a group that has none. So five Moonfall
-copies storing three spellings of one number make the **group** report no number at all, while
-each card's own detail row still shows its own raw variant. One card, three strings, one
-screen, and the group between them silent.
-
-Not fixed here because the repair has a real choice in it — normalize at capture, normalize at
-read, or teach `_agreed` to compare folded — and picking one is a decision entry, not a patch.
+**What it does not cover, by choice**: `#/review` still draws the raw read. D55 was found by the
+owner reading `UNL / 120/219` on that screen, and a queue that tidied its own evidence would
+have hidden it.
 
 ### The stripped panel was the stranded card, not a third defect
 
-The fifth Moonfall drew no card block, no `Mark sold`, no `Retire` and `sku: null`, and it
-read as the copies panel failing on a null SKU. It was not. `_agreed`'s own docstring records
-that the SKU-less group is a deliberate collection of *"cards with nothing in common but the
-operator's query"*, so a card with no SKU correctly forms its own group and correctly offers
-nothing that depends on one.
-
-**That card should never have been in it.** `3/37` was resolved by its run — the run's
-`pricing.json` names the position under SKU `9191486` — and then lost the stamp to the D7 cap
-that `cli/cmd_emit.py` used to apply to `uncommitted_positions`, sold at 14:41, and was out of
-reach of every later re-emit by D57's invariant. Repaired 2026-08-30 from the run's own
-paperwork; `GET /search?q=moonfall` now returns one group of five.
+Unchanged, and still not a defect. The fifth Moonfall drew no card block and `sku: null` because
+`_agreed`'s SKU-less group is a deliberate collection of *"cards with nothing in common but the
+operator's query"* — a card with no SKU correctly forms its own group and correctly offers
+nothing that depends on one. **That card should never have been in it**: `3/37` was resolved by
+its run, lost the stamp to the D7 cap `cli/cmd_emit.py` used to apply to `uncommitted_positions`,
+sold at 14:41, and was out of reach of every later re-emit by D57's invariant. Repaired
+2026-08-30 from the run's own paperwork; `GET /search?q=moonfall` returns one group of five, and
+that was confirmed live on 2026-08-30 against a copy of the owner's store.
 
 **What is worth keeping from it**: a SKU-less group renders as a panel with its controls
 missing, and the owner read that as breakage rather than as a category. Whether that category
 should announce itself is a design question nobody has asked.
 
-### Two departed copies in one box render as two identical rows
+### Two departed copies in one box render as two identical rows — closed 2026-08-30
 
-Reported the same day as *"I'm seeing two box 1's"*. There is one box 1. There are two sold
-copies of `Vi, Peacekeeper` in it, at stored indices **67** and **106**, and both draw the
-string `Box 1 · departed` with nothing whatever beside it to tell them apart. Two physical
-cards, one row repeated.
+Closed by **D68**. What it argued: two sold copies of `Vi, Peacekeeper` in box 1, at stored
+indices **67** and **106**, both drawing `Box 1 · departed` with nothing beside them. D58's
+label is right — a departed card is in no slot — and what was wrong is that `place.index` was in
+the payload and every renderer threw it away.
 
-**D58's label is right and is not what is wrong here.** A departed card is in no slot, and
-printing the slot number would print the number that now belongs to its successor — a lie
-about a shelf. So the label drops it, correctly.
+**What shipped**: `join.departed_label` ends on the store key, `PositionLabel` draws that key in
+the muted register rather than promoting it to the slot figure, and the walk's narrow left cell
+composes its own `departed · 3/31` from the row's key. **Two of the three surfaces were made
+worse by the label change alone and were found by running the app rather than by reasoning** —
+the walk clipped the key off the end at 177px into a 169px cell, and the copies row grew to
+154.2px against the live row's 133.6px. Both measured, both fixed, the row now 105.7px.
 
-**What is wrong is that the disambiguating value is already in the payload and the row throws
-it away.** `GET /search` returns `place.index` of 67 and 106 on those two rows. D58 itself
-draws the distinction this needs: *"The STORED index never moves — it is the
-`/inventory/<box>/<index>` path"*, while `Place.slot` is the countable number that shifts. The
-index is not a slot and printing it is not the lie D58 refuses.
+### The copies list says the state twice on every departed row — found 2026-08-30
 
-**It scales with sales, which is why it will get worse rather than stay a curiosity.** Four
-departed Moonfalls already draw four identical rows in box 3, and the only thing separating
-them on screen is the neighbor text underneath — which is the *shelf's* fact, not the card's,
-and goes blank on the copies whose neighbors are themselves departed.
+Found while fixing the entry above, by looking at four sold copies of Moonfall on one screen. Each
+departed row draws the word twice at 11px about 40px apart: `.card-locations-state`, which is
+`copy.state` verbatim, and `Inventory.tsx:Action`'s fallback, which prints the same word for the
+door the copy left by. **They can never disagree, because the second is derived from the first**
+— `sold`/`sold`, `retired`/`retired`, by construction — which is what makes this a duplication
+rather than two facts that happen to coincide.
 
-Not fixed here because it is a rendering decision with D58 next to it, and D58 is an owner
-ruling about exactly this label. It wants an entry, not a patch.
+**Why it is not fixed with the rest.** The two have different owners and different arguments.
+The state span is the pipeline's own word and the screen where being able to grep what you saw
+is worth a machine string. The action slot is D57's — it becomes `Undo` for twenty seconds after
+a sale, and the word is what it falls back to. And `Action`'s **other** call site, the lone-copy
+branch of `Inventory.tsx`, has no state span beside it at all, so nulling the fallback would
+lose the fact on the 92% of the store that has no group. The honest fix is per-call-site and it
+is a D57 question.
+
+**The Fulfiller's skin already does the other thing** — `sold ? null :` — so the two skins
+disagree about this today, which is the argument for settling it rather than leaving it.
+
+### The component gallery has no departed case — found 2026-08-30
+
+`app/src/Gallery.tsx` draws four position bars and a pull-confirm in three states, and every one
+of its place fixtures is a live card. The departed rendering — the plain label, the demoted
+store key, the absent bar — is now a real state of two components and appears in no catalogue.
+
+**Cost**: low and specific. The gallery is where a treatment is looked at against the tokens
+rather than through a screen's own layout, and the departed row is the one that was found to be
+drawn wrong by looking at it. Nothing checks that the gallery is complete, which is the general
+shape of this file's entries about `docs/map.py`.
 
 ### The pricing screen shows two Box 1 buttons, and one is a box that is gone — closed 2026-08-30
 

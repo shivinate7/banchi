@@ -333,7 +333,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D49", "D54", "D55", "D56", "D58", "D59"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -794,7 +794,7 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D53", "D60", "D67"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D53", "D60", "D67", "D69"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1042,7 +1042,7 @@ COMPONENTS = [
                 # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
                 # render that draws no stored capture photo, so the `views exposure` question
                 # the others raise does not arise for it.
-                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D67"],
+                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D67", "D69"],
             },
         },
     },
@@ -1150,12 +1150,12 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D56", "D36", "D58", "D61", "D62", "D63", "D64", "D65", "D66"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
-                        "allowed to make them — one of TWO such modules since D67 gave "
+                        "allowed to make them — one of TWO such modules since D69 gave "
                         "server/order_transport.py the order host. What the split "
                         "guarantees is not a count: an outbound call lives in its own "
                         "module, names one host, reads its credential at call time and "
@@ -1181,7 +1181,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D67"],
+                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D67", "D69"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1224,7 +1224,7 @@ COMPONENTS = [
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
-                "does": "the shipping seam (D67's second route): POST /shipping/batches reads "
+                "does": "the shipping seam (D69's second route): POST /shipping/batches reads "
                         "TCGplayer's Orders -> Export Shipping CSV into D61's three lanes and "
                         "renders a Pirate Ship import file, GET .../file?name= hands those "
                         "bytes to the browser, and DELETE .../<batch> drops the batch now "
@@ -1246,7 +1246,7 @@ COMPONENTS = [
                         "batch as nulls, so the later route changes no type and no component.",
                 # D61 is the lanes, the abstention, the weight and the PII rule; D63 is the
                 # ledger the deferred stamps route would read; D66 is why the lane got a
-                # surface of its own rather than a badge on the order screen; D67 is the
+                # surface of its own rather than a badge on the order screen; D69 is the
                 # route. D58 is the stored index the stamps route will have to speak.
                 "governed_by": ["D58", "D61", "D63", "D66", "D67"],
                 "tested_by": ["T7"],
@@ -1373,8 +1373,12 @@ COMPONENTS = [
             "playwright.config.ts": {"does": "how `make design-check` runs the spec, including the "
                                              "Vite it starts for itself. reuseExistingServer stays "
                                              "ON and is safe only because devPort.ts makes the port "
-                                             "per-checkout",
-                                     "governed_by": ["D5"]},
+                                             "per-checkout. `expect.timeout` is 15s rather than "
+                                             "Playwright's 5s: fullyParallel puts every worker's "
+                                             "first visibility wait against a cold Vite, and that "
+                                             "wait — never an assertion — was the whole of the "
+                                             "flake DEBTS.md recorded on 2026-08-30",
+                                     "governed_by": ["D5", "D16"]},
 
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing "
@@ -1423,7 +1427,7 @@ COMPONENTS = [
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
                                     "the one place this shell takes a modifier.",
-                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D67"]},
+                            "governed_by": ["D5", "D10", "D13", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D67", "D69"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, why this nav may never render on the "
                                     "Fulfillment view, and the two chip looks — the chord's, "
@@ -1462,11 +1466,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D21", "D22", "D23", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D67", "D19"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D67", "D68", "D69"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D36", "D59", "D61", "D62", "D63", "D64", "D65", "D67"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1575,14 +1579,14 @@ COMPONENTS = [
                         "(`... \u00b7 pooled`) from drawing a lowercase word as a 300px figure. "
                         "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
                         "the firewall is the component graph, not a selector.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
                         "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them.",
-                "governed_by": ["D31", "D41"]},
+                "governed_by": ["D31", "D41", "D68"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
                         "2026-08-30). `after` / `before` as a muted mono key column with the two "
@@ -1639,7 +1643,7 @@ COMPONENTS = [
                     "The store holds no price at all (D8), so this is the only place one can "
                     "come from, and the age of the reading is drawn with it because `join` is "
                     "re-run against refreshed exports.",
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -1674,7 +1678,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43", "D46"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43", "D46", "D55", "D67"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -1812,7 +1816,7 @@ COMPONENTS = [
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
             "src/Gallery.tsx": {"does": "every state on one page — what `make screenshot` renders",
-                                "governed_by": ["D5"]},
+                                "governed_by": ["D5", "D67"]},
             "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
                                 "governed_by": ["D5"]},
 
@@ -1826,7 +1830,7 @@ COMPONENTS = [
                                             "divider, a marker at this card. Says '#40 of 250 · 16% "
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
@@ -1841,7 +1845,7 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D68"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -1942,6 +1946,20 @@ COMPONENTS = [
                                             "sizes, and is the property to preserve if this is "
                                             "ever re-laid-out.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
+            "src/cardNumber.ts": {
+                "does": "ONE COMPOSER OF THE COLLECTOR NUMBER FOR EVERY SCREEN THAT DRAWS ONE "
+                        "(D67). There were three, one per screen, and no two the same: the "
+                        "review queue folded a blank on both halves, the copies list folded it "
+                        "on `number` and tested `printed_total === null` on the line below, and "
+                        "the walk tested null on both. That middle spelling cost a quarter of "
+                        "the store — 174 of 676 numbered records store `\"\"` there — and drew "
+                        "`198/219/`. The set-code fold is deliberately NOT here: that shape is "
+                        "pipeline/join.py:strip_set_code, measured against 2,607 real export "
+                        "cells, and a TypeScript copy of it would be number_index_key's own "
+                        "cautionary tale repeated. The server sends `number_display` and this "
+                        "prefers it, composing the raw pair only when an older server omits it.",
+                "governed_by": ["D3", "D13", "D25", "D35", "D55", "D67"],
+            },
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "
                                      "ONCE, the way src/reasons.ts declares the review vocabulary, "
@@ -2001,7 +2019,7 @@ COMPONENTS = [
                                        "behind the same control. IT DRAWS NO POSTAGE LANE: "
                                        "that is D61's question and #/shipping's answer, "
                                        "computed from a file this screen never sees.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D67"]},
+                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D67", "D69"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -2278,7 +2296,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D51", "D67"],
+                "governed_by": ["D5", "D31", "D39", "D51", "D67", "D69"],
                 "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
                         "worth keeping. The leader-disarm case retried an assertion that "
                         "CHORD_MS satisfies on its own after a second, so it went green against "
@@ -2363,7 +2381,7 @@ COMPONENTS = [
                         "whole write, its receipt, its undo window and the `already_sold` path "
                         "were unasserted while the control changed what one press does to a "
                         "real card. Six cases now cover it, three of them mutation-tested.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D57", "D58"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

@@ -70,7 +70,7 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
   /* The order screen reads on mount and the shipping screen does not — it holds nothing until
-     an export is uploaded — which is why only one of D67's two routes appears here. The
+     an export is uploaded — which is why only one of D69's two routes appears here. The
      `counts` map carries all six reasons including the zeros, exactly as `GET /orders` does:
      a payload that filtered them would make "nothing was short" and "nothing was checked" the
      same answer, and a screen drawn from a short map is a screen this stub could break. */

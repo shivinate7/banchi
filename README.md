@@ -143,7 +143,7 @@ gallery        step 6's component sheet, rendered by the build so it cannot go s
 ```
 
 **THIS LIST CARRIED FIVE ENTRIES AND WAS MISSING TWO SCREENS THAT ALREADY EXISTED**, `runs`
-and `pricing`, from the days D39 and D49 routed them until D67 repaired it on 2026-08-30. It
+and `pricing`, from the days D39 and D49 routed them until D69 repaired it on 2026-08-30. It
 is the sixth place this repo's screen count has been wrong, and CLAUDE.md's own warning —
 that the count has been wrong more often than right and that nothing checks it — is what
 found it. Restored first, then extended: nine entries, counted off `app/src/App.tsx`'s
