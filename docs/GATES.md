@@ -570,6 +570,89 @@ at a temporary directory, so nothing here touches the real inventory.
   eleven against a real queue. Same standing as T6's synthetic composites: self-consistency
   over a wider range than the evidence covers.
 
+- **The order screen's three routes are covered as of 2026-08-30 (D69), in four isolated
+  homes.** `check_order_screen` covers `GET /orders`, `POST /orders/ingest` and
+  `POST /orders/pull`. `check_order_resolver` already covers the resolver over an `Inventory`
+  and `check_order_ledger` the ledger over a file; **neither of them can fail on the route**,
+  which is where the two are joined — the orders are composed into engine objects, resolved in
+  ONE pass, a place is rendered per pick, and the ledger write and the sale happen inside a
+  single `Store.write()`.
+
+  **The case it exists for is the double book, asserted on the ROUTE's payload.** Two orders
+  for one SKU with one copy on hand, pasted newest-first: the older order carries the pick and
+  the newer answers `short` with no picks and `on_hand` 1 — the copy has not left, it is spoken
+  for. A handler that looped `resolve_all` per order passes every assertion in
+  `check_order_resolver`, because that section calls `resolve_all` itself, and still hands two
+  buyers the same physical card.
+
+  **Four more properties, each one a thing a plausible build gets wrong.** The reason
+  vocabulary is asserted as `sorted(counts) == sorted(orders.LINE_REASONS)`, so a seventh
+  reason added to `pipeline/orders.py` and not carried through the route fails here rather than
+  as a blank row on a screen. Every pick's `place.label` is compared against
+  `cli/resolve.py:box_views(...).at(...).label` — the reporter's walk, the other implementation
+  of D58's counting space. The PII backstop refuses a paste carrying `buyer` **by name**, at
+  the order level and at the line level, and writes nothing. And a pull's receipt is asserted
+  as a DIFFERENCE: `places[0].label` is `Box 3 · Section 1 · Card 1` while a `_Places` built
+  after the same call answers `Box 3 · departed`, because a sale moves the box's occupancy
+  (D58) and a receipt composed afterwards would name where the box has closed up to.
+
+  **And the screen is asserted to draw NO postage lane** — the order answer's key set and the
+  line answer's key set are both pinned whole, so `OrderResolution.ships_in_an_envelope`
+  cannot arrive on this wire quietly. D69 makes that a prohibition rather than an omission:
+  the lanes are D61's answer, computed from an export this screen has never read.
+
+  **Idempotence is byte equality and never a row count**, which is `check_order_ledger`'s own
+  lesson one layer up: the second identical paste leaves `orders.json`, `inventory.json` AND
+  `history.jsonl` byte-for-byte as they were. Twelve refusals are covered by code —
+  `field_not_settable` in both directions, `line_kind_invalid`, `already_sold`,
+  `capture_id_mismatch`, `copy_not_identifiable`, `sku_mismatch`, `sku_not_on_order`,
+  `order_not_ingested`, `over_fulfilled`, `copy_already_pulled`, `pull_not_recorded` and
+  `pull_spans_lines` — and each is asserted to have moved neither a count nor a card's state.
+  A fourth copy against a line of three is refused rather than clamped: you cannot ship the
+  fourth. **One equality ties the extraction**: `_sell`'s body is exactly the nine keys
+  `do_mark_sold` answers, so the pull and the sale button hand the app one shape.
+- **The shipping routes and the order transport are covered as of 2026-08-30 (D69), in one
+  isolated home, and the transport half opens no socket at all.**
+  `check_shipping_routes` runs the same committed 331-order Export Shipping file through
+  `POST /shipping/batches`: 166 envelope / 126 parcel / 39 unjudged, all six reasons as one
+  absolute dict including the two zeros, 112 rows carrying `certain` and every one of them
+  `value_at_threshold`, and a 14,786-byte import file of 126 data lines.
+
+  **Every assertion about `server/shipping_routes.py` is an ABSENCE, and each is pinned as an
+  absolute.** The union of every row's key set is exactly eight keys, so a name or a postcode
+  added later is argued for in the test rather than slipped in; the fixture's own first buyer
+  name and street appear nowhere in the serialised answer; not one of the 39 unjudged order
+  ids reaches the import file, because being swept into the parcel lane to be safe is a
+  postage charge the operator did not choose; every `Package Weight` cell is empty **including
+  on a `non_card_signal` order**, which is the row routed BY its weight and therefore the one
+  where carrying it across looks most reasonable; and no spelling of an insurance column
+  appears in the bytes. **Nothing is persisted**: the store's whole file list is identical
+  before and after reading the export, rendering the import and downloading it.
+
+  **The way back is asserted to actually forget and the holding is asserted to be bounded.**
+  Forget drops the batch, the file then refuses `no_such_batch`, and a second Forget refuses
+  too — without that assertion the button is a lie. Reading `BATCH_LIMIT + 1` exports evicts
+  the oldest, which is how much buyer PII this process can hold at once stated as a fact
+  rather than as a comment.
+
+  **The transport half is what is decidable without a live session, and its status is
+  unchanged by a green run**: `server/order_transport.py`'s authenticated success path has
+  still never run. What is asserted is that `project_order`'s four keys are an allowlist and
+  that `buyerName`, `shippingAddress` and `paymentType` are dropped where they are parsed — on
+  the line as well as at the top — while `skuId` survives coerced to a string; that the search
+  body goes out as a plain JSON document with `Content-Type: application/json` and **not**
+  D65's form-encoded `model=` shape, which is the first thing a reader will try to "fix" it
+  into; that a missing seller key, an expired session and a rejected key are three codes and
+  not one, because 403 on that host is usually the request rather than the session; that a
+  problem+json body yields its `traceId` and drops `title` and `detail`, which are the fields
+  most likely to quote a credential back into a log; and that no refusal message carries the
+  session. The one request built is handed to a stubbed opener that raises instead of
+  connecting, so the suite behind the Stop hook still reaches nobody's server.
+- **`PASS_CRITERIA` did not change for either block**, and the direction is the one this file
+  fixes: the test is the source and the gate publishes it. Both fit the criterion already
+  published above — every refusal answers in its own code — so the `- **Pass**:` line is
+  untouched rather than reworded to accommodate them.
+
 ---
 
 ### T8 — Code cards: QR decode, product tier, ledger, and the channel seam

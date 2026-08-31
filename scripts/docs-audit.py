@@ -2890,6 +2890,138 @@ def check_withhold_reasons(report: Report) -> None:
     )
 
 
+def check_order_reasons(report: Report) -> None:
+    """The six order-line reasons, reconciled across the two languages that declare them.
+
+    D69's order screen looks a reason UP rather than re-deriving it from whatever the line
+    carries beside it, so `app/src/orderReasons.ts:ORDER_REASONS` is a second independent
+    declaration of `pipeline/orders.py:LINE_REASONS`. That is the shape `check_reason_codes`
+    and `check_withhold_reasons` above both exist for, and exactly the drift D16 exists to
+    catch. `orderReasons.ts`'s own header asserts in writing that this check exists; without
+    it that paragraph would name a control that is not there, which is the failure
+    `app/eslint.config.js`'s header calls worse than admitting there is none.
+
+    THE COMPILER ALREADY DOES THE OTHER HALF AND CANNOT DO THIS ONE. Within the app,
+    `ORDER_REASONS` carries `satisfies readonly OrderLineReason[]` and the two lookup tables
+    are `Record<OrderLineReason, string>`, so the array cannot say a word the union does not
+    and the tables cannot miss one. What no TypeScript can do is import a Python tuple: a
+    reason `pipeline/orders.py` gains and this file does not is invisible until something
+    compares the two files as text, and this is that something.
+
+    BLOCKING, because a mismatch is provably wrong rather than a question of judgement. A
+    reason the resolver emits and the screen has no entry for renders as its own machine
+    string — `orderReasonLabel`'s `?? reason` fallback is deliberate and is not a repair —
+    but the row then reads as a raw code to the one person who has to act on it, and the
+    remedy beside it is blank.
+
+    THE TUPLE IS READ THROUGH ITS OWN CONSTANTS, which is where this parts company with
+    `check_withhold_reasons` one function up. `LINE_REASONS` is a tuple of NAMES
+    (`RESOLVED`, `SHORT`, …) rather than of string literals, so `ast.literal_eval` cannot
+    read it at all. The module's own `NAME = "literal"` assignments are collected first and
+    the tuple's elements are resolved through them; a member that is neither a literal nor a
+    name this file assigns a string to is REPORTED rather than skipped, because a silently
+    dropped member would make this check quietly smaller than it looks.
+
+    THE HUMAN LABELS AND REMEDIES ARE NOT CHECKED, for `check_withhold_reasons`' reason:
+    they are prose for a person, and a rule about wording would be this audit taking a view
+    on English. What is checked is the machine string, which is what has to match a resolver.
+    """
+    findings: List[Finding] = []
+    python_path = ROOT / "pipeline" / "orders.py"
+    ts_path = ROOT / "app" / "src" / "orderReasons.ts"
+
+    tree = ast.parse(read(python_path))
+
+    # Module-level `NAME = "literal"`, which is how this module spells its vocabulary.
+    literals: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not isinstance(node.value, ast.Constant) or not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                literals[target.id] = node.value.value
+
+    authored: Set[str] = set()
+    seen_tuple = False
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == "LINE_REASONS" for t in node.targets):
+            continue
+        seen_tuple = True
+        if not isinstance(node.value, (ast.Tuple, ast.List)):
+            findings.append(
+                Finding(
+                    "pipeline/orders.py",
+                    "LINE_REASONS is not a tuple or list this audit can read. It is a "
+                    "hand-authored vocabulary in D22's sense and has to stay one.",
+                )
+            )
+            continue
+        for element in node.value.elts:
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                authored.add(element.value)
+            elif isinstance(element, ast.Name) and element.id in literals:
+                authored.add(literals[element.id])
+            else:
+                findings.append(
+                    Finding(
+                        "pipeline/orders.py",
+                        "LINE_REASONS carries a member that is neither a string literal nor "
+                        "a name this module assigns a string to, so this check cannot say "
+                        "what the vocabulary is. Spell every member as a module-level "
+                        "constant or as a literal.",
+                    )
+                )
+
+    ts_text = read(ts_path)
+    match = re.search(r"ORDER_REASONS\s*=\s*\[(.*?)\]", ts_text, re.S)
+    offered: Set[str] = set(re.findall(r"'([^']+)'", match.group(1))) if match else set()
+
+    if not seen_tuple or not authored:
+        findings.append(
+            Finding("pipeline/orders.py", "LINE_REASONS is missing or empty.")
+        )
+    if match is None:
+        findings.append(
+            Finding(
+                "app/src/orderReasons.ts",
+                "no ORDER_REASONS array — the screen has to declare the vocabulary it "
+                "offers, in one place, or nothing can reconcile it with the resolver. A "
+                "`Record`'s keys are a type and are erased; a text check needs a list.",
+            )
+        )
+
+    for reason in sorted(offered - authored):
+        findings.append(
+            Finding(
+                "app/src/orderReasons.ts",
+                f"{reason!r} is offered by the screen and is not in "
+                f"pipeline/orders.py:LINE_REASONS — no resolved line can ever carry it, so "
+                f"it is a label, a remedy and a filter position for a state that cannot "
+                f"happen.",
+            )
+        )
+    for reason in sorted(authored - offered):
+        findings.append(
+            Finding(
+                "app/src/orderReasons.ts",
+                f"{reason!r} is authored in pipeline/orders.py and the screen does not "
+                f"offer it — the resolver emits it and the row draws the raw machine string "
+                f"with a blank remedy beside it.",
+            )
+        )
+
+    report.add(
+        "order reasons",
+        MECHANICAL,
+        findings,
+        f"{len(authored)} authored, offered by the screen, none unreachable",
+    )
+
+
 def check_pricing_presets(report: Report) -> None:
     """The three pricing presets, reconciled between the tuple that prices them and the
     table that writes them.
@@ -5323,6 +5455,7 @@ def audit(staged_only: bool) -> Report:
     check_reason_codes(report)
     check_supervisor_self_watch(report)
     check_withhold_reasons(report)
+    check_order_reasons(report)
     check_pricing_presets(report)
     check_tested_by_reach(report)
     check_status_sources(report)

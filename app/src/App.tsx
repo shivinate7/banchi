@@ -8,12 +8,14 @@ import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
 import { Pricing } from './Pricing'
+import { Orders } from './Orders'
+import { Shipping } from './Shipping'
 import { Codes } from './Codes'
 import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
 
-/* The app shell: six routes across two personas, and the chrome that moves between them.
+/* The app shell: nine routes across two personas, and the chrome that moves between them.
  *
  * IT WAS SEVEN UNTIL 2026-08-23 AND D31 TOOK TWO. `#/boxes` and `#/pull` rendered the same 767
  * records `#/inventory` renders, and the owner named the result: they "read as separate
@@ -24,8 +26,9 @@ import './App.css'
  * `Inventory.tsx`.
  *
  * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
- * fixes: the gallery was the seventh and nothing was counting. SEVEN again now — capture,
- * runs, review, pricing, inventory, fulfillment, gallery — and the
+ * fixes: the gallery was the seventh and nothing was counting. NINE now (D69, 2026-08-30) —
+ * capture, runs, review, pricing, orders, shipping, inventory, fulfillment, gallery — EIGHT
+ * of them the owner's and ONE the Fulfiller's. The
  * not-rendered-rather-than-hidden rule for the Fulfiller's nav is untouched, because it was
  * never about how many owner routes there are.
  *
@@ -33,7 +36,8 @@ import './App.css'
  * OWNS THE TABLE. `#/runs` landed and this line was not touched, so the one place a reader
  * would check the count against the code was itself a count nobody had checked. Nothing on
  * the commit path reconciles it; the only defence is the person editing the table below
- * reading up this far.
+ * reading up this far. THE COUNT ABOVE WAS RECOUNTED FROM THE TABLE RATHER THAN
+ * INCREMENTED, which is the only way of arriving at it that has ever been right.
  *
  * Hash routing, hand-written. A router library was the alternative and it loses on every
  * axis that matters here: a flat list of routes, no path parameters, no nested layouts, no
@@ -88,7 +92,7 @@ type Route = {
 /* One table drives both the nav and the render. The alternative — a `ROUTES` array for the
  * chrome and a `switch` for the render — is more greppable and keeps two lists of the same
  * path strings that nothing checks agree. That is the drift D16 exists to catch, in
- * miniature, so the table wins and the switch is gone. It mattered more at seven routes than at
+ * miniature, so the table wins and the switch is gone. It mattered more at nine routes than at
  * three, and it is what made removing two of them a two-line edit rather than a hunt.
  *
  * ORDERED THE WAY THE OWNER WORKS, which is what a nav built from this table is read as: shoot
@@ -96,8 +100,10 @@ type Route = {
  * boxes — walk one, check a position against its photo, and sell a copy out of it, all three
  * now being one screen. `#/runs` took its place in the middle of that sentence on 2026-08-29,
  * which is where the work actually happens: it was inside `#/inventory` — the `look` row — and
- * the four commands are the loop, not a lookup. The
- * Fulfiller's view and the component sheet sit after that run of three because neither is a
+ * the four commands are the loop, not a lookup. `#/orders` and `#/shipping` extend that
+ * sentence past the point where the cards stop being ours (D69): shoot, run, answer, price,
+ * orders arrive, orders ship. The
+ * Fulfiller's view and the component sheet sit after that run of six because neither is a
  * step in it. `group` now says that out loud rather than leaving it to the order alone, which
  * is a fact the reader had to already know to see.
  *
@@ -153,6 +159,29 @@ const ROUTES: readonly Route[] = [
     group: 'run',
     hotkey: 'p',
   },
+  /* THE ORDER SCREEN AND THE SHIPPING LANE, 2026-08-30 (D69). Two routes rather than one,
+   * and they sit here — after `#/pricing`, before `#/inventory` — because the `run` group
+   * reads in the order the work happens and this is where the work happens: shoot, run,
+   * answer, price, ORDERS ARRIVE, ORDERS SHIP. The two questions are genuinely different and
+   * are asked at different moments. `#/orders` answers "which copies does this buyer get, and
+   * where in the boxes are they" out of D63's ledger. `#/shipping` answers "which envelope
+   * does this order go in" out of TCGplayer's own shipping export, which is a file the
+   * ledger has never seen — D61 rules on the lanes and D66 on the surface, and neither
+   * question is a mode of the other.
+   *
+   * `o` AND `s` ARE THE LETTERS THE OWNER WOULD SAY OUT LOUD NAMING THE SCREENS, which is
+   * what the LEADER comment actually asks for rather than "the initial". Both were free:
+   * `c r q p i` were taken and `b` is still unassigned. CaptureScreen binds a bare `s` for
+   * its divider, and that is NOT a collision — the leader consumes the second press in the
+   * capture phase on `window`, which is the whole mechanism that makes a route key allowed
+   * to be a letter another screen already owns.
+   *
+   * `/fulfillment` STILL GETS NO HOTKEY and must not be given one here by symmetry. The ring
+   * below is derived from `hotkey !== undefined`, so a key on that row would put the
+   * Fulfiller's view — which renders no chrome and therefore no way out — one mistyped chord
+   * away from stranding whoever pressed it. */
+  { path: '/orders', label: 'Orders', view: Orders, persona: 'owner', group: 'run', hotkey: 'o' },
+  { path: '/shipping', label: 'Shipping', view: Shipping, persona: 'owner', group: 'run', hotkey: 's' },
   {
     path: '/inventory',
     label: 'Inventory',
@@ -314,8 +343,14 @@ function hasChrome(route: Route | undefined): boolean {
  * this — was rejected precisely because it IS a mnemonic: the picker arriving on the capture
  * screen is a game and rarity picker, and `g` is the first letter it will reach for.
  *
- * WHAT IS BOUND AND WHAT IS NOT: the four routes of the run and the lookups, none of the
+ * WHAT IS BOUND AND WHAT IS NOT: the six routes of the run and the lookups, none of the
  * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
+ *
+ * `s` IS THE LIVE PROOF OF THE PARAGRAPH ABOVE. `CaptureScreen.tsx:SECTION_KEY` is a bare
+ * `s` that puts a divider in a box, and D69 gave the same letter to `#/shipping` — the two
+ * cannot collide, because an armed leader consumes the second press here and delivers it
+ * nowhere. If a change ever moves this listener off the capture phase, that is the pair that
+ * breaks first, and it breaks by writing a divider nobody asked for.
  *
  * MODIFIERS ARE NEVER PART OF THE CHORD. A held Cmd, Ctrl or Alt returns before anything
  * else happens, exactly as trigger.ts, ReviewQueue.tsx and BoxBrowse.tsx all do: Cmd-comma is
@@ -498,7 +533,7 @@ function useLeader(enabled: boolean, path: string): number | null {
  * keys the chord already had (2026-08-30): "cmd+arrow keys doesn't have me going in order
  * between c r q p i, can you resolve?"
  *
- * The chord is a JUMP — five destinations, each reached by naming it. What the shell has never
+ * The chord is a JUMP — seven destinations since D69, each reached by naming it. What the shell has never
  * had is a STEP, and the nav is drawn in the order the work happens: shoot, run the pipeline,
  * answer what it could not, price it, then look up where a card is. "The next one along" was
  * the one thing about that row a key could not say. Cmd-arrow was already being pressed for
@@ -614,7 +649,7 @@ function useRouteStep(enabled: boolean, path: string): void {
  *
  * IT NOW DRAWS ITS OWN WAY OUT, because as of `hasChrome` there is no nav above it to be the
  * way out. That is not a consolation prize for losing the nav — it is the better answer, and
- * the nav was only ever standing in for it. The nav is five links at a density docs/DESIGN.md
+ * the nav was only ever standing in for it. The nav is nine links at a density docs/DESIGN.md
  * says one of this app's two users cannot read; this is two doors, one per persona, and the
  * page can hand them over without having to decide which of the two people is holding it.
  *

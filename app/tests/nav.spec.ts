@@ -29,7 +29,15 @@ import { test, expect, type Page, type Route } from '@playwright/test'
  *  hash form verbatim, for the reason every other spec here records — a path-style
  *  '/inventory' is served index.html by Vite, mounts with an empty hash and renders the
  *  capture screen, which is a passing navigation to the wrong view. */
-const RING = ['#/', '#/runs', '#/review', '#/pricing', '#/inventory'] as const
+const RING = [
+  '#/',
+  '#/runs',
+  '#/review',
+  '#/pricing',
+  '#/orders',
+  '#/shipping',
+  '#/inventory',
+] as const
 
 /** What each of those routes renders, so a step is asserted to have ARRIVED rather than
  *  merely to have changed a string. A hash the shell does not recognise still changes
@@ -39,6 +47,8 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/runs': 'main.runs',
   '#/review': 'main.review',
   '#/pricing': 'main.pricing',
+  '#/orders': 'main.orders',
+  '#/shipping': 'main.shipping',
   '#/inventory': 'main.inventory',
 }
 
@@ -59,6 +69,28 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
   await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* The order screen reads on mount and the shipping screen does not — it holds nothing until
+     an export is uploaded — which is why only one of D69's two routes appears here. The
+     `counts` map carries all six reasons including the zeros, exactly as `GET /orders` does:
+     a payload that filtered them would make "nothing was short" and "nothing was checked" the
+     same answer, and a screen drawn from a short map is a screen this stub could break. */
+  await page.route(/\/orders$/, (route) =>
+    json(route, {
+      summary: '0 orders',
+      orders: [],
+      resolution: {
+        orders: [],
+        counts: {
+          resolved: 0,
+          short: 0,
+          no_copies_on_hand: 0,
+          sku_unknown: 0,
+          sku_unseen: 0,
+          not_a_single: 0,
+        },
+      },
+    }),
+  )
   await page.route(/\/photo\//, (route) =>
     route.fulfill({
       status: 200,

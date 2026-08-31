@@ -64,14 +64,55 @@ function seam(part: string): Part {
   return at < 1 ? { key: '', value: part } : { key: part.slice(0, at), value: part.slice(at + 1) }
 }
 
+/* THE STORE KEY A LABEL MAY END ON — `3/31`, the `/inventory/<box>/<index>` path (D68). Two digit
+   runs and a slash, which is a shape no part of a position label has ever had: `Box 3`,
+   `Section 1` and `Card 17` are all `<word> <number>`, and the seam above is built on that.
+   Anchored both ends so it cannot match a collector number that wandered in — `198/219` would,
+   which is why nothing composes one into a label and why this only ever reads the LAST part of a
+   string the server built. */
+const STORE_KEY = /^\d+\/\d+$/
+
 export function PositionLabel({
   label,
   flow = 'stack',
   lead = 'path',
   boxNote = null,
 }: PositionLabelProps): ReactNode {
-  const parts = label.split(' · ')
-  if (parts.length < 2) return <>{label}</>
+  const all = label.split(' · ')
+
+  /* THE STORE KEY IS PEELED OFF FIRST AND IS NEVER PROMOTED (D68). `join.departed_label` ends on
+     it — `Box 3 · departed · 3/31` — because two departed copies of one card in one box were
+     otherwise the identical string, and the index is the one number about a departed card that
+     cannot lie about a shelf. What it must NOT become is the figure: this component draws the
+     last part at `--pos-slot`, so a promoted key would put a 44px number in the slot column of a
+     card that is in no slot, which is precisely the lie D58 refuses. It goes in the muted
+     register instead, beside the path, which is also what keeps the departed row from being the
+     tallest row in a list of copies — measured at 72.8px against the live row's 28px before this.
+
+     THE LAST PART ONLY, AND ONLY WITH SOMETHING IN FRONT OF IT. A label that is nothing but a
+     store key is not a shape anything composes, and reading one would be this component
+     inventing a rendering for a string it was never handed. */
+  const tail = all[all.length - 1]
+  const hasKey = all.length >= 3 && tail !== undefined && STORE_KEY.test(tail)
+  const storeKey = hasKey ? (tail as string) : null
+  const parts = hasKey ? all.slice(0, -1) : all
+
+  /* Whatever this component cannot rank renders whole — with the key still demoted beside it,
+     because a fallback that drew the key at the site's own size would put the 44px figure back
+     by a different door. `Box 3 · departed` takes this path: `departed` is not a slot number, so
+     the numeric guard below would refuse it anyway, and the plain string is the honest render of
+     a label that names no position. */
+  const whole = (body: string): ReactNode =>
+    storeKey === null ? (
+      <>{body}</>
+    ) : (
+      <span className="position-plain" role="group" aria-label={label}>
+        {body}
+        <span className="position-storekey">{storeKey}</span>
+      </span>
+    )
+
+  if (parts.length < 2) return whole(parts.join(' · '))
 
   const split = parts.map(seam)
 
@@ -79,7 +120,7 @@ export function PositionLabel({
      is what keeps a two-part or four-part label honest: whatever the formula ends with is the
      finest thing said, and that is what is drawn at size. */
   const slot = split[split.length - 1]
-  if (slot === undefined) return <>{label}</>
+  if (slot === undefined) return whole(parts.join(' · '))
 
   /* THE NUMERIC GUARD, AND IT IS THE ONE THING THIS COMPONENT HAS THAT D41's DID NOT.
      `#/inventory` draws only real positions, so promoting whatever sits after the last space was
@@ -92,7 +133,7 @@ export function PositionLabel({
      It also catches the capture screen's `positionText` fallback (`box 3, index 7`) for a second
      reason, which is worth having: that string reaches here only if someone later adds ' · ' to
      it, and the guard is cheaper than remembering. */
-  if (!/^\d+$/.test(slot.value)) return <>{label}</>
+  if (!/^\d+$/.test(slot.value)) return whole(parts.join(' · '))
 
   const path = split.slice(0, -1)
 

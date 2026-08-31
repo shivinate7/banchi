@@ -178,24 +178,28 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
   has no name, because a name is optional and a placeholder would draw a fault where there is
   none.
-- **The app has eight screens and eight routes** — seven the owner's, one the Fulfiller's. It
+- **The app has ten screens and ten routes** — nine the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
   `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
   the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
-  set by hand, and D70 added `#/codes` the same day — the code-card track, which shares the rig
-  and nothing downstream (D14).
-
-  **THIS SENTENCE WENT FALSE AGAIN THE MOMENT `#/codes` LANDED, AND WAS CORRECTED IN THE SAME
-  COMMIT.** That is the whole discipline the paragraph below asks for: the count is not
-  checked by anything, so it is only ever as true as the last session that touched a route.
+  set by hand, and D69 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
+  which says which copies a buyer gets and where they are, and the shipping lane, which says
+  which envelope an order goes in, out of a file the ledger has never seen. D70 added `#/codes` the same day — the code-card
+  track, which shares the rig and nothing downstream (D14). **The count above was RECOUNTED
+  from the `ROUTES` table rather than incremented**, which is the only way of arriving at it
+  that has ever been right, and it was recounted again when these two branches met: each had
+  incremented correctly against a tree the other had already moved.
 
   **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
   CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
   published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
   not load-bearing prose. That argument holds for a number in a report and does not hold here,
   where the sentence is what a session reads to learn the shape of the product. It was false
-  from D39 until D49 in FIVE places at once, none of which failed a check. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  from D39 until D49 in FIVE places at once, none of which failed a check, and it was still
+  false in a sixth on 2026-08-30: `README.md`'s fenced screen list carried five entries and
+  was missing `runs` and `pricing` outright, so D69's repair had to restore two screens
+  before it could add two. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
@@ -405,6 +409,9 @@ D63  The order ledger is two maps, and the sync writes only one of them
 D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
 D65  The export is asked for, and the box's own claims are the scope
 D66  The order screen comes before the transport, and the shipping lane needs neither
+D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
+D68  A departed card's label names the record, because two of them in one box were the same string
+D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
 D70  The QR is the whole identification, the product is a claim, and the card is destroyed
 ```
 
@@ -413,10 +420,15 @@ D70  The QR is the whole identification, the product is a claim, and the card is
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
 - `docs/specs/order-pipeline.md` — steps 8 to 14: an order arrives, a card is pulled, an
-  envelope is stamped, tracking goes back. **Recorded, not built**, and every number in it was
-  measured rather than carried forward — section 6 names what it could not check. Three modules
-  under `pipeline/` have full T7 coverage and no route, no client function and no screen — D66,
-  which settles the order the rest is built in. Not `docs/specs/order-flow.md`, the sell path.
+  envelope is stamped, tracking goes back. Every number in it was
+  measured rather than carried forward — section 6 names what it could not check.
+  **Steps 8 to 12 are BUILT as of 2026-08-30 (D69)**: `#/orders` pulls a real order out of the
+  ledger and `#/shipping` routes a real export into three lanes, both reachable from the nav,
+  and `server/order_transport.py` fetches this account's own orders over the cookie session
+  D69 measured. **Steps 13 and 14 — the shipped status and the tracking write-back — are
+  NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
+  "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
+  order was discharged. Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
   measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
   the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and

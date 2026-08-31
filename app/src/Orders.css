@@ -1,0 +1,552 @@
+/* THE ORDER SCREEN — the rules for `app/src/Orders.tsx`.
+ *
+ * PAINTED FROM `var(--token)` AND FROM NOTHING ELSE. There is not one hex literal in this file
+ * and there may never be: `scripts/docs-audit.py`'s `raw colour` row is a BLOCKING check over
+ * every stylesheet in this directory, so a literal here stops the commit rather than shipping a
+ * colour docs/DESIGN.md never locked.
+ *
+ * THE PAGE CHROME IS `Runs.css`'s AND `Shipping.css`'s, REUSED RATHER THAN REDERIVED — 16px of
+ * outer padding on all four sides, the title in the display face at 20px sharing its line with
+ * the scope and the controls, a one-line lede at the metadata size, and the first row of real
+ * content inside 150px of the top of the viewport. Those are docs/DESIGN.md's numbers, and the
+ * two screens D67 added should not each invent an answer to a header problem three screens have
+ * already settled.
+ *
+ * NO SOLID ACCENT GROUND ANYWHERE ON THIS SCREEN. `--accent` is defined as "unsure, and the
+ * only-action fill", and this screen has no single action: it reads a paste, it fetches, it
+ * pulls one copy of one line out of a list of many, and it takes a pull back. A filled Pull
+ * button would claim a primacy that changes row by row, and there are commonly a dozen of them
+ * on screen at once.
+ *
+ * NO `:focus-visible` RULE AND NO `cursor` RULE. base.css owns both, as floors, and it argues at
+ * length why: a per-screen focus ring is how one screen came to draw four different ones, and a
+ * per-screen cursor is how 39 controls came to have none (D50). Every control here is a
+ * `<button>` or a `<textarea>`, both named in that file, so both are already answered.
+ *
+ * NO HOVER CHANGES A BOX. Not `border-width`, not `padding`, not `font-size`, not
+ * `font-weight` — a row that reflows under the pointer moves the thing you were about to press.
+ * `--hover` is ROW HOVER and is spent here on exactly two things: the order card and the pick
+ * row.
+ *
+ * NOT THREE-COLUMN. D40's three columns are the inventory screen's answer to a card, its box and
+ * its copies. This screen nests — order, line, pick — and nesting reads top to bottom at every
+ * width, so it needs no breakpoint.
+ */
+
+.orders {
+  padding: var(--s4);
+
+  /* No `max-width` and no centring, matching `.runs`, `.shipping` and `.inventory`. App.css pads
+     the nav strip to this same 16px, so the first route name sits directly above this screen's
+     heading; centring the page breaks that alignment at every width except one. */
+}
+
+/* --------------------------------------------------------------------------------- the head */
+
+.orders-head {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* `wrap`, and the worst case is what makes it safe: if the scope and the fetch control cannot
+   fit beside the title they wrap onto a second line, nothing is clipped, and the header is still
+   one block rather than the title-block-over-toolbar stack docs/DESIGN.md measured at 240px on
+   the inventory screen. */
+.orders-head-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.orders-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* `contents`, so the children are flex items of `.orders-head-top` and the wrap happens BETWEEN
+   controls rather than inside this group. `margin-left: auto` on the first child collects the
+   line's slack between the heading and the controls — App.css's own `.app-nav-group-aside`
+   mechanism, and the shape `Runs.css` and `Shipping.css` settled. */
+.orders-controls {
+  display: contents;
+}
+
+.orders-controls > :first-child {
+  margin-left: auto;
+}
+
+.orders-controls > * {
+  flex: none;
+}
+
+/* THE SCOPE IS THE LEDGER'S OWN SUMMARY — a sentence with counts in it — so the utility face:
+   docs/DESIGN.md gives every count in the product to Martian Mono. */
+.orders-scope {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.orders-lede {
+  color: var(--muted);
+  margin-top: var(--s1);
+  font-size: 13px;
+}
+
+/* `.shipping-plain`'s measurements to the pixel, which are `.runs-plain`'s before them. Two
+   owner panels disagreeing about how tall a button is was a real finding on 2026-08-26 and the
+   answer then was to make them agree; a third screen is not the place to reopen it. */
+.orders-plain {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* A HOVER THAT DARKENS THE EDGE AND MOVES NOTHING. Not `--hover`: that token is row hover, and
+   the rows on this screen are below. Not `--field-hover` either, whose own row in
+   docs/DESIGN.md reads "the same border, under the pointer. Nowhere else" — it is the boundary
+   of something you TYPE INTO, and the one such control here takes it below. `--ink` on the
+   border changes no width, no padding, no size and no weight. */
+.orders-plain:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.orders-plain:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+/* ------------------------------------------------------------------------------- a refusal */
+
+.orders-note {
+  max-width: 560px;
+  margin-top: var(--s3);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.orders-note-text {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  max-width: 76ch;
+}
+
+/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, so what was
+   on screen greps against the server's own log. */
+.orders-machine {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: var(--s2);
+  word-break: break-all;
+}
+
+.orders-empty {
+  margin-top: var(--s3);
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 76ch;
+}
+
+/* ------------------------------------------------------------------------------ the receipts */
+
+/* THE WAY BACK, AND IT LIVES HERE RATHER THAN IN THE ROW. A successful pull marks the copy sold,
+   so the resolver stops offering it and the row unmounts — an Undo drawn inside the row would go
+   with it, which is the failure this placement exists to avoid. Above the list, because the
+   thing that just happened is the thing being looked for. */
+.orders-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  list-style: none;
+}
+
+.orders-receipt {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.orders-receipt-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* --------------------------------------------------------------------------- orders arrive */
+
+.orders-paste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  max-width: 560px;
+  margin-top: var(--s4);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.orders-paste-head {
+  font-family: var(--util);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* JSON, SO THE UTILITY FACE. It is pasted machine text and it is read back to check a SKU
+   against an order; a proportional face makes a column of digits unreadable, which is the one
+   thing this box is ever scanned for. `resize: vertical` because a long paste is normal and a
+   horizontal drag would break the panel's own width. */
+.orders-paste-box {
+  width: 100%;
+  min-height: 88px;
+  padding: var(--s2);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+  resize: vertical;
+}
+
+/* `--field-hover` IS EXACTLY THIS CASE — docs/DESIGN.md's own row reads "the same border, under
+   the pointer. Nowhere else", and this is the only thing on the screen you type into. It changes
+   colour and nothing else. */
+.orders-paste-box:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}
+
+.orders-paste-box:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.orders-paste-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.orders-paste-source,
+.orders-paste-note {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 76ch;
+}
+
+/* WHAT WAS DROPPED, AND IT IS DRAWN AT INK RATHER THAN AT MUTED. It is the one sentence on this
+   screen that reports the PII boundary doing its job, and a reader who skims past it cannot tell
+   a working projection from a broken one. Same size as its neighbours — the emphasis is the
+   colour, which changes no box. */
+.orders-paste-dropped {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+  max-width: 76ch;
+}
+
+/* ---------------------------------------------------------------------------- the six counts */
+
+/* ALL SIX ALWAYS, INCLUDING A ZERO, and they are drawn identically. A reason that vanished when
+   it held nothing would make "no line came up short today" indistinguishable from "this build
+   stopped counting", and the zero is the reassuring number here rather than the empty one.
+   `sku_unknown` is structurally unreachable from this route and is always a zero; it is drawn
+   the same as the other five, because a reason greyed out would read as broken rather than as
+   not-asked. */
+.orders-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+.orders-count {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 140px;
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.orders-count-label {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.orders-count-machine {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.orders-count-figure {
+  font-family: var(--util);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------------------- the orders */
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  list-style: none;
+}
+
+.orders-order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.orders-order:hover {
+  background: var(--hover);
+}
+
+/* NOTHING IS DRAWN AT REDUCED OPACITY ON THIS SCREEN — there is no `opacity` declaration in this
+   file. A fulfilled order is not a faded one: it is an order with no work left, and it is drawn
+   with the pick list absent rather than with its text dimmed. */
+.orders-order-done {
+  border-style: dashed;
+}
+
+.orders-order-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+/* The order number is an identifier the operator types into TCGplayer, so the utility face and
+   `break-all`: a `A2FFC195-0000F4-006AC` that wrapped mid-group would be read back wrong. */
+.orders-order-number {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.orders-order-source,
+.orders-order-placed {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.orders-order-figure {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.orders-done-toggle {
+  margin-top: var(--s4);
+}
+
+.orders-list-done {
+  margin-top: var(--s2);
+}
+
+/* -------------------------------------------------------------------------------- the lines */
+
+.orders-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  list-style: none;
+}
+
+/* ONE ROW CHROME FOR ALL SIX REASONS, and that is the point rather than an economy. The reason
+   is said in words and in a machine string; painting the row per reason would make one of the
+   six the loud one and another the quiet one, and there is no reason here that deserves either —
+   `sku_unseen` in particular is the one most likely to look like a defect and least likely to be
+   one. The left rule marks the nesting depth, not the verdict. */
+.orders-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border-left: 1px solid var(--line);
+}
+
+.orders-line-top {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+.orders-line-name {
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.orders-line-sku {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.orders-line-figure {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+/* The sentence is what is read; the code is what is grepped. */
+.orders-line-says {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+  max-width: 76ch;
+}
+
+.orders-line-reason {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.orders-line-remedy {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 76ch;
+}
+
+/* Four counts on one line — every number in the product is Martian Mono, tabular by
+   construction, so a column of them lines up without a table. */
+.orders-line-breakdown {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------------------------------- the picks */
+
+.orders-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin-top: var(--s1);
+  list-style: none;
+}
+
+.orders-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r);
+}
+
+/* THE SECOND AND LAST SPEND OF `--hover` ON THIS SCREEN. A pick is a row and a row is what that
+   token is for. */
+.orders-pick:hover {
+  background: var(--hover);
+}
+
+/* THE POSITION LABEL MUST NOT WRAP. It is a place to walk to — `Box 3 · Section 2 · Card 17` —
+   and a label broken across two lines is read as two places. `flex: none` keeps it out of the
+   line's shrink, and `nowrap` is the floor under it; `PositionLabel` in `flow="run"` lays the
+   parts out in one dimension for exactly this position. */
+.orders-pick-place {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* THE ROW IS LEFT-PACKED, AND NOTHING IN IT GROWS. An earlier pass gave this the flex-grow
+   `.shipping-file-name` has and the render showed why that is wrong here: the Pull button was
+   thrown to x=1170 with a thousand pixels of nothing between it and the card it acts on, which
+   is the "eye has to travel" failure docs/DESIGN.md names by the front door. Packed left, the
+   buttons still line up in a column WITHOUT being pinned there — every pick under one line is a
+   copy of the SAME card, so `card_name` is the same string on every row and the column falls
+   out of the type. `max-width` is what keeps a long name from re-creating the gap. */
+.orders-pick-card {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* A POOLED COPY HAS NO POSITION AND SAYS SO (D24). `Place.label` is null by design there, never
+   by fault, and the honest thing to draw is the game and the word. */
+.orders-pick-pooled {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* SPOKEN FOR, DRAWN AS A FACT RATHER THAN AS A DISABLED BUTTON. A greyed-out Pull would be a
+   control that teaches its press means nothing; this copy is not unavailable to press, it is
+   already promised to somebody, and that is a sentence rather than a state. */
+.orders-pick-held {
+  flex: none;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.orders-pull {
+  flex: none;
+}
