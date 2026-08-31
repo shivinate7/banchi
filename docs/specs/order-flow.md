@@ -26,10 +26,10 @@ locations panel, the search field and the search hook; the owner's search-and-se
 the Boxes screen; the Fulfiller's search; D28's layout half. T7 reaches the store and the
 routes. `make docs-audit` is clean.
 
-**RATIFIED IN PROSE AND NOT BUILT.** D26 — since BUILT, 2026-08-23, as `retired`; see §10.1 —
-D29 (group answers over a homogeneous queue), D30 (the gap convention). These are owner
-rulings with entries in `docs/DECISIONS.md` and no code behind them at all. Section 10 covers
-each, including one name collision that will bite whoever builds D26 first.
+**RATIFIED HERE, BUILT SINCE.** D26 (`retired`), D29 (group answers over a homogeneous
+queue) and D30 (the gap convention) were owner rulings with no code behind them when this
+was written. All three landed by 2026-08-23; `docs/GATES.md`'s build-order step 13 names
+them. Section 10 keeps each argument, including the name collision that bit D26.
 
 **IN FLIGHT AS THIS WAS WRITTEN.** D27 (`sessionStorage` for the capture screen's own scratch
 state), and D28's undo half, which landed underneath this file between its first draft and its
@@ -51,7 +51,7 @@ self-consistent over a wider range than the evidence covers.
 your own commit, and it is unchanged. The trap that matters most here is the same one
 `docs/specs/capture-app.md` names: a path whose first segment is a real top-level directory
 and which does not exist **blocks**. Sections 10 and 11 describe unbuilt things, so they name
-them by their behaviour and never by a file that has not been written.
+them by their behavior and never by a file that has not been written.
 
 ---
 
@@ -297,11 +297,11 @@ renderer builds it — instantiated per request, never held between them, becaus
 is millions of coercions on the route the app polls.
 
 The denominator is a **whole-box scan**. It raises `BadPosition` on any record in the box, not
-only the one being rendered. Letting that escape cost every neighbour its label over one
+only the one being rendered. Letting that escape cost every neighbor its label over one
 corrupt row — on the route the app polls. T7 caught it.
 
 **A label needs only its own two integers and the box's layout.** Neither is the scan's
-business. Only "of 250" needs the scan. So the two degrade separately now: a bad neighbour
+business. Only "of 250" needs the scan. So the two degrade separately now: a bad neighbor
 costs the box its denominator (`box_total` 0, `fraction` null, which the app already draws as
 "no fraction") and costs nobody their position.
 
@@ -309,7 +309,7 @@ costs the box its denominator (`box_total` 0, `fraction` null, which the app alr
 
 `BadSections` is deliberately **not** caught. A layout that will not validate means the
 section and card numbers themselves are unknown, and no label is the honest answer. That is a
-different failure from a neighbour nobody can place, and collapsing the two would mean either
+different failure from a neighbor nobody can place, and collapsing the two would mean either
 refusing to draw a whole box over one bad row, or drawing a section number computed against a
 rule the box no longer follows.
 
@@ -662,10 +662,17 @@ go looking for a second bug.
 
 ---
 
-## 10. Ratified and NOT BUILT — D26, D29, D30
+## 10. D26, D29 and D30 — ratified here, all three built since
 
-Everything in this section is an owner ruling with an entry in `docs/DECISIONS.md` and no code
-behind it. None of it is a proposal and none of it is done.
+**All three are built.** D26 landed 2026-08-23 as `retired` (§10.1 tells it); D29's group
+answer is `server/capture_server.py:do_review_group_answer`; D30's gap convention is
+`neighbors` and `section_gaps`, rendered per card. **This heading read "Ratified and NOT
+BUILT" until 2026-08-30**, and the paragraph under it said none of the section was done —
+false for over a week, in a file `CLAUDE.md` tells sessions to read as settled.
+
+What the section is now is the argument each ruling rests on, kept because the reasoning
+outlives the build. §10.1's name collision is the part to read before touching the state
+tuple; it is still live.
 
 ### 10.1 — D26's state, the name collision, and how it resolved
 
@@ -735,7 +742,7 @@ landmark) and `section_gaps` (terminal records inside the section — counting r
 indices, is what makes an unallocated tail not a gap by construction). Rendered as "between
 Mantine and Thievul · 2 slots in this section are empty" on the pull preview and both
 CardLocations skins. One corrupt record nulls the sentence store-wide rather than naming a
-possibly-wrong neighbour. **The physical half — which marker the Fulfiller leaves in an
+possibly-wrong neighbor. **The physical half — which marker the Fulfiller leaves in an
 emptied slot — remains the owner's open item**, and it is the retroactive one.
 
 D10 makes a sold position a permanent gap and the Fulfiller creates one per order. Nothing has
@@ -749,8 +756,8 @@ adopted after fifty gaps exist cannot be applied to them.
 
 Two halves, and only one is code. The physical marker is the owner's call and belongs in D30 once
 made. The digital half is free and is the part this step could have built: a position rendered
-with its neighbours and its section's gap count — "Card 17, between Mantine and Thievul · 2 slots
-in this section are empty". Neighbours make a label countable again without anyone learning the
+with its neighbors and its section's gap count — "Card 17, between Mantine and Thievul · 2 slots
+in this section are empty". Neighbors make a label countable again without anyone learning the
 rule; the gap count says why the count came out short.
 
 **The box audit is the check that closes the loop** — count what is physically in a section and

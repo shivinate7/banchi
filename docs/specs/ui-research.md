@@ -26,18 +26,19 @@ configuration, no persistence rule and no reset.
 `CHORD_MS = 1500`; `RunPanel.tsx:438` `<details className="run-panel">`; `RunPanel.tsx:68`
 `STEPS` holding exactly identify / join / emit / reconcile.
 
-**A defect found while verifying, which the research did not catch.** `ReviewQueue.css:47`
-states "THE CAP IN FORCE IS 60vh" while line 93 declares `--photo-cap: 48vh`. That comment was
-written to retire an earlier 38vh/34vh drift and warns in its own words against "a comment
+**A defect found while verifying, since fixed.** `ReviewQueue.css` carried a comment reading
+"THE CAP IN FORCE IS 60vh" while the file declared `--photo-cap: 48vh` — a comment written to
+retire an earlier 38vh/34vh drift, which had become the thing it warns against: "a comment
 reasoning toward a number the file does not use ... Worse than no comment, because it reads as
-the current thinking." It has become the thing it warns about. Fixing it is free and unrelated
-to any proposal.
+the current thinking." The comment now names 48vh. Kept as the record, because the drift it
+describes is the one that comment exists to prevent and it recurred anyway.
 
 ---
 
-# PKMNSCAN UI: final design recommendation
-
-*Synthesis of five research domains, three adversarial passes, and a verification read of the live tree.*
+**The rest of this file is the recommendation itself** — the synthesis of five research
+domains, three adversarial passes, and a verification read of the live tree. It carried its
+own `#` title until 2026-08-30, which made this one file two documents to every tool that
+reads headings, and put the recommendation outside the status line that governs it.
 
 ---
 
@@ -79,7 +80,7 @@ The remedy is not fewer zones. It is **more protocols**, exactly as OHIF ships t
 |---|---|---|---|
 | **SHOOT** `#/capture` | **absent** | two panes, **mode-dependent ratio**, draggable divider | 320–400px claim bar (already `--side-w`) |
 | **ANSWER** `#/answer` | 280px — **last ten decisions** | split: photograph ∥ candidates | **gone** |
-| **BROWSE** `#/inventory` | 280px — boxes + state beads | box walk → section → card | 340px — facts, copies, neighbours, re-shoot |
+| **BROWSE** `#/inventory` | 280px — boxes + state beads | box walk → section → card | 340px — facts, copies, neighbors, re-shoot |
 | **RUN** `#/box/N/run` | mini 56px | four steps, preflight, money gate, verbatim stdout, downloads | gone |
 
 Ticker: one line, bottom, **never collapses** — VS Code's Status Bar is one of six permanent zones ([code.visualstudio.com/docs/configure/custom-layout](https://code.visualstudio.com/docs/configure/custom-layout)).
@@ -199,8 +200,8 @@ Every tethering convention assumes seconds per item and a human in the framing l
 **③ Stop verifying writes by looking at an image.**
 No tethering product verifies transfer by eye — Capture One owns the counter because the camera cannot be asked for one, and ships a Next Capture Backup Tool; Sony's remedy is "Dest. + Camera". At **623ms — 5,778 cards/hour, 7.2× Scribe's 800-pages-per-hour target and 46× FADGI 2-star book scanning** — no human verifies anything. The panel's stated job ("a failed write is visible") is the counter's job being done badly by an image. Replace with a counter, a gap check and a flash; the existing "85 records at indices 1..85, zero gaps, 85 distinct capture_ids" check is already the right instrument. **Real per-card verification moves to a contact sheet.**
 
-**④ Put a physical grey patch in every frame. No consumer software does this; every digitization standard requires it.**
-Metamorfoze mandates a workflow target within 5cm of the original in every preservation master, *"to compare the stability of the image performance over a series of images or scans."* RBGE mounts a fixed colour chart and scale bar on the backboard. Two runs have now concluded "systematic sheen under the rig's lighting" — 30% at Gate B, 42% at box 2 — from **indirect** evidence. A grey patch taped to the tray turns that into a per-card number computed locally and free, and makes D3's stated re-enable condition ("a rig that measures better") a thing you can *test* rather than assert. It survives D32's crop because the crop is in-memory. **Cost: one printed card. This is the highest leverage-per-dollar item in the entire synthesis and it is not a UI change at all.**
+**④ Put a physical gray patch in every frame. No consumer software does this; every digitization standard requires it.**
+Metamorfoze mandates a workflow target within 5cm of the original in every preservation master, *"to compare the stability of the image performance over a series of images or scans."* RBGE mounts a fixed color chart and scale bar on the backboard. Two runs have now concluded "systematic sheen under the rig's lighting" — 30% at Gate B, 42% at box 2 — from **indirect** evidence. A gray patch taped to the tray turns that into a per-card number computed locally and free, and makes D3's stated re-enable condition ("a rig that measures better") a thing you can *test* rather than assert. It survives D32's crop because the crop is in-memory. **Cost: one printed card. This is the highest leverage-per-dollar item in the entire synthesis and it is not a UI change at all.**
 
 **⑤ Restate "minimize whitespace" as "minimize travel", and refuse the first version.**
 Prodigy caps its card at 675px on a 1440px screen and is the reference tool for annotation speed. Empty space beside a small card is not itself a defect. But *our* item is a photograph being judged for sheen — CVAT's genre, not Prodigy's — so the 752px goes to **the card and the 1:1 inset**, not to more UI and not to a worklist. Space that shortens the eye's path from photo to candidate row earns its keep; space that lengthens it does not. Reject "fill the width with more UI"; accept "fill the width with more card."
@@ -241,7 +242,7 @@ Two second-order versions of the same objection:
 | **1** | Worklist out of the review flow → rail as last-ten-decisions + a price-band strip | −3,318px of 4,018px per card (82%); ×47 = 188,846px/session; Prodigy, Zendesk, Label Studio all agree | M |
 | **2** | Photo ∥ candidates split; retire `--photo-cap: 48vh`; sentence keeps its 656px measure in the head | photo 309×432 → 551×769, **3.17× area**, 10.3% → 32.7% of viewport | M |
 | **3** | **1:1 sheen inset**, ~400×300 native px, prefetched with the next card | FADGI + Metamorfoze both require 1:1; detection wrong on 42% of 544; 19/40 self-disagreed across downscales | S |
-| **4** | Grey patch on the tray, in every frame | Metamorfoze 3.2; turns "systematic sheen" from inference into a number; makes D3's re-enable condition testable | **XS — one printed card** |
+| **4** | Gray patch on the tray, in every frame | Metamorfoze 3.2; turns "systematic sheen" from inference into a number; makes D3's re-enable condition testable | **XS — one printed card** |
 | **5** | Pipeline out of `<details>` into an addressed RUN posture, real four steps | NN/g accordions; +2.3min/interruption, detection 60%→12.5%; route-is-not-a-feature at one remove | M |
 | **6** | Age term in `store/queues.py:sort_key` | 47 `no_catalog_row` sort last forever; worst case 1,178 vs 890 min until escalation added | **XS** |
 | **7** | Capture: mode-dependent pane ratio + draggable divider; throttle the stored-capture swap to motion-stop or a thumbnail | Slipstream flips its panes; `Auto Select New Capture: Never`; two prior burst-pace defects already paid for | S |

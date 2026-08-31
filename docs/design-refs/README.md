@@ -14,7 +14,7 @@ Open them in a browser. They are static — no build step, no server.
 `docs/DESIGN.md` argues that a screenshot beats an adjective, and that an agent given
 "clean" produces the average of everything it has seen. A file that makes that argument
 while its own visual references live in a scratchpad directory contradicts itself the
-moment the session ends. Hex values substitute for colour; they do not substitute for
+moment the session ends. Hex values substitute for color; they do not substitute for
 layout, density, or the difference between a queue row and a spreadsheet row.
 
 `rejected.html` earns its place separately. A negative constraint that a later session
@@ -56,7 +56,7 @@ first component.
   rather than a disagreeing one, which is a different kind of staleness and worth naming
   separately: the two entries above are places the sheet is WRONG and the doc wins, and this is
   a place the sheet is INCOMPLETE. `field` is `#8C8C8C`, the boundary of a control you type
-  into, and it is the only colour in the palette that exists for a contrast criterion rather
+  into, and it is the only color in the palette that exists for a contrast criterion rather
   than for the interview — `docs/DESIGN.md` carries the argument and the render that refused
   the whole-palette version of it. Nothing audits these sheets, by the rule at the top of this
   file, so this line is what stops the omission being discovered by someone drawing a field
@@ -76,4 +76,4 @@ hook while committing exactly what it exists to stop, so it was not done.
 **Webfonts load from two CDNs.** Cabinet Grotesk comes from Fontshare, Atkinson Hyperlegible
 and Martian Mono from Google Fonts. Offline, both sheets fall back to system faces and
 everything except the typography still reads correctly. Self-hosting is a step 7 question,
-tied to the Fontshare licence that `docs/DESIGN.md` flags as unread.
+tied to the Fontshare license that `docs/DESIGN.md` flags as unread.

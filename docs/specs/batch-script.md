@@ -1,5 +1,23 @@
 # Batch script v2 — spec
 
+## STATUS — BUILT 2026-08-03, and run against real cards since
+
+**Step 4 is done and this file describes live code.** `./pkmnscan identify | join | emit |
+reconcile` exists, and it is no longer a spec waiting on anything: Gate B put 53 real cards
+through all four commands on 2026-08-22 and reconciled back with zero unmatched in either
+direction, and box 2 followed with 544. `docs/GATES.md`'s build-order step 4 carries the run
+record and the four defects those cards found that no fixture could.
+
+**The document amendments this file was gated on were all applied on 2026-08-03**, and that
+section is marked as a record rather than an open gate. The gating sentence below is left
+standing as the original terms.
+
+**This is the doc `make docs-audit` couples to `pipeline/`, `identify/`, `geometry/`,
+`store/` and `cli/`** — twenty staged lines under any of them without this file asks the
+coupling question. It is the most-read spec in the repo for that reason.
+
+---
+
 Build-order step 4. Interviewed and settled 2026-08-03. Supersedes nothing; where it
 contradicts an existing document that contradiction is called out explicitly under
 [Required document amendments](#required-document-amendments) and needs the owner's edit
@@ -589,7 +607,7 @@ toward a real card's 63/88 proportions first, because the detector's boxes come 
 systematically short for their width and a flat margin cannot fix a proportional error. A
 frame where detection refuses is sent whole and the preflight names the count.
 
-**D3 rung 1's claim is a SET.** One member determines exactly as this table's behaviour
+**D3 rung 1's claim is a SET.** One member determines exactly as this table's behavior
 always described; two or more filter the candidate rows and let rungs 2 and 3 choose within
 what survives. `--variant` is unchanged by that — it still fills a gap and still never
 overrides — but it fills it with a one-member claim, which is what every record written

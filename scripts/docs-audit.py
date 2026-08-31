@@ -3819,7 +3819,7 @@ _TYPE_ROW_RE = re.compile(r"^(" + "|".join(DOC_TYPE_TOKENS) + r")\s+(.+?)\s*\(")
 _SPACING_ROW_RE = re.compile(r"^Spacing\s+([\d ]+\d)")
 _RADIUS_ROW_RE = re.compile(r"^Radius\s+(\d+px)\b")
 
-# The one definition, shared with strip_css_comments() in the `raw colour` section below.
+# The one definition, shared with strip_css_comments() in the `raw color` section below.
 # It was declared twice, identically, once per section — harmless only for as long as the two
 # stayed identical, and the second binding silently won for BOTH call sites, so an edit to
 # this one would have been discarded without a diff to show for it. Two checks reading the
@@ -4097,7 +4097,7 @@ _POSITIONAL_RE = re.compile(r"\bchecks?\s+\d{1,2}\b", re.IGNORECASE)
 
 APP_STYLES = ROOT / "app" / "src"
 
-_RAW_COLOUR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+_RAW_COLOR_RE = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 
 
 def strip_css_comments(text: str) -> str:
@@ -4110,12 +4110,12 @@ def strip_css_comments(text: str) -> str:
     return _CSS_COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
 
 
-def check_raw_colour(report: Report) -> None:
-    """A colour painted as a literal instead of read from a token.
+def check_raw_color(report: Report) -> None:
+    """A color painted as a literal instead of read from a token.
 
     The house rule is stated everywhere and was enforced nowhere: stylesheets use
     `var(--token)` and never a raw hex, because the locked palette is only locked if the
-    palette is the only place colours come from. `design tokens` above proves
+    palette is the only place colors come from. `design tokens` above proves
     `app/src/tokens.css` agrees with `docs/DESIGN.md` — it cannot see a stylesheet that
     bypasses both.
 
@@ -4131,7 +4131,7 @@ def check_raw_colour(report: Report) -> None:
 
     **Blocking, because there is nothing to judge.** A hex outside `tokens.css` either is or
     is not there, which is D16's test. Comments are stripped first — a paragraph explaining
-    why `#000000` is the wrong ground is prose about a colour, not a colour.
+    why `#000000` is the wrong ground is prose about a color, not a color.
 
     **Scope is `app/src/*.css` only.** `docs/design-refs/` is full of hex on purpose: those
     sheets are drawings of the spec, they import nothing, and `docs/design-refs/README.md`
@@ -4145,7 +4145,7 @@ def check_raw_colour(report: Report) -> None:
         if path == TOKENS_CSS:
             continue
         for number, line in enumerate(strip_css_comments(read(path)).splitlines(), start=1):
-            for literal in _RAW_COLOUR_RE.findall(line):
+            for literal in _RAW_COLOR_RE.findall(line):
                 findings.append(
                     Finding(
                         f"{rel(path)}:{number}",
@@ -4155,8 +4155,8 @@ def check_raw_colour(report: Report) -> None:
                     )
                 )
 
-    report.add("raw colour", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
-               if findings else "every colour comes from a token")
+    report.add("raw color", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
+               if findings else "every color comes from a token")
 
 
 # ------------------------------------------------------------------ views opsec (D24)
@@ -4427,6 +4427,114 @@ def check_views_opsec(report: Report) -> None:
         ("no pooled game in the registry — a stored photo is not a bearer instrument today"
          if not pooled
          else "no manifest view can draw a stored photo"),
+    )
+
+
+# --------------------------------------------------------------- doc hygiene
+
+
+# An editor's instruction, written to a session and committed as prose. The real one read
+# "Leave lines 37-38 exactly as they are. Insert a blank line and this blockquote after line
+# 38" — and the edit that pasted it DELETED the sentence it was meant to preserve, leaving a
+# decapitated clause behind. Anchored at the start of a line and requiring a literal line
+# NUMBER, because "insert a blank line" is ordinary English and "insert ... after line 38" is
+# not: prose about a document does not cite the document's own line numbers.
+_EDITOR_INSTRUCTION = re.compile(
+    r"^\s*(?:Leave|Insert|Replace|Delete|Add|Append|Keep)\b[^.]{0,80}\b(?:line|lines)\s+\d+",
+    re.I,
+)
+
+_DOC_LINE_CITATION = re.compile(
+    r"`([A-Za-z0-9_./-]+\.(?:py|ts|tsx|css|json|sh|txt|md)):(\d+)"
+)
+
+
+def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
+    """Three ways a markdown file is malformed as a DOCUMENT, independent of what it claims.
+
+    Every other row here reads a doc's assertions and checks them against the code. This one
+    reads the file as a file, and it exists because the 2026-08-30 prose sweep found two
+    defects that every row was structurally unable to see: no assertion was wrong, so nothing
+    asked.
+
+    THE THREE, all decidable on the committed tree alone:
+
+      an editor's instruction committed as prose  `docs/specs/capture-server.md` carried
+          "Leave lines 37-38 exactly as they are. Insert ... after line 38" in the middle of
+          a paragraph, from 2026-08-22. The paste that put it there deleted the line it was
+          preserving, so the paragraph also lost "Do not add a harness test for the server in
+          this plan, and do not register" and ended mid-clause. Green for eight days.
+
+      two level-1 headings  `docs/specs/ui-research.md` was two documents in one file, the
+          second titled "PKMNSCAN UI: final design recommendation". A reader's table of
+          contents, this project's own heading parsers, and the status line that governs a
+          file all assume one title.
+
+      a line citation past the end of its file  `ReviewQueue.css:47` outliving the line it
+          named. The `paths` row proves the FILE resolves and stops there, so the number is
+          unchecked; this catches only the provable half, where the file is shorter than the
+          number. A citation pointing at the wrong line of a long-enough file is invisible
+          here and is `docs/DEBTS.md`'s to carry.
+
+    ADVISORY, and the severity is the argument. Each condition is provably true of the tree,
+    which is D16's test for a blocking row — but "true" and "wrong" part company on the second
+    one: a file that deliberately carries two titles is a judgement, not a defect, and a
+    blocking row would settle it by fiat. The first condition alone would qualify to block and
+    is not split out, because a row that fires once every eight days does not need two
+    severities and `make check` puts an advisory in front of a person anyway. **What would
+    earn it a promotion: a second instance of the instruction case reaching main.**
+
+    Fenced blocks are skipped for the heading and instruction conditions — a `#` inside one is
+    a shell comment and prose inside one is a quotation. The audit's own convention of quoting
+    verbatim doc text in blockquotes rather than fences (`docs/specs/audit-retirement.md` §0)
+    is what makes that safe.
+    """
+    findings: List[Finding] = []
+    for doc in docs:
+        titles = 0
+        fenced = False
+        for number, line in enumerate(read(doc).splitlines(), start=1):
+            if line.startswith("```"):
+                fenced = not fenced
+                continue
+            if fenced:
+                continue
+            if line.startswith("# "):
+                titles += 1
+                if titles == 2:
+                    findings.append(
+                        Finding(
+                            f"{rel(doc)}:{number}",
+                            "a second level-1 heading — one file, two document titles. "
+                            "Demote it, or split the file.",
+                        )
+                    )
+            if _EDITOR_INSTRUCTION.match(line):
+                findings.append(
+                    Finding(
+                        f"{rel(doc)}:{number}",
+                        "reads as an instruction to an editor, committed as prose: "
+                        f"{line.strip()[:70]!r}. Check what it replaced.",
+                    )
+                )
+            for match in _DOC_LINE_CITATION.finditer(line):
+                target = ROOT / match.group(1)
+                if not target.is_file():
+                    continue
+                total = len(target.read_text(errors="replace").splitlines())
+                if int(match.group(2)) > total:
+                    findings.append(
+                        Finding(
+                            f"{rel(doc)}:{number}",
+                            f"cites {match.group(1)}:{match.group(2)}, "
+                            f"but that file has {total} lines.",
+                        )
+                    )
+    report.add(
+        "doc hygiene",
+        ADVISORY,
+        findings,
+        f"{len(docs)} markdown files well-formed as documents",
     )
 
 
@@ -5625,7 +5733,7 @@ def self_test() -> int:
         str(by_label["design tokens"]),
     )
 
-    print("\na colour literal is found in CSS, and not in a comment about one")
+    print("\na color literal is found in CSS, and not in a comment about one")
     ok(
         strip_css_comments("a { color: #fff; } /* not #000 */").count("#") == 1,
         "a hex inside a block comment is stripped",
@@ -5637,17 +5745,17 @@ def self_test() -> int:
         str(strip_css_comments("/* two\nlines */\n.x{}").splitlines()),
     )
     ok(
-        bool(_RAW_COLOUR_RE.search("color: #1E40AF;")) and not _RAW_COLOUR_RE.search("var(--accent)"),
+        bool(_RAW_COLOR_RE.search("color: #1E40AF;")) and not _RAW_COLOR_RE.search("var(--accent)"),
         "the literal pattern matches a hex and not a token reference",
         "",
     )
     report = Report()
-    check_raw_colour(report)
+    check_raw_color(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
     ok(
-        not by_label["raw colour"],
-        "this repo's own stylesheets read every colour from a token",
-        str(by_label["raw colour"]),
+        not by_label["raw color"],
+        "this repo's own stylesheets read every color from a token",
+        str(by_label["raw color"]),
     )
 
     # The staged-mode primitives, which have no loud failure mode: every one of them
@@ -5975,8 +6083,9 @@ def audit(staged_only: bool) -> Report:
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)
-    check_raw_colour(report)
+    check_raw_color(report)
     check_views_opsec(report)
+    check_doc_hygiene(report, docs)
     check_route_rosters(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
