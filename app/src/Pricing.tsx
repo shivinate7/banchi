@@ -1061,6 +1061,16 @@ export function Pricing() {
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
+                /* The row's sentence, decided here rather than in the markup, because the
+                   second line now composes it with the held token below and a ternary that
+                   also had to yield a value would have been unreadable. `at_cap` still wins
+                   over the hold's note: it is the fact about this run, and the note is the
+                   operator's own aside. */
+                const why = sku.at_cap
+                  ? (sku.nothing_to_add ?? 'nothing to add this run')
+                  : withheld && standing !== 'unlisted' && standing.note
+                    ? standing.note
+                    : null
                 return (
                   <div
                     className="pricing-row"
@@ -1105,13 +1115,17 @@ export function Pricing() {
                       {sku.add_to_quantity} of {sku.copies}
                     </span>
 
+                    {/* THE HUMAN LABEL HERE, THE MACHINE STRING ON THE ROW'S SECOND LINE —
+                        and the split is arithmetic rather than taste. This column is 120px
+                        and `withheld: next_batch` measures 152px in Martian Mono at 10px
+                        (7px per character, before the 0.06em), so the token CANNOT be drawn
+                        inside the cell on one line. Stacked in here it wrapped to three
+                        lines, stood 54px tall in a 32px track, and overprinted the note
+                        below it — the two strings a held row draws were literally on top of
+                        each other. The second line already spans nine columns and is already
+                        this exact register, so that is where the token goes. */}
                     {withheld ? (
-                      <span className="pricing-held">
-                        Holding
-                        <span className="pricing-machine">
-                          withheld{heldReason(standing) ? `: ${heldReason(standing)}` : ''}
-                        </span>
-                      </span>
+                      <span className="pricing-held">Holding</span>
                     ) : (
                       <input
                         className="pricing-input"
@@ -1204,13 +1218,33 @@ export function Pricing() {
                         both runs in `runs/` today. So an older file states the bare fact,
                         which is exactly what `at_cap` means, and invents no reason for
                         it. */}
-                    {sku.at_cap ? (
+                    {/* ONE LINE, TWO REGISTERS, RIGHT-ALIGNED TOGETHER. The sentence and the
+                        held row's machine token are both `--util` 10px muted and both belong
+                        to this row, and the row reserves exactly ONE 13px line for that
+                        register — so they share it rather than contend for it. The token is
+                        last, which puts it flush right, directly under the `Holding` it
+                        belongs to, and leaves the reading order human-then-machine that
+                        docs/DESIGN.md's rule asks for.
+
+                        THE SENTENCE YIELDS AND THE TOKEN NEVER DOES. `pricing-row-why`
+                        ellipsizes and carries its full text in `title`; the token is
+                        `flex: none`, because it is the greppable half — a `withheld: nex…`
+                        finds nothing in `decisions.json`. Which way the line breaks under
+                        pressure is a decision, and this is it. */}
+                    {why === null && !withheld ? null : (
                       <p className="pricing-row-note">
-                        {sku.nothing_to_add ?? 'nothing to add this run'}
+                        {why === null ? null : (
+                          <span className="pricing-row-why" title={why}>
+                            {why}
+                          </span>
+                        )}
+                        {withheld ? (
+                          <span className="pricing-machine">
+                            withheld{heldReason(standing) ? `: ${heldReason(standing)}` : ''}
+                          </span>
+                        ) : null}
                       </p>
-                    ) : withheld && standing !== 'unlisted' && standing.note ? (
-                      <p className="pricing-row-note">{standing.note}</p>
-                    ) : null}
+                    )}
 
                     {holdFor !== sku.sku ? null : (
                       <HoldPanel sku={sku} onSet={setHold} onCancel={() => setHoldFor(null)} />
