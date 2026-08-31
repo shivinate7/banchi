@@ -9,7 +9,7 @@
  * outer padding on all four sides, the title in the display face at 20px sharing its line with
  * the scope and the controls, a one-line lede at the metadata size, and the first row of real
  * content inside 150px of the top of the viewport. Those are docs/DESIGN.md's numbers, and the
- * two screens D67 added should not each invent an answer to a header problem three screens have
+ * two screens D69 added should not each invent an answer to a header problem three screens have
  * already settled.
  *
  * NO SOLID ACCENT GROUND ANYWHERE ON THIS SCREEN. `--accent` is defined as "unsure, and the
