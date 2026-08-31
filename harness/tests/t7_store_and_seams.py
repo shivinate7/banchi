@@ -11676,6 +11676,51 @@ def check_export_fetch(checks: Checks) -> None:
     os.environ["TCGPLAYER_STORE_COOKIE"] = cookie
     os.environ.pop("PKMNSCAN_TCG_USER_AGENT", None)
 
+    # HERMETIC AGAINST THE DEVELOPER'S OWN `.env`, WHICH THIS BLOCK WAS NOT — and the way it
+    # was not is a secret leaving the place it belongs, not merely a test going red.
+    #
+    # `envfile._from_file` IS A PROCESS GLOBAL AND IT IS PART OF THE PRECEDENCE RULE.
+    # `get_live` returns an environment variable only when the name is in `os.environ` AND
+    # NOT in that set — that pair is how "a real environment variable wins" is told apart
+    # from a name this module itself lifted out of the file, which after `load` look
+    # identical in `os.environ`. The rule is right and `envfile.py` is not what is wrong
+    # here. What is wrong is that ANY earlier `load()` in this process — the harness imports
+    # six other tests and the server package — records `TCGPLAYER_STORE_COOKIE` in that set
+    # on a machine whose `.env` carries one. The line above then sets the variable, `get_live`
+    # sees a name it believes it owns, and reads THE FILE instead.
+    #
+    # SO THE STUB WAS SENT THE OPERATOR'S REAL SESSION. Measured on this Mac: the fetch went
+    # out carrying the live 2,784-byte cookie rather than the 44-byte fixture above, and
+    # `stub["seen"]` held it for the rest of the block — 127.0.0.1, in memory, never written,
+    # but a bearer instrument (D65) somewhere it was never meant to be, and one `checks.equal`
+    # failure message away from being printed. That is why this is fixed here rather than
+    # filed: two red checks are the SYMPTOM.
+    #
+    # AND IT IS INVISIBLE ON A CLEAN CHECKOUT, which is why it stood. With no `.env` the set
+    # is empty, both checks pass, and the block is only ever wrong on the one machine that
+    # has the secret it is about.
+    #
+    # WHICH HALF IS THE FIX, MEASURED RATHER THAN ASSUMED — three mutations, each run with a
+    # `load()` in front of it because that is the only condition either defect appears under:
+    #
+    #   neither half          all three checks red, this block's guard first
+    #   redirect only         the PRECEDENCE check still red, at the end of the rotation cases
+    #   cache reset only      green
+    #
+    # So **the cache reset is the fix** and the redirect is a second wall. The middle row is
+    # the interesting one and is why both are kept: the rotation cases below point `ENV_FILE`
+    # at their own file, so a redirect here does not reach them — only an unpolluted
+    # `_from_file` makes `get_live` honour the variable they set. The redirect earns its place
+    # separately, by making the block hermetic no matter what any future edit does before it:
+    # `_parse` answers `{}` for a missing path, so the real `.env` cannot be read here at all.
+    #
+    # The rotation cases move `ENV_FILE` again on top of this and restore what they found,
+    # which is now the sentinel rather than the operator's own file.
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = Path(tempfile.gettempdir()) / "t7-export-fetch-no-such.env"
+    envfile._from_file.clear()
+    envfile._loaded = False
+
     try:
         with isolated_home() as home:
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
@@ -11683,6 +11728,24 @@ def check_export_fetch(checks: Checks) -> None:
             thread = threading.Thread(target=httpd.serve_forever, daemon=True)
             thread.start()
             try:
+                # THE FIXTURE COOKIE IS WHAT THIS BLOCK READS, ASSERTED BEFORE ANYTHING
+                # FETCHES. Everything below sends a Cookie header to a stub and then reads
+                # `stub["seen"]` back, so if the reader is answering out of the developer's
+                # real `.env` the whole block is exercising the wrong secret — silently, and
+                # only on the machine that has one. The setup above has the mechanism; this
+                # is the one line that keeps the fix from quietly coming undone, and it is
+                # first so a failure names the CAUSE instead of surfacing as two puzzling
+                # cookie mismatches four hundred lines apart.
+                checks.equal(
+                    envfile.get_live("TCGPLAYER_STORE_COOKIE"),
+                    cookie,
+                    "the reader answers this block's own fixture cookie — `envfile._from_file`"
+                    " is a process global, and any earlier `load()` over a real `.env` makes "
+                    "`get_live` believe it owns the name and read the FILE past the variable "
+                    "set here (D65: that value is a bearer instrument, and it was reaching "
+                    "the stub)",
+                )
+
                 cards = [
                     (3, 1, "Dunsparce", "120/159", "normal"),
                     (3, 2, "Articuno ex", "161/159", None),
@@ -12294,6 +12357,9 @@ def check_export_fetch(checks: Checks) -> None:
         portal.shutdown()
         portal.server_close()
         portal_thread.join(5)
+        envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(restore_from_file)
         for name, value in previous.items():
             if value is None:
                 os.environ.pop(name, None)
