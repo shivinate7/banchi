@@ -1399,3 +1399,35 @@ needs **both** conditions, and each rules out the other's false positive:
 
 An empty box disowns nobody, so name-it-later still works. A live run that has not identified
 yet owns no cards, so the timestamp keeps it named. Three assertions pin it.
+
+### Every decision-id check goes vacuous at D100 — found 2026-08-30
+
+Found while building D72's renumber check, by reading the regex it reuses rather than by
+anything failing.
+
+`scripts/docs-audit.py:_DECISION_RE` is `\bD([1-9][0-9]?)\b` and `decision_heading_lines`
+matches `^##\s+(D[1-9][0-9]?)\b`. Both cap at two digits. At `D100` the heading is not a
+heading to this file, the citation is not a citation, and **four rows go quietly green over
+a file they can no longer see**: `decision ids`, `decision ids in code`, `decision index`
+and `renumbered ids`. `check_map`'s `governed_by` reader is not affected — it compares
+strings against `decision_headings`, so a `D100` entry would simply never be found there
+either, which is the same silence one layer down.
+
+The two-digit cap is not an accident and is worth keeping until it costs something:
+`# noqa: D102` appears in `server/tcg_export.py` and `server/order_transport.py`, and a
+three-digit rule reads both as citations of a decision that does not exist. That is a real
+false positive today against a real one someday.
+
+**Not fixed, because the fix cannot be tested against this tree.** The highest entry is
+D72. Widening the pattern now means loosening it on a guess, with the `noqa` collision as
+the only observable effect — the exact shape of change this file exists to argue against.
+The discharge is cheap and triggered rather than open: **at the ninetieth entry** — ten
+short of the cliff, and the last point at which this can be done against a tree where the
+old and new patterns still agree — widen both to three digits and exclude a `noqa:` on the
+same line, with a `--self-test` case for each.
+
+**The trigger is written as a word and not as an id on purpose.** Spelling it the other way
+makes this sentence a citation of an entry that does not exist, and `decision ids` blocks
+the commit for it — correctly, and it did while this entry was being written. A debt about
+four citation checks cannot be recorded in a form one of them has to refuse.
+

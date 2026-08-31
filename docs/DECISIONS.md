@@ -2900,7 +2900,7 @@ What holds instead: one host, one method, one route, in one module with one call
 
 This is cookie-session auth, not the order-management API, which is another host answering `www-authenticate: Bearer`. The two were conflated once while this was scoped and reached the wrong conclusion.
 
-**Amended 2026-08-30: the `Bearer` half is measured false, and the sentence stands because the conflation it warns about was real.** The order host is a cookie session on the same `.tcgplayer.com` ticket this table's host uses; what does not transfer between the two is the body convention, not the auth. D67 has the capture.
+**Amended 2026-08-30: the `Bearer` half is measured false, and the sentence stands because the conflation it warns about was real.** The order host is a cookie session on the same `.tcgplayer.com` ticket this table's host uses; what does not transfer between the two is the body convention, not the auth. D69 has the capture.
 
 **Whether export scope can be set by request is therefore unanswered.** It needs one authenticated probe, which needs the cookie, which only the owner can place. If scope can be set, the better design is to ask for a scoped export rather than inspect a broad one: fetch the sets the run needs with printings and conditions unfiltered, and the file is complete within scope by construction. That is recorded and not built, because a path that has never run must not carry a comment claiming a property nobody measured.
 
@@ -3079,7 +3079,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **What survives is one probe, not a session.** The admin host answers a cookie-session 302 and `order-management-api` answers a Bearer challenge; two hosts, two schemes, and D64's result does not transfer. That question is answered by one request, and the spec puts it in the free work rather than letting a build be organised around it.
 
-**Amended 2026-08-30 (D67): the probe ran, and answered cookie rather than Bearer.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the same `TCGAuthTicket_Production` cookie the admin host uses — one `.tcgplayer.com` session, two hosts — so *two hosts, two schemes* is one scheme, and D64's result DOES transfer as far as auth is concerned. The paragraph is amended rather than removed because its structural claim was right: one request settled it, and organising a build around the answer would have been organising it around a guess. What does not transfer is the body convention — form-urlencoded `model=<json>` there, plain JSON here. The capture, the two calls, the required `sellerKey` and the 403 that reads like an expired session are all in D67.
+**Amended 2026-08-30 (D69): the probe ran, and answered cookie rather than Bearer.** `order-management-api.tcgplayer.com` authenticates with `credentials: 'include'` and the same `TCGAuthTicket_Production` cookie the admin host uses — one `.tcgplayer.com` session, two hosts — so *two hosts, two schemes* is one scheme, and D64's result DOES transfer as far as auth is concerned. The paragraph is amended rather than removed because its structural claim was right: one request settled it, and organising a build around the answer would have been organising it around a guess. What does not transfer is the body convention — form-urlencoded `model=<json>` there, plain JSON here. The capture, the two calls, the required `sellerKey` and the 403 that reads like an expired session are all in D69.
 
 ### The relay, if it is built, is work this repo cannot verify
 
@@ -3091,7 +3091,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 ### What would reopen this
 
-**A screen that turns out to need the feed to be built at all** — the claim here is that pasted JSON is a sufficient input, and it is untested until somebody pastes one. **Or the probe answering Bearer**, which does not change the order but does change what the transport session is. *(It did not: the probe ran 2026-08-30 and answered cookie — see the amendment above and D67.)*
+**A screen that turns out to need the feed to be built at all** — the claim here is that pasted JSON is a sufficient input, and it is untested until somebody pastes one. **Or the probe answering Bearer**, which does not change the order but does change what the transport session is. *(It did not: the probe ran 2026-08-30 and answered cookie — see the amendment above and D69.)*
 
 ---
 
@@ -3400,6 +3400,46 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 ---
 
+
+## D72 — A renumbered entry takes its citations with it, and the branch's own history is what says one moved
+
+**Built 2026-08-30, after `docs/map.py` was found citing D67 in 24 places where it meant D69.** The order-screen entry was D67 while its branch was open; main took 67 and 68, and the renumber to D69 reached `docs/DECISIONS.md` and some prose but not the map's citations. Nine OTHER D67 citations in that same file were the real entry — the number-composition one — so no sweep could be run blind, and the wrong ones read as ordinary prose: *"the order transport (D67)"*, *"(D67) gave each its own route"*.
+
+**EVERY DECISION CHECK THIS REPO HAD ASKS WHETHER A CITED ID EXISTS, AND A RENUMBER BREAKS NONE OF THEM.** `check_decision_ids` says the same thing about a duplicate heading in its own comment — *"the citation is then not wrong in a way anything can see — it points at a real heading, just not the intended one"* — and that sentence is exactly as true when one entry moves as when two share a number. `check_map`'s superset rule is one-directional by construction: a decision a file cites must appear in `governed_by`, so a **wrong** entry there is invisible, and prose inside a `does` string is read by nothing at all.
+
+**Thirteen renumber events are in this repo's history and the collisions are structural.** `D50 -> D51 -> D53`, `D50 -> D52 -> D54`, `D61 -> D62 -> D64`, `D65 -> D66`, `D67 -> D69`, `D67 -> D70`, `D69 -> D71`. Several branches take "the next free number" against one base and all of them merge; D16 already carries the three-headings-at-D50 incident, which is the same collision landing a step earlier.
+
+### The title is the identity, and the branch is the scope
+
+**A renumber is a heading that KEPT ITS NAME AND CHANGED ITS ID**, which is the one pair no id-based check can see and the only signal that needs no judgement. `moves_across` reads it out of a sequence of states and is pure for exactly that reason: the git walk around it cannot run without a repository, and the logic that could be wrong is the part that must be testable. Five cases in `--self-test` floor it, and every id in them is real history rather than invented, so the data does not fall into the illustration problem `governed_by` already carries for `D2`.
+
+**An entry that moved TWICE reports its FIRST id.** `D50 -> D51 -> D53` is real, and the citations that need chasing were written while it was D50; reporting the middle id would name a number nobody wrote and miss every site.
+
+**Branch-scoped, which is what makes it quiet.** The renumber that matters is the one this branch did, and the files that matter are the ones this branch touched — a `D67` that main already had is not this branch's to move. On main, `merge-base` is `HEAD` and the row is empty for nothing. `origin/main` is the reference rather than `main`, because a worktree commonly has no local `main`: CLAUDE.md's merge discipline keeps it checked out somewhere else.
+
+**NOT `--staged`, AND THAT IS THE LOAD-BEARING HALF.** The `D67 -> D69` renumber was committed in `9d7f473`, a MERGE — *"Merge origin/main: D67 was taken twice over"* — and git runs no pre-commit hook for a merge commit. A staged-only check would have missed it, and would have missed most of the thirteen: renumbering is what a session does while resolving a merge, by definition. Reading the branch's own commits catches it however it was committed, and the Stop hook runs this at turn end.
+
+### Advisory, because the last step is a judgement and the list is the product
+
+**Replayed against `9d7f473` it names nine files, and two of them were wrong.** `docs/map.py` and `app/src/Orders.css` carried the corruption; the other seven — `CLAUDE.md`, `app/src/types.ts`, `app/tests/inventory.spec.ts`, `docs/DEBTS.md`, `harness/tests/t7_store_and_seams.py`, `scripts/docs-audit.py`, `server/capture_server.py` — cite the number-composition entry and are correct. **Nothing mechanical separates those two groups**, and a check that blocked would have to be right about which is which. What nobody had was the list, and the list is what this row is.
+
+**A file naming BOTH ids is annotated and is not evidence either way.** `docs/map.py` named both and was wrong in 24 places and right in 9; `app/src/types.ts` named both and is right in both. The finding says so rather than ranking on it, because a hint that reads as a verdict is worse than none.
+
+### The app was never scanned, which is the second half
+
+**`decision ids in code` walked `python_files()` and reported "citations in `.py` all resolve" — accurately, and over half the citations.** `app/` holds hundreds more in `.ts`, `.tsx` and `.css` comments, and a dangling id in one of them resolved to nothing and was reported by nothing. The scan now covers those three suffixes at the same advisory severity and for the same reason the Python row is advisory: `D2` could plausibly be a variable one day.
+
+**Measured when it landed: zero dangling ids in the app.** So this is a floor rather than a repair — it found nothing because there was nothing, which is the only honest way to describe a check that goes green on its first run.
+
+### What this does not decide
+
+**Not whether two branches may take one number** — they will, and D16's duplicate-heading rule is what blocks the collision itself. This entry is about the repair afterwards. **Not whether a citation is semantically right**: an id that never moved and was wrong from the day it was typed is invisible here and to everything else, and the only reader that catches it is a human reading the entry. **And not the `governed_by` direction** — a curated entry that names a decision the file never mentions is legitimate by that field's own definition, and checking it would fire on every one.
+
+### What would reopen this
+
+**D100.** `_DECISION_RE` is `\bD([1-9][0-9]?)\b` and the heading pattern matches two digits, so at three digits every citation check in this file goes silently vacuous — it is recorded in `docs/DEBTS.md` rather than fixed here, because fixing it untested against a tree that has no such id is how a regex gets loosened for nothing. **Or a renumber done by rewriting history** rather than by a commit, which leaves no state pair to compare and is invisible to this.
+
+---
 
 ## Deferred — argued, not gated: nothing here is blocked, and none of it starts without a decision entry
 
