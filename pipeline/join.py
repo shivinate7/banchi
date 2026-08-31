@@ -73,7 +73,7 @@ from typing import (
     Callable, Dict, Iterable, List, Mapping, NamedTuple, Optional, Sequence, Set, Tuple,
 )
 
-from pipeline import games, pricing, routing, tcgcsv, variant
+from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 
 # D7 — a playset. Configurable, but never guessed at.
 LIVE_QUANTITY_CAP = 4
@@ -1091,17 +1091,18 @@ def normalize_set(name: str) -> str:
 def set_matches(hint: Optional[str], set_name: str) -> bool:
     """Does this hint name this set?
 
-    Matched against the whole label and against each side of the colon, so `sv9`,
-    `SV09`, `Journey Together` and the full `SV09: Journey Together` all hit. Deliberately
-    exact after folding, with no substring fallback: `sv1` is a substring of `sv19`, and a
-    hint that quietly matches the wrong set is worse than one that matches nothing — the
-    latter reviews, which is what D2's "possibly wrong" hint has earned.
+    ONE NAME AT A TIME, which is why nothing that has to CHOOSE a set calls this any more.
+    A pairwise predicate cannot see that four sets answered, and four did: `SV` matched
+    `SV: Prismatic Evolutions`, `SV: Paldean Fates`, `SV: Scarlet & Violet 151` and
+    `SV: Shrouded Fable`, and the caller below handed all four sets\' rows back as a confident
+    narrowing with no `set_ambiguous`. `Catalog.candidates` resolves set-wise now; this
+    survives as the yes/no question `harness/tests/t3_join_coverage.py` asks of one pair.
+
+    The rules are `pipeline/setnames.py`\'s, not its own. They used to be its own, and they
+    disagreed with the fetch\'s — `sv9` folded to `sv09` here and nowhere else, and the fetch
+    had a prefix rule this did not.
     """
-    folded = normalize_set(hint)
-    if not folded:
-        return False
-    parts = [set_name] + set_name.split(":")
-    return any(normalize_set(part) == folded for part in parts)
+    return setnames.resolve(hint, [set_name]) is not None
 
 
 @dataclass(frozen=True)
@@ -1341,13 +1342,18 @@ class Catalog:
                 rows=tuple(rows), lookup=lookup, name_inferred=name_inferred
             )
 
-        # Rung 3 of §5.1 — a colliding key, disambiguated by the sidecar set hint.
+        # Rung 3 of §5.1 — a colliding key, disambiguated by the sidecar set hint. THE SET IS
+        # CHOSEN FIRST AND THE ROWS ARE FILTERED TO IT, rather than every row being asked
+        # whether it matches: asked row by row, a hint answering to two of the candidate sets
+        # narrowed to BOTH of them and returned that as decisive. `setnames.resolve` answers
+        # `None` on a tie, so such a card falls through to rung 4 and faces a human (D2, D3).
         if card.set_hint:
-            narrowed = [
-                row
-                for row in rows
-                if set_matches(card.set_hint, row.get(tcgcsv.SET_COLUMN, ""))
-            ]
+            chosen = setnames.resolve(card.set_hint, sets)
+            narrowed = (
+                [row for row in rows if row.get(tcgcsv.SET_COLUMN, "") == chosen]
+                if chosen is not None
+                else []
+            )
             if narrowed:
                 return Candidates(
                     rows=tuple(narrowed),

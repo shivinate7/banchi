@@ -48,8 +48,8 @@ make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
 make check          # harness + docs-audit + both self-tests + port-agreement +
-                    #   screen-freshness + ignore-check + lint + vale + typecheck.
-                    #   The line above said five of those nine for months.
+                    #   set-hint-agreement + screen-freshness + ignore-check + lint +
+                    #   vale + typecheck. The line above said five of them for months.
 make screen-freshness # every server write in app/src has a way back: a re-read, an
                     #   invalidation signal, or a reason in the code why none is owed.
                     #   Needs node, so it is in `check` and never in the git hook.
