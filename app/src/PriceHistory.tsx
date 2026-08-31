@@ -65,7 +65,7 @@ import './PriceHistory.css'
 /** How a range is captioned. The endpoint's own range names are machine strings and are drawn
  *  verbatim beside these, per `docs/DESIGN.md`'s owner-screen rule — human label large,
  *  machine string small — so the label here never becomes a second vocabulary. */
-const RANGE_LABEL: Record<string, string> = {
+export const RANGE_LABEL: Record<string, string> = {
   month: 'Daily',
   quarter: '3-day',
   semiannual: 'Weekly',
@@ -115,36 +115,59 @@ function direction(fraction: string | null): string {
  *  a size a person can read, and a 44px-tall sparkline with tick labels would be four
  *  illegible things instead of one legible one. `docs/DESIGN.md`'s hairline is the baseline
  *  and there is nothing else on it. */
+/** A series of prices as polyline point-lists, oldest on the left. `null` where a bucket
+ *  carries no price at all. Answers `null` when there is nothing that can honestly be drawn.
+ *
+ *  SHARED WITH `PriceTrend.tsx` BECAUSE THE SUBTLE RULE IS THE ONE A COPY WOULD LOSE. A
+ *  bucket with no price BREAKS THE LINE rather than interpolating across it — measured on
+ *  Vilemaw's annual, whose oldest buckets are a card that had not been printed yet (21 of 52
+ *  on the run D78 was built against), and joining through them would draw a year-long slope
+ *  that never happened. Two implementations of that would be one implementation of it and one
+ *  slope nobody could see was invented. The panel and the row differ only in W, H and what
+ *  they draw around it, so those are arguments and the geometry is not. */
+export function sparkSegments(
+  priced: (number | null)[],
+  W: number,
+  H: number,
+): string[][] | null {
+  const known = priced.filter((v): v is number => v !== null && Number.isFinite(v))
+  if (known.length < 2) return null
+  const lo = Math.min(...known)
+  const hi = Math.max(...known)
+  // A FLAT SERIES IS DRAWN FLAT, down the middle, rather than divided by zero. A card whose
+  // price has not moved is a real and useful reading, and it must not render as a NaN path.
+  const span = hi - lo || 1
+  const step = priced.length > 1 ? W / (priced.length - 1) : W
+  const segments: string[][] = []
+  let current: string[] = []
+  priced.forEach((value, at) => {
+    if (value === null || !Number.isFinite(value)) {
+      if (current.length > 1) segments.push(current)
+      current = []
+      return
+    }
+    const x = (at * step).toFixed(1)
+    // SVG's y grows DOWNWARD, so the high price is the small number. Inverted here rather
+    // than by a transform, because a transform would also flip the stroke geometry.
+    const y = (H - ((value - lo) / span) * (H - 4) - 2).toFixed(1)
+    current.push(`${x},${y}`)
+  })
+  if (current.length > 1) segments.push(current)
+  return segments.length ? segments : null
+}
+
 function Spark({ points }: { points: HistoryPoint[] }) {
   const W = 260
   const H = 44
-  const runs = useMemo(() => {
-    const priced = points.map((p) => (p.market === null ? null : Number(p.market)))
-    const known = priced.filter((v): v is number => v !== null && Number.isFinite(v))
-    if (known.length < 2) return null
-    const lo = Math.min(...known)
-    const hi = Math.max(...known)
-    // A FLAT SERIES IS DRAWN FLAT, down the middle, rather than divided by zero. A card whose
-    // price has not moved is a real and useful reading, and it must not render as a NaN path.
-    const span = hi - lo || 1
-    const step = priced.length > 1 ? W / (priced.length - 1) : W
-    const segments: string[][] = []
-    let current: string[] = []
-    priced.forEach((value, at) => {
-      if (value === null || !Number.isFinite(value)) {
-        if (current.length > 1) segments.push(current)
-        current = []
-        return
-      }
-      const x = (at * step).toFixed(1)
-      // SVG's y grows DOWNWARD, so the high price is the small number. Inverted here rather
-      // than by a transform, because a transform would also flip the stroke geometry.
-      const y = (H - ((value - lo) / span) * (H - 4) - 2).toFixed(1)
-      current.push(`${x},${y}`)
-    })
-    if (current.length > 1) segments.push(current)
-    return segments.length ? segments : null
-  }, [points])
+  const runs = useMemo(
+    () =>
+      sparkSegments(
+        points.map((p) => (p.market === null ? null : Number(p.market))),
+        W,
+        H,
+      ),
+    [points],
+  )
 
   if (runs === null) return null
   return (

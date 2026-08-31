@@ -13116,6 +13116,87 @@ def check_history_route(checks: Checks) -> None:
             pipeline_routes.do_pipeline_history(name, "9189317")
             checks.ok(True, "and a second read is served from the same warm cache")
 
+            # ------------------------------------------- the batched read (D78)
+            #
+            # THE SAME WARM CACHE AND THE SAME SOCKET BAN. `readings_for_rows` walks the
+            # identical `Market`, so a batch that opened a connection would trip `no_sockets`
+            # above — which is what makes this a seam test rather than a network test.
+            batch = pipeline_routes.do_pipeline_trends(name)
+            checks.equal(batch["asked"], 1, "the batch walks the run's own table")
+            checks.equal(batch["skipped"], 0, "and skips nothing while no row is at the cap")
+            checks.equal(batch["refused"], {}, "no refusals over a row the single route reads")
+            strip = batch["skus"].get("9189317")
+            checks.ok(strip is not None, "the SKU the single route answers is in the batch too")
+            checks.equal(
+                [r["range"] for r in strip["ranges"]],
+                list(pricehistory.DEFAULT_RANGES),
+                "both ranges, finest first, in the same order the panel draws",
+            )
+            # THE ASCENDING ASSERTION AGAIN, ON THE OTHER PAYLOAD. It is the failure with no
+            # symptom — a rising card drawn falling — and `_history_spark` is a second
+            # serializer over the same buckets, so asserting it once upstream proves nothing
+            # about this one.
+            spark = strip["ranges"][0]
+            checks.equal(
+                [v for v in spark["points"] if v is not None],
+                [p["market"] for p in answer["ranges"][0]["points"] if p["market"] is not None],
+                "and the strip's points are the panel's own bucket prices, in the same order",
+            )
+            # NO MONEY ON THIS PAYLOAD, WHICH IS D78's RULE AS A TEST RATHER THAN A PARAGRAPH.
+            # The row draws this one column from the field a listing price is typed into, so
+            # every figure it carries is dimensionless or a date. A later session adding `vwap`
+            # here would be reopening D8 by widening a serializer.
+            checks.equal(
+                sorted(spark),
+                ["fraction", "from", "points", "range", "to"],
+                "the strip carries a span, a fraction and the shape — and nothing else",
+            )
+
+            # AN EXPLICIT LIST IS THE CHUNK, and it is what makes the strip fill in waves.
+            picked = pipeline_routes.do_pipeline_trends(name, ["9189317"])
+            checks.equal(list(picked["skus"]), ["9189317"], "an explicit ?sku= asks for that row")
+            # BOTH DIRECTIONS, WHICH IS CLAUDE.md's HARD RULE. A SKU this run never matched is
+            # NAMED with the reason rather than dropped — silence would look to the screen like
+            # a mirror that had nothing to say about a real card, and leave the row reading
+            # `reading…` for the rest of the session.
+            named = pipeline_routes.do_pipeline_trends(name, ["9189317", "1"])
+            checks.ok(
+                "1" in named["refused"] and "1" not in named["skus"],
+                "a SKU this run never matched comes back refused, never absent",
+            )
+
+            # THE AT-CAP SKIP, on the owner's instruction of 2026-08-31: a row this run can add
+            # nothing for is not a decision anyone is waiting on. Written into the stored table
+            # rather than faked, because `at_cap` is `cli/cmd_join.py`'s own field and the whole
+            # safety of the filter is that it is the SAME field the list groups those rows
+            # under — two readers of one fact rather than two rules kept in step.
+            table = run_dir.directory / runs.PRICING
+            stored = json.loads(table.read_text("utf-8"))
+            for entry in stored["skus"]:
+                entry["at_cap"] = True
+            table.write_text(json.dumps(stored), "utf-8")
+
+            capped = pipeline_routes.do_pipeline_trends(name)
+            checks.equal(capped["asked"], 0, "a row at the cap is not asked about")
+            checks.equal(capped["skipped"], 1, "and the skip is COUNTED, never silent")
+            checks.equal(capped["skus"], {}, "so the batch reads nothing")
+            # AND IT STAYS REACHABLE, which is what makes the default safe rather than a rule
+            # about the SKU. `T` reads any one of them and so does a named ?sku=.
+            asked = pipeline_routes.do_pipeline_trends(name, ["9189317"])
+            checks.ok(
+                "9189317" in asked["skus"],
+                "but naming it overrides the skip — a caller that names a row has decided",
+            )
+            checks.equal(
+                pipeline_routes.do_pipeline_history(name, "9189317")["sku"],
+                "9189317",
+                "and `T` still reads an at-cap row through the single route",
+            )
+            stored = json.loads(table.read_text("utf-8"))
+            for entry in stored["skus"]:
+                entry["at_cap"] = False
+            table.write_text(json.dumps(stored), "utf-8")
+
             for sku, code, why in (
                 ("", "sku_required", "no SKU at all"),
                 ("1", "sku_not_in_run", "a SKU this run never matched"),
@@ -13151,6 +13232,19 @@ def check_history_route(checks: Checks) -> None:
                     "an uncatalogued product line refuses as `not_catalogued`, before any fetch",
                 )
 
+            # THE BATCH REPORTS THE SAME FACT WITHOUT RAISING, and that difference is the
+            # design rather than an inconsistency. One SKU asked about is one answer, so a
+            # refusal is the answer; forty-six asked about is forty-six answers, and one
+            # uncatalogued card must not cost the other forty-five their reading. Same
+            # sentence, different envelope.
+            uncatalogued = pipeline_routes.do_pipeline_trends(name)
+            checks.equal(uncatalogued["skus"], {}, "the batch reads nothing uncatalogued")
+            checks.ok(
+                "D22" in (uncatalogued["refused"].get("9189317") or ""),
+                "and names it per SKU, citing the entry that makes it permanent, without "
+                "raising over the rows beside it",
+            )
+
             # AND A RUN WITH NO PRICING TABLE REFUSES BY NAME. `join` is what writes it, so
             # this is the run that predates the file or has never been joined — the same
             # refusal `do_pipeline_pricing` makes, because it is the same missing file.
@@ -13163,6 +13257,19 @@ def check_history_route(checks: Checks) -> None:
                     refusal.code,
                     "pricing_not_written",
                     "a run with no pricing table refuses as `pricing_not_written`",
+                )
+
+            # THE BATCH RAISES HERE AND DOES NOT RETURN AN EMPTY ANSWER, which is the one place
+            # it is right for it to raise: there is no table to walk, so there are no SKUs to
+            # report either way, and `{}` would read as a run whose every card is at the cap.
+            try:
+                pipeline_routes.do_pipeline_trends(name)
+                checks.ok(False, "the batch refuses a run with no table", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "pricing_not_written",
+                    "and the batch refuses it by the same name rather than answering empty",
                 )
         finally:
             urllib.request.urlopen = real_urlopen

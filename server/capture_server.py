@@ -51,6 +51,7 @@
     GET    /pipeline/runs/<name>/scope    what a fetch would ask TCGplayer for, and why
     POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
+    GET    /pipeline/runs/<name>/trends    many SKUs' shape at once, for the row strip
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
     PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
@@ -512,6 +513,13 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # is latent rather than live. Ordered defensively all the same: the day somebody adds a
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
+
+# D78's batched read, beside D62's single one. `/history` answers one SKU for the panel and
+# `/trends` answers many for the row strip — two routes because they carry two different
+# payloads for two different drawings, not one route with a mode: the panel needs every figure
+# a reading has and the strip needs a shape and a sign, and a shared handler would send the
+# panel's payload forty-six times to draw the strip's.
+_RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
 # What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
 # three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
@@ -8375,6 +8383,22 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_history(match.group(1), asked[0]),
+                )
+            match = _RUN_TRENDS_RE.match(path)
+            if match:
+                # THE SAME READ, BATCHED, AND IT LEAVES THIS MACHINE FOR THE SAME REASON.
+                # D62 named this route and the condition for building it; D78 is the owner
+                # answering that condition. It is still a press — nothing polls it — and what
+                # changed is that one press covers the list instead of one card.
+                #
+                # `sku` REPEATS rather than carrying a comma list, which is `_RUN_SCOPE_RE`'s
+                # own rule one route down and for the identical reason: a comma inside a value
+                # would be indistinguishable from the separator. With none, the handler walks
+                # the run's own table and skips the rows it can add nothing for.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_pipeline_trends(match.group(1), asked),
                 )
             match = _RUN_SCOPE_RE.match(path)
             if match:

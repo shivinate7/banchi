@@ -450,6 +450,7 @@ D74  A document is checked as a document, and every markdown file is linted rath
 D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted, and the shape correction reaches both crop paths
 D76  A hint is evidence about its own card, and how wide to ask is a per-game rule
 D77  The pipeline's rows can be the wrong card, so the export is reachable from every entry — asked for, never offered unasked
+D78  The reading goes on every row, because the operator answered D62's own measurement
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

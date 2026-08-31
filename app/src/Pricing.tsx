@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   describeFailure,
   getPriceHistory,
+  getPriceTrends,
   getPricing,
   getRun,
   getRuns,
@@ -18,12 +19,14 @@ import type {
   RunDetail,
   RunFile,
   RunSummary,
+  TrendRange,
   WithheldRecord,
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
-import { PriceHistoryPanel, type HistoryRead } from './PriceHistory'
+import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory'
+import { TrendCell, type TrendRead } from './PriceTrend'
 import { RunFiles } from './RunFiles'
 import { runBoxLabel } from './runScope'
 import './Pricing.css'
@@ -64,6 +67,15 @@ import './Pricing.css'
  *  is `decisions.json`, `join` merges it and `emit` is free and re-runnable, so the receipt
  *  is a courtesy and the undo stack behind it is what matters. */
 const UNDO_DEPTH = 10
+
+/** How many SKUs one batched trend request asks about — D78.
+ *
+ *  IT IS A LATENCY NUMBER AND NOT A COURTESY ONE. The server sleeps `COURTESY_DELAY_SECONDS`
+ *  between live fetches whatever the chunking, so this changes nothing the mirrors see; what
+ *  it decides is how long the operator looks at an empty column. Eight SKUs is two ranges each
+ *  — sixteen requests, about five seconds — so a 46-row box arrives as six waves instead of
+ *  one 37-second blank. Larger wastes the wait; smaller pays a round trip per two cards. */
+const TREND_CHUNK = 8
 
 /** The three presets, matching `cli/cmd_join.py:PRESETS` key for key AND rule for rule. The
  *  owner chose these three and their percentages in the interview; a fourth is a change to
@@ -219,6 +231,45 @@ export function Pricing() {
    * that matched it. The server's own on-disk cache (`pipeline/pricehistory.py`'s TTLs) is
    * what decides staleness; this only avoids asking it twice in one sitting. */
   const [history, setHistory] = useState<Record<string, HistoryRead>>({})
+
+  /* ---------------------------------------------------------------- the trend strip (D78)
+   *
+   * D62 MADE THE HISTORY A PRESS PER CARD AND NAMED WHAT WOULD REOPEN IT — *"the panel being
+   * opened on every card… the honest answer is a batched route and a column on the row"*. The
+   * owner asked for that on 2026-08-31. This is the state behind that column, and it is
+   * SEPARATE from `history` above rather than a widening of it: the two carry different
+   * payloads for different drawings, and merging them would put the panel's every-figure
+   * reading and the row's shape-and-sign in one bag whose shape neither consumer could trust.
+   *
+   * IT IS KEYED BY RUN AND CLEARED WHEN THE RUN CHANGES, which is the opposite of `history`
+   * above and correct for the opposite reason. A reading is a fact about a CARD, so it is
+   * kept across runs. This is a reading over a run's OPEN rows — which rows those are is a
+   * fact about the run — so a strip carried across a run change would draw the last run's
+   * answer set against this run's list. */
+  const [trends, setTrends] = useState<Record<string, TrendRead>>({})
+  const [trendRun, setTrendRun] = useState<{
+    run: string
+    /** How many rows the walk will ask about, and how many it has heard back on. The row
+     *  strip fills in waves and this is what lets the screen say so — 37.7s of courtesy delay
+     *  arriving as six partial answers rather than one blank half-minute. */
+    total: number
+    done: number
+    /** The rows never asked about: this run can add nothing for them, so the batch skips them
+     *  on the owner's instruction. COUNTED rather than hidden — a strip drawn over 46 of 60
+     *  rows with no number beside it reads as fourteen failures. */
+    skipped: number
+    /** The two ranges' spans, off the first answer that carried them. STATED ONCE HERE and
+     *  never on a row: they are identical across every SKU of a run (measured, all 46 on
+     *  `2026-08-31-box3-01`), and a row has no width for a date. */
+    spans: TrendRange[] | null
+    reading: boolean
+  } | null>(null)
+  /* WHICH WALK IS LIVE. A run change or a second press abandons the one in flight, and every
+   * chunk checks this before it writes — without it, a walk started over run A keeps filling
+   * the strip after the operator has moved to run B, one chunk at a time, for half a minute.
+   * A ref and not state: nothing draws it, and a re-render per chunk boundary is already paid
+   * for by the answer that chunk carries. */
+  const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
@@ -312,6 +363,15 @@ export function Pricing() {
   }, [])
 
   const load = useCallback(async (name: string) => {
+    /* THE TREND STRIP IS THIS RUN'S AND DIES WITH IT (D78). `history` above deliberately
+       survives a run change — a card's sales history is a fact about the CARD — but the strip
+       is a reading over the rows this run still wants an answer for, and which rows those are
+       is a fact about the run. Abandoning the walk is the other half: a chunked read started
+       over the old run would otherwise keep filling the new one's column, one chunk at a
+       time, for the rest of the half-minute. */
+    trendWalk.current += 1
+    setTrends({})
+    setTrendRun(null)
     try {
       const answer = await getPricing(name)
       /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D54). This was
@@ -543,6 +603,19 @@ export function Pricing() {
 
   const rows = useMemo(() => table?.skus ?? [], [table])
 
+  /** What the strip has actually got, for the one line above the list that says so. Counted
+   *  rather than tracked: `trends` IS the record, and a second counter kept in step with it
+   *  would be a second answer to the same question. */
+  const trendTally = useMemo(() => {
+    let read = 0
+    let refused = 0
+    for (const value of Object.values(trends)) {
+      if (value.kind === 'read') read += 1
+      else if (value.kind === 'refused') refused += 1
+    }
+    return { read, refused }
+  }, [trends])
+
   const answerFor = useCallback(
     (sku: PricingSku): unknown =>
       targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : unpriced[sku.sku],
@@ -752,6 +825,126 @@ export function Pricing() {
     },
     [history, run],
   )
+
+  /**
+   * READ THE SHAPE OF EVERY ROW STILL WAITING ON AN ANSWER — one press, D78.
+   *
+   * IT IS A PRESS AND MAY NEVER BECOME AN EFFECT. D62 closed the follow-focus read
+   * structurally because a walk down this list would fire one request per arrow key at a free
+   * public mirror. Batching does not make that cheap — this is ~92 requests, 37.7s cold and
+   * 0.15s warm, measured on `2026-08-31-box3-01` — it makes it ONE DECISION instead of fifty.
+   * Firing this from a `useEffect` on mount would spend that on every visit to this screen for
+   * readings nobody asked for, which is the rudeness D62 named, arriving by the other door.
+   *
+   * IT SKIPS THE ROWS THIS RUN CAN ADD NOTHING FOR, on the owner's instruction of 2026-08-31:
+   * *"I don't need the prices for the rows that have none left."* `at_cap` is the field
+   * `cli/cmd_join.py` writes and the same one those rows are grouped under, so the filter and
+   * the grouping agree by construction rather than by two rules kept in step. They stay
+   * reachable: `T` reads any one of them, which is the right shape for a row an operator has a
+   * reason to be curious about and no reason to be shown.
+   *
+   * CHUNKED, WHICH IS WHY THE STRIP FILLS IN WAVES. One request for 46 SKUs is 37 seconds of
+   * nothing; six requests of eight are six partial answers, and the first arrives in about
+   * five. The server applies its own courtesy delay between live fetches either way, so this
+   * costs the mirrors nothing extra — it is the same walk, reported as it goes.
+   *
+   * SEQUENTIAL AND NOT PARALLEL, DELIBERATELY. `Promise.all` over the chunks would finish in a
+   * sixth of the time by making six sockets race at a host that publishes no rate limit and
+   * asks nothing of us — which is precisely the courtesy `pipeline/pricehistory.py` spends a
+   * constant on. The wall clock is not the thing being optimised; the blank screen is.
+   */
+  const loadTrends = useCallback(() => {
+    if (run === null) return
+    const open = rows.filter((row) => !row.at_cap).map((row) => row.sku)
+    const walk = (trendWalk.current += 1)
+    setTrends(
+      Object.fromEntries(open.map((sku) => [sku, { kind: 'reading' } as TrendRead])),
+    )
+    setTrendRun({
+      run,
+      total: open.length,
+      done: 0,
+      skipped: rows.length - open.length,
+      spans: null,
+      reading: true,
+    })
+
+    const chunks: string[][] = []
+    for (let at = 0; at < open.length; at += TREND_CHUNK) {
+      chunks.push(open.slice(at, at + TREND_CHUNK))
+    }
+
+    const read = async () => {
+      for (const chunk of chunks) {
+        /* THE ABANDON CHECK, BEFORE THE REQUEST AND AGAIN AFTER IT. Before, so a walk the
+           operator has already replaced stops spending requests; after, so a chunk that was
+           in flight when they did cannot write into the strip that replaced it. */
+        if (trendWalk.current !== walk) return
+        try {
+          const payload = await getPriceTrends(run, chunk)
+          if (trendWalk.current !== walk) return
+          setTrends((current) => {
+            const next = { ...current }
+            for (const sku of chunk) {
+              const found = payload.skus[sku]
+              const why = payload.refused[sku]
+              /* EVERY ASKED SKU LANDS SOMEWHERE. The route promises both directions and this
+                 is where that promise is spent: a SKU in neither map would otherwise sit on
+                 `reading…` for the rest of the session, which is the silent drop CLAUDE.md
+                 forbids wearing a spinner. */
+              next[sku] =
+                found !== undefined
+                  ? { kind: 'read', ranges: found.ranges }
+                  : {
+                      kind: 'refused',
+                      why: why ?? 'the batch answered without this SKU and without a reason.',
+                    }
+            }
+            return next
+          })
+          setTrendRun((current) =>
+            current === null || current.run !== run
+              ? current
+              : {
+                  ...current,
+                  done: current.done + chunk.length,
+                  /* THE SPANS COME OFF THE FIRST ANSWER THAT HAS THEM and are not replaced.
+                     Every SKU of a run carries the same two, so a later chunk would rewrite
+                     them with themselves; taking the first keeps the caption still while the
+                     list fills underneath it. */
+                  spans:
+                    current.spans ??
+                    Object.values(payload.skus).find((entry) => entry.ranges.length > 0)
+                      ?.ranges ??
+                    null,
+                },
+          )
+        } catch (error) {
+          if (trendWalk.current !== walk) return
+          /* A DEAD CHUNK IS EIGHT REFUSALS AND NOT A STOPPED WALK. A mirror having a bad
+             minute should cost the rows it was asked about, not the thirty behind them —
+             `describeFailure` carries the server's own sentence where there is one. */
+          const why = describeFailure(error).message
+          setTrends((current) => {
+            const next = { ...current }
+            for (const sku of chunk) next[sku] = { kind: 'refused', why }
+            return next
+          })
+          setTrendRun((current) =>
+            current === null || current.run !== run
+              ? current
+              : { ...current, done: current.done + chunk.length },
+          )
+        }
+      }
+      if (trendWalk.current === walk) {
+        setTrendRun((current) =>
+          current === null || current.run !== run ? current : { ...current, reading: false },
+        )
+      }
+    }
+    void read()
+  }, [rows, run])
 
   /* WHICH ROW THE POINTER IS OVER, AND WHICH ONE A HELD KEY LATCHED. BOTH ARE REFS BECAUSE
      NOTHING DRAWS EITHER. A hovered row in state re-renders a hundred rows on every crossing
@@ -1164,6 +1357,61 @@ export function Pricing() {
         </span>
       </div>
 
+      {/* THE TREND STRIP'S ONE PRESS — D78, and D62's condition discharged.
+          That entry made the history a press per card so a walk down the list could not fire a
+          request per arrow key, and named what would reopen it: the panel wanted on every card,
+          answered by a batched route and a column on the row. This is that press. It is still a
+          press: nothing polls it and no render fires it, because batching makes ~92 requests at
+          a free public mirror ONE DECISION rather than fifty, not cheap. */}
+      <div className="pricing-trendbar">
+        <button
+          type="button"
+          className="pricing-plain"
+          onClick={loadTrends}
+          disabled={run === null || trendRun?.reading === true}
+        >
+          {trendRun === null
+            ? 'Load trends'
+            : trendRun.reading
+              ? `Reading ${trendRun.done} of ${trendRun.total}…`
+              : 'Read again'}
+        </button>
+        <span className="pricing-trendbar-says">
+          {trendRun === null ? (
+            <>
+              A shape and a sign per row, off two public mirrors. Free, about 35s for a box,
+              and it skips the rows this run can add nothing for — <kbd>T</kbd> still reads
+              any one of those. Every figure stays on the panel.
+            </>
+          ) : (
+            <>
+              {/* THE SPANS, STATED ONCE. Each range draws its own because the WIDER one is the
+                  STALER — weekly buckets are stamped at the start of their week, so `annual`
+                  ran six days behind `month` on one card at one moment (D62, measured). A
+                  shared caption would be wrong for one of them, and forty-six copies of two
+                  dates would be the panel drawn badly. */}
+              {(trendRun.spans ?? []).map((range) => (
+                <span key={range.range} className="pricing-trendbar-span">
+                  {RANGE_LABEL[range.range] ?? range.range} {range.from ?? '?'} → {range.to ?? '?'}
+                </span>
+              ))}
+              {/* THE ONE SENTENCE THIS COLUMN OWES A READER, and the reason it is here rather
+                  than on the row: two ranges disagreeing is the ordinary case and not a fault,
+                  and without it a `+54%` beside a `−30%` on one row reads as a broken screen. */}
+              <span>
+                The ranges overlap and are read separately — the wider one includes these same
+                recent days at a coarser width, so they can point opposite ways.
+              </span>
+              <span className="pricing-machine">
+                {trendTally.read} read
+                {trendRun.skipped > 0 ? ` · ${trendRun.skipped} not asked` : ''}
+                {trendTally.refused > 0 ? ` · ${trendTally.refused} refused` : ''}
+              </span>
+            </>
+          )}
+        </span>
+      </div>
+
       {note === null ? null : <p className="pricing-refusal">{note.text}</p>}
 
       {SECTIONS.map((section) => {
@@ -1179,6 +1427,16 @@ export function Pricing() {
 
             <div className="pricing-caption" aria-hidden="true">
               <span>Card</span>
+              {/* ONE LABEL PER RANGE, HERE AND NOT ON THE ROW — the same argument the snap
+                  keys beside it make: the two ranges are the same two on every row, so the
+                  name belongs where the eye already is when reading the column. `RANGE_LABEL`
+                  is `PriceHistory.tsx`'s own table, imported rather than restated, so the
+                  panel and the strip cannot come to call one range two things. */}
+              <span className="pricetrend-keys">
+                {['month', 'annual'].map((range) => (
+                  <span key={range}>{RANGE_LABEL[range] ?? range}</span>
+                ))}
+              </span>
               {SNAPS.map((column) => (
                 <span key={column.key} className="pricing-caption-ref">
                   {column.label} <kbd>{column.key}</kbd>
@@ -1244,6 +1502,13 @@ export function Pricing() {
                         {` · ${sku.set_name} · ${sku.row['Number'] ?? ''} · ${sku.row['Rarity'] ?? ''}`}
                       </span>
                     </div>
+
+                    {/* WHICH OF THESE IS MOVING — the question a list answers and a panel
+                        cannot (D78). A shape and a sign; every figure a reading has stays on
+                        `T`'s panel, where there is room to draw the anchor at size and its
+                        bound muted beneath it. `undefined` draws an empty cell, which is the
+                        honest rendering of a row nobody has asked about. */}
+                    <TrendCell read={trends[sku.sku]} />
 
                     {SNAPS.map((column) => (
                       <span

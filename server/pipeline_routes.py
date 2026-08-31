@@ -1855,6 +1855,170 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     }
 
 
+def _history_spark(series) -> dict:
+    """One range of one SKU, as a ROW draws it. Deliberately not `_history_series`.
+
+    THE LEAN SHAPE IS THE POINT, AND IT IS A DESIGN RULE RATHER THAN A SAVING. D62's panel
+    is where a reading's numbers live — the vwap at display size, its bound muted beneath,
+    liquidity, spread, the export's own figure beside them. A row has space for a shape and
+    one number, so this carries a shape and one number, and a row that wanted more would be
+    the panel drawn badly forty-six times.
+
+    NO MONEY CROSSES THIS FUNCTION AND THAT IS THE SECOND REASON. The row already carries
+    four dollar columns and the field a listing price is typed into; a fifth figure that is
+    a READING rather than a price would sit inches from that field inviting the operator to
+    copy it in, which is the D8 reopening D62 refused in as many words. `fraction` is
+    dimensionless and `points` are drawn to a 44px box and never labelled.
+
+    THE SIZE IS ALSO WHY. `_history_series` carries five fields per bucket; over 46 SKUs and
+    two ranges that is ~19,000 numbers for a strip that draws one of the five.
+    """
+    starts = [b.start for b in series.buckets if b.start is not None]
+    return {
+        "range": series.range,
+        # The span, because the two ranges END ON DIFFERENT DAYS — weekly buckets are stamped
+        # at the start of their week, so `annual` is the STALER of the pair. The row has no
+        # room to caption that and the section's caption states it once, off these.
+        "from": starts[0].isoformat() if starts else None,
+        "to": starts[-1].isoformat() if starts else None,
+        # POSITIVE IS RISING, and the sign survives only because `Series.parse` sorted the
+        # buckets ascending — the endpoint sends them newest-first.
+        "fraction": _money(series.momentum().fraction),
+        # THE SHAPE, AND NOTHING ELSE OFF THE BUCKET. A `null` is a bucket with no price at
+        # all and the client BREAKS the line there rather than interpolating: measured on
+        # Vilemaw's annual, whose oldest bucket predates the card's printing, and joining
+        # through it would draw a year-long slope that never happened.
+        "points": [_money(bucket.market) for bucket in series.buckets],
+    }
+
+
+def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
+    """`GET /pipeline/runs/<name>/trends` — the shape of many SKUs at once, for the row strip.
+
+    D62 NAMED THIS ROUTE AND THE CONDITION FOR BUILDING IT. Its closing paragraph: *"What
+    would reopen this: the panel being opened on every card... the honest answer is a batched
+    route — `readings_for_rows` already exists in the module and groups by productId — and a
+    column on the row rather than a panel beside it. The measurement is whether the operator
+    presses `T` more often than they press `H`."* The owner answered that measurement on
+    2026-08-31 by asking for the graphs on every row. This is the route that entry specified,
+    built to the shape it specified, and D78 records what the answer cost.
+
+    IT IS STILL A PRESS AND THAT IS THE WHOLE OF D62 THAT SURVIVES INTACT. Nothing polls
+    this and no render fires it: a screen that read it on mount would turn every visit to
+    `#/pricing` into ~92 requests at a free public mirror for readings nobody asked for,
+    which is the one way D62 said this feature could become rude. What changed is the
+    GRANULARITY of the press — one for the list instead of one per card — and not whether
+    there is one.
+
+    IT SKIPS THE ROWS THIS RUN CAN ADD NOTHING FOR, on the owner's instruction of the same
+    day: *"I don't need the prices for the rows that have none left."* `at_cap` is the field
+    `cli/cmd_join.py` already writes and the same one the list groups those rows under, so
+    the two agree by construction rather than by two definitions kept in step. Measured on
+    `2026-08-31-box3-01`: 60 SKUs, 14 at the cap, so 46 asked and 28 requests not made.
+    **They are not unreachable** — `T` still reads any one of them, which is the right shape
+    for a row the operator has a reason to be curious about and no reason to be shown.
+
+    AN EXPLICIT `?sku=` LIST OVERRIDES THAT FILTER, AND IT IS WHAT MAKES THE ROUTE
+    PROGRESSIVE. 46 SKUs is ~34s of courtesy delay and the client walks them in chunks so the
+    strip fills in waves rather than after a blank half-minute — see `app/src/Pricing.tsx`.
+    A named SKU is fetched whatever its `at_cap`, because a caller naming a row has already
+    decided; the filter is a default over the run, not a rule about SKUs.
+
+    BOTH DIRECTIONS, WHICH IS `CLAUDE.md`'s HARD RULE. Every asked SKU comes back in exactly
+    one of `skus` or `refused`, never dropped — `readings_for_rows` makes the same promise one
+    layer down and this route keeps it across the two filters it applies on top: a SKU that is
+    not in this run's table and one whose product line has no catalogue (D22) are named with
+    the reason rather than silently absent.
+    """
+    directory = _open_run(name)
+    table = directory / run_files.PRICING
+    if not table.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_not_written",
+            f"Run {directory.name} has no {run_files.PRICING} — `join` is what writes it, "
+            f"and a price history is read off the export rows it stores. Join this run.",
+        )
+    try:
+        payload = json.loads(table.read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "pricing_unreadable",
+            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+        ) from None
+
+    entries = {
+        str(entry.get("sku") or ""): entry
+        for entry in (payload.get("skus") or ())
+        if str(entry.get("sku") or "")
+    }
+    wanted = [s for s in (str(x).strip() for x in skus) if s]
+
+    refused: Dict[str, str] = {}
+    skipped = 0
+    rows: List[dict] = []
+    for sku in wanted or list(entries):
+        entry = entries.get(sku)
+        if entry is None:
+            # ONLY REACHABLE THROUGH AN EXPLICIT `?sku=`, since the unfiltered walk is over
+            # this table's own keys. Named rather than dropped: a client asking about a SKU
+            # this run never matched has a stale list, and silence would look like a mirror
+            # that had nothing to say about a real card.
+            refused[sku] = (
+                f"Run {directory.name} matched no SKU {sku}. A history is read off the "
+                f"export row this run stored."
+            )
+            continue
+        if not wanted and entry.get("at_cap"):
+            # THE DEFAULT SKIP, AND IT IS COUNTED RATHER THAN HIDDEN. A screen that showed 46
+            # readings over a 60-row list with no number beside them would look like 14 rows
+            # had failed. This is what lets it say they were never asked about.
+            skipped += 1
+            continue
+        row = entry.get("row") or {}
+        if not pricehistory.catalogued_row(row):
+            # D22 MAKES THIS PERMANENT RATHER THAN A GAP. `misc` carries no product line, so
+            # there is no category to look a history up by — a refusal with its own sentence,
+            # not an empty reading.
+            refused[sku] = (
+                f"{entry.get('name') or sku} is not in a catalogued product line, so there "
+                f"is no product to look a history up by (D22)."
+            )
+            continue
+        rows.append(row)
+
+    market = pricehistory.Market(cache_dir=market_cache_dir())
+    # THE WALK ITSELF NEVER RAISES PAST HERE. `readings_for_rows` catches every
+    # `PriceHistoryError` per product and answers refusals alongside readings, which is the
+    # right shape for a batch: one unresolvable card must not cost the other forty-five their
+    # reading, and a mirror having a bad day is reported per SKU rather than as one 502 that
+    # says nothing about which rows were affected.
+    readings, walked = market.readings_for_rows(rows)
+    refused.update(walked)
+
+    return {
+        "run": directory.name,
+        "asked": len(rows),
+        "skipped": skipped,
+        "skus": {
+            sku: {
+                "product_id": reading.product_id,
+                # ONE ENTRY PER RANGE, IN `DEFAULT_RANGES` ORDER — finest first, the same
+                # order the panel draws and the same list. The ranges OVERLAP and are never
+                # two halves to add up.
+                "ranges": [
+                    _history_spark(reading.series[r])
+                    for r in pricehistory.DEFAULT_RANGES
+                    if r in reading.series
+                ],
+            }
+            for sku, reading in readings.items()
+        },
+        "refused": refused,
+    }
+
+
 def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:
     """`GET /pipeline/runs/<name>/file?name=<f>` — one artefact's bytes, for download.
 

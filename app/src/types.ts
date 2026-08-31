@@ -1396,6 +1396,46 @@ export type PriceHistoryPayload = {
   never_sold: boolean
 }
 
+/** ONE RANGE OF ONE SKU AS A ROW DRAWS IT — a shape and a sign, and deliberately no money.
+ *
+ *  IT IS NOT A SMALLER `HistoryRange` AND MUST NOT GROW INTO ONE. D62's panel is where a
+ *  reading's figures live; D78 gives the row a strip and gives it exactly what a 90px cell
+ *  can carry honestly. The row already has four dollar columns and the field a listing price
+ *  is typed into, so a fifth figure — a READING rather than a price — would sit inches from
+ *  that field inviting a copy across, which is the D8 reopening D62 refused by name. Anything
+ *  added here that is denominated in dollars is that refusal being spent.
+ *
+ *  `points` IS ASCENDING and `null` MEANS NO PRICE AT ALL. The client BREAKS the line at a
+ *  null rather than interpolating: measured on Vilemaw's annual, whose oldest buckets predate
+ *  the card's printing — 21 of 52 on the run this was built against — and joining through
+ *  them would draw a year-long slope that never happened. */
+export type TrendRange = {
+  range: string
+  /** The span these buckets cover. Identical across every SKU of a run — measured, all 46 on
+   *  `2026-08-31-box3-01`, both ranges — which is why the SECTION captions it once and the
+   *  row does not. A row has no width to say when a range ends and forty-six copies of one
+   *  date would be the panel drawn badly. */
+  from: string | null
+  to: string | null
+  /** POSITIVE IS RISING. Dimensionless, which is what makes it safe on this row. */
+  fraction: string | null
+  points: (string | null)[]
+}
+
+/** Many SKUs' shapes in one read — D78, the batched half of D62.
+ *
+ *  BOTH DIRECTIONS, WHICH IS `CLAUDE.md`'s HARD RULE AND VISIBLE IN THIS TYPE. Every SKU the
+ *  route was asked about comes back in `skus` or in `refused`, never absent, and `skipped`
+ *  counts the rows it was never asked about — the ones this run can add nothing for. Without
+ *  that count a strip drawn over 46 of 60 rows reads as fourteen failures. */
+export type TrendsPayload = {
+  run: string
+  asked: number
+  skipped: number
+  skus: Record<string, { product_id: number; ranges: TrendRange[] }>
+  refused: Record<string, string>
+}
+
 export type PricingSku = {
   sku: string
   game: string

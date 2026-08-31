@@ -1253,7 +1253,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D78"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1343,7 +1343,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19", "D76"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D62", "D64", "D65", "D68", "D76", "D78"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1629,11 +1629,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73", "D76"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D78"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D39", "D76"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D78"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2086,7 +2086,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -2096,7 +2096,7 @@ COMPONENTS = [
                                         "does. NO SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
                                         "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62"]},
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -2118,7 +2118,7 @@ COMPONENTS = [
                                              "FOR NOTHING — only the press does. The footer is "
                                              "the only place the two differ on screen — Close "
                                              "against Keep open.",
-                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62"],
+                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62", "D78"],
                                      "note": "IT PRICES NOTHING AND WRITES NOTHING. The two "
                                              "ranges OVERLAP and are drawn side by side with a "
                                              "sentence saying so — measured on Vilemaw the day it "
@@ -2137,6 +2137,45 @@ COMPONENTS = [
                                             "sizes, and is the property to preserve if this is "
                                             "ever re-laid-out.",
                                      "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
+            # D78 is the batched half of D62, and D62 is why this file is separate from
+            # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
+            # has and the strip draws a shape and a sign, which are two answers to two
+            # questions. D8 governs it for PriceHistory.tsx's reason, and harder — a reading
+            # drawn one column from the field a listing price is typed into is one keystroke
+            # from becoming a price, which is why no figure here is denominated in money.
+            "src/PriceTrend.tsx": {"does": "the trend strip in a #/pricing row: a daily and a "
+                                           "weekly sparkline with a signed percentage under "
+                                           "each, in a real 168px column between the card and "
+                                           "MARKET. It answers the question a LIST can answer "
+                                           "and a panel cannot — which of these forty-six is "
+                                           "moving — and every figure a reading carries stays on "
+                                           "T's panel. NO MONEY ON THE ROW: the vwap, its bound, "
+                                           "the liquidity and the spread are all one column from "
+                                           "the price field, and the distance between reading "
+                                           "one and copying it across is a keystroke. An empty "
+                                           "cell is the honest drawing of a row nobody asked "
+                                           "about, which is every at-cap row and every row "
+                                           "before the press.",
+                                   "governed_by": ["D5", "D8", "D9", "D22", "D28", "D49", "D50", "D62", "D78"],
+                                   "note": "THE SPARK GEOMETRY IS IMPORTED FROM PriceHistory.tsx "
+                                           "RATHER THAN COPIED, because the rule a copy would "
+                                           "lose is the subtle one: a bucket with no price "
+                                           "BREAKS the line instead of interpolating across it — "
+                                           "21 of 52 annual buckets on the run this was built "
+                                           "against are a card that had not been printed yet, "
+                                           "and joining through them draws a year-long slope "
+                                           "that never happened."},
+            "src/PriceTrend.css": {"does": "that strip at owner density. It spans BOTH grid rows "
+                                           "the way .pricing-id does, so 45px carries a 20px "
+                                           "shape and a 10px sign without touching the invariant "
+                                           "row height D28 depends on. The percentage sits at "
+                                           "the row's own metadata register and is tabular, so a "
+                                           "column of forty-six lines up on the decimal. "
+                                           "DIRECTION IS A SIGN AND NEVER A COLOR (D62): on a "
+                                           "list a coloured percentage would be the loudest "
+                                           "thing on screen, over the least authoritative thing "
+                                           "on it.",
+                                   "governed_by": ["D5", "D28", "D41", "D50", "D62", "D78"]},
             "src/cardNumber.ts": {
                 "does": "ONE COMPOSER OF THE COLLECTOR NUMBER FOR EVERY SCREEN THAT DRAWS ONE "
                         "(D67). There were three, one per screen, and no two the same: the "
@@ -2555,7 +2594,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
