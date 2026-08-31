@@ -243,28 +243,42 @@ export type HistoryRead =
   | { kind: 'read'; payload: PriceHistoryPayload }
   | { kind: 'refused'; why: string }
 
+/**
+ * TWO WAYS IN, AND THE PANEL IS TOLD WHICH ONE IT IS.
+ *
+ * `pinned` is the deliberate open — the `T` button's click, or this panel's own Keep — and it
+ * stands until something closes it. Unpinned is a HELD `t` aimed by the pointer, and it ends
+ * on the release. `Pricing.tsx` owns both states and the gesture; what is here is the one
+ * difference a reader can see, which is the footer: a pin offers the press that ends it, a
+ * held peek offers the press that stops it ending.
+ */
 export function PriceHistoryPanel({
   sku,
   name,
   read,
+  pinned,
   onClose,
+  onKeep,
   onRetry,
 }: {
   sku: string
   name: string
   read: HistoryRead | undefined
+  pinned: boolean
   onClose: () => void
+  onKeep: () => void
   onRetry: () => void
 }) {
   return (
     <aside className="pricehistory" aria-label={`Price history for ${name}`}>
       <header className="pricehistory-head">
         <h3>{name}</h3>
-        {/* PINNED, AND THE PANEL SAYS SO. It does not follow the focused row the way the
+        {/* AIMED, AND THE PANEL SAYS AT WHAT. It does not follow the focused row the way the
             photograph beside it does, because a read is a request to two public mirrors and a
             follow-focus panel would fire one per arrow key. The SKU is printed so that a
             panel left open while the hands move down the list cannot be mistaken for a
-            reading of whatever row is focused now. */}
+            reading of whatever row is focused now — the pinned case, and equally the held one,
+            where the row named is the one the pointer was over when the key went down. */}
         <p className="pricehistory-machine">sku {sku}</p>
       </header>
 
@@ -315,10 +329,20 @@ export function PriceHistoryPanel({
         </>
       )}
 
+      {/* THE FOOTER IS WHERE THE TWO OPENINGS DIFFER, and it is the only place they do.
+          A pin ends on a press, so it offers that press. A held peek ends on the release,
+          which is the whole point of it and needs no button — so what it offers instead is
+          the way to STOP it ending, reachable because the other hand is still on the mouse. */}
       <div className="pricehistory-controls">
-        <button type="button" className="pricing-plain" onClick={onClose}>
-          Close
-        </button>
+        {pinned ? (
+          <button type="button" className="pricing-plain" onClick={onClose}>
+            Close
+          </button>
+        ) : (
+          <button type="button" className="pricing-plain" onClick={onKeep}>
+            Keep open
+          </button>
+        )}
       </div>
     </aside>
   )
