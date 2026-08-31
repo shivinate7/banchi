@@ -1297,12 +1297,20 @@ COMPONENTS = [
                         "anything is joined, guarded by a per-run coverage delta rather than "
                         "by inspecting the file (completeness cannot be read off an export "
                         "— three filters narrow it and one leaves no trace), and deleting "
-                        "what it wrote on every refusal.",
+                        "what it wrote on every refusal. GET .../pricing RE-RENDERS every "
+                        "stored position label against the live store before it answers and "
+                        "serves the one join froze into pricing.json never (D58, on D56's "
+                        "rule) — measured at 142 of 146 stored labels wrong on the owner's "
+                        "two joined runs. It goes through cli/resolve.py:box_views rather "
+                        "than capture_server._Places because capture_server imports THIS "
+                        "module, and the file on disk is not touched.",
                 # D1 is the two-phase split, which is why join/emit/reconcile can answer in
                 # the request and identify cannot. D9 is the decisions gate. D13 is one truth
                 # on one Mac, which is what a detached child outliving this process rests on.
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D43", "D47", "D48", "D49", "D54", "D56", "D64", "D65", "D19"],
+                # D58 is the pricing route's label re-render — the stored rendering is
+                # never served, which that entry's own amendment records at this site.
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -2476,7 +2484,7 @@ COMPONENTS = [
                                               "draws no solid accent fill at all. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

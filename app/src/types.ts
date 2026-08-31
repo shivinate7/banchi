@@ -1461,8 +1461,22 @@ export type PricingSku = {
   /** Every copy, in box-walk order. The FIRST is the representative photograph and the
    *  screen names which one it is drawing — there is no quality signal worth trusting, and
    *  confidence is the tempting one and exactly wrong (T1's misses are confident answers
-   *  with the digits wrong), so an arbitrary pick made steppable is the honest version. */
-  positions: { box: number; index: number; label: string }[]
+   *  with the digits wrong), so an arbitrary pick made steppable is the honest version.
+   *
+   *  `box` and `index` ARE THE STORE KEY AND `label` IS A RENDERING OF IT, which is the same
+   *  split `Place` states two hundred lines up. The key is what `cli/cmd_join.py` wrote into
+   *  `pricing.json` and what `photoUrl` addresses; the label is composed FRESH on every read
+   *  by `server/pipeline_routes.py:_relabel_positions` and the one frozen into the file is
+   *  never served (D58, on D56's rule) — so a copy that sold after the join reads
+   *  `Box 3 · departed · 3/17` and a divider moved since reads against the layout that is in
+   *  the box today.
+   *
+   *  `null` FOR A LABEL THE SERVER WILL NOT COMPOSE, exactly as `Place.label` is: the box's
+   *  walk degraded, or no located record names that box any more. It is not the pooled case
+   *  — a pooled copy carries `place_text`'s own string here rather than a gap (D24). What a
+   *  caller draws instead is the caller's decision, and `#/pricing` follows `BoxBrowse`'s
+   *  `no label · <key>`. */
+  positions: { box: number; index: number; label: string | null }[]
   listing: { pushed: number; staged: number; live: number } | null
 }
 

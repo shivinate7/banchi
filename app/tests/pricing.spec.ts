@@ -704,6 +704,55 @@ test('the photo is on demand, names which copy it is, and the same key closes it
   await expect(page.locator('.pricing-photo')).toHaveCount(0)
 })
 
+test('the caption draws the label the server composed on THIS read, including where it composed none', async ({
+  page,
+}) => {
+  /* THE LABEL IS RE-RENDERED SERVER-SIDE ON EVERY READ AND THE ONE IN `pricing.json` IS NEVER
+     SERVED (D58, on D56's rule) — `server/pipeline_routes.py:_relabel_positions`. So this panel
+     receives strings that DID NOT EXIST when the run was joined, and the two it must be able to
+     draw are the two a stored label cannot produce: a copy that left the box afterwards, and a
+     position the server would not name at all.
+
+     IT MATTERS MORE HERE THAN WHERE THE SAME STRINGS ARE DRAWN LARGER, because `photoUrl`
+     addresses the photograph BY SLOT. The picture above the caption has always been the index's
+     current occupant; until the re-render landed the caption was the join's, so the two named
+     different cards and nothing on the screen said which was which. */
+  await open(page, {
+    skus: [
+      sku({
+        positions: [
+          { box: 7, index: 1, label: 'Box 7 · departed · 7/1' },
+          { box: 7, index: 2, label: null },
+          { box: 7, index: 3, label: 'Box 7 · Section 1 · Card 1' },
+        ],
+      }),
+    ],
+  })
+
+  await field(page).focus()
+  await page.keyboard.press('p')
+
+  /* WHOLE, AND THE TRAILING KEY IS THE POINT (D68). Two sold copies of one SKU in one box drew
+     the identical string before that entry, which is exactly the case this strip steps through.
+     `PositionLabel` would promote a bare trailing number to a 44px slot figure — the lie D58
+     refuses — and `7/1` is what fails that guard; this caption is plain text and must not start
+     parsing the string either. */
+  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · departed · 7/1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
+
+  /* `no label · <key>` IS `BoxBrowse`'s OWN FALLBACK, one vocabulary with it and for its reason:
+     the server answers null where it will not name a place — a box its walk could not count, or
+     one no located record names any more — and `7/2` bare reads like a position and is not one.
+     Drawing nothing here would leave a dangling separator in front of `2 of 3`, which reads as a
+     fault rather than as an answer. */
+  await page.getByRole('button', { name: 'Next copy' }).click()
+  await expect(page.locator('.pricing-photo-caption')).toContainText('no label · 7/2')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('2 of 3')
+
+  await page.getByRole('button', { name: 'Next copy' }).click()
+  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · Section 1 · Card 1')
+})
+
 // ------------------------------------------------------------ the design rules
 
 test('the screen draws no solid accent fill anywhere', async ({ page }) => {

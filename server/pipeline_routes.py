@@ -111,7 +111,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import games as game_registry, tcgcsv  # noqa: E402
+from pipeline import games as game_registry, join, tcgcsv  # noqa: E402
 from server import tcg_export  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
@@ -1426,6 +1426,107 @@ def _remembered_sub_threshold(directory: Path) -> Optional[dict]:
     return None
 
 
+def _position_label(
+    views: Dict[int, join.BoxView],
+    inventory: Optional[master.Inventory],
+    box,
+    index,
+) -> Optional[str]:
+    """Where the copy stored at `box/index` is RIGHT NOW, or None where that cannot be said.
+
+    THE POOLED BRANCH COMES BEFORE THE VIEW LOOKUP, exactly as `capture_server._Places.of`
+    orders it and for its reason: a pooled card borrows nothing from the box, and
+    `cli/resolve.py:box_views` skips pooled records by ruling (D24) — so a box holding only
+    code cards has no view at all, and asking for one first would answer null for a card
+    whose place is perfectly well known to be no place.
+
+    A BOX WITH NO VIEW ANSWERS None, NEVER AN INDEX-SPACE LABEL. `box_views` returns `{}`
+    when a record's position will not coerce — its own store-wide degrade — and omits a box
+    no located record names, which is a box deleted out from under this run. A bare
+    `join.BoxView()` would render both of those as `Box N · Section N · Card M` in the
+    numbering D58 replaced, silently, on a screen already drawing the other one. `_Places`
+    calls that "no honest label" and answers null; this answers null with it.
+    """
+    if inventory is None:
+        return None
+    try:
+        number, at = int(box), int(index)
+    except (TypeError, ValueError):
+        return None
+    card = inventory.cards.get(master.position_key(number, at))
+    game = str(getattr(card, "game", None) or game_registry.DEFAULT_GAME)
+    if not join.is_located(game):
+        return join.place_text(game, join.BoxView().at(number, at))
+    view = views.get(number)
+    if view is None:
+        return None
+    return join.place_text(game, view.at(number, at))
+
+
+def _relabel_positions(table) -> None:
+    """Re-render every position label in a parsed `pricing.json`, in place. The file is not touched.
+
+    THE STORED LABEL IS NEVER SERVED (D58, on D56's rule), and this is the third surface to
+    say so. `cli/cmd_join.py:_pricing_table` writes `{"box", "index", "label"}` per matched
+    SKU at join time and `cli/runs.py` makes a run an immutable input — so that label is a
+    snapshot of a rendering, and every rule that moves a rendering leaves it behind. Two
+    already have, and both were live here:
+
+      a copy that sold or retired after the join went on drawing `Box N · Section N · Card M`
+      at a slot whose occupant closed up behind it, which is the exact claim D58 refuses;
+
+      a divider layout edited after the join left the label describing a sectioning that is
+      no longer in the plastic, which is the failure D58 MEASURED at 15 of 92 entries on the
+      review queue the day it landed.
+
+    IT IS THE PHOTO CAPTION, WHICH IS WHY IT MATTERS MORE THAN ITS TYPOGRAPHY SUGGESTS.
+    `app/src/Pricing.tsx` draws this string under the copy's photograph beside `2 of 3`, and
+    `photoUrl` addresses that photograph BY SLOT — so the picture was always the current
+    occupant of the index while the caption was the join's. Re-rendering here is what makes
+    the caption describe the photograph above it rather than a different moment of it.
+
+    THE LABEL ONLY, AND NOTHING IS WRITTEN BACK — D58's own posture for the queue, for its
+    reason: nothing already on disk moves, no re-join is needed, and every run already
+    written is corrected the next time a screen opens it. `box` and `index` travel exactly as
+    stored, because they are the store key `photoUrl` is aimed by and the key
+    `cli/resolve.py:paperwork_for` realigns (D36); this composes a string and re-binds
+    nothing.
+
+    `cli/resolve.py:box_views` RATHER THAN `capture_server._Places`, AND THE CHOICE IS
+    FORCED: `capture_server` imports this module, so the reverse import is the cycle
+    `PipelineRefusal` exists to avoid. It is not a second renderer — it is the OTHER
+    implementation of D58's walk, the one every report in `cli/resolve.py` renders through,
+    and T7 already asserts the two agree on a real card.
+
+    `place_text` RATHER THAN `Position.label`, WHICH FIXES A POOLED BUG ON ITS WAY PAST.
+    `pokemon_code` is `located: False` AND `catalogued: True` (D24), so its cards do reach a
+    join and did land in this table wearing `Box N · Section N · Card M` — the one string the
+    pooled ruling says may never be printed for them. `place_text` answers the pooled fact
+    with the store key beside it, which is also what keeps two copies of one SKU from drawing
+    the identical caption in a strip whose whole job is stepping between them (D68).
+    """
+    if not isinstance(table, dict):
+        return
+    try:
+        inventory = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError):
+        # THE PRICING SCREEN DOES NOT GO DOWN WITH THE STORE, and that is a property this
+        # route had for free until it started reading one. Its table comes off the run
+        # directory; the store is consulted only to compose a caption. So an unreadable
+        # inventory costs the captions and nothing else — the same call the handler below
+        # makes for a malformed `decisions.json`, degrading the way `_Places` does: null,
+        # never the stored string and never a guess.
+        inventory = None
+    views = {} if inventory is None else run_resolve.box_views(inventory)
+    for entry in table.get("skus") or ():
+        if not isinstance(entry, dict):
+            continue
+        for at in entry.get("positions") or ():
+            if not isinstance(at, dict):
+                continue
+            at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"))
+
+
 def do_pipeline_pricing(name: str) -> dict:
     """`GET /pipeline/runs/<name>/pricing` — the per-SKU table and this run's answers.
 
@@ -1434,6 +1535,14 @@ def do_pipeline_pricing(name: str) -> dict:
     `pipeline/pricing.py`, which is the only place in this repo allowed to. This route is a
     reader, and `app/src/server.ts` already records that the app may not compute rules the
     pipeline owns — that rule reaches the server that feeds it.
+
+    IT DOES COMPOSE ONE THING, AND IT IS NOT A PRICE. Every position label in the table is
+    re-rendered against the live store before it goes out and the stored one is never served
+    — D58 on D56's rule, the same treatment `capture_server._queue_row` gives the review
+    queue, argued at `_relabel_positions`. So this handler now reads the store as well as the
+    run directory, and it reads it LOCK-FREE like `do_queues`: a screen must not serialise
+    behind a running `./pkmnscan join`. A store it cannot read costs the captions and not the
+    table.
 
     IT ALSO ANSWERS WHEN THE TABLE WAS WRITTEN, which is what lets a screen say how stale a
     market price is — see `written_at` below for why that is a file mtime and what it does not
@@ -1466,6 +1575,10 @@ def do_pipeline_pricing(name: str) -> dict:
             "pricing_unreadable",
             f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
         ) from None
+    # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
+    # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
+    # `QueueEntry.label`.
+    _relabel_positions(pricing)
     answers = None
     if decisions_path.is_file():
         try:
