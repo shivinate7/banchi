@@ -19,7 +19,12 @@ import { settleFonts } from './fontsReady'
  * walks what each route actually renders and classifies by tag, type and disabled state. A
  * pinned roster goes green on any later change that moves the defect somewhere else — and a
  * button added next month would simply not be in the list, which is the one failure a guard
- * written after a 41-defect sweep exists to prevent. What this costs is that a control which does not render in
+ * written after a 41-defect sweep exists to prevent.
+ *
+ * AND THAT HAS TO HOLD FOR THE ROUTES, WHICH IT DID NOT UNTIL 2026-08-31. This paragraph was
+ * written about controls, and four lines under it sat a hand-typed list of seven route hashes
+ * that three later screens never reached. The block above `routesFromNav` tells it in full;
+ * what belongs here is that the sentence was always meant to cover both. What this costs is that a control which does not render in
  * this worktree's empty store is not checked; what it buys is that a NEW control cannot be
  * missed. The floor below is what stops that trade going bad silently.
  *
@@ -34,28 +39,61 @@ import { settleFonts } from './fontsReady'
  * at the Stop hook; this starts a browser. `make design-check` runs it.
  */
 
-/* EACH ROUTE WITH THE VIEW IT MUST DRAW, because a control COUNT is the wrong instrument and
- * this file tried it first. The floor was three controls per route, on the reasoning that a
- * route drawing nothing has crashed — and `#/fulfillment` against an empty store legitimately
- * draws one, so the guard failed on a route that was working perfectly. Emptiness and breakage
- * are different facts and a count cannot tell them apart.
+/* THE ROSTER IS DERIVED FROM `App.tsx`'S OWN TABLE, AND UNTIL 2026-08-31 IT WAS PINNED HERE —
+ * which is the failure the header above spends a paragraph warning about, committed in this
+ * file, four lines under the warning. Seven hashes were typed out by hand on 2026-08-30; D69
+ * added `#/orders` and `#/shipping` the same day and D70 added `#/codes`, and none of the
+ * three was added here. Three whole screens were swept by nothing, `make design-check` was
+ * green through all of them, and the defect the sweep found the moment they were included was
+ * the exact class D50 was written for — a disabled control still saying something other than
+ * `not-allowed`. A pinned roster does not go stale loudly; it goes green.
  *
- * `App.tsx` renders `main.no-such-view` for a hash it does not recognise, so asserting the
- * view is the check the count was reaching for: it catches an unregistered route, a renamed
- * hash and a crashed screen, and it stays quiet about a store with nothing in it. It is also
- * this repo's own lesson rather than a new idea — `app/tests/fulfillment.spec.ts` asserts its
- * view before measuring anything, precisely because 7b once shipped with three screens missing
- * from the route table and produced 16 confident measurements of whatever Vite served. */
-const ROUTES: [hash: string, view: string][] = [
-  ['#/', 'main.capture'],
-  ['#/runs', 'main.runs'],
-  ['#/review', 'main.review'],
-  ['#/inventory', 'main.inventory'],
-  ['#/pricing', 'main.pricing'],
-  ['#/fulfillment', 'main.fulfillment'],
-  ['#/gallery', 'main.gallery'],
-]
+ * SO THE HASHES COME OFF THE NAV, WHICH IS `ROUTES` RENDERED. `App.tsx` builds that strip by
+ * mapping the same table it routes from — one table, deliberately, so the chrome and the
+ * render cannot disagree — so every registered route has a link in it and a route added next
+ * month arrives here with no edit to this file. That is the same claim the sweep makes about
+ * controls, applied one level up: discover them, never be handed them.
+ *
+ * WHAT IS ASSERTED PER ROUTE IS THE ARRIVAL, not a per-route selector, because a selector list
+ * is the roster again in a second column. `App.tsx` renders `main.no-such-view` for a hash it
+ * does not recognise, so its ABSENCE says the route resolved, and a visible `<main>` says the
+ * screen drew. Between them they catch an unregistered route, a renamed hash and a crashed
+ * screen — everything the old view column caught — and they stay quiet about a store with
+ * nothing in it. That last part is why a control COUNT is not the instrument, and this file
+ * tried a count first: the floor was three controls per route, on the reasoning that a route
+ * drawing nothing has crashed, and `#/fulfillment` against an empty store legitimately draws
+ * one. Emptiness and breakage are different facts and a count cannot tell them apart.
+ *
+ * EVERY ROUTE DRAWS A `<main>`, which is a real rule of this app and not a convenience for
+ * this test. It was true of nine screens and false of `#/codes`, which rooted itself in a
+ * `<div>` — so that route had no main landmark at all while the nav was on screen, and a
+ * screen reader offered no way past the links. `Codes.tsx` is a `<main>` now. Asserting the
+ * rule rather than exempting the exception is the same choice the disabled arm makes below.
+ *
+ * `#/fulfillment` IS REACHED BY THE HARVEST AND DRAWS NO NAV ITSELF, which is fine and worth
+ * saying: the strip is read once, on `#/`, and his route is in the owner's table like every
+ * other. Nothing here renders his chrome or asserts one of his floors — see the header. */
+async function routesFromNav(page: import('@playwright/test').Page): Promise<string[]> {
+  await page.goto('/#/')
+  await settleFonts(page)
+  await expect(page.locator('main.capture'), 'the capture screen is the way in').toBeVisible()
 
+  const hashes = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('nav.app-nav a.app-nav-link')).map(
+      (a) => a.getAttribute('href') ?? '',
+    ),
+  )
+
+  /* THE HARVEST IS GUARDED, because a selector that matches nothing would turn this whole
+     sweep into a loop over an empty list — green, instantly, forever. That is a test that
+     cannot fail, which this file's own synthetic case exists to say is not coverage. A FLOOR
+     rather than a count: it fails loudly when the nav stops rendering or is renamed, and it
+     cannot go stale in the direction that matters, since a route ADDED still gets swept. */
+  expect(hashes.length, 'the nav rendered no links — is `nav.app-nav a.app-nav-link` still it?')
+    .toBeGreaterThan(3)
+  expect(hashes, 'the capture screen must be in the strip the roster is read from').toContain('#/')
+  return hashes
+}
 
 type Found = {
   kind: 'click' | 'text' | 'skip'
@@ -134,14 +172,22 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
   const wrong: string[] = []
   let total = 0
 
-  for (const [route, view] of ROUTES) {
+  for (const route of await routesFromNav(page)) {
     await page.goto(`/${route}`)
     await settleFonts(page)
     await page.waitForLoadState('networkidle').catch(() => {})
+    /* THE ORDER OF THESE TWO IS NOT ARBITRARY. `toHaveCount(0)` is satisfied by an element
+       that has not rendered YET, so asking it first would pass vacuously on a slow mount and
+       then be satisfied a second time by `main.no-such-view` itself, which is a `<main>`. So
+       wait for the screen to draw, and only then ask which screen it was. */
     await expect(
-      page.locator(view),
-      `no ${view} at ${route} — is the route still registered in App.tsx?`,
+      page.locator('main').first(),
+      `${route} drew no <main> — a crashed screen, or a screen that rooted itself in a <div>`,
     ).toBeVisible()
+    await expect(
+      page.locator('main.no-such-view'),
+      `${route} is drawn in the nav but resolves to nothing — is the row still in App.tsx's ROUTES?`,
+    ).toHaveCount(0)
 
     const found = await sweep(page)
     total += found.length
@@ -171,10 +217,19 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
      screens draw their typed-into controls only once there is something to type against, so
      against this worktree's own empty store (D43) `#/inventory` renders no search field and
      `#/` renders no Box field — both first attempts failed on ABSENCE rather than on colour,
-     which is a test reporting a defect that is not there. Probed across all seven routes, the
-     gallery is the only one drawing a `--field` edge at all, which is exactly what that route
-     is for: it renders components against the tokens without needing a store behind them, and
-     it is already what `make screenshot` and step 6's own spec point at. */
+     which is a test reporting a defect that is not there. The gallery is what a route for this
+     is: it renders components against the tokens without needing a store behind them, and it is
+     already what `make screenshot` and step 6's own spec point at.
+
+     RE-PROBED ACROSS ALL TEN ROUTES ON 2026-08-31, and the sentence that stood here has been
+     rewritten rather than renumbered. It said "probed across all seven routes, the gallery is
+     the only one drawing a `--field` edge at all" — the seven were the pinned roster this file
+     no longer keeps, and the claim is no longer true either: `#/codes` (D70) draws that edge on
+     a bare `input` AND on a bare `button`, which is a token question for D50 rather than a
+     cursor one and is left alone here. What is still true, and is what this case actually
+     needs, is that the gallery is the only route drawing a `.search-field-box` against an empty
+     store. That is the measurement; the count of routes it was taken over is not load-bearing
+     and is stated only so the next person knows what was walked. */
   await page.goto('/#/gallery')
   await settleFonts(page)
   await expect(page.locator('main.gallery')).toBeVisible()
