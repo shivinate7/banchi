@@ -1368,12 +1368,185 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     scan(docs, in_docs)
     in_code: List[Finding] = []
     scan(python_files(), in_code)
+    # THE APP WAS NOT SCANNED AT ALL UNTIL 2026-08-30 (D72). `python_files()` is every `.py`
+    # in the tree, and the row below said "citations in .py all resolve" — accurately, and
+    # over half the citations. `app/` holds hundreds more in `.ts`, `.tsx` and `.css`
+    # comments, and a dangling id in one of them resolved to nothing and was reported by
+    # nothing. Same severity as the Python row and for the same reason: `D2` could plausibly
+    # be a variable, and a false positive that blocks a commit is worse than a printed line.
+    scan(_walk(ROOT, (".ts", ".tsx", ".css")), in_code)
 
     report.add("decision ids", MECHANICAL, in_docs, f"{len(singles)} D + {len(codes)} C headings")
     # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
     # positive that blocks a commit is worse than one that prints a line.
-    report.add("decision ids in code", ADVISORY, in_code, "citations in .py all resolve")
+    report.add("decision ids in code", ADVISORY, in_code, "citations in .py, .ts, .tsx and .css all resolve")
 
+
+# ------------------------------------------------------- a renumbered entry takes its citations
+
+# WHAT THIS CATCHES IS THE ONE THING AN EXISTENCE CHECK STRUCTURALLY CANNOT (D72). Every
+# other decision row above asks whether a cited id EXISTS. A renumber breaks none of them:
+# the branch's entry moves from D67 to D69, the citations stay on D67, and D67 still names
+# a real heading — a DIFFERENT one. `check_decision_ids` says the same about a duplicate id
+# in its own comment: "the citation is then not wrong in a way anything can see — it points
+# at a real heading, just not the intended one." This is that sentence's other half.
+#
+# It happened. `docs/map.py` cited D67 in 24 places meaning D69 — "the order transport
+# (D67)", "(D67) gave each its own route" — while nine OTHER D67 citations in the same file
+# were the real entry, so no sweep could be run blind. Thirteen renumber events are in this
+# repo's history and the collisions are structural: several branches take "the next free
+# number" against one base and all of them merge.
+#
+# BRANCH-SCOPED, WHICH IS WHAT MAKES IT QUIET. The renumber that matters is the one THIS
+# branch did, and the files that matter are the ones THIS branch touched — a citation of
+# D67 that main already had is not this branch's to move. On main, base == HEAD and this
+# row is empty for nothing.
+#
+# NOT `--staged`, DELIBERATELY. The renumber is commonly done while resolving a merge, and
+# git runs no pre-commit hook for a merge commit — a staged-only check would have missed
+# every event in the history above. Reading the branch's own commits catches it however it
+# was committed, and the Stop hook runs this at turn end.
+#
+# ADVISORY. A branch may legitimately cite the new occupant of the freed number, and only a
+# human can tell that from the mistake. What the row is for is naming the sites: the triage
+# list is the whole cost of getting this right, and it is what nobody had.
+
+
+def branch_base() -> str:
+    """The commit this branch left main at, or "" when that cannot be answered.
+
+    `origin/main` rather than `main`: a worktree checkout commonly has no local `main` (it
+    is checked out elsewhere, and CLAUDE.md's merge discipline moves it by pull), while the
+    remote-tracking ref is present in every clone.
+    """
+    for ref in ("origin/main", "main"):
+        base = git("merge-base", "HEAD", ref).strip()
+        if base:
+            return base
+    return ""
+
+
+def headings_at(rev: str, path: str = "docs/DECISIONS.md") -> Dict[str, str]:
+    """title -> id, as of `rev`. Empty when the blob is unreadable at that commit."""
+    pattern = re.compile(r"^##\s+(D[1-9][0-9]?)\s+—\s+(.+?)\s*$")
+    out: Dict[str, str] = {}
+    for line in git("show", f"{rev}:{path}").splitlines():
+        match = pattern.match(line)
+        if match:
+            out[match.group(2)] = match.group(1)
+    return out
+
+
+def headings_now() -> Dict[str, str]:
+    pattern = re.compile(r"^##\s+(D[1-9][0-9]?)\s+—\s+(.+?)\s*$")
+    out: Dict[str, str] = {}
+    for line in read(ROOT / "docs" / "DECISIONS.md").splitlines():
+        match = pattern.match(line)
+        if match:
+            out[match.group(2)] = match.group(1)
+    return out
+
+
+def moves_across(states: Sequence[Dict[str, str]]) -> List[Tuple[str, str, str]]:
+    """(old, new, title) for every title whose id changes across a sequence of states.
+
+    Pure, and split out for exactly that: the git walk that produces `states` cannot be
+    exercised without a repository, and this is where the logic that could be wrong lives.
+    A title that moves twice (D50 -> D51 -> D53 is in this repo's history) reports its
+    FIRST id against its last, because the citations that need chasing were written when it
+    was still D50.
+    """
+    moves: Dict[str, Tuple[str, str]] = {}
+    for before, after in zip(states, states[1:]):
+        for title, new in after.items():
+            old = before.get(title)
+            if old and old != new:
+                first = moves[title][0] if title in moves else old
+                moves[title] = (first, new)
+    return sorted(
+        ((old, new, title) for title, (old, new) in moves.items() if old != new),
+        key=lambda move: (int(move[1][1:]), move[2]),
+    )
+
+
+def renumbered_on_branch(base: str) -> List[Tuple[str, str, str]]:
+    """Every entry this branch moved to a different number, from the branch's own history.
+
+    Walks only the commits that TOUCHED the file — usually one or two — and compares each
+    against the state before it. The title is the identity: a renumber keeps it and changes
+    the id, which is exactly the pair no id-based check can see.
+    """
+    revisions = [line for line in git(
+        "log", "--format=%H", f"{base}..HEAD", "--", "docs/DECISIONS.md"
+    ).split() if line]
+    states = [headings_at(base)]
+    for revision in reversed(revisions):
+        states.append(headings_at(revision))
+    states.append(headings_now())
+    return moves_across(states)
+
+
+def branch_files(base: str) -> List[str]:
+    """Paths this branch changed, committed or not. The renumber's own file is not one."""
+    names = set(git("diff", "--name-only", base, "HEAD").split("\n"))
+    names.update(git("diff", "--name-only", "HEAD").split("\n"))
+    names.update(git("diff", "--cached", "--name-only").split("\n"))
+    return sorted(
+        name for name in names
+        if name and name != "docs/DECISIONS.md" and exists(ROOT / name)
+    )
+
+
+def check_renumbered_decisions(report: Report) -> None:
+    findings: List[Finding] = []
+    base = branch_base()
+    if not base or base == git("rev-parse", "HEAD").strip():
+        report.add("renumbered ids", ADVISORY, findings, "not a branch off main — nothing to compare")
+        return
+
+    moves = renumbered_on_branch(base)
+    occupant = {number: title for title, number in headings_now().items()}
+    touched = branch_files(base)
+    for old, new, title in moves:
+        was = re.compile(r"\b" + old + r"\b")
+        now = re.compile(r"\b" + new + r"\b")
+        sites: List[str] = []
+        for name in touched:
+            text = read(ROOT / name)
+            lines = [
+                number
+                for number, line in enumerate(text.splitlines(), start=1)
+                if was.search(line)
+            ]
+            if not lines:
+                continue
+            shown = ", ".join(str(number) for number in lines[:6])
+            if len(lines) > 6:
+                shown += f", +{len(lines) - 6} more"
+            both = "" if now.search(text) else f"   <- and never names {new}"
+            sites.append(f"{name}:{shown}{both}")
+        if not sites:
+            continue
+        listed = "\n  ".join(sites)
+        findings.append(
+            Finding(
+                f"docs/DECISIONS.md -> {new}",
+                f"`{title}` moved {old} -> {new} on this branch, and {len(sites)} file(s) "
+                f"this branch touched still cite {old}.\n"
+                f"  {old} now names: {occupant.get(old) or 'nothing — the number is free'}\n"
+                f"  {listed}\n"
+                f"  Each site is either a citation that must follow the entry to {new}, or a "
+                f"real reference to {old}'s current occupant. Nothing mechanical can tell "
+                f"them apart — an id-based check sees a citation that resolves. A file that "
+                f"names BOTH ids is common and is not evidence either way: docs/map.py "
+                f"carried 24 wrong and 9 right in one file.",
+            )
+        )
+    detail = (
+        ", ".join(f"{old}->{new}" for old, new, _ in moves)
+        if moves else "no entry changed number on this branch"
+    )
+    report.add("renumbered ids", ADVISORY, findings, detail)
 
 # ------------------------------------------------------------------------- env vars
 
@@ -4720,6 +4893,33 @@ def self_test() -> int:
         ]
         ok(not kept, line[:58], f"extracted: {kept}")
 
+    # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
+    # that. The git walk around it needs a repository; this does not, and it is where the
+    # logic that could be wrong lives (D72).
+    print("\na renumbered entry is found by its title, not its id")
+    # EVERY PAIR HERE IS REAL HISTORY, not invented ids. `D67 -> D69` is the order-screen
+    # entry and the incident this check exists for; `D50 -> D51 -> D53` is the "one link"
+    # entry, which moved twice. Using live ids keeps this data out of the illustration
+    # problem `governed_by` already carries for `D2` in docs/map.py.
+    ORDER = "The order screen and the shipping lane get a route each"
+    LINK = "One link, always live"
+    moved = moves_across([{ORDER: "D67"}, {ORDER: "D69"}])
+    ok(moved == [("D67", "D69", ORDER)], "an id that moves is reported old -> new", str(moved))
+
+    added = moves_across([{ORDER: "D69"}, {ORDER: "D69", LINK: "D53"}])
+    ok(not added, "a NEW entry beside an unchanged one is not a renumber", str(added))
+
+    # The citations that need chasing were written while it was D50, so the FIRST id is the
+    # one to hunt for. Reporting the middle id would miss every one of them.
+    twice = moves_across([{LINK: "D50"}, {LINK: "D51"}, {LINK: "D53"}])
+    ok(twice == [("D50", "D53", LINK)], "an entry renumbered twice reports its FIRST id", str(twice))
+
+    gone = moves_across([{ORDER: "D69"}, {}])
+    ok(not gone, "an entry that DISAPPEARS is not a renumber — nothing to chase", str(gone))
+
+    one = moves_across([{ORDER: "D67", LINK: "D53"}, {ORDER: "D69", LINK: "D53"}])
+    ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbours", str(one))
+
     print("\nextractor finds real references")
     for line, expected in REAL_PATHS:
         found = path_candidates(line)
@@ -5445,6 +5645,7 @@ def audit(staged_only: bool) -> Report:
     check_decision_ids(report, docs)
     check_decision_structure(report)
     check_decision_index(report)
+    check_renumbered_decisions(report)
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_map(report, allowed)

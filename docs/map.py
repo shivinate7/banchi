@@ -864,7 +864,13 @@ COMPONENTS = [
                 # of D23's "if anyone ever narrows this matrix, unselectable becomes a
                 # trap". D12 is cited where a graded or vintage Condition cell is skipped
                 # rather than reported — out of scope is not evidence.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D53", "D60", "D69"],
+                # D72 IS THE RULING; D50, D51 and D67 ARE THE WORKED EXAMPLE IT CITES. The
+                # renumber check names this repo's real chains — D50 -> D51 -> D53, and the
+                # D67 -> D69 move that occasioned it — in its comments and in the self-test
+                # data, deliberately: an id that exists keeps that data out of the very
+                # illustration problem D2 above records. The superset rule reads them
+                # literally either way, so they are listed, and this is what they are.
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D72"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

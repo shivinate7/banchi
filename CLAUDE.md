@@ -414,6 +414,7 @@ D68  A departed card's label names the record, because two of them in one box we
 D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
 D70  The QR is the whole identification, the product is a claim, and the card is destroyed
 D71  A card with no slot is ranked like every other, and it is the figure that goes
+D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 ```
 
 - docs/GATES.md — gates, harness contract, build order.
