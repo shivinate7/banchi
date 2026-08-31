@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 
 import type { HistoryRange, PriceHistoryPayload, PricingSku } from '../src/types'
@@ -1075,21 +1075,49 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
   }
 })
 
+
 // ------------------------------------------------------- the price history (D62)
 //
-// THE PROPERTY THESE CASES EXIST FOR IS THAT THE PANEL DOES NOT FIRE ON A WALK. Every other
-// assertion here is about what is drawn; that one is about what is REQUESTED, and it is the
-// only one whose failure is invisible on screen — a follow-focus panel looks identical and
-// quietly fires one request per arrow key at a free public mirror.
+// THE GESTURE IS THE OWNER'S, 2026-08-31, and it is one sentence: point at a row, HOLD `t`,
+// and "as soon as i release it goes away". The pointer aims and the key holds. The `T`
+// button's click is the other opening and the only one that outlives itself.
+//
+// THE PROPERTY EVERY CASE HERE PROTECTS IS THAT THE PANEL DOES NOT FIRE ON A WALK. Every
+// other assertion is about what is DRAWN; that one is about what is REQUESTED, and it is the
+// only one whose failure is invisible on screen — a panel that read on the pointer looks
+// identical and quietly fires one request per row at a free public mirror.
 
 const asks = (wire: Wire[]) => wire.filter((call) => call.path.includes('/history'))
 
-test('`T` reads the price history, and draws the average as the anchor', async ({ page }) => {
-  const wire = await open(page)
-  await field(page).click()
-  await page.keyboard.press('t')
+const panelOf = (page: Page) =>
+  page.getByRole('complementary', { name: /Price history for/ })
 
-  const panel = page.getByRole('complementary', { name: /Price history for/ })
+/** The pointer, put on something, in one call. `hover()` runs actionability checks first and
+ *  these cases care about what happens BETWEEN pointer moves, so the checks are time this
+ *  file cannot afford to have spent for it. */
+async function point(page: Page, at: Locator) {
+  const box = await at.boundingBox()
+  if (box === null) throw new Error('nothing to point at')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+}
+
+/** POINT AT A ROW AND HOLD `t`. The whole row is the target, not the `T` button in it. */
+async function hold(page: Page, at = 0) {
+  await point(page, page.locator('.pricing-row').nth(at))
+  await page.keyboard.down('t')
+}
+
+/** THE PIN, which is the `T` button's click and — since the key became a hold — nothing else. */
+const pin = (page: Page, at = 0) =>
+  page.getByRole('button', { name: /Price history for/ }).nth(at).click()
+
+test('holding `t` over a row reads it, and draws the average as the anchor', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await hold(page)
+
+  const panel = panelOf(page)
   await expect(panel).toBeVisible()
   await expect(panel).toContainText('$18.81')
   expect(asks(wire).map((call) => call.path)).toEqual([
@@ -1112,50 +1140,175 @@ test('`T` reads the price history, and draws the average as the anchor', async (
   expect(figure).toBeGreaterThan(bound * 2)
 })
 
-test('the panel is PINNED — walking the list fires no further reads', async ({ page }) => {
-  /* THE LOAD-BEARING CASE. A read leaves the machine, so a panel that followed the focused
-     row would fire one request per arrow key: fifty for a walk down a fifty-SKU list, at a
-     free public mirror, for readings nobody asked for. Two SKUs and two arrow presses are
-     enough to catch it — a follow-focus panel asks again on the first one. */
-  const wire = await open(page, {
-    skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })],
-  })
+test('the release puts it away, and holding it again asks nothing', async ({ page }) => {
+  /* THE COMPLAINT THIS ANSWERS, in the owner's words: "the price data is valuable but it
+     persisting on my screen till i close it is annoying". */
+  const wire = await open(page)
+  await hold(page)
+  await expect(panelOf(page)).toBeVisible()
+
+  await page.keyboard.up('t')
+  await expect(panelOf(page)).toHaveCount(0)
+
+  /* THE READING IS KEPT BY SKU, which is what makes a gesture this cheap to repeat
+     affordable. Without it, a hand resting on `t` twice would read the same card twice. */
+  await page.keyboard.down('t')
+  await expect(panelOf(page)).toBeVisible()
+  expect(asks(wire)).toHaveLength(1)
+})
+
+test('it holds while the cursor moves, and the release lets a new row be aimed', async ({
+  page,
+}) => {
+  /* LATCHED AT THE PRESS. Re-aiming continuously would swap the panel out from under a hand
+     that is only crossing the screen to reach it — the panel is in the far corner and the
+     hand passes over every row between here and there. */
+  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
+  await hold(page, 0)
+  await expect(panelOf(page)).toContainText('sku 8608859')
+
+  await point(page, page.locator('.pricing-row').nth(1))
+  await expect(panelOf(page)).toContainText('sku 8608859')
+
+  await page.keyboard.up('t')
+  await expect(panelOf(page)).toHaveCount(0)
+
+  await hold(page, 1)
+  await expect(panelOf(page)).toContainText('sku 8608860')
+  await page.keyboard.up('t')
+})
+
+test('pointing at a row asks for nothing — only the press does', async ({ page }) => {
+  /* THE LOAD-BEARING CASE, and the reason the gesture is a KEY and not a rest of the pointer:
+     a reading is a request to two public mirrors, so a pointer crossing this list on its way
+     somewhere else must not spend one. */
+  const wire = await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
+
+  await point(page, page.locator('.pricing-row').nth(0))
+  await point(page, page.locator('.pricing-row').nth(1))
+  await point(page, page.locator('.pricing-title'))
+  await page.waitForTimeout(400)
+
+  expect(asks(wire)).toHaveLength(0)
+  await expect(panelOf(page)).toHaveCount(0)
+})
+
+test('the pointer wins over the focused row', async ({ page }) => {
+  /* THE HANDS ARE IN A FIELD WHILE THE EYES ARE SOMEWHERE ELSE. The row being asked about is
+     the one being pointed at, which is the whole shape of the gesture. */
+  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
   await field(page).first().click()
-  await page.keyboard.press('t')
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+
+  await hold(page, 1)
+  await expect(panelOf(page)).toContainText('sku 8608860')
+  await page.keyboard.up('t')
+})
+
+test('with nothing pointed at, the focused row answers', async ({ page }) => {
+  /* THE FALLBACK, so the gesture still works with the mouse parked off the list — which is
+     where it sits while both hands are pricing. */
+  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
+  await field(page).nth(1).click()
+  await page.mouse.move(2, 2)
+
+  await page.keyboard.down('t')
+  await expect(panelOf(page)).toContainText('sku 8608860')
+  await page.keyboard.up('t')
+})
+
+test('the `T` button pins, and a pin survives the walk', async ({ page }) => {
+  /* A BINDING NOTHING ADVERTISES IS ONE ONLY THE PERSON WHO ASKED FOR IT WILL PRESS (D51), so
+     the letter is on screen as a control and not only in a key handler — and since the key
+     became a hold, this click is the only way to a panel that stays.
+
+     IT DOES NOT FOLLOW FOCUS, which is what D62 closed structurally: a walk down a fifty-SKU
+     list would otherwise be fifty reads at a free public mirror for readings nobody asked
+     for. Two rows and two arrow presses are enough to catch it. */
+  const wire = await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
+  await pin(page, 0)
+  await expect(panelOf(page)).toBeVisible()
   expect(asks(wire)).toHaveLength(1)
 
+  await field(page).first().click()
   await page.keyboard.press('ArrowDown')
   await page.keyboard.press('ArrowUp')
   expect(asks(wire)).toHaveLength(1)
+  await expect(panelOf(page)).toContainText('sku 8608859')
 
-  // And it still names the card it was opened for rather than the focused one.
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toContainText(
-    'sku 8608859',
-  )
+  // And the same button closes it, which is the other half of a pin being deliberate.
+  await pin(page, 0)
+  await expect(panelOf(page)).toHaveCount(0)
 })
 
-test('a second press closes it, and re-opening asks nothing', async ({ page }) => {
+test('a hold cannot spend a pin — the pinned card comes back on the release', async ({
+  page,
+}) => {
+  /* `peek ?? pinned` RATHER THAN ONE SLOT. With one slot, a glance at another row would
+     re-aim the panel the operator had deliberately left open — and since the panel prints its
+     SKU, that would not read as wrong, only as no longer the card that was asked about. */
+  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
+  await pin(page, 0)
+  await expect(panelOf(page)).toContainText('sku 8608859')
+
+  await hold(page, 1)
+  await expect(panelOf(page)).toContainText('sku 8608860')
+
+  await page.keyboard.up('t')
+  await expect(panelOf(page)).toContainText('sku 8608859')
+  await expect(panelOf(page).getByRole('button', { name: 'Close' })).toBeVisible()
+})
+
+test('the footer says which panel it is, and `Keep open` makes a hold into a pin', async ({
+  page,
+}) => {
+  /* THE ONLY PLACE THE TWO OPENINGS DIFFER ON SCREEN. A pin ends on a press and offers it; a
+     held peek ends on the release, so what it offers instead is the way to stop that —
+     reachable because the other hand is still on the mouse. */
+  await open(page)
+  await hold(page)
+  const keep = panelOf(page).getByRole('button', { name: 'Keep open' })
+  await expect(keep).toBeVisible()
+
+  await keep.click()
+  await page.keyboard.up('t')
+  await expect(panelOf(page)).toBeVisible()
+  await expect(panelOf(page).getByRole('button', { name: 'Close' })).toBeVisible()
+})
+
+test('losing the window mid-hold releases it', async ({ page }) => {
+  /* A KEYUP THAT NEVER ARRIVES. Cmd-Tab away holding `t` and the release is delivered to
+     somebody else's window — so the panel would be standing when the operator came back,
+     which is exactly the state this gesture exists to prevent. */
+  await open(page)
+  await hold(page)
+  await expect(panelOf(page)).toBeVisible()
+
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(panelOf(page)).toHaveCount(0)
+  await page.keyboard.up('t')
+})
+
+test('the hold panel keeps the keyboard, so `t` there is not this gesture', async ({
+  page,
+}) => {
+  /* D49's reasons are letter keys too, and its note is a field somebody types PROSE into.
+     Both are covered: the panel owns the keyboard while it is up, and a letter typed into any
+     field on this screen but a price field is a character rather than a command. */
   const wire = await open(page)
   await field(page).click()
-  await page.keyboard.press('t')
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  await page.keyboard.press('h')
+  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
 
+  await page.getByLabel('Note').fill('t')
   await page.keyboard.press('t')
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toHaveCount(0)
-
-  await page.keyboard.press('t')
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
-  /* THE READING IS KEPT BY SKU, which is what makes the toggle affordable. Without it a
-     bounce between two cards would re-read both every time. */
-  expect(asks(wire)).toHaveLength(1)
+  await expect(panelOf(page)).toHaveCount(0)
+  expect(asks(wire)).toHaveLength(0)
 })
 
 test('both ranges are drawn, and the panel says they overlap', async ({ page }) => {
   await open(page)
-  await field(page).click()
-  await page.keyboard.press('t')
-  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await hold(page)
+  const panel = panelOf(page)
 
   /* THE MACHINE STRINGS, VERBATIM — `month` and `annual` are the endpoint's own range names
      and docs/DESIGN.md's owner-screen rule is that they are drawn rather than relabelled. */
@@ -1170,18 +1323,18 @@ test('both ranges are drawn, and the panel says they overlap', async ({ page }) 
   await expect(panel).toContainText('-33.9%')
   await expect(panel).toContainText('falling')
   await expect(panel).toContainText(/ranges overlap/)
+  await page.keyboard.up('t')
 })
 
 test('the export price is drawn beside the reading, and nothing averages them', async ({
   page,
 }) => {
   await open(page)
-  await field(page).click()
-  await page.keyboard.press('t')
-  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await hold(page)
   // D8's figure, labelled as the export's, next to the reading rather than mixed into it.
-  await expect(panel).toContainText('EXPORT MARKET')
-  await expect(panel).toContainText('$22.03')
+  await expect(panelOf(page)).toContainText('EXPORT MARKET')
+  await expect(panelOf(page)).toContainText('$22.03')
+  await page.keyboard.up('t')
 })
 
 test('a card that has never sold says so, and does not read as a failure', async ({ page }) => {
@@ -1189,18 +1342,19 @@ test('a card that has never sold says so, and does not read as a failure', async
      never traded — measured on two of them — so this is not an error arm. A screen that drew
      it as one would report a join defect over a card that is merely illiquid. */
   await open(page, { history: history({ ranges: [], never_sold: true }) })
-  await field(page).click()
-  await page.keyboard.press('t')
-  const panel = page.getByRole('complementary', { name: /Price history for/ })
-  await expect(panel).toContainText('no recorded sales')
-  await expect(panel).toContainText(/has not traded/)
+  await hold(page)
+  await expect(panelOf(page)).toContainText('no recorded sales')
+  await expect(panelOf(page)).toContainText(/has not traded/)
+  await page.keyboard.up('t')
 })
 
 test('a refusal draws the sentence the server sent, and offers a retry', async ({ page }) => {
+  /* PINNED FOR THIS ONE, AND THAT IS THE ARGUMENT FOR KEEPING A PIN AT ALL: `Try again` is a
+     control, and a panel that lives as long as a key is held is not somewhere a second
+     deliberate act can happen. */
   const wire = await open(page, { history: 'refuse' })
-  await field(page).click()
-  await page.keyboard.press('t')
-  const panel = page.getByRole('complementary', { name: /Price history for/ })
+  await pin(page)
+  const panel = panelOf(page)
   await expect(panel).toContainText(/not in a catalogued product line/)
   expect(asks(wire)).toHaveLength(1)
 
@@ -1211,24 +1365,38 @@ test('a refusal draws the sentence the server sent, and offers a retry', async (
   await expect.poll(() => asks(wire).length).toBe(2)
 })
 
-test('opening the history closes the photograph', async ({ page }) => {
+test('the photograph yields to a hold and comes back, and a pin closes it', async ({ page }) => {
   /* BOTH PANELS ARE FIXED IN THE SAME CORNER — `PriceHistory.css` carries why that corner is
-     the right one — so they are mutually exclusive rather than overlapping. */
+     the right one — so only one may be drawn. A PRESS closes the other outright; a hold only
+     HIDES it, because a gesture this cheap to make must not spend anything the operator has
+     to restore by hand. */
   await open(page)
   await field(page).click()
   await page.keyboard.press('p')
   await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
 
-  await page.keyboard.press('t')
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
+  await hold(page)
+  await expect(panelOf(page)).toBeVisible()
+  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toHaveCount(0)
+
+  await page.keyboard.up('t')
+  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
+
+  await pin(page)
   await expect(page.getByRole('complementary', { name: /Photograph of/ })).toHaveCount(0)
 })
 
-test('the button beside the hold does what the key does', async ({ page }) => {
-  /* A BINDING NOTHING ADVERTISES IS ONE ONLY THE PERSON WHO ASKED FOR IT WILL PRESS (D51),
-     so the letter is on screen as a control and not only in a key handler. */
-  const wire = await open(page)
-  await page.getByRole('button', { name: /Price history for/ }).first().click()
-  await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
-  expect(asks(wire)).toHaveLength(1)
+test('`p` closes a pinned reading, which is the half of the exclusion that was missing', async ({
+  page,
+}) => {
+  /* `t` cleared the photograph and `p` did not clear the history, so the two drew over each
+     other in the one corner `PriceHistory.css` argues for. */
+  await open(page)
+  await pin(page)
+  await expect(panelOf(page)).toBeVisible()
+
+  await field(page).click()
+  await page.keyboard.press('p')
+  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
+  await expect(panelOf(page)).toHaveCount(0)
 })

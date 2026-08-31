@@ -21,6 +21,7 @@ import type {
   WithheldRecord,
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
+import { isEditableTarget } from './keys'
 import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
 import { PriceHistoryPanel, type HistoryRead } from './PriceHistory'
 import { RunFiles } from './RunFiles'
@@ -190,15 +191,28 @@ export function Pricing() {
 
   /* ------------------------------------------------------------- the price history (D62)
    *
-   * WHICH SKU THE PANEL IS PINNED TO, AND IT DOES NOT FOLLOW FOCUS. That is the one way this
-   * differs from the photograph above it, and it is not a preference: a reading is a request
-   * to two public mirrors, so a panel that re-read on the focused row would fire one request
-   * per arrow key — fifty for a walk down this list, at a free mirror, for readings nobody
-   * asked for. `t` re-aims it, which is a press and therefore a deliberate act.
+   * TWO WAYS IN, AND WHAT SEPARATES THEM IS WHAT ENDS THEM. `peek` is the HELD one: point at
+   * a row, hold `t`, and the panel stands for exactly as long as the key is down. `pinned` is
+   * the `T` button's click and the panel's own Keep, and it stands until it is closed. The
+   * owner asked for the first on 2026-08-31 and gave the gesture whole — "it holds as my
+   * cursor moves as long as i hold T, and then as soon as i release it goes away" — because
+   * the reading is worth having on a card being weighed and the panel outliving the glance
+   * is the part that grates.
    *
-   * The panel prints the SKU it is pinned to for the same reason, so a panel left open while
-   * the hands move down the list cannot be read as describing the focused row. */
-  const [historyFor, setHistoryFor] = useState<string | null>(null)
+   * `peek ?? pinned` RATHER THAN ONE SLOT, SO A GLANCE CANNOT SPEND A PIN. An operator holding
+   * one card open who points at another row and holds `t` gets that row for the hold and their
+   * own card back on the release. One slot would have handed the pin to whatever was glanced
+   * at last, and a pin quietly re-aimed is worse than no pin: the panel prints its SKU, so it
+   * would not be WRONG on screen, merely no longer the card the operator asked about.
+   *
+   * NEITHER ONE FOLLOWS FOCUS, which is the property D62 closed structurally rather than with
+   * a debounce: a reading is a request to two public mirrors, so a panel re-read on the
+   * focused row would fire one request per arrow key — fifty for a walk down this list, at a
+   * free mirror, for readings nobody asked for. Nor does either follow the POINTER: pointing
+   * at a row asks for nothing at all, and only the press reads. */
+  const [pinned, setPinned] = useState<string | null>(null)
+  const [peek, setPeek] = useState<string | null>(null)
+  const historyFor = peek ?? pinned
   /* Every reading this session has taken, by SKU. Kept across closes so re-opening a card is
    * free, and NOT cleared when the run changes: a SKU's sales history is a fact about the
    * card rather than about the run that priced it, so the same reading is correct on any run
@@ -700,25 +714,24 @@ export function Pricing() {
     setUndo(rest)
   }, [undo])
 
-  /* OPEN THE HISTORY PANEL FOR ONE SKU, AND FETCH IF THIS SESSION HAS NOT ALREADY.
+  /* TAKE THE READING FOR ONE SKU, AND ASK NOTHING IF THIS SESSION ALREADY HAS IT.
    *
-   * ONE PRESS, ONE READ, AND A SECOND PRESS IS FREE. The reading is kept by SKU, so toggling
-   * the panel shut and open again asks nothing — which matters because the panel is closed by
-   * the same key that opens it and an operator comparing two cards will bounce between them.
+   * ONE READ PER CARD PER SITTING, WHICHEVER GESTURE ASKED FOR IT. The reading is kept by SKU,
+   * so an operator comparing two cards — pinning one, holding `t` over the other, bouncing
+   * back — asks once each and never again. That cache is what makes a gesture cheap enough to
+   * repeat affordable at all: the hold added no new spending, only a second way to reach a
+   * read that was already free after the first.
    *
    * `force` IS THE RETRY, and it is the only way past the cache. A refusal is cached like a
    * reading is: without that, a card whose mirror was down would re-fetch on every press, and
    * the panel would look like it were doing nothing while quietly hammering a host that is
    * already struggling. The button says `Try again` because retrying is the operator's call.
    *
-   * IT CLOSES THE PHOTOGRAPH. Both panels are fixed in the same corner — `PriceHistory.css`
-   * carries the reason that corner is the right one — so they are mutually exclusive rather
-   * than overlapping. */
-  const openHistory = useCallback(
+   * IT OPENS NOTHING. Aiming the panel is `pinHistory` and `peekIn` below, because the two
+   * gestures differ in what they aim and in what closes it, and only this part is common. */
+  const readHistory = useCallback(
     (sku: PricingSku, force = false) => {
       if (run === null) return
-      setPhotoFor(null)
-      setHistoryFor(sku.sku)
       if (!force && history[sku.sku] !== undefined) return
       setHistory((current) => ({ ...current, [sku.sku]: { kind: 'reading' } }))
       /* `.then().catch()` AND NOT `.then(ok, fail)` — `app/eslint.config.js` refuses the
@@ -739,6 +752,123 @@ export function Pricing() {
     },
     [history, run],
   )
+
+  /* WHICH ROW THE POINTER IS OVER, AND WHICH ONE A HELD KEY LATCHED. BOTH ARE REFS BECAUSE
+     NOTHING DRAWS EITHER. A hovered row in state re-renders a hundred rows on every crossing
+     to bookkeep a fact no row draws — the row's own `:hover` is CSS and needs no help — and
+     the only reader of these two is a key press. */
+  const hovered = useRef<string | null>(null)
+  const heldSku = useRef<string | null>(null)
+
+  /** The SKU whose price field has focus, or null. Read off the DOM rather than mirrored into
+   *  a third piece of state: `inputs` already maps every field, and a mirror would be one more
+   *  thing to keep true across a filter, a re-sort, a hold and a row that stops having a
+   *  field at all. */
+  const focusedSku = useCallback(() => {
+    for (const [sku, node] of inputs.current) if (node === document.activeElement) return sku
+    return null
+  }, [])
+
+  /** Whether an event landed in one of THIS screen's price fields, which is the one place a
+   *  letter is a command rather than a character. */
+  const isPriceField = useCallback((target: EventTarget | null) => {
+    for (const node of inputs.current.values()) if (node === target) return true
+    return false
+  }, [])
+
+  /** PIN THE PANEL TO ONE SKU. The deliberate gesture, and the only one that outlives itself.
+   *
+   *  IT CLOSES THE PHOTOGRAPH. Both panels are fixed in the same corner — `PriceHistory.css`
+   *  carries the reason that corner is the right one — so they are mutually exclusive rather
+   *  than overlapping. A peek does NOT close it: a gesture that lasts as long as a key is down
+   *  must not destroy a panel the operator opened on purpose. It hides it while it is up
+   *  instead, at the one render below that draws the corner. */
+  const pinHistory = useCallback(
+    (sku: PricingSku) => {
+      if (run === null) return
+      heldSku.current = null
+      setPeek(null)
+      setPhotoFor(null)
+      setPinned(sku.sku)
+      readHistory(sku)
+    },
+    [readHistory, run],
+  )
+
+  /** Close the panel both ways, so nothing that was showing survives the press. */
+  const unpin = useCallback(() => {
+    heldSku.current = null
+    setPeek(null)
+    setPinned(null)
+  }, [])
+
+  /* HOLD `t`, SEE THE ROW UNDER THE POINTER, LET GO AND IT IS GONE (D62, amended 2026-08-31).
+   *
+   * THE POINTER AIMS AND THE KEY HOLDS, which is the owner's gesture in their own words: "if
+   * i then push T i see that row's T, and it holds as my cursor moves as long as i hold T,
+   * and then as soon as i release it goes away". The row is LATCHED at the press and hover
+   * changes are ignored until the release — re-aiming continuously would swap the panel out
+   * from under a hand that is only crossing the screen to reach it, and the hand crossing to
+   * `Try again` passes over forty other rows on the way.
+   *
+   * IT IS A PRESS, WHICH IS THE PROPERTY D62 SPENT ITSELF ON. A reading is a request to two
+   * public mirrors, so nothing may take one on a movement: hovering a row asks for nothing at
+   * all, and this handler is the whole of what asks.
+   *
+   * ON `window` AND NOT ON THE FIELD. The gesture starts at the pointer, so the hands need not
+   * be in any field for it — and a keyup has to arrive even where the press moved focus, which
+   * a per-field handler cannot promise. The field's own handler still swallows the letter; the
+   * `t` branch in `onKey` is that and nothing else now.
+   *
+   * `blur` RELEASES IT TOO, because a window that loses focus mid-hold never delivers the
+   * keyup. Cmd-Tab away holding `t` and the panel would otherwise be standing when you came
+   * back — which is precisely the thing this gesture exists to stop. */
+  useEffect(() => {
+    const release = () => {
+      if (heldSku.current === null) return
+      heldSku.current = null
+      setPeek(null)
+    }
+    const down = (event: KeyboardEvent) => {
+      // `repeat` IS THE WHOLE REASON A HELD KEY IS AFFORDABLE: a key held down fires keydown
+      // over and over, and without this the read would be re-asked at the OS repeat rate.
+      if (event.key.toLowerCase() !== 't' || event.repeat) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (heldSku.current !== null) return
+      // THE HOLD PANEL OWNS THE KEYBOARD WHILE IT IS UP — D49's reasons are letter keys too.
+      if (holdFor !== null) return
+      /* EVERY OTHER FIELD ON THIS SCREEN IS ONE SOMEBODY TYPES PROSE OR DIGITS INTO — a note,
+         a rule, a basis, the run search. Only the price field's alphabet is closed, so only
+         there is a letter free to mean something. */
+      if (isEditableTarget(event.target) && !isPriceField(event.target)) return
+      /* THE POINTER WINS OVER FOCUS, deliberately: the hands are in a field while the eyes and
+         the pointer are on some other row, and the row being ASKED ABOUT is the one being
+         pointed at. Focus is the fallback for the case where nothing is pointed at, so the
+         gesture still works with the mouse parked off the list. */
+      const aim = hovered.current ?? focusedSku()
+      const row = aim === null ? undefined : rows.find((one) => one.sku === aim)
+      if (row === undefined) return
+      heldSku.current = row.sku
+      setPeek(row.sku)
+      readHistory(row)
+    }
+    const up = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 't') release()
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', release)
+      /* AND NOTHING ELSE. This effect re-subscribes whenever `readHistory` gets a new identity
+         — which the first `setHistory({kind: 'reading'})` of the hold guarantees — so a
+         `release()` here would close the panel one render after it opened, every time. It cost
+         seven red cases to learn. There is nothing to release on the real unmount either: the
+         refs and the state go with the screen. */
+    }
+  }, [focusedSku, holdFor, isPriceField, readHistory, rows])
 
   const onKey = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
@@ -790,6 +920,11 @@ export function Pricing() {
       }
       if (lower === 'p') {
         event.preventDefault()
+        /* AND IT CLOSES THE READING, which is the half of the mutual exclusion that was never
+           built: `t` cleared the photograph and `p` did not clear the history, so the two
+           drew over each other in one corner. A press ends a pin; only the pointer ends a
+           peek, and one showing when this fires is hidden rather than closed. */
+        unpin()
         setPhotoFor((current) =>
           current !== null && current.sku === sku.sku ? null : { sku: sku.sku, at: 0 },
         )
@@ -801,12 +936,13 @@ export function Pricing() {
          would say out loud naming what the panel shows, which is the rule `App.tsx` states
          for the route chords one level up.
 
-         THE SAME KEY CLOSES IT, matching `p` beside it, so the panel never takes a binding
-         away from price entry and `Escape` keeps its two existing jobs in the field. */
+         THE ACT ITSELF IS ON `window` NOW, because the pointer aims it and the release ends
+         it — see the effect above. What is left here is the SWALLOW, and it is not optional:
+         without it the letter reaches `onBeforeInput`, which marks the field touched and
+         clears the suggestion on its way to rejecting the character. So `t` in a price field
+         would silently blank a suggested price. */
       if (lower === 't') {
         event.preventDefault()
-        if (historyFor === sku.sku) setHistoryFor(null)
-        else openHistory(sku)
         return
       }
       if (lower === 'n' && sku.snap.now !== null) {
@@ -825,7 +961,7 @@ export function Pricing() {
        Adding it costs nothing: `suggestionFor` changes exactly when `doc` does, and `doc`
        already reaches this array through `answerFor`. What it buys is that the two stop
        being correct by coincidence. */
-    [answerFor, commit, historyFor, move, openHistory, snap, suggestionFor, toggleHold, undoLast],
+    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, unpin],
   )
 
   /* THE PHOTO PANEL FOLLOWS FOCUS WHILE IT IS OPEN, and the same key closes it — so
@@ -851,10 +987,14 @@ export function Pricing() {
     [photoSku, photoFor],
   )
 
-  /* THE PINNED CARD, RESOLVED AGAINST THE CURRENT ROWS. `rows` is what the section filter and
-     the held filter leave, so a card filtered out from under an open panel resolves to null
-     and the panel closes itself — which is right: a reading floating over a list that no
-     longer contains its card is a panel about nothing the operator can see. */
+  /* THE CARD THE PANEL IS DRAWN FOR, RESOLVED AGAINST THE CURRENT ROWS. A held `t` outranks a
+     pin while the key is down — `historyFor` is `peek ?? pinned` — so the glance shows the row
+     it latched and the pinned card comes back underneath it on the release.
+
+     `rows` is what the section filter and the held filter leave, so a card filtered out from
+     under an open panel resolves to null and the panel closes itself — which is right: a
+     reading floating over a list that no longer contains its card is a panel about nothing
+     the operator can see. */
   const historySku = useMemo(
     () => (historyFor === null ? null : rows.find((row) => row.sku === historyFor) ?? null),
     [historyFor, rows],
@@ -1065,6 +1205,20 @@ export function Pricing() {
                   <div
                     className="pricing-row"
                     key={sku.sku}
+                    /* THE WHOLE ROW IS THE TARGET, not the `T` alone: the gesture is "point at
+                       a row and hold `t`", and asking the operator to find a 32px button
+                       first would make a pointing gesture into an aiming one. Writing a ref
+                       renders nothing, so this costs a crossing what a CSS `:hover` costs.
+
+                       THE LEAVE IS GUARDED because enter and leave are not promised in an
+                       order: A's leave arriving after B's enter would otherwise null out the
+                       row the pointer is now on. */
+                    onPointerEnter={() => {
+                      hovered.current = sku.sku
+                    }}
+                    onPointerLeave={() => {
+                      if (hovered.current === sku.sku) hovered.current = null
+                    }}
                     data-answer={
                       withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'
                     }
@@ -1175,11 +1329,17 @@ export function Pricing() {
                     <button
                       type="button"
                       className="pricing-history"
-                      aria-pressed={historyFor === sku.sku}
+                      /* THE PIN, NOT THE PANEL. `aria-pressed` is this control's own state,
+                         and a `t` held over the row draws the panel without this button having
+                         been pressed at all — reporting that as pressed would announce a state
+                         to a screen reader that nothing on the page is in. */
+                      aria-pressed={pinned === sku.sku}
                       aria-label={`Price history for ${sku.name}`}
-                      onClick={() =>
-                        historyFor === sku.sku ? setHistoryFor(null) : openHistory(sku)
-                      }
+                      /* THE CLICK IS THE PIN, AND IT IS THE ONLY WAY TO ONE. Holding `t` is
+                         the glance; this is the panel that stays — which is what a refusal's
+                         `Try again`, a scroll through both ranges, and reading while typing a
+                         price all need, none of which can be done with a key held down. */
+                      onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
                     >
                       T
                     </button>
@@ -1223,25 +1383,33 @@ export function Pricing() {
         )
       })}
 
-      {/* THE READING, PINNED TO THE SKU IT WAS OPENED FOR. Not `photoSku`'s follow-focus
-          shape, and `openHistory` carries the reason: a read leaves this machine, so a panel
-          that re-read on the focused row would fire one request per arrow key.
+      {/* THE READING, AIMED AT ONE SKU AND NEVER AT THE FOCUSED ROW. `readHistory` carries
+          the reason: a read leaves this machine, so a panel that re-read on the focused row
+          would fire one request per arrow key.
 
-          IT SURVIVES THE ROW SCROLLING AWAY, which is the other half of being pinned. The
+          A PIN SURVIVES THE ROW SCROLLING AWAY, which is the other half of being pinned. The
           operator opens a reading, walks the list comparing it against other cards, and the
           panel goes on describing the card they opened it for — with its SKU printed, so
-          which card that is stays answerable. */}
+          which card that is stays answerable. A held `t` ends with the key instead, and the
+          panel says which of the two it is: `Keep open` where letting go would end it,
+          `Close` where a press is what it will take. */}
       {historySku === null ? null : (
         <PriceHistoryPanel
           sku={historySku.sku}
           name={historySku.name}
           read={history[historySku.sku]}
-          onClose={() => setHistoryFor(null)}
-          onRetry={() => openHistory(historySku, true)}
+          pinned={pinned === historySku.sku}
+          onClose={unpin}
+          onKeep={() => pinHistory(historySku)}
+          onRetry={() => readHistory(historySku, true)}
         />
       )}
 
-      {photoSku === null || photoFor === null ? null : (
+      {/* ONE CORNER, ONE PANEL. `p` clears a pinned reading outright, and this guard covers
+          the case a press cannot reach: a held `t` arriving over an open photograph. It hides
+          rather than closes, so the photograph is back on the release and a gesture this
+          cheap to make has spent nothing the operator must restore by hand. */}
+      {photoSku === null || photoFor === null || historyFor !== null ? null : (
         <aside className="pricing-photo" aria-label={`Photograph of ${photoSku.name}`}>
           <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
           <p className="pricing-photo-caption">
