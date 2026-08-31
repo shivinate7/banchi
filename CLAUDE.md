@@ -28,6 +28,11 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
                     #   `.claude/launch.json` from this checkout's own slot before any work
                     #   starts, so a worktree can no longer preview the MAIN tree (D43).
 make status         # where you are: next step, T1 score, branch. Start here.
+make map            # docs/map.py RENDERED — the file is 2,700 lines and had no human view
+                    #   at all until 2026-08-31 (D80), which is how a whole section of it
+                    #   sat wrong for three weeks. ARGS=<package|path|D<n>|--stale>;
+                    #   `--stale` ranks entries whose FILE has moved since the prose about
+                    #   it did, which is the one drift no audit row can decide.
 make harness        # all EIGHT verification tests; the Stop hook runs it at turn end. It said
                     #   seven until 2026-08-31 — `t8_codes.py` landed with the code-card track
                     #   and nothing counts these either (see the route-count warning below).
@@ -379,6 +384,23 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   `identify/`, `store/`, `geometry/` or `cli/`** — every entry there is settled and
   re-litigating one wastes a session. Audited by `make docs-audit`, so it cannot quietly go
   stale: adding a file under any of those without an entry fails the commit.
+
+  **`make map` is how you look at it, and there was no way to until 2026-08-31** (D80). At
+  2,700 lines and ~56,000 tokens a Read of the whole file spends a fifth of a context
+  window, so in practice it was written constantly and read never — 75 commits touched it on
+  2026-08-30 alone. That asymmetry is not academic: its `COMPONENTS` section, which three
+  consumers read, was measured at **142 of 155 entries written at or after the file they
+  describe last moved**, while `TRACKS`, which NOTHING read, was wrong in two ways for three
+  weeks. **A section of this file with no consumer is now a failed commit** — `make
+  docs-audit`'s `map sections` row — because a claim with no reader has no way of ever being
+  contradicted. `build order mirror` checks the step numbers against `docs/GATES.md`'s
+  numbered list, which the map's header had claimed to mirror since 2026-08-04 with nothing
+  verifying it.
+
+  **`BUILD_ORDER` is a backlog, not a schedule, and is deliberately not extended.** Step 15
+  is the last step anybody added; D34 and after landed past it and none of them is a step.
+  Step 9 is the one row that still describes the future — nothing has vendored the catalog.
+  A session looking for what to do next reads the recent decision entries, not that list.
 - docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 
   **These three are NOT `@`-loaded, and that is deliberate (D60).** At 627KB they cost
@@ -468,6 +490,7 @@ D76  A hint is evidence about its own card, and how wide to ask is a per-game ru
 D77  The pipeline's rows can be the wrong card, so the export is reachable from every entry — asked for, never offered unasked
 D78  A run's reason for adding nothing is a heading, the rows under it sink, and a hold sinks on the reopening
 D79  The reading goes on every row, because the operator answered D62's own measurement
+D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 ```
 
 - docs/GATES.md — gates, harness contract, build order.

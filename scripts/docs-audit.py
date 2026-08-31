@@ -2299,6 +2299,200 @@ def observed_rarities(committed_only: bool) -> Dict[str, Set[str]]:
     return out
 
 
+# --------------------------------------------------- the map's sections, and its readers
+
+# `Read by four consumers` in docs/map.py's docstring, and the indented block under it. The
+# word is checked against the number of entries, and every entry that looks like a path is
+# checked to exist — a consumer list is a claim about the tree like any other.
+_CONSUMER_HEAD = re.compile(r"Read by ([a-z]+) consumers", re.I)
+_CONSUMER_ROW = re.compile(r"^ {2}(\S.*?)\s{2,}\S")
+
+# Files that may be a section's reader. Everything tracked under scripts/ plus the audit's
+# own tree walk would be circular here, so this is deliberately the same walk `paths` uses,
+# minus the map itself.
+_SECTION_SKIP = {"docs/map.py"}
+
+
+def _map_sections() -> List[str]:
+    """Top-level literal names in docs/map.py, in file order."""
+    if not exists(MAP):
+        return []
+    names: List[str] = []
+    for node in ast.parse(read(MAP)).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name) and target.id.isupper():
+                names.append(target.id)
+    return names
+
+
+def _consumer_block() -> Tuple[Optional[str], List[str]]:
+    """The docstring's declared consumer count word, and the names in the block under it.
+
+    The block is a two-column layout, so the name is taken by COLUMN rather than by a run
+    of spaces: the longest path in it — `scripts/decision-context.py` — fills its column
+    and is separated from its description by a single space, and one entry is the phrase
+    `you, or an agent`, which has spaces of its own. A separator-based reader got both
+    wrong in opposite directions.
+    """
+    if not exists(MAP):
+        return None, []
+    text = read(MAP)
+    head = _CONSUMER_HEAD.search(text)
+    if head is None:
+        return None, []
+    rows: List[str] = []
+    column: Optional[int] = None
+    for line in text[head.end():].splitlines()[1:]:
+        if not line.strip():
+            if rows:
+                break
+            continue
+        if line.startswith("   "):  # a description wrapping onto the next line
+            continue
+        if not line.startswith("  "):
+            if rows:
+                break
+            continue
+        if column is None:
+            gap = re.search(r"\S\s+(?=\S)", line)
+            if gap is None:
+                continue
+            column = gap.end()
+        rows.append(line[:column].strip())
+    return head.group(1).lower(), rows
+
+
+def check_map_sections(report: Report) -> None:
+    """Every top-level section of docs/map.py is read by something, and the docstring's
+    consumer list is true.
+
+    **`TRACKS` is why this row exists.** It sat in that file from 2026-08-07 to 2026-08-31
+    with no reader anywhere in the repo and no check over it, and it went wrong twice
+    without anything being able to tell: it said `C1-C7` after `docs/CODES-DECISIONS.md`
+    had reached C11, and it said the codes track's delivery automation was gated on Gate B
+    months after that gate passed and the gating system was retired outright. Three weeks
+    wrong, in the file whose entire argument — D17 — is that it is audited exactly as hard
+    as it is trusted.
+
+    **A section with no consumer is worse than a section that is wrong**, which is the part
+    worth stating. Wrong-with-a-reader gets found the first time somebody runs the reader.
+    Wrong-with-no-reader is a claim the repo makes about itself that has no way of ever
+    being contradicted, and it decays silently while looking exactly like the sections that
+    do work. The remedy is the one this repo reaches for everywhere else: give it a job, or
+    delete it (D80). `TRACKS` got a job — `scripts/decision-context.py` routes a `codes/` edit to
+    C decisions by it, and `scripts/status.py` declares it in SOURCES.
+
+    MECHANICAL. Each of the three conditions is decidable on the committed tree, which is
+    D16's test: a name is read or it is not, a count matches or it does not, a path exists
+    or it does not. There is no judgement here for a blocking row to settle by fiat.
+    """
+    findings: List[Finding] = []
+    sections = _map_sections()
+    if not sections:
+        report.add("map sections", MECHANICAL,
+                   [Finding(rel(MAP), "no top-level sections could be read.")])
+        return
+
+    haystack: Dict[str, str] = {}
+    for path in python_files() + list(_walk(ROOT / "scripts", (".mjs", ".sh"))):
+        if rel(path) in _SECTION_SKIP or not exists(path):
+            continue
+        haystack[rel(path)] = read(path)
+
+    readers: Dict[str, List[str]] = {}
+    for name in sections:
+        hits = sorted(where for where, text in haystack.items() if name in text)
+        readers[name] = hits
+        if not hits:
+            findings.append(Finding(
+                f"{rel(MAP)} -> {name}",
+                f"`{name}` is a top-level section of the map that NOTHING reads. Give it a "
+                f"consumer or delete it: a section no code reads cannot be caught being "
+                f"wrong, and `TRACKS` was wrong for three weeks exactly this way (D17, D80).",
+            ))
+
+    word, rows = _consumer_block()
+    if word is None:
+        findings.append(Finding(
+            rel(MAP),
+            "its docstring no longer says `Read by <word> consumers`, so the consumer list "
+            "is reconciled against nothing. Restore the sentence or re-point this check.",
+        ))
+    else:
+        declared = _NUMBER_WORDS.get(word)
+        if declared is None:
+            findings.append(Finding(rel(MAP), f"`Read by {word} consumers` is not a number this check knows."))
+        elif declared != len(rows):
+            findings.append(Finding(
+                rel(MAP),
+                f"the docstring says {word} consumers and lists {len(rows)}: "
+                f"{', '.join(rows) or 'none'}.",
+            ))
+        for row in rows:
+            if "/" in row and not row.endswith("/") and not exists(ROOT / row):
+                findings.append(Finding(
+                    rel(MAP),
+                    f"the docstring names `{row}` as a consumer and no such file exists.",
+                ))
+
+    covered = sum(1 for name in sections if readers[name])
+    report.add("map sections", MECHANICAL, findings,
+               f"{covered} of {len(sections)} sections have a reader, consumer list agrees")
+
+
+# ------------------------------------------------- the build order against its own source
+
+# The numbered list under `## Build order` in docs/GATES.md, which docs/map.py's BUILD_ORDER
+# says in its own header that it mirrors. Bounded at the next `## ` so a numbered list
+# anywhere else in that file cannot join in.
+_GATES_STEP = re.compile(r"^(\d+)\.\s", re.M)
+
+
+def check_build_order_mirror(report: Report) -> None:
+    """docs/map.py's BUILD_ORDER step numbers are docs/GATES.md's numbered list.
+
+    The map's own header has claimed `Mirrors the numbered list in docs/GATES.md` since
+    2026-08-04 and nothing checked it, which is this repo's recurring failure class — two
+    decisions that must agree, only one of which moves — sitting on the sentence that says
+    they agree.
+
+    **Numbers only, deliberately.** The two files word a step differently on purpose, and
+    GATES.md marks a step done by STRIKING IT THROUGH rather than by carrying a status
+    field, so reconciling titles or statuses would fail on files that are both correct. The
+    step numbers are the one thing that must be identical for the word `mirrors` to be
+    true, and a step added to one file and not the other is the only drift that has ever
+    happened here.
+    """
+    gates = ROOT / "docs" / "GATES.md"
+    if not exists(MAP) or not exists(gates):
+        report.add("build order mirror", MECHANICAL,
+                   [Finding("docs/", "docs/map.py or docs/GATES.md is missing.")])
+        return
+
+    steps = {row.get("step") for row in (literals_from_module(MAP).get("BUILD_ORDER") or [])}
+    text = read(gates)
+    start = re.search(r"^##\s+Build order\s*$", text, re.M)
+    if start is None:
+        report.add("build order mirror", MECHANICAL, [Finding(
+            "docs/GATES.md",
+            "has no `## Build order` heading, so docs/map.py's claim to mirror its "
+            "numbered list is reconciled against nothing.",
+        )])
+        return
+    rest = text[start.end():]
+    end = re.search(r"^##\s", rest, re.M)
+    listed = {int(n) for n in _GATES_STEP.findall(rest[: end.start() if end else len(rest)])}
+
+    findings: List[Finding] = []
+    for number in sorted(listed - steps):
+        findings.append(Finding("docs/map.py", f"docs/GATES.md lists step {number}; BUILD_ORDER has no such step."))
+    for number in sorted(steps - listed):
+        findings.append(Finding("docs/GATES.md", f"BUILD_ORDER has step {number}; the numbered list has no such step."))
+    report.add("build order mirror", MECHANICAL, findings,
+               f"{len(steps)} steps, the same set in both files")
+
+
 def observed_triples(committed_only: bool) -> Set[Tuple[str, str, str]]:
     return {
         triple
@@ -6398,6 +6592,32 @@ def self_test() -> int:
         _census_pattern("has ([A-Za-z]+) screens"),
     )
 
+    # THE CONSUMER BLOCK IS A TWO-COLUMN LAYOUT AND A SEPARATOR-BASED READER GOT IT WRONG
+    # TWICE, in opposite directions: a wrapped description ended the block after one entry,
+    # and the longest path in it is separated from its description by a SINGLE space, so a
+    # `\s{2,}` split dropped that row too. Both misreads made a correct docstring fail.
+    print("\nthe map's consumer list is read by column, not by separator")
+    _saved = globals()["MAP"]
+    try:
+        sample = ROOT / "docs" / "map.py"
+        globals()["MAP"] = sample
+        word, rows = _consumer_block()
+        ok(word == "four", "the declared count word is read", str(word))
+        ok(len(rows) == 4, "all four rows are found, wrapped descriptions and all", str(rows))
+        ok(
+            "scripts/decision-context.py" in rows,
+            "including the row whose path leaves a single space before its description",
+            str(rows),
+        )
+        ok(
+            "you, or an agent" in rows,
+            "and the one entry that is a phrase with spaces in it, not a path",
+            str(rows),
+        )
+        ok("TRACKS" in _map_sections(), "TRACKS is a section this check can see", str(_map_sections()))
+    finally:
+        globals()["MAP"] = _saved
+
     report = Report()
     check_dispatch(report)
     by_label = {check: findings for check, _, findings, _ in report.checks}
@@ -6448,6 +6668,8 @@ def audit(staged_only: bool) -> Report:
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_map(report, allowed)
+    check_map_sections(report)
+    check_build_order_mirror(report)
     check_game_vocabulary(report)
     check_game_coverage(report)
     check_matrix_superset(report)

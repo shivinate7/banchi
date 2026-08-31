@@ -5,12 +5,25 @@ re-derive from prose that already knew the answer. `docs/GATES.md` has the build
 `docs/DECISIONS.md` has the rulings, `README.md` has the layout — but all three are prose,
 and prose has to be read in full before it can be trusted.
 
-Read by three consumers, which is the reason it is data and not another markdown section:
+Read by four consumers, which is the reason it is data and not another markdown section:
 
+  scripts/status.py           `make status` — the human view. THE ONE A PERSON RUNS, and it
+                              was missing from this list from 2026-08-13 to 2026-08-31 while
+                              being the answer to "how do I look at this file"
   scripts/docs-audit.py       its repo-map check verifies every claim below against the tree
   scripts/decision-context.py the PreToolUse hook that tells you which decisions govern a
                               file before you edit it
-  you, or an agent            a single Read instead of a search
+  you, or an agent            `make map` renders it — a package, a path, or a decision id.
+                              Read the raw literals only when you want the argument in a
+                              `note`, which is the half no renderer can summarise
+
+THE COUNT ABOVE IS CHECKED. `make docs-audit`'s `map sections` row fails a commit where a
+top-level name here is read by nothing, and where this docstring's consumer list disagrees
+with the readers it can find. `TRACKS` is why: it sat here from 2026-08-07 to 2026-08-31
+with no reader and no check, went wrong twice — `C1-C7` against a file that had reached C11,
+and a codes track "gated on singles Gate B" months after Gate B passed and the gating system
+was retired — and nothing anywhere could tell. A section nobody reads is not free; it is a
+claim the repo makes about itself with no way of being wrong out loud.
 
 THIS FILE GOES STALE LIKE ANY OTHER DOC, so it is audited like one. The repo-map check
 fails when a `built` path is missing, when a `planned` path has quietly arrived, when a
@@ -31,6 +44,26 @@ that way: an audit must not run project code.
 # --------------------------------------------------------------------------- build order
 #
 # Mirrors the numbered list in docs/GATES.md. status: done | next | blocked
+#
+# THE MIRROR IS CHECKED as of 2026-08-31 — `make docs-audit`'s `build order mirror` row
+# fails a commit where the step NUMBERS here and the numbered list under `## Build order`
+# in docs/GATES.md are not the same set. It checks the numbers and deliberately not the
+# titles or the statuses: the two files word a step differently on purpose, and GATES.md
+# marks a step done by striking it through rather than by a field. What it catches is the
+# only drift that matters — a step added to one file and not the other.
+#
+# THIS LIST STOPPED BEING THE SCHEDULE ON 2026-08-24 AND IS A BACKLOG NOW. Step 15 is the
+# last step anybody added; D34 through D77 landed after it, and not one of them is a step
+# here. That is not drift and it is not this file falling behind: work is proposed, argued
+# and recorded in docs/DECISIONS.md, and the build order is what is left of an ordering
+# that has already happened. Step 9 is the exception and is genuinely open — nothing has
+# vendored the catalog, `make status` is right to say so, and it is the one row here that
+# still describes the future.
+#
+# So this list is NOT renumbered, extended or rewritten to cover the decisions. Steps 1-15
+# are the record of an order that was really followed, and the same rule docs/GATES.md
+# applies to its measurements applies here: what happened is not edited to match a later
+# tree. A session looking for what to do next reads the last decision entries, not this.
 #
 # `next` means unblocked and NOT STARTED. There is deliberately no "in progress": the
 # earlier draft called step 5 `current`, which read as work underway when step 4 had just
@@ -940,7 +973,7 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65", "D80"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1027,7 +1060,7 @@ COMPONENTS = [
                 # pipeline/pricing.py by merging package lists into modules. Both are cited,
                 # and the superset rule takes a citation at face value — same trade as
                 # docs-audit.py above.
-                "governed_by": ["D2", "D3", "D17"],
+                "governed_by": ["D2", "D3", "D17", "D80"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -1094,6 +1127,28 @@ COMPONENTS = [
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70"],
                 "status": "built",
             },
+            "map-view.py": {
+                "does": "`make map` — docs/map.py rendered for a person, in four views: the "
+                        "shape, one package, one module, everything a decision governs, and "
+                        "`--stale`. Stdlib only, and it reads the map with ast.literal_eval "
+                        "rather than importing it, for the reason the audit does.",
+                "governed_by": ["D17", "D18", "D60", "D80"],
+                "note": "WRITTEN BECAUSE THE MAP HAD NO HUMAN VIEW, 2026-08-31. The file is "
+                        "2,700 lines and ~56,000 tokens, which is a third of what D60 dropped "
+                        "the `@` over — so the header's promise that one Read answers the "
+                        "question had quietly become a promise to spend a fifth of a context "
+                        "window. `make status` lifted three lines of it and nothing rendered "
+                        "the rest. A file that can only be read whole is read by nobody and "
+                        "edited by everybody, which is how TRACKS sat wrong for three weeks "
+                        "in the file whose whole argument is that it is audited as hard as it "
+                        "is trusted. D18 governs it because it WRITES NOTHING and gates "
+                        "nothing: it is a renderer, so it may be as clever as it likes. Its "
+                        "`--stale` view is the one thing here that reports what no audit row "
+                        "can — `git blame` on the map's own lines against each file's last "
+                        "commit — and it is deliberately NOT a check: a note written to "
+                        "outlive a refactor is not a defect, so this ranks suspicion and "
+                        "never fails.",
+            },
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
@@ -1113,7 +1168,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -1465,7 +1520,6 @@ COMPONENTS = [
         # the motion trigger's constants are tuned here (src/motion.ts) even though the
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
-        "step": 10,
         "does": "the web app. TEN routes behind a hand-written hash router, NINE of them the "
                 "owner's — the capture screen that Gate B runs on, the runs screen the "
                 "pipeline lives on, the review queue, the pricing worklist, the order "
@@ -2802,10 +2856,30 @@ COMPONENTS = [
 
 # ------------------------------------------------------------------------------- tracks
 #
-# Two tracks share one rig (D14). The codes track has its own decisions file, C1-C7.
+# Two tracks share one rig (D14). Each names the decisions file and the rules file that
+# govern it, and `owns` is the path prefix that decides which — `scripts/decision-context.py`
+# reads it to answer a `codes/` edit with C decisions instead of silently finding none.
+#
+# THIS SECTION HAD NO READER FROM 2026-08-07 TO 2026-08-31 and went wrong twice while
+# nothing could tell: it said `C1-C7` after the file had reached C11, and it said the codes
+# track's delivery automation was "gated on singles Gate B" long after Gate B passed
+# (2026-08-22) and the gating system was retired outright (2026-08-23). Both wrong for over
+# a week, in the file whose whole argument is that it is audited as hard as it is trusted.
+# It has a reader and a check now — see the docstring at the top of this file.
 
 TRACKS = [
-    {"name": "singles", "decisions": "docs/DECISIONS.md", "rules": "CLAUDE.md", "status": "current"},
-    {"name": "codes", "decisions": "docs/CODES-DECISIONS.md", "rules": "code-card-fork/CLAUDE.md",
-     "status": "shakedown", "note": "manual eBay sales allowed early; delivery automation gated on singles Gate B"},
+    {"name": "singles", "owns": "", "decisions": "docs/DECISIONS.md", "rules": "CLAUDE.md",
+     "status": "current",
+     "note": "the default track: every path this map covers except the codes ones below."},
+    {"name": "codes", "owns": "codes/", "decisions": "docs/CODES-DECISIONS.md",
+     "rules": "code-card-fork/CLAUDE.md", "status": "shakedown",
+     "note": "C1-C11. The decode path, the ledger and the product claim are BUILT, and D70 "
+             "gave the track a screen of its own at #/codes on 2026-08-30 — so 'shakedown' "
+             "no longer means unbuilt, it means unproven: docs/specs/code-cards.md section 8 "
+             "records that NO REAL CODE CARD HAS EVER BEEN THROUGH THIS PIPELINE, and every "
+             "measurement in the track is synthetic. The channel decision is RECORDED and "
+             "NOT executed — six venue families were researched and every one came back "
+             "marginal — which is what the track is actually waiting on. It is NOT waiting "
+             "on a gate: this row said 'gated on singles Gate B' until 2026-08-31, and that "
+             "gate passed 2026-08-22 with the gating system retired the day after."},
 ]

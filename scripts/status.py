@@ -38,6 +38,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -74,8 +75,10 @@ SOURCES = (
     {
         "path": "docs/map.py",
         "kind": "literals",
-        "requires": ("BUILD_ORDER", "GATES", "COMPONENTS"),
-        "why": "build order, gate status, per-component status and governed_by",
+        "requires": ("BUILD_ORDER", "GATES", "COMPONENTS", "TRACKS"),
+        "why": "build order, gate status, per-component status and governed_by, and the "
+               "two tracks. TRACKS was added to this tuple on 2026-08-31 (D80): it had no reader "
+               "anywhere and no check, and had been wrong in two ways for three weeks.",
     },
     {
         "path": "scripts/decision-context.py",
@@ -355,9 +358,28 @@ def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[st
 
     entry = next((c for c in components if c.get("step") == step_no), None)
     out: List[str] = []
+
+    # NO COMPONENT NAMES A DIRECTORY FOR STEP 9, AND THAT IS THE MAP'S RULE RATHER THAN A
+    # HOLE. An entry only earns its keep once the path is real: a `planned` entry at a
+    # guessed path audits clean forever and never fires the day the directory arrives. So
+    # this branch is the NORMAL one for a step whose name is undecided, and it used to
+    # print "no component in docs/map.py claims this step" — true, unexplained, and read as
+    # a defect in the map by everyone who saw it, including for a week where it was the
+    # entire content of this section.
     if entry is None:
-        out.append(field("Build", f"step {step_no} — no component in docs/map.py claims this step"))
-        out.append(cont("The map names a directory only once the name is decided (see its header)."))
+        out.append(field("Build", f"step {step_no} — {nxt[0].get('title')}"))
+        out.append(cont("The only unblocked step. Nothing else moves until it lands."))
+        out.append(cont("No directory is named for it yet — deliberate: the map names a"))
+        out.append(cont("path only once it is real, because a guessed one audits clean"))
+        out.append(cont("forever and never fires the day the directory arrives."))
+        governed = sorted(set(re.findall(r"\bD[1-9][0-9]?\b", str(nxt[0].get("note") or ""))),
+                          key=lambda d: int(d[1:]))
+        for i, name in enumerate(governed):
+            title, rulings = gists.get(name, ("(no such entry in docs/DECISIONS.md)", []))
+            out.append(field("Governed by" if i == 0 else "", f"{name:<4} {title}"))
+            for ruling in rulings[:1]:
+                out.extend(cont(f"     {line}") for line in wrap(ruling, LABEL + 7))
+        out.append(field("Read first", f"docs/GATES.md step {step_no} · `make map`"))
         return out
 
     path = str(entry.get("path"))
@@ -371,7 +393,7 @@ def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[st
         out.append(field("Governed by" if i == 0 else "", f"{name:<4} {title}"))
         for ruling in rulings[:1]:
             out.extend(cont(f"     {line}") for line in wrap(ruling, LABEL + 7))
-    out.append(field("Read first", f"docs/GATES.md step {step_no} · docs/map.py COMPONENTS {path}"))
+    out.append(field("Read first", f"docs/GATES.md step {step_no} · `make map ARGS={path}`"))
     return out
 
 
@@ -524,6 +546,19 @@ def audit_line() -> List[str]:
     ]
 
 
+# A map `note` argues its case at length — that is what the field is for. Printing the
+# WHOLE of one under a heading called "Blind spots" put a 900-character paragraph about the
+# codes package into `make status`, most of it about what the track deliberately does not
+# share with the singles track, none of that a blind spot. Taking the sentences that
+# actually say `blind` keeps the field free to keep arguing and the status line short.
+_SENTENCE = re.compile(r"(?<=[.;])\s+")
+
+
+def blind_sentences(note: str) -> str:
+    hits = [part.strip() for part in _SENTENCE.split(note) if "blind" in part.lower()]
+    return " ".join(hits) if hits else note
+
+
 def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     """From structured fields, never from prose.
 
@@ -542,7 +577,7 @@ def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     for component in mapdata.get("COMPONENTS") or []:
         note = str(component.get("note") or "")
         if "blind" in note.lower() or "NOT that" in note:
-            notes.append(note)
+            notes.append(f"{component.get('path')} — {blind_sentences(note)}")
 
     if not notes:
         return []
@@ -863,6 +898,8 @@ def render() -> str:
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
+    lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
+    lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
     lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
     lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()

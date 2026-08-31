@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status map harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -26,6 +26,7 @@ help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
+	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
 	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
 	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
@@ -264,6 +265,11 @@ hooks:
 # quietly printing less, because the shorter version is the one you would believe.
 status:
 	@python3 scripts/status.py
+
+# The map, rendered. Stdlib only and no project import, same as `status` — see the module
+# docstring for why the raw file could not be the only way to read it.
+map:
+	@python3 scripts/map-view.py $(ARGS)
 
 harness:
 	@$(PYTHON) harness/run.py

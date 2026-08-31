@@ -4055,3 +4055,30 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 | 3 | `facingMode: "environment"` broke desktop camera selection | Device picker; lint rule |
 | 4 | Web Audio contexts created per-sound, never closed | Code review checklist |
 | 5 | CSV import matched by box+position, silently skipped identified cards, reported nothing for unmatched rows | Harness test 3 (bidirectional reporting) |
+
+## D80 — A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
+
+**The map was never stale in the part anybody checked, and that is the finding.** `docs/map.py` took 75 commits on 2026-08-30 alone. Measured properly — `git blame` on the map's own lines for each of its 155 module entries, against that file's last commit — **142 of 155 entries were written at or after the file they describe last moved**, worst gap 17 days. The `repo map` row was green throughout, at 166 entries. No other prose in this repo is maintained that well.
+
+**What had gone wrong was everything the map says about ITSELF, and it correlates exactly with having no reader.**
+
+| section | reader before this entry | state |
+|---|---|---|
+| `COMPONENTS` | the audit, the hook, `make status` | current, 2,400 lines of it |
+| `BUILD_ORDER` | `make status` | accurate; frozen at step 15 since 2026-08-24 |
+| `GATES` | the audit, reconciled against `docs/GATES.md` | correct |
+| `TRACKS` | **nothing** | wrong twice, for three weeks |
+
+`TRACKS` said `C1-C7` after `docs/CODES-DECISIONS.md` had reached C11, and said the codes track's delivery automation was **"gated on singles Gate B"** — a gate that passed 2026-08-22, in a gating system retired outright on 2026-08-23. Both false for over three weeks in the file whose entire argument, D17, is that it is audited exactly as hard as it is trusted.
+
+**A section with no consumer is worse than a section that is wrong.** Wrong-with-a-reader is found the first time somebody runs the reader. Wrong-with-no-reader is a claim the repo makes about itself that has no way of ever being contradicted, and it decays silently while looking exactly like the sections that work. So the rule is: **give it a job or delete it**, and `make docs-audit`'s `map sections` row fails the commit that adds a top-level name nothing reads.
+
+**`TRACKS` was given a job rather than deleted, because it turned out to answer a real question nobody was being asked.** `scripts/decision-context.py` resolves a file to its decisions through `COMPONENTS` only, so a session editing `codes/` was shown the D entries the rig shares and **was never told that C1-C11 and a second rules file exist at all** — D14's two-tracks-one-rig arriving as a surprise at the worst moment. The track now carries an `owns` prefix, the hook routes by it, and `scripts/status.py` declares `TRACKS` in `SOURCES` so the `status sources` row fails the commit that deletes it.
+
+**The build order is a backlog now, and it is not renumbered to pretend otherwise.** Step 15 is the last step anyone added; D34 through D77 landed after it and not one is a step. That is not the map falling behind — work is proposed and argued in this file, and the numbered list is what is left of an ordering that already happened. Step 9 is the exception and is genuinely open: nothing has vendored the catalog. So steps 1-15 stay exactly as they are, under the rule `docs/GATES.md` applies to its own measurements — **what happened is not edited to match a later tree** — and the header says which of the two it is. `build order mirror` checks the step NUMBERS against GATES.md's numbered list and deliberately not the titles or statuses, which the two files word differently on purpose.
+
+**The map had no human view, and that is why nobody could tell.** 2,700 lines and ~56,000 tokens — a third of what D60 dropped the `@` over — so the docstring's promise that one Read answers the question had quietly become a promise to spend a fifth of a context window. `make status` lifted three lines of it and nothing rendered the rest. **A file that can only be read whole is read by nobody and edited by everybody**, which is the mechanism behind every row of the table above. `make map` renders it: the shape, one package, one module, everything a decision governs, and `--stale`.
+
+**`--stale` reports what no audit row can, and is deliberately not one.** It is the blame measurement above, run on demand. A note written to outlive a refactor is not a defect, so it ranks suspicion and never fails — the same reasoning that keeps `views exposure` advisory, one step further out.
+
+**The docstring's own consumer list is checked, because it was wrong in the way that matters most.** It said "three consumers" and omitted `scripts/status.py` — **the only one a person runs**. A reader asking how to look at this file was told, by the file, that there was no way to.
