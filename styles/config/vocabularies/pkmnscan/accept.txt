@@ -276,6 +276,7 @@ reCAPTCHA
 buylist
 buylists
 Tesseract
+Nasus
 
 # ---------------------------------------------------------------------------------
 # ADDED 2026-08-30, when `make vale` stopped running over four files and started

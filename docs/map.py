@@ -1251,7 +1251,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1834,10 +1834,17 @@ COMPONENTS = [
             # seen it hold a real card — the distinction the whole entry note above is about,
             # and the one a reader skimming `does` lines would otherwise lose.
             "src/ReviewQueue.tsx": {
-                "does": "D43's catalog lookup for a card the pipeline offered no rows for — "
-                        "suggested on arrival from the card's own read, searchable by name, "
-                        "number or SKU, drawn in the rows' own slot and answered on the same "
-                        "digits; "
+                # D43 IS THE PORT DECISION AND HAS NEVER GOVERNED THIS FILE. It stood here
+                # in the prose AND in `governed_by` until 2026-08-31, which is why
+                # `scripts/decision-context.py` recited "the port follows the store" to every
+                # session about to edit the review queue. The lookup it names is D46's. D72
+                # is the entry for citations that stop pointing at their argument; this one
+                # was never right rather than having moved.
+                "does": "D46's catalog lookup, reachable from EVERY queued entry (D77) — "
+                        "suggested on arrival where the pipeline offered no rows, and drawn "
+                        "on `L` where it offered rows that are the wrong card, searchable by "
+                        "name, number or SKU, replacing the pipeline's rows rather than "
+                        "sitting beside them because both are answered on the same digits; "
                         "the review queue: one card at a time, photo first, the choices "
                         "BESIDE the photograph above 900px and stacked below it, the "
                         "reason as a human label over its machine string, candidate rows "
@@ -1850,7 +1857,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D43", "D46", "D55", "D67"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -2618,7 +2625,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

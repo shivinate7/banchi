@@ -4294,8 +4294,28 @@ def _answer_target(
     # card in both is a card the owner answers from the review screen.
     offering, governing = holders[0]
     candidates: List[dict] = list(governing.candidates)
-    if not candidates and from_catalog:
+    if from_catalog:
         # D46 — THE ROW CAME OUT OF THE EXPORT, SO IT IS NOT FREE TEXT.
+        #
+        # D77 WIDENED WHICH ENTRIES THIS REACHES, AND CHANGED NOTHING ABOUT WHAT IT CHECKS.
+        # The condition was `not candidates and from_catalog` until 2026-08-31, on D46's
+        # reasoning that a card the pipeline found rows for already has its answer on screen.
+        # Box 3 card 66 is the counter-example and it was the only open entry in the store:
+        # `Nasus, Ascended` read with its number misread as `8/298`, which is a REAL key in
+        # that export and belongs to `Get Excited!` — so the entry carries two confident
+        # candidate rows for a different card, at $0.07 and $0.29, while the card's own row
+        # (`9405493`, `046/166`, Near Mint Foil, $0.74) sat in the same file. The old gate
+        # made "the pipeline offered nothing" the test for whether a human may point at a
+        # row, and the test that was wanted is "the pipeline is wrong", which is not a thing
+        # the entry can know about itself. Measured on that card: the lookup returns the
+        # right row FIRST for an empty query, because the read's NAME was right all along.
+        #
+        # WHAT IS UNCHANGED IS THE PART THAT WAS EVER LOAD-BEARING. The SKU is re-read out of
+        # THIS CARD'S OWN EXPORT below, inside the write lock; the condition comes off that
+        # row and never off the request; an unknown SKU refuses. So no string a client sends
+        # can become a listing on its own — the property the original refusal protected — and
+        # an answer that does NOT set this flag still reaches `sku_not_a_candidate` and may
+        # still only choose from the rows the pipeline offered.
         #
         # The refusal below names the evidence it stands on: "Every one of them wanted a
         # re-export or a re-shoot, never a typed SKU". That was true of the cards it was
@@ -4329,12 +4349,19 @@ def _answer_target(
         # empty tuple into the entry. Every one of them wanted a re-export or a
         # re-shoot, never a typed SKU, so the refusal stands on the evidence it asked
         # for.
+        #
+        # WHAT IT NO LONGER MEANS IS "THIS CARD CANNOT BE ANSWERED". D46 gave it a remedy
+        # and the sentence went on describing the dead end for two days; D77 widened the
+        # remedy to every entry and the sentence would have been wrong in a second way. It
+        # names the flag now, because the operator reading this refusal on a screen has the
+        # control that satisfies it a few pixels away.
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "no_candidates",
             f"Box {box}, card {index} is queued in {offering.name} as "
-            f"`{governing.reason}` and records no candidate rows, so there is nothing to "
-            f"choose. It needs a re-shoot or a re-identify, not an answer.",
+            f"`{governing.reason}` and records no candidate rows, so there is nothing here "
+            f"to choose. Search this card's own export and answer with `from_catalog`, or "
+            f"re-shoot it.",
         )
 
     chosen = _candidate_with_sku(candidates, sku)
@@ -4564,6 +4591,13 @@ def do_review_catalog(box: int, index: int, query: str) -> dict:
     IT OFFERS; IT NEVER ANSWERS. Nothing here writes a SKU onto a card — the operator still
     presses a digit, and `do_review_answer` still validates what they picked. This route is
     the evidence, not the decision.
+
+    IT WAS NEVER GATED ON THE CARD HAVING NO CANDIDATES AND STILL IS NOT, which under D46
+    was an accident of it being free and read-only, and under D77 is the point. The gate
+    lived entirely in the two places that decide: the screen, which drew the search only in
+    the zero-candidate arm, and `_answer_target`, which honoured `from_catalog` only there.
+    Both are widened; this route did not have to move, because searching an export the
+    operator is already looking at was never a thing worth refusing.
     """
     # `Store().read()` answers a snapshot outright rather than a context manager — this
     # route takes no lock because it writes nothing.
@@ -4731,10 +4765,16 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
         return _reverse_answer(box, index)
 
     _reject_unknown(payload, ANSWER_FIELDS)
-    # D46. Opt-in, per request, and only this route ever passes it: the group route below
-    # calls `_answer_target` too, and a group is by definition uniform over ONE shared
-    # candidate row — a zero-candidate entry can never qualify — so widening it there would
-    # open a path nothing could ever legitimately walk.
+    # D46. Opt-in, per request, and only this route ever passes it.
+    #
+    # THE GROUP ROUTE STILL DOES NOT, AND D77 CHANGED THE REASON RATHER THAN THE RULE. The
+    # old reason was arithmetic — a group is uniform over ONE shared candidate row, so a
+    # zero-candidate entry could never qualify and the flag had nothing to reach. Widening
+    # the flag to entries that DO have candidates retires that argument, so the real one has
+    # to be said: a catalog row is found by a person looking at ONE photograph, and D29's
+    # group answer is a claim about a set of cards nobody is looking at individually.
+    # Pointing at a row found for card A and applying it to fifteen others is the laundering
+    # this whole guard exists to prevent, arriving by the one door that skips the looking.
     from_catalog = _optional_flag(payload, "from_catalog", "from_catalog_invalid")
     sku = _require_text(
         payload,
@@ -4816,7 +4856,15 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             # PIPELINE offered from a row a HUMAN went and found. Those are different claims
             # about how much the machine knew, and after the write there is no other evidence
             # which one happened.
-            from_catalog=True if from_catalog and not governing.candidates else None,
+            #
+            # D77 DROPPED THE `not governing.candidates` HALF, AND THAT IS THE FLAG FINALLY
+            # MEANING WHAT ITS NAME SAYS. Under D46 the two conditions could not come apart,
+            # so the extra clause cost nothing and read as belt-and-braces; now they can, and
+            # keeping it would have written `from_catalog` off a card that had rows and
+            # silently omitted it off a card whose rows were wrong — which is exactly the
+            # answer the line most needs to distinguish, because it is the one where the
+            # pipeline had a confident offer and a human overruled it.
+            from_catalog=True if from_catalog else None,
         )
 
         # WHETHER THE UNDO WILL BE ALLOWED, ANSWERED NOW RATHER THAN AT THE TAP THAT FAILS. This
