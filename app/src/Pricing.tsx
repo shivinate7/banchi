@@ -509,8 +509,23 @@ export function Pricing() {
   )
 
   const table = payload?.pricing ?? null
-  const answers = (doc?.overrides ?? {}) as Record<string, unknown>
-  const unpriced = (doc?.no_market_data ?? {}) as Record<string, unknown>
+  /* MEMOISED BECAUSE `?? {}` BUILDS A NEW OBJECT EVERY RENDER, and both of these are read as
+     dependencies rather than as values — `answerFor` and `held` below, and the key handler
+     through them. Unmemoised they defeated every memo downstream: `answerFor` was rebuilt on
+     every paint, so `onKey` was too, so the whole chain memoised nothing while looking as
+     though it did. Found by `react-hooks/exhaustive-deps` on the day it was switched on.
+
+     `[doc]` and not `[doc?.overrides]`: the document is replaced wholesale on every write
+     (see the autosave effect), so the narrower key would be a second way of saying the same
+     thing and a third thing to keep in step. */
+  const answers = useMemo(
+    () => (doc?.overrides ?? {}) as Record<string, unknown>,
+    [doc],
+  )
+  const unpriced = useMemo(
+    () => (doc?.no_market_data ?? {}) as Record<string, unknown>,
+    [doc],
+  )
 
   const rows = useMemo(() => table?.skus ?? [], [table])
 
@@ -799,7 +814,18 @@ export function Pricing() {
         snap(sku, 'now')
       }
     },
-    [answerFor, commit, historyFor, move, openHistory, snap, toggleHold, undoLast],
+    /* `suggestionFor` IS LISTED BECAUSE THE MEMO ABOVE MADE THIS HANDLER STABLE. It was
+       omitted and harmless while `answers` and `unpriced` were rebuilt every render: this
+       callback was rebuilt with them, so its closure could never go stale. Memoising them
+       fixed that churn and would have ARMED the omission — a preset change gives
+       `suggestionFor` a new identity off `[doc]`, and a handler holding the old one would
+       apply the PREVIOUS preset's suggested price to a key the operator pressed after
+       switching. A wrong number on a listing, silently.
+
+       Adding it costs nothing: `suggestionFor` changes exactly when `doc` does, and `doc`
+       already reaches this array through `answerFor`. What it buys is that the two stop
+       being correct by coincidence. */
+    [answerFor, commit, historyFor, move, openHistory, snap, suggestionFor, toggleHold, undoLast],
   )
 
   /* THE PHOTO PANEL FOLLOWS FOCUS WHILE IT IS OPEN, and the same key closes it — so

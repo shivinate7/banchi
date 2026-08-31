@@ -1986,7 +1986,22 @@ export function CaptureScreen() {
     // `rememberCaptureId` is stable (no dependencies of its own), so it is listed for
     // honesty rather than because it can change: an identity that moved per render would
     // re-arm the trigger seam, which keys its effect off `doCapture`.
-  }, [box, camera, finish, gameEntry, halt, rarityClaim, rememberCaptureId, setHint])
+    //
+    // `product` WAS MISSING FROM THIS LIST AND IT SENT THE PREVIOUS STACK'S CLAIM. Found by
+    // `react-hooks/exhaustive-deps` the day it was switched on, in code that had been merged
+    // hours earlier. The claim is read at `product: product ?? undefined` above; the callback
+    // is memoised on this array; and picking a product changes NONE of the other eight, so
+    // the memoised closure kept whatever `product` held when it was last built. First stack
+    // of a session that sends `null` is the loud outcome the comment at the call site is
+    // counting on — an unclaimed code card is refused by both channel lanes. The SECOND stack
+    // is the quiet one: it carries stack one's product, on real cards, and nothing downstream
+    // can tell. That is precisely the failure the call site says it declined to create by not
+    // writing a `booster` default, arriving by the other door.
+    //
+    // It belongs here for the same reason `finish` and `rarityClaim` do, and it costs what
+    // they cost: the identity moves when the operator makes a claim, which is an act, not a
+    // render. The seam re-arms on a keypress the operator made and not on a paint.
+  }, [box, camera, finish, gameEntry, halt, product, rarityClaim, rememberCaptureId, setHint])
 
   /* UNDO, `depth` CARDS OF IT, NEWEST FIRST. `depth` is 1 for `U` and for the button on the
    * top row; it is N for the Nth row of the stack, which means "this card and everything
