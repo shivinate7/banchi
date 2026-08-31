@@ -1,5 +1,23 @@
 # Batch script v2 — spec
 
+## STATUS — BUILT 2026-08-03, and run against real cards since
+
+**Step 4 is done and this file describes live code.** `./pkmnscan identify | join | emit |
+reconcile` exists, and it is no longer a spec waiting on anything: Gate B put 53 real cards
+through all four commands on 2026-08-22 and reconciled back with zero unmatched in either
+direction, and box 2 followed with 544. `docs/GATES.md`'s build-order step 4 carries the run
+record and the four defects those cards found that no fixture could.
+
+**The document amendments this file was gated on were all applied on 2026-08-03**, and that
+section is marked as a record rather than an open gate. The gating sentence below is left
+standing as the original terms.
+
+**This is the doc `make docs-audit` couples to `pipeline/`, `identify/`, `geometry/`,
+`store/` and `cli/`** — twenty staged lines under any of them without this file asks the
+coupling question. It is the most-read spec in the repo for that reason.
+
+---
+
 Build-order step 4. Interviewed and settled 2026-08-03. Supersedes nothing; where it
 contradicts an existing document that contradiction is called out explicitly under
 [Required document amendments](#required-document-amendments) and needs the owner's edit
@@ -589,7 +607,22 @@ toward a real card's 63/88 proportions first, because the detector's boxes come 
 systematically short for their width and a flat margin cannot fix a proportional error. A
 frame where detection refuses is sent whole and the preflight names the count.
 
-**D3 rung 1's claim is a SET.** One member determines exactly as this table's behaviour
+**And so is a frame where detection ANSWERED and the box was not the card** — D75. The
+detector has no way to say "found the wrong thing", and over the owner's 867 real
+photographs it returned a box for every one and refused none while nine of them were a
+card-shaped rectangle inside the card. `identify/images.py:crop_refusal` declines a crop
+under 30% of the frame that keeps under half the frame's detail, `prepare` sends the whole
+frame instead, and the preflight names that count SEPARATELY from the detection refusals
+above and prints the reason per card. The same guard stands in front of the crop retry in
+§4.5, where the bands would otherwise be cut out of the wrong rectangle and sent as evidence.
+
+**And §4.5's bands are now cut from a card-shaped rectangle**, which they were not until
+2026-08-31 — D75's amendment. `card_rect`'s aspect correction reached the primary image and
+not `geometry/crop.py:registered_card`, so every band was a fraction of a box measured at a
+median aspect of 0.789 against a real card's 0.716. It moved down into
+`geometry.corrected_bounds` so both paths share one computation.
+
+**D3 rung 1's claim is a SET.** One member determines exactly as this table's behavior
 always described; two or more filter the candidate rows and let rungs 2 and 3 choose within
 what survives. `--variant` is unchanged by that — it still fills a gap and still never
 overrides — but it fills it with a one-member claim, which is what every record written
@@ -605,6 +638,7 @@ before the amendment reads as.
 | Batch expires (24h API cap) | Reported per card; retried within budget; then main queue. |
 | Photo has no sidecar and no recoverable position | Identified, main queue, `no_position`. |
 | Card boundary not detectable | No crop retry; main queue; named in report. |
+| Card located, box is not the card | Crop refused with its reason; whole frame sent; no crop retry; named in report as `unfit crop` (D75). |
 | Two sets collide on one join key | Set hint disambiguates; otherwise main queue, `set_ambiguous`. |
 | Matched row has no market price | `no_market_data`; never auto-priced. |
 | Sub-threshold decision missing | `emit` refuses to write anything. |

@@ -48,6 +48,7 @@
     GET    /pipeline/runs/<name>           one run: manifest, console tail, artefacts
     GET    /pipeline/runs/<name>/file      one artefact's bytes — the import CSVs, the report
     GET    /pipeline/runs/<name>/pricing   the per-SKU pricing table and this run's answers
+    GET    /pipeline/runs/<name>/scope    what a fetch would ask TCGplayer for, and why
     POST   /pipeline/runs/<name>/export   fetch this run's Filtered Export from TCGplayer
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
@@ -511,6 +512,10 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # is latent rather than live. Ordered defensively all the same: the day somebody adds a
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
+# What a fetch WOULD ask TCGplayer for, before one is pressed (D76). Same hazard as the
+# three above and the same remedy: `scope` is `[a-z]+`, so `_RUN_STEP_RE` would answer it
+# `no_such_step` if this were declared after it. GET only — it presses nothing.
+_RUN_SCOPE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/scope$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
@@ -4292,7 +4297,7 @@ def _answer_target(
     if from_catalog:
         # D46 — THE ROW CAME OUT OF THE EXPORT, SO IT IS NOT FREE TEXT.
         #
-        # D75 WIDENED WHICH ENTRIES THIS REACHES, AND CHANGED NOTHING ABOUT WHAT IT CHECKS.
+        # D77 WIDENED WHICH ENTRIES THIS REACHES, AND CHANGED NOTHING ABOUT WHAT IT CHECKS.
         # The condition was `not candidates and from_catalog` until 2026-08-31, on D46's
         # reasoning that a card the pipeline found rows for already has its answer on screen.
         # Box 3 card 66 is the counter-example and it was the only open entry in the store:
@@ -4346,7 +4351,7 @@ def _answer_target(
         # for.
         #
         # WHAT IT NO LONGER MEANS IS "THIS CARD CANNOT BE ANSWERED". D46 gave it a remedy
-        # and the sentence went on describing the dead end for two days; D75 widened the
+        # and the sentence went on describing the dead end for two days; D77 widened the
         # remedy to every entry and the sentence would have been wrong in a second way. It
         # names the flag now, because the operator reading this refusal on a screen has the
         # control that satisfies it a few pixels away.
@@ -4588,7 +4593,7 @@ def do_review_catalog(box: int, index: int, query: str) -> dict:
     the evidence, not the decision.
 
     IT WAS NEVER GATED ON THE CARD HAVING NO CANDIDATES AND STILL IS NOT, which under D46
-    was an accident of it being free and read-only, and under D75 is the point. The gate
+    was an accident of it being free and read-only, and under D77 is the point. The gate
     lived entirely in the two places that decide: the screen, which drew the search only in
     the zero-candidate arm, and `_answer_target`, which honoured `from_catalog` only there.
     Both are widened; this route did not have to move, because searching an export the
@@ -4762,7 +4767,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     _reject_unknown(payload, ANSWER_FIELDS)
     # D46. Opt-in, per request, and only this route ever passes it.
     #
-    # THE GROUP ROUTE STILL DOES NOT, AND D75 CHANGED THE REASON RATHER THAN THE RULE. The
+    # THE GROUP ROUTE STILL DOES NOT, AND D77 CHANGED THE REASON RATHER THAN THE RULE. The
     # old reason was arithmetic — a group is uniform over ONE shared candidate row, so a
     # zero-candidate entry could never qualify and the flag had nothing to reach. Widening
     # the flag to entries that DO have candidates retires that argument, so the real one has
@@ -4852,7 +4857,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
             # about how much the machine knew, and after the write there is no other evidence
             # which one happened.
             #
-            # D75 DROPPED THE `not governing.candidates` HALF, AND THAT IS THE FLAG FINALLY
+            # D77 DROPPED THE `not governing.candidates` HALF, AND THAT IS THE FLAG FINALLY
             # MEANING WHAT ITS NAME SAYS. Under D46 the two conditions could not come apart,
             # so the extra clause cost nothing and read as belt-and-braces; now they can, and
             # keeping it would have written `from_catalog` off a card that had rows and
@@ -8370,6 +8375,33 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_pipeline_history(match.group(1), asked[0]),
+                )
+            match = _RUN_SCOPE_RE.match(path)
+            if match:
+                # D76's lever, drawn before it is pulled. `game`, `scope` and `set_ids` are
+                # the same three fields `POST .../export` takes, so the screen asks this
+                # route the identical question it is about to press — which is what stops the
+                # panel describing a scope different from the one the button would send.
+                #
+                # `set_ids` REPEATS rather than carrying a comma list, because a comma inside
+                # one value is exactly how a query-string list starts lying and `parse_qs`
+                # already gives the honest shape for free.
+                asked = parse_qs(parsed.query, keep_blank_values=True)
+                wanted: dict = {}
+                if asked.get("game", [""])[0]:
+                    wanted["game"] = asked["game"][0]
+                if asked.get("scope", [""])[0]:
+                    wanted["scope"] = asked["scope"][0]
+                ids = [v for v in asked.get("set_ids", []) if v.strip()]
+                if ids:
+                    # NOT COERCED SILENTLY. A non-numeric id reaches the handler as the
+                    # string it was and is refused there by name, rather than being dropped
+                    # here into a scope that quietly means something else.
+                    wanted["set_ids"] = [
+                        int(v) if v.strip().isdigit() else v for v in ids
+                    ]
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_scope(match.group(1), wanted)
                 )
             match = _RUN_ITEM_RE.match(path)
             if match:

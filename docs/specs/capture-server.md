@@ -1,5 +1,28 @@
 # Capture server — execution spec (build-order step 5)
 
+## STATUS — BUILT 2026-08-11. This is the record of a plan that ran, not a plan to run.
+
+**Step 5 is done and the imperative voice below is historical.** `server/capture_server.py`
+exists, `docs/map.py` carries the package as built, and T7 has reached `store/`, `server/`
+and `cli/` since 2026-08-13. Read the sections as the argument behind what shipped.
+
+**Sections 2, 3, 4 and 7 are one-time edits, all applied.** They name line numbers in files
+that have since moved and they instruct edits already in git. **Section 4 was applied and
+then deliberately reversed**: it deletes the `PostToolUse` block from `.claude/settings.json`,
+which happened on 2026-08-11 — and the block was re-added on 2026-08-12 with build-order
+step 6, when TypeScript arrived and gave it something real to run. That file's own
+`_PostToolUse_typecheck_note` carries the argument. A session following section 4 today
+would undo a working check.
+
+**Sections 5 and 6 are the ones still worth reading**: the allocator's rule and the server's
+contract, including the sidecar seam that can fail silently. Both describe live code.
+
+**The server has grown well past the five routes this file was written about.** It does not
+publish a route count and neither does `docs/GATES.md`, deliberately — `server/capture_server.py`'s
+own header is the register.
+
+---
+
 Planning output of the 2026-08-11 workflow review; owner-approved. The executing session
 implements from this file, top to bottom, and asks nothing. Every judgment call below is
 already made; deviating from one is an owner conversation, not an implementation choice.
@@ -34,7 +57,8 @@ this session does not fix that.** Verified: no module under `harness/tests/` imp
 `store` or `cli`. That is 2,509 lines, about 40% of product code, including the package
 the capture server writes through. The mitigation is honesty, not coverage: the capture
 server says so in its own module docstring, and `docs/map.py` stops implying otherwise
-Leave lines 37-38 exactly as they are. Insert a blank line and this blockquote after line 38, before "### 0.3":
+(section 3.2). Do not add a harness test for the server in this plan, and do not register
+T7 — D16 rejected that id by name and `scripts/docs-audit-allow.txt` records why.
 
 > **Status, 2026-08-13:** T7 exists and is registered, and it reaches `store/`, `server/`
 > and `cli/` — added through exactly the process the batch-script spec's §11 demands:
@@ -46,7 +70,6 @@ Leave lines 37-38 exactly as they are. Insert a blank line and this blockquote a
 > `server/capture_server.py` now says T7 reaches it, where the docstring this paragraph
 > cites once said the opposite. The instruction is left standing as the record of what
 > this session was told.
-T7 — D16 rejected that id by name and `scripts/docs-audit-allow.txt` records why.
 
 ### 0.3 — Writing docs in this repo without blocking your own commit
 
@@ -540,7 +563,7 @@ root.** No thumbnails, no previews, no `-original` copies.
 
 A missing or malformed sidecar is explicitly *not* a failure — the reader recovers the
 position from the filename and treats it as equivalent, because the same server writes
-both. That is a safety net, not a licence to skip the file.
+both. That is a safety net, not a license to skip the file.
 
 ### 6.4 — Routes
 

@@ -23,7 +23,13 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Sequence
 
-from geometry.detect import CardBox, GeometryError, open_image
+from geometry.detect import (
+    CARD_ASPECT,
+    CardBox,
+    GeometryError,
+    corrected_bounds,
+    open_image,
+)
 
 # THE ONE EDGE FROM `geometry/` INTO `pipeline/`, and it costs nothing: `pipeline/games.py`
 # imports `typing` and nothing else from this repo, by the rule D22 puts on it so the docs
@@ -96,20 +102,41 @@ def _upscale(image):
     return image.resize(size, Image.LANCZOS)
 
 
-def registered_card(source, box: CardBox):
-    """The card alone: rotated upright, mat cut away, portrait."""
+def registered_card(source, box: CardBox, aspect: float = CARD_ASPECT):
+    """The card alone: rotated upright, corrected to a card's shape, mat cut away, portrait.
+
+    THE CORRECTION IS THE SAME ONE THE PRIMARY IMAGE GETS, and it was missing here until
+    2026-08-31. `geometry.corrected_bounds` restores the height a real card of this width
+    would have, because the border search comes back systematically short at the bottom — the
+    number end — and every band below is cut as a FRACTION of this rectangle. A band that is
+    the bottom 18% of a box 12% too short is not the bottom 18% of the card.
+
+    IT WAS NOT THEORETICAL. Measured over box 2's 543 photographs on the day it was fixed: the
+    registered card's aspect ran to a median of 0.789 against a real card's 0.716, which puts
+    `NUMBER_BAND`'s bottom edge at 0.953 of the card at the median and 0.935 at worst. On
+    `box2/0340.jpg` — box bottom at 0.756 of the frame where its neighbours sit at 0.805 — the
+    number band contained the weakness row and NO collector number at all. That is the retry
+    answering confidently about the wrong strip, on the rung that exists to recover a number
+    the first reading lost.
+
+    CLAMPED TO THE CANVAS, because the correction only grows and a card near the frame's edge
+    would otherwise be cut against nothing and padded black. What is outside the photograph
+    was never going to be recovered; a black bar pretending to be cardboard would move every
+    band below it.
+    """
     if Image is None:  # pragma: no cover - environment problem
         raise GeometryError("cropping needs Pillow — run `make venv`")
 
     image = open_image(source)
     rotated = image.rotate(box.angle, resample=Image.BICUBIC, expand=True)
     width, height = rotated.size
+    left, top, right, bottom = corrected_bounds(rotated.size, box, aspect)
     card = rotated.crop(
         (
-            int(round(box.left * width)),
-            int(round(box.top * height)),
-            int(round(box.right * width)),
-            int(round(box.bottom * height)),
+            max(0, int(round(left))),
+            max(0, int(round(top))),
+            min(width, int(round(right))),
+            min(height, int(round(bottom))),
         )
     )
     # A card lying on its side passes the aspect gate — the gate compares short to long
@@ -120,7 +147,10 @@ def registered_card(source, box: CardBox):
 
 
 def crop_regions(
-    source, box: Optional[CardBox], bands: Optional[Sequence[str]] = None
+    source,
+    box: Optional[CardBox],
+    bands: Optional[Sequence[str]] = None,
+    aspect: float = CARD_ASPECT,
 ) -> Dict[str, object]:
     """The regions to attach to a crop retry, or `{}` when there is no card.
 
@@ -139,6 +169,11 @@ def crop_regions(
     A name outside `BAND_PROFILES` refuses rather than being skipped. Silently cutting one
     band where two were asked for is a retry that reports itself as having done more than it
     did, and the caller has no way to tell.
+
+    `aspect` IS THE GAME'S `card_aspect` (D22), and it reaches `registered_card`'s shape
+    correction rather than any gate — the detecting was done before this was called. The
+    default keeps a three-argument call byte-identical to what it did before the parameter
+    existed, and it is the right value for all four catalogued games besides.
     """
     if box is None:
         return {}
@@ -154,7 +189,7 @@ def crop_regions(
             + ". Check the game's `crop_bands` in pipeline/games.py."
         )
 
-    card = registered_card(source, box)
+    card = registered_card(source, box, aspect)
     regions = {REGION_CARD: _upscale(card)}
 
     width, height = card.size

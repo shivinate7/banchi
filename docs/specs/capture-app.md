@@ -115,7 +115,7 @@ correctly left alone.
 every one reporting the unregistered route rather than a design defect. That is
 `app/tests/fulfillment.spec.ts` working exactly as written — it asserts the view is on
 screen before measuring anything, because the alternative is nine confident measurements of
-whatever Vite serves for a hash it does not recognise.
+whatever Vite serves for a hash it does not recognize.
 
 **`make harness`, `make lint`, `make typecheck` and `make docs-audit` were all green
 throughout.** That combination is the finding, and it survives the fix: nothing on the path
@@ -325,13 +325,13 @@ in T7, from the other direction.
 error body: what happened, and what to do next. Reserve 500 for bugs.
 
 T7 gains its cases the day this lands. `harness/tests/t7_store_and_seams.py` already
-asserts the allocator behaviour undo depends on — that deleting the newest record releases
+asserts the allocator behavior undo depends on — that deleting the newest record releases
 its index — and says in its own docstring that the route's own cases arrive with the route.
 
 ## 4. server-client
 
 One module under `app/src/` owning every call to the capture server. Not spread across
-components: the failure behaviour in section 5 has to be one decision applied once.
+components: the failure behavior in section 5 has to be one decision applied once.
 
 Base URL is the server on port 8000, configurable through a Vite env variable so the
 Fulfiller's device can point at the Mac by address later. **Since D43 the default is derived
@@ -458,7 +458,7 @@ says where the operator is. **Where the server is ahead of this session the stac
 deep**, unlabelled, exactly as the single control was: the cards in between were never taken
 here, so there is nothing to draw and nothing to promise about them.
 
-### 5.5 — Failure behaviour
+### 5.5 — Failure behavior
 
 **A failed capture stops the run and says so, loudly.** Rejected: quiet retry, and
 queue-and-continue.
@@ -634,7 +634,7 @@ contract can be benchmarks, never components.
 - **Clean HDMI output must be on at the camera.** Otherwise the capture card faithfully
   records the camera's own overlays across the card.
 - **Disable auto power off.** A body that sleeps mid-box drops the HDMI signal, and the
-  failure behaviour in section 5.5 then stops the run — correctly, but avoidably.
+  failure behavior in section 5.5 then stops the run — correctly, but avoidably.
 
 The last two are rig settings rather than code, recorded here because they are invisible
 until a box has been shot wrong.

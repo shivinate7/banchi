@@ -7708,7 +7708,7 @@ def check_review_catalog(checks: Checks) -> None:
     lock, so an unknown one refuses and a condition the client invented is discarded rather
     than believed.
 
-    D75 WIDENED WHICH ENTRIES THE FLAG REACHES, AND THIS BLOCK ASSERTS BOTH HALVES. It used
+    D77 WIDENED WHICH ENTRIES THE FLAG REACHES, AND THIS BLOCK ASSERTS BOTH HALVES. It used
     to reach only an entry with NO candidates, on D46's reasoning that a card the pipeline
     found rows for already has its answer on screen. Box 3 card 66 was the counter-example
     and it was the only open entry in the owner's store: `Nasus, Ascended`, its number
@@ -7884,10 +7884,10 @@ def check_review_catalog(checks: Checks) -> None:
             "pipeline — after the write there is no other evidence which happened",
         )
 
-        # --- D75: an entry WITH rows, whose rows are the wrong card ---
+        # --- D77: an entry WITH rows, whose rows are the wrong card ---
         #
         # THIS BLOCK REPLACES AN ASSERTION THAT SAID THE OPPOSITE, and the reversal is the
-        # whole of D75. It read: "an entry WITH candidates is unaffected by the flag: it
+        # whole of D77. It read: "an entry WITH candidates is unaffected by the flag: it
         # still answers only from the rows it was offered, which is the laundering guard D46
         # must not reach." That sentence conflated two guards. The laundering guard is that
         # no string a client sends becomes a listing on its own, and it is asserted twice
@@ -7904,14 +7904,14 @@ def check_review_catalog(checks: Checks) -> None:
                 3,
                 {"sku": "9192027", "condition": "Near Mint Foil", "from_catalog": True},
             ),
-            "D75: an entry WITH candidate rows can be answered from the catalog, because "
+            "D77: an entry WITH candidate rows can be answered from the catalog, because "
             "rows the pipeline offered can be the wrong card and only a human can see that",
         )
         if answered_over is not None:
             checks.equal(
                 Store().read().inventory.cards["1/3"].sku,
                 "9192027",
-                "D75: and the row a human found is what lands, over the rows it was offered",
+                "D77: and the row a human found is what lands, over the rows it was offered",
             )
             over_line = [
                 event
@@ -7920,7 +7920,7 @@ def check_review_catalog(checks: Checks) -> None:
             ]
             checks.ok(
                 bool(over_line) and over_line[-1].get("from_catalog") is True,
-                "D75: the history line says a HUMAN found this row — the case that most "
+                "D77: the history line says a HUMAN found this row — the case that most "
                 "needs saying, because here the pipeline had a confident offer and was "
                 "overruled, and the old `not candidates` clause omitted the flag exactly "
                 "here",
@@ -7948,7 +7948,7 @@ def check_review_catalog(checks: Checks) -> None:
                 1, 3, {"sku": "9192027", "condition": "Near Mint Foil"}
             ),
             "sku_not_a_candidate",
-            "WITHOUT the flag an entry with rows still answers only from those rows — D75 "
+            "WITHOUT the flag an entry with rows still answers only from those rows — D77 "
             "widened which entries the flag reaches and not what an unflagged answer may say",
         )
         checks.ok(
@@ -12347,13 +12347,161 @@ def check_export_fetch(checks: Checks) -> None:
                     "empty list is the one that fails, and widening is the safe direction",
                 )
                 checks.equal(
-                    (sent.get("MyInventory"), sent.get("PrintingIds")),
-                    (False, ["0"]),
-                    "and two fields are never negotiable: the CATALOG rather than the "
-                    "operator's current listings, and All Printings — a number stocked in "
-                    "several finishes must arrive with all of them or D3 rung 2 decides it "
-                    "from whichever survived",
+                    (
+                        sent.get("MyInventory"),
+                        sent.get("PrintingIds"),
+                        sent.get("ExcludeListos"),
+                    ),
+                    (False, ["0"], True),
+                    "and THREE fields are never negotiable, asserted on the wire rather than "
+                    "in the literal: the CATALOG rather than the operator's current "
+                    "listings; All Printings, because a number stocked in several finishes "
+                    "must arrive with all of them or D3 rung 2 decides it from whichever "
+                    "survived; and listings-with-photos EXCLUDED, which is the owner's "
+                    "standing instruction and the one of the three that nothing downstream "
+                    "could ever catch — D64 measured `Photo URL` empty in every export, "
+                    "filtered and unfiltered, so a wrong value here is invisible in the file "
+                    "it narrows (D76)",
                 )
+
+                # ------------------- A HINT IS EVIDENCE ABOUT ITS OWN CARD AND NO OTHER
+                #
+                # D76, AND THE DEFECT IT IS NAMED FOR. D65 gathered the hints that EXISTED
+                # and never counted the cards carrying none, so a box sorted by rarity with
+                # one set hint on one card scoped the whole export to that one set — and
+                # every unhinted card queued `no_catalog_row` behind a fetch that reported
+                # success and a positive check that PASSED, because the set asked for did
+                # arrive. Measured on the owner's own Riftbound box, and reproduced on a
+                # synthetic 200-card run before the fix: `SetNameIds` came back `["77"]`.
+                #
+                # ASSERTED OFF THE POST BODY, never off the response: a fetch that answers
+                # with the right file proves nothing about what was asked for, and asking
+                # for too little is precisely the failure that still returns a valid CSV.
+                identifications = directory / pipeline_routes.run_files.IDENTIFICATIONS
+
+                def hint_cards(hinted):
+                    """Give the first `hinted` of the run's cards a set hint, clear the rest."""
+                    payload = json.loads(identifications.read_text())
+                    for at, key in enumerate(sorted(payload["cards"])):
+                        payload["cards"][key].pop("set_hint", None)
+                        if at < hinted:
+                            payload["cards"][key]["set_hint"] = "SV09"
+                    identifications.write_text(json.dumps(payload))
+
+                def sent(payload=None):
+                    stub["mode"] = "csv"
+                    stub["body"] = whole.read_bytes()
+                    stub["posted"] = []
+                    fetch({"accept_narrower": True, "accept_unverified": True, **(payload or {})})
+                    return json.loads(
+                        urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
+                    ) if stub["posted"] else {}
+
+                hint_cards(2)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["4242"],
+                    "a box where EVERY card carries a hint and the hint resolves still "
+                    "narrows to that set — D65's saving is intact, and D76 narrows the "
+                    "condition rather than removing it",
+                )
+                hint_cards(1)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["0"],
+                    "and one hinted card among unhinted ones widens to the whole category. "
+                    "This is the defect: the hints describe part of the box, a filter built "
+                    "from them cuts the export to that part, and every card outside it "
+                    "queues no_catalog_row behind a fetch that reported success",
+                )
+                hint_cards(0)
+                checks.equal(
+                    sent().get("SetNameIds"),
+                    ["0"],
+                    "a box with no hint at all widens, as it always did",
+                )
+
+                # -------------------------------------- THE GAME'S OWN RULE, AND THE OPERATOR
+                checks.equal(
+                    (games.export_scope("riftbound"), games.export_scope("pokemon")),
+                    ("category", "sets"),
+                    "the registry carries the per-game rule: riftbound's whole English "
+                    "catalogue is one 10078-row file and has nothing a set filter would buy, "
+                    "and Pokemon's whole category is not measured so it still narrows",
+                )
+                checks.equal(
+                    games.export_scope("nobody_registered_this"),
+                    games.DEFAULT_EXPORT_SCOPE,
+                    "and a game outside the registry answers the DEFAULT rather than raising "
+                    "— unlike `games.get`, because the question is how wide to ask rather "
+                    "than what a card is, and the safe answer to the first is the wider one",
+                )
+
+                hint_cards(2)
+                checks.equal(
+                    sent({"scope": "category"}).get("SetNameIds"),
+                    ["0"],
+                    "the operator widens a box the cards would have narrowed — `scope` is "
+                    "the axis, and asking for more than the inference is always safe",
+                )
+                hint_cards(0)
+                checks.equal(
+                    sent({"set_ids": [4242]}).get("SetNameIds"),
+                    ["4242"],
+                    "and ticking sets by hand narrows a box that carries no hint at all. A "
+                    "hint is a guess about one card; a person ticking a set is making the "
+                    "claim about the BOX that the inference was trying to reconstruct",
+                )
+                status, raw, _ = fetch({"set_ids": [999999]})
+                checks.equal(
+                    (status, error_code(raw)),
+                    (400, "set_ids_unknown"),
+                    "a set id the portal's own category does not publish is refused HERE, "
+                    "because the portal answers a body it cannot read with a 200 carrying "
+                    "its System Error page — which reads exactly like a rejected cookie",
+                )
+                status, raw, _ = fetch({"scope": "everything"})
+                checks.equal(
+                    (status, error_code(raw)),
+                    (400, "scope_invalid"),
+                    "and an axis that is not one of the two is refused by name rather than "
+                    "falling through to the game's rule, which would silently answer a "
+                    "different question from the one asked",
+                )
+
+                # ------------------------------- THE LEVER'S POSITION, BEFORE IT IS PULLED
+                #
+                # `GET .../scope` (D76). The receipt named the scope AFTER the file was on
+                # disk, so the one moment an operator could correct a wrong scope was the one
+                # moment it was not on screen. FREE and it presses nothing — asserted by the
+                # POST count, because "it did not fetch" is the property, not a side effect.
+                hint_cards(1)
+                stub["posted"] = []
+                status, raw, _ = request(
+                    port, "GET", f"/pipeline/runs/{directory.name}/scope"
+                )
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, stub["posted"]),
+                    (200, []),
+                    "the scope preview answers 200 and POSTs nothing — it reads the run and "
+                    "the portal's set list, and never asks for a file",
+                )
+                checks.equal(
+                    [(g["game"], g["cards"], g["hinted"], g["policy"]) for g in body["games"]],
+                    [("pokemon", 2, 1, "sets")],
+                    "and it publishes the evidence the rule reads — how many cards, how many "
+                    "carry a hint, and this game's own rule — which is the fact that was "
+                    "invisible while one hinted card could scope a whole box's export",
+                )
+                checks.equal(
+                    (body["asked"]["scope"], body["asked"]["reason"]),
+                    ("category", "partial_hints"),
+                    "and it says WHICH of the three voices chose the scope and why, in the "
+                    "same shape the fetch's own receipt carries — a scope is only "
+                    "correctable by somebody who can see what decided it",
+                )
+                hint_cards(0)
 
                 # ------------------------------------- THE COOKIE ROTATES, AND `get` CANNOT
                 #

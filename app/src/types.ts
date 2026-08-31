@@ -1642,10 +1642,11 @@ export type RunLegPreflight = {
  *  can be drawn over the photograph `GET /photo/<box>/<index>` already serves — which is why
  *  changing the reading costs no bytes at all: only the rectangle moves.
  *
- *  `rect` is null when the reading sends the whole frame, EITHER because the crop is off or
- *  because detection refused, and `method` is what tells those apart. The two look identical
- *  in the payload and mean opposite things to an operator: one is the setting they chose, the
- *  other is a card going at whole-frame cost when they asked for a crop.
+ *  `rect` is null when the reading sends the whole frame, and there are THREE reasons it can
+ *  be: the crop is off, detection found nothing, or a card was found and the box was refused
+ *  as unfit to cut to. They look identical in the payload and mean different things to an
+ *  operator — a setting they chose, a photograph to look at, and a detector that answered
+ *  confidently and wrongly. `method` and `crop_refused` are what tell them apart.
  */
 export type CropSample = {
   box: number
@@ -1659,6 +1660,11 @@ export type CropSample = {
   sent?: [number, number]
   rect?: [number, number, number, number] | null
   method?: 'edges' | 'tone' | null
+  /** Why a card WAS found and still not cropped to — `identify/images.py:crop_refusal`'s own
+   *  sentence, or null. A detected box can be a rectangle inside the card, which crops the
+   *  collector number away and reads confidently; the guard refuses those and the run sends
+   *  the whole frame instead. Rendered verbatim: it is the pipeline's words, not a code. */
+  crop_refused?: string | null
   /** THE BYTES THAT WILL BE SENT, as a data URI — not the stored photograph. The frame draws
    *  these, so the picture changes when the reading does; the 1:1 view is a region of this
    *  same file, which is why the two can never disagree about what is being sent. */
@@ -1796,15 +1802,69 @@ export type ExportFetched = {
    *  can correct. `widened` is true where no hint resolved and the whole category was taken,
    *  which is slower and always correct; `unresolved_hints` names the hints that did not
    *  match a TCGplayer set, which is the thing worth seeing. */
-  asked: {
+  asked: ExportAsked
+}
+
+/** WHAT THE FETCH ASKED TCGPLAYER FOR, AND WHICH OF THE THREE VOICES CHOSE IT (D76).
+ *
+ *  `widened` is the D65 field and still says the same thing `scope === 'category'` says; what
+ *  D76 adds beside it is WHY, because "the whole category" was never the interesting half. A
+ *  set filter now needs the box to be unanimous — every card hinted and every hint resolved —
+ *  so `reason` is the field that tells an operator whether their box, their game's rule or
+ *  their own tick decided, and `hinted`/`cards` is the evidence for the first of those. */
+export type ExportAsked = {
+  game: string
+  category_id: number
+  hints: string[]
+  set_ids: number[]
+  unresolved_hints: string[]
+  sets: string[]
+  widened: boolean
+  scope: 'category' | 'sets'
+  /** The game's own rule from `pipeline/games.py`, before any override. */
+  policy: 'category' | 'sets'
+  chosen_by: 'operator' | 'policy' | 'cards'
+  reason:
+    | 'game_policy'
+    | 'operator_asked'
+    | 'no_hints'
+    | 'partial_hints'
+    | 'unresolved_hints'
+    | 'no_hints_resolved'
+    | null
+  cards: number
+  hinted: number
+  unhinted: number
+}
+
+/** `GET /pipeline/runs/<name>/scope` — the lever's current position, before it is pulled.
+ *
+ *  NAMED `ExportScope` AND NOT `RunScope`, WHICH IS TAKEN: `RunScope` is the BOX a run was
+ *  over — D39's whole-box-or-ticked-selection — and this is the CATALOG the fetch asks for.
+ *  Two different scopes, and collapsing their names would be the kind of near-miss that reads
+ *  correct at every call site until one of them is wrong.
+ *
+ *  DEGRADES THE WAY THE CAPTURE SCREEN'S SET LIST DOES. Resolving a hint to a set id needs the
+ *  portal, so `asked` is null with `reason` naming the refusal whenever the cookie is stale or
+ *  the network is gone — and every count in `games` is local and still draws. A mixed-game run
+ *  is a LIST here rather than the `game_required` refusal `POST .../export` makes, because a
+ *  screen that must ask which game cannot draw the picker from a route that refuses first. */
+export type ExportScope = {
+  run: string
+  games: {
     game: string
+    display: string
     category_id: number
+    cards: number
+    hinted: number
+    unhinted: number
     hints: string[]
-    set_ids: number[]
-    unresolved_hints: string[]
-    sets: string[]
-    widened: boolean
-  }
+    policy: 'category' | 'sets'
+  }[]
+  scopes: ('category' | 'sets')[]
+  asked: ExportAsked | null
+  reason: string | null
+  message: string | null
 }
 
 /** One code on the ledger, as `GET /codes` serves it (C3, C8, C11).

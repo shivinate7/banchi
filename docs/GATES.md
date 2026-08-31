@@ -245,7 +245,8 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
 
 - **Pass**: detected rectangle within tolerance across the sweep; bands contain their
   target; no card -> not found; a ground the tone path cannot segment is still found by its
-  borders; the cut and the rectangle the run panel draws are one computation
+  borders; the cut and the rectangle the run panel draws are one computation; a box that is
+  a rectangle inside the card is refused before it can be cut to
 - The sweep is offset, scale and rotation. "Bands" are the title band and the number
   corner, and each must contain its target region. "Not found" must be a refusal, never a
   guess.
@@ -287,6 +288,21 @@ offset, scale and rotation, so the answer key is exact. No rig photo exists in t
   one rig in one lighting state on one day. That is 53 more than this section could claim
   before, and it is still not a detection rate. Treat it as T1's finish blind spot is
   treated: recorded here so a green harness cannot be misread.
+- **The border search's own failure mode was measured on 2026-08-31, and it is not
+  "not found" (D75).** Over all 867 photographs in the owner's three real boxes — box 1 (133
+  Riftbound), box 2 (543 Pokemon), box 3 (191 Riftbound) — `detect_card` returned a box for
+  **every one and refused none**, and **nine of them were wrong**: a card-shaped rectangle
+  inside the card, the rules-text panel or the artwork frame, returned with a card's aspect
+  and a passing border score. The 53/53 above is a rate at which the card is FOUND and says
+  nothing about this, because a wrong box and a right one both count as found.
+
+  On the padded rectangle that is actually cut, the two populations are `0.300-0.988` of the
+  frame with `0.438-0.995` of its detail for the 858 correct, and `0.068-0.270` with
+  `0.152-0.435` for the nine wrong. Neither column separates them alone — box 1's smallest
+  correct crop sits exactly on 0.300 and the detail gap is under a percent — so
+  `identify/images.py:crop_refusal` is an AND of both, and it refuses all nine and none of
+  the 858. The check here asserts its SHAPE on a synthetic inner rectangle, not that rate;
+  the rate is one rig on one day and is recorded in the source beside the constants.
 
 ### T7 — Inventory store, capture server, and the command seams
 

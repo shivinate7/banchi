@@ -356,7 +356,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
 
     /* D23's job (a), and it had no sentence here from the day the reason shipped — the
      * fallback below drew "a reason this screen has no sentence for" over the one entry in
-     * the owner's whole store, which is where D75 found it.
+     * the owner's whole store, which is where D77 found it.
      *
      * WHAT IT HAS TO SAY IS THAT THE ROWS MAY BE ANOTHER CARD, and nothing else on screen
      * says it. Every other reason on this list is a question about WHICH row; this one is
@@ -598,7 +598,7 @@ const UNDO_DEPTH = 10
 const CLOSE_KEY = 'x'
 const CLOSE_KEY_LABEL = 'X'
 
-/* D75. `L` for "look it up", and it is the letter the paragraph above `SKIP_KEY` reserved and
+/* D77. `L` for "look it up", and it is the letter the paragraph above `SKIP_KEY` reserved and
  * then handed back: an early draft bound it to "Leave unlisted" for the zero-candidate card,
  * the route refused that idea, and the letter has been free ever since.
  *
@@ -1068,7 +1068,7 @@ export function ReviewQueue() {
   const [lookupFailed, setLookupFailed] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
 
-  /* D75 — the row key the operator asked to see the export for, because none of the rows the
+  /* D77 — the row key the operator asked to see the export for, because none of the rows the
    * pipeline offered is the card in the photograph.
    *
    * THE KEY RATHER THAN A BOOLEAN, which is `photoAbsent`'s reason two states down and is
@@ -1806,7 +1806,7 @@ export function ReviewQueue() {
    * answer on screen already, and fetching a catalog beside it would offer a second, looser
    * list beside a good one — which is how a screen teaches you to stop reading the first.
    *
-   * D75 ADDED THE ASKED-FOR CASE, AND `looking` IS THE WHOLE OF THE DIFFERENCE. The paragraph
+   * D77 ADDED THE ASKED-FOR CASE, AND `looking` IS THE WHOLE OF THE DIFFERENCE. The paragraph
    * above is an argument about what appears without being sent for, and it is kept: nothing
    * changes on arrival at a card with rows. What it was ALSO doing, until 2026-08-31, was
    * deciding whether the export could be reached at all — and the entry it stranded is box 3
@@ -1846,7 +1846,7 @@ export function ReviewQueue() {
     // rule — widening it to `lookupFor` would fetch a catalog per poll for a card nobody
     // touched.
     //
-    // `looking` IS THE SECOND DEPENDENCY AND IT IS NOT REDUNDANT (D75). Pressing `L` fetches
+    // `looking` IS THE SECOND DEPENDENCY AND IT IS NOT REDUNDANT (D77). Pressing `L` fetches
     // for a card that has been on screen since before the press, so `lookupKey` does not
     // change and this effect would never run. It also carries the way back: Escape flips it
     // false, the effect re-runs, and the three `set` calls at the top clear the rows and the
@@ -1999,7 +1999,7 @@ export function ReviewQueue() {
         return
       }
 
-      /* D75. BELOW THE CLOSE PANEL AND ABOVE THE DIGITS, which is the whole of its placement
+      /* D77. BELOW THE CLOSE PANEL AND ABOVE THE DIGITS, which is the whole of its placement
        * argument: the panel owns the keyboard while it is up, and the digits below read
        * whichever list this key decides. */
       if (key === LOOKUP_KEY && current.entry.candidates.length > 0) {
@@ -2036,7 +2036,7 @@ export function ReviewQueue() {
        * whether the pipeline or the catalog found that row is not something the finger needs
        * to know.
        *
-       * D75 — AND THE TEST IS WHAT IS DRAWN, NEVER WHAT THE ENTRY HOLDS. It was
+       * D77 — AND THE TEST IS WHAT IS DRAWN, NEVER WHAT THE ENTRY HOLDS. It was
        * `offered.length > 0` while the panel appeared only in the zero-candidate arm, so the
        * two questions had one answer and this read as the simpler of two equivalent forms.
        * They come apart the moment an entry with rows can show the export, and the wrong one
@@ -2073,7 +2073,7 @@ export function ReviewQueue() {
     answerGroup,
     // D46 — the digits read these rows when the entry offers none of its own.
     lookup,
-    // D75 — and these two decide WHICH list the digits read. A handler closed over a stale
+    // D77 — and these two decide WHICH list the digits read. A handler closed over a stale
     // `showCatalog` is the mis-write the digit branch describes, arriving by a dependency
     // array instead of by a wrong comparison.
     showCatalog,
@@ -2293,7 +2293,7 @@ export function ReviewQueue() {
           /* `true` — this row came from the catalog, not from the entry. It is the only
              call site that passes it, which is what keeps every ordinary answer unflagged. */
           onChooseCatalog={(row) => answer(current, row, true)}
-          /* D75. `showCatalog` decides which list is drawn and `looking` decides what the
+          /* D77. `showCatalog` decides which list is drawn and `looking` decides what the
              control beside it says, and they are NOT the same question: a zero-candidate
              entry shows the export without anyone having asked, so it has a list to answer
              and no state to leave. */
@@ -2351,7 +2351,7 @@ type CardProps = {
   onSearch: () => void
   onChooseCatalog: (row: CandidateRow) => void
 
-  /** D75. Whether the export's rows are what is drawn, and whether the operator ASKED for
+  /** D77. Whether the export's rows are what is drawn, and whether the operator ASKED for
    *  them — two questions, because a zero-candidate entry answers yes to the first and no to
    *  the second. `showCatalog` picks the list; `looking` decides whether there is a way back
    *  and what the control offering it says. Both are the container's for `closing`'s reason,
@@ -2653,7 +2653,7 @@ type CatalogPanelProps = {
   onTyped: (text: string) => void
   onSearch: () => void
   onChoose: (row: CandidateRow) => void
-  /** D75 — whether these rows are STANDING IN FOR a list the operator rejected, rather than
+  /** D77 — whether these rows are STANDING IN FOR a list the operator rejected, rather than
    *  standing where the pipeline left a hole. It changes one paragraph of copy and nothing
    *  else: the rows, the digits and the search are identical in both cases. */
   overruling: boolean
@@ -2689,7 +2689,7 @@ function CatalogPanel({
   const rows = lookup?.rows ?? []
   return (
     <div className="review-catalog">
-      {/* TWO SENTENCES FOR TWO SITUATIONS, AND THE DIFFERENCE IS WORTH THE BRANCH (D75). The
+      {/* TWO SENTENCES FOR TWO SITUATIONS, AND THE DIFFERENCE IS WORTH THE BRANCH (D77). The
           rows are identical either way, so the copy is the only place the screen can say
           whether the pipeline had nothing to offer or had something wrong — and those call
           for opposite amounts of trust in the list underneath. The overruling sentence names
@@ -3040,7 +3040,7 @@ function Card({
           <kbd className="review-key">{SKIP_KEY_LABEL}</kbd>
         </button>
 
-        {/* D75. BEFORE "Close this card", WHICH IS THE POINT OF WHERE IT SITS. The two
+        {/* D77. BEFORE "Close this card", WHICH IS THE POINT OF WHERE IT SITS. The two
             controls beside it are both ways PAST a card; this is a second way to ANSWER one,
             and offering it after the two exits reads as a last resort when it is the first
             thing to reach for once the rows on screen are visibly the wrong card.

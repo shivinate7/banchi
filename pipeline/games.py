@@ -186,6 +186,37 @@ PROMPT_STRATEGIES = (
 # list does not contain is a band nothing knows how to cut.
 CROP_BAND_NAMES = ("title", "number")
 
+# ------------------------------------------- how wide this game's export is fetched (D76)
+#
+# WHICH AXIS THE FETCH IS ALLOWED TO NARROW ON, PER GAME. D65 scoped
+# `POST /admin/pricing/downloadexportcsv` by the set hints the box's own cards carry, on the
+# reasoning that widening is always safe and narrowing is not. The reasoning is right; the
+# rule built from it was too eager. It collected the hints that EXISTED and never counted the
+# cards that carried none — so one hinted card in a 200-card box scoped the export to that
+# one set, and the other 199 queued as `no_catalog_row` behind a fetch that reported success
+# and a positive check that passed, because the set asked for did arrive.
+#
+# The narrowing is worth having where a category is too large to take whole, and it is worth
+# NOTHING where the whole catalogue already fits in one file. That is a per-game fact, it is
+# measured, and the measurements are the committed exports named under GAMES below:
+#
+#   riftbound   10078 rows, 1.6 MB — the ENTIRE English catalogue, in one file
+#   one_piece    3622 rows, 580 KB — three sets, and nothing about the category refused
+#   pokemon      NOT measured whole — 220 sets in the live category picker, and the widest
+#                file this repo holds (7802 rows, 1.1 MB) is four sets of it
+#
+# `category` IS A CLAIM THAT THE WHOLE CATEGORY IS FETCHABLE and may only be authored against
+# a measurement like the first two. `sets` is the default and the safe one: it narrows only
+# where every card in the run carries a hint AND every hint resolved, and widens to the whole
+# category otherwise. A game with no `tcgplayer_category_id` has no export to scope and names
+# neither.
+#
+# THE OPERATOR OVERRIDES THIS PER FETCH, which is the half that makes it a default rather
+# than a policy — `server/pipeline_routes.py:_scope_for_run` takes `scope` and `set_ids` from
+# the request, and `#/runs` draws both beside the fetch button.
+EXPORT_SCOPES = ("category", "sets")
+DEFAULT_EXPORT_SCOPE = "sets"
+
 # The read-side backfill for records written before `game` existed, and NOTHING ELSE.
 # D21 is explicit that the field is required and that D3's null-means-no-claim does not
 # transfer: `FinishClaim`'s null is meaningful because a ladder infers a finish underneath
@@ -361,6 +392,11 @@ GAMES = (
             "Secret Rare": ("holo",),
             "Rainbow Rare": ("holo",),
         },
+        # D76. `sets` because the whole category is NOT measured: 220 sets in the live
+        # picker, and the widest Pokemon file this repo holds is four of them. So the fetch
+        # narrows — but only where every card in the run carries a hint and every hint
+        # resolved, which is the condition D65's first build did not check.
+        "export_scope": "sets",
         "located": True,
         "join_key": "number_and_printed_total",
         "prompt": "pokemon_card_v1",
@@ -403,6 +439,10 @@ GAMES = (
         # after it, but `Position.label` is never rendered for one and it never enters the
         # pull flow or the Fulfillment view — there is nothing to walk to. This flag is the
         # concrete form of D14's "two tracks, one rig".
+        # D76. `sets`, and it is the same unmeasured Pokemon category as above. Code cards
+        # rarely carry a set hint, so in practice this widens — which is correct and is what
+        # it already did; what changed is that a single hinted card can no longer narrow it.
+        "export_scope": "sets",
         "located": False,
         # Code cards are the blank-`Number` rows. The name fallback is not a degraded path
         # here, it is the only key there is.
@@ -498,6 +538,13 @@ GAMES = (
             "Showcase": ("foil",),
             "Promo": ("normal", "foil"),
         },
+        # D76, AND THE ONE ENTRY THAT EARNS `category`. The file named at the top of this
+        # module — fixtures/riftbound_export_untouched.csv, 10078 rows, 1.6 MB — is the
+        # ENTIRE English catalogue in one download, per the owner. So there is nothing for a
+        # set filter to buy here and a real hazard in spending one: a box sorted by rarity
+        # rather than by set carries hints on some cards and none on the rest, and narrowing
+        # on the few would drop the many. Always fetch the whole category.
+        "export_scope": "category",
         "located": True,
         # `printed_code`, NOT `number_and_printed_total`, AND THE 450 PROMO AND TOKEN ROWS
         # ARE WHY. Most of this catalogue is Pokemon-shaped — 9540 of 10078 rows carry a
@@ -598,6 +645,12 @@ GAMES = (
             "PR": ("normal", "foil"),
             "DON!!": ("normal", "foil"),
         },
+        # D76. `sets`, and NOT `category`, on the same asymmetry this module already uses to
+        # decide how far a matrix may be narrowed: the committed One Piece export is three
+        # sets out of many, so nothing here has measured the whole category. It is the most
+        # likely next `category` — 3622 rows for three sets suggests a small catalogue — and
+        # it stays `sets` until a whole-category download says so.
+        "export_scope": "sets",
         "located": True,
         # NO DENOMINATOR ANYWHERE IN THIS CATALOGUE, so `number_and_printed_total` is not
         # merely a poor fit — it is unmatchable, and `printed_total` is a field with no
@@ -758,6 +811,28 @@ def is_catalogued(key: str) -> bool:
     that is the only question it has ever been able to answer.
     """
     return bool(get(key)["catalogued"])
+
+
+def export_scope(key: str) -> str:
+    """How wide this game's Filtered Export is fetched — `category` or `sets` (D76).
+
+    DEFAULTS TO `sets`, WHICH IS THE ONE THAT CANNOT BE WRONG BY OMISSION. `sets` still
+    widens to the whole category unless the run's cards unanimously ask for a narrower file,
+    so a game added to this registry without the field behaves exactly as D65 did — a larger
+    download where the category is small, never a file narrower than the cards support.
+    `category` is the claim that has to be measured, and only `riftbound` has the measurement.
+
+    A GAME OUTSIDE THE REGISTRY ANSWERS THE DEFAULT RATHER THAN RAISING, unlike `get`. The
+    caller is deciding how wide to ask, not what a card IS, and the safe answer to "how wide"
+    for a game nobody authored is the wider one. `get`'s no-fallback rule is about the second
+    question and is untouched.
+    """
+    try:
+        entry = get(key)
+    except UnknownGame:
+        return DEFAULT_EXPORT_SCOPE
+    scope = str(entry.get("export_scope") or DEFAULT_EXPORT_SCOPE)
+    return scope if scope in EXPORT_SCOPES else DEFAULT_EXPORT_SCOPE
 
 
 def require(key: str) -> Dict[str, object]:

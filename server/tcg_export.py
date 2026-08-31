@@ -137,6 +137,43 @@ MAX_BYTES = 32 * 1024 * 1024
 _LOGON_MARKER = "account/logon"
 
 
+# ------------------------------------------------- THE FIELDS THAT ARE NOT A PER-REQUEST CHOICE
+#
+# THREE STANDING INSTRUCTIONS, HOISTED OUT OF THE REQUEST BODY SO THEY CAN BE GUARDED (D76).
+# They used to be three literals among fourteen in `Scope.model` with a comment beside each,
+# which is exactly the shape a value gets changed in without anybody noticing: the body is
+# copied from the portal's own submit, so the next person to re-capture it will paste over all
+# fourteen and the three that are DECISIONS will go with the eleven that are not.
+#
+# `ExcludeListos` — EXCLUDE LISTINGS WITH PHOTOS. TRUE, and it is the owner's standing
+# instruction (2026-08-31). It shipped `False` because D65 captured the body off the owner's
+# browser and took whatever that checkbox happened to be set to; nothing recorded it as a
+# choice. WHAT IT CHANGES IN THE FILE IS NOT MEASURED — see D76, which records that as an open
+# measurement rather than reasoning past it. Do not flip this back on a reading of the field
+# name; it is the owner's instruction and it goes back to the owner.
+#
+# AND NOTHING DOWNSTREAM CAN EVER CHECK IT, WHICH IS WHY THE GUARD IS HERE. D64 measured
+# `Photo URL` empty in all eleven exports, filtered and unfiltered: this axis leaves NO trace
+# in the file. A wrong value produces a clean join, a clean reconcile and a green
+# `make check`, forever.
+#
+# `MyInventory` — the CATALOG rather than the operator's current listings. With it true the
+# same request returns only what is already listed, which is useless to a join whose whole job
+# is listing cards that are not.
+#
+# `PrintingIds` — All Printings, always. A number stocked in several finishes must arrive with
+# all of them, or D3 rung 2 decides it from whichever one survived.
+#
+# `scripts/docs-audit.py`'s `export request` row reads this dict and blocks the commit on any
+# value that has moved, naming the instruction rather than the literal. A comment is what this
+# already had.
+STANDING_FILTERS = {
+    "MyInventory": False,
+    "PrintingIds": ["0"],
+    "ExcludeListos": True,
+}
+
+
 @dataclass(frozen=True)
 class Scope:
     """What to ask TCGplayer for. Empty tuples mean "all of them", as the portal encodes it.
@@ -156,17 +193,13 @@ class Scope:
     def model(self) -> dict:
         """The request body, field for field as `main-built.js` builds it.
 
-        READ OFF THE PORTAL'S OWN BUNDLE rather than guessed, and the two fields that matter
-        most are the ones nobody would have guessed. `MyInventory` false is what makes this
-        the CATALOG rather than the operator's current listings — with it true the same
-        request returns only what they already have listed, which is useless to a join that
-        exists to list new cards. `ExcludeListos` is the exclude-listings-with-photos flag,
-        the axis D64 measured as leaving no trace in the file; setting it explicitly is what
-        stops it being invisible.
+        READ OFF THE PORTAL'S OWN BUNDLE rather than guessed, and the types are the part that
+        matters — the bundle gives the field names and not the shapes.
 
-        `PrintingIds` is left empty on purpose. All Printings is the whole point: a number
-        stocked in several finishes must arrive with all of them, or D3 rung 2 decides it
-        from whichever one survived.
+        THREE OF THE FOURTEEN FIELDS ARE DECISIONS AND THE OTHER ELEVEN ARE TRANSCRIPTION.
+        The three live in `STANDING_FILTERS` above, spread in last, and are guarded by
+        `scripts/docs-audit.py`. Read that comment before changing anything here: the reason
+        they are hoisted is that a re-capture of this body would otherwise paste over them.
         """
         def ids(chosen):
             # "ALL OF THEM" IS `["0"]` AND NOT THE EMPTY LIST, which is the single detail that
@@ -196,12 +229,11 @@ class Scope:
             "PriceToCompare": 3,
             "ValueToCompare": 1,
             "PriceValueToCompare": None,
-            # The catalog, not the operator's current listings. With this true the same
-            # request returns only what is already listed, which is useless to a join whose
-            # whole job is listing cards that are not.
-            "MyInventory": False,
-            "ExcludeListos": False,
             "ExportLowestListingNotMe": True,
+            # SPREAD LAST, AND THE POSITION IS THE POINT: a key re-added above by somebody
+            # re-capturing the portal's body is overwritten by the standing instruction rather
+            # than silently winning over it. See STANDING_FILTERS for what each one is.
+            **STANDING_FILTERS,
         }
 
 

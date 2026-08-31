@@ -323,8 +323,7 @@ COMPONENTS = [
                                  "exports, and it REFUSES on an empty vocabulary rather than "
                                  "falling back to Pokemon's — riftbound and one_piece ship "
                                  "unverified because no export for either has ever been seen.",
-                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18",
-                                         "D21", "D22", "D23", "D24", "D25", "D65"],
+                         "governed_by": ["D3", "D8", "D11", "D12", "D14", "D16", "D18", "D21", "D22", "D23", "D24", "D25", "D65", "D76"],
                          "note": "THE MATRIX IS A SUPERSET OF WHAT ANY ONE EXPORT PROVES, and that "
                                  "is load-bearing rather than sloppy: D23's capture screen renders "
                                  "a finish chip excluded by a rarity claim as unselectable, which "
@@ -530,7 +529,8 @@ COMPONENTS = [
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
-            "images.py": {"does": "downscale, encode, hash a photograph for the API", "governed_by": ["D2", "D23"]},
+            "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
+                          "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
         },
     },
     {
@@ -549,10 +549,10 @@ COMPONENTS = [
                 "no rig photo lives here. Still not a detection rate: one rig, one lighting "
                 "state, one day.",
         "modules": {
-            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses",
-                          "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses, and the shape correction both crop paths share",
+                          "governed_by": ["D1", "D22", "D23", "D75"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
-                        "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+                        "governed_by": ["D1", "D22", "D75"], "tested_by": ["T6"]},
         },
     },
     {
@@ -867,7 +867,14 @@ COMPONENTS = [
                         "`--self-test` is what checks the checker. It NEVER writes, and it "
                         "parses with `ast` rather than importing, so it does not run "
                         "project code. Stdlib only — the pre-commit hook runs bare python3 "
-                        "with nothing installed.",
+                        "with nothing installed. IT AUDITS TWO TSX FILES AS WELL AS THE "
+                        "MARKDOWN, 2026-08-31: the `route rosters` row reads src/App.tsx's "
+                        "ROUTES table and reconciles it against any hand-typed list of "
+                        "routes in a Playwright spec, because that list going stale is "
+                        "silent — a roster missing a route walks the routes it has and stays "
+                        "green, which is how D69 and D70 left three screens asserted by "
+                        "nothing. It is here rather than in a spec because a browser must "
+                        "not run on the commit path (docs/GATES.md).",
                 # D2 is here because the file names it, not because it governs: one comment
                 # uses `C1` and `D2` as examples of a citation that could plausibly become
                 # a variable name one day. The superset rule reads a citation literally and
@@ -885,7 +892,10 @@ COMPONENTS = [
                 # data, deliberately: an id that exists keeps that data out of the very
                 # illustration problem D2 above records. The superset rule reads them
                 # literally either way, so they are listed, and this is what they are.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D72"],
+                # D70 JOINS THEM AS A CITED FAILURE rather than a ruling: the `route rosters`
+                # row names D69 and D70 as the two entries whose routes a hand-typed roster
+                # missed, which is what that row exists to make impossible a third time.
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1241,7 +1251,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D75"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1272,7 +1282,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69"],
+                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69", "D8", "D9", "D76"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1331,7 +1341,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D64", "D65", "D68", "D19", "D76"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1408,16 +1418,21 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "step": 10,
-        "does": "the web app. NINE routes behind a hand-written hash router, EIGHT of them the "
+        "does": "the web app. TEN routes behind a hand-written hash router, NINE of them the "
                 "owner's — the capture screen that Gate B runs on, the runs screen the "
                 "pipeline lives on, the review queue, the pricing worklist, the order "
                 "screen and the shipping lane (D69 gave each its own route rather than "
                 "making one a mode of the other), the one "
-                "inventory view (D31 folded the box walk and the pull preview into it) and "
+                "inventory view (D31 folded the box walk and the pull preview into it), the "
+                "code-card screen D70 gave its own route, and "
                 "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. The count "
                 "here is RECOUNTED off src/App.tsx's ROUTES table and never incremented: it "
-                "has been wrong more often than right and nothing reconciles it. Playwright "
+                "has been wrong more often than right and nothing reconciles it — it said "
+                "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
+                "outright. What IS reconciled now is the specs: scripts/docs-audit.py's "
+                "`route rosters` row fails a commit where a spec's hand-typed list of routes "
+                "disagrees with that table. Playwright "
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against step "
                 "6's component and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
@@ -1517,7 +1532,7 @@ COMPONENTS = [
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: EIGHT hash routes — five after D31 merged #/boxes "
+            "src/App.tsx": {"does": "the shell: TEN hash routes — five after D31 merged #/boxes "
                                     "and #/pull into #/inventory, plus #/runs, which D39 gave the "
                                     "pipeline on 2026-08-29 between Capture and the review queue, "
                                     "and #/pricing, which D49 gave hand-pricing on 2026-08-30 "
@@ -1538,14 +1553,14 @@ COMPONENTS = [
                                     "nav draws it — the ring derived from `hotkey` and "
                                     "GROUP_ORDER rather than listed twice, never wrapping, and "
                                     "the one place this shell takes a modifier. "
-                                    "`#/codes` IS THE EIGHTH, 2026-08-30 — the code-card track "
+                                    "`#/codes` IS THE TENTH, 2026-08-30 — the code-card track "
                                     "on a route of its own under D14's two-tracks-one-rig, with "
                                     "the chord `d` because `c` is Capture. It sits in `look` "
                                     "rather than `run`: a code-card box is read once in seconds "
                                     "with no model call and nothing to price, so it is reached "
                                     "when asked, which is what this table's own definition of "
                                     "that group says.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69", "D70"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -1566,8 +1581,14 @@ COMPONENTS = [
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
                                       "the file, because a duplicate can mean a code that is "
-                                      "worth nothing.",
-                              "governed_by": ["D14", "D32"]},
+                                      "worth nothing. Its disabled buttons read `default` "
+                                      "until 2026-08-31 — a (0,2,1) override of base.css's "
+                                      "(0,1,1) `not-allowed` floor, which is D50's 30-of-41 "
+                                      "class — and nothing caught it: the cursor sweep's "
+                                      "roster did not list this route, and this checkout's "
+                                      "store is empty (D43) so no disabled button renders for "
+                                      "it to see even now that it does.",
+                              "governed_by": ["D14", "D32", "D43", "D50"]},
             "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
                                     "shadow, why this nav may never render on the "
                                     "Fulfillment view, and the two chip looks — the chord's, "
@@ -1606,11 +1627,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D63", "D64", "D65", "D68", "D69", "D73", "D76"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D39", "D76"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -1819,7 +1840,7 @@ COMPONENTS = [
                 # session about to edit the review queue. The lookup it names is D46's. D72
                 # is the entry for citations that stop pointing at their argument; this one
                 # was never right rather than having moved.
-                "does": "D46's catalog lookup, reachable from EVERY queued entry (D75) — "
+                "does": "D46's catalog lookup, reachable from EVERY queued entry (D77) — "
                         "suggested on arrival where the pipeline offered no rows, and drawn "
                         "on `L` where it offered rows that are the wrong card, searchable by "
                         "name, number or SKU, replacing the pipeline's rows rather than "
@@ -1836,7 +1857,7 @@ COMPONENTS = [
                         "offered on the same panel). The panel owns the keyboard while it is "
                         "up, because its choices ride digits that mean candidates everywhere "
                         "else on this screen; the mid-box delete is deliberately not on it.",
-                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D75"],
+                "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26", "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -2302,7 +2323,7 @@ COMPONENTS = [
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
                                  # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65"]},
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -2321,7 +2342,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64", "D76"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -2422,25 +2443,33 @@ COMPONENTS = [
             },
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
-                        "different things. A live sweep walks the seven routes its own "
-                        "hand-written table lists — seven of NINE since D69 added #/orders and "
-                        "#/shipping, which are not in it yet — classifies each "
-                        "rendered control by tag, type and disabled state, and asserts the "
-                        "cursor the rule requires — no selector roster, so a control added next "
-                        "month cannot be missed. A synthetic case then probes base.css's floor "
+                        "different things. A live sweep walks EVERY registered route — the "
+                        "hashes are read off the nav strip, which App.tsx renders from the same "
+                        "ROUTES table it routes from — classifies each rendered control by tag, "
+                        "type and disabled state, and asserts the cursor the rule requires. No "
+                        "selector roster and, since 2026-08-31, no route roster either, so "
+                        "neither a control nor a SCREEN added next month can be missed. A "
+                        "synthetic case then probes base.css's floor "
                         "with elements it builds itself, because this checkout's store is empty "
                         "(D43) so no screen renders a DISABLED control — deleting the whole "
                         "disabled arm was mutation-tested and the live sweep alone PASSED, "
                         "which is 30 of the 41 original defects invisible. A third case asserts "
                         "the --field-hover edge responds and that no hover reflows the box. Run "
                         "by `make design-check`.",
-                "governed_by": ["D28", "D43", "D50"],
-                "note": "NOT a harness test and not registered in harness/run.py:TESTS — it "
-                        "starts a browser. KNOWN LIMIT, so a green run is read for what it is: "
-                        "between the two cases the floor is covered completely and a SCREEN's "
-                        "own override only where that screen renders it. A per-file rule on a "
-                        "control this empty store never draws is unchecked by either, and "
-                        "closing that needs fixtures for nine screens.",
+                "governed_by": ["D28", "D43", "D50", "D69", "D70"],
+                "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
+                        "its own header warning against exactly that. D69 added #/orders and "
+                        "#/shipping and D70 added #/codes; none reached the list, three screens "
+                        "were swept by nothing, and design-check stayed green — a roster missing "
+                        "a route walks the routes it has. Widening it found a live defect of the "
+                        "30-of-41 class on #/codes. NOT a harness test and not registered in "
+                        "harness/run.py:TESTS — it starts a browser. KNOWN LIMIT, so a green run "
+                        "is read for what it is: between the two cases the floor is covered "
+                        "completely and a SCREEN's own override only where that screen renders "
+                        "it. A per-file rule on a control this empty store never draws is "
+                        "unchecked by either — the #/codes defect was found by reading the "
+                        "sheet, not by the sweep — and closing that needs fixtures for ten "
+                        "screens.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "
@@ -2470,8 +2499,14 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D51", "D69", "D70"],
-                "note": "TWO OF ITS CASES COULD NOT FAIL AND WERE CHANGED, which is the part "
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70"],
+                "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
+                        "derived from App.tsx could not assert the ORDER against anything "
+                        "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
+                        "marker that scripts/docs-audit.py's `route rosters` row checks against "
+                        "the table. Added after D70 put #/codes in the product's ring and not in "
+                        "this one, which left design-check red. TWO OF ITS CASES COULD NOT FAIL "
+                        "AND WERE CHANGED, which is the part "
                         "worth keeping. The leader-disarm case retried an assertion that "
                         "CHORD_MS satisfies on its own after a second, so it went green against "
                         "a build with the disarm deleted; it reads the attribute two frames "
@@ -2526,7 +2561,7 @@ COMPONENTS = [
                 # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
                 # bypass the join control offers; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
-                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65"],
+                "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
@@ -2590,7 +2625,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D75"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

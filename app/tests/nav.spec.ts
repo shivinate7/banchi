@@ -28,7 +28,21 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 /** The ring, in the order `app/src/App.tsx` draws it: the run group, then the look group. The
  *  hash form verbatim, for the reason every other spec here records — a path-style
  *  '/inventory' is served index.html by Vite, mounts with an empty hash and renders the
- *  capture screen, which is a passing navigation to the wrong view. */
+ *  capture screen, which is a passing navigation to the wrong view.
+ *
+ *  PINNED ON PURPOSE, AND RECONCILED AT THE COMMIT SINCE 2026-08-31. `App.tsx` derives its own
+ *  ring — `hotkey !== undefined` over GROUP_ORDER then the table — and this list is a hand
+ *  typed copy of that, which is the shape that goes stale. It did: D70 added `#/codes` with a
+ *  key and this array was not touched, so the ring under test was seven routes long while the
+ *  product's was eight, and the "never a wrap" case below stepped off the end of THIS list
+ *  onto a real screen. That failure was luck — a roster missing a route normally just walks
+ *  the routes it has and stays green, which is what happened to `cursor.spec.ts` for two days.
+ *
+ *  So the copy stays (a derived ring could not assert the ORDER against anything independent —
+ *  it would be `App.tsx`'s answer marked by `App.tsx`) and `scripts/docs-audit.py`'s
+ *  `route rosters` row reads the marker below, reads the ROUTES table, and fails the commit
+ *  when they disagree. */
+/* ROUTE-ROSTER hotkey */
 const RING = [
   '#/',
   '#/runs',
@@ -37,24 +51,13 @@ const RING = [
   '#/orders',
   '#/shipping',
   '#/inventory',
-  /* D70's codes screen, and IT WAS MISSING FROM HERE FROM THE DAY THAT ROUTE LANDED. The
-     product's ring is derived — `GROUP_ORDER` then every route with a `hotkey` — so adding a
-     row with `hotkey: 'd'` put `#/codes` at the end of the `look` group and therefore at the
-     end of the ring, while this list still ended at `#/inventory`. The last assertion in the
-     walk below reads "the step lands nowhere new", and it went red saying `#/codes`.
-
-     THE LIST IS THE STALE HALF, NOT THE ROUTE. App.tsx's own comment on the ring says a
-     separate list would be "a second answer to a question the table has already answered,
-     and the first screen added without being put in both would be the bug" — which is the
-     failure this file just had one level up, in a fixture written to spell the ring out so a
-     re-order of ROUTES cannot silently redefine what is being asserted. That trade is still
-     the right one; the price is that a new hotkeyed route lands here too. */
   '#/codes',
 ] as const
 
 /** What each of those routes renders, so a step is asserted to have ARRIVED rather than
  *  merely to have changed a string. A hash the shell does not recognise still changes
  *  `location.hash`; only the view proves the route resolved. */
+/* ROUTE-ROSTER hotkey */
 const VIEW: Record<(typeof RING)[number], string> = {
   '#/': 'main.capture',
   '#/runs': 'main.runs',
@@ -63,12 +66,16 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/orders': 'main.orders',
   '#/shipping': 'main.shipping',
   '#/inventory': 'main.inventory',
-  /* `.codes` AND NOT `main.codes`, which is a fact about that screen rather than a looser
-     selector chosen here: `Codes.tsx` renders a `<div className="codes">` where the other
-     nine render a `<main>`. Asserted as what is actually there, because a selector written
-     to match the pattern would fail for a reason that has nothing to do with the ring. */
-  '#/codes': '.codes',
+  '#/codes': 'main.codes',
 }
+
+/** The end of the ring, read off the array rather than written out beside it. Three cases
+ *  below assert something about "the last screen the step can reach", and each one naming
+ *  `#/inventory` by hand is how the D70 miss survived a file that already had the route in
+ *  front of it: the array grew and three string literals did not. */
+/* The `!` is the tuple's own length used as an index, which the compiler widens to `number`
+   and so cannot narrow; `RING` is `as const` and non-empty two lines up. */
+const LAST = RING[RING.length - 1]!
 
 /* Every read any of these screens makes on mount, answered with the smallest honest payload.
  * Nothing here may touch the real store: an unstubbed read is a request to whatever is
@@ -87,15 +94,11 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
   await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
-  /* D70's two reads. Both are on mount and both are `Promise.all`'d, so an unstubbed one
-     leaves that screen never resolving and the last step of the walk asserting against a
-     view that never arrives.
-
-     EVERY MEMBER OF `CodeLedger`, INCLUDING THE EMPTY ONES, and that is not tidiness. The
-     screen filters `ledger.entries` in a `useMemo` that guards only the null case, so a
-     short payload throws inside render, React unmounts the tree, and the step reports as
-     "`.codes` not found" — which reads exactly like a route that failed to resolve. Cost one
-     debugging pass to see that the ROUTE was fine and the STUB was not. */
+  /* The code-card screen reads its ledger on mount (D70), and an EMPTY one is the honest
+     answer here: this checkout has its own store (D43) and no code has ever been scanned into
+     it. Every field the screen indexes is present rather than short, for the reason the order
+     stub below gives at length — a payload missing a key makes "none" and "not asked" the same
+     answer, and a screen drawn from a short map is a screen this stub could break. */
   await page.route(/\/codes$/, (route) =>
     json(route, {
       counts: {},
@@ -107,7 +110,6 @@ async function stub(page: Page, cards: unknown[] = []) {
       products: [],
     }),
   )
-  await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
   /* The order screen reads on mount and the shipping screen does not — it holds nothing until
      an export is uploaded — which is why only one of D69's two routes appears here. The
      `counts` map carries all six reasons including the zeros, exactly as `GET /orders` does:
@@ -217,19 +219,13 @@ test('the step walks the strip in the order it is drawn, and the last screen is 
      A case pressing the step ON his view could not: `enabled` refuses there AND the ring does,
      so no single mutation makes it fail, and docs/GATES.md's rule is that a case which cannot
      fail is not coverage. `app/tests/fulfillment.spec.ts` asserts the nav is not drawn. */
-  /* DERIVED FROM `RING`, NOT NAMED. It read `#/inventory` in both places until `#/codes`
-     was added to the ring above and made that screen the second-to-last — so the assertion
-     failed saying the step had landed somewhere new when what had actually moved was the end
-     of the ring. A named screen turns "the ring does not wrap" into "the ring ends HERE",
-     which is a different claim and one this case was never trying to make. */
-  const last = RING[RING.length - 1]!
   await page.keyboard.press('Meta+ArrowRight')
-  await expect(page.locator(VIEW[last])).toBeVisible()
-  expect(page.url()).toContain(last)
+  await expect(page.locator(VIEW[LAST])).toBeVisible()
+  expect(page.url()).toContain(LAST)
 })
 
 test('the step walks back, and the first screen is the first', async ({ page }) => {
-  await open(page, RING[RING.length - 1]!)
+  await open(page, LAST)
 
   for (const previous of [...RING].reverse().slice(1)) {
     await page.keyboard.press('Meta+ArrowLeft')
@@ -300,7 +296,7 @@ test('the strip advertises the step once, at the end of the ring', async ({ page
      can reach, and the two routes after it are the two it cannot. */
   const links = page.locator('.app-nav-link')
   const lastRing = links.nth(RING.length - 1)
-  await expect(lastRing).toHaveAttribute('href', RING[RING.length - 1]!)
+  await expect(lastRing).toHaveAttribute('href', LAST)
   const ring = await lastRing.boundingBox()
   const chips = await hint.boundingBox()
   const aside = await links.last().boundingBox()

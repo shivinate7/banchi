@@ -549,7 +549,7 @@ test('the search box does not answer the card when a digit is typed into it', as
   await expect(box).toHaveValue('1')
 })
 
-/* ------------------------------------- D75: the rows are there and they are the wrong card */
+/* ------------------------------------- D77: the rows are there and they are the wrong card */
 
 /* THE CASE D46 COULD NOT REACH, and it is not hypothetical: box 3 card 66 in the owner's own
    store, and the only open entry in it. `Nasus, Ascended` was read with its number misread as
@@ -591,7 +591,7 @@ test('an entry with rows is not offered the export unasked', async ({ page }) =>
 
   /* D46'S SECOND ARGUMENT, KEPT. It refused to fetch a catalog beside a good list of rows —
      "a second, looser list beside a good one is how a screen teaches you to stop reading the
-     first" — and that is an argument about what appears UNASKED, which D75 does not touch.
+     first" — and that is an argument about what appears UNASKED, which D77 does not touch.
      The timeout is the assertion: an arrival fetch would already have been sent. */
   await page.waitForTimeout(200)
   expect(sent.filter((s) => s.url.includes('/catalog?'))).toHaveLength(0)
@@ -631,7 +631,7 @@ test('a digit answers the row that is on screen, not the row the entry holds', a
   }
   /* THE SILENT MIS-WRITE THIS FILE EXISTS TO CATCH. The keyboard handler picked its list by
      `candidates.length > 0` for as long as the two lists could not both exist — so the first
-     build of D75 would have seen the export's first row, been pressed `1`, and written the
+     build of D77 would have seen the export's first row, been pressed `1`, and written the
      ENTRY's first row: `Get Excited!`, a different card, onto a real position, with no
      refusal because that SKU is a perfectly good candidate. */
   expect(body.sku).toBe(CATALOG_ROWS[0]!.sku)

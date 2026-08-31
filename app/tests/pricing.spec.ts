@@ -670,8 +670,16 @@ test('a held row says so, in both registers, and has no price field', async ({ p
   await expect(page.locator('.pricing-held')).toContainText('Holding')
   /* docs/DESIGN.md's human-label-large, machine-string-small rule. The machine line is the
      JSON as it sits in the file, so grepping `withheld` finds the screen, decisions.json and
-     the run report at once — which is the only job that line has. */
-  await expect(page.locator('.pricing-held .pricing-machine')).toHaveText('withheld: bullish')
+     the run report at once — which is the only job that line has.
+
+     IT IS ON THE ROW'S SECOND LINE AND NOT INSIDE THE HELD CELL, which is where it used to
+     be drawn and could not fit: that column is 120px and `withheld: next_batch` measures
+     152px in this face, so the token wrapped and the cell overprinted the sentence beneath
+     it. Asserted through `.pricing-row-note` deliberately — the selector names the line the
+     token has to be on, so a change that put it back in the 120px cell fails here rather
+     than in a screenshot nobody takes. */
+  await expect(page.locator('.pricing-row-note .pricing-machine')).toHaveText('withheld: bullish')
+  await expect(page.locator('.pricing-row-note')).toContainText('waiting on rotation')
   await expect(field(page)).toHaveCount(0)
 })
 
@@ -911,6 +919,89 @@ test('a row is the same height whether or not it carries a note', async ({ page 
     nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
   )
   expect(heights[0]).toBe(heights[1])
+})
+
+/* THE STATE THAT BROKE THE INVARIANT WHILE THE CASE ABOVE STAYED GREEN, and the gap is the
+ * point: that case compares a priced row against a priced row with a note, and a HELD row is
+ * neither. It draws a different cell in the price column and a second machine string, and it
+ * stood 54px tall in a 32px track — three wrapped lines that printed over the sentence
+ * beneath. The owner reported it off a screenshot, which is the only instrument this repo had
+ * pointed at it.
+ *
+ * THE LONGEST REASON, DELIBERATELY. `next_batch` is the widest of `holds.ts`'s three and the
+ * one that fails first: `withheld: next_batch` measures 152px against a 120px column. A case
+ * written on `bullish` would be 129px — still too wide, but a fix that merely bought 20px
+ * would pass it and ship the wrap.
+ *
+ * BOTH AT ONCE ON THE LAST ROW, because a held row with an `at_cap` sentence is where the two
+ * strings actually collided, and it is a shape the store produces: a card can be at the live
+ * cap and withheld at the same time. */
+test('a held row is the same height as a priced one, reason and sentence together', async ({
+  page,
+}) => {
+  await open(page, {
+    skus: [
+      sku(),
+      sku({ sku: '8608459', name: 'Dunsparce' }),
+      sku({
+        sku: '8608659',
+        name: 'Wattrel',
+        at_cap: true,
+        add_to_quantity: 0,
+        copies_out: 4,
+        nothing_to_add:
+          '0 live and 4 on an import this pipeline has not seen land — 4 of the 4 this SKU may have out',
+      }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: {
+        '8608459': { withheld: 'next_batch' },
+        '8608659': { withheld: 'next_batch', note: 'waiting on rotation' },
+      },
+    },
+  })
+
+  const rows = page.locator('.pricing-row')
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(1).locator('.pricing-machine')).toHaveText('withheld: next_batch')
+  await expect(rows.nth(2).locator('.pricing-machine')).toHaveText('withheld: next_batch')
+
+  const heights = await rows.evaluateAll((nodes) =>
+    nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
+  )
+  expect(heights[1]).toBe(heights[0])
+  expect(heights[2]).toBe(heights[0])
+
+  /* AND NOTHING OVERLAPS, which is the defect said in its own terms rather than inferred from
+     a height. A row of the right height whose cell overflowed both ways — 54px centred in 32px
+     — is exactly what was on screen, so the height alone would not have caught it. Every box
+     is measured against the row that contains it: the held cell and the second line must both
+     sit inside their row, and the second line must start at or below where the held cell
+     ends. */
+  const boxes = await rows.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = (el: Element | null) =>
+        el === null ? null : { top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom }
+      return {
+        row: rect(node),
+        held: rect(node.querySelector('.pricing-held')),
+        note: rect(node.querySelector('.pricing-row-note')),
+      }
+    }),
+  )
+  for (const box of boxes.slice(1)) {
+    expect(box.held).not.toBeNull()
+    expect(box.held?.top).toBeGreaterThanOrEqual(box.row?.top ?? 0)
+    expect(box.held?.bottom).toBeLessThanOrEqual(box.row?.bottom ?? 0)
+  }
+
+  const both = boxes.at(-1)
+  expect(both?.note).not.toBeNull()
+  expect(both?.note?.top).toBeGreaterThanOrEqual(both?.held?.bottom ?? 0)
+  expect(both?.note?.bottom).toBeLessThanOrEqual(both?.row?.bottom ?? 0)
 })
 
 // ------------------------------------------------------ the save loop actually finishes
@@ -1232,3 +1323,4 @@ test('the button beside the hold does what the key does', async ({ page }) => {
   await expect(page.getByRole('complementary', { name: /Price history for/ })).toBeVisible()
   expect(asks(wire)).toHaveLength(1)
 })
+

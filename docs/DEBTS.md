@@ -307,7 +307,97 @@ Both cost more at every turn end than they can return.
 
 ---
 
-## 7 — Recorded and correctly unfixed
+## 7 — The preview crops the card, and the one check that looks at a photo cannot see it
+
+**Blocked on a ruling, not on code.** Found 2026-08-31 by the owner, on the screen, looking at
+cards photographed the night before.
+
+### `object-fit: cover` is centred on the frame, and the card is not
+
+Five stylesheets draw a stored photograph into a `63 / 88` box under `object-fit: cover`:
+`app/src/BoxBrowse.css` (the `#/inventory` preview), `app/src/Inventory.css` (sell-confirm),
+`app/src/CardLocations.css`, `app/src/Fulfillment.css` and `app/src/Pricing.css`. The frames are
+2160x3840 — aspect 0.5625 — and the box is 0.7159, so `cover` scales to the width and keeps
+**10.71% to 89.29% of the frame height, 411px discarded at each end**. Default `object-position`
+is `50% 50%`, so the window is nailed to the centre of the FRAME whatever the card is doing.
+
+**The slack was always about three points wide and D32 measured it without anyone reading it that
+way.** That entry records cards filling 61–72% of the frame height; against a 78.57% window a
+perfectly centred card has 3.3 to 8.8 points of frame height per side before an edge goes.
+
+**Measured, 48 box-3 frames sampled evenly, `detect_card` at 48/48 with zero refusals:**
+
+| | |
+|---|---|
+| card top | 2.0% .. 71.9% (window opens at 10.71%) |
+| card bottom | 73.2% .. 98.0% (window closes at 89.29%) |
+| clipped at the bottom | 34 of 48 |
+| clipped at the top | 16 of 48 |
+| worst bottom loss | 333px of cardboard |
+
+Bottom loss is what gets noticed because the collector number and the set line print there. The
+survey passed `card_rect`'s corrected box at the default 0.716; three frames were checked
+against the photographs by eye and the rest were not, so the per-frame rows are indicative and
+the counts are the claim.
+
+### Why `make design-check` is green over it
+
+`docs/DESIGN.md`'s floor is `>= 320px` on the short edge of the pull-modal photo, asserted at
+`app/tests/fulfillment.spec.ts`. Its `paintedPhoto` helper resolves `object-fit` properly —
+`cover`, `contain`, `scale-down`, `none` and `fill` each get their own scale — so it measures how
+large the photograph is **drawn**. It has no way to ask whether the CARD is inside what was
+drawn, and under `cover` it never can: the frame fills the box by construction, so the painted
+short edge IS the box and the row passes at exactly the moment the card is being cut. **A floor
+on size is not a floor on content**, and this is the second time that distinction has cost
+something here — the same helper's own comment draws it, about a broken image that still has a
+layout box.
+
+Closing it needs the thing the assertion does not have: where the card is. `detect_card` answers
+that, and putting a detector behind a Playwright row buys a check that is slower than the suite
+it joins and can refuse. Not costed.
+
+### Neither fix is a stylesheet edit, which is why this is recorded
+
+**`object-fit: contain` fails the floor it would have to clear.** `.fulfillment-photo` is
+`min(360px, 100%)` at `63 / 88`, so 360 x 503; `contain` scales by
+`min(360/2160, 503/3840)` = 0.131 and paints **283px** on the short edge, under the 320 floor.
+Computed from the helper's own formula rather than observed in a run. The box would have to reach
+407px to hold the floor and it is capped at 360, so `contain` is unavailable on the Fulfiller's
+screen without reopening that row of the constraints table — which D31 says is not his to
+reopen. On the owner's screens nothing checks it, and the cost there is size: the frame draws at
+78.6% of the box width and the card lands at 63–69% of it, against 80–88% today.
+
+**The server crop is mostly wiring and four open questions.** `identify/images.py:crop_rect` is
+already extracted so a second caller can draw the rectangle the pipeline cuts, and
+`POST /pipeline/crop-preview` already detects and serves for `#/runs`; a third caller of the same
+function is D32's own rule rather than an exception to it. What is not answered:
+
+- **Latency forces a cache.** D32 measured ~115ms per card for the crop preview. `GET /photo` is
+  hit on every arrow-key step of the browse walk and auto-repeat is faster than that; the runs
+  panel bought its way out with a 140ms debounce and a photo route cannot debounce.
+- **The rect has no home.** A capture sidecar is `{box, game, index, rarity_claim}` today. Adding
+  the rectangle makes this a capture-write change plus a backfill over every photograph already
+  on disk.
+- **D32 enumerated the consumers that keep the whole frame** — the review queue photograph a
+  human judges foil against, the pull preview matched to a physical slot, the re-shoot comparison
+  — and the browse preview is on that list. Per-request cropping honours *in memory, never on
+  disk*, and still needs an amendment saying why identifying a card differs from judging one.
+  `app/src/ReviewQueue.css` deliberately sets no `object-fit` and should keep the frame either
+  way.
+- **A refusal renders as today.** `detect_card` returning `None` means the whole frame, which is
+  the clipping. So the crop narrows the case `contain` answers and does not remove it.
+
+**Not blocked on the games registry.** `card_aspect` is 0.716 for `pokemon`, `pokemon_code`,
+`riftbound` and `one_piece`; only `misc` is `None`, which `detect_card` refuses by contract. Box
+3 is Riftbound, so the box this was found on is not the blocked case.
+
+**Why it stays open**: the two fixes trade legibility against coverage in opposite directions and
+one of them moves a published floor. That is a decision entry, not an edit, and the owner has not
+made it.
+
+---
+
+## 8 — Recorded and correctly unfixed
 
 **No work proposed. Here so a green run is not read as a promise none of these exists.**
 
@@ -351,6 +441,15 @@ on source line 24 with nothing above it reported 23; the same test on line 27 un
 code, silently, because the line is real and the file is right. Grep the TITLE instead; the
 reporter prints that too and it is exact. Nothing to fix at 1.55.1; the remedy is to stop
 writing the number down.
+
+**The same shape in the docs, and `doc hygiene` sees only its provable half.** Docs carry 52
+resolvable `path:line` citations. D74's row catches one failure — a number past the end of its
+file — and there are none today. **The common case is invisible**: a citation whose file is
+long enough but whose line has moved, which is exactly what `ReviewQueue.css:47` became when
+the comment it named slid to line 57. Nothing distinguishes that from a correct citation
+without knowing what the line should say. **The remedy is the same one this entry already
+gives** — cite the identifier, not the number — and the 2026-08-30 prose sweep applied it
+where it rewrote a citation rather than adding a check that cannot exist.
 
 ### What is not closed about the `make design-check` flakes
 
@@ -407,7 +506,7 @@ at integration, and by hand is where it stays.
 other row prints green, the run exits 0, and the row is absent. A detector cannot detect its own
 absence, so there is a root to the recursion: unwire anything else and the commit fails, unwire
 *this* and only `--self-test` catches it. Related: **called is not run, and run is not looked** —
-a dispatched check returning before its `report.add` prints no row, which `check_raw_colour` does
+a dispatched check returning before its `report.add` prints no row, which `check_raw_color` does
 when `app/src/` is absent. And **`scripts/status.py` is not in `INVOKERS`**, so `audit invocation`
 does not see its call; it would find nothing if it did, since that row reads flags off a literal
 command line and `status.py` builds argv as a list.
@@ -469,7 +568,7 @@ it stands and cannot see what a change removed.
 ### The second fenced block in `docs/DESIGN.md` is not read
 
 `design tokens` reconciles the `## Tokens` fence against `app/src/tokens.css` both ways, and
-`raw colour` now blocks a hex anywhere in `app/src/*.css` — which closed the sharper half, the
+`raw color` now blocks a hex anywhere in `app/src/*.css` — which closed the sharper half, the
 `#ffffff` in `app/src/PullConfirm.css` that survived a design review and two integration passes.
 What is left is a document disagreeing with itself: step 6's three button states restate five of
 these hexes in a second fence nothing reads. Left out because D18's instinct is that deleting a

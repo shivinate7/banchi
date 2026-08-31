@@ -1,9 +1,21 @@
 # Where `emit` and `reconcile` belong
 
-**STATUS: RECORDED, NOT BUILT. Nothing in this file is implemented.** It answers one question
+**STATUS — the placement answer stands; three of the six items have since been built.**
+Re-checked against the tree 2026-08-30. **Items 1, 2 and 3 of §6 are BUILT**: the preset now
+moves `rule`/`basis` and `pricing presets` is a blocking audit row guarding it; `#/pricing`
+draws the sub-threshold answer and reads `remembered_sub_threshold`; and `app/src/readiness.ts`
+computes what a run owes. **Items 5 and 6 are NOT built** — no `#/runs?run=<name>` link exists
+and `.run-phase-identifying` still has no `reconcile` sibling. §2.1 and §2.2 are therefore the
+record of two defects that were fixed, not two that are live; both are written in the present
+tense below and were true when written. **This header read "RECORDED, NOT BUILT. Nothing in
+this file is implemented" until 2026-08-30**, by which point the two findings it calls its
+sharpest had both shipped.
+
+It answers one question
 the owner asked on 2026-08-29 — *"whether emit and reconcile ought to move from the runs page,
 to be its own page, or to be within the pricing page"* — and it changes no decision entry. The
-work it proposes is ordered and costed at the foot; none of it has been started.
+work it proposes is ordered and costed at the foot; the status line above says which of it has
+since been built.
 
 **Method.** Four agents, four lenses, run in parallel and told to disagree: the command seam
 (what each command reads, writes and refuses on), operator ergonomics (route switches, fold
@@ -72,6 +84,12 @@ pricing payload, and `app/src/types.ts:1304` declares it. No component reads it.
 designed for that screen and never built there — `CLAUDE.md`'s route-is-not-a-feature rule, one
 field rather than one route.
 
+> **Half of this is fixed, checked 2026-08-30.** `app/src/Pricing.tsx` now draws the
+> sub-threshold control and reads `remembered_sub_threshold`, so the textarea is no longer the
+> only way to answer — §6 item 2. **The refusal itself is unchanged**: `Decisions.blocking`
+> still tests `sub_threshold is None` against the sub-threshold SKUs and still never consults
+> `overrides`, so pricing every SKU by hand leaves `emit` refusing exactly as described.
+
 ### 2.2 The preset control writes a key nothing reads
 
 `app/src/Pricing.tsx:387` carries the comment *"A PRESET WRITES `rule`/`basis` AND NO
@@ -91,6 +109,11 @@ figures still on screen.
 `basis: market`, two overrides across fifty SKUs.
 
 **This is the sharpest finding in this file and it has nothing to do with the question asked.**
+
+> **FIXED, and it grew a guard.** The press writes `rule`/`basis` and `pricing presets` is now
+> a blocking row of `make docs-audit`, reconciling `app/src/Pricing.tsx`'s table against
+> `cli/cmd_join.py:PRESETS` key for key and rule for rule. That row's docstring carries this
+> finding as the reason it exists, including the measurement on the owner's riftbound run.
 
 ---
 
@@ -204,18 +227,19 @@ Both stuck runs read `emit`.
 
 ---
 
-## 6. The ordered work, none of it built
+## 6. The ordered work — items 1, 2 and 3 built since
 
-Costs are relative sizes, not hours.
+Costs are relative sizes, not hours. **The heading read "none of it built" until 2026-08-30**;
+the `state` column is the re-check against the tree that replaced it.
 
-| # | change | why | size |
-|---|---|---|---|
-| 1 | **`preset` moves `rule`/`basis`, or the control stops claiming to** (§2.2) | a silent mispricing, live on disk | S |
-| 2 | **Draw `sub_threshold` on `#/pricing`** — the payload is already served and typed (§2.1) | unblocks both stuck runs; removes the only argument for moving emit | S |
-| 3 | **`phase` says what the run owes**, in the run's own unit — `price` with a count where the disposition is unanswered, `answer N` where the queue is non-empty | both stuck runs read `emit` today | M |
-| 4 | **A finished step's body collapses; its head and note never do** (§3) | puts emit near y≈660, above the fold, with no relocation | M |
-| 5 | **`#/pricing` links back as `#/runs?run=<name>`, and `#/runs` reads it** | the link is one-directional today: `RunPanel.tsx:1603` links out with the run name, `Pricing.tsx` links back bare, and `openRun` is local state with no persistence — so every return costs a re-pick | S |
-| 6 | **`phase === 'reconcile'` gets the ink-600 treatment** `.run-phase-identifying` has | it is the fact the operator needs on re-entry, drawn in the quietest register | XS |
+| # | change | why | size | state |
+|---|---|---|---|---|
+| 1 | **`preset` moves `rule`/`basis`, or the control stops claiming to** (§2.2) | a silent mispricing, live on disk | S | BUILT |
+| 2 | **Draw `sub_threshold` on `#/pricing`** — the payload is already served and typed (§2.1) | unblocks both stuck runs; removes the only argument for moving emit | S | BUILT |
+| 3 | **`phase` says what the run owes**, in the run's own unit — `price` with a count where the disposition is unanswered, `answer N` where the queue is non-empty | both stuck runs read `emit` today | M | BUILT |
+| 4 | **A finished step's body collapses; its head and note never do** (§3) | puts emit near y≈660, above the fold, with no relocation | M | not verified |
+| 5 | **`#/pricing` links back as `#/runs?run=<name>`, and `#/runs` reads it** | the link is one-directional today: `RunPanel.tsx:1603` links out with the run name, `Pricing.tsx` links back bare, and `openRun` is local state with no persistence — so every return costs a re-pick | S | NOT BUILT |
+| 6 | **`phase === 'reconcile'` gets the ink-600 treatment** `.run-phase-identifying` has | it is the fact the operator needs on re-entry, drawn in the quietest register | XS | NOT BUILT |
 
 **Item 4 is the only one that touches the thing the question was about**, and it is fourth
 because the three above it are worth more.
