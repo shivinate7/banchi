@@ -1047,3 +1047,93 @@
   font-size: 10px;
   color: var(--muted);
 }
+
+/* ------------------------------------------------ D76: the fetch's scope, drawn as a lever
+ *
+ * ONE BLOCK, INSIDE THE JOIN STEP, ABOVE ITS BUTTONS. The scope is a decision about the
+ * press below it, so it sits between the note that explains the step and the row that runs
+ * it — the same placement the bypass toggle already has, for the same reason: a control
+ * separated from the button it governs reads as unrelated configuration.
+ *
+ * NO COLOUR OF ITS OWN. Every value here is a token (the `raw colour` audit row blocks
+ * otherwise), and the panel is separated by a rule and a background step rather than by an
+ * accent — the accent stays reserved for the one thing on this screen that spends money. */
+.run-scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.run-scope-head {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The three answers to one question, so they read as one control rather than three
+   toggles. Wrapping, because the third label is the longest and a narrow column is the
+   normal case on this screen. */
+.run-scope-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+}
+
+/* A SCROLLING LIST, BECAUSE 220 SETS IS A REAL LENGTH. Pokemon's category answers with the
+   whole published vocabulary, and a list that pushed the fetch button off the screen would
+   make the control unreachable at exactly the moment it is being used. */
+.run-scope-sets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  max-height: 220px;
+  overflow-y: auto;
+  padding: var(--s2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* WHAT THE PRESS WILL ASK FOR, IN A SENTENCE. Body rather than the fine print the notes
+   around it use: this is the answer the panel exists to give, and it is what an operator
+   reads before deciding whether to press or to change something. */
+.run-scope-says {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* A label and its control on one line — the shape a `select` wants and the column-stacked
+   `.run-field-wide` does not. */
+.run-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.run-select {
+  padding: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--bg);
+  /* --field: a boundary you type inside, as the number inputs above use. */
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+}
+
+.run-select:hover:not(:disabled) {
+  border-color: var(--field-hover);
+}

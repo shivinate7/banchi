@@ -33,6 +33,7 @@ import type {
   CropPreview,
   CsvUpload,
   ExportFetched,
+  ExportScope,
   RunDetail,
   PriceHistoryPayload,
   PricingPayload,
@@ -1747,9 +1748,47 @@ export async function getTcgSets(game: string): Promise<TcgSets> {
   return (await request(`/tcg/sets?game=${encodeURIComponent(game)}`, NO_CACHE)) as TcgSets
 }
 
+/**
+ * What a fetch WOULD ask TCGplayer for, before one is pressed (D76).
+ *
+ * FREE, AND IT PRESSES NOTHING. The same three fields `fetchExport` takes go out here, so the
+ * panel describes the scope the button is about to send rather than a second guess at it.
+ *
+ * NEVER THROWS FOR A MIXED-GAME RUN. `POST .../export` refuses one with `game_required`
+ * because a category is scalar; this answers 200 with the list, because the screen that has
+ * to ask which game cannot draw the picker from a route that refuses without one.
+ */
+export async function getExportScope(
+  name: string,
+  options: { game?: string; scope?: 'category' | 'sets'; setIds?: number[] } = {},
+): Promise<ExportScope> {
+  const query = new URLSearchParams()
+  if (options.game !== undefined) query.set('game', options.game)
+  if (options.scope !== undefined) query.set('scope', options.scope)
+  /* REPEATED rather than comma-joined, which is the shape the dispatcher reads with
+     `parse_qs`. A comma list is one value away from a set name that contains a comma. */
+  for (const id of options.setIds ?? []) query.append('set_ids', String(id))
+  const tail = query.toString()
+  return (await request(
+    `/pipeline/runs/${encodeURIComponent(name)}/scope${tail === '' ? '' : `?${tail}`}`,
+    NO_CACHE,
+  )) as ExportScope
+}
+
 export async function fetchExport(
   name: string,
-  options: { acceptUnverified?: boolean; acceptNarrower?: boolean } = {},
+  options: {
+    acceptUnverified?: boolean
+    acceptNarrower?: boolean
+    /** Which category to ask for. Required only where the run holds more than one game —
+     *  one fetch answers for one category, because `CategoryId` is scalar in the portal. */
+    game?: string
+    /** D76's axis. Absent uses the game's own rule from the registry. */
+    scope?: 'category' | 'sets'
+    /** TCGplayer set ids, ticked by hand. Outranks both the rule and the cards' own hints:
+     *  the unanimity rule guesses at what the box is, and this is somebody saying. */
+    setIds?: number[]
+  } = {},
 ): Promise<ExportFetched> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/export`, {
     method: 'POST',
@@ -1757,6 +1796,9 @@ export async function fetchExport(
     body: JSON.stringify({
       accept_unverified: options.acceptUnverified,
       accept_narrower: options.acceptNarrower,
+      game: options.game,
+      scope: options.scope,
+      set_ids: options.setIds,
     }),
   })) as ExportFetched
 }

@@ -2118,6 +2118,40 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
 # quiet under, arriving from the opposite direction.
 
 GAMES_MODULE = ROOT / "pipeline" / "games.py"
+
+# The one module allowed to build the export request (D64/D65), and the three fields of it
+# that are a standing instruction rather than a transcription of the portal's own form.
+#
+# THE REASON EACH ONE HOLDS IS CARRIED HERE RATHER THAN LEFT TO THE READER, because the person
+# this row stops is the person who has just decided the value should be different — and the
+# only thing that will change their mind is the argument, not a restatement of the number.
+EXPORT_MODULE = ROOT / "server" / "tcg_export.py"
+EXPORT_STANDING = (
+    (
+        "ExcludeListos",
+        True,
+        "Exclude listings with photos — the owner's standing instruction (2026-08-31, D76). "
+        "It holds on the owner's word: what the flag changes in the file is NOT measured, "
+        "because the axis leaves no trace in it. NOTHING DOWNSTREAM CAN CATCH A WRONG VALUE: "
+        "D64 measured `Photo URL` empty in every export, filtered and unfiltered, so a wrong "
+        "value gives a clean join and a green `make check` forever. Do not flip this on a "
+        "reading of the field name — take it back to the owner.",
+    ),
+    (
+        "MyInventory",
+        False,
+        "The CATALOG, not the operator's current listings. With this true the same request "
+        "returns only what is already listed, which is useless to a join whose whole job is "
+        "listing cards that are not.",
+    ),
+    (
+        "PrintingIds",
+        ["0"],
+        "All Printings. A number stocked in several finishes must arrive with all of them, "
+        "or D3 rung 2 decides it from whichever one survived — which is a silent mislisting "
+        "rather than a loud miss.",
+    ),
+)
 FIXTURES_DIR = ROOT / "fixtures"
 
 # Opt-in extra exports, colon-separated, absolute or repo-relative. For the operator who
@@ -2137,7 +2171,9 @@ GAME_REQUIRED_KEYS = frozenset({
     "condition_by_finish", "finish_by_rarity", "located", "join_key", "prompt",
     "crop_bands", "card_aspect", "catalogued", "unverified",
 })
-GAME_OPTIONAL_KEYS = frozenset({"product_line_rarities", "tcgplayer_category_id", "set_aliases"})
+GAME_OPTIONAL_KEYS = frozenset(
+    {"product_line_rarities", "tcgplayer_category_id", "set_aliases", "export_scope"}
+)
 
 # The `join_key` an uncatalogued game must name. Written here rather than read out of the
 # module for the same reason GAME_REQUIRED_KEYS is: renaming the strategy in the registry
@@ -2392,6 +2428,30 @@ def check_game_vocabulary(report: Report) -> None:
                     f"and a condition string with no finish is unreachable.",
                 )
             )
+
+        # D76's per-game fetch width. Two provable things and nothing softer: the value is
+        # one of the two the registry publishes, and `category` — the claim that a whole
+        # TCGplayer category comes down in one file — cannot be authored for a game naming
+        # no category to fetch. Both are the shape of a literal, which is what keeps this row
+        # blocking rather than advisory.
+        scope = entry.get("export_scope")
+        if scope is not None:
+            if scope not in set(data.get("EXPORT_SCOPES") or ()):
+                findings.append(
+                    Finding(
+                        where,
+                        f"export_scope {scope!r} is not one of "
+                        f"{', '.join(sorted(data.get('EXPORT_SCOPES') or ()))}.",
+                    )
+                )
+            elif scope == "category" and not entry.get("tcgplayer_category_id"):
+                findings.append(
+                    Finding(
+                        where,
+                        "export_scope is `category` but the entry names no "
+                        "`tcgplayer_category_id`, so there is no category to fetch whole.",
+                    )
+                )
 
         if entry.get("join_key") not in join_keys:
             findings.append(
@@ -3333,6 +3393,71 @@ def check_pricing_presets(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} priced, written by the screen, key rule and basis agree",
+    )
+
+
+def check_export_request(report: Report) -> None:
+    """The three fields of the export request that are DECISIONS, pinned to their values.
+
+    **THE OTHER ELEVEN FIELDS ARE TRANSCRIPTION AND THIS ROW IGNORES THEM.**
+    `server/tcg_export.py:Scope.model` is a body captured off the portal's own form submit,
+    so most of it is a shape somebody copied and nothing here should have an opinion about
+    it. Three of the fourteen are the operator's standing instruction, they are hoisted into
+    `STANDING_FILTERS` for that reason, and this row is what makes the hoisting mean
+    something.
+
+    **WHY A BLOCKING ROW AND NOT A COMMENT, WHICH IS WHAT IT ALREADY HAD.** All three are
+    invisible downstream. `ExcludeListos` is the worst of them: D64 measured `Photo URL`
+    empty in all eleven exports, filtered AND unfiltered, so the axis leaves no trace in the
+    file it narrows. A wrong value produces a clean join, a clean reconcile, a green
+    `make check` and a mispriced listing, indefinitely — there is no run, no report and no
+    later check that could ever disagree with it.
+
+    **And the failure mode is specific rather than hypothetical.** `ExcludeListos` shipped
+    `False` in D65 because the capture took whatever the checkbox happened to be set to that
+    day, and the next re-capture of that body would paste over all fourteen fields the same
+    way. This row is what turns that paste into a stopped commit.
+
+    The finding names the INSTRUCTION rather than the literal, because somebody who has just
+    changed the value already knows what the literal is.
+    """
+    findings: List[Finding] = []
+    where = rel(EXPORT_MODULE)
+    if not exists(EXPORT_MODULE):
+        report.add("export request", MECHANICAL, [Finding(where, "does not exist")])
+        return
+
+    held = literals_from_module(EXPORT_MODULE).get("STANDING_FILTERS")
+    if not isinstance(held, dict):
+        findings.append(
+            Finding(
+                where,
+                "no `STANDING_FILTERS` literal could be read. It is hoisted out of "
+                "`Scope.model` precisely so this row can read it with `ast`; folding it back "
+                "into the method body puts three standing instructions somewhere nothing "
+                "checks.",
+            )
+        )
+    else:
+        for field, expected, why in EXPORT_STANDING:
+            actual = held.get(field)
+            if field not in held:
+                findings.append(
+                    Finding(where, f"`STANDING_FILTERS` no longer names {field}. {why}")
+                )
+            elif actual != expected:
+                findings.append(
+                    Finding(
+                        where,
+                        f"{field} is {actual!r} and must be {expected!r}. {why}",
+                    )
+                )
+
+    report.add(
+        "export request",
+        MECHANICAL,
+        findings,
+        f"{len(EXPORT_STANDING)} standing filters, each at its instructed value",
     )
 
 
@@ -6080,6 +6205,7 @@ def audit(staged_only: bool) -> Report:
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)
+    check_export_request(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)

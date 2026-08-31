@@ -414,6 +414,50 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"games": []}' })
   })
 
+  /* D76's scope preview. Registered panel-wide because EVERY case that opens a run now draws
+     it, and a case that wanted a different scope re-registers over this one. A one-game run
+     whose cards are only partly hinted, which is the shape the defect was found in. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        run: '2026-08-30-box3-01',
+        games: [
+          {
+            game: 'riftbound',
+            display: 'Riftbound',
+            category_id: 89,
+            cards: 200,
+            hinted: 1,
+            unhinted: 199,
+            hints: ['OGN'],
+            policy: 'category',
+          },
+        ],
+        scopes: ['category', 'sets'],
+        asked: {
+          game: 'riftbound',
+          category_id: 89,
+          hints: ['OGN'],
+          set_ids: [],
+          unresolved_hints: [],
+          sets: [],
+          widened: true,
+          scope: 'category',
+          policy: 'category',
+          chosen_by: 'policy',
+          reason: 'game_policy',
+          cards: 200,
+          hinted: 1,
+          unhinted: 199,
+        },
+        reason: null,
+        message: null,
+      }),
+    })
+  })
+
   await page.route(/\/search\?/, async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"groups": []}' })
   })
@@ -1214,6 +1258,13 @@ function fetchedBody(over: Record<string, unknown> = {}) {
       unresolved_hints: [],
       sets: ['Unleashed'],
       widened: false,
+      scope: 'sets',
+      policy: 'sets',
+      chosen_by: 'cards',
+      reason: null,
+      cards: 40,
+      hinted: 40,
+      unhinted: 0,
     },
     ...over,
   }
@@ -1389,4 +1440,65 @@ test('a hint that resolved to nothing says so, because the export silently widen
      worked unless the screen says which happened. */
   await expect(page.locator('.run-fetched')).toContainText('every set')
   await expect(page.locator('.run-fetched')).toContainText('OGN')
+})
+
+/* ------------------------------------------------------------------ D76: the scope as a lever
+ *
+ * THE PROPERTY IS THAT A HUMAN CAN SEE AND CHANGE THE SCOPE BEFORE PRESSING. `CLAUDE.md`'s
+ * route-is-not-a-feature rule is the whole reason these three exist rather than the server
+ * tests alone: `_scope_for_run` can be perfect and the operator still unable to reach it. */
+
+test('the scope panel draws what the fetch will ask for, and why', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await page.locator('.run-row').first().click()
+
+  /* THE EVIDENCE THE RULE READS, WHICH IS THE FACT THAT WAS INVISIBLE. `1 of 200 carry a set
+     hint` is what decides whether a set filter is safe, and while it could not be seen, one
+     hinted card scoped a whole box's export and the receipt reported success. */
+  await expect(page.locator('.run-scope')).toContainText('1 of 200 cards carry a set hint')
+  await expect(page.locator('.run-scope')).toContainText('category')
+
+  /* AND THE REASON IN A SENTENCE, not the machine string. A scope is only correctable by
+     somebody who can see which of the three voices chose it. */
+  await expect(page.locator('.run-scope-says')).toContainText(
+    'whole catalogue comes down in one file',
+  )
+})
+
+test('choosing the whole category sends it, rather than only redrawing the sentence', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await page.locator('.run-row').first().click()
+
+  await page.getByRole('radio', { name: 'Every set in the category' }).check()
+  await expect(page.locator('.run-scope-says')).toContainText('you asked for the whole category')
+
+  await fetchButton(page).click()
+
+  /* THE CONTROL AND THE REQUEST ARE ONE DECISION READ TWICE. A panel that drew a scope the
+     button did not send would be worse than no panel — it would be a lie the operator acts on,
+     which is exactly the failure D65's after-the-fact receipt made possible. */
+  const sent = wire.filter((row) => row.path.endsWith('/export')).pop()
+  expect(sent?.body).toMatchObject({ scope: 'category' })
+})
+
+test('the routing lever reaches join', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await page.locator('.run-row').first().click()
+
+  await page.getByLabel('Send to review at or below').selectOption('medium')
+  await page.getByRole('button', { name: 'Join again' }).click()
+
+  /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
+     are deliberately NOT here: D49 makes decisions.json the one place a pricing answer is
+     written, and a second place to say `rule` already cost 48 cards a price nobody chose. */
+  const join = wire.filter((row) => row.path.endsWith('/join')).pop()
+  expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })
+  expect((join?.body as { rule?: unknown }).rule).toBeUndefined()
 })
