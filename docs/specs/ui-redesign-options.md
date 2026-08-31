@@ -150,7 +150,7 @@ against today's 45.6%.
   make his view a different posture at different floors. He keeps `#/fulfillment` as its own
   route, unmerged, exactly as D31 already requires.
 - **Fixed docks mean fixed costs.** 620px of the 1440 is committed before any content. That
-  is correct at 1440 and wrong at 1100, so the rail and dock need collapse behaviour, and a
+  is correct at 1440 and wrong at 1100, so the rail and dock need collapse behavior, and a
   collapsing dock is the one place this proposal grows a fold.
 - **Reopens nothing, strictly.** It is a shell change: D31's spine survives inside the stage,
   D33's panel becomes a dock state rather than a fold. But it makes `docs/DESIGN.md`'s page
@@ -404,7 +404,7 @@ Measured today against the projection for each proposal, at 1440x900.
 | scroll for one review card | 4.5 viewports | 0 | 0 | 0 |
 | routes | 5 | addressed subjects + Fulfiller (§1.5 cause 1) | 1 + Fulfiller | 0 + Fulfiller |
 | clicks, shoot → CSVs in hand | 3 route changes, 3 folds | 0 route changes, 0 folds | 6 stop clicks, 0 folds | 0 clicks, 4 typed subjects |
-| "what do I do next" | terminal only | bead colour | the counts | `?` or a stale breadcrumb |
+| "what do I do next" | terminal only | bead color | the counts | `?` or a stale breadcrumb |
 | decision entries reopened | — | none (DESIGN.md re-argued) | **D31, D33** | D31 softened, DESIGN.md re-argued |
 | risk | — | one big tree; three zones is a bet | demotes the box axis | discoverability |
 
@@ -590,7 +590,7 @@ Proposal D shipped. Every item measured, on the owner's instruction to complete 
 | 4 | `#/fulfillment` caps the default list | **124,348px -> 4,693px** against the real 682 cards; all 42 of his assertions still pass | BUILT |
 | 5 | review undo: depth 10, no clock | verified live — three answers still reversible at 35s, where the old window dropped them at 20 | BUILT |
 | 6 | capture run counter | arithmetic correct on 7 cases incl. a gap and a replayed `capture_id`; render typechecked, NOT browser-verified | BUILT, partly verified |
-| 7 | grey patch on the tray | **physical, not code — see below** | NOT DONE, owner's to do |
+| 7 | gray patch on the tray | **physical, not code — see below** | NOT DONE, owner's to do |
 | + | `app/tests/review.spec.ts` | 9 assertions, all passing; 113 across every suite | BUILT |
 
 **Two deviations from the plan, both deliberate and both argued where they landed.** The
@@ -608,12 +608,12 @@ starvation tier landed, so `docs/DESIGN.md`'s "that ordering is visible" was alr
 `app/src/App.css`'s nav strip did not wrap, so **every owner screen inherited a sideways scroll
 to 557px on a 375px viewport** from the shell.
 
-### 7.1 Item 7 — the grey patch, which is the highest leverage-per-dollar item here
+### 7.1 Item 7 — the gray patch, which is the highest leverage-per-dollar item here
 
 **It is not a UI change and no session can complete it, because it is a piece of card.** Stated
 here so it stops being carried as an unfinished software task.
 
-**What to do**: print a neutral grey patch — an 18% grey card, or the grey row of any colour
+**What to do**: print a neutral gray patch — an 18% gray card, or the gray row of any color
 target — and fix it to the tray inside the camera's field, within about 5cm of where the card
 lands, in the same plane. Metamorfoze 3.2 requires a workflow target in every preservation
 master for exactly this reason, "to compare the stability of the image performance over a

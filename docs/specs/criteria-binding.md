@@ -94,7 +94,7 @@ first exists so the second cannot go quiet.
    report, not `continue`. The retired count-of-checks row had the shape to copy: it
    downgraded itself to `ADVISORY` and said so in its summary — *"the reader could not
    account for every check"* — rather than publishing a confident line about a comparison
-   it did not make. A row that could not find its subject must never summarise as though
+   it did not make. A row that could not find its subject must never summarize as though
    it did. **This is worth landing on its own even if nothing below is built**, because it
    is the difference between the auditor failing and the auditor going quiet.
 

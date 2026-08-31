@@ -198,7 +198,14 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   incremented correctly against a tree the other had already moved.
 
   **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
-  CHECKS IT.** `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
+  CHECKS IT — and on 2026-08-31 it turned out the TESTS had the same disease.**
+  `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand and never
+  saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the Cmd-arrow ring
+  and missed `#/codes`. Three screens were asserted by nothing and `make design-check` was
+  green, because a roster missing a route does not fail — it walks the routes it has. The
+  cursor sweep reads the nav strip now, and `scripts/docs-audit.py`'s `route rosters` row
+  fails a COMMIT where a spec's pinned list disagrees with `App.tsx`'s table. **That guard is
+  over the specs and not over this sentence**: the number below is still checked by nobody. `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
   published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
   not load-bearing prose. That argument holds for a number in a report and does not hold here,
   where the sentence is what a session reads to learn the shape of the product. It was false
@@ -422,6 +429,7 @@ D70  The QR is the whole identification, the product is a claim, and the card is
 D71  A card with no slot is ranked like every other, and it is the figure that goes
 D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
 D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
+D74  A document is checked as a document, and every markdown file is linted rather than the four a session loads
 D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted
 ```
 
