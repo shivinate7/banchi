@@ -38,6 +38,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -74,8 +75,10 @@ SOURCES = (
     {
         "path": "docs/map.py",
         "kind": "literals",
-        "requires": ("BUILD_ORDER", "GATES", "COMPONENTS"),
-        "why": "build order, gate status, per-component status and governed_by",
+        "requires": ("SHIPPED", "OPEN", "GATES", "COMPONENTS", "TRACKS"),
+        "why": "what shipped and what is open, gate status, per-component governed_by, and the "
+               "two tracks. TRACKS was added to this tuple on 2026-08-31 (D80): it had no reader "
+               "anywhere and no check, and had been wrong in two ways for three weeks.",
     },
     {
         "path": "scripts/decision-context.py",
@@ -296,82 +299,63 @@ def cont(value: str) -> str:
 
 
 def where_you_are(mapdata: Dict[str, object]) -> List[str]:
-    build = mapdata.get("BUILD_ORDER") or []
+    """What has landed and what has not — never "step N of M".
+
+    THAT HEADLINE WAS THE LIE THIS FUNCTION EXISTED TO TELL. It read `Build step 9 of 15`
+    for a week while steps 13, 14 and 15 were done, step 9 had been deferred by choice, and
+    six days of pricing, order and code-card work had landed under no step at all. The
+    number was correct and the sentence was false, because `N of M` is a claim about a
+    SEQUENCE and this was never one (D80). The map is two lists now and so is this.
+    """
+    shipped = mapdata.get("SHIPPED") or []
+    open_steps = mapdata.get("OPEN") or []
     gates = mapdata.get("GATES") or []
-    if not build:
-        return [field("Build step", "MISSING: docs/map.py BUILD_ORDER")]
+    if not shipped and not open_steps:
+        return [field("Shipped", "MISSING: docs/map.py SHIPPED / OPEN")]
 
-    nxt = [s for s in build if s.get("status") == "next"]
-    done = [s.get("step") for s in build if s.get("status") == "done"]
     out: List[str] = []
+    latest = max((str(step.get("on") or "") for step in shipped), default="")
+    out.append(field("Shipped", f"{len(shipped)} steps, last on {latest or 'an unrecorded date'}"))
+    for step in [s for s in shipped if str(s.get("on") or "") == latest][:2]:
+        out.append(cont(f"{step.get('n')}. {step.get('title')}"))
 
-    if len(nxt) != 1:
-        out.append(field("Build step", f"MISSING: expected exactly one `next`, found {len(nxt)}"))
-        step_no = None
-    else:
-        step = nxt[0]
-        step_no = step.get("step")
-        title = str(step.get("title", ""))
-        head, _, rest = title.partition(":")
-        out.append(field("Build step", f"{step_no} of {len(build)} — {head.strip()}"))
-        if rest.strip():
-            out.extend(cont(line) for line in wrap(rest.strip(), LABEL + 2))
+    out.append(field("Open", f"{len(open_steps)} — unranked, and deliberately so"))
+    for step in open_steps:
+        out.extend(cont(line) for line in wrap(f"{step.get('n')}. {step.get('title')}", LABEL + 2))
 
-    # GATES ARE A RECORD NOW, NOT A SCHEDULE (retired 2026-08-23). This block used to find
-    # the one gate marked `next`, print what it blocked, and draw the chain of build steps
-    # standing between here and it. With nothing open, that code printed nothing at all —
-    # which would have quietly dropped the only line in `make status` that says this project
-    # has ever met a real card. So it reports the history instead of the schedule.
-    open_gate = next((g for g in gates if g.get("status") == "next"), None)
-    if open_gate:
-        blocked = open_gate.get("blocked_by") or "nothing"
-        out.append(field("Gate", f"{open_gate.get('gate')} (next) — blocked behind {blocked}"))
-        out.extend(cont(line) for line in wrap(str(open_gate.get("what", "")), LABEL + 2))
-    elif gates:
+    if gates:
         passed = [g for g in gates if g.get("status") == "passed"]
-        names = ", ".join(f"{g.get('gate')} {g.get('on', '')}".strip() for g in passed)
-        out.append(field("Gates", f"retired — {len(passed)} passed: {names}"))
-        out.extend(cont(line) for line in wrap(
-            "docs/GATES.md is the record of what was measured, not a schedule.", LABEL + 2))
-
-    out.append(field("Done", "steps " + ", ".join(str(d) for d in done)))
-
-    if step_no and open_gate:
-        blocked_by = str(open_gate.get("blocked_by") or "")
-        last = "".join(c for c in blocked_by if c.isdigit())
-        if last:
-            chain = " → ".join(str(n) for n in range(int(step_no), int(last) + 1))
-            out.append(field(f"Chain to {open_gate.get('gate')}", f"{chain} → Gate {open_gate.get('gate')}"))
+        out.append(field("Gates", "retired — {} passed: {}".format(
+            len(passed), ", ".join(f"{g.get('gate')} {g.get('on')}" for g in passed))))
+        out.append(cont("docs/GATES.md is the record of what was measured, not a"))
+        out.append(cont("schedule."))
     return out
 
 
 def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[str]]]) -> List[str]:
-    build = mapdata.get("BUILD_ORDER") or []
-    components = mapdata.get("COMPONENTS") or []
-    nxt = [s for s in build if s.get("status") == "next"]
-    if not nxt:
-        return []
-    step_no = nxt[0].get("step")
+    """Every open step, with what governs it. NOT one step, and not ranked.
 
-    entry = next((c for c in components if c.get("step") == step_no), None)
+    This used to read the single `next` the map was required to carry and present it as the
+    answer. Both halves were wrong: the map's one-`next` rule forced a step to hold the flag
+    whether or not anyone was working on it, and printing one item under `DO THIS NEXT` made
+    a scheduling claim `status.py` has no standing to make. It lists what is open; which one
+    matters today is the owner's (D80).
+    """
+    open_steps = mapdata.get("OPEN") or []
+    if not open_steps:
+        return [field("Nothing open", "every step in docs/map.py has shipped.")]
+
     out: List[str] = []
-    if entry is None:
-        out.append(field("Build", f"step {step_no} — no component in docs/map.py claims this step"))
-        out.append(cont("The map names a directory only once the name is decided (see its header)."))
-        return out
-
-    path = str(entry.get("path"))
-    out.append(field("Build", f"{path} — the only unblocked step."))
-    out.append(cont("Nothing else moves until it lands."))
-    out.extend(cont(line) for line in wrap(str(entry.get("does", "")), LABEL + 2))
-
-    governed = sorted(entry.get("governed_by") or [], key=lambda d: int(str(d)[1:]))
-    for i, name in enumerate(governed):
-        title, rulings = gists.get(name, ("(no such entry in docs/DECISIONS.md)", []))
-        out.append(field("Governed by" if i == 0 else "", f"{name:<4} {title}"))
-        for ruling in rulings[:1]:
-            out.extend(cont(f"     {line}") for line in wrap(ruling, LABEL + 7))
-    out.append(field("Read first", f"docs/GATES.md step {step_no} · docs/map.py COMPONENTS {path}"))
+    for i, step in enumerate(open_steps):
+        if i:
+            out.append("")
+        out.append(field(f"{step.get('n')}.", str(step.get("title"))))
+        governed = sorted(set(re.findall(r"\bD[1-9][0-9]?\b", str(step.get("note") or ""))),
+                          key=lambda d: int(d[1:]))
+        for name in governed[:3]:
+            title, _ = gists.get(name, ("(no such entry in docs/DECISIONS.md)", []))
+            out.extend(cont(line) for line in wrap(f"{name}  {title}", LABEL + 2))
+    out.append(field("Read first", "docs/GATES.md `What is open` · `make map`"))
     return out
 
 
@@ -524,6 +508,19 @@ def audit_line() -> List[str]:
     ]
 
 
+# A map `note` argues its case at length — that is what the field is for. Printing the
+# WHOLE of one under a heading called "Blind spots" put a 900-character paragraph about the
+# codes package into `make status`, most of it about what the track deliberately does not
+# share with the singles track, none of that a blind spot. Taking the sentences that
+# actually say `blind` keeps the field free to keep arguing and the status line short.
+_SENTENCE = re.compile(r"(?<=[.;])\s+")
+
+
+def blind_sentences(note: str) -> str:
+    hits = [part.strip() for part in _SENTENCE.split(note) if "blind" in part.lower()]
+    return " ".join(hits) if hits else note
+
+
 def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     """From structured fields, never from prose.
 
@@ -542,7 +539,7 @@ def blind_spots(mapdata: Dict[str, object]) -> List[str]:
     for component in mapdata.get("COMPONENTS") or []:
         note = str(component.get("note") or "")
         if "blind" in note.lower() or "NOT that" in note:
-            notes.append(note)
+            notes.append(f"{component.get('path')} — {blind_sentences(note)}")
 
     if not notes:
         return []
@@ -857,12 +854,16 @@ def render() -> str:
     lines += where_you_are(mapdata)
     nxt = do_this_next(mapdata, gists)
     if nxt:
-        lines += ["", "DO THIS NEXT"] + nxt
+        # NOT "DO THIS NEXT". The heading made the same scheduling claim the single-`next`
+        # field did, one layer up: whatever is printed under it reads as the instruction.
+        lines += ["", "WHAT IS OPEN"] + nxt
     lines += ["", "HEALTH"]
     lines += audit_line()
     lines.append(field("harness", "NOT RUN — status never runs it. Committed scores below."))
     lines += t1_blocks()
     lines += blind_spots(mapdata)
+    lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
+    lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
     lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
     lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()

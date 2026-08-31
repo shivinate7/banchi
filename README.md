@@ -8,10 +8,12 @@ physical location tracking. Two tracks share one physical rig.
 ```
 CLAUDE.md                  always-on rules. Keep it short.
 code-card-fork/CLAUDE.md   code-card track, auto-loaded in that directory
-docs/map.py                the repo as data: built vs TBD, and what governs each file
+docs/map.py                the repo as data: built vs TBD, and what governs each file.
+                           `make map` renders it; `make map ARGS=--stale` ranks the
+                           entries whose file has outrun the prose about it.
 docs/DECISIONS.md          settled decisions + rationale (read on demand)
 docs/CODES-DECISIONS.md    same, for the codes track
-docs/GATES.md              gates, harness contract, build order
+docs/GATES.md              gates, harness contract, what shipped and what is open
 docs/DESIGN.md             design tokens, Fulfillment view constraints
 docs/specs/                interviewed specs, executed in a clean session
 .claude/skills/            on-demand domain knowledge (TCGplayer CSV schema)
@@ -28,9 +30,9 @@ geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
-app/                       the web app. Vite + React + TS. Nine screens — capture, runs,
-                           review queue, pricing, orders, shipping, inventory,
-                           Fulfillment, component gallery — all nine routed. See "The
+app/                       the web app. Vite + React + TS. Ten screens — capture, runs,
+                           review queue, pricing, orders, shipping, inventory, codes,
+                           Fulfillment, component gallery — all ten routed. See "The
                            app" below.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
@@ -54,8 +56,8 @@ rules it enforces are off. That failure is silent: nothing prints, nothing exits
 commit that leaks a live code looks like every commit before it. `make status` prints an
 `Git hooks` line so an unarmed clone says so, rather than being found out by a leak.
 
-`make status` first, especially after time away: it prints the next build-order step, the
-last T1 score and the branch — all read from the repo, none of it written
+`make status` first, especially after time away: it prints what has shipped and what is
+open, the last T1 score and the branch — all read from the repo, none of it written
 down anywhere a person has to remember to update. Stdlib only, so it works before
 `make venv` and without an API key.
 
@@ -139,6 +141,8 @@ orders         which copies this buyer gets and where they are, out of the order
 shipping       which envelope an order goes in, out of TCGplayer's own shipping export
 inventory      the box walk, and everything that hangs off it: search, a card's copies
                and its sale, and the box's own operations
+codes          the code-card track: read a box's QRs into the ledger, the two lanes the
+               pile is tiered into, and a lane handed to a buyer against a named order
 Fulfillment    the second persona's whole product: pull, photo-confirm, mark sold
 gallery        step 6's component sheet, rendered by the build so it cannot go stale
 ```
@@ -147,8 +151,15 @@ gallery        step 6's component sheet, rendered by the build so it cannot go s
 and `pricing`, from the days D39 and D49 routed them until D69 repaired it on 2026-08-30. It
 is the sixth place this repo's screen count has been wrong, and CLAUDE.md's own warning —
 that the count has been wrong more often than right and that nothing checks it — is what
-found it. Restored first, then extended: nine entries, counted off `app/src/App.tsx`'s
+found it. Restored first, then extended: counted off `app/src/App.tsx`'s
 `ROUTES` table rather than added to whatever the last number was.
+
+**AND IT WENT WRONG A SEVENTH TIME THE SAME DAY, HERE AND IN `docs/map.py` AT ONCE**: D70
+added `#/codes` and neither this list nor the map's own two route counts gained it, so the
+repair above was stale within hours of being written. That is the last time the count is
+maintained by hand. `make docs-audit`'s `route census` row now reconciles every published
+count against the `ROUTES` table, and a route added without touching this list fails the
+commit — the check CLAUDE.md's warning said did not exist.
 
 **It was six until D31.** `#/boxes` and `#/pull` were separate routes over the same 767
 records, and the owner named the problem: they read as three instances of one thing. They are
@@ -169,8 +180,8 @@ moved would be serving a **different** store (D43). `make screenshot` renders `s
 into `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
 real browser.
 
-All nine open at a hash, and the Fulfillment view opens **without the nav strip** the other
-eight carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
+All ten open at a hash, and the Fulfillment view opens **without the nav strip** the other
+nine carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
 it, and a strip of links to the capture screen's hard-delete undo is exactly the route it
 forbids. `docs/map.py`'s `app/` entry is the current account of what each file does.
 

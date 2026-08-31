@@ -61,9 +61,16 @@ def literals(path: Path) -> Dict[str, object]:
     return out
 
 
-def decision_gists() -> Dict[str, Tuple[str, List[str]]]:
-    """`D3` -> ("Variant resolution ladder", ["The toggle is trusted.", ...])."""
-    if not DECISIONS.exists():
+def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, Tuple[str, List[str]]]:
+    """`D3` -> ("Variant resolution ladder", ["The toggle is trusted.", ...]).
+
+    The two parameters exist so a TRACK's own decisions file goes through THIS parser
+    rather than a second one — `docs/CODES-DECISIONS.md` numbers its entries `C1`..`C11`
+    and is otherwise the same document shape. Both default to the singles track, so every
+    existing caller (`scripts/status.py`, and this file's own hook path) is unchanged.
+    """
+    DECISIONS_PATH = path or DECISIONS
+    if not DECISIONS_PATH.exists():
         return {}
     gists: Dict[str, Tuple[str, List[str]]] = {}
     current: Optional[str] = None
@@ -74,8 +81,8 @@ def decision_gists() -> Dict[str, Tuple[str, List[str]]]:
         if current:
             gists[current] = (title, pick_rulings(bolds))
 
-    for line in read(DECISIONS).splitlines():
-        heading = re.match(r"^##\s+(D[1-9][0-9]?)\s*[—-]\s*(.+)$", line)
+    for line in read(DECISIONS_PATH).splitlines():
+        heading = re.match(r"^##\s+(" + prefix + r"[1-9][0-9]?)\s*[—-]\s*(.+)$", line)
         if heading:
             store()
             current, title, bolds = heading.group(1), heading.group(2).strip(), []
@@ -106,6 +113,26 @@ def pick_rulings(bolds: Sequence[str]) -> List[str]:
     sentences = [text for text in bolds if text.endswith(".")]
     labels = [text for text in bolds if not text.endswith(".")]
     return (sentences + labels)[:MAX_RULINGS]
+
+
+def track_for(relative: str) -> Optional[Dict[str, object]]:
+    """The track that owns this path, per docs/map.py's TRACKS. Longest `owns` prefix wins.
+
+    THE ONLY READER TRACKS HAS. It sat in the map with none from 2026-08-07 to 2026-08-31
+    and went wrong twice unnoticed; a section with no consumer cannot be caught being
+    false. What it buys is real rather than ceremonial: a session editing `codes/` was
+    shown the D decisions the rig shares and was never told that C1-C11 and a second rules
+    file exist at all, which is D14's two-tracks-one-rig arriving as a surprise (D80).
+    """
+    if not MAP.exists():
+        return None
+    best: Optional[Dict[str, object]] = None
+    for track in literals(MAP).get("TRACKS") or []:  # type: ignore[union-attr]
+        owns = str(track.get("owns") or "")
+        if owns and relative.startswith(owns):
+            if best is None or len(owns) > len(str(best.get("owns") or "")):
+                best = track
+    return best
 
 
 def lookup(relative: str) -> Optional[Dict[str, object]]:
@@ -159,6 +186,21 @@ def render(relative: str, entry: Dict[str, object]) -> str:
     tested = entry.get("tested_by") or []
     if tested:
         lines.append(f"Covered by: {', '.join(tested)}. Run `make harness` before claiming it works.")
+    track = track_for(relative)
+    if track:
+        lines.append(
+            f"TRACK: {track.get('name')} (D14, two tracks one rig). The decisions above are "
+            f"the shared rig's; this path ALSO answers to {track.get('decisions')} and to "
+            f"{track.get('rules')}, which is auto-loaded in that directory."
+        )
+        codes = [d for d in governed if d.startswith("C")]
+        if codes:
+            track_gists = decision_gists(ROOT / str(track.get("decisions")), prefix="C")
+            for name in sorted(codes, key=lambda d: int(d[1:])):
+                title, rulings = track_gists.get(name, ("(no such entry)", []))
+                lines.append(f"  {name:<4} {title}")
+                for ruling in rulings:
+                    lines.append(f"       - {ruling}")
     if entry.get("note"):
         lines.append(f"Also: {entry['note']}")
     return "\n".join(lines)

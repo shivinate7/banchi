@@ -28,6 +28,11 @@ make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; 
                     #   `.claude/launch.json` from this checkout's own slot before any work
                     #   starts, so a worktree can no longer preview the MAIN tree (D43).
 make status         # where you are: next step, T1 score, branch. Start here.
+make map            # docs/map.py RENDERED — the file is 2,700 lines and had no human view
+                    #   at all until 2026-08-31 (D80), which is how a whole section of it
+                    #   sat wrong for three weeks. ARGS=<package|path|D<n>|--stale>;
+                    #   `--stale` ranks entries whose FILE has moved since the prose about
+                    #   it did, which is the one drift no audit row can decide.
 make harness        # all EIGHT verification tests; the Stop hook runs it at turn end. It said
                     #   seven until 2026-08-31 — `t8_codes.py` landed with the code-card track
                     #   and nothing counts these either (see the route-count warning below).
@@ -214,22 +219,38 @@ make githooks-selftest # D42's guard over main, proved in a throwaway repo. Neve
   that has ever been right, and it was recounted again when these two branches met: each had
   incremented correctly against a tree the other had already moved.
 
-  **THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS BEEN RIGHT, AND NOTHING
-  CHECKS IT — and on 2026-08-31 it turned out the TESTS had the same disease.**
-  `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand and never
-  saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the Cmd-arrow ring
-  and missed `#/codes`. Three screens were asserted by nothing and `make design-check` was
-  green, because a roster missing a route does not fail — it walks the routes it has. The
-  cursor sweep reads the nav strip now, and `scripts/docs-audit.py`'s `route rosters` row
-  fails a COMMIT where a spec's pinned list disagrees with `App.tsx`'s table. **That guard is
-  over the specs and not over this sentence**: the number below is still checked by nobody. `scripts/docs-audit.py` reconciles no count of anything — D18 deleted the last
-  published one on purpose, on the grounds that a verifiable fact nobody can disagree with is
-  not load-bearing prose. That argument holds for a number in a report and does not hold here,
-  where the sentence is what a session reads to learn the shape of the product. It was false
-  from D39 until D49 in FIVE places at once, none of which failed a check, and it was still
-  false in a sixth on 2026-08-30: `README.md`'s fenced screen list carried five entries and
-  was missing `runs` and `pricing` outright, so D69's repair had to restore two screens
-  before it could add two. The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
+  **THE COUNT IN THIS FILE WAS WRONG MORE OFTEN THAN IT WAS RIGHT, AND NOTHING CHECKED IT
+  UNTIL 2026-08-31 — and when a reader finally arrived it turned out the TESTS had the same
+  disease.** `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand
+  and never saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the
+  Cmd-arrow ring and missed `#/codes`. Three screens were asserted by nothing and
+  `make design-check` was green, because a roster missing a route does not fail — it walks the
+  routes it has. The cursor sweep reads the nav strip now.
+
+  **The prose failed the same way, seven times.** It was false from D39 until D49 in FIVE
+  places at once, none of which failed a check; false in a sixth on 2026-08-30, when
+  `README.md`'s fenced screen list carried five entries and was missing `runs` and `pricing`
+  outright, so D69's repair had to restore two screens before it could add two; and false a
+  SEVENTH time hours after that repair, when D70's `#/codes` reached the `ROUTES` table and
+  this file and neither `README.md`'s list nor either of `docs/map.py`'s two route counts —
+  which then disagreed with each other as well as with the tree.
+
+  **Two `make docs-audit` rows end it, one over the specs and one over the prose.**
+  `route rosters` fails a COMMIT where a spec's pinned list of routes disagrees with
+  `App.tsx`'s table. `route census` does the same for every published screen or route count in
+  this file, in `README.md` and in `docs/map.py`, reconciled against that same table, so a
+  route added without recounting fails the commit. D18 deleted the last published count on
+  purpose, on the grounds that a verifiable fact nobody can disagree with is not load-bearing
+  prose; that argument holds for a number in a report and does not hold here, where the
+  sentence is what a session reads to learn the shape of the product. So this count stays and
+  gets a reader instead, and the two rulings sit side by side rather than one repealing the
+  other. **Recount from the table; never increment** — the instruction is unchanged, and it is
+  now enforced rather than asked for. The census row also refuses to go quiet: a claim reworded
+  past the pattern watching it is reported as an unwatched sentence, because a check that
+  silently stops covering prose is the failure it exists to end. What it deliberately does NOT
+  check is the ordinals in `docs/map.py`, which count the order routes were ADDED and not their
+  place in the table.
+  The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
   went. **The two movements are not in tension**: the merge deleted two routes rendering one
   thing, and the addition gave a route to something no route rendered.
   The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
@@ -363,6 +384,32 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   `identify/`, `store/`, `geometry/` or `cli/`** — every entry there is settled and
   re-litigating one wastes a session. Audited by `make docs-audit`, so it cannot quietly go
   stale: adding a file under any of those without an entry fails the commit.
+
+  **`make map` is how you look at it, and there was no way to until 2026-08-31** (D80). At
+  2,700 lines and ~56,000 tokens a Read of the whole file spends a fifth of a context
+  window, so in practice it was written constantly and read never — 75 commits touched it on
+  2026-08-30 alone. That asymmetry is not academic: its `COMPONENTS` section, which three
+  consumers read, was measured at **142 of 155 entries written at or after the file they
+  describe last moved**, while `TRACKS`, which NOTHING read, was wrong in two ways for three
+  weeks. **A section of this file with no consumer is now a failed commit** — `make
+  docs-audit`'s `map sections` row — because a claim with no reader has no way of ever being
+  contradicted. `build order mirror` reconciles the step ids against `docs/GATES.md`'s two
+  lists, per list and in both directions — a claim the map's header had made since
+  2026-08-04 with nothing verifying it.
+
+  **The build order is two lists, `SHIPPED` and `OPEN`, and it was one numbered list telling
+  a lie its own shape forced on it until 2026-08-31** (D80). Rendered the only way a numbered
+  list can be, `make status` said *"Build step 9 of 15"* — while 13, 14 and 15 were done, 9
+  had been deferred by choice for a week, and everything from D34 onward had landed under no
+  step at all. Every row was true; the sequence the numbering implied was not. `SHIPPED` is ordered
+  by the date work landed, `OPEN` is **not ordered and has no `next`** — ranking two open
+  items is yours, and "exactly one step is next" is what forced a false answer to it.
+  **`n` is a stable id, never renumbered**: 218 references to `step <n>` live in this tree,
+  74 of them `step 7`, and a renumber leaves every one pointing at a real step that is not
+  the one meant — which nothing can detect, because a stale number still resolves. Steps 16
+  to 19 were added for work that had landed with no step, and **step 12 was culled**, the
+  only row ever removed: it named no deliverable and its "only then" pointed at the retired
+  gating system.
 - docs/DECISIONS.md — settled decisions and why. Read before redesigning.
 
   **These three are NOT `@`-loaded, and that is deliberate (D60).** At 627KB they cost
@@ -452,9 +499,10 @@ D76  A hint is evidence about its own card, and how wide to ask is a per-game ru
 D77  The pipeline's rows can be the wrong card, so the export is reachable from every entry — asked for, never offered unasked
 D78  A run's reason for adding nothing is a heading, the rows under it sink, and a hold sinks on the reopening
 D79  The reading goes on every row, because the operator answered D62's own measurement
+D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 ```
 
-- docs/GATES.md — gates, harness contract, build order.
+- docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
   before treating a green `make docs-audit` as coverage: it means the checks that exist,
   passed. Nothing in it blocks anything; it exists so no session rediscovers it by surprise.
