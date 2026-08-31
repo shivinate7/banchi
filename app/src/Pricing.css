@@ -485,18 +485,26 @@
   outline-offset: -1px;
 }
 
+/* ONE LINE, AND IT IS ARITHMETIC RATHER THAN TASTE. This column is 120px; `withheld:
+   next_batch` measures 152px, because Martian Mono's advance is 7px at 10px and the 0.06em
+   adds 0.6px of it per character — so the machine token has NEVER fitted here and no size
+   this screen is willing to draw makes it. Stacked in this cell it wrapped to three lines,
+   stood 54px tall in the row's 32px track, and printed over the note in the line below:
+   `withheld: bullish` and `every copy in this run is already listed or has left the box` were
+   drawn on top of each other, which is what the owner reported.
+
+   THE HUMAN LABEL IS WHAT STAYS, and the token moves to the row's reserved second line —
+   still small, still beneath the label, still right-aligned to the same edge, so
+   docs/DESIGN.md's human-label-large, machine-string-small rule reads the same down the
+   column. `line-height: 1` and `nowrap` are the height guarantee: one 15px line box inside a
+   32px track, whatever the reason string says. */
 .pricing-held {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   font-family: var(--body);
   font-size: 15px;
+  line-height: 1;
   color: var(--ink);
   text-align: right;
-}
-
-.pricing-held .pricing-machine {
-  margin: 0;
+  white-space: nowrap;
 }
 
 /* THE HOLD AND THE HISTORY ARE ONE CONTROL SHAPE UNDER TWO NAMES (D62). They sit side by
@@ -540,16 +548,48 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* The free row. Spans everything but the card, which is space that already exists. */
+/* The free row. Spans everything but the card, which is space that already exists.
+
+   IT CARRIES TWO THINGS NOW AND THEY ARE LAID OUT RATHER THAN STACKED. The sentence and a
+   held row's `withheld: …` token are the same register and belong to the same row, and this
+   line is the only one the row reserves for that register — so they share it, right-aligned,
+   sentence first. Flex and not two grid cells: the token is one of nine columns wide and the
+   sentence is however long the join made it, so the split has to be content-shaped.
+
+   THE 13px RESERVATION IS THE THING BEING PROTECTED. `nowrap` on both halves is what keeps
+   this one line box tall in every state — with either half free to wrap, a row that acquired
+   a long note would grow and the list would move under a finger already travelling to the
+   next field, which is the reflow D28 forbids. */
 .pricing-row-note {
   grid-column: 2 / -1;
   grid-row: 2;
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--s2);
   margin: 0;
   font-family: var(--util);
   font-size: 10px;
   line-height: 1.3;
   color: var(--muted);
   text-align: right;
+}
+
+/* THE SENTENCE YIELDS. It is prose and it has a `title` carrying every word of it, so an
+   ellipsis costs a hover; the token beside it is a string somebody greps for, and
+   `withheld: nex…` matches nothing in `decisions.json`. Which half gives way under a narrow
+   window is a decision rather than an accident of source order, and this is it. */
+.pricing-row-why {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pricing-row-note .pricing-machine {
+  flex: none;
+  margin: 0;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------- the hold panel */
