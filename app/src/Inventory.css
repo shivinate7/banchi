@@ -156,7 +156,7 @@
   border-radius: var(--r);
 }
 
-/* THE SIXTH SITE OF D41's TREATMENT, ADDED BY D69, and `--pos-slot` is the only number it
+/* THE SIXTH SITE OF D41's TREATMENT, ADDED BY D71, and `--pos-slot` is the only number it
    chooses. 20px rather than the walk panel's 44: this row carries a position, a state word and
    two controls inside a ~460px panel, and the register it has always sat in is 13px. 20 is the
    capture undo sidebar's figure, chosen there for the same shape — a compact row in a column —
@@ -338,7 +338,7 @@
    the row's 13px because this is the one thing being checked, and mono so it cannot shift width.
    It said "about to be sold" until D57 took the sale's panel away; the retirement is the only
    write left that draws one. */
-/* THE SEVENTH SITE (D69). 20px, up from the 15px this drew the raw string at: the treatment
+/* THE SEVENTH SITE (D71). 20px, up from the 15px this drew the raw string at: the treatment
    demotes the coarse parts to 11px and promotes only the card number, so the figure can be
    larger than the string was while the block is narrower — which is the trade D41 measured at
    every other site. It is what somebody checks against the card in their hand. */

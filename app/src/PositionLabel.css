@@ -222,11 +222,11 @@
    the muted register on its own line, so the row grows by one small line rather than by a second
    line of the site's payload face.
 
-   ITS ONE CALLER IS THE POOLED ROW (D24, D69). `Pokémon code cards · pooled · 5/12` has no
+   ITS ONE CALLER IS THE POOLED ROW (D24, D71). `Pokémon code cards · pooled · 5/12` has no
    coordinate to rank: `pooled` is a state like `departed`, but the part in front of it is a game's
    display name rather than a `<word> <number>` pair, so there is no path to hang it on and no
    figure to leave empty. A pooled card is nowhere; a departed card is in a box. That is the line
-   this rule sits on, and it is why the departed label crossed it in D69 and this one did not.
+   this rule sits on, and it is why the departed label crossed it in D71 and this one did not.
 
    `.position-key`'S OWN EXPRESSION, NOT A SECOND ONE. The key beside a slot figure and the key
    under a plain label are the same fact drawn in the same register, and this file's whole argument
@@ -269,7 +269,7 @@
    that site's other type, and gathering all seven here would make this file the place a screen's
    size is changed, which is how a shared component becomes a bottleneck.
 
-   IT WAS FIVE UNTIL D69 AND THE PROSE SAID IT REACHED EVERY OWNER SITE, WHICH WAS FALSE. The two
+   IT WAS FIVE UNTIL D71 AND THE PROSE SAID IT REACHED EVERY OWNER SITE, WHICH WAS FALSE. The two
    added are both in `Inventory.tsx` and both drew `Position.label` raw: the lone-copy panel, which
    is what a card with no name and no SKU renders through and therefore what 629 of 682 records on
    the owner's Mac render through, and the retire dialog. Neither was found by a check — the lone

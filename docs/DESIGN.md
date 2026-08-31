@@ -251,7 +251,7 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
   `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
   paragraph above exists to prevent.
-- **It reaches every OWNER site as of 2026-08-30 (D41, amended; D69), and the size is per site.**
+- **It reaches every OWNER site as of 2026-08-30 (D41, amended; D71), and the size is per site.**
   Eight of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28
   and slot-first, the capture stage at 32, its undo sidebar at 20, the lone-copy panel at 20, the
   retire dialog at 20, and three in-sentence mentions in a `run` form that keeps the rank and drops
@@ -259,7 +259,7 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   used to carry is measured now: 44px down a seven-copy list costs +86px and drops a copy below the
   fold.
 - **This line said "every OWNER site" and "six" from 2026-08-29 and was wrong on both counts until
-  D69.** The two it missed are both in `Inventory.tsx`, and the first of them is the one most of
+  D71.** The two it missed are both in `Inventory.tsx`, and the first of them is the one most of
   the store is drawn by: the lone-copy panel is what a card with no name and no SKU renders
   through, which on the owner's Mac is 629 of 682 records. It went on printing the raw label in the
   utility face, and the way that surfaced was a sold card — `Box 1 · departed · 1/1` as a run of
@@ -271,7 +271,7 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   figure of 40px or more and `--s3` below, so it always lands on the spacing scale above. And a
   promoted slot is a slot NUMBER, never a word — without that guard D24's pooled label draws the
   lowercase word `pooled` as a 300px figure.
-- **A label with no figure is still ranked, and it is the FIGURE that goes (D69).** A departed
+- **A label with no figure is still ranked, and it is the FIGURE that goes (D71).** A departed
   card's label ends on a state where a slot number would be (`Box 3 · departed · 3/36`). Refusing
   the whole treatment over that was the shipped behavior and it drew the pre-D41 plain string at
   the site's payload size — 44px and wrapped in the `#/inventory` band, the loudest row in the

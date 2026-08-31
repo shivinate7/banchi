@@ -247,14 +247,20 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline import games, join, tcgcsv  # noqa: E402
+from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
+from store import orders as order_store  # noqa: E402
 
 # The pipeline seam, in its own module because it is the one part of this server that can
 # cause money to be spent — see its header for what replaced the promise this file's own
 # header used to make. Imported here rather than inlined so that the boundary is a file
 # boundary: everything above this line still holds no key, opens no socket, and starts no
-# child process.
+# child process. THE TWO ORDER IMPORTS ABOVE DO NOT WEAKEN THAT: `pipeline/orders.py` is a
+# pure resolver over an `Inventory` handed to it and `store/orders.py` is one more JSON
+# document beside the four this store already writes — stdlib-only, no credential, no
+# socket, no child — so the line is where it always was and the promise it makes is
+# unbroken.
 #
 # THAT SENTENCE IS NOW TRUE OF THIS FILE AND FALSE OF THE PROCESS, and it is rewritten rather
 # than qualified (D64). `server/tcg_export.py` reads the TCGplayer session cookie out of
@@ -269,6 +275,16 @@ from store import Store, files, master, queues  # noqa: E402
 # module as `harness/tests/t7_store_and_seams.py` imports it. Only the package form works
 # under both, and the sys.path line above is what makes it work under the first.
 from server import pipeline_routes  # noqa: E402
+# The shipping seam, below the line for the same reason and by the same rule (D61). It opens
+# no socket and holds no key, but it does hold a buyer's ADDRESS in memory for half an hour,
+# which is its own boundary worth keeping in one file rather than inlined here.
+from server import shipping_routes  # noqa: E402
+# The order transport, and it is the SECOND outbound call this process makes (D63/D66). Below
+# the line and beside the two above for the reason the paragraph gives: it reads the
+# TCGplayer session cookie out of `.env` and opens a socket to
+# `order-management-api.tcgplayer.com`. It cannot cause a charge — it is a read of this
+# account's own orders — so the one route that spends is still `POST /pipeline/identify`.
+from server import order_transport  # noqa: E402
 from server import ports  # noqa: E402
 
 HOST = "0.0.0.0"
@@ -491,6 +507,20 @@ _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 _RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
+# The shipping batches (D61). A batch id is 128 random bits rendered as hex by
+# `server/shipping_routes.py:_new_batch_id`, and the character class here is the alphabet
+# that mints them — a path that reaches either handler is already known to hold no
+# separator and no dot, so nothing downstream needs a traversal rule.
+#
+# THE GET IS A SAFE METHOD AND IS THEREFORE NOT BEHIND THE ORIGIN GATE, which is exactly
+# why the id is unguessable rather than a counter: `_dispatch` checks the origin only for
+# the mutating verbs, so the id is the whole of what stands between a stray page and a
+# buyer's address. The file path is matched before the item path for the reader's sake;
+# the item pattern is anchored and admits no slash, so it could never swallow the longer
+# one in any case.
+_SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
+_SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
+
 # ------------------------------------------------------- the capture claims, on the wire
 #
 # `store/master.py:CAPTURE_CLAIM_FIELDS` names every field a capture writes onto a record.
@@ -645,6 +675,57 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
 BOX_PUT_FIELDS = ("name", "sections", "state")
+
+# ----------------------------------------------------------- the order screen, on the wire
+#
+# THESE SIX TUPLES ARE THE PII BACKSTOP AND THAT IS WHY THEY ARE THIS NARROW (D63, D66). An
+# order feed carries a buyer's name and a shipping address, and this repo has no use for
+# either: `server/order_transport.py` projects them away where it parses them, and a paste
+# arriving from a screen has had no such pass made over it. `_reject_unknown` is called FIRST
+# at every level of the ingest body — before a source is read, before an order is looked up —
+# so an unprojected paste REFUSES BY NAME rather than being stored with the buyer's fields
+# quietly trimmed. A trim is silent; a refusal names `buyer` and sends the caller back to
+# project. That difference is the whole argument for an allowlist over a filter.
+ORDER_INGEST_FIELDS = ("orders",)
+ORDER_INGEST_ORDER_FIELDS = ("source", "number", "placed_at", "status", "lines")
+ORDER_INGEST_LINE_FIELDS = (
+    "sku",
+    "quantity",
+    "name",
+    "number",
+    "printing",
+    "condition",
+    "rarity",
+    "unit_price",
+    "kind",
+)
+
+# What `POST /orders/fetch` accepts: the search range and nothing else. Every other knob
+# `server/order_transport.py` takes — the page size, the ceiling — is a rate limit rather
+# than a preference, and a route that let a client raise either would put this account's
+# request budget in the hands of whatever page was open.
+ORDER_FETCH_FIELDS = ("range",)
+
+# What `POST /orders/pull` carries in each direction. TWO TUPLES, `ANSWER_FIELDS`'
+# convention exactly: a body carrying `undo` AND an order key is a client that has confused
+# the directions, and obeying it with the order ignored would reverse a pull the caller
+# believed it was recording.
+ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo")
+ORDER_PULL_UNDO_FIELDS = ("undo", "targets")
+ORDER_PULL_TARGET_FIELDS = ("box", "index", "capture_id")
+
+# A paste ceiling, not a page size. Two hundred orders is far past any day's work and well
+# short of a whole exported history, which is the accident this guards: one paste of
+# everything the marketplace ever sold would take the store lock for the length of it.
+ORDER_INGEST_LIMIT = 200
+
+# One press is one operator's armful of cards. Fifty is generous for that and refuses the
+# script that meant to send the whole box.
+ORDER_PULL_TARGET_LIMIT = 50
+
+# The feed a fetched order is recorded under. `store/orders.py:order_key` folds case to
+# compare and stores what it was given, so this is the spelling that reaches a screen.
+ORDER_FETCH_SOURCE = "TCGplayer"
 
 # States at which a card may still be undone — `captured` ALONE, since the owner's ruling
 # of 2026-08-23 (D10, ruling 2). This tuple held `identified` from the day the route landed,
@@ -5597,6 +5678,154 @@ def _origin(store: Store, key: str, reader) -> Tuple[Optional[str], Optional[str
     return state, None
 
 
+def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
+    """`do_mark_sold`'s whole body against an ALREADY-OPEN snapshot.
+
+    Writes nothing to disk: the caller's `Store.write()` commits, so a refusal raised here
+    discards every earlier card's state change AND its queued history lines. That is what
+    lets one order pull mark three copies sold as one operation.
+
+    Snapshot-only, deliberately, so it has the same shape as `_answer_target` above: one
+    handle to keep in step rather than two. `_sale_origin` needs a `Store` because
+    `Snapshot` has no `history()`, and `Store(snapshot.directory)` reads the identical
+    `history.jsonl`.
+
+    Raises exactly the refusals `do_mark_sold` raises and no others.
+    """
+    key = master.position_key(box, index)
+
+    card = snapshot.inventory.cards.get(key)
+    if card is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "card_not_found",
+            f"No card at box {box}, card {index}. A sale is recorded against a card "
+            f"that exists; this route never creates one.",
+        )
+
+    # Read inside the lock, before either branch writes. The `sold` event of the sale
+    # being reversed was committed by an earlier request, so it is on disk by now —
+    # `Store.write()` appends history after the yield, which is why this cannot see an
+    # event the CURRENT request has queued and does not need to. `_sale_origin` never
+    # raises: an unreadable history makes the origin unknown, it does not block the sale.
+    # A caller selling SEVERAL positions inside one session must de-duplicate its positions
+    # first: a position sold twice in the same session computes `previous` from pre-session
+    # history both times, so the second sale's `restores_to` names the state the card held
+    # before the first one rather than before it.
+    previous, origin_unknown = _sale_origin(Store(snapshot.directory), key)
+    was = card.state
+
+    if undo:
+        if was != master.SOLD:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "not_sold",
+                f"Box {box}, card {index} is {was}, not sold, so there is no sale to "
+                f"reverse. It may already have been reversed on the other device.",
+            )
+        if previous is None:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sold_origin_unknown",
+                # The reason is carried rather than assumed: "no earlier state" and "the
+                # log will not parse" are one refusal and two repairs, and the second one
+                # is a file to go and fix.
+                f"Box {box}, card {index} is sold, but {origin_unknown}, so there is no "
+                f"state to put back. Set it by hand rather than letting this guess — a "
+                f"card restored to the wrong state is a listing that disagrees with "
+                f"TCGplayer.",
+            )
+        restored = previous
+    else:
+        if was == master.SOLD:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "already_sold",
+                f"Box {box}, card {index} is already sold. Send {{\"undo\": true}} to "
+                f"reverse that sale; marking it again would record a second sale of one "
+                f"physical card.",
+            )
+        if was == master.RETIRED:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_retired",
+                f"Box {box}, card {index} is retired ({card.retire_reason}) — it left "
+                f"inventory without a sale, and a sale recorded over that would replace "
+                f"the record of a departure with a transaction that did not happen. If "
+                f"it genuinely sold after all, send {{\"undo\": true}} to "
+                f"`/inventory/{box}/{index}/retire` first, then mark it sold.",
+            )
+        restored = master.SOLD
+
+    # `set_state` returns False only for a position with no record, and the card was
+    # found above inside this same lock. Checked anyway rather than assumed: a silent
+    # no-op reported as a success is v1 bug 5's exact shape, which is the reason that
+    # return value exists at all.
+    if not snapshot.inventory.set_state(key, restored):
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "inventory_conflict",
+            f"Box {box}, card {index} vanished between being read and being written. "
+            f"Retry; if it repeats, another process is writing inventory.json outside "
+            f"the store lock.",
+        )
+
+    # THE SALE MOVES THE SKU'S `live` COUNT, WHICH IS THE HALF OF A SALE THAT USED TO BE
+    # FREE. Until v2 a sold copy simply stopped wearing `live`, so the number of live
+    # copies was a count of positions and it fell on its own. `live` is now a quantity on
+    # `Listing` (D7 amended) and nothing decrements it unless this route does — a
+    # Fulfiller pulling three copies would otherwise leave TCGplayer's cap arithmetic
+    # (`Add to Quantity = min(cap - live, backstock)`) refilling against three copies
+    # that are in the post.
+    #
+    # ONLY AN EXISTING LISTING IS TOUCHED, and `Inventory.listing()` is deliberately not
+    # used even though it is the sanctioned accessor: it CREATES the record. A sale of a
+    # card whose SKU was never emitted would then write a listing of all zeros, and — far
+    # worse — the reversal of that sale would find the record it had just invented and
+    # bump `live` to 1, claiming a copy is for sale on TCGplayer that was never pushed
+    # there. A read on a route that may not have a listing is `.get`.
+    #
+    # WHAT IT IS AND IS NOT: `Listing` calls `live` an optimistic local estimate between
+    # runs, and D8/D11 put the authority in the export's own quantity, which
+    # `./pkmnscan join` reads on every run. So this is a guess the next join corrects,
+    # never a second source of truth. One edge is left standing rather than papered over:
+    # `bump` floors at zero, so selling a copy while `live` is already 0 loses the
+    # decrement, and a later reversal still adds one — an estimate that has drifted UP by
+    # one until the next join. Accepted, because the alternative is recording a per-sale
+    # delta somewhere in order to reverse it exactly, which is a fourth thing the store
+    # would have to explain for a number the export overwrites anyway.
+    listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
+    if listing is not None:
+        listing.bump(master.LIVE, 1 if undo else -1)
+
+    body = {
+        "position": key,
+        "box": int(box),
+        "index": int(index),
+        # True when this call reversed a sale. The app reads this rather than comparing
+        # states, so one field answers "which way did that go" in both directions.
+        "undone": bool(undo),
+        "state": card.state,
+        "previous_state": was,
+        # What an undo of THIS call would put back, or null when history cannot say.
+        # Null on a reversal because there is then nothing to reverse; null on a sale
+        # means the undo control should not be offered, which is worth knowing at the
+        # moment of the sale rather than at the tap that fails.
+        "restores_to": None if undo else previous,
+        # What this sale did to the SKU's counts, or null when it did nothing — the card
+        # carries no SKU, or its SKU has no listing record. Added rather than left
+        # implicit because every other write in this file says what it touched, and
+        # because this is the one field on the response that is about the OTHER copies:
+        # a Fulfiller pulling the third of four wants to see two still live. Additive to
+        # the contract `app/src/Fulfillment.tsx` reads — every key it already reads,
+        # including `restores_to`, is unmoved.
+        "listing": asdict(listing) if listing is not None else None,
+        "card": _card_row(snapshot.inventory, box, index, card),
+    }
+
+    return body
+
+
 def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     """Mark one copy sold, or put its state back. D10, and the server half of undo.
 
@@ -5653,140 +5882,18 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     would put back, and `_sale_origin` degrades an unreadable one to "origin unknown" rather
     than refusing — the reversal is what loses, and only the reversal. Its own docstring has
     the argument, including why the read stays inside the lock.
+    THE BODY LIVES IN `_sell`, AND THIS ROUTE IS THE THIN HALF OF IT. A second caller — an
+    order pull marking several copies sold and writing the order ledger — has to do all of
+    it inside ONE `Store.write()`, and a caller looping this route would take the lock once
+    per copy and lose all-or-nothing. The precedent is `_answer_target` above, shared
+    verbatim by the single review answer and the group one for the same reason: one
+    implementation rather than two, because the second copy is the one that stops being
+    exact the first time a check changes.
     """
     _reject_unknown(payload, SOLD_FIELDS)
     undo = _optional_flag(payload, "undo", "undo_invalid")
-
-    key = master.position_key(box, index)
-    store = Store()
-
-    with store.write() as snapshot:
-        card = snapshot.inventory.cards.get(key)
-        if card is None:
-            raise BadRequest(
-                HTTPStatus.NOT_FOUND,
-                "card_not_found",
-                f"No card at box {box}, card {index}. A sale is recorded against a card "
-                f"that exists; this route never creates one.",
-            )
-
-        # Read inside the lock, before either branch writes. The `sold` event of the sale
-        # being reversed was committed by an earlier request, so it is on disk by now —
-        # `Store.write()` appends history after the yield, which is why this cannot see an
-        # event the CURRENT request has queued and does not need to. `_sale_origin` never
-        # raises: an unreadable history makes the origin unknown, it does not block the sale.
-        previous, origin_unknown = _sale_origin(store, key)
-        was = card.state
-
-        if undo:
-            if was != master.SOLD:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "not_sold",
-                    f"Box {box}, card {index} is {was}, not sold, so there is no sale to "
-                    f"reverse. It may already have been reversed on the other device.",
-                )
-            if previous is None:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "sold_origin_unknown",
-                    # The reason is carried rather than assumed: "no earlier state" and "the
-                    # log will not parse" are one refusal and two repairs, and the second one
-                    # is a file to go and fix.
-                    f"Box {box}, card {index} is sold, but {origin_unknown}, so there is no "
-                    f"state to put back. Set it by hand rather than letting this guess — a "
-                    f"card restored to the wrong state is a listing that disagrees with "
-                    f"TCGplayer.",
-                )
-            restored = previous
-        else:
-            if was == master.SOLD:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "already_sold",
-                    f"Box {box}, card {index} is already sold. Send {{\"undo\": true}} to "
-                    f"reverse that sale; marking it again would record a second sale of one "
-                    f"physical card.",
-                )
-            if was == master.RETIRED:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "card_retired",
-                    f"Box {box}, card {index} is retired ({card.retire_reason}) — it left "
-                    f"inventory without a sale, and a sale recorded over that would replace "
-                    f"the record of a departure with a transaction that did not happen. If "
-                    f"it genuinely sold after all, send {{\"undo\": true}} to "
-                    f"`/inventory/{box}/{index}/retire` first, then mark it sold.",
-                )
-            restored = master.SOLD
-
-        # `set_state` returns False only for a position with no record, and the card was
-        # found above inside this same lock. Checked anyway rather than assumed: a silent
-        # no-op reported as a success is v1 bug 5's exact shape, which is the reason that
-        # return value exists at all.
-        if not snapshot.inventory.set_state(key, restored):
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "inventory_conflict",
-                f"Box {box}, card {index} vanished between being read and being written. "
-                f"Retry; if it repeats, another process is writing inventory.json outside "
-                f"the store lock.",
-            )
-
-        # THE SALE MOVES THE SKU'S `live` COUNT, WHICH IS THE HALF OF A SALE THAT USED TO BE
-        # FREE. Until v2 a sold copy simply stopped wearing `live`, so the number of live
-        # copies was a count of positions and it fell on its own. `live` is now a quantity on
-        # `Listing` (D7 amended) and nothing decrements it unless this route does — a
-        # Fulfiller pulling three copies would otherwise leave TCGplayer's cap arithmetic
-        # (`Add to Quantity = min(cap - live, backstock)`) refilling against three copies
-        # that are in the post.
-        #
-        # ONLY AN EXISTING LISTING IS TOUCHED, and `Inventory.listing()` is deliberately not
-        # used even though it is the sanctioned accessor: it CREATES the record. A sale of a
-        # card whose SKU was never emitted would then write a listing of all zeros, and — far
-        # worse — the reversal of that sale would find the record it had just invented and
-        # bump `live` to 1, claiming a copy is for sale on TCGplayer that was never pushed
-        # there. A read on a route that may not have a listing is `.get`.
-        #
-        # WHAT IT IS AND IS NOT: `Listing` calls `live` an optimistic local estimate between
-        # runs, and D8/D11 put the authority in the export's own quantity, which
-        # `./pkmnscan join` reads on every run. So this is a guess the next join corrects,
-        # never a second source of truth. One edge is left standing rather than papered over:
-        # `bump` floors at zero, so selling a copy while `live` is already 0 loses the
-        # decrement, and a later reversal still adds one — an estimate that has drifted UP by
-        # one until the next join. Accepted, because the alternative is recording a per-sale
-        # delta somewhere in order to reverse it exactly, which is a fourth thing the store
-        # would have to explain for a number the export overwrites anyway.
-        listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
-        if listing is not None:
-            listing.bump(master.LIVE, 1 if undo else -1)
-
-        body = {
-            "position": key,
-            "box": int(box),
-            "index": int(index),
-            # True when this call reversed a sale. The app reads this rather than comparing
-            # states, so one field answers "which way did that go" in both directions.
-            "undone": bool(undo),
-            "state": card.state,
-            "previous_state": was,
-            # What an undo of THIS call would put back, or null when history cannot say.
-            # Null on a reversal because there is then nothing to reverse; null on a sale
-            # means the undo control should not be offered, which is worth knowing at the
-            # moment of the sale rather than at the tap that fails.
-            "restores_to": None if undo else previous,
-            # What this sale did to the SKU's counts, or null when it did nothing — the card
-            # carries no SKU, or its SKU has no listing record. Added rather than left
-            # implicit because every other write in this file says what it touched, and
-            # because this is the one field on the response that is about the OTHER copies:
-            # a Fulfiller pulling the third of four wants to see two still live. Additive to
-            # the contract `app/src/Fulfillment.tsx` reads — every key it already reads,
-            # including `restores_to`, is unmoved.
-            "listing": asdict(listing) if listing is not None else None,
-            "card": _card_row(snapshot.inventory, box, index, card),
-        }
-
-    return body
+    with Store().write() as snapshot:
+        return _sell(snapshot, box, index, undo)
 
 
 def do_retire(box: int, index: int, payload: dict) -> dict:
@@ -6887,6 +6994,867 @@ def do_open_section(box: int, payload: dict) -> dict:
     return body
 
 
+# --------------------------------------------------------------------------- the orders
+#
+# D66'S SCREEN HALF, AND IT IS FOUR ROUTES. `GET /orders` says which physical copies fill
+# which line and why a line found nothing; `POST /orders/fetch` asks TCGplayer for this
+# account's own orders and hands back a body the next route accepts unchanged; `POST
+# /orders/ingest` takes the feed's word for what was bought; `POST /orders/pull` records
+# the copies as they come out of the box and marks them sold in the same lock.
+#
+# D63 IS THE STORE UNDERNEATH — two maps, and the split between them is the guard. An
+# ingest writes `ledger.orders` and nothing else: not a card, not a listing count, not one
+# byte of `inventory.json`, which is true by construction because `store/orders.py` holds
+# no `Inventory` at all. Only the pull writes the other map, and it writes the store
+# beside it in the same `Store.write()`.
+
+
+def _order_text(payload: dict, field: str, code: str, message: str) -> str:
+    """A non-empty JSON STRING, or a refusal. Never `str()` over whatever arrived.
+
+    `_require_text` above coerces, which is right for a hint typed into a text box and
+    wrong for everything on this screen: a `source` of `{"en": "TCGplayer"}` would become
+    the order key `{'en': 'tcgplayer'}` and nothing anywhere would say so. These values are
+    identifiers, and an identifier this route had to guess at is a record nobody can find
+    again.
+    """
+    raw = payload.get(field)
+    if not isinstance(raw, str) or not raw.strip():
+        raise BadRequest(HTTPStatus.BAD_REQUEST, code, message)
+    return raw.strip()
+
+
+def _order_optional_text(
+    payload: dict, field: str, code: str, message: str
+) -> Optional[str]:
+    """An optional string the feed said, kept verbatim. A number is coerced; nothing else is.
+
+    A feed spelling a unit price as `11.88` rather than `"11.88"` is the one coercion worth
+    making — the value is the feed's own words either way and nothing joins on it. A list or
+    an object in one of these fields is a caller sending a shape this route has never seen,
+    and it refuses rather than storing the repr.
+    """
+    raw = payload.get(field)
+    if raw is None:
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, (str, int, float)):
+        raise BadRequest(HTTPStatus.BAD_REQUEST, code, message)
+    text = str(raw).strip()
+    return text or None
+
+
+def _engine_order(record: order_store.OrderRecord) -> order_engine.Order:
+    """`store.orders.OrderRecord` → `pipeline.orders.Order`. THE ONLY ADAPTER, and it is here.
+
+    Neither package may hold it. `store/orders.py` is a document and knows nothing about an
+    `Inventory`; `pipeline/orders.py` is a resolver and stores nothing — a shared carrier
+    would make each import the other's vocabulary to say what it already says. The server is
+    where the two meet, so the mapping is one function at that seam.
+
+    `kind` IS PASSED ONLY WHERE IT IS TRUTHY, and that is not a tidiness. The store leaves
+    `kind` unvalidated and uses `None` for "the feed said nothing"; the engine's own default
+    is `single` and its `__post_init__` raises `UnknownLineKind` for anything outside
+    `LINE_KINDS` — `None` included. Passing the None through would make every line no feed
+    classified take the whole screen down.
+    """
+    lines = []
+    for line in record.lines:
+        claimed = {"kind": line.kind} if line.kind else {}
+        lines.append(
+            order_engine.OrderLine(
+                sku=line.sku,
+                quantity=line.quantity,
+                name=line.name,
+                number=line.number,
+                printing=line.printing,
+                condition=line.condition,
+                rarity=line.rarity,
+                unit_price=line.unit_price,
+                **claimed,
+            )
+        )
+    return order_engine.Order(
+        number=record.number, lines=tuple(lines), placed_at=record.placed_at
+    )
+
+
+def _order_progress(ledger: order_store.Ledger, record: order_store.OrderRecord) -> List[dict]:
+    """What WE have recorded against each line of one order. The ledger's own half.
+
+    `recorded` rather than `progress`, which is the accessor that INVENTS an empty row and
+    stores it — a read that created a fulfilment entry would put a row in `orders.json`
+    claiming a pull that never happened, every time a screen was drawn.
+    """
+    key = record.key
+    rows = []
+    for line in record.lines:
+        row = ledger.recorded(key, line.sku)
+        rows.append(
+            {
+                "sku": str(line.sku).strip(),
+                "wanted": int(line.quantity),
+                "recorded": int(row.fulfilled),
+                "outstanding": ledger.outstanding(key, line.sku),
+                # Normally zero, and never created by a pull. A later ingest that REDUCES a
+                # quantity underneath a legitimate pull is what makes it non-zero, and that
+                # state has to be readable rather than a crash — `Ledger.over` has the
+                # argument.
+                "over": ledger.over(key, line.sku),
+                "copies": list(row.copies),
+                "at": row.at,
+            }
+        )
+    return rows
+
+
+def _order_row(
+    ledger: order_store.Ledger, record: order_store.OrderRecord, is_open: bool
+) -> dict:
+    """One order as the feed said it, with our own progress beside it.
+
+    `open` IS THE LEDGER'S ANSWER AND NEVER THE FEED'S `status` STRING. The status is stored
+    verbatim and unvalidated on purpose (`store/orders.py` argues why a closed vocabulary
+    there would refuse a marketplace that learned a new word), so nothing may branch on it.
+    Whether an order still owes copies is a question this store owns, and
+    `Ledger.unfulfilled` computes it from its own two maps.
+    """
+    progress = _order_progress(ledger, record)
+    return {
+        "key": record.key,
+        "source": record.source,
+        "number": record.number,
+        "placed_at": record.placed_at,
+        "status": record.status,
+        "first_seen": record.first_seen or None,
+        "changed_at": record.changed_at,
+        "wanted": record.wanted,
+        "recorded": sum(row["recorded"] for row in progress),
+        "open": bool(is_open),
+        "lines": [asdict(line) for line in record.lines],
+        "progress": progress,
+    }
+
+
+def _pick_row(
+    inventory: master.Inventory, places: _Places, held: Dict[str, dict], pick
+) -> dict:
+    """One physical copy the resolver offered, as it stands RIGHT NOW.
+
+    NOT A DURABLE ADDRESS (D36). `box` and `index` are true of the snapshot this was computed
+    from and of no other, and `place` is composed by `_Places.of` — the one renderer — rather
+    than assembled here: `pipeline/join.py:Position` is the only label formula in this repo
+    and a second one on this screen would be the failure it has already recorded three times.
+
+    `held_by` IS THIS REQUEST'S OWN REVERSE INDEX AND IS NEVER STORED. It says that this
+    exact card is already recorded against a line, so the screen can draw it as spoken for
+    rather than offering it twice. Keyed by `capture_id`, which is the one identity a
+    renumber cannot move.
+    """
+    card = inventory.cards.get(master.position_key(pick.box, pick.index))
+    return {
+        "box": pick.box,
+        "index": pick.index,
+        "capture_id": pick.capture_id,
+        "source": pick.source,
+        "run": pick.run,
+        "card_name": card.name if card is not None else None,
+        "card_number": card.number if card is not None else None,
+        "condition": card.condition if card is not None else None,
+        "state": card.state if card is not None else None,
+        "held_by": held.get(str(pick.capture_id)) if pick.capture_id else None,
+        "place": places.of(pick.box, pick.index),
+    }
+
+
+def _line_answer(
+    inventory: master.Inventory,
+    places: _Places,
+    held: Dict[str, dict],
+    record: order_store.OrderRecord,
+    line,
+) -> dict:
+    """One resolved line: the reason, the breakdown behind it, and the copies it found.
+
+    `order_key` travels beside `order` because the resolver keys on the NUMBER alone and this
+    store keys on `source:number` — a number is unique to a marketplace and not across two,
+    so a screen that wanted to act on this line would have nothing to name it by.
+    """
+    return {
+        "order": line.order,
+        "order_key": record.key,
+        "sku": line.sku,
+        "reason": line.reason,
+        "wanted": line.wanted,
+        "fulfilled": line.fulfilled,
+        "outstanding": line.outstanding,
+        "on_hand": line.on_hand,
+        "sold": line.sold,
+        "retired": line.retired,
+        "pooled": line.pooled,
+        "line": asdict(line.line),
+        "picks": [_pick_row(inventory, places, held, pick) for pick in line.picks],
+    }
+
+
+def do_orders() -> dict:
+    """`GET /orders` — every order, and where the copies for the open ones are.
+
+    ONE SNAPSHOT, NO LOCK. This route writes nothing, so `Store().read()` answers a snapshot
+    outright — the same call and the same reason as `do_review_catalog`. One snapshot rather
+    than two is what keeps the order list and the resolution from disagreeing: read twice and
+    a sale landing between them would show a card both on hand and gone.
+
+    THE OPEN ORDERS ARE RESOLVED IN ONE CALL AND THERE IS DELIBERATELY NO `resolve_one`.
+    `pipeline/orders.py` refuses to offer one, and its header says why: a per-order resolver
+    cannot see what another order has already been promised, so it hands two buyers the same
+    physical card and reports success twice. The picker walks to box 3 card 3 twice and the
+    second envelope goes out short.
+
+    NO `paperwork=` IS PASSED, AND THE COST IS NAMED RATHER THAN HIDDEN. The run-side backup
+    would come from `cli/resolve.py:paperwork_for`, which takes ONE run, reads its
+    `pricing.json` and its manifest, and calls `realign` — and `realign` HASHES EVERY
+    PHOTOGRAPH OFF DISK and raises `runs.RunError` on an ambiguous digest. One bad run would
+    take down the whole screen render, and `cli/runs.py` has no list function to walk the
+    others with. So this is a pure card-first resolution: the picks are the copies whose own
+    records carry the SKU, `source` is always `card`, and `sku_unknown` — the reason that
+    fires only when a run's paperwork names a SKU no card wears — is UNREACHABLE HERE and
+    draws a zero in `counts`. That zero is a limit of this route, not a fact about the store.
+
+    THE ORDER LIST AND THE RESOLUTION AGREE ABOUT SEQUENCE, deliberately. Both are sorted the
+    way `Ledger.unfulfilled` and `pipeline/orders.py:order_sequence` sort — oldest
+    `placed_at` first, then the key, with a missing stamp LAST rather than first — so a
+    screen listing what is outstanding and a resolver deciding who gets the last copy cannot
+    disagree about which order comes first.
+    """
+    snapshot = Store().read()
+    ledger = snapshot.ledger
+
+    sequence = sorted(
+        ledger.orders.values(),
+        key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
+    )
+    open_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in open_keys]
+
+    asked = [_engine_order(record) for record in open_records]
+    # KEYED BY OBJECT IDENTITY rather than by order number, because `order_sequence` sorts
+    # the very objects it was handed and hands them back — so identity survives the pass,
+    # while a number does not identify a record: two marketplaces may spell one number, and
+    # `source:number` is the key for exactly that reason.
+    behind = {id(order): record for order, record in zip(asked, open_records)}
+    resolution = order_engine.resolve_all(snapshot.inventory, asked)
+
+    # ONE `_Places` FOR THE WHOLE RESPONSE. It walks the entire store per instantiation, and
+    # its own docstring measures what a per-card one costs; the instance never outlives this
+    # request, so it cannot serve a stale denominator to the next one.
+    places = _Places(snapshot.inventory)
+
+    # The reverse index behind `held_by`, built in this request and NEVER stored. A stored
+    # position-keyed index is the fourth thing no renumber path remaps — `pipeline/orders.py`
+    # names the three that already exist — which is why this is keyed by `capture_id`.
+    held: Dict[str, dict] = {}
+    for key, rows in ledger.fulfilment.items():
+        holder = ledger.orders.get(key)
+        for sku, row in rows.items():
+            for copy in row.copies:
+                held[str(copy)] = {
+                    "order": holder.number if holder is not None else key,
+                    "sku": sku,
+                }
+
+    answered = []
+    for answer in resolution.orders:
+        record = behind[id(answer.order)]
+        answered.append(
+            {
+                "key": record.key,
+                "number": record.number,
+                "complete": answer.complete,
+                "outstanding": answer.outstanding,
+                "lines": [
+                    _line_answer(snapshot.inventory, places, held, record, line)
+                    for line in answer.lines
+                ],
+            }
+        )
+
+    return {
+        "summary": ledger.summary,
+        "orders": [_order_row(ledger, record, record.key in open_keys) for record in sequence],
+        "resolution": {
+            # EVERY REASON, INCLUDING THE ZEROS — `Resolution.counts` returns all six and
+            # nothing here filters them. Reporting only the reasons that fired would make
+            # "nothing was short" and "nothing was checked" the same output.
+            "counts": resolution.counts(),
+            "orders": answered,
+        },
+    }
+
+
+def _ingest_line(order_at: int, line_at: int, raw) -> order_store.OrderLine:
+    """One line of a pasted order. `_reject_unknown` FIRST, before a value is read."""
+    where = f"line {line_at} of order {order_at}"
+    if not isinstance(raw, dict):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_invalid",
+            f"{where.capitalize()} is not an object. A line is "
+            f"{{\"sku\": …, \"quantity\": …}} plus whatever else the feed said.",
+        )
+    _reject_unknown(raw, ORDER_INGEST_LINE_FIELDS)
+
+    # A SKU ARRIVES AS EITHER A STRING OR AN INT and both are the same identifier — a CSV
+    # cell versus a JSON number. `"9191486" == 9191486` is False in Python, and an
+    # uncoerced SKU makes every line unresolvable while raising nothing and logging
+    # nothing, which is the silent total failure `pipeline/orders.py` opens by naming.
+    sku = raw.get("sku")
+    if isinstance(sku, bool) or not isinstance(sku, (str, int)):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_invalid",
+            f"{where.capitalize()} carries {sku!r} as its sku; send the TCGplayer Id as a "
+            f"string or a number.",
+        )
+    sku = str(sku).strip()
+    if not sku:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_invalid",
+            f"{where.capitalize()} carries a blank sku, so there is no way to find the card "
+            f"it wants. Nothing was written.",
+        )
+
+    quantity = raw.get("quantity")
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_invalid",
+            f"{where.capitalize()} wants {quantity!r} copies; send a whole number of at "
+            f"least 1. A float refuses rather than being rounded — half a card is a paste "
+            f"that went wrong upstream.",
+        )
+
+    # VALIDATED HERE EVEN THOUGH `store/orders.py` LEAVES IT UNVALIDATED ON PURPOSE. That
+    # module is a document and a closed vocabulary in it would refuse a feed that learned a
+    # new product category. This is the door, and a kind outside `LINE_KINDS` stored through
+    # it raises `UnknownLineKind` at resolve time — which makes the WHOLE order screen
+    # unreadable for one bad paste, with nothing on it saying which paste.
+    kind = raw.get("kind")
+    if kind is not None and (
+        not isinstance(kind, str) or kind not in order_engine.LINE_KINDS
+    ):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_kind_invalid",
+            f"{where.capitalize()} declares kind {kind!r}. The kinds this repo resolves are "
+            f"{', '.join(order_engine.LINE_KINDS)}, and a line may omit it — omitted means "
+            f"the feed said nothing, which resolves as "
+            f"{order_engine.LINE_KIND_SINGLE}. Nothing was written.",
+        )
+
+    said = f"{where.capitalize()} carries a value this route cannot store verbatim."
+    return order_store.OrderLine(
+        sku=sku,
+        quantity=quantity,
+        name=_order_optional_text(raw, "name", "line_invalid", said),
+        number=_order_optional_text(raw, "number", "line_invalid", said),
+        printing=_order_optional_text(raw, "printing", "line_invalid", said),
+        condition=_order_optional_text(raw, "condition", "line_invalid", said),
+        rarity=_order_optional_text(raw, "rarity", "line_invalid", said),
+        unit_price=_order_optional_text(raw, "unit_price", "line_invalid", said),
+        kind=kind,
+    )
+
+
+def _ingest_record(order_at: int, raw) -> order_store.OrderRecord:
+    """One pasted order. `_reject_unknown` FIRST — that call is the PII backstop."""
+    if not isinstance(raw, dict):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "order_invalid",
+            f"Order {order_at} is not an object. Send "
+            f"{{\"source\": …, \"number\": …, \"lines\": [...]}}.",
+        )
+    _reject_unknown(raw, ORDER_INGEST_ORDER_FIELDS)
+
+    source = _order_text(
+        raw,
+        "source",
+        "source_required",
+        f"Order {order_at} names no `source` — the marketplace it came from, e.g. "
+        f"TCGplayer. It is half of the key this order is stored under.",
+    )
+    number = _order_text(
+        raw,
+        "number",
+        "number_required",
+        f"Order {order_at} names no `number` — the order's own identifier at that "
+        f"marketplace. It is the other half of the key.",
+    )
+    said = f"Order {order_at} carries a value this route cannot store verbatim."
+    placed_at = _order_optional_text(raw, "placed_at", "order_invalid", said)
+    status = _order_optional_text(raw, "status", "order_invalid", said)
+
+    lines = raw.get("lines")
+    if not isinstance(lines, list) or not lines:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "lines_required",
+            f"Order {order_at} carries no `lines`. An order with nothing on it is a "
+            f"purchase nobody can pick, and it is refused rather than stored empty.",
+        )
+
+    # THE KEY IS COMPOSED BEFORE ANYTHING IS WRITTEN so a bad one refuses by name rather
+    # than as a 500 out of `Ledger.ingest`. The only real cause is a colon in the SOURCE —
+    # a colon in the NUMBER is legal and must keep working, because the key splits on the
+    # FIRST one.
+    try:
+        order_store.order_key(source, number)
+    except order_store.BadOrderKey as exc:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)
+        ) from None
+
+    return order_store.OrderRecord(
+        source=source,
+        number=number,
+        placed_at=placed_at,
+        status=status,
+        lines=[_ingest_line(order_at, at, line) for at, line in enumerate(lines, start=1)],
+    )
+
+
+def do_order_ingest(payload: dict) -> dict:
+    """`POST /orders/ingest` — take the feed's word for what was bought. D63's one map.
+
+    IT TOUCHES ONE MAP AND THAT IS TRUE BY CONSTRUCTION. `Ledger.ingest` writes
+    `ledger.orders` and can write nothing else, because `store/orders.py` holds no
+    `Inventory`: no card state moves, no listing count moves, not one byte of
+    `inventory.json` is rewritten with different content. Nothing is logged to
+    `history.jsonl` either, and no state here is a member of `master.STATES` — an order is a
+    fact about a marketplace, not a transition of a card.
+
+    A SECOND IDENTICAL PASTE IS A NO-OP DOWN TO THE BYTE. `ingest` compares the feed-owned
+    content, carries `first_seen` across, and stamps `changed_at` only where something
+    actually moved — so `orders.json`, `inventory.json` and `history.jsonl` are all
+    unchanged and the report says `unchanged`. There is deliberately no `last_synced_at`:
+    one would move on every press and make the second press write.
+
+    EVERY LEVEL IS ALLOWLISTED BEFORE IT IS READ. The three tuples are the PII backstop and
+    their comment has the argument: an unprojected paste carrying `buyer` or
+    `shippingAddress` refuses BY NAME rather than being stored with those fields silently
+    trimmed.
+    """
+    _reject_unknown(payload, ORDER_INGEST_FIELDS)
+    raw = payload.get("orders")
+    if not isinstance(raw, list) or not raw:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "orders_required",
+            "Send `orders` — a non-empty list of orders as the feed reported them. An empty "
+            "paste is refused rather than reported as a sync that learned nothing, because "
+            "those two are different answers to 'did that work'.",
+        )
+    if len(raw) > ORDER_INGEST_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_orders",
+            f"{len(raw)} orders in one paste, and this route takes at most "
+            f"{ORDER_INGEST_LIMIT}. That ceiling is a guard against pasting a whole "
+            f"exported history, which would hold the store lock for the length of it. "
+            f"Paste what is open.",
+        )
+
+    records = [_ingest_record(at, entry) for at, entry in enumerate(raw, start=1)]
+
+    with Store().write() as snapshot:
+        try:
+            report = snapshot.ledger.ingest(records)
+        except order_store.DuplicateOrderLine as exc:
+            # A 409 rather than a 400 on this file's standing rule: the request was
+            # well-formed and lost to something the STORE knows — fulfilment is keyed by
+            # SKU, so two lines sharing one would make "how many have we pulled" a question
+            # with two answers. Its own message says that, so it is answered with its text.
+            raise BadRequest(HTTPStatus.CONFLICT, "duplicate_line", str(exc)) from None
+
+    return {
+        "added": report.added,
+        "changed": report.changed,
+        "unchanged": report.unchanged,
+        "total": report.total,
+        "wrote_nothing": report.wrote_nothing,
+        "summary": report.summary,
+        "keys": [record.key for record in records],
+    }
+
+
+def do_order_fetch(payload: dict) -> dict:
+    """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE.
+
+    IT IS NOT THE MONEY GATE AND CARRIES NO `confirm`. The one route in this server that can
+    cause a charge is still `POST /pipeline/identify`, and it is still named for it. This is
+    a READ against `order-management-api.tcgplayer.com` with the session cookie already in
+    `.env` — the same account session `server/tcg_export.py` uses one host over — and it
+    writes nothing: no card state, no listing count, no run directory, not even the ledger.
+
+    IT RETURNS EXACTLY WHAT `POST /orders/ingest` ACCEPTS AND NOT ONE KEY MORE. The body is
+    `{"orders": [...]}`, which is the paste path's body verbatim, so the fetched result can
+    be sent to the ingest route unaltered — which is the whole point of the shape. A count
+    or a summary added here would be a field `_reject_unknown` refuses by name at the ingest,
+    and the two routes would then need an adapter between them for no gain: the caller can
+    count the list.
+
+    THE PROJECTION HAPPENED UPSTREAM AND IS NOT REPEATED HERE. `server/order_transport.py`
+    drops `buyerName`, `shippingAddress`, `paymentType` and the transaction breakdown where
+    it parses them, by allowlist rather than by denylist, so a field TCGplayer adds later
+    does not arrive through this route either. What this function does is rename the four
+    surviving fields into this repo's own spelling.
+
+    A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at the one call site is the whole
+    seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that module
+    raises its own exception type because this file imports it and the reverse import would
+    be a cycle. Every one of its twenty-one codes carries a sentence saying what to fix.
+    """
+    _reject_unknown(payload, ORDER_FETCH_FIELDS)
+    asked = payload.get("range")
+    if asked is not None and not isinstance(asked, str):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "range_invalid",
+            f"range was {asked!r}; send one of "
+            f"{', '.join(order_transport.KNOWN_RANGES)} as a string, or omit it for "
+            f"{order_transport.DEFAULT_RANGE}.",
+        )
+    wanted = (asked or "").strip() or order_transport.DEFAULT_RANGE
+
+    try:
+        fetched = order_transport.fetch_open_orders(wanted)
+    except order_transport.FetchRefusal as exc:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
+
+    return {
+        "orders": [
+            {
+                "source": ORDER_FETCH_SOURCE,
+                "number": order["orderNumber"],
+                "placed_at": order["orderDate"],
+                "status": order["status"],
+                "lines": [
+                    {
+                        "sku": line["skuId"],
+                        "quantity": line["quantity"],
+                        "name": line["name"],
+                        "unit_price": line["unitPrice"],
+                    }
+                    for line in order["products"]
+                ],
+            }
+            for order in fetched
+        ]
+    }
+
+
+def _pull_target(at: int, raw) -> dict:
+    """One position coming out of the box: `{box, index, capture_id}`, all three required.
+
+    THE CAPTURE ID IS REQUIRED IN BOTH DIRECTIONS AND IT IS NOT BOOKKEEPING. Recording, it
+    is the aim check — a mid-box delete (D10 ruling 1), a capture undo releasing an index,
+    or a re-shoot all change which physical card sits at a slot, so a screen drawn a minute
+    ago may be pointing at a different card than the operator is holding. Undoing, it is the
+    whole of the lookup: the client does not name the line and cannot, so the server finds it
+    by asking the ledger who holds this copy.
+    """
+    if not isinstance(raw, dict):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "target_invalid",
+            f"Target {at} is not an object. Send "
+            f"{{\"box\": …, \"index\": …, \"capture_id\": …}}.",
+        )
+    _reject_unknown(raw, ORDER_PULL_TARGET_FIELDS)
+    box = raw.get("box")
+    index = raw.get("index")
+    if isinstance(box, bool) or not isinstance(box, int) or box < 1:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "target_invalid",
+            f"Target {at} names box {box!r}; send a whole number, and boxes start at 1.",
+        )
+    if isinstance(index, bool) or not isinstance(index, int) or index < 1:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "target_invalid",
+            f"Target {at} names index {index!r}; send a whole number. This is the STORED "
+            f"index — the `/inventory/<box>/<index>` path and the `<index>.jpg` the "
+            f"photograph is named after — never the slot a person counts to (D58).",
+        )
+    capture_id = raw.get("capture_id")
+    if not isinstance(capture_id, str) or not capture_id.strip():
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "target_invalid",
+            f"Target {at} carries no `capture_id`. Send the id the row you are looking at "
+            f"carries: it is the aim check on the way in and the whole of the lookup on the "
+            f"way back, and it is the one identity a renumber cannot move.",
+        )
+    return {"box": box, "index": index, "capture_id": capture_id.strip()}
+
+
+def do_order_pull(payload: dict) -> dict:
+    """`POST /orders/pull` — record copies against an order line and mark them sold. D63.
+
+    BODY-ADDRESSED, NOT PATH-ADDRESSED, and that is forced rather than chosen. An order key
+    is `source:number` and a NUMBER may legally contain a colon — `store/orders.py` splits on
+    the FIRST one for exactly that reason — so a key in a path segment would need an escaping
+    rule that the one place it is composed does not have.
+
+    THE TWO DIRECTIONS TAKE DIFFERENT TUPLES, `do_review_answer`'s convention exactly. `undo`
+    is read FIRST and the narrow tuple is checked against it, so an undo that also names an
+    order REFUSES rather than being obeyed with the order silently ignored. The reversal
+    names no line at all: the server asks `Ledger.holder_of` which line holds each copy, so a
+    screen holding a stale order key cannot reverse the wrong one.
+
+    ONE `Store.write()` FOR THE WHOLE CALL, IN TWO PHASES — D29's rule, and `store/orders.py`
+    applies the same one inside `record_pull`.
+
+      PHASE ONE validates every target and writes nothing, and it computes every `place`
+      BEFORE ANY WRITE. A sale moves the box's occupancy (D58 — the numbers count the cards,
+      not the slots), so a receipt composed afterwards would name where the operator is about
+      to be rather than where they just were. A per-position refusal is collected rather than
+      raised, and the whole set is answered as one `pull_entry_refused` — `group_entry_refused`'s
+      shape — because a pull half-refused is an operator holding cards with no record of
+      which ones went.
+
+      `duplicate_target` IS REQUIRED HERE AND IS NOT TIDINESS. `_sell` reads `history.jsonl`
+      FROM DISK to learn what an undo would restore, and it cannot see an event this session
+      has queued — so the same position sent twice would compute `previous` from pre-session
+      history both times and the second sale's `restores_to` would name the state the card
+      held before the first one.
+
+      PHASE TWO WRITES THE LEDGER FIRST, then sells. The ledger is the one call that can
+      refuse on a fact neither the client nor phase one holds — the line's quantity against
+      what is already recorded — and `Store.write()` commits only on a clean exit, so a raise
+      anywhere discards every earlier state change and every history line queued behind it.
+      Correctness therefore does not depend on the order; the reading order matches the
+      refusal order.
+    """
+    # Read before `_reject_unknown`, because which fields are settable depends on which
+    # direction this is. A stringified flag refuses rather than being coerced.
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+    _reject_unknown(payload, ORDER_PULL_UNDO_FIELDS if undo else ORDER_PULL_FIELDS)
+
+    raw = payload.get("targets")
+    if not isinstance(raw, list) or not raw:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "targets_required",
+            "Send `targets` — the positions coming out of the box, each as "
+            "{box, index, capture_id}. A pull of nothing is refused rather than recorded "
+            "as a pull of nothing.",
+        )
+    if len(raw) > ORDER_PULL_TARGET_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_targets",
+            f"{len(raw)} positions in one press, and this route takes at most "
+            f"{ORDER_PULL_TARGET_LIMIT}. One press is one armful of cards; a longer list is "
+            f"a script that meant to send the whole box.",
+        )
+    parsed = [_pull_target(at, entry) for at, entry in enumerate(raw, start=1)]
+
+    key = ""
+    sku = ""
+    if not undo:
+        source = _order_text(
+            payload,
+            "source",
+            "source_required",
+            "Send `source` — the marketplace this order came from. It is half of the key "
+            "the pull is recorded under.",
+        )
+        number = _order_text(
+            payload,
+            "number",
+            "number_required",
+            "Send `number` — the order's own identifier at that marketplace.",
+        )
+        sku = _order_text(
+            payload,
+            "sku",
+            "sku_required",
+            "Send `sku` — the TCGplayer Id of the line these copies fill. Fulfilment is "
+            "keyed by SKU because that is the only line identity stable across two ingests.",
+        )
+        try:
+            key = order_store.order_key(source, number)
+        except order_store.BadOrderKey as exc:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)
+            ) from None
+
+    with Store().write() as snapshot:
+        places = _Places(snapshot.inventory)
+
+        # ---------------------------------------------------------------- phase one
+        prepared: List[dict] = []
+        refused: List[Tuple[str, BadRequest]] = []
+        seen: Set[str] = set()
+        for target in parsed:
+            position = master.position_key(target["box"], target["index"])
+            try:
+                if position in seen:
+                    raise BadRequest(
+                        HTTPStatus.CONFLICT,
+                        "duplicate_target",
+                        f"{position} is in this pull twice. One physical card is pulled "
+                        f"once; a repeated position would record a second sale of it and "
+                        f"compute the wrong state to restore.",
+                    )
+                seen.add(position)
+
+                card = snapshot.inventory.cards.get(position)
+                if card is None:
+                    raise BadRequest(
+                        HTTPStatus.NOT_FOUND,
+                        "card_not_found",
+                        f"No card at box {target['box']}, index {target['index']}.",
+                    )
+                if not card.capture_id:
+                    raise BadRequest(
+                        HTTPStatus.CONFLICT,
+                        "copy_not_identifiable",
+                        f"The card at {position} carries no capture_id, so this pull "
+                        f"cannot be made idempotent and is refused rather than counted "
+                        f"blind. Every record written by this server has one; this is a "
+                        f"record that predates it.",
+                    )
+                if str(card.capture_id) != target["capture_id"]:
+                    raise BadRequest(
+                        HTTPStatus.CONFLICT,
+                        "capture_id_mismatch",
+                        f"The card at {position} is not the card the screen drew: it "
+                        f"carries capture_id {card.capture_id!r} and the request aimed at "
+                        f"{target['capture_id']!r}. A mid-box delete, a capture undo "
+                        f"releasing an index, or a re-shoot all change a slot's occupant. "
+                        f"Re-read the order screen, then aim again.",
+                    )
+                if not undo and str(card.sku or "").strip() != sku:
+                    raise BadRequest(
+                        HTTPStatus.CONFLICT,
+                        "sku_mismatch",
+                        f"The card at {position} carries SKU "
+                        f"{str(card.sku or '') or 'nothing'}, and this pull is for {sku}. "
+                        f"A copy fills a line by carrying its SKU; nothing here recategorises "
+                        f"a card to make it fit.",
+                    )
+                # COMPUTED BEFORE ANY WRITE — see the docstring's phase one.
+                place = places.of(target["box"], target["index"])
+            except BadRequest as exc:
+                refused.append((position, exc))
+                continue
+            prepared.append(
+                {
+                    "box": target["box"],
+                    "index": target["index"],
+                    "capture_id": str(card.capture_id),
+                    "place": place,
+                }
+            )
+
+        if refused:
+            named = "; ".join(f"{position}: {exc.code} — {exc}" for position, exc in refused)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "pull_entry_refused",
+                f"{len(refused)} of {len(parsed)} positions refused, so the whole pull is "
+                f"refused and nothing was written — neither the ledger nor one card's "
+                f"state. Re-read the order screen and aim again. {named}",
+            )
+
+        copies = [entry["capture_id"] for entry in prepared]
+
+        # ---------------------------------------------------------------- phase two
+        if undo:
+            holders = []
+            for entry, copy in zip(prepared, copies):
+                holder = snapshot.ledger.holder_of(copy)
+                if holder is None:
+                    raise BadRequest(
+                        HTTPStatus.CONFLICT,
+                        "pull_not_recorded",
+                        f"The ledger has no record of the copy at box {entry['box']}, "
+                        f"index {entry['index']} being pulled for an order, so this route "
+                        f"did not do what is being undone. If it was marked sold on "
+                        f"#/inventory, reverse it there.",
+                    )
+                holders.append(holder)
+            spanned = sorted(set(holders))
+            if len(spanned) > 1:
+                named = ", ".join(f"{held_key} SKU {held_sku}" for held_key, held_sku in spanned)
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "pull_spans_lines",
+                    f"These copies are held by more than one line ({named}). One press "
+                    f"pulled one line and one press reverses one; send the copies of a "
+                    f"single line.",
+                )
+            key, sku = spanned[0]
+            newly = snapshot.ledger.forget_pull(key, sku, copies)
+        else:
+            try:
+                newly = snapshot.ledger.record_pull(key, sku, copies)
+            except order_store.UnknownOrder:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "order_not_ingested",
+                    f"Order {key} is not in this ledger, so there is nothing to fulfil. "
+                    f"Paste or fetch it first — inventing it here would put a shipment on "
+                    f"record for a purchase nobody can produce.",
+                ) from None
+            except order_store.UnknownOrderLine:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "sku_not_on_order",
+                    f"Order {key} has no line for SKU {sku}. The buyer did not order it, "
+                    f"and fulfilment is keyed by SKU.",
+                ) from None
+            except order_store.CopyNotIdentifiable as exc:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT, "copy_not_identifiable", str(exc)
+                ) from None
+            except order_store.CopyAlreadyPulled as exc:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT, "copy_already_pulled", str(exc)
+                ) from None
+            except order_store.OverFulfilled as exc:
+                # NOTHING IS CLAMPED. Recording a fourth copy against an order for three is
+                # a mistake with nothing to be gained by swallowing it — you cannot ship
+                # the fourth.
+                raise BadRequest(HTTPStatus.CONFLICT, "over_fulfilled", str(exc)) from None
+
+        # `_sell`'s five refusals reach the dispatcher unchanged and unsoftened. A raise
+        # here discards the ledger write above with everything else — `Store.write()`
+        # commits only on a clean exit.
+        sales = [
+            _sell(snapshot, entry["box"], entry["index"], undo) for entry in prepared
+        ]
+
+        body = {
+            "undone": bool(undo),
+            "order_key": key,
+            "sku": sku,
+            "newly": int(newly),
+            "recorded": snapshot.ledger.fulfilled(key, sku),
+            "outstanding": snapshot.ledger.outstanding(key, sku),
+            # The PRE-WRITE places, one per target in request order — where the operator
+            # just was, not where the box has closed up to.
+            "places": [entry["place"] for entry in prepared],
+            "sales": sales,
+        }
+
+    return body
+
+
 # ------------------------------------------------------------------------------- handler
 
 
@@ -7102,6 +8070,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # `except` clause is the whole of that seam; every refusal it carries already
             # holds the status and the code it wants to be answered with.
             self._fail(exc.status, exc.code, str(exc))
+        except shipping_routes.ShippingRefusal as exc:
+            # The shipping module's own exception type, for the identical reason one line
+            # up: it cannot import `BadRequest` from here because this file imports IT, and
+            # the reverse import would be a cycle. One `except` clause is the whole seam,
+            # and every refusal already carries the status and the code it wants.
+            self._fail(exc.status, exc.code, str(exc))
         except files.LockTimeout:
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
@@ -7189,6 +8163,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_boxes())
             if path == "/games":
                 return self._json(HTTPStatus.OK, do_games())
+            # D66's order screen. An exact string and therefore no ordering hazard, and a
+            # read: it takes no lock, writes nothing, and resolves the open orders in one
+            # pass so no two of them are offered the same physical card.
+            if path == "/orders":
+                return self._json(HTTPStatus.OK, do_orders())
             if path == "/search":
                 # `keep_blank_values` so `?q=` reaches `_require_query` and is refused in
                 # `query_required` rather than looking like a request with no `q` at all —
@@ -7277,6 +8256,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_run(match.group(1))
+                )
+            # D61's Pirate Ship import file. `keep_blank_values` so `?name=` reaches the
+            # handler's own refusal rather than looking absent — `/search` and
+            # `_RUN_FILE_RE` above take the same care for the same reason. The
+            # `Content-Disposition` rides on `_send`'s existing `extra` tuple, which until
+            # now only `_photo` used, for its ETag.
+            match = _SHIPPING_FILE_RE.match(path)
+            if match:
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob, kind = shipping_routes.do_shipping_file(match.group(1), wanted[0])
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    kind,
+                    (("Content-Disposition", 'attachment; filename="pirateship-import.csv"'),),
                 )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No GET route {path}.")
 
@@ -7401,6 +8395,28 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         match.group(1), match.group(2), self._body()
                     ),
                 )
+            # D66's three writes, all exact strings — no regex, and therefore no ordering
+            # hazard against each other or against anything above. NONE OF THEM SPENDS:
+            # `/orders/fetch` is a read of this account's own orders at TCGplayer, and the
+            # other two touch only this store. The one route that can cost money is still
+            # `/pipeline/identify`.
+            #
+            # The pull is BODY-ADDRESSED rather than `/orders/<key>/pull`, and that is
+            # forced: an order key is `source:number` and a number may legally carry a
+            # colon.
+            if path == "/orders/fetch":
+                return self._json(HTTPStatus.OK, do_order_fetch(self._body()))
+            if path == "/orders/ingest":
+                return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
+            if path == "/orders/pull":
+                return self._json(HTTPStatus.OK, do_order_pull(self._body()))
+            # D61's Export Shipping read. Free, re-runnable, and it spends nothing — what
+            # it costs is memory holding buyer addresses, which the DELETE below is the way
+            # back from.
+            if path == "/shipping/batches":
+                return self._json(
+                    HTTPStatus.OK, shipping_routes.do_shipping_batches(self._body())
+                )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No POST route {path}.")
 
         self._dispatch(run)
@@ -7474,6 +8490,16 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_delete_box(int(match.group(1)))
                 return self._json(HTTPStatus.OK, body)
+            # D61's way back. It drops a held batch — and the buyer addresses in it — now
+            # rather than in half an hour, which is what CLAUDE.md's hard rule asks of
+            # anything that makes this process hold one. Answers a body rather than a 204,
+            # by this verb's own existing rule: the app names what it just removed, and
+            # this response is where that name comes from.
+            match = _SHIPPING_ITEM_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK, shipping_routes.do_shipping_forget(match.group(1))
+                )
             raise BadRequest(
                 HTTPStatus.NOT_FOUND, "no_such_route", f"No DELETE route {path}."
             )

@@ -1173,6 +1173,30 @@ failed, and the true count at that commit was 256. The number was written before
 was read. Corrected here rather than by rewriting the message, because the message is history
 and this file is where what-we-actually-know lives.
 
+
+### Two additions from the order-pipeline branch, and one of them is weaker than it looks
+
+**A font wait was added to a DIFFERENT case — `the address holds one line at both widths` —
+and it is hardening, not a reproduction.** That case asserts advance widths and prices itself
+at "Martian Mono's 0.70em advance", while `app/index.html` fetches that face with
+`&display=swap`; `await page.evaluate(() => document.fonts.ready.then(() => true))` makes it
+measure the typeface it was computed for. **It has never been observed failing**, so this is a
+latent correctness fix. The branch that added it first proposed `display=swap` as *the* cause
+of the recorded red and supported that with run counts alone — 2 reds in 9 runs before, 1 in
+37 after. **The investigation above supersedes that**: it captured error text under controlled
+load and found the failures in `open()`, with the geometry stable at 0px across 120 loaded
+samples with fonts already loaded. Run counts are not a diagnosis, and the earlier claim is
+withdrawn rather than quietly left standing.
+
+**A genuine and unrelated race was found and fixed in `shipping.spec.ts`.** It asserted
+`expect(await orders.allTextContents()).toEqual([...])`. `allTextContents()` is a SNAPSHOT
+with no auto-wait: it reads once, and a list that has not rendered yet reads as `[]`. **This
+one was observed** — it took a captured red on the first full-suite run of the new screen. The
+web-first `await expect(orders).toHaveText([...])` retries and asserts the same count, text and
+order, and now inherits the 15s allowance set above. Eight such non-retrying reads exist in the
+suite; the three in `shipping.spec.ts` are fixed and the remaining five are recorded here —
+three in `inventory.spec.ts`, two elsewhere — none of them observed failing.
+
 ## A Playwright line number is not a line in the file — found 2026-08-30
 
 **The entry above cited `app/tests/inventory.spec.ts:2799`. At the commit it was written

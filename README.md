@@ -28,9 +28,10 @@ geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
-app/                       the web app. Vite + React + TS. Seven screens — capture, runs,
-                           review queue, pricing, inventory, Fulfillment, component
-                           gallery — all seven routed. See "The app" below.
+app/                       the web app. Vite + React + TS. Nine screens — capture, runs,
+                           review queue, pricing, orders, shipping, inventory,
+                           Fulfillment, component gallery — all nine routed. See "The
+                           app" below.
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
@@ -130,12 +131,23 @@ server and nothing else: no pipeline logic, no second store, no auth, no login.
 
 ```
 capture        live camera, box / game / set hint / finish / rarity, undo, motion trigger
+runs           the pipeline: preflight, the money gate, join / emit / reconcile, downloads
 review queue   one card at a time, photo first — the answer writes and advances
+pricing        the hand-pricing worklist, one row per SKU, and D49's deliberate holds
+orders         which copies this buyer gets and where they are, out of the order ledger
+shipping       which envelope an order goes in, out of TCGplayer's own shipping export
 inventory      the box walk, and everything that hangs off it: search, a card's copies
-               and its sale, the box's own operations, and the pipeline's Runs panel
+               and its sale, and the box's own operations
 Fulfillment    the second persona's whole product: pull, photo-confirm, mark sold
 gallery        step 6's component sheet, rendered by the build so it cannot go stale
 ```
+
+**THIS LIST CARRIED FIVE ENTRIES AND WAS MISSING TWO SCREENS THAT ALREADY EXISTED**, `runs`
+and `pricing`, from the days D39 and D49 routed them until D69 repaired it on 2026-08-30. It
+is the sixth place this repo's screen count has been wrong, and CLAUDE.md's own warning —
+that the count has been wrong more often than right and that nothing checks it — is what
+found it. Restored first, then extended: nine entries, counted off `app/src/App.tsx`'s
+`ROUTES` table rather than added to whatever the last number was.
 
 **It was six until D31.** `#/boxes` and `#/pull` were separate routes over the same 767
 records, and the owner named the problem: they read as three instances of one thing. They are
@@ -156,8 +168,8 @@ moved would be serving a **different** store (D43). `make screenshot` renders `s
 into `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
 real browser.
 
-All five open at a hash, and the Fulfillment view opens **without the nav strip** the other
-four carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
+All nine open at a hash, and the Fulfillment view opens **without the nav strip** the other
+eight carry — that view's row in `docs/DESIGN.md`'s constraints table requires no route out of
 it, and a strip of links to the capture screen's hard-delete undo is exactly the route it
 forbids. `docs/map.py`'s `app/` entry is the current account of what each file does.
 

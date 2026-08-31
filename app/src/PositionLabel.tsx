@@ -11,7 +11,7 @@
  * record, and it is the property every spec asserts.
  *
  * A CARD IN NO SLOT IS RANKED TOO, AND IT IS THE FIGURE THAT GOES RATHER THAN THE TREATMENT
- * (D69). `join.departed_label` ends on a word where a slot number would be, and refusing the
+ * (D71). `join.departed_label` ends on a word where a slot number would be, and refusing the
  * whole label over it meant every screen fell back to the raw string at its payload size — so
  * `#/inventory` drew a sold card the pre-D41 way while every live card beside it was ranked.
  * The state and the store key ride the path (`BOX 3` / `DEPARTED 3/36`), the number column is
@@ -107,7 +107,7 @@ export function PositionLabel({
      last part at `--pos-slot`, so a promoted key would put a 44px number in the slot column of a
      card that is in no slot, which is precisely the lie D58 refuses.
 
-     WHERE IT GOES INSTEAD DEPENDS ON WHETHER THE REST RANKS (D69). For a label this component can
+     WHERE IT GOES INSTEAD DEPENDS ON WHETHER THE REST RANKS (D71). For a label this component can
      rank it becomes the VALUE of the state that explains it — `DEPARTED 3/31`, one path pair
      beside `BOX 3` — and for one it cannot it stays a demoted note under the plain string, which
      is the pooled row and the only caller left of that shape. Either way it is in the path's
@@ -127,7 +127,7 @@ export function PositionLabel({
      takes this path, and it is the honest render of a string that names no position: a pool has
      no coordinate to rank, so there is no key/figure pair to be had.
 
-     `Box 3 · departed · 3/36` USED TO TAKE IT AND NO LONGER DOES (D69). That label names a real
+     `Box 3 · departed · 3/36` USED TO TAKE IT AND NO LONGER DOES (D71). That label names a real
      box and is ranked below; drawing it here put the pre-D41 plain string back on two screens —
      44px and wrapped in the walk panel, the loudest row in the copies list — which is what a
      person saw the moment they marked a card sold. */

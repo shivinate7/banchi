@@ -1768,3 +1768,307 @@ export type ExportFetched = {
     widened: boolean
   }
 }
+
+/* ============================================================================ THE ORDERS
+ *
+ * D63's ledger on the wire, and D69's screen reading it. Field names are the SERVER'S, in
+ * the server's own case, for the reason every block above this one is: a rename here is a
+ * second spelling of one contract, and the renaming would have to happen somewhere anyway.
+ * Nothing in this file is validated at run time — `server.ts` casts, and its own comment
+ * argues why.
+ */
+
+/** The six words `pipeline/orders.py:LINE_REASONS` enumerates, and the ONE closed vocabulary
+ *  on this screen. `app/src/orderReasons.ts` carries the array, the labels and the remedies,
+ *  and `scripts/docs-audit.py:check_order_reasons` reconciles that array against the Python
+ *  tuple in both directions — the half the compiler cannot do, because TypeScript cannot
+ *  import a Python tuple. */
+export type OrderLineReason =
+  | 'resolved'
+  | 'short'
+  | 'no_copies_on_hand'
+  | 'sku_unknown'
+  | 'sku_unseen'
+  | 'not_a_single'
+
+/** One line as the FEED said it, stored verbatim. Everything but `sku` and `quantity` is
+ *  nullable because a marketplace may say nothing about it, and `store/orders.py` stores
+ *  what it was told rather than what it would prefer. `unit_price` is a STRING for
+ *  `ShippingRow.value`'s reason one block down: money crosses this wire as text. */
+export type OrderLineWire = {
+  sku: string
+  quantity: number
+  name: string | null
+  number: string | null
+  printing: string | null
+  condition: string | null
+  rarity: string | null
+  unit_price: string | null
+  kind: string | null
+}
+
+/** What WE have recorded against one line — the ledger's own half, beside the feed's.
+ *
+ *  `recorded` IS A COUNT AND `copies` ARE CAPTURE IDS. Neither is ever a position: a
+ *  position-keyed record is the thing no renumber path remaps (D58 moves the slot a person
+ *  counts to, D10 ruling 1 slides every higher index down), and a `capture_id` is the one
+ *  identity that survives both. A screen wanting a place asks the resolution for it. */
+export type OrderLineProgress = {
+  sku: string
+  wanted: number
+  recorded: number
+  outstanding: number
+  /** Normally zero, and never created by a pull. A later ingest that REDUCES a quantity
+   *  underneath a legitimate pull is what makes it non-zero. */
+  over: number
+  copies: string[]
+  at: string | null
+}
+
+/** One order as the feed said it, with our progress beside it.
+ *
+ *  `status` IS THE FEED'S OWN WORD, verbatim and unvalidated — `store/orders.py` refuses to
+ *  hold a closed vocabulary there, because a marketplace that learns a new word must not be
+ *  refused at the door. So NOTHING MAY BRANCH ON IT. `open` is the LEDGER'S answer,
+ *  computed by `Ledger.unfulfilled` from its own two maps, and it is the one to branch on. */
+export type OrderRow = {
+  /** `source:number`, split on the FIRST colon — a number may legally contain one. */
+  key: string
+  source: string
+  number: string
+  placed_at: string | null
+  status: string | null
+  first_seen: string
+  changed_at: string | null
+  wanted: number
+  recorded: number
+  open: boolean
+  lines: OrderLineWire[]
+  progress: OrderLineProgress[]
+}
+
+/** One physical copy the resolver offered, AS IT STANDS RIGHT NOW.
+ *
+ *  TRUE OF THE SNAPSHOT IT WAS COMPUTED FROM AND OF NO OTHER, and it is never stored (D36).
+ *  `box` and `index` are the store key at the instant `GET /orders` read it; `place` is
+ *  composed by the server's one renderer over `pipeline/join.py:Position`, which is the only
+ *  label formula in this repo. A second one on this screen is the failure this repo has
+ *  already recorded three times.
+ *
+ *  `held_by` IS THAT REQUEST'S OWN REVERSE INDEX, keyed by `capture_id`, and is never
+ *  stored either. It says this exact card is already recorded against a line, so the screen
+ *  draws it as spoken for rather than offering it to a second order. */
+export type PickRow = {
+  box: number
+  index: number
+  capture_id: string | null
+  source: 'card' | 'run'
+  run: string | null
+  card_name: string | null
+  card_number: string | null
+  condition: string | null
+  /** Null where the snapshot holds no card at that key — a copy the resolver named and a
+   *  delete took out from under it between one render and the next. */
+  state: string | null
+  held_by: { order: string; sku: string } | null
+  place: Place
+}
+
+/** One resolved line: why, the breakdown behind it, and the copies it found.
+ *
+ *  `fulfilled` IS `len(picks)` — a count DERIVED from the list beside it and never stored.
+ *  It is not `OrderLineProgress.recorded`, which is what the ledger says has actually been
+ *  pulled; this is what the resolver could offer right now.
+ *
+ *  `order_key` travels beside `order` because the resolver keys on the NUMBER alone and the
+ *  store keys on `source:number`. A number is unique to a marketplace and not across two. */
+export type ResolvedLine = {
+  order: string
+  order_key: string
+  sku: string
+  reason: OrderLineReason
+  wanted: number
+  fulfilled: number
+  outstanding: number
+  on_hand: number
+  sold: number
+  retired: number
+  pooled: number
+  line: OrderLineWire
+  picks: PickRow[]
+}
+
+/** One order's resolution. NO POSTAGE LANE HERE, deliberately: this screen answers "which
+ *  copies, and where", and which envelope an order ships in is D61's ruling and `#/shipping`'s
+ *  answer, computed from TCGplayer's own shipping export rather than from the ledger. */
+export type ResolvedOrder = {
+  key: string
+  number: string
+  complete: boolean
+  outstanding: number
+  lines: ResolvedLine[]
+}
+
+/** `GET /orders`, out of ONE store snapshot so the list and the resolution cannot disagree.
+ *
+ *  Only `Ledger.unfulfilled()` orders are resolved, so `resolution.orders` is a subset of
+ *  `orders`. `counts` carries EVERY reason including the zeros — reporting only what fired
+ *  would make "nothing was short" and "nothing was checked" the same payload — and
+ *  `sku_unknown` is structurally UNREACHABLE from this route and always draws a zero,
+ *  because it fires only when a run's paperwork names a SKU no card wears and this route
+ *  passes no paperwork. That zero is a limit of the route, not a fact about the store. */
+export type OrdersPayload = {
+  summary: string
+  orders: OrderRow[]
+  resolution: { orders: ResolvedOrder[]; counts: Record<OrderLineReason, number> }
+}
+
+/** THE PROJECTION, and NOTHING MAY BE ADDED TO IT.
+ *
+ *  These two types are the whole of what may leave this browser about a purchase. No buyer,
+ *  no address, no city, no postcode, no payment. `app/src/orderPaste.ts` mints them from
+ *  whatever was pasted and NAMES what it dropped; `server/capture_server.py`'s three
+ *  allowlist tuples are the backstop, so an unprojected paste refuses BY NAME rather than
+ *  being stored with those fields quietly trimmed. A field added here is a field that leaves
+ *  the machine, and it has to be argued for in D69's entry before it is typed here. */
+export type OrderIngestLine = {
+  sku: string
+  quantity: number
+  name?: string | null
+  number?: string | null
+  printing?: string | null
+  condition?: string | null
+  rarity?: string | null
+  unit_price?: string | null
+  kind?: string | null
+}
+
+export type OrderIngestOrder = {
+  source: string
+  number: string
+  placed_at?: string | null
+  status?: string | null
+  lines: OrderIngestLine[]
+}
+
+/** What `POST /orders/ingest` did. `wrote_nothing` is the honest answer to "did that work"
+ *  for a second identical paste: `Ledger.ingest` carries `first_seen` across and stamps
+ *  `changed_at` only where something moved, so the second press rewrites nothing at all. */
+export type IngestResult = {
+  added: number
+  changed: number
+  unchanged: number
+  total: number
+  wrote_nothing: boolean
+  summary: string
+  keys: string[]
+}
+
+/** What `POST /orders/fetch` answered: EXACTLY the body `POST /orders/ingest` accepts and
+ *  not one key more, so the fetched result is sent on unaltered. A count or a summary added
+ *  here would be a field the ingest's `_reject_unknown` refuses by name, and the two routes
+ *  would then need an adapter between them for no gain — the caller can count the list. */
+export type OrdersFetched = { orders: OrderIngestOrder[] }
+
+/** One copy coming out of a box. All three are required in both directions.
+ *
+ *  `index` IS THE STORED INDEX (D58) — the `/inventory/<box>/<index>` path and the
+ *  `<index>.jpg` the photograph is named after — and never the slot a person counts to.
+ *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
+ *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
+export type PullTarget = { box: number; index: number; capture_id: string }
+
+/** What a pull or its undo did.
+ *
+ *  `places` ARE THE LABELS AS THEY WERE BEFORE THE WRITE, one per target in request order.
+ *  That is the receipt to draw, and `sales[i].card.place.label` is not: a sale moves the
+ *  box's occupancy (D58), so the card is departed by the time the answer is composed and
+ *  its label reads `Box 3 · departed`. */
+export type PullResult = {
+  undone: boolean
+  order_key: string
+  sku: string
+  newly: number
+  recorded: number
+  outstanding: number
+  places: Place[]
+  sales: SaleResult[]
+}
+
+/* ========================================================================== THE SHIPPING
+ *
+ * D61's three lanes, read off TCGplayer's own `Orders → Export Shipping` file. The batch
+ * lives in the capture server's MEMORY for half an hour and touches no disk (D61 forbids
+ * persisting buyer PII), so every one of these is true of one process and one upload.
+ */
+
+export type ShippingLane = 'envelope' | 'parcel' | 'unjudged'
+
+export type ShippingReason =
+  | 'value_at_threshold'
+  | 'non_card_signal'
+  | 'cards_only'
+  | 'no_weight_data'
+  | 'no_value_data'
+  | 'sub_single_weight'
+
+/** One order as the shipping screen draws it, and EVERY FIELD THIS SCREEN IS ALLOWED TO
+ *  KNOW. No name, no address, no city, no postcode — and their absence is the design rather
+ *  than an omission to fill in later. The buyer's details cross this wire exactly once, as
+ *  the CSV download, which is the one thing that has to carry them.
+ *
+ *  `value` IS A STRING AND NEVER A NUMBER. It is a `Decimal` on the server and money read
+ *  through a float is money that rounds.
+ *
+ *  `weight_per_item_oz` IS A RENDERING TO FOUR PLACES AND IS NEVER COMPARED CLIENT-SIDE.
+ *  The ratio is a `Fraction` on the server; a float pass over that column MOVED the lane
+ *  counts, which is the measurement this sentence exists to carry.
+ *
+ *  `certain` is carried rather than inferred from `reason` here, because
+ *  `pipeline/shipping.py:Routing` owns that distinction and a second copy of the rule in
+ *  TypeScript is the second-renderer failure this repo has recorded. `item_count` is null
+ *  and NEVER 0 for an unparseable cell — absent stays distinguishable from small all the
+ *  way to the screen, which is the whole of that module's abstention. */
+export type ShippingRow = {
+  order: string
+  lane: ShippingLane
+  reason: ShippingReason
+  certain: boolean
+  value: string | null
+  weight_per_item_oz: string | null
+  item_count: number | null
+  /** The seam for the deferred pick-location route, and null until it exists. */
+  stamp: string | null
+}
+
+export type ShippingFile = { name: string; bytes: number }
+
+/** The other half of that seam: null until `POST /shipping/batches/<batch>/stamps` is built,
+ *  and typed now so the later route changes no type and no component. */
+export type ShippingStamps = {
+  ledger_orders: number
+  matched: number
+  stamped: number
+  unstamped: number
+}
+
+/** One uploaded export, routed. `batch` is 128 random bits because the file route is a GET
+ *  and therefore not behind the origin gate; `expires_in` is seconds and is a TTL rather
+ *  than a countdown the screen has to keep. */
+export type ShippingBatch = {
+  batch: string
+  name: string
+  expires_in: number
+  shipments: number
+  rows: ShippingRow[]
+  /** Straight from `shipping.lane_counts` / `shipping.reason_counts`, WHICH SEED EVERY KEY
+   *  INCLUDING THE ZEROS. Do not filter them: "nothing was unjudged" and "nothing was
+   *  checked" must not be the same payload. */
+  lane_counts: Record<ShippingLane, number>
+  reason_counts: Record<ShippingReason, number>
+  parcel_count: number
+  file: ShippingFile
+  stamps: ShippingStamps | null
+}
+
+export type ShippingForgotten = { batch: string; forgotten: boolean }

@@ -901,7 +901,7 @@ function CopiesPanel({
           <p className="inventory-machine">place: absent · key {row.key}</p>
         ) : (
           <div className="inventory-lone">
-            {/* THE SIXTH OWNER SITE, AND IT IS THE ONE MOST OF THE STORE IS DRAWN BY (D69).
+            {/* THE SIXTH OWNER SITE, AND IT IS THE ONE MOST OF THE STORE IS DRAWN BY (D71).
                 D41's treatment reached five sites and this was not one of them, so it went on
                 printing `Position.label` raw — and the sentence directly above says how much of
                 the store that is: 629 of 682 records have no name and no SKU, so this panel is
@@ -929,7 +929,7 @@ function CopiesPanel({
                 The label slot above already says the pooled fact where the position would be.
 
                 AND NEVER FOR A DEPARTED ONE EITHER (D68's ruling, reaching its third screen in
-                D69). This drew an empty track captioned `no longer in the box` under every sold
+                D71). This drew an empty track captioned `no longer in the box` under every sold
                 card — the same empty bar D68 deleted from the copies list, on the same grounds:
                 a bar cannot draw a card that is in no place, and the walk has omitted it since
                 D58. Two of the three screens rendering "one copy and where it is" had been fixed
@@ -1207,7 +1207,7 @@ function RetirePanel({
           />
         )}
 
-        {/* Treated for the same reason as everywhere else (D69): this is the string somebody
+        {/* Treated for the same reason as everywhere else (D71): this is the string somebody
             checks against the card in their hand, and it was the last owner-side position label
             still drawn as a run of words and interpuncts. A departed card cannot reach here — a
             card that has left is not one you can retire — so this is consistency rather than a

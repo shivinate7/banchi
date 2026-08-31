@@ -445,7 +445,7 @@ def departed_label(box: int, index: int) -> str:
     off as a store key before anything is promoted, and `app/tests/inventory.spec.ts` asserts
     that nothing in the panel is drawn at the figure's size.
 
-    WHAT THE RENDERER DOES WITH THE REST CHANGED IN D69, AND THIS STRING DID NOT. Until then the
+    WHAT THE RENDERER DOES WITH THE REST CHANGED IN D71, AND THIS STRING DID NOT. Until then the
     word `departed` made the whole label unrankable and every screen drew it raw at its payload
     size — the pre-D41 plain string, back on `#/inventory` for exactly the cards that had been
     sold. The client ranks it now (`BOX 1` / `DEPARTED 1/67`, and no figure at all), which is a

@@ -1518,7 +1518,7 @@ test('the card with no group gets both depths too — it is most of the store', 
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5 so far')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
 
-  /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D69). This test reaches
+  /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the branch 92% of the store draws through and asserted only the two bars, so the label beside
    * them went on being the raw server string in the utility face — D41's treatment shipped to five
    * sites and this was not one of them. Nothing failed, because nothing here read it. */
@@ -1530,7 +1530,7 @@ test('the card with no group gets both depths too — it is most of the store', 
 })
 
 test('a sold card with no group is ranked too, and draws no bar', async ({ page }) => {
-  /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D69).
+  /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D71).
    * That entry deleted an empty track captioned `where this sits in the box is not known yet`
    * from the copies list, on the grounds that a bar cannot draw a card that is in no place and
    * that the walk has omitted it since D58 — two screens agreeing about one card. This panel is
@@ -1626,7 +1626,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * a card that is in no place, so it is absent rather than drawn at zero. */
   await page.locator('.browse-row').nth(3).click()
 
-  /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D69). It read the raw
+  /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D71). It read the raw
    * string as text and asserted `.position-parts` count ZERO — a floor on the component
    * REFUSING a departed label — and what that refusal actually drew was the pre-D41 plain
    * string: `Box 2 · departed` at 44px in the face the address is drawn in, wrapped onto two
@@ -2902,6 +2902,27 @@ test('the address holds one line at both widths, including the longest label the
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
      and the block is measured for a second line. */
+
+  /* WAIT FOR THE WEB FONT BEFORE MEASURING, AS HARDENING AND NOT AS A FIX FOR THE RECORDED
+     FLAKE — that one was diagnosed properly on the branch that landed as `6c70d55`, by loading
+     the rig and CAPTURING the error text: 9 of 80 loaded repeats failed in `open()` on a
+     `toBeVisible()` timeout, none on an assertion, and the geometry case that remained was a
+     case subtracting two layouts rather than a screen that moves. `docs/DEBTS.md` carries that
+     reading; this comment does not restate it.
+
+     WHY THIS AWAIT IS STILL WORTH ITS LINE. Every number this case asserts is an advance width
+     — the comment above prices them at "Martian Mono's 0.70em advance" — and `app/index.html`
+     fetches that face from Google Fonts with `&display=swap`, which paints a fallback first and
+     re-lays-out when the real one arrives. That same swap is what the other investigation names
+     as the thing that moves the grid under a split measurement. Here the whole assertion is a
+     font metric, so waiting for the face is a precondition of measuring the right typeface at
+     all rather than a timing guess. It weakens nothing: the same numbers, on the font they were
+     computed for.
+
+     NOT PRESENTED AS MEASURED. This case has never been observed failing, so this is a latent
+     correctness fix and not a reproduction. */
+  await page.evaluate(() => document.fonts.ready.then(() => true))
+
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
     await page.locator('.position-parts').first().waitFor()
@@ -3480,7 +3501,7 @@ test('two departed copies of one card draw two different rows', async ({ page })
 
   const gone = page.locator('.card-locations-row', { hasText: 'departed' })
   await expect(gone).toHaveCount(2)
-  /* RANKED, NOT PLAIN (D69), and the store key is the value of the thing that explains it. This
+  /* RANKED, NOT PLAIN (D71), and the store key is the value of the thing that explains it. This
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
