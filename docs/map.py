@@ -530,7 +530,8 @@ COMPONENTS = [
             "prompt.py": {"does": "the identification prompt and its fingerprint", "governed_by": ["D2", "D3", "D22", "D23"], "tested_by": ["T1"]},
             "batch.py": {"does": "Batch API submit/poll/collect. Batch, never sequential.", "governed_by": ["D2", "D21", "D23"], "tested_by": ["T1"]},
             "sidecar.py": {"does": "reading a capture directory: photos, JSON sidecars, position", "governed_by": ["D2", "D3", "D10", "D21", "D22", "D23"]},
-            "images.py": {"does": "downscale, encode, hash a photograph for the API", "governed_by": ["D2", "D23"]},
+            "images.py": {"does": "downscale, encode, hash a photograph for the API, and refuse a crop that is not the card",
+                          "governed_by": ["D2", "D23", "D75"], "tested_by": ["T6"]},
         },
     },
     {
@@ -549,10 +550,10 @@ COMPONENTS = [
                 "no rig photo lives here. Still not a detection rate: one rig, one lighting "
                 "state, one day.",
         "modules": {
-            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses",
-                          "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+            "detect.py": {"does": "card-boundary detection by tone, and by border when tone refuses, and the shape correction both crop paths share",
+                          "governed_by": ["D1", "D22", "D23", "D75"], "tested_by": ["T6"]},
             "crop.py": {"does": "cut the crop-retry regions out of a registered card",
-                        "governed_by": ["D1", "D22"], "tested_by": ["T6"]},
+                        "governed_by": ["D1", "D22", "D75"], "tested_by": ["T6"]},
         },
     },
     {
