@@ -22,12 +22,27 @@ NPM_GUARD = @[ -d app/node_modules ] || { \
 	echo "  Fix: npm --prefix app install"; \
 	exit 1; }
 
+# `venv` is already idempotent — the venv module tolerates an existing dir and pip happily
+# reinstalls — so the gap was never the install, it was that nothing said to re-run it.
+# Measured 2026-08-31: this worktree's .venv was built 2026-08-30 13:39, zxing-cpp was
+# pinned into requirements.txt at 17:32 the same day, and the first symptom was a bare
+# `ModuleNotFoundError` three stack frames into T8 with no venv in the trace at all — the
+# same shape T2-T5's fallback-to-system-python3 is deliberately allowed to hit (see PYTHON
+# above), except this venv existed and was simply stale, which that design never covered.
+# Passes when there is no venv at all (falls through to system python3, unchanged) or when
+# the stamp `venv` writes on a successful install is not older than requirements.txt.
+VENV_GUARD = @[ ! -x .venv/bin/python ] || [ -f .venv/.deps-stamp -a ! requirements.txt -nt .venv/.deps-stamp ] || { \
+	echo "requirements.txt has changed since this .venv was last installed into."; \
+	echo "  Fix: make venv"; \
+	exit 1; }
+
 help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
-	@echo "  make venv         .venv + requirements.txt   (once, before the first harness run)"
+	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
+	@echo "                    again whenever requirements.txt changes — safe to re-run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
 	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
 	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
@@ -67,6 +82,7 @@ venv: launch-config
 	@python3 -m venv .venv
 	@.venv/bin/python -m pip install --quiet --upgrade pip
 	@.venv/bin/python -m pip install --quiet -r requirements.txt
+	@touch .venv/.deps-stamp
 	@echo "venv ready: $$(.venv/bin/python -V)"
 	@echo "T1 also needs ANTHROPIC_API_KEY in the environment."
 
@@ -272,6 +288,7 @@ map:
 	@python3 scripts/map-view.py $(ARGS)
 
 harness:
+	$(VENV_GUARD)
 	@$(PYTHON) harness/run.py
 
 # Exit 1 is a provably wrong reference and fails. Exit 2 is the coupling question — it
