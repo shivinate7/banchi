@@ -26,25 +26,16 @@
 # WHAT IT INSTALLS AND WHAT IT ONLY REPORTS, because the line is deliberate:
 #
 #   harness/.cache/  COPIED. Local, ~90 KB, no network. It is also the SAFETY one: without
-#                    it T1 has nothing to replay, and T1's refusal is what stands between a
-#                    cold cache and a paid submission at the end of every turn.
-#   harness/images/  SYMLINKED TO WHEREVER THE MAIN TREE'S MIRROR ACTUALLY IS — asked for, not
-#                    assumed, since D47 moved it out of iCloud and this line went on pointing at
-#                    the old place in silence. It is back at the in-repo default as of
-#                    2026-08-29, which is precisely what asking makes irrelevant: the answer
-#                    moved twice in two days and this line did not change either time.
-#                    The difference from the line above is the point:
-#                    133 MB
-#                    is too much to duplicate per worktree, and unlike the cache these are
-#                    immutable: `fixtures.load` only ever ADDS a missing file, keyed by card
-#                    id, so two trees sharing them cannot make each other score differently.
-#                    A `PKMNSCAN_RERUN_T1=1` rewrites the CACHE, which is exactly why that
-#                    one is copied and this one is not.
-#                    Without it T1 still passes — by DOWNLOADING 151 images from
-#                    pokemontcg.io. That is slow, rate-limited without a key, and simply
-#                    fails offline, so a green T1 there was bought with a network fetch
-#                    nobody asked for. Measured 2026-08-29 on a throwaway worktree, which is
-#                    how this line came to exist at all.
+#     harness/images   it T1 has nothing to replay, and T1's refusal is what stands between a
+#   app/node_modules cold cache and a paid submission at the end of every turn. The mirror
+#                    (133 MB) is SYMLINKED rather than copied, asked for rather than assumed
+#                    — see scripts/worktree-provision.sh's header for why, and D47 for the
+#                    drift that assuming cost once already. node_modules (~80 MB) is
+#                    REPORTED, NEVER INSTALLED, for the reason the Makefile's NPM_GUARD
+#                    already argues: an implicit install hides a slow, network-touching
+#                    step, and nothing on the turn-end path needs it. All three are shared
+#                    with `make worktree-setup` through that one script rather than kept as
+#                    two copies of the same logic.
 #   .venv/           BUILT. A network pip install, but small, idempotent, and once per
 #                    worktree — and it is what makes the harness able to run at all, which
 #                    is the thing the Stop hook demands every turn.
@@ -56,10 +47,6 @@
 #                    the MAIN TREE from a worktree while looking like it worked (D43).
 #                    Written conservatively — absent or stale only, a hand-edit reported
 #                    and never overwritten — because this runs unasked.
-#   app/node_modules REPORTED, NEVER INSTALLED. ~80 MB. The Makefile's NPM_GUARD already
-#                    argues this and the argument is its own: "an implicit install hides a
-#                    slow, network-touching step", and nothing on the turn-end path needs
-#                    it. `make harness` does not; lint, typecheck and design-check do.
 #
 # IT FAILS OPEN, ALWAYS, which is this repo's standing rule for hooks and was learned the
 # hard way — scripts/guard-opsec.sh over-triggered and was disabled within a day. A hook
@@ -147,48 +134,19 @@ main="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)" ||
 
 did_something=0
 
-# The cache first: it is instant, it needs no network, and it is the one whose absence can
-# cost money rather than time.
-if [ ! -d harness/.cache ] && [ -d "$main/harness/.cache" ]; then
-  if mkdir -p harness/.cache 2>/dev/null \
-     && cp -R "$main/harness/.cache/." harness/.cache/ 2>/dev/null; then
-    echo "worktree-guard: copied harness/.cache from the main working tree (T1 can replay)."
-    did_something=1
-  else
-    echo "worktree-guard: could not copy harness/.cache — run \`make worktree-setup\`."
-  fi
-fi
+# Cache and image-mirror provisioning is shared with `make worktree-setup` — see
+# scripts/worktree-provision.sh's header for why this used to be two copies of the same
+# cp/ln/python-one-liner sequence, and D47 for the drift that duplication cost. Presence is
+# checked before and after so `did_something` still gates the summary line below exactly as
+# it did when this logic lived here directly; the script itself is silent about which case
+# it hit.
+had_cache=0; [ -d harness/.cache ] && had_cache=1
+had_images=0; [ -e harness/images ] && had_images=1
 
-# Symlinked rather than copied — 133 MB, immutable, additive-only. See the header.
-#
-# THE SOURCE IS ASKED FOR, NEVER ASSUMED, AND D47 IS WHY. This read `[ -d "$main/harness/images" ]`
-# and linked that path. D47 then moved the mirror out of iCloud behind `PKMNSCAN_IMAGE_MIRROR`,
-# so on a tree that sets it the main checkout has no `harness/images` at all — the precondition
-# went false, the whole block was skipped, and NOTHING WAS PRINTED, because the only failure
-# message here is on the `ln` and the `ln` was never reached. A fresh worktree then downloaded
-# 151 images at the first `make harness`, which is the exact cost the header says this line
-# exists to avoid. Observed 2026-08-30, from a Stop hook that failed T1 in a worktree whose
-# main tree was healthy.
-#
-# So the main tree's own harness is asked where its images are. `fixtures.IMAGES_DIR` is the ONE
-# resolution — env var, then that checkout's `.env`, then its in-repo default — and re-deriving
-# that precedence in shell is how the two drift apart again. Stdlib-only at module scope, so a
-# bare `python3` answers; `.env` is read by `envfile` and never by this script, and the only
-# thing that crosses the pipe is a path.
-mirror="$(cd "$main" 2>/dev/null && python3 -c 'import sys; sys.path.insert(0, "."); from harness.eval import fixtures; print(fixtures.IMAGES_DIR)' 2>/dev/null)"
-[ -n "$mirror" ] || mirror="$main/harness/images"
+bash "$(dirname "$0")/worktree-provision.sh" --prefix "worktree-guard: " "$main"
 
-if [ ! -e harness/images ]; then
-  if [ ! -d "$mirror" ]; then
-    # Said out loud rather than skipped. The silent skip is the defect above.
-    echo "worktree-guard: no image mirror at $mirror — T1 will re-download 151 images."
-  elif mkdir -p harness 2>/dev/null && ln -s "$mirror" harness/images 2>/dev/null; then
-    echo "worktree-guard: linked harness/images -> $mirror (T1 scores without downloading 151 files)."
-    did_something=1
-  else
-    echo "worktree-guard: could not link harness/images — T1 will re-download them."
-  fi
-fi
+{ [ "$had_cache" = 0 ] && [ -d harness/.cache ]; } && did_something=1
+{ [ "$had_images" = 0 ] && [ -e harness/images ]; } && did_something=1
 
 if [ ! -x .venv/bin/python ]; then
   echo "worktree-guard: building .venv (once for this worktree)…"
@@ -199,13 +157,6 @@ if [ ! -x .venv/bin/python ]; then
     echo "worktree-guard: \`make venv\` failed. Run it by hand to see why; the harness"
     echo "                will fail T1, T6 and T7 until it succeeds."
   fi
-fi
-
-# Reported, never installed — see the header.
-if [ ! -d app/node_modules ]; then
-  echo "worktree-guard: app/ dependencies are absent (gitignored, so they do not travel)."
-  echo "                \`make harness\` does not need them. lint, typecheck and"
-  echo "                design-check do:  npm --prefix app install"
 fi
 
 [ "$did_something" = "1" ] && echo "worktree-guard: this worktree is provisioned. See \`make worktree-setup\`."
