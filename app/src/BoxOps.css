@@ -8,11 +8,17 @@
  *
  * NO ACCENT ANYWHERE IN THIS FILE, and unlike Inventory.css there is no exception. This
  * component is sure about everything it shows, and it never has exactly one thing to do: every
- * box carries four controls, so a fill would have to pick one of them and would then mean
+ * box carries SEVERAL controls, so a fill would have to pick one of them and would then mean
  * "important" — the third meaning docs/DESIGN.md's two-jobs rule exists to prevent. That
- * includes the seal, which is the most consequential control in the app and is still one of
- * four. Its weight comes from the sentence on it — the number it will freeze — rather than
+ * includes the seal, which is the most consequential control in the app and is still just one
+ * of them. Its weight comes from the sentence on it — the number it will freeze — rather than
  * from colour, which is the honest way to make a control loud: say what it does.
+ *
+ * "SEVERAL" RATHER THAN A FIGURE, DELIBERATELY. This paragraph said "four controls" and "still
+ * one of four" while five were drawn (D83's `Move to box`, 2026-09-01), and there is no number
+ * that would have stayed true: the two controls acting on cards are each conditional on what
+ * the box holds, so the row list runs three to five. What the no-accent argument actually rests
+ * on is that the seal is never alone, and that is structural.
  *
  * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header strip
  * — docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it, and
@@ -550,7 +556,7 @@
   color: var(--muted);
 }
 
-/* ---- the layout and the four controls ---- */
+/* ---- the layout and the controls ---- */
 
 /* D31 put this panel on the header of the box's own walk, and its last sentence read "so the
    reading stays open and the operations fold" for a day after the fold was deleted. Nothing here
@@ -760,7 +766,9 @@
    a chip in a wrapping row and needed a rule to be lifted out of it. The row list above now
    closes on its last row's own `border-bottom`, so a rule here would be the second of two 25px
    apart — and the bar below wears a full ink border of its own, which is a stronger edge than
-   any hairline. What is left to say is "this is not one of the four", and `--s4` says it.
+   any hairline. What is left to say is "this is not one of the rows above", and `--s4` says
+   it. (It read "not one of the four" until 2026-09-01, when there were five and the figure was
+   the only wrong part of a rule that never depended on it.)
 
    The `flex-wrap: nowrap` went with the flex: the target this component kept stationary by
    forbidding a rewrap is now stationary because nothing shares its row and nothing above it

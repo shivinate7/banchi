@@ -2303,13 +2303,17 @@ COMPONENTS = [
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
                         "owner-side end. No accent anywhere in it and no exception — every box "
-                        "carries four controls, so a fill would have to pick one and would then "
-                        "mean 'important'. The seal's weight comes from the number on it. NOT A "
+                        "carries SEVERAL controls, so a fill would have to pick one and would "
+                        "then mean 'important'. Several rather than a figure: this entry and the "
+                        "file both said 'four' while five were drawn (D83's Move to box), and the "
+                        "two cards controls are each conditional on what the box holds, so the "
+                        "row list runs three to five. The seal's weight comes from the number on "
+                        "it. NOT A "
                         "PANEL since D38: it is drawn inside the walk's own column, so it carries "
                         "no border of its own, and its sections list is DELETED rather than "
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
-                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50"],
+                "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "
@@ -3012,8 +3016,16 @@ COMPONENTS = [
                         "asserted that `Mark sold` was VISIBLE and never pressed it, so the "
                         "whole write, its receipt, its undo window and the `already_sold` path "
                         "were unasserted while the control changed what one press does to a "
-                        "real card. Six cases now cover it, three of them mutation-tested.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71"],
+                        "real card. Six cases now cover it, three of them mutation-tested. AND "
+                        "THE BOX OPERATIONS ARE A ROSTER SINCE 2026-09-01, not a count: "
+                        "`toHaveCount(4)` went red on main when D83's Move to box made it five, "
+                        "which a bare number reports without naming and which it cannot see at "
+                        "all when one control silently replaces another. The sweep pins the "
+                        "labels in draw order, so the row it holds to the no-border rule is a "
+                        "row it can name. THE MOVE'S OWN WRITE IS STILL UNASSERTED HERE — the "
+                        "FOUR WRITES above are the four this file sends; D83 shipped its "
+                        "control with no file under app/tests/ touched.",
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

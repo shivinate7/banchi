@@ -1734,8 +1734,34 @@ test('the operations are rows on one edge, and the delete is the only bordered o
      shrink-to-fit chips at 79 / 110 / 109 / 267px inside a 360px column — six widths against a
      list, a meta line and two hairlines that all run the full measure. Asserted as ONE EDGE
      rather than as a width, so the track stays free to be re-cut. */
+
+  /* THE ROSTER RATHER THAN A BARE COUNT, AND THIS FILE EARNED THE CHANGE. `toHaveCount(4)`
+     stood here until 2026-09-01, when D83's `Move to box` made it five and turned
+     `make design-check` red on main — the commit that added the control touched no file under
+     `app/tests/` at all, and nothing on the commit path reads this spec (docs/GATES.md step 7).
+
+     A COUNT CANNOT SAY WHAT MOVED. It failed with `Expected 4, Received 5`, which reports that
+     a row appeared without naming it, and it is blind to the failure that matters more: five
+     rows where one control has silently replaced another, or one of these going missing while
+     a sixth arrives. The roster fails naming both sides, and it is the repair
+     `app/tests/cursor.spec.ts` already took when its hand-typed list of routes was found to be
+     sweeping three screens it did not know existed — a sweep that walks whatever it finds
+     passes for the wrong reason.
+
+     LABELS, NOT ACCESSIBLE NAMES: what belongs here is WHICH controls are drawn and in what
+     order, which is D20's own — what the box is called, where its dividers are, whether the lid
+     is on, then the two that act on cards rather than on the box. The details riding on them
+     (`freezes at 7`, `7 cards`) are each asserted by the case that owns that promise, and
+     repeating them here would make one number two tests to edit. */
   const rows = page.locator('.boxops-op')
-  await expect(rows).toHaveCount(4)
+  await expect(rows.locator('.boxops-op-label')).toHaveText([
+    'Rename',
+    'Edit dividers',
+    'Seal box',
+    'Set claims',
+    'Move to box',
+  ])
+  await expect(rows).toHaveCount(5)
   const list = await page.locator('.browse-list').boundingBox()
   if (list === null) throw new Error('the walk did not render')
   for (const row of await rows.all()) {
@@ -1745,9 +1771,14 @@ test('the operations are rows on one edge, and the delete is the only bordered o
     expect(Math.abs(box.x + box.width - (list.x + list.width))).toBeLessThanOrEqual(1)
   }
 
-  /* A row is not a chip: `--line` separates and does not enclose, so none of the four carries a
-     border of its own. The ink border is spent once, on the bar below them, and that step is
-     bigger than it was when the delete was one bordered chip among six. */
+  /* A row is not a chip: `--line` separates and does not enclose, so no row in the roster above
+     carries a border of its own. The ink border is spent once, on the bar below them, and that
+     step is bigger than it was when the delete was one bordered chip among six.
+
+     THE SWEEP IS OVER `rows`, so an operation added later is held to this claim by arriving
+     rather than by somebody remembering to add it — which is why the roster above has to pin
+     what `rows` contains. D83's `Move to box` is the first control to reach this loop that way,
+     and it passes: it is an `Op`, so it is the same element under the same rule. */
   for (const row of await rows.all()) {
     await expect(row).toHaveCSS('border-top-width', '0px')
     await expect(row).toHaveCSS('border-bottom-width', '1px')
@@ -1755,6 +1786,16 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   const bar = page.locator('.boxops-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar).toHaveAttribute('aria-label', /^Delete box 2…, no undo$/)
+
+  /* AND THE BAR IS BORDERED, which is the half of this case's own name that nothing asserted.
+     The loop above proves the rows are bare and the lines below prove the bar says `no undo`;
+     between them the title claims the delete is the ONLY bordered one, and `.boxops-bar` losing
+     its `1px solid var(--ink)` would have left every assertion here green while the one step of
+     emphasis this palette allows went missing. All four sides, because it encloses — that is
+     the distinction the rows are measured against. */
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    await expect(bar).toHaveCSS(`border-${side}-width`, '1px')
+  }
 
   /* `no undo` is said BEFORE the panel that spends a paragraph on it, and it is what keeps a
      full-measure bordered control from being a short label beside 220px of white. */
