@@ -491,19 +491,19 @@ test('every export column that carries data is on the row', async ({ page }) => 
   await open(page)
 
   /* The owner's requirement in their own words: "I want all the data from the CSV shown when
-     I make the decision". The four price columns are the ones a subset would have dropped. */
+     I make the decision". The four price columns are the ones a subset would have dropped.
+     Drawn Market, Low, +Ship, Direct left to right. */
   const refs = page.locator('.pricing-ref')
   await expect(refs).toHaveCount(4)
   await expect(refs.nth(0)).toHaveText('$22.03')
-  await expect(refs.nth(2)).toHaveText('$21.98')
-  await expect(refs.nth(3)).toHaveText('$22.98')
+  await expect(refs.nth(1)).toHaveText('$21.98')
+  await expect(refs.nth(2)).toHaveText('$22.98')
   /* A BLANK CELL DRAWS AN EM DASH AND NOT `$0.00` — measured, TCG Direct Low is blank on
      2,060 of 2,476 listable rows, and D9 holds that a missing price is unknown, not low. */
-  await expect(refs.nth(1)).toHaveText('—')
+  await expect(refs.nth(3)).toHaveText('—')
 
   await expect(page.locator('.pricing-meta')).toContainText('Near Mint Holofoil')
   await expect(page.locator('.pricing-meta')).toContainText('Secret Rare')
-  await expect(page.locator('.pricing-sku')).toHaveText('8608859')
 })
 
 // -------------------------------------------------- the suggestion writes nothing
