@@ -35,7 +35,7 @@ tool.
 from __future__ import annotations
 
 import sys
-from typing import Dict, List, Sequence
+from typing import List, Sequence
 
 WIDTH = 78
 
@@ -261,7 +261,7 @@ def wrap(text: str, indent: int, width: int = WIDTH) -> List[str]:
 def table() -> str:
     longest = max(len(entry["target"]) for entry in CHECKS)
     lines = [
-        f"PKMNSCAN — what `make check` runs" + f"{len(CHECKS)} checks".rjust(
+        "PKMNSCAN — what `make check` runs" + f"{len(CHECKS)} checks".rjust(
             WIDTH - len("PKMNSCAN — what `make check` runs")
         ),
         "=" * WIDTH,
