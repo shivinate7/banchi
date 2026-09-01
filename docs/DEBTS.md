@@ -1399,3 +1399,51 @@ needs **both** conditions, and each rules out the other's false positive:
 
 An empty box disowns nobody, so name-it-later still works. A live run that has not identified
 yet owns no cards, so the timestamp keeps it named. Three assertions pin it.
+
+## A `governed_by` citation can name the wrong entry, and the check that reads it agrees — found 2026-08-30
+
+`docs/map.py` cited **D67** for `server/order_transport.py`, `server/shipping_routes.py`,
+`app/src/Orders.tsx`, `app/src/Shipping.tsx`, `app/src/orderPaste.ts`,
+`app/src/orderReasons.ts`, `app/src/csvUpload.ts`, both order/shipping stylesheets and both
+their Playwright specs — twenty citations across thirteen entries and eight lines of prose.
+**The governing entry is D69.** The order-screen work was authored as D67 while another branch
+was open; that branch took 67 and 68 first, so it was renumbered to D69 in `CLAUDE.md` and
+`docs/DECISIONS.md` and nowhere else. D67 is a real entry about composing a collector number,
+so every stale citation resolved to a heading that exists and read as deliberate.
+
+**`check_map` READS THIS FIELD AND STAYED GREEN, AND WHY IT DID IS THE WHOLE ENTRY.** That
+check compares the D-numbers a source file cites in its own comments against the map's
+`governed_by` for that file, which is the right invariant and would have caught a one-sided
+rename immediately. It passed because the rename was NOT one-sided: `app/src/Orders.css` also
+said D67 in its own header, so the file and the map agreed — on the wrong number. **Two wrong
+copies of a fact satisfy an agreement check**, and it is worth being precise that the checker
+was not absent and was not weak. It proved what it claims to prove.
+
+It proved it in the other direction the moment one side moved: correcting the map alone turned
+the row into a `FAIL` naming `app/src/Orders.css` by path, which is how the last stale comment
+in the tree was found. Every other source file citing D67 — `pipeline/join.py`,
+`app/src/cardNumber.ts`, `types.ts`, `ReviewQueue.tsx`, `BoxBrowse.tsx`, `Gallery.tsx`,
+`server/capture_server.py`, `tests/inventory.spec.ts` — composes or draws a collector number
+and is cited correctly.
+
+**Corrected 2026-08-30** by grepping each cited file for a collector-number role
+(`cardNumber`, `printed_total`, `_number_display`) and keeping D67 only where one exists.
+`server/capture_server.py` earns both entries and had only D67; it now has both.
+`server/tcg_export.py` and `app/src/Orders.tsx` cited D67 with no referent and already cited
+D69; the D67 was dropped.
+
+**A second guard was prototyped and DECLINED, with the number that decided it.** The invariant
+tried was: every file a decision entry names in backticks should be cited by that file's map
+row. It catches this one squarely — D69's entry names four of the mis-cited files by path.
+Run over the tree it produces **70 findings across 69 entries**, because naming a file in an
+argument is not the same as being governed by it, and `pipeline/pirateship.py`'s own comment
+already records what that costs: permanent noise in the one check whose whole value is that its
+questions are worth reading. It is not shipped, and this paragraph is why — a later session
+proposing it should know it was measured rather than overlooked.
+
+**What is left uncovered, exactly.** A citation that is wrong in the file and in the map
+together. Nothing mechanical can see it, because an id is only checkable against the set of ids
+that exist and a wrong-but-real id is indistinguishable from a right one to anything that does
+not read the argument. That is D16's line, and it lands on the human side. The rule a renaming
+session should carry: **a D-number that moved moves in `docs/map.py` and in the source comments
+too, and `grep -rc 'D<old>'` over both before and after is the whole of the diligence.**

@@ -1150,7 +1150,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1181,7 +1181,7 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D67", "D69"],
+                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -1248,7 +1248,7 @@ COMPONENTS = [
                 # ledger the deferred stamps route would read; D66 is why the lane got a
                 # surface of its own rather than a badge on the order screen; D69 is the
                 # route. D58 is the stored index the stamps route will have to speak.
-                "governed_by": ["D58", "D61", "D63", "D66", "D67"],
+                "governed_by": ["D58", "D61", "D63", "D66", "D69"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "
                         "every refusal path is exercisable with no network. WHAT T7 CANNOT "
@@ -1257,7 +1257,7 @@ COMPONENTS = [
                         "it is one upload by the owner.",
             },
             "order_transport.py": {
-                "does": "the order transport (D67): this account's own orders off "
+                "does": "the order transport (D69): this account's own orders off "
                         "order-management-api.tcgplayer.com, cookie-authenticated with the "
                         "same TCGPLAYER_STORE_COOKIE the export uses — one .tcgplayer.com "
                         "session, two hosts. Stdlib urllib, one host, an https-or-loopback "
@@ -1273,19 +1273,24 @@ COMPONENTS = [
                         "missing filters.sellerKey answers 403 rather than 400 and reads "
                         "exactly like an expired session. Twenty-one named refusal codes.",
                 # D63 is the ledger this feeds; D65 is the body convention it deliberately does
-                # not carry over; D66 is the build order it discharges; D67 is the capture and
+                # not carry over; D66 is the build order it discharges; D69 is the capture and
                 # the entry. D34 and D53 are cited in its own text.
-                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D67"],
+                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69"],
                 "tested_by": ["T7"],
-                "note": "THE AUTHENTICATED SUCCESS PATH IS UNEXERCISED. The wire shapes were "
-                        "captured off the owner's own logged-in browser and every refusal is "
-                        "reachable with no network — the body builder and the projections are "
-                        "pure and public for exactly that, and PKMNSCAN_TCG_ORDERS_URL aims it "
-                        "at a loopback socket the way T7 already aims the export. What no test "
-                        "here can answer is whether the cookie string in .env authenticates "
-                        "THIS host; the mechanism is proven and the stored value has never "
-                        "been sent. First real fetch answers it. PKMNSCAN_TCG_SELLER_KEY must "
-                        "be in .env before that fetch or it answers 403.",
+                "note": "SEARCH IS PROVEN AND DETAIL IS NOT. The operator ran search() against "
+                        "the live host on 2026-08-30 and got three real orders back — an agent "
+                        "may not read .env here, so the run was theirs — which settled that the "
+                        "stored TCGPLAYER_STORE_COOKIE DOES authenticate this host, that "
+                        "PKMNSCAN_TCG_SELLER_KEY was accepted, and that the plain-JSON body was "
+                        "accepted rather than D65's form. THIS NOTE SAID THE OPPOSITE UNTIL "
+                        "2026-08-30 and is corrected rather than deleted. What is still "
+                        "unexercised is detail() and fetch_open_orders(), which is the half "
+                        "carrying a buyer's name and address: products[].skuId was read in the "
+                        "BROWSER and never through this module, so the projection is proven "
+                        "against T7's fixtures and against nothing off the wire. Every refusal "
+                        "is reachable with no network — the body builder and the projections "
+                        "are pure and public for exactly that, and PKMNSCAN_TCG_ORDERS_URL aims "
+                        "it at a loopback socket the way T7 already aims the export.",
             },
         },
     },
@@ -1300,7 +1305,7 @@ COMPONENTS = [
         "does": "the web app. NINE routes behind a hand-written hash router, EIGHT of them the "
                 "owner's — the capture screen that Gate B runs on, the runs screen the "
                 "pipeline lives on, the review queue, the pricing worklist, the order "
-                "screen and the shipping lane (D67 gave each its own route rather than "
+                "screen and the shipping lane (D69 gave each its own route rather than "
                 "making one a mode of the other), the one "
                 "inventory view (D31 folded the box walk and the pull preview into it) and "
                 "step 6's component gallery — and one "
@@ -1983,9 +1988,9 @@ COMPONENTS = [
                                             "The lookups take a `string` and fall back to the "
                                             "code itself, so drift arrives on screen as a "
                                             "machine string rather than as a blank row.",
-                                    "governed_by": ["D9", "D16", "D22", "D63", "D67"]},
+                                    "governed_by": ["D9", "D16", "D22", "D63", "D69"]},
             "src/orderPaste.ts": {"does": "THE ONE PLACE IN THIS APP THAT DECIDES WHAT LEAVES "
-                                          "THE BROWSER ABOUT A PURCHASE (D67). It reads pasted "
+                                          "THE BROWSER ABOUT A PURCHASE (D69). It reads pasted "
                                           "order JSON and projects it to "
                                           "{source, number, placed_at, status, lines[]} by "
                                           "ALLOWLIST — no buyer, no address, no city, no "
@@ -1997,16 +2002,16 @@ COMPONENTS = [
                                           "rather than being stored with fields quietly "
                                           "trimmed. src/server.ts:ingestOrders takes this "
                                           "output verbatim, so there is exactly one door.",
-                                  "governed_by": ["D13", "D63", "D67"]},
+                                  "governed_by": ["D13", "D63", "D69"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
                                          "disagree about. One decode, one refusal shape, one "
                                          "CsvUpload — a second reader is how a file that joins "
                                          "on one screen refuses on another.",
-                                 "governed_by": ["D33", "D61", "D67"]},
+                                 "governed_by": ["D33", "D61", "D69"]},
             "src/Orders.tsx": {"does": "#/orders: which copies this buyer gets, and where they "
-                                       "are (D67). One read of GET /orders answers the order "
+                                       "are (D69). One read of GET /orders answers the order "
                                        "list and the resolution out of ONE store snapshot, so "
                                        "the two cannot disagree; each line draws its reason "
                                        "large with the machine string beneath it, the six-way "
@@ -2019,27 +2024,27 @@ COMPONENTS = [
                                        "behind the same control. IT DRAWS NO POSTAGE LANE: "
                                        "that is D61's question and #/shipping's answer, "
                                        "computed from a file this screen never sees.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D67", "D69"]},
+                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D69"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D67"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69"]},
             "src/Shipping.tsx": {"does": "#/shipping: TCGplayer's Orders -> Export Shipping "
                                          "file read into D61's three lanes, with the Pirate "
                                          "Ship import CSV as a download and a way to forget the "
-                                         "batch (D67). It knows NO buyer — no name, no address, "
+                                         "batch (D69). It knows NO buyer — no name, no address, "
                                          "no city, no postcode — and the absence is the design: "
                                          "those details cross the wire exactly once, as the "
                                          "download. The weight ratio is a rendering and is "
                                          "never compared here; a float pass over that column "
                                          "moved the lane counts on the server.",
-                                 "governed_by": ["D53", "D61", "D66", "D67"]},
+                                 "governed_by": ["D53", "D61", "D66", "D69"]},
             "src/Shipping.css": {"does": "the lane table and its chips, at owner density. The "
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
-                                 "governed_by": ["D40", "D50", "D61", "D67"]},
+                                 "governed_by": ["D40", "D50", "D61", "D69"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -2261,7 +2266,7 @@ COMPONENTS = [
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
                         "different things. A live sweep walks the seven routes its own "
-                        "hand-written table lists — seven of NINE since D67 added #/orders and "
+                        "hand-written table lists — seven of NINE since D69 added #/orders and "
                         "#/shipping, which are not in it yet — classifies each "
                         "rendered control by tag, type and disabled state, and asserts the "
                         "cursor the rule requires — no selector roster, so a control added next "
@@ -2329,7 +2334,7 @@ COMPONENTS = [
                                              "pre-write place rather than the sale's departed "
                                              "label. Not a harness test — it starts a browser; "
                                              "`make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D67"]},
+                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -2341,7 +2346,7 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D66", "D67"]},
+                                       "governed_by": ["D16", "D61", "D66", "D69"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to decisions.json, a "
