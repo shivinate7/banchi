@@ -286,8 +286,8 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
             f"capture,")
         say(f"                 and {sum(with_bypass.values())} still need you: they have no "
             f"claim to fall back on,")
-        say(f"                 so answering them for you would mean inventing a row rather "
-            f"than trusting you.")
+        say("                 so answering them for you would mean inventing a row rather "
+            "than trusting you.")
         if with_bypass:
             _counts_block(say, with_bypass)
     say("")

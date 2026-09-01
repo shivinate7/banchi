@@ -232,6 +232,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import os
@@ -2577,7 +2578,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # re-validated here: the stale members cost a recorded problem at the next sidecar
         # read (`identify/sidecar.py` drops them, loudly) rather than a refusal that would
         # force every game correction to restate a claim it never mentioned.
-        judged_against = incoming["game"] if "game" in incoming else card.game
+        judged_against = incoming.get("game", card.game)
         if "variant" in payload:
             # The RETURN is what lands, not `variant_shape`: this is where the claim is put
             # into the game's enum order, and only this side knows the game (D3 rung 1's set
@@ -2773,7 +2774,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 _check_rarity_members(claim_shape, incoming["game"])
         elif "variant" in payload or "rarity_claim" in payload:
             rejected: List[Tuple[int, str]] = []
-            for at, key, card in targets:
+            for at, _key, card in targets:
                 try:
                     if "variant" in payload:
                         _check_variant_members(variant_shape, card.game)
@@ -2812,7 +2813,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 # on disk and make the next restated sweep diff as a change.
                 fields["metadata_finish"] = _check_variant_members(
                     variant_shape,
-                    incoming["game"] if "game" in incoming else card.game,
+                    incoming.get("game", card.game),
                 )
             if "rarity_claim" in payload:
                 fields["rarity_claim"] = claim_shape
@@ -2842,7 +2843,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 )
                 sidecars += 1
 
-        for at, key, changed in applied:
+        for _at, key, changed in applied:
             _history(inventory, CORRECTED, key, changed=changed, bulk=len(applied))
 
     return {
@@ -4546,9 +4547,7 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
         sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
         if wanted and name == wanted:
             rank = 0
-        elif number and cell == number:
-            rank = 1
-        elif sku and sku == query.strip():
+        elif (number and cell == number) or (sku and sku == query.strip()):
             rank = 1
         elif wanted and wanted in name:
             rank = 2  # the epithet case: the read is part of the catalogued title
@@ -5026,14 +5025,14 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     )
     try:
         reason = queues.check_stand_down_reason(reason)
-    except queues.UnknownStandDownReason:
+    except queues.UnknownStandDownReason as exc:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "stand_down_reason_invalid",
             f"{reason!r} is not a stand-down reason. One of: "
             + ", ".join(queues.STAND_DOWN_REASONS)
             + ". Never coerced and never defaulted — the reason is the record.",
-        )
+        ) from exc
 
     key = master.position_key(box, index)
 
@@ -8800,7 +8799,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         print(f"cannot listen on {host}:{port} — {exc}")
         print("  Something is already serving this port. `make status` says who.")
         print("  If it is your own supervisor: `make down`, or just use the one that is up.")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     # SIGTERM RAISES THE INTERRUPT THE CTRL-C PATH ALREADY HANDLES, so there is one shutdown
     # and not two. Without this the default disposition terminates the process outright — no
@@ -8813,10 +8812,8 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     def _term(_signum, _frame):
         raise KeyboardInterrupt
 
-    try:
+    with contextlib.suppress(ValueError):
         signal.signal(signal.SIGTERM, _term)
-    except ValueError:
-        pass
 
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")

@@ -63,7 +63,9 @@ make server         # Python capture server. :8000 in the main tree, its own por
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
-make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
+make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
+                    #   the Python packages, scoped to a slice measured against this tree (D82) —
+                    #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + ignore-check + lint + vale + typecheck.
@@ -539,6 +541,7 @@ D78  A run's reason for adding nothing is a heading, the rows under it sink, and
 D79  The reading goes on every row, because the operator answered D62's own measurement
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
+D82  Ruff is adopted on the slice this session measured, not on what it enables by default
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

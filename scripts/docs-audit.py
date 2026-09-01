@@ -838,13 +838,16 @@ def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                if isinstance(node.value, ast.Dict):
-                    keys = []
-                    for key in node.value.keys:
-                        if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                            keys.append(key.value)
-                    return keys
+            if (
+                isinstance(target, ast.Name)
+                and target.id == name
+                and isinstance(node.value, ast.Dict)
+            ):
+                keys = []
+                for key in node.value.keys:
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        keys.append(key.value)
+                return keys
     return None
 
 
@@ -914,13 +917,16 @@ def list_names_from_assign(source: str, name: str) -> Optional[List[str]]:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                if isinstance(node.value, (ast.List, ast.Tuple)):
-                    return [
-                        element.id
-                        for element in node.value.elts
-                        if isinstance(element, ast.Name)
-                    ]
+            if (
+                isinstance(target, ast.Name)
+                and target.id == name
+                and isinstance(node.value, (ast.List, ast.Tuple))
+            ):
+                return [
+                    element.id
+                    for element in node.value.elts
+                    if isinstance(element, ast.Name)
+                ]
     return None
 
 
@@ -3857,9 +3863,13 @@ def string_literals(source: str) -> Set[str]:
         body = getattr(node, "body", None)
         if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-            if isinstance(body[0].value.value, str):
-                docstrings.add(id(body[0].value))
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            docstrings.add(id(body[0].value))
     return {
         node.value
         for node in ast.walk(tree)

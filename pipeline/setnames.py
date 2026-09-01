@@ -31,7 +31,7 @@ dependency-free and this module is not the thing that changes that.
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 # A set code is short. Four is the longest TCGplayer publishes as a colon prefix (`SWSH`,
 # `ME01`) and the longest the community uses (`OGN`, `SFD`, `PFL`). The cap is what keeps

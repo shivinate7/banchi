@@ -36,6 +36,14 @@ VENV_GUARD = @[ ! -x .venv/bin/python ] || [ -f .venv/.deps-stamp -a ! requireme
 	echo "  Fix: make venv"; \
 	exit 1; }
 
+# ruff (D82) is a requirements.txt entry, not a system binary — same reasoning as NPM_GUARD:
+# a lint target that silently no-ops without it would let `make check` go green having
+# checked nothing.
+RUFF_GUARD = @$(PYTHON) -m ruff --version >/dev/null 2>&1 || { \
+	echo "ruff is not installed in $(PYTHON)."; \
+	echo "  Fix: make venv"; \
+	exit 1; }
+
 help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
@@ -81,7 +89,7 @@ help:
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
-	@echo "  make lint         eslint over app/: the two v1-bug rules. No Python linter."
+	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
@@ -512,15 +520,23 @@ design-check:
 # the config held four, and the config file is the register. The pattern is the point — a bug
 # becomes a guard, so the list only grows.
 #
-# JavaScript only, and this target does not claim otherwise. The stub it replaced promised
-# "ruff (Python) + eslint (JS)"; shipping the JS half under that name would leave `make
-# check` green with a whole language unlinted, which is the same lie the header comment
-# above is about. Python has no linter here. Adopting ruff is its own decision, unmade —
-# and `docs/specs/audit-retirement.md` section 9 is the format for making it: run the tool
-# on this repo, read the findings, then decide.
+# RUFF JOINED THIS TARGET 2026-09-01 (D82), ON A SLICE MEASURED AGAINST THIS TREE, NOT ON
+# WHAT IT ENABLES BY DEFAULT. Zero-config `ruff check .` found 2,131 things on this repo,
+# 79% of them three pyupgrade rules rewriting `Dict`/`Optional[X]` to PEP 585/604 syntax —
+# a runtime TypeError on the Python 3.9.6 this repo pins, unless ruff is told the target
+# version, which its own default does not do. `ruff.toml` sets it and selects only
+# pyflakes + bugbear + flake8-simplify; the other ~890 default-enabled rules are unmeasured
+# here and stay off. Three rules in even that narrower selection produced confirmed false
+# positives on this tree, each now a per-line `# noqa` with its reason rather than a
+# blanket exclusion: SIM115 over a lock's flock handle and a detached child's log handle,
+# both deliberately outliving the function that opens them; B023 over a test closure that
+# is started and joined before the loop variable it captures rebinds; and SIM118 in
+# cli/resolve.py, where `games` is the `pipeline.games` MODULE and `.keys()` is a real
+# function rather than dict.keys() — applying that one broke `make harness` (T3/T4/T7,
+# `TypeError: 'module' object is not iterable`) before it was caught and reverted.
 #
-# No `--fix`, here or in the npm script. `check` below runs this target, and D18 keeps
-# anything that writes off the path that decides whether work is done.
+# No `--fix`, here or in the npm script, for either language. `check` below runs this
+# target, and D18 keeps anything that writes off the path that decides whether work is done.
 # Vale, the prose linter, over EVERY tracked markdown file.
 #
 # NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
@@ -551,6 +567,9 @@ vale:
 lint:
 	$(NPM_GUARD)
 	@npm --prefix app run lint
+	$(VENV_GUARD)
+	$(RUFF_GUARD)
+	@$(PYTHON) -m ruff check .
 
 typecheck:
 	$(NPM_GUARD)
