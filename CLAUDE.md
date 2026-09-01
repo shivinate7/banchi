@@ -60,8 +60,9 @@ make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   port-agreement + set-hint-agreement + screen-freshness +
-                    #   ignore-check + lint + vale + typecheck. THIS LIST IS CHECKED NOW —
+                    #   merge-selftest + port-agreement + set-hint-agreement +
+                    #   screen-freshness + ignore-check + lint + vale + typecheck.
+                    #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
                     #   for months while this line said eleven, and nothing compared them.
@@ -79,6 +80,13 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
+make merge-selftest # the merge wrapper's local half, against a throwaway origin, clone and
+                    #   worktree. Its FOOTGUN case is the one that matters: main checked out
+                    #   nowhere while another tree sits on a branch BEHIND its upstream, where
+                    #   the wrong command advances that branch and no hook says a word.
+make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
+                    #   A bare `make merge` refuses: there is no default PR and will not be one.
 
 ./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
                                    #   FREE — no model call, no network. The QR IS the code.
@@ -325,6 +333,17 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   **One word, both halves, and a session does not stop in between to ask again**: `gh pr merge`,
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
+
+  **`make merge ARGS="<n> --confirm"` is that whole operation**, and `ARGS=<n>` alone previews
+  it and presses nothing (D42, amended 2026-09-01). It does the GitHub half, fetches origin,
+  asserts the merged commit is on `origin/main` — allow rule 3, checked BEFORE anything moves
+  rather than discovered when the hook refuses — and then picks between the two local forms
+  below by asking git rather than by remembering. **It automates the lookup and never the
+  decision**: a bare `make merge` refuses, and the word is still yours.
+
+  **The two commands stay written out here on purpose.** A wrapper that becomes the only way
+  anybody knows the answer is a worse outcome than the one it fixed, and when it is not what
+  you want, this is what you type.
 
   **The local half is two states, and one question tells them apart.** Ask which working tree,
   if any, holds main — a clone running several worktrees is in either state on any given day,

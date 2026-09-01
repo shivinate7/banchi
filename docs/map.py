@@ -910,6 +910,49 @@ COMPONENTS = [
                 "governed_by": ["D42"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
             },
+            "merge-pr.py": {
+                "does": "`make merge` — D42's whole operation: `gh pr merge`, then the local "
+                        "move of refs/heads/main onto the commit that produced. Refuses without "
+                        "a PR number somebody typed; a bare `ARGS=<n>` is a preview that presses "
+                        "nothing and only `--confirm` acts. It fetches origin FIRST and then "
+                        "asserts the merge commit is an ancestor of refs/remotes/origin/main — "
+                        "the same predicate reference-transaction evaluates at `prepared` — so "
+                        "the hook is never asked to refuse. Idempotent on a PR already merged, "
+                        "which is what makes a failed local half re-runnable rather than a "
+                        "handoff.",
+                # D42 governs it twice over: the operation it performs and the rejection it
+                # amends. D18 governs its shape — the preview is the read-only mode, and the
+                # act is behind a flag rather than a default. D33 is the instrument the two-step
+                # is borrowed from, one register down from a route that can spend money.
+                "governed_by": ["D18", "D33", "D42"],
+                "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
+                        "is explicit that a session reaching for that variable has left the "
+                        "amendment behind; this needs no hatch because allow rule 3 already "
+                        "permits the move it makes. WHAT IT AUTOMATES IS THE STATE LOOKUP AND "
+                        "NOT THE DECISION — the local half has two correct forms and the wrong "
+                        "one does not error, it fast-forwards whatever branch the main tree is "
+                        "standing on, moves no protected ref and trips no hook. Nothing here "
+                        "resolves a path relative to itself: the repository is the one "
+                        "`git rev-parse` answers for from the caller's directory, which is what "
+                        "lets the self-test point it at a temporary clone.",
+            },
+            "merge-selftest.sh": {
+                "does": "merge-pr.py's local half, against an origin, a clone and a linked "
+                        "worktree built and destroyed for the run. Seventeen cases: both forms "
+                        "of the move, a dirty main worktree, a commit origin does not carry, an "
+                        "unknown rev, a bare invocation — and the footgun, main checked out "
+                        "nowhere while another tree sits on a branch that is BEHIND its "
+                        "upstream.",
+                "governed_by": ["D18", "D42"],
+                "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
+                        "WRITTEN, and the fixture carries the repair in a comment. The other "
+                        "tree sat on a branch already at the commit a wrong pull would have "
+                        "brought it to, so the assertion could not fail — proved by forcing the "
+                        "picker to always choose the pull form and watching it stay green. The "
+                        "branch is now one behind its upstream, the same mutation turns it red, "
+                        "and the fixture asserts its own arming. Same lesson githooks-selftest "
+                        "records about git's own refusals scoring as the hook's.",
+            },
             "githooks-selftest.sh": {
                 "does": "builds an origin and a clone in a temp directory, points "
                         "core.hooksPath at the real hook files, and runs the gestures against "

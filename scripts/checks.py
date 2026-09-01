@@ -125,6 +125,21 @@ CHECKS = (
         "governed_by": ("D18", "D42"),
     },
     {
+        "target": "merge-selftest",
+        "runs": "bash scripts/merge-selftest.sh",
+        "asserts": "scripts/merge-pr.py's local half, against a throwaway origin, clone and "
+                   "second worktree. The case that matters is the footgun D42 names: main "
+                   "checked out NOWHERE while a feature branch sits in the other tree, where "
+                   "the wrong command silently fast-forwards that branch and trips no hook.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare repo, a clone and a linked worktree, all under `mktemp -d`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes — and githooks-selftest's second reason applies "
+                               "unchanged: it drives the thing that moves main.",
+        "gates": True,
+        "governed_by": ("D18", "D42"),
+    },
+    {
         "target": "port-agreement",
         "runs": "python3 scripts/port-agreement.py",
         "asserts": "server/ports.py and app/devPort.ts answer the same port for the same "

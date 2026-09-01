@@ -1,0 +1,383 @@
+#!/usr/bin/env python3
+"""`make merge` — merge a pull request, then move this clone's main onto it.
+
+D42 settles that a session performs BOTH HALVES on the owner's word and does not stop in
+between to ask again: `gh pr merge`, then the local fast-forward. This is that operation, with
+the half nobody can remember done by a machine.
+
+WHAT GOES WRONG IS NEVER THE DECISION. The local half has two correct forms and the choice
+between them is a STATE LOOKUP, not a judgement:
+
+    main checked out in no worktree     git fetch origin && git fetch origin main:main
+    main checked out at <path>          git -C <path> pull --ff-only
+
+Run the second when main is not actually the branch in that tree and it does not error. It
+fast-forwards WHATEVER BRANCH THAT TREE IS STANDING ON, moves no protected ref, and so trips
+no hook — the only symptom is a branch somebody else is working on having quietly advanced.
+D42 names it as the footgun and leaves it to a session to remember; this asks git instead.
+
+WHY THIS DOES NOT REOPEN D42'S REJECTION. That entry rejected "a `make` target that picks for
+you", on the grounds that it would delete the choice and read as routine plumbing. The choice
+it meant is WHETHER TO MERGE, and that is untouched: this refuses without a PR number somebody
+typed and a `--confirm` somebody added, and a bare invocation is a free preview that presses
+nothing — D33's instrument one register down. What is automated is the lookup, which nobody
+makes deliberately and which is silent when wrong. See D42's own amendment.
+
+IT NEVER SETS `PKMNSCAN_MAIN`, and no refusal here suggests it. D42 is explicit that a session
+typing that variable has left the amendment behind. This works because allow rule 3 of
+`scripts/githooks/reference-transaction` ALREADY permits a move to a commit origin carries;
+the job here is to ESTABLISH that precondition — fetch first, then assert ancestry — so the
+hook is never asked to refuse. The two fetches are two transactions in that order for the
+reason D42 measured: the combined refspec moves both refs at once, and the hook would then be
+judging `new` against the `origin/main` the same transaction is about to replace.
+
+THE LOCAL HALF IS DRIVEN BY A TEST. `--local <rev>` runs it alone against whatever repository
+the working directory is in, which is how `scripts/merge-selftest.sh` exercises every branch
+of it — including the footgun — in a throwaway origin, clone and worktree. Nothing here
+resolves paths relative to this file: the repository is the one `git rev-parse` answers for
+from the caller's directory, so the self-test can point it at a temporary one.
+
+    scripts/merge-pr.py <n>                  preview. Presses nothing.
+    scripts/merge-pr.py <n> --confirm        merge it, then move main.
+    scripts/merge-pr.py --local <rev>        the local half alone, for the self-test.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from typing import List, NamedTuple, Optional, Sequence, Tuple
+
+WIDTH = 76
+
+
+class Ran(NamedTuple):
+    ok: bool
+    out: str
+    err: str
+
+
+def run(args: Sequence[str], cwd: Optional[str] = None) -> Ran:
+    """A subprocess, never a shell. Failure is a value here, not an exception.
+
+    Every refusal in this file wants the command's own stderr in the message — a hook's
+    refusal names itself, and git's own refusal names a path, and D42 spends a paragraph on
+    telling those two apart. Swallowing either would leave a session guessing which it hit.
+    """
+    try:
+        done = subprocess.run(list(args), cwd=cwd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return Ran(False, "", str(exc))
+    return Ran(done.returncode == 0, done.stdout.strip(), done.stderr.strip())
+
+
+def say(*lines: str) -> None:
+    for line in lines:
+        print(line)
+
+
+def rule(title: str = "") -> None:
+    print(("— " + title + " ").ljust(WIDTH, "—") if title else "—" * WIDTH)
+
+
+def refuse(*lines: str) -> int:
+    print("")
+    print("REFUSED: " + lines[0])
+    for line in lines[1:]:
+        print("  " + line if line else "")
+    print("")
+    return 1
+
+
+# ------------------------------------------------------------------- reading the clone
+
+
+def repo_root(cwd: Optional[str] = None) -> Optional[str]:
+    got = run(["git", "rev-parse", "--show-toplevel"], cwd=cwd)
+    return got.out or None
+
+
+def main_worktrees(root: str) -> List[str]:
+    """Every working tree with refs/heads/main checked out. D42's own question, in Python.
+
+    Git allows a branch in at most one worktree, so this is a list of nought or one — but it
+    is READ as a list rather than asserted to be one, because the whole point of this function
+    is that the answer is not assumed.
+    """
+    got = run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    if not got.ok:
+        return []
+    found, here = [], None
+    for line in got.out.splitlines():
+        if line.startswith("worktree "):
+            here = line[len("worktree "):].strip()
+        elif line.strip() == "branch refs/heads/main" and here:
+            found.append(here)
+    return found
+
+
+def head_of(root: str, ref: str) -> str:
+    return run(["git", "rev-parse", "--verify", "--quiet", ref], cwd=root).out
+
+
+# ------------------------------------------------------------------------- the local half
+
+
+def local_plan(root: str, commit: str) -> Tuple[Optional[List[str]], Optional[str], str]:
+    """(the command that moves main, the tree it runs in, why this form).
+
+    Split out from the running so the preview and the act cannot disagree about what would
+    happen — the preview prints exactly the list this returns.
+    """
+    holders = main_worktrees(root)
+    if not holders:
+        return (
+            ["git", "fetch", "origin", "main:main"],
+            root,
+            "main is checked out in no worktree, so there is nowhere to switch to and the "
+            "refspec form is the one that applies.",
+        )
+    if len(holders) > 1:
+        return None, None, (
+            "git reports main checked out in more than one worktree, which it does not "
+            "permit: " + ", ".join(holders)
+        )
+    return (
+        ["git", "pull", "--ff-only"],
+        holders[0],
+        "main is checked out at {0}, and `git fetch origin main:main` is exactly what git "
+        "refuses against a branch somebody is standing on. That refusal would be git's and "
+        "not a hook's.".format(holders[0]),
+    )
+
+
+def local_half(root: str, commit: str, confirm: bool) -> int:
+    """Fetch, prove the precondition, then move main — or say precisely why not."""
+    rule("the local half")
+
+    fetched = run(["git", "fetch", "origin"], cwd=root)
+    if not fetched.ok:
+        return refuse(
+            "`git fetch origin` failed, so nothing can be proved about origin/main.",
+            fetched.err or "(git said nothing)",
+        )
+    say("  fetched origin. origin/main is {0}".format(
+        head_of(root, "refs/remotes/origin/main")[:9] or "unknown"))
+
+    # THE WHOLE SAFETY ARGUMENT IS THIS ONE PREDICATE, and it is deliberately the same one
+    # scripts/githooks/reference-transaction evaluates at `prepared`. Checked here, before
+    # anything moves, so a wrong commit is refused by name rather than by a hook whose message
+    # is written for a different mistake.
+    ancestor = run(
+        ["git", "merge-base", "--is-ancestor", commit, "refs/remotes/origin/main"], cwd=root
+    )
+    if not ancestor.ok:
+        return refuse(
+            "{0} is not on origin/main.".format(commit[:9]),
+            "",
+            "main only ever moves to a commit origin already carries — that is allow rule 3",
+            "of scripts/githooks/reference-transaction, and this checks it rather than",
+            "letting the hook discover it. A commit that is not there is a local commit, a",
+            "local merge or a branch that was never merged.",
+            "",
+            "Nothing was moved.",
+        )
+    say("  {0} is on origin/main — the move the ref hook permits.".format(commit[:9]))
+
+    command, tree, why = local_plan(root, commit)
+    if command is None:
+        return refuse(why)
+    say("", "  " + why)
+
+    # Belt and braces over the footgun. `local_plan` chose the pull form BECAUSE main is the
+    # branch there; asking again costs one command and is the difference between advancing
+    # main and silently advancing somebody's feature branch.
+    if command[1] == "pull":
+        on = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=tree).out
+        if on != "main":
+            return refuse(
+                "{0} reports HEAD on `{1}`, not main.".format(tree, on or "an unreadable ref"),
+                "",
+                "`git pull --ff-only` there would fast-forward THAT branch. It moves no",
+                "protected ref, so no hook has anything to say, and the only symptom is a",
+                "branch somebody else is working on having quietly advanced.",
+                "",
+                "Nothing was moved.",
+            )
+        dirty = run(["git", "status", "--porcelain"], cwd=tree)
+        if dirty.out:
+            return refuse(
+                "{0} has uncommitted changes, so the fast-forward is not safe.".format(tree),
+                "",
+                *["  " + line for line in dirty.out.splitlines()[:10]],
+                "",
+                "Reported rather than forced: what is in that tree is not this command's to",
+                "discard. The GitHub half is done; finish the local half by hand there.",
+            )
+
+    before = head_of(root, "refs/heads/main")
+    say("", "  would run:  {0}".format(" ".join(command)),
+        "  in:         {0}".format(tree),
+        "  main is at: {0}".format(before[:9] or "(no main in this clone)"))
+
+    if not confirm:
+        say("", "  PREVIEW — nothing was run. Add --confirm to perform it.")
+        return 0
+
+    moved = run(command, cwd=tree)
+    after = head_of(root, "refs/heads/main")
+    if not moved.ok:
+        return refuse(
+            "the local half did not complete. THE GITHUB HALF MAY ALREADY BE DONE.",
+            "",
+            moved.err or moved.out or "(git said nothing)",
+            "",
+            "This is an INCOMPLETE OPERATION, not a missing permission (D42): the word was",
+            "given and the first half acted on it. Re-running this command is safe — an",
+            "already-merged PR is detected and only the local half is retried.",
+        )
+    say("  main:       {0} -> {1}".format(before[:9] or "(none)", after[:9]))
+    if after == before:
+        say("  (already there — nothing to fast-forward)")
+    return 0
+
+
+# ------------------------------------------------------------------------ the GitHub half
+
+
+def pr_state(number: int) -> Tuple[Optional[dict], str]:
+    got = run([
+        "gh", "pr", "view", str(number), "--json",
+        "number,title,url,state,mergeable,mergeStateStatus,headRefName,mergeCommit",
+    ])
+    if not got.ok:
+        return None, got.err or got.out or "gh said nothing"
+    try:
+        return json.loads(got.out), ""
+    except ValueError as exc:
+        return None, "gh --json is not JSON ({0})".format(exc)
+
+
+def merge_commit_of(data: dict) -> str:
+    commit = data.get("mergeCommit") or {}
+    return str(commit.get("oid") or "") if isinstance(commit, dict) else ""
+
+
+def github_half(number: int, confirm: bool) -> Tuple[Optional[str], int]:
+    """(the merge commit, an exit code). Idempotent on a PR that is already merged."""
+    rule("the GitHub half")
+    data, why = pr_state(number)
+    if data is None:
+        return None, refuse("could not read PR #{0}.".format(number), why)
+
+    say("  #{0}  {1}".format(data.get("number"), data.get("title")),
+        "  {0}".format(data.get("url")),
+        "  branch {0} · state {1} · mergeable {2}".format(
+            data.get("headRefName"), data.get("state"), data.get("mergeable")))
+
+    if data.get("state") == "MERGED":
+        commit = merge_commit_of(data)
+        if not commit:
+            return None, refuse(
+                "PR #{0} is MERGED and gh names no merge commit.".format(number),
+                "Without one there is nothing to prove ancestry against.")
+        say("  already merged at {0} — the GitHub half is done, the local half is not."
+            .format(commit[:9]))
+        return commit, 0
+
+    if data.get("state") != "OPEN":
+        return None, refuse(
+            "PR #{0} is {1}, not OPEN.".format(number, data.get("state")),
+            "Nothing here closes or reopens a pull request.")
+    if data.get("mergeable") == "CONFLICTING":
+        return None, refuse(
+            "PR #{0} conflicts with its base and cannot be merged.".format(number))
+
+    if not confirm:
+        say("", "  would run:  gh pr merge {0} --merge".format(number),
+            "  a merge commit, matching every merge in this repository's history.",
+            "  the branch is NOT deleted: live worktrees track branches in this clone.")
+        return None, 0
+
+    merged = run(["gh", "pr", "merge", str(number), "--merge"])
+    if not merged.ok:
+        return None, refuse("`gh pr merge {0} --merge` failed.".format(number),
+                            merged.err or merged.out or "(gh said nothing)")
+    say("  merged.")
+
+    data, why = pr_state(number)
+    if data is None or data.get("state") != "MERGED":
+        return None, refuse(
+            "gh reports PR #{0} is not MERGED after merging it.".format(number),
+            why or "state: {0}".format(data.get("state") if data else "unreadable"),
+            "Refusing to move main on a claim its own source will not repeat.")
+    commit = merge_commit_of(data)
+    if not commit:
+        return None, refuse("PR #{0} merged and gh names no merge commit.".format(number))
+    say("  merge commit {0}".format(commit[:9]))
+    return commit, 0
+
+
+# --------------------------------------------------------------------------------- main
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="merge-pr",
+        description="Merge a pull request and move this clone's main onto it (D42).",
+    )
+    parser.add_argument("pr", nargs="?", type=int, help="the pull request number")
+    parser.add_argument("--confirm", action="store_true",
+                        help="perform it. Without this, everything is a preview.")
+    parser.add_argument("--local", metavar="REV",
+                        help="run the local half alone against REV, skipping gh. What "
+                             "scripts/merge-selftest.sh drives.")
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    root = repo_root()
+    if root is None:
+        return refuse("not a git repository.")
+
+    if args.local:
+        commit = head_of(root, args.local)
+        if not commit:
+            return refuse("`{0}` does not name a commit in this repository.".format(args.local))
+        return local_half(root, commit, args.confirm)
+
+    if args.pr is None:
+        return refuse(
+            "no pull request named.",
+            "",
+            "There is no default PR and there will not be one. D42 makes the merge a",
+            "deliberate act on the owner's word, and a command with a default has already",
+            "chosen for them.",
+            "",
+            "  make merge ARGS=92               preview. Presses nothing.",
+            "  make merge ARGS=\"92 --confirm\"    merge it, then move main.",
+        )
+
+    say("PKMNSCAN — merge PR #{0}{1}".format(args.pr, "" if args.confirm else "  (PREVIEW)"))
+    rule()
+    commit, code = github_half(args.pr, args.confirm)
+    if code:
+        return code
+    if commit is None:  # preview of an unmerged PR: no commit exists to reason about yet
+        rule("the local half")
+        _, tree, why = local_plan(root, "")
+        say("  " + why,
+            "",
+            "  after the merge, main would move in: {0}".format(tree or "(undecidable)"),
+            "",
+            "  PREVIEW — nothing was run. Add --confirm to perform it.")
+        return 0
+    return local_half(root, commit, args.confirm)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
