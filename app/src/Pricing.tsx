@@ -1139,6 +1139,50 @@ export function Pricing() {
     [readHistory, run],
   )
 
+  /** PUBLISH THE SHIP BAR'S MEASURED HEIGHT AS `--pricing-ship-h` (D85).
+   *
+   *  `Pricing.css` and `PriceHistory.css` have read this property since D54 and NOTHING HAS
+   *  EVER SET IT. Three declarations took the `64px` fallback every time, against a bar that
+   *  is 125px closed and 433px with an emit receipt up — so the two fixed panels, which are
+   *  positioned to sit above the bar, sat on top of its sub-threshold controls instead. Those
+   *  controls are the answer `emit` refuses to run without, which is what made this worth
+   *  measuring rather than worth another constant.
+   *
+   *  A CALLBACK REF AND NOT AN EFFECT, because the bar is conditional — it is absent until a
+   *  run is picked — and an effect would need the node in state to know when it arrived,
+   *  which is a re-render to bookkeep a number no React code reads. The property is written
+   *  straight to the DOM for the same reason: only the stylesheets read it.
+   *
+   *  `closest` AND NOT A SECOND REF ON THE `<main>`. React assigns child refs before parent
+   *  refs, so a `mainRef.current` read from here would be null on the first mount and the
+   *  panels would take the fallback on exactly the render that matters. The host is one hop up
+   *  and asking the DOM for it has no ordering to get wrong.
+   *
+   *  A `ResizeObserver` AND NOT A ONE-SHOT MEASUREMENT: the bar grows when the receipt lands,
+   *  when a refusal is drawn, and when the window narrows enough to wrap its rows. Every one
+   *  of those is a height change with no re-render of this component behind it. */
+  const shipObserver = useRef<ResizeObserver | null>(null)
+  const shipHost = useRef<HTMLElement | null>(null)
+  const measureShip = useCallback((node: HTMLElement | null) => {
+    shipObserver.current?.disconnect()
+    shipObserver.current = null
+    if (node === null) {
+      /* The bar went away with the run. Clear rather than freeze the last height: a stale
+         clearance would hold a gap open under panels that no longer have anything to clear. */
+      shipHost.current?.style.removeProperty('--pricing-ship-h')
+      shipHost.current = null
+      return
+    }
+    const host = node.closest<HTMLElement>('.pricing')
+    if (host === null) return
+    shipHost.current = host
+    const publish = () => host.style.setProperty('--pricing-ship-h', `${node.offsetHeight}px`)
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(node)
+    shipObserver.current = observer
+  }, [])
+
   /** Close the panel both ways, so nothing that was showing survives the press. */
   const unpin = useCallback(() => {
     heldSku.current = null
@@ -1907,7 +1951,7 @@ export function Pricing() {
           is the two-declarations-that-must-agree drift this stylesheet already argues against
           for its grid template. */}
       {run === null ? null : (
-        <aside className="pricing-ship" role="region" aria-label="Ship this run">
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run">
           {subThresholdSkus(payload?.pricing.skus ?? []).length === 0 ? null : (
             <div className="pricing-ship-row">
               <span className="pricing-ship-key">

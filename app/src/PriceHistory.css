@@ -10,14 +10,15 @@
    overlapping in one corner is worse than one at a time. `Pricing.tsx` closes each when the
    other opens.
 
-   ABOVE THE SHIP BAR, the same floor the photograph takes and for D54's reason: the bar's
-   height varies with its receipt, so `--pricing-ship-h` is its closed height and a bar grown
-   by a receipt overlaps this panel's lower edge only while the operator is reading a console
-   rather than a card. */
+   ABOVE THE SHIP BAR AND AFTER THE ROW'S GUTTER, both the same floor the photograph takes,
+   and both stated in `Pricing.css` — this file follows rather than re-derives. D54 put it
+   above the bar; D85 corrected `--pricing-ship-h` from a closed height nothing defined to the
+   bar's measured one, and moved the left edge off the T and H columns it had been sitting on
+   top of. Both variables are set on `.pricing`, which is this panel's ancestor. */
 
 .pricehistory {
   position: fixed;
-  left: var(--s4);
+  left: var(--pricing-gutter, var(--s4));
   bottom: calc(var(--pricing-ship-h, 64px) + var(--s4));
   z-index: 20;
   /* WIDE ENOUGH FOR TWO RANGES ABREAST AND CAPPED SO IT CANNOT EAT THE ROW. The two ranges
@@ -36,7 +37,14 @@
   box-shadow: 0 2px 16px rgb(8 9 10 / 12%);
   /* THE PANEL SCROLLS RATHER THAN THE PAGE. It is fixed, so content past the viewport would
      be unreachable — a sticky element does not move with the document scroll, which is the
-     defect D45 records for the box walk one screen over. */
+     defect D45 records for the box walk one screen over.
+
+     THIS FORMULA WAS ALREADY RIGHT AND HAD NOTHING TO READ. It anticipated a real
+     `--pricing-ship-h` — subtract the bar, subtract the margins, take what is left — and got
+     the 64px fallback every time, so a reading opened over a 433px bar was sized as though
+     the bar were 64px and simply ran over it. With the measured value it shrinks instead,
+     which is the right trade: a reading is a transient overlay and the run's answer controls
+     are not. */
   max-height: calc(100vh - var(--pricing-ship-h, 64px) - 4 * var(--s4));
   overflow-y: auto;
 }

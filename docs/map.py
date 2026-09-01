@@ -2425,7 +2425,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -2436,8 +2436,13 @@ COMPONENTS = [
                                         "act on, which is the sunk group's heading (D78). NO "
                                         "SOLID ACCENT FILL ANYWHERE — every state of "
                                         "this screen is a choice among prices, which is the "
-                                        "definition of more than one thing to do.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79"]},
+                                        "definition of more than one thing to do. THE "
+                                        "BOTTOM-LEFT CORNER IS SETTLED BY GEOMETRY AND NEVER "
+                                        "BY z-index (D85): --pricing-gutter is composed from "
+                                        "the same button width the grid reads, and both fixed "
+                                        "panels start after it, so no panel is ever over a row "
+                                        "control and nothing has to win a stacking order.",
+                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -2476,8 +2481,13 @@ COMPONENTS = [
                                             "average against the 11px bound is the "
                                             "anchor-versus-sanity-check rule expressed as type "
                                             "sizes, and is the property to preserve if this is "
-                                            "ever re-laid-out.",
-                                     "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62"]},
+                                            "ever re-laid-out. Its anchor is stated in "
+                                            "Pricing.css and read here rather than re-derived: "
+                                            "--pricing-gutter clears the row's T and H, and "
+                                            "--pricing-ship-h is the ship bar's MEASURED height "
+                                            "(D85) — read by three declarations and set by "
+                                            "nothing from D54 until then.",
+                                     "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62", "D85"]},
             # D79 is the batched half of D62, and D62 is why this file is separate from
             # PriceHistory.tsx rather than a mode of it: the panel draws every figure a reading
             # has and the strip draws a shape and a sign, which are two answers to two
@@ -2967,10 +2977,15 @@ COMPONENTS = [
                                               "suggested row writes no key to decisions.json, a "
                                               "Tab across one writes nothing, a snap onto a blank "
                                               "column writes nothing and says so, and the screen "
-                                              "draws no solid accent fill at all. Not a harness "
+                                              "draws no solid accent fill at all. Since D85 it also "
+                                              "HIT-TESTS the bottom-left corner — every point of "
+                                              "the ship bar and of an open reading, asking which "
+                                              "element a hand aiming there actually reaches — "
+                                              "which is the one question 56 green cases could not "
+                                              "ask while the screen was a pile. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

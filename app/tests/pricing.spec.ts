@@ -1908,3 +1908,156 @@ test('the spans and the overlap caveat are stated once, above the list', async (
   /* AND EXACTLY ONCE. A span drawn per row is the failure this case exists to catch. */
   await expect(page.locator('.pricing-trendbar-span')).toHaveCount(2)
 })
+
+/* ---------------------------------------------------------------- the bottom-left corner
+ *
+ * D85, AND THE FORM THESE TAKE IS THE POINT. Four things want this screen's bottom-left
+ * corner — every row's T and H, the reading panel, the photograph, and the ship bar — and the
+ * defect they produced was invisible to all 56 cases above it. `bbf7e11` moved T and H into
+ * the corner and raised them to `z-index: 21` to win it; they then drew over the panel they
+ * were escaping AND over the ship bar, so every row scrolled behind the bar punched its two
+ * letters through it and took the clicks landing there. A press at the bar's left edge opened
+ * a hold on a card nobody could see, and a hold writes `decisions.json`.
+ *
+ * NOTHING ON THE COMMIT PATH COULD TELL. The suite was green, typecheck was green, lint was
+ * green; the screen was a pile. What this file had was text, grid templates and row heights,
+ * and every one of those was still true. The missing question is geometric and it is asked by
+ * HIT-TESTING rather than by comparing rectangles: `elementFromPoint` answers what a hand
+ * aiming at a pixel actually reaches, which is the property that broke, and it is indifferent
+ * to HOW a later change breaks it — a stacking order, an anchor, a width.
+ *
+ * `overlaps()` ONE SCREEN OVER DOES THE RECTANGLE HALF, and this deliberately does not reuse
+ * it: two boxes that intersect is the normal, correct state of an overlay above a list. The
+ * fault was never the intersection. It was who answered inside it. */
+
+/** Every point in `region` that a `.pricing-row` answers for — the hand's-eye view of who owns
+ *  the pixels. An 8px lattice: the controls at issue are 32px squares, so nothing that could
+ *  swallow a press fits between the samples. */
+async function rowsShowingThrough(page: Page, region: string): Promise<number> {
+  return page.evaluate((selector) => {
+    const panel = document.querySelector(selector)
+    if (panel === null) throw new Error(`nothing at ${selector}`)
+    const box = panel.getBoundingClientRect()
+    let through = 0
+    for (let y = Math.round(box.top) + 4; y < box.bottom - 2; y += 8) {
+      for (let x = Math.round(box.left) + 4; x < box.right - 2; x += 8) {
+        const at = document.elementFromPoint(x, y)
+        if (at !== null && at.closest('.pricing-row') !== null) through += 1
+      }
+    }
+    return through
+  }, region)
+}
+
+/** Which of the ship bar's own controls another element answers for. A control the operator
+ *  can see and cannot press is the shape this corner failed in, and `emit` refuses to run
+ *  without the sub-threshold answer these set. */
+async function barControlsBlocked(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const blocked: string[] = []
+    document.querySelectorAll('.pricing-ship button, .pricing-ship input').forEach((node) => {
+      const box = node.getBoundingClientRect()
+      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      if (at !== null && at !== node && !node.contains(at)) {
+        blocked.push(`${(node.textContent || '').trim() || node.className} <- ${at.className}`)
+      }
+    })
+    return blocked
+  })
+}
+
+/** A run long enough that rows are behind the bar rather than above it. Forty is past the
+ *  viewport at every size this suite runs, and the case is about the ones you cannot see. */
+const manySkus = () =>
+  Array.from({ length: 40 }, (_, at) =>
+    sku({ sku: `9${String(at).padStart(6, '0')}`, name: `Card ${at}` }),
+  )
+
+test('no row draws through the ship bar, at either of the bar heights', async ({ page }) => {
+  await open(page, { skus: manySkus() })
+  await expect(page.locator('.pricing-ship')).toBeVisible()
+
+  /* CLOSED FIRST. The bar is ~125px here and two rows sit behind it. */
+  expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
+
+  /* AND WITH THE RECEIPT UP, which is the state the owner reported from and the one that
+     makes it obvious: the console and the file list take the bar past 400px, so what was two
+     punched rows becomes seven. THE RECEIPT IS ALSO WHY THIS IS TWO ASSERTIONS AND NOT ONE —
+     a bar that only ever had one height would let a fixed clearance pass for a measured
+     one. */
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+  expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
+})
+
+test('the bar publishes its measured height, so the panels above it clear the real one', async ({
+  page,
+}) => {
+  /* THE VARIABLE IS THE DEFECT CLASS, NAMED. `--pricing-ship-h` was read by three
+     declarations and set by nothing from D54 until D85 — every one of them took the `64px`
+     fallback against a bar that is 125px closed and 433px with a receipt. A fallback that is
+     the only value a property ever has is not a fallback, and nothing said so out loud. */
+  await open(page, { skus: manySkus() })
+
+  const agrees = async () =>
+    page.evaluate(() => {
+      const main = document.querySelector<HTMLElement>('main.pricing')
+      const bar = document.querySelector<HTMLElement>('.pricing-ship')
+      if (main === null || bar === null) throw new Error('no bar')
+      const published = getComputedStyle(main).getPropertyValue('--pricing-ship-h').trim()
+      return { published, measured: `${bar.offsetHeight}px` }
+    })
+
+  await expect(page.locator('.pricing-ship')).toBeVisible()
+  const closed = (await agrees()).measured
+
+  /* THE TWO AGREE, AND THE HEIGHT IS NOT PINNED TO A NUMBER. The bar's height is a function
+     of this fixture — a run with no sub-threshold SKUs draws one fewer row than the owner's
+     did — so a literal here would assert what the fixture happens to be and would have to be
+     re-typed every time the bar gained a line. What must be true is that the published value
+     is the measured one, whatever the bar is. On the code this case was written against,
+     `published` was the empty string. */
+  await expect.poll(agrees).toEqual({ published: closed, measured: closed })
+  expect(closed).toMatch(/^\d+px$/)
+
+  /* AND IT FOLLOWS THE BAR RATHER THAN BEING WRITTEN ONCE. The receipt changes the height
+     with no press and no navigation behind it, which is exactly the case a one-shot
+     measurement at mount would get wrong and report as green. */
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+  await expect
+    .poll(async () => {
+      const seen = await agrees()
+      return seen.published === seen.measured && seen.measured !== closed
+    })
+    .toBe(true)
+})
+
+test('an open reading covers no ship-bar control and no row draws through it', async ({
+  page,
+}) => {
+  await open(page, { skus: manySkus() })
+
+  /* THE WORST CASE, BUILT DELIBERATELY: the tallest bar under the tallest panel. With the
+     receipt up the bar's sub-threshold controls sit at the TOP of the bar, which is the half
+     of the geometry a clearance measured from the bottom gets wrong. */
+  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+
+  await pin(page)
+  await expect(panelOf(page)).toBeVisible()
+
+  expect(await barControlsBlocked(page)).toEqual([])
+  expect(await rowsShowingThrough(page, '.pricehistory')).toBe(0)
+
+  /* AND THE PANEL STARTS AFTER THE ROW'S GUTTER, which is the mechanism rather than the
+     symptom — stated so a later change that restores the overlap and re-settles it with a
+     stacking order fails here rather than passing on the two counts above. */
+  const clears = await page.evaluate(() => {
+    const panel = document.querySelector('.pricehistory')
+    const button = document.querySelector('.pricing-history')
+    if (panel === null || button === null) throw new Error('no panel')
+    return panel.getBoundingClientRect().left >= button.getBoundingClientRect().right
+  })
+  expect(clears).toBe(true)
+})

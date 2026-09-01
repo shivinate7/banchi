@@ -16,6 +16,29 @@
 
 .pricing {
   padding: var(--s4);
+
+  /* ---- THE CORNER IS OWNED BY GEOMETRY, NEVER BY `z-index` (D85) -----------------------
+   *
+   * Four things want the bottom-left corner of this screen: every row's T and H, the reading
+   * panel, the photograph, and the ship bar. Three of them are `position: fixed` or `sticky`
+   * and one is a hundred rows deep, so whichever wins a stacking contest, something a hand
+   * is aiming at stops answering. The contest was actually run — T and H were raised to
+   * `z-index: 21` to escape the panels — and it inverted the defect rather than removing it:
+   * the buttons then drew over the panel they were escaping AND over the ship bar, so a row
+   * scrolled behind the bar punched its two letters through it and took the clicks landing
+   * there. A press at the bar's left edge opened a hold on a card nobody could see, and a
+   * hold writes `decisions.json`.
+   *
+   * These two properties are the settlement. The row keeps its gutter and the panels start
+   * after it, so no panel is ever over a T or an H and no `z-index` has to say who wins.
+   *
+   * `--pricing-gutter` IS DERIVED AND NEVER TYPED. It is the page's own padding plus the two
+   * button columns and the gaps after them, composed from the same `--pricing-btn` the grid
+   * template below uses — so widening a button moves the panels with it. A hand-typed 104px
+   * is exactly the two-declarations-that-must-agree drift this stylesheet refuses for its
+   * grid template, arrived at from the other end. */
+  --pricing-btn: 32px;
+  --pricing-gutter: calc(var(--s4) + 2 * (var(--pricing-btn) + var(--s3)));
 }
 
 .pricing-head {
@@ -325,8 +348,8 @@
    templates and caught it. */
 .pricing-section {
   --pricing-cols:
-    32px /* history (D62)                  */
-    32px /* hold                           */
+    var(--pricing-btn) /* history (D62)                  */
+    var(--pricing-btn) /* hold                           */
     76px /* quantity                       */
     minmax(0, 1fr) /* the card                       */
     168px /* the trend strip (D79)          */
@@ -624,14 +647,14 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   cursor: pointer;
-  /* ABOVE THE FIXED CORNER PANELS, DELIBERATELY. These two buttons are the leftmost thing on
-     the row and `.pricehistory`/`.pricing-photo` are fixed to that same bottom-left corner
-     (see `PriceHistory.css`) — so a panel open on ANY row would otherwise sit on top of every
-     other row's T and H the moment that row scrolls under it, and the control that opens and
-     closes a panel would be the one thing it makes unreachable. `position: relative` is what
-     makes the raised `z-index` take effect at all; nothing else on the row needs either. */
-  position: relative;
-  z-index: 21;
+  /* NO `z-index` AND NO `position`, AND THE ABSENCE IS THE FIX (D85). These two buttons were
+     raised to 21 to stop `.pricehistory`/`.pricing-photo` — fixed to the corner the buttons
+     had just been moved into — swallowing their clicks. It worked, and the buttons then
+     swallowed the panel, and the ship bar with it: 28 sampled points inside an open reading
+     hit a hidden row's T or H, and every row scrolled behind the bar drew its two letters on
+     top of it. The panels start after `--pricing-gutter` now, so they are never over a T or
+     an H and there is nothing for a stacking order to arbitrate. A row's controls stack like
+     every other thing in the document, which is what a row's controls should do. */
 }
 
 /* The only control on this screen that did not answer the pointer. `.pricing-plain`,
@@ -792,12 +815,19 @@
      which is already ellipsised and is the least precise thing on the row, so covering part
      of it costs the least; and the panel is a picture of that card, so it sits beside what it
      is about. */
-  left: var(--s4);
-  /* ABOVE THE SHIP BAR, NOT UNDER IT (D54). The corner above was chosen by looking at it and
-     that argument is untouched — what changed is that the bottom edge is now occupied. The
-     bar's height varies with its receipt, so this is a floor rather than an exact clearance:
-     `--pricing-ship-h` is the closed height, and a bar grown by a receipt overlaps the
-     panel's lower edge only while the operator is reading a console rather than a card. */
+  /* AFTER THE ROW'S GUTTER, NOT AT THE PAGE EDGE (D85). The corner argument above is
+     untouched — this panel still sits beside the name it is about, at the left. What moved is
+     the start: `left: var(--s4)` put it directly over every row's T and H, which is the
+     overlap that was being settled with a stacking order and is settled by this offset
+     instead. `.pricing` composes the value from the same button width the grid uses. */
+  left: var(--pricing-gutter);
+  /* ABOVE THE SHIP BAR, NOT UNDER IT (D54, corrected by D85). `--pricing-ship-h` is now the
+     bar's MEASURED height, published by `Pricing.tsx` on every resize, rather than a closed
+     height nothing ever defined — the fallback below was the only value this ever had, and it
+     was wrong by 61px with the bar closed and by 369px with an emit receipt up. Wrong in the
+     direction that buried the bar's own sub-threshold controls under this panel, which are
+     the answer emit refuses without. The fallback stays for the frame before the observer
+     first reports. */
   bottom: calc(var(--pricing-ship-h, 64px) + var(--s4));
   z-index: 20;
   display: flex;
