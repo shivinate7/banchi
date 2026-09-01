@@ -1871,7 +1871,7 @@ export function Pricing() {
                 anywhere the same string is drawn larger: `photoUrl` addresses the photograph
                 above BY SLOT, so the picture has always been the index's current occupant
                 while the stored caption was the join's. A copy sold since now reads
-                `Box 3 · departed · 3/17` instead of pointing at the card that closed up
+                `Box 3 · departed · B3 #17` instead of pointing at the card that closed up
                 behind it, and a divider moved since reads against the layout in the box
                 today. Nothing is composed here — `server/pipeline_routes.py` sends the
                 finished string, as every other position on every other screen arrives.

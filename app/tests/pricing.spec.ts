@@ -796,7 +796,7 @@ test('the caption draws the label the server composed on THIS read, including wh
     skus: [
       sku({
         positions: [
-          { box: 7, index: 1, label: 'Box 7 · departed · 7/1' },
+          { box: 7, index: 1, label: 'Box 7 · departed · B7 #1' },
           { box: 7, index: 2, label: null },
           { box: 7, index: 3, label: 'Box 7 · Section 1 · Card 1' },
         ],
@@ -812,7 +812,7 @@ test('the caption draws the label the server composed on THIS read, including wh
      `PositionLabel` would promote a bare trailing number to a 44px slot figure — the lie D58
      refuses — and `7/1` is what fails that guard; this caption is plain text and must not start
      parsing the string either. */
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · departed · 7/1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · departed · B7 #1')
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
   /* `no label · <key>` IS `BoxBrowse`'s OWN FALLBACK, one vocabulary with it and for its reason:

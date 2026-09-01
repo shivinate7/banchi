@@ -143,7 +143,7 @@ function card(input: {
            the identical string — this file's own walk case expected `Box 2 · departed` twice —
            so the label carries the one number about a departed card that cannot lie about a
            shelf. `join.departed_label` is still the one composer of it. */
-        label: `Box ${box} · departed · ${box}/${input.index}`,
+        label: `Box ${box} · departed · B${box} #${input.index}`,
         box,
         index: input.index,
         slot: null,
@@ -1565,8 +1565,8 @@ test('a sold card with no group is ranked too, and draws no bar', async ({ page 
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
   const lone = page.locator('.inventory-lone-place .position-parts')
-  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · 2/4')
-  await expect(page.locator('.inventory-lone-place .position-path')).toHaveText('BOX 2DEPARTED 2/4')
+  await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
+  await expect(page.locator('.inventory-lone-place .position-path')).toHaveText('BOX 2DEPARTED B2 #4')
   await expect(page.locator('.inventory-lone-place .position-num')).toHaveCount(0)
   await expect(page.locator('.inventory-lone-place .position-void')).toHaveCount(1)
   await expect(page.locator('.inventory-lone-place .position-plain')).toHaveCount(0)
@@ -1602,8 +1602,8 @@ test('a departed card draws no number, and the cards behind it count past it', a
     '1',
     '2',
     '3',
-    'departed · 2/4',
-    'departed · 2/5',
+    'departed · B2 #4',
+    'departed · B2 #5',
     '1',
     '2',
   ])
@@ -1640,7 +1640,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * and refusing the whole treatment was never the only way to stop that. */
   const panel = page.locator('.browse-position .position-parts')
   await expect(panel).toHaveCount(1)
-  await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · 2/4')
+  await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
   await expect(page.locator('.browse-position .position-plain')).toHaveCount(0)
   await expect(page.locator('.browse-band .position-bar')).toHaveCount(0)
 
@@ -1652,14 +1652,14 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await expect(page.locator('.browse-position .position-void')).toHaveCount(1)
 
   /* AND THE STATE AND THE KEY ARE RANKED RATHER THAN LEFT AS A STRING WITH A NOTE UNDER IT.
-   * `DEPARTED 2/4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
+   * `DEPARTED B2 #4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
    * stands in for, which is what makes a departed row cost the same two path lines a live one
    * costs. 19.8px because a block with no figure re-ranks its path — `clamp(11px, 0.45em, 20px)`
    * against this site's 44px, the derivation `PositionLabel.css` states beside `.position-key`'s.
    * At the shipped 11px the whole answer sat in the metadata register and the panel read as one
    * that had failed to load, which is the second half of what selling a card did to this screen. */
   const path = page.locator('.browse-position .position-path')
-  await expect(path).toHaveText('BOX 2DEPARTED 2/4')
+  await expect(path).toHaveText('BOX 2DEPARTED B2 #4')
   await expect(path).toHaveCSS('font-size', '19.8px')
 })
 
@@ -3507,8 +3507,8 @@ test('two departed copies of one card draw two different rows', async ({ page })
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
-  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED 2/4')
-  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED 2/5')
+  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED B2 #4')
+  await expect(gone.nth(1).locator('.position-path')).toHaveText('BOX 2ME01 commonsDEPARTED B2 #5')
 
   /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
      `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every

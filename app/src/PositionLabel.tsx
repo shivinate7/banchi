@@ -14,7 +14,7 @@
  * (D71). `join.departed_label` ends on a word where a slot number would be, and refusing the
  * whole label over it meant every screen fell back to the raw string at its payload size — so
  * `#/inventory` drew a sold card the pre-D41 way while every live card beside it was ranked.
- * The state and the store key ride the path (`BOX 3` / `DEPARTED 3/36`), the number column is
+ * The state and the store key ride the path (`BOX 3` / `DEPARTED B3 #36`), the number column is
  * drawn empty, and D58's refusal of a slot number for a card that has left is untouched: what
  * that refusal was ever about is the FIGURE, and there is none.
  *
@@ -72,13 +72,18 @@ function seam(part: string): Part {
   return at < 1 ? { key: '', value: part } : { key: part.slice(0, at), value: part.slice(at + 1) }
 }
 
-/* THE STORE KEY A LABEL MAY END ON — `3/31`, the `/inventory/<box>/<index>` path (D68). Two digit
-   runs and a slash, which is a shape no part of a position label has ever had: `Box 3`,
-   `Section 1` and `Card 17` are all `<word> <number>`, and the seam above is built on that.
-   Anchored both ends so it cannot match a collector number that wandered in — `198/219` would,
-   which is why nothing composes one into a label and why this only ever reads the LAST part of a
-   string the server built. */
-const STORE_KEY = /^\d+\/\d+$/
+/* THE STORE KEY A LABEL MAY END ON — the `/inventory/<box>/<index>` path (D68), in the two
+   spellings the two composers use. `B3 #96` is `join.departed_label`'s and `5/12` is
+   `join.place_text`'s pooled one; that entry's amendment has why they differ, and the short of it
+   is that a departed label is drawn beside printed card numbers and `3/96` was read as one.
+   Neither shape is `<word> <number>`, which is what every part of a position label is — `Box 3`,
+   `Section 1`, `Card 17` — and what the seam above is built on, so neither can be mistaken for a
+   part. Anchored both ends: unanchored, the slash form would match a collector number that
+   wandered in (`198/219`), which is why nothing composes one into a label and why this only ever
+   reads the LAST part of a string the server built. THE PYTHON IS THE AUTHORITY AND THIS IS THE
+   READER OF IT — a respelling there that does not land here draws the key as a position part
+   instead of failing, so the two move together. */
+const STORE_KEY = /^(?:B\d+ #\d+|\d+\/\d+)$/
 
 /* A PART WHOSE VALUE IS A NUMBER — `Box 3`, `Section 1`, `Card 17`. Every part of a label this
    component composes has this shape, which is what makes the seam above safe to take. */
@@ -101,14 +106,14 @@ export function PositionLabel({
   const all = label.split(' · ')
 
   /* THE STORE KEY IS PEELED OFF FIRST AND IS NEVER PROMOTED (D68). `join.departed_label` ends on
-     it — `Box 3 · departed · 3/31` — because two departed copies of one card in one box were
+     it — `Box 3 · departed · B3 #31` — because two departed copies of one card in one box were
      otherwise the identical string, and the index is the one number about a departed card that
      cannot lie about a shelf. What it must NOT become is the figure: this component draws the
      last part at `--pos-slot`, so a promoted key would put a 44px number in the slot column of a
      card that is in no slot, which is precisely the lie D58 refuses.
 
      WHERE IT GOES INSTEAD DEPENDS ON WHETHER THE REST RANKS (D71). For a label this component can
-     rank it becomes the VALUE of the state that explains it — `DEPARTED 3/31`, one path pair
+     rank it becomes the VALUE of the state that explains it — `DEPARTED B3 #31`, one path pair
      beside `BOX 3` — and for one it cannot it stays a demoted note under the plain string, which
      is the pooled row and the only caller left of that shape. Either way it is in the path's
      register and never in the figure's, which is the whole of D68's ask.
@@ -127,7 +132,7 @@ export function PositionLabel({
      takes this path, and it is the honest render of a string that names no position: a pool has
      no coordinate to rank, so there is no key/figure pair to be had.
 
-     `Box 3 · departed · 3/36` USED TO TAKE IT AND NO LONGER DOES (D71). That label names a real
+     `Box 3 · departed · B3 #36` USED TO TAKE IT AND NO LONGER DOES (D71). That label names a real
      box and is ranked below; drawing it here put the pre-D41 plain string back on two screens —
      44px and wrapped in the walk panel, the loudest row in the copies list — which is what a
      person saw the moment they marked a card sold. */
@@ -167,7 +172,7 @@ export function PositionLabel({
   const numbered = NUMBER.test(terminal.value)
 
   /* A STATE TERMINAL IS RANKED RATHER THAN REFUSED, AND THE REFUSAL WAS A REGRESSION TO THE UI
-     THIS COMPONENT REPLACED. `join.departed_label` composes `Box 3 · departed · 3/36`, whose
+     THIS COMPONENT REPLACED. `join.departed_label` composes `Box 3 · departed · B3 #36`, whose
      terminal is a word, so the guard above threw the WHOLE label out and `whole()` drew the raw
      server string at the site's payload size. Measured on the two sites that do not bail in CSS:
      the walk panel drew `Box 2 · departed` at 44px, wrapped onto two lines — the exact wrap D41
@@ -180,7 +185,7 @@ export function PositionLabel({
      number's place. Both are kept exactly — the slot column below draws no figure at all for a
      state — and the ranking is given back.
 
-     THE STATE JOINS THE PATH AND CARRIES THE STORE KEY AS ITS VALUE. `DEPARTED 3/36` is the same
+     THE STATE JOINS THE PATH AND CARRIES THE STORE KEY AS ITS VALUE. `DEPARTED B3 #36` is the same
      key/value shape as the `BOX 3` above it and the `SECTION 1` it stands in for, so a departed
      row costs the same two path lines a live row costs and reads in the same register. That is
      also what retires `.position-storekey`'s orphan sub-line for this label: the key is no longer
@@ -253,7 +258,7 @@ export function PositionLabel({
 
           THE MARK IS THE STYLESHEET'S AND THE ELEMENT IS THIS FILE'S, which is the split that
           keeps it out of the label. A dash in the DOM joins `textContent`, so `.browse-position`
-          reads `BOX 2DEPARTED 2/4—` to anything that greps the rendered text — a spec, a
+          reads `BOX 2DEPARTED B2 #4—` to anything that greps the rendered text — a spec, a
           screenshot diff, a copy-paste — for a glyph that is pure typography and already
           `aria-hidden`. Empty here, `content` there. */}
       <span className="position-slot">

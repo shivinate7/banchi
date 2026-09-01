@@ -144,11 +144,11 @@
 
 /* ---- the number column of a card that is in no slot ---- */
 
-/* `Box 3 · departed · 3/36` IS RANKED LIKE EVERY OTHER LABEL, AND THIS IS THE COLUMN IT LEAVES
+/* `Box 3 · departed · B3 #36` IS RANKED LIKE EVERY OTHER LABEL, AND THIS IS THE COLUMN IT LEAVES
    EMPTY. D58 refuses a slot number for a card that has left and D68 refuses the store key in that
    number's place; what neither asks for is the pre-D41 plain string, which is what the component
    drew instead until this existed — 44px and wrapped in the walk panel, the loudest row in the
-   copies list. The state and the store key ride the path now (`DEPARTED 3/36`, one key/value pair
+   copies list. The state and the store key ride the path now (`DEPARTED B3 #36`, one key/value pair
    in the same register as `SECTION 1`), and the figure is a dash.
 
    1em AND MUTED, WHICH IS THE WHOLE ARGUMENT IN TWO DECLARATIONS. The size holds the column open
@@ -173,7 +173,7 @@
    is here rather than in five stylesheets. `--pos-slot` is the number a site chooses because the
    slot figure is that screen's answer; a departed card has no figure, so at the shipped 11px the
    whole answer collapses into the metadata register and a singleton reads as a block that failed
-   to load. Measured on the walk panel: `BOX 2 / DEPARTED 2/4` at 11px under a 44px heading, in
+   to load. Measured on the walk panel: `BOX 2 / DEPARTED B2 #4` at 11px under a 44px heading, in
    the panel whose payload it is.
 
    `clamp(11px, 0.45em, 20px)` IS `.position-key`'S ARGUMENT AT A DIFFERENT RANK, and the same
@@ -199,7 +199,7 @@
    rather than two.
 
    IN `content` AND NOT IN THE COMPONENT, because a dash in the DOM joins `textContent` and the
-   label stops reading as the label: `.browse-position` greps as `BOX 2DEPARTED 2/4—`. It is
+   label stops reading as the label: `.browse-position` greps as `BOX 2DEPARTED B2 #4—`. It is
    typography, it is `aria-hidden`, and this is where typography lives. */
 .position-parts[data-lead='slot'] .position-void::before {
   content: '\2014';

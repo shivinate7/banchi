@@ -1882,7 +1882,7 @@ COMPONENTS = [
                         "THE FULFILLER NEVER IMPORTS IT: his 32px/36px labels stay plain text and "
                         "the firewall is the component graph, not a selector. A TERMINAL THAT IS "
                         "A STATE RATHER THAN A NUMBER IS RANKED TOO (D71): `... \u00b7 departed "
-                        "\u00b7 3/36` puts the state and the store key on the path and draws the "
+                        "\u00b7 B3 #36` puts the state and the store key on the path and draws the "
                         "number column EMPTY, because what D58 refuses is the figure. Refusing "
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",

@@ -432,26 +432,45 @@ def departed_label(box: int, index: int) -> str:
     the photograph is named after — while `Place.slot` is the countable number that shifts. This
     prints the one that cannot lie about a shelf.
 
-    THE SEPARATOR AND THE SPELLING ARE `place_text`'S, TWO FUNCTIONS DOWN, deliberately: its
-    pooled form already carries `· {box}/{index}` and already says why — *"the only handle
-    left"*, and *"two pooled entries with identical lines would be indistinguishable in the
-    report that names them"*. That sentence was true of this string as well, and this is one
-    vocabulary rather than a second.
+    THE SPELLING IS `B3 #96`, AND IT WAS `3/96` UNTIL THE OWNER READ ONE AS A FRACTION
+    (2026-08-31, the two departed Kharoxes in box 3). That form was `place_text`'s pooled key,
+    borrowed one function down on the argument that this is one vocabulary rather than a second
+    — and the borrowing is exactly what broke. A pooled label names no card number; this one is
+    drawn beside `NUMBER 114/166` in `#/inventory`'s card panel and inside a copies list whose
+    live rows carry printed numbers of that shape. `<box>/<index>` in that company reads as
+    `<number>/<total>`, and the two facts it separates are a card's identity and a card's shelf.
+
+    THE BOX HALF SURVIVES, WHICH IS WHY IT IS NOT A BARE `#96`. A copies list crosses boxes —
+    that is the whole reason it exists — so an index alone cannot say which shelf the departed
+    copy left, and the owner's own test of the form was reading one while standing in box 10.
+    `B` is then the sigil no COUNT on these screens carries: `Card 17` counts cards,
+    `Section 1 · #1–#108` counts cards, and `#41` in the neighbour rows is an index in a
+    sentence that says so. A key that says a box out loud is the one shape none of them can be
+    confused with.
+
+    THE POOLED FORM IS DELIBERATELY LEFT AT `5/12`, SO THIS IS TWO VOCABULARIES NOW. It never
+    shares a column with this one — `BoxBrowse.shelvesOf` gives pooled records a shelf of their
+    own — and it carries its box for a different reason: a pooled label names a game where this
+    one names a box, so there is nothing in front of the key restating it. Respelling it too
+    would be changing a string on the strength of a misreading nobody has had of it.
 
     IT ENDS ON A KEY AND NEVER ON A BARE NUMBER, and that is load-bearing rather than a taste
     call. `PositionLabel.tsx` promotes the last `·`-part of a label to a slot figure whenever it
     is all digits, so `Box 1 · departed · 67` would draw **67 at 44px in the slot column** — the
-    exact lie D58 refuses, reintroduced by a renderer. `1/67` is not all digits, so it is peeled
-    off as a store key before anything is promoted, and `app/tests/inventory.spec.ts` asserts
-    that nothing in the panel is drawn at the figure's size.
+    exact lie D58 refuses, reintroduced by a renderer. `B1 #67` is not all digits, so it is
+    peeled off as a store key before anything is promoted, and `app/tests/inventory.spec.ts`
+    asserts that nothing in the panel is drawn at the figure's size. The renderer's `STORE_KEY`
+    is the guard, and it matches THIS shape and the pooled one and nothing else — a respelling
+    that slips past it does not fail, it silently draws the key as a position part.
 
     WHAT THE RENDERER DOES WITH THE REST CHANGED IN D71, AND THIS STRING DID NOT. Until then the
     word `departed` made the whole label unrankable and every screen drew it raw at its payload
     size — the pre-D41 plain string, back on `#/inventory` for exactly the cards that had been
-    sold. The client ranks it now (`BOX 1` / `DEPARTED 1/67`, and no figure at all), which is a
-    change of VIEW only: this function's output is byte-for-byte what it was, because the ordering
-    the renderer relies on — coarse parts first, the state where a slot number would be, the store
-    key last — is the ordering it already had.
+    sold. The client ranks it now (`BOX 1` / `DEPARTED B1 #67`, and no figure at all), which was
+    a change of VIEW only: D71 left this function's output byte-for-byte what it was. The
+    respelling above is the first change to the string itself, and it moves no part — coarse
+    parts first, the state where a slot number would be, the store key last is the ordering the
+    renderer relies on and the ordering it still gets.
 
     IT NAMES NO DOOR, AND THAT IS DELIBERATE. `sold` and `retired` are different departures
     with different reversals, and both are already on the record beside this string — every
@@ -464,7 +483,7 @@ def departed_label(box: int, index: int) -> str:
     snapshot the label BEFORE the write, so "Sold Box 3 · Section 1 · Card 7" still names
     where the operator just was. This string is for the record afterwards, not the moment.
     """
-    return f"Box {int(box)} · departed · {int(box)}/{int(index)}"
+    return f"Box {int(box)} · departed · B{int(box)} #{int(index)}"
 
 
 def place_text(game: str, position: Position) -> str:
@@ -491,8 +510,11 @@ def where_phrase(game: str, position: Position) -> str:
         return f"in the {game} pool ({position.box}/{position.index})"
     if position.card is None:
         # D58 — a departed card is at nothing. "at Box 3 · departed" is the same sentence
-        # that stopped meaning anything for a pooled card two lines up.
-        return f"in box {position.box}, departed ({position.box}/{position.index})"
+        # that stopped meaning anything for a pooled card two lines up. The key is spelled
+        # `departed_label`'s way and not the pooled branch's: a report sentence sits beside
+        # printed card numbers exactly as the panel does, which is the misreading D68's
+        # amendment ended, and this is the second place that key is composed.
+        return f"in box {position.box}, departed (B{position.box} #{position.index})"
     return f"at {position.label}"
 
 

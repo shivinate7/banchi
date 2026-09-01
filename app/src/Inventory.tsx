@@ -906,7 +906,7 @@ function CopiesPanel({
                 printing `Position.label` raw — and the sentence directly above says how much of
                 the store that is: 629 of 682 records have no name and no SKU, so this panel is
                 what nearly every card renders through. Marking one sold made it unmissable:
-                `Box 1 · departed · 1/1` as a plain string, which is exactly the rendering the
+                `Box 1 · departed · B1 #1` as a plain string, which is exactly the rendering the
                 owner reported. Found by pressing the button in a browser over a real store; the
                 spec fixture is a multi-copy group and never reaches this branch.
 
