@@ -137,8 +137,14 @@ launch-config:
 # `.env` IS DELIBERATELY NOT COPIED. It is the API key, copying secrets around a disk is
 # how they end up somewhere nobody is tracking, and T1 does not need it once the cache is
 # warm. Named here so its absence reads as a decision rather than an oversight.
+# The cache/mirror/node_modules provisioning below is shared with scripts/worktree-guard.sh
+# (the SessionStart hook) via scripts/worktree-provision.sh — see that script's header for
+# why: this used to be a second copy of the same cp/ln/python-one-liner sequence, and D47's
+# image-mirror fix had to be applied to both by hand the one time the mirror moved.
 worktree-setup:
-	@main="$$(dirname "$$(git rev-parse --git-common-dir)")"; \
+	@common="$$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || git rev-parse --git-common-dir)"; \
+	case "$$common" in /*) ;; *) common="$$(cd "$$common" && pwd)" ;; esac; \
+	main="$$(dirname "$$common")"; \
 	here="$$(pwd)"; \
 	if [ "$$main" = "$$here" ]; then \
 		echo "This IS the main working tree — nothing to copy into it."; \
@@ -146,28 +152,7 @@ worktree-setup:
 		exit 1; \
 	fi; \
 	$(MAKE) --no-print-directory venv; \
-	if [ -d "$$main/harness/.cache" ]; then \
-		mkdir -p harness/.cache; \
-		cp -R "$$main/harness/.cache/." harness/.cache/; \
-		echo "harness/.cache copied from $$main"; \
-	else \
-		echo "NOTE: $$main has no harness/.cache — T1 will refuse until a run is banked there."; \
-	fi; \
-	mirror="$$(cd "$$main" 2>/dev/null && python3 -c 'import sys; sys.path.insert(0, "."); from harness.eval import fixtures; print(fixtures.IMAGES_DIR)' 2>/dev/null)"; \
-	[ -n "$$mirror" ] || mirror="$$main/harness/images"; \
-	if [ -e harness/images ]; then \
-		:; \
-	elif [ -d "$$mirror" ]; then \
-		ln -s "$$mirror" harness/images; \
-		echo "harness/images linked -> $$mirror (133 MB, shared — immutable and additive-only)"; \
-	else \
-		echo "NOTE: no image mirror at $$mirror — T1 will re-download 151 images."; \
-	fi
-	@[ -d app/node_modules ] || { \
-		echo "NOTE: app/ dependencies are not installed either — also gitignored, also"; \
-		echo "      does not travel. \`make harness\` does not need them; lint, typecheck"; \
-		echo "      and design-check do, so \`make check\` will stop at lint until you run:"; \
-		echo "        npm --prefix app install"; }
+	bash scripts/worktree-provision.sh "$$main"
 	@echo "worktree ready. \`make harness\` should now be green without spending anything."
 
 # core.hooksPath is LOCAL config — it lives in .git/config, which is never pushed. So a fresh

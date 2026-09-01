@@ -1088,6 +1088,16 @@ COMPONENTS = [
                 # nothing, so every failure exits 0.
                 "governed_by": ["D16", "D18", "D43", "D47", "D42"],
             },
+            "worktree-provision.sh": {
+                "does": "the cache-copy, image-mirror-symlink and node_modules report "
+                        "shared by worktree-guard.sh (above) and `make worktree-setup` — "
+                        "extracted so a fix like D47's lands once rather than twice. Takes "
+                        "the main tree's path and an optional --prefix so each caller keeps "
+                        "its own voice; every failure here is reported, never fatal, matching "
+                        "D18 for the same reason worktree-guard.sh does — this is provisioning, "
+                        "not a gate, and neither caller is on the commit path.",
+                "governed_by": ["D18", "D47"],
+            },
             "stop-gate.sh": {
                 "does": "the Stop hook: runs `make harness` at turn end and refuses to let "
                         "the turn end on a failure. Arms itself on the absence of the last "
