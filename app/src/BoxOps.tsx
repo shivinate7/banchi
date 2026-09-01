@@ -666,7 +666,7 @@ export function BoxOps({
   /* The last box-wide apply's receipt, or null. Held past the editor closing because the
    * numbers are the only evidence of what a write over eighty-five records actually did. */
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
-  /* D82's move — the destination box, typed rather than picked. The same free-text field
+  /* D83's move — the destination box, typed rather than picked. The same free-text field
    * shape the capture screen's own Box field uses is the richer version of this; this is
    * the minimum that makes the route reachable from a screen (CLAUDE.md's own rule), and a
    * search-by-name picker is a real follow-up rather than a silent gap. */
@@ -695,7 +695,7 @@ export function BoxOps({
     }
   }
 
-  /* D82. `indices: null` moves every on-hand card — a whole-box move, which is a merge
+  /* D83. `indices: null` moves every on-hand card — a whole-box move, which is a merge
    * from this button's side; there is no separate merge control. A selection narrows it
    * to a ticked set or a section, the same widening rule `scope`/`applyClaims` already
    * follow. `to_box` is typed rather than validated client-side beyond "is it digits" —
@@ -901,7 +901,7 @@ export function BoxOps({
               onClick={() => startEdit('claims')}
             />
           ) : null}
-          {/* D82's third door, drawn beside Set claims for the same reason: it is the other
+          {/* D83's third door, drawn beside Set claims for the same reason: it is the other
               control here that acts on cards rather than on the box, and `selection`/`on_hand`
               gate it the identical way — absent over a box with nothing that could move,
               rather than disabled. `record.on_hand` and not `record.cards`: a box holding only
@@ -962,7 +962,7 @@ export function BoxOps({
           />
           <p className="boxops-hint">
             {selection.length > 0
-              ? `Moves the ${count(selection.length, 'selected card', 'selected cards')} — the tombstoned position here stays, permanently empty (D82).`
+              ? `Moves the ${count(selection.length, 'selected card', 'selected cards')} — the tombstoned position here stays, permanently empty (D83).`
               : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in box ${record.box} — the same operation a merge is, from this side.`}
           </p>
           {refused === null ? null : <p className="boxops-machine">{refused}</p>}
@@ -1022,7 +1022,7 @@ export function BoxOps({
             <p className="boxops-note-text">
               Moved {count(moved.moved, 'card', 'cards')} from box {moved.box} to box{' '}
               {moved.to_box}. The {count(moved.moved, 'position', 'positions')} left behind
-              {moved.moved === 1 ? ' stays' : ' stay'} permanently empty (D82) — the same
+              {moved.moved === 1 ? ' stays' : ' stay'} permanently empty (D83) — the same
               gap a sale or a retirement leaves.
             </p>
           </div>

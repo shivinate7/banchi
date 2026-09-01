@@ -232,6 +232,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import os
@@ -474,12 +475,12 @@ _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
 # `do_remove_card` demands the target's own `capture_id` and refuses a mismatch, so a
 # replay of a lost response refuses instead of deleting a second card.
 _REMOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/remove$")
-# D82's third door. A POST beside `remove` and `retire`, for the identical shape of reason:
+# D83's third door. A POST beside `remove` and `retire`, for the identical shape of reason:
 # a different verb on a path longer than `/inventory/<box>/<index>`, whose own regex is
 # anchored to end there, so this cannot shadow the PUT and DELETE routes. Aim-checked like
 # `remove` and not idempotent like a capture — see `MOVE_FIELDS`.
 _MOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/move$")
-# The batched move (D82): every on-hand card in a box, or a ticked selection of them, in one
+# The batched move (D83): every on-hand card in a box, or a ticked selection of them, in one
 # write. Box-level like `_INVENTORY_BOX_RE` one register up, and matched after the single-
 # card `_MOVE_RE` for the reader's sake — both are anchored and admit no ambiguity between
 # them, since one carries an index and the other does not.
@@ -682,14 +683,14 @@ RESHOOT_FIELDS = ("image", "capture_id")
 # neighbour also has none; both are pre-server records, and the limit is named at the check.
 REMOVE_FIELDS = ("capture_id",)
 
-# One card's move (D82). `capture_id` is the SAME aim check `REMOVE_FIELDS` above takes and
+# One card's move (D83). `capture_id` is the SAME aim check `REMOVE_FIELDS` above takes and
 # for the identical reason: `move_card` is not idempotent — a replayed request after a lost
 # response must not move whatever card now happens to sit at this key, which after a first
 # successful move is nothing at all (the key is a tombstone). `to_box` is the one thing this
 # body adds that a delete does not need: a destination.
 MOVE_FIELDS = ("capture_id", "to_box")
 
-# The batched move (D82): a list of indices IN THIS BOX, or `null` for every on-hand one —
+# The batched move (D83): a list of indices IN THIS BOX, or `null` for every on-hand one —
 # the shape that makes a whole-box move (merge, from the caller's side) the same request as
 # a ticked selection, with no second field to mean "everything". `to_box` is required either
 # way; there is no such thing as moving nowhere.
@@ -2600,7 +2601,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # re-validated here: the stale members cost a recorded problem at the next sidecar
         # read (`identify/sidecar.py` drops them, loudly) rather than a refusal that would
         # force every game correction to restate a claim it never mentioned.
-        judged_against = incoming["game"] if "game" in incoming else card.game
+        judged_against = incoming.get("game", card.game)
         if "variant" in payload:
             # The RETURN is what lands, not `variant_shape`: this is where the claim is put
             # into the game's enum order, and only this side knows the game (D3 rung 1's set
@@ -2796,7 +2797,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 _check_rarity_members(claim_shape, incoming["game"])
         elif "variant" in payload or "rarity_claim" in payload:
             rejected: List[Tuple[int, str]] = []
-            for at, key, card in targets:
+            for at, _key, card in targets:
                 try:
                     if "variant" in payload:
                         _check_variant_members(variant_shape, card.game)
@@ -2835,7 +2836,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 # on disk and make the next restated sweep diff as a change.
                 fields["metadata_finish"] = _check_variant_members(
                     variant_shape,
-                    incoming["game"] if "game" in incoming else card.game,
+                    incoming.get("game", card.game),
                 )
             if "rarity_claim" in payload:
                 fields["rarity_claim"] = claim_shape
@@ -2865,7 +2866,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 )
                 sidecars += 1
 
-        for at, key, changed in applied:
+        for _at, key, changed in applied:
             _history(inventory, CORRECTED, key, changed=changed, bulk=len(applied))
 
     return {
@@ -3396,7 +3397,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"Box {box}, card {index} was moved to {card.moved_to} (D82) — this key is "
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key is "
                 f"a permanent tombstone, the same as a sold or retired one, and deleting it "
                 f"would put a future capture into a box this card's own history still "
                 f"claims. The card itself is not gone: move the transplant at "
@@ -3686,7 +3687,7 @@ def _move_one(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "card_moved",
-            f"Box {box}, card {index} was already moved to {card.moved_to} (D82). Move "
+            f"Box {box}, card {index} was already moved to {card.moved_to} (D83). Move "
             f"the transplant at {card.moved_to} instead.",
         )
 
@@ -3781,7 +3782,7 @@ def _move_one(
 
 
 def do_move_card(box: int, index: int, payload: dict) -> dict:
-    """Move one card to a fresh index in another box. D82 — the third door, addressed.
+    """Move one card to a fresh index in another box. D83 — the third door, addressed.
 
     A THIRD DOOR OUT OF A BOX, NOT A SHIFT. `do_remove_card` above cascades every higher
     card down one slot; this touches no card but the one named. The position at `box`,
@@ -3855,7 +3856,7 @@ def _require_to_box(payload: dict) -> int:
 
 
 def do_move_cards(box: int, payload: dict) -> dict:
-    """Move several cards from `box` to `to_box` in one write. D82.
+    """Move several cards from `box` to `to_box` in one write. D83.
 
     `indices: null` MOVES EVERY ON-HAND CARD — a whole-box move, which is what a merge
     is from the caller's side: nothing about this route needs to know it is being used
@@ -4227,7 +4228,7 @@ def do_delete_box(box: int) -> dict:
             elif card.state == master.RETIRED:
                 blockers.append((at, f"card {at} is retired ({card.retire_reason})"))
             elif card.state == master.MOVED:
-                # D82's third door, named exactly like the other two: a moved card's
+                # D83's third door, named exactly like the other two: a moved card's
                 # tombstone is a departure record, not clutter, so a box left holding only
                 # tombstones (the residue of a merge) stays undeletable until each is
                 # accounted for — the same gate `box_not_empty_of_commitments` already is.
@@ -4886,9 +4887,7 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
         sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
         if wanted and name == wanted:
             rank = 0
-        elif number and cell == number:
-            rank = 1
-        elif sku and sku == query.strip():
+        elif (number and cell == number) or (sku and sku == query.strip()):
             rank = 1
         elif wanted and wanted in name:
             rank = 2  # the epithet case: the read is part of the catalogued title
@@ -5366,14 +5365,14 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     )
     try:
         reason = queues.check_stand_down_reason(reason)
-    except queues.UnknownStandDownReason:
+    except queues.UnknownStandDownReason as exc:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "stand_down_reason_invalid",
             f"{reason!r} is not a stand-down reason. One of: "
             + ", ".join(queues.STAND_DOWN_REASONS)
             + ". Never coerced and never defaulted — the reason is the record.",
-        )
+        ) from exc
 
     key = master.position_key(box, index)
 
@@ -6048,7 +6047,7 @@ def _state_before_sale(events: Sequence[dict], key: str) -> Optional[str]:
     erase the retirement. `sold_origin_unknown` names a file to go and look at, which is
     what this situation is.
 
-    `moved` IS `retired`'s SIBLING GUARD (D82), and for a sharper reason than symmetry:
+    `moved` IS `retired`'s SIBLING GUARD (D83), and for a sharper reason than symmetry:
     `set_state` accepts `moved` without complaint — it is a plain member of `master.STATES`
     — but `store/master.py:Inventory.move_card` is the ONLY correct way to reach it, and it
     never uses `set_state` at all. A `moved` line directly under a `sold` one is therefore
@@ -6085,7 +6084,7 @@ def _state_before_retirement(events: Sequence[dict], key: str) -> Optional[str]:
     hand-edited history, and restoring to it would fabricate a sale this store never
     recorded. `retired_origin_unknown` sends the operator to the file instead.
 
-    `moved` REFUSES TOO (D82), same reason `_state_before_sale` refuses it: `moved` is
+    `moved` REFUSES TOO (D83), same reason `_state_before_sale` refuses it: `moved` is
     reachable only through `Inventory.move_card`, which never calls `set_state`, so handing
     it back as a state to restore TO would put a card in that state with none of the
     tombstone shape `move_card` guarantees — no `moved_to`, no transplant.
@@ -6239,7 +6238,7 @@ def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"Box {box}, card {index} was moved to {card.moved_to} (D82) — this key "
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key "
                 f"is a tombstone, not the card. Mark the transplant at {card.moved_to} "
                 f"sold instead.",
             )
@@ -6519,7 +6518,7 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                 raise BadRequest(
                     HTTPStatus.CONFLICT,
                     "card_moved",
-                    f"Box {box}, card {index} was moved to {card.moved_to} (D82) — this "
+                    f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this "
                     f"key is a tombstone, not the card. Retire the transplant at "
                     f"{card.moved_to} instead.",
                 )
@@ -6644,7 +6643,7 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "card_moved",
-                f"Box {box}, card {index} was moved to {card.moved_to} (D82) — this key "
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key "
                 f"is a tombstone with no photo of its own. Re-shoot the transplant at "
                 f"{card.moved_to} instead.",
             )
@@ -7150,7 +7149,7 @@ def _box_row(
         elif card.state == master.RETIRED:
             retired += 1
         elif card.state == master.MOVED:
-            # D82's third door. Reported for the same reason `sold`/`retired` are: once a
+            # D83's third door. Reported for the same reason `sold`/`retired` are: once a
             # move can be one of `box_not_empty_of_commitments`'s grounds (a merged-away box
             # is left holding only tombstones), the delete panel needs to say so before the
             # operator presses anything, not discover it from a refusal.
@@ -8625,7 +8624,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(HTTPStatus.CONFLICT, "section_ahead", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
-        # D82's move primitive, caught here as a backstop rather than the whole story: the
+        # D83's move primitive, caught here as a backstop rather than the whole story: the
         # move routes run their own state checks first, with the richer per-door messages
         # `card_sold`/`card_retired`/`card_moved` already give — these two exist for any
         # caller that reaches `Inventory.move_card` without going through them, the same
@@ -8909,7 +8908,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
-            # D82's third door: one card, to another box. Matched before the batched form
+            # D83's third door: one card, to another box. Matched before the batched form
             # one register down, though the two patterns cannot collide — `_MOVE_RE` needs
             # two digit groups before `/move` and `_MOVE_CARDS_RE` needs exactly one.
             match = _MOVE_RE.match(path)
@@ -8918,7 +8917,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
                 return self._json(HTTPStatus.OK, body)
-            # D82's batched move: a ticked selection, a section (indices computed by the
+            # D83's batched move: a ticked selection, a section (indices computed by the
             # caller from the box's own live rendering), or a whole box (`indices: null`) —
             # which is a merge, from the caller's side, with no separate route for it.
             match = _MOVE_CARDS_RE.match(path)
@@ -9211,7 +9210,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         print(f"cannot listen on {host}:{port} — {exc}")
         print("  Something is already serving this port. `make status` says who.")
         print("  If it is your own supervisor: `make down`, or just use the one that is up.")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     # SIGTERM RAISES THE INTERRUPT THE CTRL-C PATH ALREADY HANDLES, so there is one shutdown
     # and not two. Without this the default disposition terminates the process outright — no
@@ -9224,10 +9223,8 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     def _term(_signum, _frame):
         raise KeyboardInterrupt
 
-    try:
+    with contextlib.suppress(ValueError):
         signal.signal(signal.SIGTERM, _term)
-    except ValueError:
-        pass
 
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")

@@ -15,7 +15,6 @@ you do not have when the poll is the thing that died.
 from __future__ import annotations
 
 import hashlib
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path

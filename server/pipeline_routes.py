@@ -91,7 +91,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import io
 import json
 import os
 import re
@@ -895,7 +894,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         from geometry.crop import BAND_PROFILES
         from identify import images as identify_images, sidecar
         from pipeline import games
-        from PIL import Image
+        from PIL import Image  # noqa: F401 — probes Pillow's presence, same as the four imports above it
     except ImportError as exc:
         # NAMED RATHER THAN FATAL, and the import is in here rather than at module scope for
         # exactly this reason: `server/capture_server.py` has never needed Pillow, and a
@@ -906,7 +905,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
             "imaging_unavailable",
             f"The crop preview needs Pillow, numpy and geometry in the SERVER's "
             f"interpreter — run `make venv` and restart `make server`. ({exc})",
-        )
+        ) from exc
 
     captures = [c for c in sidecar.scan(scope_dir) if c.has_position]
     total = len(captures)

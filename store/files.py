@@ -76,7 +76,7 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
 
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / LOCK_NAME
-    handle = open(path, "a+")
+    handle = open(path, "a+")  # noqa: SIM115 — the flock lives as long as this fd stays open
     deadline = time.monotonic() + timeout
     try:
         while True:
@@ -90,7 +90,7 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
                     raise LockTimeout(
                         f"{path} is locked by another process after {timeout}s — the "
                         f"capture server holds this lock while it writes. Retry, or stop it."
-                    )
+                    ) from exc
                 time.sleep(LOCK_POLL_SECONDS)
         yield
     finally:

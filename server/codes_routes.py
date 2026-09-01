@@ -27,11 +27,10 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from codes import ledger, lots, products, qr
 from codes import scan as codescan
-from store import files
 from store.session import Store
 
 # The two lanes C11 settles. A lane is not a channel — it is which of the two POPULATIONS a

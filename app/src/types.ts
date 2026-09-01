@@ -611,7 +611,7 @@ export type RemoveResult = {
   next_index: number
 }
 
-/** What `POST /inventory/<box>/<index>/move` answers — D82's third door.
+/** What `POST /inventory/<box>/<index>/move` answers — D83's third door.
  *
  *  Unlike `RemoveResult`, nothing here EVER renumbers a neighbour: the source position
  *  becomes a permanent tombstone (same shape as a sale or a retirement) and the card is
@@ -634,7 +634,7 @@ export type MoveResult = {
   card: InventoryCard
 }
 
-/** What `POST /inventory/<box>/move` answers — D82's batched move: a ticked selection, a
+/** What `POST /inventory/<box>/move` answers — D83's batched move: a ticked selection, a
  *  section, or (via `indices: null`) a whole box, which is what a merge is from the
  *  caller's side. `cards` carries one row per card in the same shape `MoveResult` uses,
  *  minus its own `card` field — the screen already knows what moved without re-fetching
@@ -1283,7 +1283,7 @@ export type BoxRecord = {
    *  itself would name. */
   retired: number
 
-  /** Cards moved OUT of this box to another one (D82) — `retired`'s sibling on the same
+  /** Cards moved OUT of this box to another one (D83) — `retired`'s sibling on the same
    *  panel. A box left holding only these after a merge stays undeletable exactly as a
    *  box holding sold or retired cards does, and this is what lets the delete panel say
    *  so before the press rather than after the refusal. */

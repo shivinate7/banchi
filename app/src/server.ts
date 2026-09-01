@@ -1460,7 +1460,7 @@ export async function removeCardInPlace(
 }
 
 /**
- * Move one card to a fresh index in another box (D82) — the third door out of a box, and
+ * Move one card to a fresh index in another box (D83) — the third door out of a box, and
  * not a shift: unlike `removeCardInPlace`, nothing else in either box renumbers. The
  * source position becomes a permanent tombstone, the same shape a sale or a retirement
  * leaves, and the card is recorded fresh at the answer's `new_box`/`new_index`.
@@ -1491,7 +1491,7 @@ export async function moveCard(
 }
 
 /**
- * Move several cards from one box to another in one write (D82). `indices: null` moves
+ * Move several cards from one box to another in one write (D83). `indices: null` moves
  * every on-hand card — a whole-box move, which is what a merge is from this call's side;
  * there is no separate merge endpoint. Pass an explicit list for a ticked selection or a
  * section (computed from the box's own `sections_detail`, the same source the dividers

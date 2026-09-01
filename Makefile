@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -36,11 +36,21 @@ VENV_GUARD = @[ ! -x .venv/bin/python ] || [ -f .venv/.deps-stamp -a ! requireme
 	echo "  Fix: make venv"; \
 	exit 1; }
 
+# ruff (D82) is a requirements.txt entry, not a system binary — same reasoning as NPM_GUARD:
+# a lint target that silently no-ops without it would let `make check` go green having
+# checked nothing.
+RUFF_GUARD = @$(PYTHON) -m ruff --version >/dev/null 2>&1 || { \
+	echo "ruff is not installed in $(PYTHON)."; \
+	echo "  Fix: make venv"; \
+	exit 1; }
+
 help:
 	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
+	@echo "  make explain      what \`make check\` runs, and what each row is worth."
+	@echo "                    ARGS=<target> for one entry in full."
 	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
 	@echo "                    again whenever requirements.txt changes — safe to re-run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
@@ -52,12 +62,16 @@ help:
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
+	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
-	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
+	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
+	@echo "                    merge-selftest + port-agreement + set-hint-agreement +"
+	@echo "                    screen-freshness +"
+	@echo "                    ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -65,6 +79,8 @@ help:
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make up           BOTH servers, detached, and the capture server reloads itself"
 	@echo "                    when you edit Python. Prints the link. Start here."
+	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
+	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop them.  make restart  stop and start."
 	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
 	@echo "                    ARGS=--remove to undo it."
@@ -73,7 +89,7 @@ help:
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
-	@echo "  make lint         eslint over app/: the two v1-bug rules. No Python linter."
+	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
 	@echo "Build order and gates: docs/GATES.md"
@@ -272,6 +288,25 @@ status:
 map:
 	@python3 scripts/map-view.py $(ARGS)
 
+# THE COMPOSITION OF `check` BELOW, AS DATA WITH A READER. The recipe is eleven lines of
+# `$(MAKE)`, and everything a session needs to know about them — which are on the commit path,
+# which write, which need node, which can never fail — was argued in ~120 lines of comment
+# spread through this file and readable only by opening it. `make help`'s one-line summary was
+# the compressed version and it WAS WRONG: it said `harness + docs-audit + the self-tests +
+# lint + typecheck` while five more targets ran, and had said so since those five landed.
+#
+# scripts/checks.py is a PARALLEL DECLARATION and deliberately does not drive the recipe.
+# A registry that drove the suite could silently stop running a check; this one can only lie,
+# and `make docs-audit` has three rows that catch it lying — `check registry` against the
+# recipe, `check census` against the published prose, and `commit path writes`, which asserts
+# D18 mechanically by refusing any writing check on the commit path.
+#
+# python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
+# tool. Same rule as `status`, `map` and `docs-audit`.
+explain:
+	@python3 scripts/checks.py $(ARGS)
+
+
 harness:
 	$(VENV_GUARD)
 	@$(PYTHON) harness/run.py
@@ -309,6 +344,7 @@ check:
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -334,6 +370,28 @@ audit-self-test:
 # refusing its own commits.
 githooks-selftest:
 	@bash scripts/githooks-selftest.sh
+
+# THE HALF NOBODY CAN REMEMBER, DONE BY A MACHINE. D42 settles that a session performs both
+# halves of a merge on the owner's word — `gh pr merge`, then the local fast-forward — and the
+# local half has TWO correct forms chosen by whether any worktree holds main. Pick wrong and it
+# does not error: `git -C <main tree> pull --ff-only` fast-forwards whatever branch that tree is
+# standing on, moves no protected ref, and trips no hook.
+#
+# THIS DOES NOT REOPEN D42'S "no make target that picks for you". That rejection is about
+# WHETHER TO MERGE, which stays the owner's: a bare `make merge` refuses, `ARGS=<n>` is a free
+# preview that presses nothing, and only `ARGS="<n> --confirm"` acts. What is automated is the
+# state lookup. See D42's amendment.
+#
+# It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
+# variable is doing something else (D42).
+merge:
+	@$(PYTHON) scripts/merge-pr.py $(ARGS)
+
+# HERE AND NOT IN THE GIT HOOK, for githooks-selftest's two reasons exactly: D18, because it
+# writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
+# main, so a version on the commit path would be exercising that against the real one.
+merge-selftest:
+	@bash scripts/merge-selftest.sh
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and
@@ -462,15 +520,23 @@ design-check:
 # the config held four, and the config file is the register. The pattern is the point — a bug
 # becomes a guard, so the list only grows.
 #
-# JavaScript only, and this target does not claim otherwise. The stub it replaced promised
-# "ruff (Python) + eslint (JS)"; shipping the JS half under that name would leave `make
-# check` green with a whole language unlinted, which is the same lie the header comment
-# above is about. Python has no linter here. Adopting ruff is its own decision, unmade —
-# and `docs/specs/audit-retirement.md` section 9 is the format for making it: run the tool
-# on this repo, read the findings, then decide.
+# RUFF JOINED THIS TARGET 2026-09-01 (D82), ON A SLICE MEASURED AGAINST THIS TREE, NOT ON
+# WHAT IT ENABLES BY DEFAULT. Zero-config `ruff check .` found 2,131 things on this repo,
+# 79% of them three pyupgrade rules rewriting `Dict`/`Optional[X]` to PEP 585/604 syntax —
+# a runtime TypeError on the Python 3.9.6 this repo pins, unless ruff is told the target
+# version, which its own default does not do. `ruff.toml` sets it and selects only
+# pyflakes + bugbear + flake8-simplify; the other ~890 default-enabled rules are unmeasured
+# here and stay off. Three rules in even that narrower selection produced confirmed false
+# positives on this tree, each now a per-line `# noqa` with its reason rather than a
+# blanket exclusion: SIM115 over a lock's flock handle and a detached child's log handle,
+# both deliberately outliving the function that opens them; B023 over a test closure that
+# is started and joined before the loop variable it captures rebinds; and SIM118 in
+# cli/resolve.py, where `games` is the `pipeline.games` MODULE and `.keys()` is a real
+# function rather than dict.keys() — applying that one broke `make harness` (T3/T4/T7,
+# `TypeError: 'module' object is not iterable`) before it was caught and reverted.
 #
-# No `--fix`, here or in the npm script. `check` below runs this target, and D18 keeps
-# anything that writes off the path that decides whether work is done.
+# No `--fix`, here or in the npm script, for either language. `check` below runs this
+# target, and D18 keeps anything that writes off the path that decides whether work is done.
 # Vale, the prose linter, over EVERY tracked markdown file.
 #
 # NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
@@ -501,6 +567,9 @@ vale:
 lint:
 	$(NPM_GUARD)
 	@npm --prefix app run lint
+	$(VENV_GUARD)
+	$(RUFF_GUARD)
+	@$(PYTHON) -m ruff check .
 
 typecheck:
 	$(NPM_GUARD)
