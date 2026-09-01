@@ -511,6 +511,7 @@ D78  A run's reason for adding nothing is a heading, the rows under it sink, and
 D79  The reading goes on every row, because the operator answered D62's own measurement
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
+D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
@@ -557,8 +558,9 @@ D81  The presence gate is a distance from this session's own baseline, and the s
   view against a real order, and the review screen's price-banded hierarchy against a
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested 2026-08-22,
-  tuned at the rig 2026-08-23, confirmed live at 85/85 on box 95, and **rebuilt on
-  measurements 2026-08-31 (D81)**. Its §4 is the rig protocol; D19 and D81 are the decisions.
+  tuned at the rig 2026-08-23, confirmed live at 85/85 on box 95, **rebuilt on
+  measurements 2026-08-31 (D81)** and **corrected on three more 2026-09-01 (D84)**. Its §4 is
+  the rig protocol; D19, D81 and D84 are the decisions.
   Read its STATUS before treating a green `make design-check` as evidence about the feeder —
   the TRIGGER half of Gate C is confirmed and the PIPELINE half is not: box 95's 85 records
   are all still `captured`, and no run directory exists for that box.
@@ -574,11 +576,25 @@ D81  The presence gate is a distance from this session's own baseline, and the s
   the session's own median still-frame difference. The seed reproduces the hand-tuned
   4.50/8.00 exactly, so the 85/85 run is not re-litigated.
 
+  **THE FIRST THREE SESSIONS RUN ON THAT MACHINE COST TWO JUNK PHOTOGRAPHS AND FOUR SILENTLY
+  LOST CARDS, ALL IN THE FIRST TWO SECONDS AFTER ARMING** (D84). A settle is now `stillFrames`
+  of the last `stillWindow` and not a consecutive run — a two-frame alternation defeats a run
+  absolutely, and one did, on a card sitting motionless for 500 ms. The stall clock is cleared
+  by a COMPLETED settle and not by any quiet frame, which is why `stalled` never fired across
+  those four. **`presenceMin` is 16.0 and it BINDS**, so the sentence above is no longer true
+  of the presence floor: what that floor has to clear is the operator's HAND arriving with the
+  first card (8–11 on this rig), and no session statistic measures how big a hand is in frame.
+  D84 records that as a debt rather than a design, and names the three quantities that
+  re-derive it on a new rig — the idle stand, the worst approach, the quietest card.
+
   **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
   changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws
   every verdict's frame, because the 2026-08-29 fix derived its "empty stand" brightnesses
   from twenty photographs of real cards nobody had looked at. **Arm on an empty stand**: what
-  is in the watch region at arm time is what the session will call nothing.
+  is in the watch region at arm time is what the session will call nothing. **And the trace is
+  not the whole answer** — D84's four lost cards were only provable by downsampling the run's
+  own JPEGs to the trace's 38x28 watch region and matching them frame against photograph. A
+  trace says what the machine decided; only the photographs say what was there.
 - docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

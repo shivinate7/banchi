@@ -166,10 +166,28 @@ export type MotionParams = {
    *  86 cards vanished while everything looked normal. A median over a window that admitted
    *  motion would have been quieter and wronger. */
   noiseWindowMs: number
-  /** Consecutive still frames that mean "settled". 2 frames = 67 ms at 30fps. The original
+  /** Still frames that mean "settled" — counted as `stillFrames` of the last
+   *  `stillWindow`, not as a consecutive run. 2 frames = 67 ms at 30fps. The original
    *  guess of 6 (200 ms), plus a blinding 400 ms cooldown, summed to more than the 458 ms
    *  worst cycle Gate B measured — infeasible at the MEAN cycle, not just the worst. */
   stillFrames: number
+  /** How many recent frames `stillFrames` is counted over. 4 SINCE 2026-09-01 (D84). It
+   *  was effectively 2 until then, because the rule was a consecutive run.
+   *
+   *  A CONSECUTIVE RUN IS DEFEATED BY A TWO-FRAME ALTERNATION, and that is measured rather
+   *  than feared. A card sitting motionless at the head of a feeder run, 500 ms, every
+   *  frame, against a tLo of 4.18:
+   *
+   *      2.71  5.40  2.63  5.54  2.83  5.14  3.03  4.80  3.64  4.91
+   *
+   *  Five separate runs of ONE, never a run of two, no verdict — and the card was replaced
+   *  unphotographed with nothing on the HUD. Two of the last four is satisfied by that
+   *  pattern at its third frame. Swept over the three 2026-09-01 sessions it recovers two
+   *  of the four cards lost this way and changes no other verdict; 2-of-3 and 3-of-5 both
+   *  recover fewer. The other two recoveries are not this rule's job — those scenes had
+   *  one quiet frame in ten and were genuinely still moving, which is what `maxMoveMs` is
+   *  for and why D84 moves that too. */
+  stillWindow: number
   /** Floor on the spacing between fires, DEFERRING rather than blinding: a settle that
    *  completes inside the window fires when it expires instead of being dropped. Sized to
    *  the measured capture round trip (<250 ms), not to the card cycle. A time, not a light
@@ -212,28 +230,47 @@ export type MotionParams = {
    *  silent loss of twenty mid-run. */
   presenceK: number
   /** Absolute floor under the presence threshold, so a very quiet rig cannot drive it low
-   *  enough that a drifting lamp reads as an object arriving.
+   *  enough that something which is not a card reads as one.
    *
-   *  8.0 IS SET BY DRIFT, NOT BY NOISE. A perfectly static scene does not hold still against
-   *  a baseline minutes old: the lamp warms, the auto-gain that manual exposure did not quite
-   *  disable breathes, and the same unchanged stand walks away from its own baseline. The
-   *  measured worst case across the saved traces is 7.94 — the 2026-08-23 02:49 scene, 3.4
-   *  seconds after its baseline, with nothing having moved. 8.0 sits just above that and
-   *  still leaves better than 2x under the dimmest card ever measured (17.4). Scored end to
-   *  end, every value from 6 to 10 gives byte-identical verdicts on all five traces, which
-   *  is what a real gap between two populations looks like; 8.0 is the middle of it.
+   *  16.0 SINCE 2026-09-01 (D84), AND WHAT IT KEEPS OUT IS A HAND RATHER THAN DRIFT. 8.0
+   *  was set by illumination drift — a static scene walking 7.94 away from a baseline 3.4 s
+   *  old — and three fresh traces did not reproduce that. An undisturbed stand does not
+   *  creep at all; per-second worst dBase, plate only:
    *
-   *  DRIFT ALONE CANNOT FIRE ANYWAY, and that is the second line of defence: a fire needs a
-   *  settle EPISODE, an episode needs motion above tHi, and drift is slower than the still
-   *  threshold by two orders of magnitude. The floor only decides the one case where a card
-   *  is REMOVED and the drifted empty stand settles — where the worst outcome is one
-   *  photograph of an empty stand, visible in the strip and undone with U. */
+   *      21:10 run   0s 2.45  1s 2.26  2s 2.53 … 9s 2.36 │ 10s 8.12  11s 14.14  12s 17.91
+   *      21:16 run   0s 2.13  1s 2.19  2s 2.20 … 5s 2.79 │  6s 6.81   7s 14.66   8s 11.64
+   *                                                      ^ the operator's hand, arriving
+   *
+   *  Everything above 3 is the hand entering frame with the first card of the run. It holds
+   *  still for two frames on the way in, and at 8.0 that FIRED: two of the three sessions
+   *  photographed the bare stand at dBase 9.07 and 9.10 and put a junk row at the top of a
+   *  box. 16.0 is 1.4x over the worst approach measured (11.15) and 2x under the quietest
+   *  card in the same sessions (32.5); re-scored end to end it removes exactly those two
+   *  fires and no others.
+   *
+   *  IT IS A CONSTANT AND IT IS NOW THE BINDING TERM, which is a debt and not a design.
+   *  `presenceK * dTypical` sits at 6-10 on this rig, so this floor decides every verdict
+   *  and the adaptive half decides none — the species D81 convicted in `cardLumaFloor`. It
+   *  stays constant because what it has to clear is a HAND, whose size in frame no session
+   *  statistic measures. Three quantities re-derive it on a new rig and they are the three
+   *  above: the idle stand, the worst approach, the quietest card.
+   *
+   *  DRIFT ALONE STILL CANNOT FIRE, and that is the second line of defence, unchanged: a
+   *  fire needs a settle EPISODE, an episode needs motion above tHi, and drift is slower
+   *  than the still threshold by two orders of magnitude. */
   presenceMin: number
-  /** Continuous motion this long without settling is a jam or a hand — surfaced as
-   *  `stalled`, and the machine does NOT fire. Firing anyway was argued (never silently
-   *  drop a card, §5.5) and rejected for v1: a hand in frame would capture-spam, and the
-   *  stall is loud on screen, which is what §5.5 actually requires. Revisit at the rig —
-   *  docs/specs/motion-trigger.md carries both sides. A time, like the refractory. */
+  /** This long without a COMPLETED settle is a jam or a hand — surfaced as `stalled`, and
+   *  the machine does NOT fire. Firing anyway was argued (never silently drop a card, §5.5)
+   *  and rejected for v1: a hand in frame would capture-spam, and the stall is loud on
+   *  screen, which is what §5.5 actually requires. A time, like the refractory.
+   *
+   *  "COMPLETED SETTLE" IS D84'S CORRECTION AND IT IS THE WHOLE VALUE OF THIS FIELD. The
+   *  clock used to be cleared by any single frame under tLo while a fire needed two in a
+   *  row, so the alternation `stillWindow` documents reset it every other frame and it
+   *  could never expire. Across three sessions, 93 seconds and four cards left
+   *  unphotographed, this never fired once. Cleared on a settle instead, it reports each of
+   *  those and nothing else: one stall per session, every one on a real card, zero false
+   *  positives over 67 good captures. */
   maxMoveMs: number
 }
 
@@ -247,10 +284,11 @@ export const DEFAULT_PARAMS: MotionParams = {
   dFloor: 1.0,
   noiseWindowMs: 8000,
   stillFrames: 2,
+  stillWindow: 4,
   refractoryMs: 250,
   tNovel: 4.0,
   presenceK: 3.0,
-  presenceMin: 8.0,
+  presenceMin: 16.0,
   maxMoveMs: 1250,
 }
 
@@ -329,7 +367,18 @@ export class MotionMachine {
 
   private prev: Float32Array | null = null
   private lastFired: Float32Array | null = null
-  private stillRun = 0
+  /* THE LAST `stillWindow` FRAMES, as a ring of "was this one under tLo" plus a running
+   * count, because a settle is `stillFrames` OF them and no longer a consecutive run. The
+   * field `stillWindow` carries the alternation this exists to survive.
+   *
+   * `stillSeen` gates on the window being FULL. A partial window would let an episode
+   * settle on fewer marks than the rule names — two marks out of two seen is the
+   * consecutive rule wearing a new name — and the sweep that chose 2-of-4 was run with the
+   * window full, so shipping it any other way would ship a rule nobody scored. */
+  private readonly stillMarks: Uint8Array
+  private stillHead = 0
+  private stillCount = 0
+  private stillSeen = 0
   private movingSince: number | null = null
   private stallFlagged = false
   private refractoryUntil = 0
@@ -384,6 +433,10 @@ export class MotionMachine {
 
   constructor(params: MotionParams = DEFAULT_PARAMS) {
     this.p = params
+    /* Math.max, so a stillWindow set under stillFrames cannot make a settle unreachable —
+     * a trigger that can never fire and says nothing is the failure class this whole file
+     * is about, and it must not be one typo away in a params object. */
+    this.stillMarks = new Uint8Array(Math.max(params.stillFrames, params.stillWindow))
     const capacity = Math.max(64, Math.ceil((params.noiseWindowMs / 1000) * 125))
     this.dTimes = new Float64Array(capacity)
     this.dVals = new Float32Array(capacity)
@@ -393,6 +446,24 @@ export class MotionMachine {
     this.tHi = this.dTypical * params.moveK
     this.presenceFloor = Math.max(params.presenceMin, this.dTypical * params.presenceK)
     this.publishThresholds()
+  }
+
+  /** Fold one frame's verdict into the stillness window. */
+  private markStill(quiet: boolean): void {
+    const slot = this.stillHead
+    this.stillCount -= this.stillMarks[slot] as number
+    this.stillMarks[slot] = quiet ? 1 : 0
+    if (quiet) this.stillCount += 1
+    this.stillHead = (slot + 1) % this.stillMarks.length
+    if (this.stillSeen < this.stillMarks.length) this.stillSeen += 1
+  }
+
+  /** Throw the window away. Motion above tHi ends the episode the marks belonged to. */
+  private clearStillMarks(): void {
+    this.stillMarks.fill(0)
+    this.stillHead = 0
+    this.stillCount = 0
+    this.stillSeen = 0
   }
 
   /** Forget the baseline. See `MotionControls.rebaseline`. */
@@ -407,7 +478,7 @@ export class MotionMachine {
      * control while a card sits still would take the new baseline but never judge against
      * it until something moved. */
     this.episodeJudged = false
-    this.stillRun = 0
+    this.clearStillMarks()
   }
 
   private publishThresholds(): void {
@@ -499,7 +570,7 @@ export class MotionMachine {
     if (d > this.tHi) {
       // MOVING. A new episode: whatever verdict the last settle got, the next one is new.
       if (this.movingSince === null) this.movingSince = nowMs
-      this.stillRun = 0
+      this.clearStillMarks()
       this.episodeJudged = false
       this.diag.phase = 'moving'
       if (!this.stallFlagged && nowMs - this.movingSince > this.p.maxMoveMs) {
@@ -510,15 +581,29 @@ export class MotionMachine {
       return null
     }
 
-    if (d >= this.tLo) {
-      /* The Schmitt band: not confidently still, not new motion. The still-counter does
-       * not accumulate — and the stall clock RUNS, starting here if it has to, because a
-       * hand hovering just under tHi forever is exactly as jammed as one at d 20.
-       * `movingSince` therefore means "since the scene stopped being confidently still",
-       * not "since d last crossed tHi": a stall that only armed above tHi would let the
-       * band hide a jam silently, which the test named for this case proved before this
-       * line existed. */
-      this.stillRun = 0
+    /* UNDER tHi, so this frame is evidence about stillness whichever side of tLo it falls
+     * on. The Schmitt band is a mark of ZERO here rather than a reset of the window, and
+     * that is the D84 change: the alternation `stillWindow` documents is a card sitting
+     * still whose every other frame lands in the band, and a rule that threw the window
+     * away on each of those could never see it. */
+    const quiet = d < this.tLo
+    this.markStill(quiet)
+
+    /* A settle may only COMPLETE on a quiet frame, because the fire photographs this one.
+     * Measured over the three D84 traces: requiring it costs nothing — both cards the
+     * window recovers land on a quiet frame anyway — and without it a capture could be
+     * taken from a frame the machine had just called not-confidently-still. */
+    const settled =
+      quiet && this.stillSeen >= this.p.stillWindow && this.stillCount >= this.p.stillFrames
+    this.diag.phase = settled ? 'watching' : 'settling'
+
+    if (!settled) {
+      /* THE STALL CLOCK RUNS, and this frame does not clear it however quiet it was.
+       * `movingSince` means "since the scene last SETTLED", not "since d last crossed tHi"
+       * and no longer "since the last frame under tLo" — which is what makes a hand
+       * hovering in the band, and an alternation that never completes, both expire. The
+       * middle reading was already argued here; the third is D84's, and the count that
+       * convicted the second is in `maxMoveMs`. */
       if (this.movingSince === null) this.movingSince = nowMs
       if (!this.stallFlagged && nowMs - this.movingSince > this.p.maxMoveMs) {
         this.stallFlagged = true
@@ -528,13 +613,9 @@ export class MotionMachine {
       return null
     }
 
-    // STILL.
+    // SETTLED.
     this.movingSince = null
     this.stallFlagged = false
-    this.stillRun += 1
-    this.diag.phase = this.stillRun >= this.p.stillFrames ? 'watching' : 'settling'
-
-    if (this.stillRun < this.p.stillFrames) return null
 
     /* THE BASELINE IS TAKEN HERE, on the first still run after arming — "the watch region
      * as it stood when you armed", which is what the operator is asked to make an empty

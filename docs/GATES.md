@@ -722,18 +722,26 @@ re-run at the rig's real resolution — opencv fell from a plausible 96% to 72.7
 of 8 on a card filling a quarter of the frame. A test at the wrong resolution would have
 locked that mistake in.
 
-### T9 — Motion trigger against five recorded rig sessions
+### T9 — Motion trigger against eight recorded rig sessions
 
-New 2026-08-31 with D81. **Pass: on every saved trace an empty stand sits within 2 of its own
-baseline and every card sits 17 or more away; the dimmest card on one rig is dimmer than the
-empty stand on another, so no brightness constant separates them; and the adaptive thresholds
-reach at least as many verdicts as the hand-tuned constants did live on all five.**
+New 2026-08-31 with D81, widened 2026-09-01 with D84. **Pass: on every saved trace an empty stand sits within 2 of its own baseline and every card sits
+17 or more away; the dimmest card on one rig is dimmer than the empty stand on another, so
+no brightness constant separates them; the adaptive thresholds reach at least as many
+verdicts as the hand-tuned constants did live on all eight; and on the three sessions D84
+was derived from, the presence floor refuses both settles that photographed the bare stand
+while a card that never settles is reported as a stall.**
 
-**The inputs are `harness/traces/` — five armed sessions across four rig states**, saved from
-the capture screen's HUD by the owner between 2026-08-23 and 2026-09-01. Each carries every
-frame's `(t, d, luma)` and the exact watch-region pixels of every verdict, which is what makes
-a refusal re-scorable a year later. They are ground truth in `fixtures/`'s sense and are never
-modified.
+**The inputs are `harness/traces/` — eight armed sessions**, saved from the capture screen's
+HUD by the owner between 2026-08-23 and 2026-09-01: FIVE recorded under the brightness floor
+D81 replaced, and THREE recorded on 2026-09-01 under the distance gate that replaced it, which
+are the sessions D84 was derived from. Each carries every frame's `(t, d, luma)`, v2 adding
+`dBase`, and the exact watch-region pixels of every verdict, which is what makes a refusal
+re-scorable a year later. They are ground truth in `fixtures/`'s sense and are never modified.
+
+**The two corpora are named in code and never summed.** "38 real cards were refused live" is a
+receipt for what the brightness floor cost, and only the first five sessions were ever recorded
+under it; adding the later three would turn a fixed number into one that grows every time a
+trace is banked.
 
 **Why it exists.** The card-present gate was rebuilt three times. Through the first two, both
 Playwright specs over the motion machine stayed green — they draw their own frames, so they
@@ -741,11 +749,15 @@ can only prove the machine agrees with the test's idea of a card. Meanwhile the 
 the tree refused **38 real cards as an empty stand across three live sessions**, silently. T9
 is the first test in this repo that could have failed.
 
-**Two kinds of assertion, and they are not equally valuable.** The *separation* — empty stand
+**Three kinds of assertion, and they are not equally valuable.** The *separation* — empty stand
 within 2 of its baseline, cards 17 or more away — is a claim about photographs, and if it
 fails something physical changed. The *counts* are a claim about the replay's arithmetic: a
 tripwire for a constant moved without re-scoring, legitimately updatable as a decision with
-the sweep re-run, never as a reflex.
+the sweep re-run, never as a reflex. The *D84 pair* is a claim about the two defects those
+three sessions cost — that the presence floor refuses both settles that photographed the bare
+stand and nothing else that fired, and that a card which never completes a settle is reported
+rather than lost. Both are asserted by TIME and not by count, because "two fires are refused"
+would pass just as happily on a floor that had climbed far enough to refuse two cards.
 
 **The answer key is written down, not inferred**, and that is the point rather than a
 convenience. The 2026-08-29 fix derived its "empty stand" brightness table from twenty frames
@@ -754,8 +766,8 @@ the stand. Every verdict frame was rendered and inspected before the labels in
 `t9_traces.py` were written; `scripts/score-trace.py contact` is how.
 
 **WHAT A GREEN T9 DOES NOT MEAN.** It does not mean the trigger works at the rig today —
-these are five recordings of four rig states, and a sixth can differ from all of them. Same
-limit T6 and T8 carry. What it means is that the machine still tells a card from an empty
+these are eight recordings of a handful of rig states, and the next can differ from all of
+them. Same limit T6 and T8 carry. What it means is that the machine still tells a card from an empty
 stand on every session anybody has recorded.
 
 **No card is identifiable and no code card is present.** A stored frame is 1,064 luma cells

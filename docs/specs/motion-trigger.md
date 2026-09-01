@@ -4,7 +4,7 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — CONFIRMED LIVE AT 85/85, AND REBUILT ON MEASUREMENTS 2026-08-31
+## STATUS — CONFIRMED LIVE AT 85/85, REBUILT ON MEASUREMENTS 2026-08-31, CORRECTED 2026-09-01
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
 mode toggle on the capture screen, with a live HUD, a swallowed-fire counter and a
@@ -33,10 +33,32 @@ the last 8 s of frames the machine already called still, and score **86, 86, 20,
 across the five traces where the hand-tuned constants scored 72, 86, 20, 15, 24. The seed
 reproduces 4.50 and 8.00 to the last digit.
 
-**§4's protocol changed shape because of it.** The parameters are no longer what a rig
+**THE FIRST THREE SESSIONS RUN ON THAT MACHINE FOUND TWO MORE DEFECTS, AND D84 IS THE
+CORRECTION.** 2026-09-01, three armed runs, 93 s of feeding, 69 fires — every one of which
+reached disk, so the plumbing was never in question. What the traces and the photographs
+together say is that **two fires photographed the bare stand** and **four cards were fed and
+never photographed at all**, and that every one of those six sits in the first two seconds
+after arming. After that the cadence is metronomic: 43 consecutive fires in the longest run
+with no gap over 1.0 s.
+
+Three changes, each with its own row in §2's table: a settle is `stillFrames` of the last
+`stillWindow` rather than a consecutive run; the stall clock is cleared by a COMPLETED settle
+rather than by any quiet frame; and `presenceMin` is 16.0, sized to a hand arriving with the
+first card rather than to lamp drift. Together they turn the four silent losses into two
+photographs and two stalls, and the two junk photographs into refusals — with **zero false
+stalls across 67 good captures and the 217 verdicts of the five earlier traces**, which are
+byte-identical under the new rule. D84 carries the argument and the measurements.
+
+**One of the three walks a step BACK from D81 and the entry says so.** `presenceMin` at 16.0
+binds over `presenceK` × the session's measurement on this rig, so the presence gate is
+decided by a constant again. It is a debt rather than a design: what the floor must clear is
+a HAND, and no session statistic measures how big a hand is in frame.
+
+**§4's protocol changed shape because of D81.** The parameters are no longer what a rig
 session tunes; the rig session now reads whether the machine's own measurements are sane and
 whether the baseline was taken on an empty stand. Read §4 before treating any number here as
-something to edit.
+something to edit — and read D84's ruling 3 before treating `presenceMin` as re-derivable
+from anything this machine measures for itself.
 
 ## 1. The two halves
 
@@ -64,12 +86,13 @@ Phases: watching → moving → settling → (verdict) → watching, with a defe
 | `dSeed` | 2.25 | what the still-frame difference is taken to be until 25 still frames have been seen. Chosen so the seeded thresholds are **4.50 and 8.00 exactly** — Gate C's own pair, so the machine boots on the confirmed run's numbers |
 | `dFloor` | 1.0 | floor under the measurement, so a rock-steady mount cannot drive `tLo` toward zero. Sits under every session measured (1.75–3.22) without touching any |
 | `noiseWindowMs` | 8000 | ~200 frames at the observed 25 fps and a dozen feeder cycles. **Only frames already judged still go in** — see below |
-| `stillFrames` | 2 (67 ms) | fire latency (stillFrames+1)·f = 100 ms = 22% of the 458 ms worst observed cycle |
+| `stillFrames` | 2 | frames under `tLo` that mean settled — counted over `stillWindow`, not consecutively (D84) |
+| `stillWindow` | 4 (133 ms) | how many recent frames those 2 are counted over, and the window must be FULL. **A consecutive run is defeated absolutely by a two-frame alternation**, measured on a card motionless for 500 ms whose `d` read 2.71 5.40 2.63 5.54 2.83 5.14 against a `tLo` of 4.18 — five runs of one, no verdict, card lost. Swept over the three 2026-09-01 21:xx sessions, 2-of-4 recovers two of the four cards lost that way and changes no other verdict; 2-of-3 and 3-of-5 recover fewer. Fire latency (stillWindow+1)·f = 167 ms = 36% of the 458 ms worst observed cycle |
 | `refractoryMs` | 250, deferring | sized to the <250 ms capture round trip, not the card cycle. A time, not a light level |
 | `tNovel` | 4.0 | **deliberately still absolute.** Across all five traces and 217 verdicts the `suppressed:unchanged` count is zero, so there is no measurement to take a multiple of; and scaling it to session noise would push it DOWN on a quiet rig, making suppression more likely — the wrong direction, since a false pass is a duplicate `U` fixes and a false suppression is a silent §5.5 loss |
 | `presenceK` | 3.0 | the presence floor is this × the session's still-frame difference. Against its own baseline an empty stand reads 1.10–1.38 and every card of every session reads 17.4–167.4; 3.0 puts the threshold at 5.5–9.7, four to seven times over the empty stand and three to ten times under the dimmest card |
-| `presenceMin` | 8.0 | absolute floor, **set by illumination DRIFT rather than by noise**: a static scene walks up to 7.94 from a baseline 3.4 s old with nothing having moved. Every value from 6 to 10 gives byte-identical verdicts on all five traces; 8.0 is the middle of that gap |
-| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire. A time, like the refractory |
+| `presenceMin` | 16.0 | absolute floor, **set by a HAND rather than by drift** (D84, correcting D81). An undisturbed stand does not creep: it holds 2.0–2.5 for as long as it is left alone. What crosses 8.0 is the operator's hand arriving with the first card, which holds still for two frames on the way in — and at 8.0 that fired, twice, photographing the bare stand. 16.0 is 1.4× over the worst approach measured (11.15) and 2× under the quietest card in the same sessions (32.5). **It now BINDS over `presenceK` × the measurement, which is a debt** — see D84 |
+| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire. A time, like the refractory. **The clock is cleared by a COMPLETED settle** (D84): cleared by any quiet frame, as it was, the alternation above reset it every other frame and `stalled` could never expire — it did not fire once across three sessions and four cards left unphotographed |
 
 ### The measurement only admits frames it already called still, and that is the whole safety argument
 
@@ -203,6 +226,13 @@ confirmation run.
    rigs the separation is 17.4 against 1.38 at worst. **A card that reads close to `floor`
    is a framing problem** — the card is barely inside the watch region — not a number to
    lower.
+
+   **AND WATCH `dbase` WHILE YOUR HAND IS STILL MOVING IN, which is the reading D84 was
+   missing.** The stand at rest is not what decides `presenceMin`; the approach is. Reach in
+   as you would to place a card and read the peak before the card lands — measured on this
+   rig it is 8–11, and the floor sits at 16 to clear it. **If your approach reads near 16,
+   that is the number to raise**, and it is the one quantity in this file the machine cannot
+   take for itself.
 4. **Swap signal.** Hand-swap cards at feeder-ish pace. Every swap should spike `d` past
    `thi` and every settle should fire exactly once; `same` should stay at zero unless you
    re-present the same card, and then it should count exactly once per re-present.
@@ -211,6 +241,12 @@ confirmation run.
    Agreement within one or two over a hopper is the pass. Watch `stall`: the feeder's own
    motion profile has never been measured, and if its advance reads as continuous motion
    longer than 1250 ms, `maxMoveMs` is the one constant here still worth raising by hand.
+
+   **`stall` MEANS MORE SINCE D84 AND IS THE COUNTER TO READ FIRST.** It no longer only
+   catches a jam: the clock is cleared by a completed settle rather than by any quiet frame,
+   so a card that sits in the watch region without ever settling — the failure that lost four
+   cards silently — now expires it. A stall during a feeder run is a card the machine did not
+   photograph and is telling you about. Re-present it; it is not a number to raise.
 6. **Save the trace before disarming — every step above, and this one, is in the file.**
    The `Save trace` button under the HUD downloads the whole armed session: every frame's
    `(t, d, dBase, luma)`, plus the exact watch-region pixels each fire/suppression/stall was

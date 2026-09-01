@@ -32,8 +32,9 @@ import type { Page } from '@playwright/test'
  * WHAT THE RACE WAS. `swapTo` alternated the whole frame 40/220 ten times, each dwell held
  * by `waitForTimeout(30)` over a CDP round trip. A timeout is a FLOOR, not a period, and
  * the round trip is unbounded — so under design-check's parallel workers one dwell spans
- * three DELIVERED frames instead of one. `stillFrames` is 2, so three identical delivered
- * frames ARE a settle: `d` reads 0, the episode is judged MID-SWAP, the frame clears
+ * three DELIVERED frames instead of one. `stillFrames` was 2 CONSECUTIVE then, so three
+ * identical delivered frames ARE a settle: `d` reads 0, the episode is judged MID-SWAP,
+ * the frame clears
  * `cardLumaFloor`, it is novel, and the machine FIRES. `fires 2` then passed for the wrong
  * reason, `lastFired` held the swap frame, the real settle was genuinely novel and fired a
  * THIRD time, and `same 1` became unreachable — which is why step 4 burned its timeout.
@@ -53,6 +54,11 @@ import type { Page } from '@playwright/test'
  * the machine fires on a swap it never saw as motion — measured against the real machine as
  * `fire@220` at every EVEN ratio. There is no pattern here to alias because there is no
  * pattern.
+ *
+ * D84 RAISED THE PRICE OF THAT RACE WITHOUT REMOVING IT. A settle is now `stillFrames` of
+ * the last `stillWindow` with the window full, so a stage would have to span FIVE delivered
+ * frames rather than three to be judged mid-swap. Wider is not immune, and the invariant
+ * below is still what this file relies on.
  *
  * THE INVARIANT, AND IT IS LOAD-BEARING: every `setScene` is followed by a wait on the
  * counter that scene must move. A stage cut short inside the 250ms refractory loses its

@@ -3187,6 +3187,149 @@ def design_reason_lists() -> Tuple[Dict[str, str], Optional[str]]:
     return out, None
 
 
+# The scorer's constants, by the DEFAULT_PARAMS key each one mirrors. Written out rather
+# than derived by case conversion, because a rule that turns `dSeed` into `D_SEED` also
+# turns a typo into a name that simply is not found — and "not found" is how a mirror stops
+# being checked without anyone deciding to stop checking it.
+MOTION_MIRROR = {
+    "stillK": "STILL_K",
+    "moveK": "MOVE_K",
+    "dSeed": "D_SEED",
+    "dFloor": "D_FLOOR",
+    "noiseWindowMs": "NOISE_WINDOW_MS",
+    "stillFrames": "STILL_FRAMES",
+    "stillWindow": "STILL_WINDOW",
+    "refractoryMs": "REFRACTORY_MS",
+    "presenceK": "PRESENCE_K",
+    "presenceMin": "PRESENCE_MIN",
+    "maxMoveMs": "MAX_MOVE_MS",
+}
+
+# Parameters the offline scorer deliberately does not carry, each with the reason. The list
+# is checked in BOTH directions below: an entry naming a parameter that no longer exists is
+# as much a finding as a parameter in neither map, because a stale excuse is how a real gap
+# hides.
+MOTION_UNMIRRORED = {
+    "tNovel": "the scorer replays the stillness and presence halves; it does not implement "
+              "the novelty gate, so there is no constant to disagree with",
+}
+
+_NUMERIC = re.compile(r"^[\d.\s()*/+-]+$")
+
+
+def _motion_number(text: str) -> Optional[float]:
+    """A parameter's value as a number, or None if it is not plain arithmetic.
+
+    `moveK` is written `(2.0 * 16) / 9` in both files — the same expression, deliberately,
+    so the 16:9 argument survives — so this cannot be a literal parse. It refuses anything
+    that is not digits and operators rather than widening: an unreadable value is REPORTED
+    below, never skipped, because a silently skipped parameter is an unchecked mirror.
+    """
+    body = text.strip().rstrip(",")
+    if not _NUMERIC.match(body):
+        return None
+    try:
+        return float(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - guarded above
+    except (SyntaxError, ValueError, ZeroDivisionError, TypeError):
+        return None
+
+
+def check_motion_params(report: Report) -> None:
+    """`app/src/motion.ts`'s DEFAULT_PARAMS and `scripts/score-trace.py`'s mirror agree.
+
+    THE SCORER IS A SECOND IMPLEMENTATION OF THE MACHINE, and it exists because the first
+    one runs in a browser at a rig. Every threshold in this subsystem was chosen by replaying
+    saved traces through `scripts/score-trace.py`, and T9 asserts its counts — so a constant
+    moved in `motion.ts` and not in the scorer does not fail anything. It makes the harness
+    grade a machine nobody is running, and grade it GREEN, which is worse than no grade.
+
+    THIS ROW WAS CLAIMED BEFORE IT EXISTED. `score-trace.py` has said since D81 that "`make
+    docs-audit`'s `motion params` row is what keeps the two honest"; there was no such row.
+    Two constants drifted apart for the length of that claim without consequence, and D84
+    widened the mirror by two more. A comment naming a check that does not exist is worse
+    than no comment: it is the reason the next session does not write one.
+
+    Provably wrong when it fires, and no judgement to defer — both numbers are literals in
+    the tree, and they either match or they do not.
+    """
+    findings: List[Finding] = []
+    ts_path = ROOT / "app/src/motion.ts"
+    py_path = ROOT / "scripts/score-trace.py"
+    for path in (ts_path, py_path):
+        if not exists(path):
+            report.add("motion params", MECHANICAL,
+                       [Finding(rel(path), f"{rel(path)} is missing.")], "")
+            return
+
+    block = re.search(
+        r"export const DEFAULT_PARAMS: MotionParams = \{(.*?)\n\}", read(ts_path), re.S
+    )
+    if block is None:
+        report.add("motion params", MECHANICAL, [Finding(
+            rel(ts_path),
+            "no `export const DEFAULT_PARAMS: MotionParams = {...}` to read. The mirror "
+            "check cannot run, which means it is not running — say so here rather than "
+            "passing.",
+        )], "")
+        return
+
+    declared: Dict[str, str] = {}
+    for line in block.group(1).splitlines():
+        entry = re.match(r"\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?),?\s*$", line)
+        if entry and not line.lstrip().startswith(("*", "/")):
+            declared[entry.group(1)] = entry.group(2)
+
+    scorer: Dict[str, str] = {}
+    for line in read(py_path).splitlines():
+        entry = re.match(r"^([A-Z][A-Z0-9_]*)\s*=\s*(.+?)\s*$", line)
+        if entry:
+            scorer[entry.group(1)] = entry.group(2)
+
+    for name in sorted(set(declared) - set(MOTION_MIRROR) - set(MOTION_UNMIRRORED)):
+        findings.append(Finding(rel(ts_path), (
+            f"DEFAULT_PARAMS carries `{name}`, which is in neither MOTION_MIRROR nor "
+            f"MOTION_UNMIRRORED in this file. Mirror it into scripts/score-trace.py, or "
+            f"say in MOTION_UNMIRRORED why the offline scorer does not need it."
+        )))
+    for name in sorted((set(MOTION_MIRROR) | set(MOTION_UNMIRRORED)) - set(declared)):
+        findings.append(Finding(rel(ts_path), (
+            f"this file's mirror map names `{name}`, which DEFAULT_PARAMS no longer "
+            f"declares. Remove the entry — a stale excuse reads as coverage."
+        )))
+
+    for name, constant in sorted(MOTION_MIRROR.items()):
+        if name not in declared:
+            continue
+        if constant not in scorer:
+            findings.append(Finding(rel(py_path), (
+                f"`{constant}` is gone, but motion.ts still declares `{name}`. The offline "
+                f"scorer is what chose every threshold in this subsystem and what T9 grades; "
+                f"an absent constant makes it grade a different machine."
+            )))
+            continue
+        here, there = _motion_number(declared[name]), _motion_number(scorer[constant])
+        if here is None or there is None:
+            findings.append(Finding(
+                rel(ts_path if here is None else py_path),
+                f"`{name}`/`{constant}` is not plain arithmetic, so the two cannot be "
+                f"compared: {declared[name]!r} vs {scorer[constant]!r}. Keep both a number "
+                f"or an expression over numbers.",
+            ))
+        elif here != there:
+            findings.append(Finding(rel(py_path), (
+                f"`{name}` is {declared[name].strip()} in app/src/motion.ts and "
+                f"`{constant}` is {scorer[constant].strip()} here. The rig runs the first "
+                f"and every saved trace is scored against the second."
+            )))
+
+    report.add(
+        "motion params",
+        MECHANICAL,
+        findings,
+        f"{len(MOTION_MIRROR)} mirrored constants agree, {len(MOTION_UNMIRRORED)} accounted for",
+    )
+
+
 def check_supervisor_self_watch(report: Report) -> None:
     """Every project module the supervisor imports is in its own `SELF_FILES`.
 
@@ -6703,6 +6846,7 @@ def audit(staged_only: bool) -> Report:
     check_join_key_shape(report)
     check_reason_codes(report)
     check_supervisor_self_watch(report)
+    check_motion_params(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)

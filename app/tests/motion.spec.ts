@@ -26,7 +26,15 @@ import type { MotionEvent } from '../src/motion'
  * The clock is hand-fed at 30fps. Every threshold crossed below is crossed by a value
  * derived from real measurements: still noise well under tLo, swaps of 50-140 luma levels
  * against a tHi of 8.0, and card-versus-empty distances of 90-140 against a presence floor
- * of 8.0.
+ * of 16.0.
+ *
+ * A SETTLE TAKES `stillWindow` FRAMES TO REACH, NOT `stillFrames` (D84). The rule is
+ * `stillFrames` of the last `stillWindow` and the window must be full, so every settle
+ * below is four frames after the motion that opened the episode rather than two. That is
+ * why the arm block is five frames and not three: one to seed `prev`, four to fill the
+ * window. Feeding fewer is the commonest way to write a case here that proves nothing —
+ * it produces no verdict at all, and an empty event list compares equal to an empty
+ * expectation.
  */
 
 const F = 1000 / 30 // one frame at 30fps, ms
@@ -48,11 +56,13 @@ function still(base: number, phase: number): Float32Array {
   return cells
 }
 
-/** The four frames every sequence starts with: an empty stand, still, at arm time. The
- *  machine takes its baseline on the second of them and judges that first episode against
- *  itself, so these four are worth exactly one `suppressed:no-card` — the same single
- *  verdict an empty stand at arm has always been worth. */
-const ARM_FRAMES = 4
+/** The frames every sequence starts with: an empty stand, still, at arm time. One seeds
+ *  `prev` and the next `stillWindow` fill the stillness window, so the machine takes its
+ *  baseline on the LAST of them and judges that first episode against itself — worth
+ *  exactly one `suppressed:no-card`, the same single verdict an empty stand at arm has
+ *  always been worth. Derived from the params rather than typed, because the two moved
+ *  together in D84 and a hand-typed 5 would silently stop arming if either moved again. */
+const ARM_FRAMES = DEFAULT_PARAMS.stillWindow + 1
 function armEmpty(): number[] {
   return Array<number>(ARM_FRAMES).fill(EMPTY)
 }
@@ -80,7 +90,7 @@ test('a still empty scene is judged empty exactly once, then stays silent', () =
      same scene reached without a constant. One verdict per settle episode, and nothing
      opens a new one. */
   const events = run(machine, Array<number>(100).fill(EMPTY))
-  expect(events).toEqual([{ at: 2, event: 'suppressed:no-card' }])
+  expect(events).toEqual([{ at: DEFAULT_PARAMS.stillWindow, event: 'suppressed:no-card' }])
   expect(machine.diag.fires).toBe(0)
   expect(machine.diag.hasBaseline).toBe(true)
 })
@@ -103,7 +113,7 @@ test('a card already at the lens when the trigger is armed BECOMES the baseline'
      twenty cards mid-run and silence. */
   const machine = new MotionMachine()
   const events = run(machine, Array<number>(60).fill(170))
-  expect(events).toEqual([{ at: 2, event: 'suppressed:no-card' }])
+  expect(events).toEqual([{ at: DEFAULT_PARAMS.stillWindow, event: 'suppressed:no-card' }])
   expect(machine.diag.fires).toBe(0)
 })
 
@@ -162,7 +172,7 @@ test('a dim card on an under-lit rig is a card — no brightness floor could say
      without knowing anything about lamps. */
   const machine = new MotionMachine()
   const events = run(machine, [
-    27, 27, 27, 27, // the under-lit empty stand, at arm
+    27, 27, 27, 27, 27, // the under-lit empty stand, at arm
     45, // the swap: motion
     61, 61, 61, 61, 61, 61, 61, // a dim card, settled
   ])
@@ -281,6 +291,52 @@ test('motion dwelling in the Schmitt band still stalls — the band cannot hide 
   expect(machine.diag.fires).toBe(0)
 })
 
+test('a card whose every other frame lands in the band still settles and fires', () => {
+  /* D84'S FIRST HALF, AND IT IS A REGRESSION TEST FOR FOUR REAL CARDS. The rule used to be
+     `stillFrames` CONSECUTIVE frames under tLo, and a two-frame alternation defeats that
+     absolutely — a run of one, forever. Measured, not imagined: a card sitting motionless
+     at the head of the 2026-09-01 21:10 session, 500 ms, against a tLo of 4.18:
+
+         2.71  5.40  2.63  5.54  2.83  5.14  3.03  4.80  3.64  4.91
+
+     Five separate runs of one, no verdict, and the card was replaced unphotographed with
+     nothing on the HUD. `stillFrames` of the last `stillWindow` is satisfied by that
+     pattern; the fixture below is that pattern, with the scene held still and only the
+     sub-threshold noise moving. */
+  const machine = new MotionMachine()
+  const card: number[] = []
+  // Pairs: 170,170,176,176,... so every step is alternately ~0 (under tLo) and ~6 (inside
+  // the Schmitt band). The SCENE never changes — this is a still card, jittering.
+  for (let i = 0; i < 12; i += 1) card.push(Math.floor(i / 2) % 2 === 0 ? 170 : 176)
+  const events = run(machine, [...armEmpty(), ...card])
+  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'fire'])
+  expect(machine.diag.fires).toBe(1)
+  expect(machine.diag.stalled).toBe(0)
+})
+
+test('a scene that never completes a settle is STALLED, however quiet its odd frame', () => {
+  /* D84'S SECOND HALF, and the failure it closes was silent by construction. The stall
+     clock used to be cleared by ANY single frame under tLo while a fire needed two in a
+     row, so a scene quiet often enough to reset the clock but never often enough to settle
+     could sit in front of the lens forever: no fire, no stall, nothing on screen. Across
+     the three 2026-09-01 sessions — 93 seconds, four cards left unphotographed — the live
+     machine raised not one `stalled`.
+
+     One quiet frame in every four here: enough to have cleared the old clock every time,
+     never enough for `stillFrames` of `stillWindow`. Cleared by a COMPLETED SETTLE instead,
+     the clock expires and says so. */
+  const machine = new MotionMachine()
+  const bases: number[] = [60]
+  for (let i = 1; i < 60; i += 1) {
+    const last = bases[i - 1] as number
+    bases.push(i % 4 === 0 ? last : last === 60 ? 66 : 60)
+  }
+  const events = run(machine, [...armEmpty(), ...bases])
+  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'stalled'])
+  expect(machine.diag.fires).toBe(0)
+  expect(machine.diag.stalled).toBe(1)
+})
+
 test('the refractory defers a fast settle instead of dropping it', () => {
   const machine = new MotionMachine()
   const events: Array<{ ms: number; event: MotionEvent }> = []
@@ -289,23 +345,18 @@ test('the refractory defers a fast settle instead of dropping it', () => {
     if (event !== null) events.push({ ms, event })
   }
   // The empty stand at arm, which is where the baseline comes from (D81).
-  for (let i = 0; i < ARM_FRAMES; i += 1) feed(i * F, EMPTY, i)
-  // Card A: motion, then two stills — fires. Refractory runs 250ms from there.
-  feed(4 * F, 170, 4)
-  feed(5 * F, 170, 5)
-  feed(6 * F, 170, 6)
+  let at = 0
+  for (; at < ARM_FRAMES; at += 1) feed(at * F, EMPTY, at)
+  // Card A: the swap, then a full window of stills — fires on the last of them, and the
+  // refractory runs 250 ms from there.
+  feed(at * F, 170, at)
+  at += 1
+  for (let i = 0; i < DEFAULT_PARAMS.stillWindow; i += 1, at += 1) feed(at * F, 170, at)
   // Card B arrives IMMEDIATELY. Its settle completes inside the refractory window — the
-  // fire must arrive after the window expires, not never.
-  feed(7 * F, 60, 7)
-  feed(8 * F, 120, 8)
-  feed(9 * F, 120, 9)
-  feed(10 * F, 120, 10) // still run complete, refractory holds it
-  feed(11 * F, 120, 11)
-  feed(12 * F, 120, 12)
-  feed(13 * F, 120, 13)
-  feed(14 * F, 120, 14)
-  feed(15 * F, 120, 15)
-  feed(16 * F, 120, 16) // past the refractory: the held fire lands here
+  // fire must arrive after the window expires, not never, which is the whole property.
+  feed(at * F, 60, at)
+  at += 1
+  for (let i = 0; i < 12; i += 1, at += 1) feed(at * F, 120, at)
   const fires = events.filter((e) => e.event === 'fire')
   expect(fires).toHaveLength(2)
   const second = fires[1]
@@ -334,10 +385,8 @@ test('the machine copies what it keeps — a reused, mutated buffer cannot zero 
   }
   let at = 0
   for (let i = 0; i < ARM_FRAMES; i += 1, at += 1) feed(at * F, EMPTY, at)
-  feed(at * F, 170, at)
+  feed(at * F, 170, at) // the swap
   at += 1
-  feed(at * F, 170, at)
-  at += 1
-  feed(at * F, 170, at)
+  for (let i = 0; i < DEFAULT_PARAMS.stillWindow; i += 1, at += 1) feed(at * F, 170, at)
   expect(events).toEqual(['suppressed:no-card', 'fire'])
 })

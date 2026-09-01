@@ -7,10 +7,12 @@ own frames — synthetic arrays, a flat canvas fill — so they can only ever pr
 agrees with the test's own idea of a card. Until this file, nothing in the repo had ever put
 the motion machine in front of a photograph.
 
-The traces in `harness/traces/` are the only real-rig evidence this subsystem has: five
-armed sessions across four rig states, saved from the HUD by the owner. Each carries every
-frame's (t, d, luma) and the exact watch-region pixels of every verdict, which is what makes
-a refusal re-scorable years later.
+The traces in `harness/traces/` are the only real-rig evidence this subsystem has: eight
+armed sessions saved from the HUD by the owner — FIVE recorded under the brightness floor
+D81 replaced, and THREE recorded on 2026-09-01 under the distance gate that replaced it,
+which is what convicted the stillness rule and the presence floor in D84. Each carries every
+frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of every verdict,
+which is what makes a refusal re-scorable years later.
 
 WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
 
@@ -26,9 +28,16 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
                      `stillK` or `presenceK` without re-scoring. Legitimately updatable —
                      but as a decision, with the sweep re-run, never as a reflex.
 
+    the D84 PAIR     over the three 2026-09-01 21:xx sessions only: that the presence floor
+                     refuses the two settles that photographed the bare stand and passes
+                     every card, and that a card which never completes a settle is
+                     REPORTED. Those two were the defects; this is what says they stay
+                     fixed. A stall is asserted as a count AND a time, because "some stall
+                     fired" would pass on a stall in the wrong place.
+
 WHAT A GREEN T9 DOES NOT MEAN. It does not mean the trigger works at the rig today. These
-are five recordings of four rig states, and a sixth rig can differ from all of them — the
-same honest limit T6 and T8 carry, in the same words. What it does mean is that the machine
+are eight recordings of a handful of rig states, and the next rig can differ from all of
+them — the same honest limit T6 and T8 carry, in the same words. What it does mean is that the machine
 still tells a card from an empty stand on every session anybody has ever recorded.
 
 NO CARD IS IDENTIFIABLE IN THESE FILES and no code card is in them. A stored frame is 1,064
@@ -48,12 +57,14 @@ from pathlib import Path
 from harness.tests import Checks, Result
 
 NAME = "T9"
-DESCRIPTION = "Motion trigger against five recorded rig sessions"
+DESCRIPTION = "Motion trigger against eight recorded rig sessions"
 PASS_CRITERIA = (
     "on every saved trace an empty stand sits within 2 of its own baseline and every card "
     "sits 17 or more away; the dimmest card on one rig is dimmer than the empty stand on "
-    "another, so no brightness constant separates them; and the adaptive thresholds reach "
-    "at least as many verdicts as the hand-tuned constants did live on all five"
+    "another, so no brightness constant separates them; the adaptive thresholds reach at "
+    "least as many verdicts as the hand-tuned constants did live on all eight; and on the "
+    "three sessions D84 was derived from, the presence floor refuses both settles that "
+    "photographed the bare stand while a card that never settles is reported as a stall"
 )
 
 # NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
@@ -83,6 +94,37 @@ def _label(path: str) -> str:
 REFERENCE = "harness/traces/motion-trace-2026-08-23T03-09-19-299Z.json"
 EMPTY_BEFORE_MS = 5200
 
+# THE PRE-D81 CORPUS, and it is named because one claim below is HISTORY rather than a
+# property. "38 real cards were refused live" is a receipt for what the brightness floor
+# cost, and only these five sessions were ever recorded under that floor. The 2026-09-01
+# 21:xx sessions ran on the distance gate, where a `suppressed:no-card` is the gate working
+# correctly on the bare stand — summing all eight would turn a fixed receipt into a number
+# that grows every time a trace is banked, which is a claim about nothing.
+PRE_D81 = {
+    "harness/traces/motion-trace-2026-08-23T02-49-55-745Z.json",
+    "harness/traces/motion-trace-2026-08-23T03-09-19-299Z.json",
+    "harness/traces/motion-trace-2026-08-29T21-34-14-525Z.json",
+    "harness/traces/motion-trace-2026-08-29T21-38-29-293Z.json",
+    "harness/traces/motion-trace-2026-09-01T03-06-14-582Z.json",
+}
+
+# THE THREE SESSIONS D84 WAS DERIVED FROM, with what each one cost before it. 93 seconds of
+# feeding, 69 fires, and the two defects the entry is about: two photographs of the bare
+# stand, and four cards fed and never photographed at all. `plate_fires` is when the live
+# gate fired on the arm-time scene; `stalls` is what the corrected clock reports, and every
+# one of those times sits on a card that was in the watch region and never settled.
+D84 = {
+    "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {
+        "plate_fires": [12.4], "stalls": [14.1],
+    },
+    "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {
+        "plate_fires": [5.4], "stalls": [],
+    },
+    "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {
+        "plate_fires": [], "stalls": [8.6],
+    },
+}
+
 # What the machine did live, per trace, and what it should do now. The live counts are
 # history and cannot change; the adaptive counts are this build's and may, deliberately.
 # `arrival` is WHEN THE FIRST NEW SCENE REACHED THE LENS, read off the contact sheets on
@@ -104,6 +146,17 @@ EXPECTED = {
     "harness/traces/motion-trace-2026-08-29T21-34-14-525Z.json": {"live": 20, "adaptive": 20, "arrival": 9000},
     "harness/traces/motion-trace-2026-08-29T21-38-29-293Z.json": {"live": 15, "adaptive": 15, "arrival": 12000},
     "harness/traces/motion-trace-2026-09-01T03-06-14-582Z.json": {"live": 24, "adaptive": 24, "arrival": 4000},
+    # The three D84 sessions. `adaptive` is under the SHIPPED rule — `stillFrames` of the
+    # last `stillWindow`. The consecutive rule these replaced scored 47, 14 and 11 on the
+    # same rows, and the one extra verdict in the first is the card at 14.49 s that sat
+    # motionless for 500 ms while its every other frame landed in the Schmitt band.
+    #
+    # `arrival` is EARLIER than the first fire in the first two, deliberately and by this
+    # key's own definition: the 12.4 s and 5.4 s verdicts are re-settles of the arm-time
+    # scene, which is why the floor may refuse them without that being a missed card.
+    "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {"live": 46, "adaptive": 48, "arrival": 13000},
+    "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {"live": 13, "adaptive": 14, "arrival": 5700},
+    "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {"live": 10, "adaptive": 11, "arrival": 8400},
 }
 
 
@@ -137,7 +190,9 @@ def run() -> Result:
         path.relative_to(ROOT).as_posix(): json.loads(path.read_text())
         for path in sorted(TRACES.glob("*.json"))
     }
-    checks.equal(sorted(traces), sorted(EXPECTED), "all five recorded sessions are present")
+    checks.equal(sorted(traces), sorted(EXPECTED), "all eight recorded sessions are present")
+    checks.equal(sorted(PRE_D81 | set(D84)), sorted(EXPECTED),
+                 "and every one is in exactly one corpus — the brightness floor's, or D84's")
     if sorted(traces) != sorted(EXPECTED):
         return checks.result()
 
@@ -202,13 +257,14 @@ def run() -> Result:
         1
         for name, trace in traces.items()
         for e in trace["events"]
-        if name != REFERENCE and "no-card" in e["event"]
+        if name in PRE_D81 and name != REFERENCE and "no-card" in e["event"]
     )
     still_refused = sum(
         1
         for name, trace in traces.items()
         for e in trace["events"]
-        if name != REFERENCE
+        if name in PRE_D81
+        and name != REFERENCE
         and score._quantile([float(v) for v in _cells(e["frame"])], 0.9) < 90
     )
     checks.equal(live_refused, 38, "38 real cards were refused live, across three sessions")
@@ -234,10 +290,55 @@ def run() -> Result:
             f"below the floor: {missed}",
         )
 
+    # ---- D84: the two defects, on the three sessions that convicted them ------------
+    #
+    # ASSERTED BY TIME, NOT BY COUNT, and that is the whole design of this block. "two fires
+    # are refused now" would pass just as happily if the floor had climbed far enough to
+    # refuse two CARDS instead, which is D81's failure with the sign flipped. Naming the
+    # second is what makes the check about the right two frames.
+    for name in sorted(D84):
+        trace = traces[name]
+        rows = score._rows(trace)
+        base = _cells(trace["keyframes"][0]["frame"])
+        typical = max(1.0, statistics.median(d for _t, d, _b, _l in rows))
+        floor = max(score.PRESENCE_MIN, score.PRESENCE_K * typical)
+        refused = [
+            round(event["t"] / 1000, 1)
+            for event in trace["events"]
+            if event["event"] == "fire" and _distance(_cells(event["frame"]), base) < floor
+        ]
+        checks.equal(
+            refused,
+            D84[name]["plate_fires"],
+            f"{_label(name)}: the floor ({floor:.1f}) refuses exactly the settles that "
+            f"photographed the bare stand, and nothing else that fired",
+        )
+        _verdicts, _band, stalls = score._replay(rows)
+        checks.equal(
+            [round(at / 1000, 1) for at in stalls],
+            D84[name]["stalls"],
+            f"{_label(name)}: and a card that never completes a settle is REPORTED — the "
+            f"silent loss D84 is about, made loud",
+        )
+
+    # THE OTHER HALF OF A STALL BEING USEFUL: that it is quiet when nothing is wrong. Five
+    # earlier sessions, 217 verdicts, several hundred good captures between them — the
+    # corrected clock must not fire on any of it, or the HUD learns to be ignored and the
+    # signal is worth nothing on the day it matters.
+    noise = {
+        _label(name): [round(at / 1000, 1) for at in score._replay(score._rows(traces[name]))[2]]
+        for name in sorted(PRE_D81)
+    }
+    checks.ok(
+        not any(noise.values()),
+        f"and it stays silent across all five earlier sessions ({sum(len(t['events']) for n, t in traces.items() if n in PRE_D81)} verdicts)",
+        f"stalled on: { {k: v for k, v in noise.items() if v} }",
+    )
+
     # ---- the tripwire: the replay still reaches what the sweep said it would --------
     for name in sorted(traces):
         rows = score._rows(traces[name])
-        verdicts, _band = score._replay(rows)
+        verdicts, _band, _stalls = score._replay(rows)
         expected = EXPECTED[name]
         checks.equal(
             len(verdicts),

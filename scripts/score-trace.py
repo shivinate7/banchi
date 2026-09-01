@@ -53,9 +53,11 @@ D_SEED = 2.25
 D_FLOOR = 1.0
 NOISE_WINDOW_MS = 8000.0
 STILL_FRAMES = 2
+STILL_WINDOW = 4
 REFRACTORY_MS = 250.0
 PRESENCE_K = 3.0
-PRESENCE_MIN = 8.0
+PRESENCE_MIN = 16.0
+MAX_MOVE_MS = 1250.0
 
 
 def _load(path: str) -> dict:
@@ -95,13 +97,34 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
 
     Only frames the machine already calls STILL feed the noise estimate — motion.ts's
     `noiseWindowMs` carries the argument, and dropping that condition here would score a
-    machine nobody is running."""
+    machine nobody is running.
+
+    STILLNESS IS `STILL_FRAMES` OF THE LAST `STILL_WINDOW` (D84), completing only on a
+    frame that is itself quiet, and the stall clock is cleared by a COMPLETED SETTLE rather
+    than by any quiet frame. Both halves have to mirror motion.ts exactly or this scorer
+    grades a machine nobody is running — `make docs-audit`'s `motion params` row is what
+    stops the two drifting.
+
+    Returns (verdicts, (tLo min, tLo max), stalls)."""
     window: list[tuple[float, float]] = []
     d_typical = d_seed
     t_lo, t_hi = d_typical * still_k, d_typical * move_k
-    still_run, judged, refractory = 0, False, 0.0
+    judged, refractory = False, 0.0
+    marks: list[bool] = []
+    moving_since: float | None = None
+    stall_flagged = False
     verdicts: list[float] = []
+    stalls: list[float] = []
     lows: list[float] = []
+
+    def stall(now: float) -> None:
+        nonlocal moving_since, stall_flagged
+        if moving_since is None:
+            moving_since = now
+        if not stall_flagged and now - moving_since > MAX_MOVE_MS:
+            stall_flagged = True
+            stalls.append(now)
+
     for index, (now, d, _dbase, _luma) in enumerate(rows[1:], start=1):
         if d < t_lo:
             window.append((now, d))
@@ -112,18 +135,23 @@ def _replay(rows, still_k=STILL_K, move_k=MOVE_K, d_seed=D_SEED):
             t_lo, t_hi = d_typical * still_k, d_typical * move_k
         lows.append(t_lo)
         if d > t_hi:
-            still_run, judged = 0, False
+            marks, judged = [], False
+            stall(now)
             continue
-        if d >= t_lo:
-            still_run = 0
+        quiet = d < t_lo
+        marks.append(quiet)
+        del marks[:-STILL_WINDOW]
+        settled = quiet and len(marks) >= STILL_WINDOW and sum(marks) >= STILL_FRAMES
+        if not settled:
+            stall(now)
             continue
-        still_run += 1
-        if still_run < STILL_FRAMES or judged or now < refractory:
+        moving_since, stall_flagged = None, False
+        if judged or now < refractory:
             continue
         judged = True
         refractory = now + REFRACTORY_MS
         verdicts.append(now)
-    return verdicts, (min(lows), max(lows)) if lows else (0.0, 0.0)
+    return verdicts, ((min(lows), max(lows)) if lows else (0.0, 0.0)), stalls
 
 
 def _presentations(rows, t_hi: float, merge_ms: float = 300.0) -> list[float]:
@@ -156,13 +184,14 @@ def summary(paths: list[str]) -> None:
             kinds[event["event"]] = kinds.get(event["event"], 0) + 1
         t_hi_live = params.get("tHi") or (params["dSeed"] * params["moveK"])
         presented = _presentations(rows, t_hi_live)
-        replayed, (lo, hi) = _replay(rows)
+        replayed, (lo, hi), stalls = _replay(rows)
         print(f"{Path(path).name}   v{trace.get('version', 1)}")
         print(f"  {duration:6.1f}s  {len(rows):5d} frames  {len(rows) / duration:5.1f} fps")
         print(f"  live params   {params}")
         print(f"  live verdicts {len(events):4d}   {kinds}")
         print(f"  presentations {len(presented):4d}   (motion bursts above the live tHi)")
         print(f"  replayed      {len(replayed):4d}   under today's adaptive form, tLo {lo:.2f}-{hi:.2f}")
+        print(f"  stalls        {len(stalls):4d}   at {[round(t / 1000, 1) for t in stalls]}")
         print(f"  d      median {statistics.median(d_values):5.2f}  p99 {_quantile(d_values, 0.99):6.2f}")
         print(f"  luma   min {min(lumas):5.1f}  median {statistics.median(lumas):6.1f}  max {max(lumas):6.1f}")
         print()

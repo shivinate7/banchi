@@ -438,3 +438,6 @@ matchers
 Spiritforged
 Paldea
 Paldean
+unphotographed
+[Dd]ownsampl\w*
+dBase
