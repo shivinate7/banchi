@@ -185,7 +185,7 @@ def run() -> Result:
     )
     checks.ok(
         dimmest[0] < 90,
-        f"and the floor that was in the tree (90) sat ABOVE that card, inside the card population",
+        "and the floor that was in the tree (90) sat ABOVE that card, inside the card population",
     )
 
     # ---- what the constant in the tree before D81 actually cost ---------------------

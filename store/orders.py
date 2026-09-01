@@ -572,7 +572,7 @@ class Ledger:
         if line is None:
             raise UnknownOrderLine(
                 f"order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
-                f"{', '.join(str(l.sku) for l in record.lines) or 'nothing'}"
+                f"{', '.join(str(each.sku) for each in record.lines) or 'nothing'}"
             )
 
         row = self.recorded(key, sku)

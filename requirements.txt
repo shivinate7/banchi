@@ -1,5 +1,11 @@
-# Harness + pipeline runtime. Installed into .venv by `make venv`.
+# Harness + pipeline runtime, plus one dev tool. Installed into .venv by `make venv`.
 #
+# ruff  `make lint`'s Python half (D82), pinned to the version this session measured
+#       against this tree — a newer release could enable different default behavior under
+#       ruff.toml's same select list. Nothing under server/ pipeline/ store/ identify/
+#       geometry/ cli/ codes/ imports it; it runs only as a subprocess from the Makefile.
+ruff==0.16.5
+
 # anthropic  T1's identification transport (Batch API). Nothing else in the repo
 #            talks to Anthropic — see identify/batch.py.
 anthropic>=0.69

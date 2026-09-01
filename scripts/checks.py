@@ -52,6 +52,8 @@ NEEDS = {
     "bash": "bash, not merely a POSIX sh.",
     "sh": "any POSIX sh.",
     "vale": "the vale binary — `brew install vale`. Absent, the target reports and exits 0.",
+    "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
+            "loudly rather than letting the target no-op.",
 }
 
 
@@ -198,16 +200,17 @@ CHECKS = (
     },
     {
         "target": "lint",
-        "runs": "npm --prefix app run lint",
-        "asserts": "eslint over app/, one rule per bug this project caught itself. JavaScript "
-                   "only — Python has no linter here, and this target does not claim otherwise. "
-                   "No `--fix`, here or in the npm script, per D18.",
-        "needs": ("node", "app deps"),
+        "runs": "npm --prefix app run lint; ruff check . (ruff.toml)",
+        "asserts": "eslint over app/, one rule per bug this project caught itself, plus ruff "
+                   "over the Python packages on a slice measured against this tree — pyflakes, "
+                   "bugbear, flake8-simplify, never ruff's own ~900-rule default (D82). No "
+                   "`--fix`, in either language, per D18.",
+        "needs": ("node", "app deps", "venv", "ruff"),
         "writes": "",
         "commit_path": False,
         "why_off_commit_path": "It runs node, and the git hook runs a bare python3.",
         "gates": True,
-        "governed_by": ("D18",),
+        "governed_by": ("D18", "D82"),
     },
     {
         "target": "vale",

@@ -28,6 +28,7 @@ events with its own latency, so the debounce below would still be needed, and an
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import signal
@@ -233,10 +234,8 @@ def read_pidfile(child: Child, root: Path = REPO_ROOT) -> Optional[dict]:
 
 
 def clear_pidfile(child: Child, root: Path = REPO_ROOT) -> None:
-    try:
+    with contextlib.suppress(OSError):
         _pid_path(child, root).unlink()
-    except OSError:
-        pass
 
 
 def _command_of(pid: int) -> str:
@@ -346,9 +345,13 @@ def _origins_env_name(root: Path = REPO_ROOT) -> str:
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "ORIGINS_ENV":
-                    if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-                        return node.value.value
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "ORIGINS_ENV"
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)
+                ):
+                    return node.value.value
     return "PKMNSCAN_ALLOWED_ORIGINS"
 
 
@@ -416,7 +419,7 @@ def spawn_capture(root: Path = REPO_ROOT) -> Optional[subprocess.Popen]:
     logfile = state_dir(root) / CAPTURE_LOG
     logfile.parent.mkdir(parents=True, exist_ok=True)
     _rotate(logfile)
-    handle = open(logfile, "a", buffering=1)
+    handle = open(logfile, "a", buffering=1)  # noqa: SIM115 — outlives this function as the detached child's stdout
     try:
         # start_new_session so the child leads its own process group. Not a detail: `killpg` is
         # the only way to take down a tree, and without it a `kill` reaches the parent alone.
@@ -444,7 +447,7 @@ def spawn_vite(root: Path = REPO_ROOT) -> Optional[subprocess.Popen]:
     logfile = state_dir(root) / VITE_LOG
     logfile.parent.mkdir(parents=True, exist_ok=True)
     _rotate(logfile)
-    handle = open(logfile, "a", buffering=1)
+    handle = open(logfile, "a", buffering=1)  # noqa: SIM115 — outlives this function as the detached child's stdout
     try:
         child = subprocess.Popen(
             argv, cwd=str(root), env=_child_env(root),
@@ -481,14 +484,10 @@ def stop_child(child: subprocess.Popen, grace: float, label: str) -> bool:
         time.sleep(0.05)
     log(f"{label} did not stop within {grace:.0f}s — killing it.")
     log("  a request in flight was cut. If the store looks wrong, check history.jsonl.")
-    try:
+    with contextlib.suppress(OSError):
         os.killpg(pgid, signal.SIGKILL)
-    except OSError:
-        pass
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired):
         child.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        pass
     return False
 
 
@@ -928,7 +927,7 @@ def do_up(args: argparse.Namespace) -> int:
     state_dir(REPO_ROOT).mkdir(parents=True, exist_ok=True)
     logfile = state_dir(REPO_ROOT) / SUPERVISOR_LOG
     _rotate(logfile)
-    handle = open(logfile, "a", buffering=1)
+    handle = open(logfile, "a", buffering=1)  # noqa: SIM115 — outlives this function as the detached child's stdout
     argv = [python_executable(), str(Path(__file__).resolve()), "run"]
     if args.no_watch:
         argv.append("--no-watch")
@@ -959,10 +958,8 @@ def _sweep_orphans() -> None:
             clear_pidfile(child)
             continue
         print(f"sweeping orphaned {child.label} (pid {pid})")
-        try:
+        with contextlib.suppress(OSError):
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-        except OSError:
-            pass
         clear_pidfile(child)
 
 
@@ -1009,10 +1006,8 @@ def do_down(_args: argparse.Namespace) -> int:
         time.sleep(0.1)
     else:
         print(f"supervisor (pid {pid}) did not stop — killing it.")
-        try:
+        with contextlib.suppress(OSError):
             os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
     clear_pidfile(Child("supervisor", SUPERVISOR_PID, SUPERVISOR_LOG))
     _sweep_orphans()
     print("stopped.")
@@ -1076,7 +1071,7 @@ def do_launch_agent(args: argparse.Namespace) -> int:
         print(f"refusing: {root.name} is a linked worktree.")
         print("  A worktree is deleted routinely and its launch agent would outlive it —")
         print("  launchd would retry a path that is gone. Install this from the main")
-        print(f"  checkout instead. `make up` works here and does not persist.")
+        print("  checkout instead. `make up` works here and does not persist.")
         return 1
 
     state = state_dir(root)
@@ -1119,8 +1114,8 @@ def do_launch_agent(args: argparse.Namespace) -> int:
         return 1
     print(f"launch agent installed ({label}).")
     print(f"  plist     {plist}")
-    print(f"  starts at login, and restarts on a crash.")
-    print(f"  remove    make launch-agent ARGS=--remove")
+    print("  starts at login, and restarts on a crash.")
+    print("  remove    make launch-agent ARGS=--remove")
     return 0
 
 

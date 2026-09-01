@@ -209,7 +209,7 @@ def run() -> Result:
 
     c.ok(found_all, "the card is found at every angle, scale and offset in the sweep")
     c.ok(angles_ok, f"detected rotation is within {ANGLE_TOLERANCE} degrees of the truth")
-    c.ok(boxes_ok, f"detected rectangle is card-shaped and inside the canvas")
+    c.ok(boxes_ok, "detected rectangle is card-shaped and inside the canvas")
 
     # --- the box tracks the composite's own scale -------------------------------------------
     small = geometry.detect_card(_scene(Image, ImageDraw, scale=0.7))
