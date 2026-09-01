@@ -257,10 +257,27 @@ function sectionsOf(rows: Row[]): Section[] {
  * shows the label whole rather than a guess. */
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return String(row.card.card)
-  if (hasDeparted(row.card)) return `departed · ${row.key}`
+  if (hasDeparted(row.card)) return `departed · ${departedKey(row.card)}`
   const label = positionLabel(row.card)
   if (label !== null) return label
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
+}
+
+/** `join.departed_label`'s store key, composed client-side because this cell drops the rest of
+ *  the label (see below) and a key is the part it cannot drop.
+ *
+ *  THE SPELLING IS THE SERVER'S AND MUST STAY SO — `B3 #96`, D68 as amended: the row above this
+ *  one may be a live card whose panel is showing `114/166`, and `3/96` in that company was read
+ *  as a printed number by the owner. It is composed here rather than sliced off `place.label`
+ *  for `rowSlot`'s own stated reason: this file draws server facts and never parses the label
+ *  string. The two spellings are checked against each other by `app/tests/inventory.spec.ts`,
+ *  which renders the server's label in the panel and this cell in the walk for one sold card.
+ *
+ *  `row.key` IS NOT IT, and that is the change of 2026-08-31. The walk's map key is
+ *  `${box}/${index}` — the same two numbers, in the shape that reads as a fraction — so the two
+ *  looked interchangeable and were, right up until one of them became a thing a person reads. */
+function departedKey(card: InventoryCard): string {
+  return `B${card.box} #${card.index}`
 }
 
 /** A record that is still in this box's index space and in none of its slots — sold or retired.
@@ -277,7 +294,13 @@ function rowSlot(row: Row): string {
  *  is exactly the store key that D68 put there to tell two departed copies apart. Four departed
  *  Moonfalls drew `Box 3 · departed · 3…` four times. `Box 3 · ` is the part worth spending:
  *  this walk is scoped to one shelf, named in the panel above and in every section header, which
- *  is the same argument that took the box out of those headers. */
+ *  is the same argument that took the box out of those headers.
+ *
+ *  THE BOX IS BACK INSIDE THE KEY AND THE PREFIX IS STILL GONE, which is not a reversal: the
+ *  prefix restated a shelf this walk cannot leave, and `B3` is part of an address the copies
+ *  list carries across shelves. Measured at the shipped 11px: `departed · B3 #96` is 130.9px
+ *  against the old form's 115.5px, in a cell whose `max-width: 22ch` is the 169.4px the full
+ *  label overflowed. 38.5px spare, so the two characters cost nothing this cell has. */
 function hasDeparted(card: InventoryCard): boolean {
   return isDeparted(card.place)
 }

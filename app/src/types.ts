@@ -1508,7 +1508,7 @@ export type PricingSku = {
    *  `pricing.json` and what `photoUrl` addresses; the label is composed FRESH on every read
    *  by `server/pipeline_routes.py:_relabel_positions` and the one frozen into the file is
    *  never served (D58, on D56's rule) — so a copy that sold after the join reads
-   *  `Box 3 · departed · 3/17` and a divider moved since reads against the layout that is in
+   *  `Box 3 · departed · B3 #17` and a divider moved since reads against the layout that is in
    *  the box today.
    *
    *  `null` FOR A LABEL THE SERVER WILL NOT COMPOSE, exactly as `Place.label` is: the box's

@@ -6451,7 +6451,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
         )
         checks.equal(
             capture_server.do_inventory()["cards"]["3/3"].get("label"),
-            "Box 3 · departed · 3/3",
+            "Box 3 · departed · B3 #3",
             "the DEPARTED card does not keep the number it held — that number belongs to "
             "the card that closed up behind it, and answering it would send someone to the "
             "wrong slot. It says where the record belongs, that there is no slot, and which "
@@ -6492,8 +6492,8 @@ def check_consolidated_numbering(checks: Checks) -> None:
         # that no two records ever share one.
         checks.ok(
             label(3) != label(8) and {label(3), label(8)} == {
-                "Box 3 · departed · 3/3",
-                "Box 3 · departed · 3/8",
+                "Box 3 · departed · B3 #3",
+                "Box 3 · departed · B3 #8",
             },
             "two departed records in one box draw two different labels, each naming the "
             "record it belongs to — `Place.index`, which D58 keeps immovable, and never "
@@ -9328,12 +9328,12 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · 3/1",
+                "3/1": "Box 3 · departed · B3 #1",
                 "3/2": "Box 3 · Section 1 · Card 1",
                 "3/3": "Box 3 · Section 2 · Card 1",
                 "3/4": "Box 3 · Section 2 · Card 2",
             },
-            "SELL A COPY AND ITS CAPTION STOPS NAMING A SLOT — `Box 3 · departed · 3/1`, with "
+            "SELL A COPY AND ITS CAPTION STOPS NAMING A SLOT — `Box 3 · departed · B3 #1`, with "
             "the store key D68 put there so two departed copies of one SKU are not one string "
             "— while the card behind it takes the number it vacated. The stored label said "
             "`Section 1 · Card 1` for BOTH rows, which is the exact lie D58 refuses",
@@ -9354,7 +9354,7 @@ def check_pricing_labels(checks: Checks) -> None:
         checks.equal(
             positions(name),
             {
-                "3/1": "Box 3 · departed · 3/1",
+                "3/1": "Box 3 · departed · B3 #1",
                 "3/2": "Box 3 · Section 1 · Card 1",
                 "3/3": "Box 3 · Section 1 · Card 2",
                 "3/4": "Box 3 · Section 2 · Card 1",
@@ -14197,7 +14197,7 @@ def check_order_screen(checks: Checks) -> None:
             checks.equal(
                 capture_server._Places(Store().read().inventory).of(3, 1)["label"],
                 join.departed_label(3, 1),
-                "AND A `_Places` BUILT AFTER THE CALL SAYS `Box 3 · departed · 3/1` FOR THE SAME "
+                "AND A `_Places` BUILT AFTER THE CALL SAYS `Box 3 · departed · B3 #1` FOR THE SAME "
                 "POSITION. The two differ, and the response carries the FIRST: a sale moves "
                 "the box's occupancy (D58), so a receipt composed afterwards would name "
                 "where the box has closed up to rather than the slot the card came out of",

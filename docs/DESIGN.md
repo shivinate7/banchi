@@ -262,7 +262,7 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   D71.** The two it missed are both in `Inventory.tsx`, and the first of them is the one most of
   the store is drawn by: the lone-copy panel is what a card with no name and no SKU renders
   through, which on the owner's Mac is 629 of 682 records. It went on printing the raw label in the
-  utility face, and the way that surfaced was a sold card — `Box 1 · departed · 1/1` as a run of
+  utility face, and the way that surfaced was a sold card — `Box 1 · departed · B1 #1` as a run of
   words and interpuncts, which is what the owner reported. **Nothing checked either.** The lone
   panel has a spec; that spec asserts its two position bars and never looked at the label beside
   them. Both were found by pressing `Mark sold` in a browser over a real store, which is the same
@@ -272,7 +272,7 @@ which travels verbatim on `aria-label`. Two consequences worth stating as rules:
   promoted slot is a slot NUMBER, never a word — without that guard D24's pooled label draws the
   lowercase word `pooled` as a 300px figure.
 - **A label with no figure is still ranked, and it is the FIGURE that goes (D71).** A departed
-  card's label ends on a state where a slot number would be (`Box 3 · departed · 3/36`). Refusing
+  card's label ends on a state where a slot number would be (`Box 3 · departed · B3 #36`). Refusing
   the whole treatment over that was the shipped behavior and it drew the pre-D41 plain string at
   the site's payload size — 44px and wrapped in the `#/inventory` band, the loudest row in the
   copies list. The state and the store key ride the path as one more key/value pair, the number
